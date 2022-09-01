@@ -24,7 +24,6 @@ import tempfile
 import threading
 import time
 import traceback
-import uuid
 import itertools
 import json
 import ipaddress
@@ -1225,18 +1224,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     stat_dict[stat_line[0]] = stat_line[1].split()[0]
         return stat_dict
 
-    def _get_tcpdump_logs(self, tcpdump_id):
-        try:
-            pcap_name = 'tcpdump-%s.pcap' % tcpdump_id
-            pcap_tmp_file = os.path.join('/tmp', pcap_name)
-            pcap_file = os.path.join(self.logdir, pcap_name)
-            self.remoter.run('sudo tcpdump -vv -i lo port 10000 -w %s > /dev/null 2>&1' %
-                             pcap_tmp_file, ignore_status=True)
-            self.remoter.receive_files(src=pcap_tmp_file, dst=pcap_file)  # pylint: disable=not-callable
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
-                           str(details))
-
     def _is_storage_virtualized(self):
         return self.is_docker()
 
@@ -1250,31 +1237,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 message="fstrim'ming of Scylla disks was skipped",
                 severity=Severity.WARNING, ).publish_or_dump()
 
-    def get_cfstats(self, keyspace, tcpdump=False):
+    def get_cfstats(self, keyspace):
         def keyspace_available():
             self.run_nodetool("flush", ignore_status=True, timeout=300)
             res = self.run_nodetool(sub_cmd='cfstats', args=keyspace, ignore_status=True, timeout=300)
             return res.exit_status == 0
-        tcpdump_id = uuid.uuid4()
-        if tcpdump:
-            self.log.info('START tcpdump thread uuid: %s', tcpdump_id)
-            tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs, name='TcpDumpUploadingThread',
-                                              kwargs={'tcpdump_id': tcpdump_id}, daemon=True)
-            tcpdump_thread.start()
+
         wait.wait_for(keyspace_available, timeout=600, step=60,
                       text='Waiting until keyspace {} is available'.format(keyspace), throw_exc=False)
-        try:
-            # Don't need NodetoolEvent when waiting for space_node_threshold before start the nemesis, not publish it
-            result = self.run_nodetool(sub_cmd='cfstats', args=keyspace, timeout=300,
-                                       warning_event_on_exception=(Failure, UnexpectedExit), publish_event=False)
-        except (Failure, UnexpectedExit):
-            self.log.error('nodetool error - see tcpdump thread uuid %s for '
-                           'debugging info', tcpdump_id)
-            raise
-        finally:
-            if tcpdump:
-                self.remoter.run('sudo killall tcpdump', ignore_status=True)
-                self.log.info('END tcpdump thread uuid: %s', tcpdump_id)
+        # Don't need NodetoolEvent when waiting for space_node_threshold before start the nemesis, not publish it
+        result = self.run_nodetool(sub_cmd='cfstats', args=keyspace, timeout=300,
+                                   warning_event_on_exception=(Failure, UnexpectedExit), publish_event=False)
+
         return self._parse_cfstats(result.stdout)
 
     def wait_jmx_up(self, verbose=True, timeout=None):
@@ -1903,14 +1877,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     self.distro.is_rocky9):
                 self.install_epel()
             self.remoter.run("sudo yum remove -y abrt")  # https://docs.scylladb.com/operating-scylla/admin/#core-dumps
-            self.remoter.run('sudo yum install -y rsync tcpdump screen')
+            self.remoter.run('sudo yum install -y rsync')
             self.download_scylla_repo(scylla_repo)
             # hack cause of broken caused by EPEL
             self.remoter.run('sudo yum install -y python36-PyYAML', ignore_status=True)
             self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
         elif self.distro.is_sles15:
-            self.remoter.sudo('zypper install -y rsync tcpdump screen')
+            self.remoter.sudo('zypper install -y rsync')
             self.download_scylla_repo(scylla_repo)
             # self.remoter.sudo('zypper mr -e Python_2_Module_x86_64:SLE-Module-Python2-15-SP3-Pool')
             # self.remoter.sudo('zypper mr -e Python_2_Module_x86_64:SLE-Module-Python2-15-SP3-Updates')
@@ -1984,7 +1958,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 '-o Dpkg::Options::="--force-confold" '
                 '-o Dpkg::Options::="--force-confdef" '
                 'upgrade -y ')
-            self.remoter.run('sudo apt-get install -y rsync tcpdump screen')
+            self.remoter.run('sudo apt-get install -y rsync')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
             self.remoter.run(
