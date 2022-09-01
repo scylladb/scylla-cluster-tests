@@ -26,10 +26,12 @@ class LongevitySlaTest(LongevityTest):
     STRESS_ROLE_NAME_TEMPLATE = 'role%d_%d'
     STRESS_ROLE_PASSWORD_TEMPLATE = 'rolep%d'
     SERVICE_LEVEL_NAME_TEMPLATE = 'sl%d_%d'
+    FULLSCAN_SERVICE_LEVEL_SHARES = 600
 
     def __init__(self, *args):
         super().__init__(*args)
         self.service_level_shares = self.params.get("service_level_shares")
+        self.fullscan_role = None
         self.roles = []
 
     def test_custom_time(self):
@@ -39,6 +41,9 @@ class LongevitySlaTest(LongevityTest):
             # it unique and prevent failure when try to create role/SL with same name
             for index, shares in enumerate(self.service_level_shares):
                 self.roles.append(self.create_sla_auth(session=session, shares=shares, index=index))
+
+            if self.params.get("run_fullscan"):
+                self.fullscan_role = self.create_sla_auth(session=session, shares=self.FULLSCAN_SERVICE_LEVEL_SHARES)
 
         self.add_sla_credentials_to_stress_cmds()
         super().test_custom_time()
