@@ -45,6 +45,8 @@ class ScanOperationThread:
         self.scan_event = scan_event
         self.termination_event = termination_event
         self.log = logging.getLogger(self.__class__.__name__)
+        self.user = kwargs.get("user", None)
+        self.password = kwargs.get("password", None)
         self._thread = threading.Thread(daemon=True, name=self.__class__.__name__, target=self.run)
 
     def wait_until_user_table_exists(self, db_node, table_name: str = 'random', timeout_min: int = 20):
@@ -103,7 +105,8 @@ class ScanOperationThread:
             cmd = cmd or self.randomly_form_cql_statement()
             if not cmd:
                 return
-            with self.db_cluster.cql_connection_patient(node=db_node, connect_timeout=300) as session:
+            with self.db_cluster.cql_connection_patient(node=db_node, connect_timeout=300,
+                                                        user=self.user, password=self.password) as session:
 
                 if self.termination_event.is_set():
                     return

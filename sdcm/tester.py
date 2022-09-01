@@ -1975,12 +1975,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             interval {number} -- interval between requests in min (default: {1})
             duration {int} -- duration of running thread in min (default: {None})
         """
+        sla_role_name, sla_role_password = None, None
+        if fullscan_role := getattr(self, "fullscan_role", None):
+            sla_role_name = fullscan_role.name
+            sla_role_password = fullscan_role.password
+
         FullScanThread(
             db_cluster=self.db_cluster,
             ks_cf=ks_cf,
             duration=self.get_duration(duration),
             interval=interval * 60,
             termination_event=self.db_cluster.nemesis_termination_event,
+            user=sla_role_name,
+            password=sla_role_password,
         ).start()
 
     def run_full_partition_scan_thread(self, duration=None, interval=1, **kwargs):
