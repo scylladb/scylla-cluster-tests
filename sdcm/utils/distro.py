@@ -36,7 +36,7 @@ KNOWN_OS = (
     ("RHEL", "rhel", ["7", "8"], DistroBase.RHEL),
     ("OEL", "ol", ["7", "8"], DistroBase.RHEL),
     ("AMAZON", "amzn", ["2"], DistroBase.RHEL),
-    ("ROCKY", "rocky", ["8"], DistroBase.RHEL),
+    ("ROCKY", "rocky", ["8", "9"], DistroBase.RHEL),
     ("DEBIAN", "debian", ["8", "9", "10", "11"], DistroBase.DEBIAN),
     ("UBUNTU", "ubuntu", ["14.04", "16.04", "18.04", "20.04", "21.04", "21.10", "22.04"], DistroBase.DEBIAN),
     ("SLES", "sles", ["15"], DistroBase.UNKNOWN),

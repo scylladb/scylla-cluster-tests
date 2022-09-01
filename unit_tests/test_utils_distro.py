@@ -279,6 +279,24 @@ BUG_REPORT_URL="https://bugs.rockylinux.org/"
 ROCKY_SUPPORT_PRODUCT="Rocky Linux"
 ROCKY_SUPPORT_PRODUCT_VERSION="8"
 """,
+    "Rocky Linux 9": """\
+NAME="Rocky Linux"
+VERSION="9.0 (Blue Onyx)"
+ID="rocky"
+ID_LIKE="rhel centos fedora"
+VERSION_ID="9.0"
+PLATFORM_ID="platform:el9"
+PRETTY_NAME="Rocky Linux 9.0 (Blue Onyx)"
+ANSI_COLOR="0;32"
+LOGO="fedora-logo-icon"
+CPE_NAME="cpe:/o:rocky:rocky:9::baseos"
+HOME_URL="https://rockylinux.org/"
+BUG_REPORT_URL="https://bugs.rockylinux.org/"
+ROCKY_SUPPORT_PRODUCT="Rocky-Linux-9"
+ROCKY_SUPPORT_PRODUCT_VERSION="9.0"
+REDHAT_SUPPORT_PRODUCT="Rocky Linux"
+REDHAT_SUPPORT_PRODUCT_VERSION="9.0"
+""",
 
     "Unknown": """\
 ID=sillylinux
@@ -292,7 +310,7 @@ VERSION_ID 18.04
 }
 
 
-class TestDistro(unittest.TestCase):
+class TestDistro(unittest.TestCase):  # pylint: disable=too-many-public-methods
     def test_unknown(self):
         self.assertTrue(Distro.UNKNOWN.is_unknown)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Unknown"])
@@ -398,6 +416,12 @@ class TestDistro(unittest.TestCase):
         self.assertTrue(Distro.ROCKY8.is_rocky8)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Rocky Linux 8"])
         self.assertTrue(distro.is_rocky8)
+        self.assertTrue(distro.is_rhel_like)
+
+    def test_rocky9(self):
+        self.assertTrue(Distro.ROCKY9.is_rocky9)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Rocky Linux 9"])
+        self.assertTrue(distro.is_rocky9)
         self.assertTrue(distro.is_rhel_like)
 
     def test_parsing_error(self):

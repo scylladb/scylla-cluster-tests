@@ -25,6 +25,7 @@ def get_distro_name(distro_object):
         Distro.OEL7: "centos7",
         Distro.OEL8: "centos8",
         Distro.ROCKY8: "centos8",
+        Distro.ROCKY9: "centos8",
         Distro.FEDORA34: "centos8",
         Distro.FEDORA35: "centos8",
         Distro.FEDORA36: "centos8",
