@@ -158,7 +158,6 @@ class UpgradeTest(FillDatabaseData):
         upgrade_node_packages = self.params.get('upgrade_node_packages')
 
         InfoEvent(message='Upgrading a Node').publish()
-        node.upgrade_system()
 
         # We assume that if update_db_packages is not empty we install packages from there.
         # In this case we don't use upgrade based on new_scylla_repo(ignored sudo yum update scylla...)
@@ -220,9 +219,14 @@ class UpgradeTest(FillDatabaseData):
                 else:
                     node.remoter.run(r'sudo apt-get remove scylla\* -y')
                     # fixme: add publick key
-                    node.remoter.run(
-                        r'sudo apt-get install {} -y '
-                        r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg_ver))
+                    if self.params.get("use_preinstalled_scylla"):
+                        package_path = self._download_packages_file(node, scylla_pkg)
+                        node.remoter.run(f"sudo apt-get install $(awk '{{print $1'}} {package_path}) -y "
+                                         r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" ')
+                    else:
+                        node.remoter.run(
+                            r'sudo apt-get install {} -y '
+                            r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg_ver))
                 recover_conf(node)
                 node.remoter.run('sudo systemctl daemon-reload')
             else:
@@ -230,9 +234,14 @@ class UpgradeTest(FillDatabaseData):
                     node.remoter.run(r'sudo yum update {}\* -y'.format(scylla_pkg_ver))
                 else:
                     node.remoter.run('sudo apt-get update')
-                    node.remoter.run(
-                        r'sudo apt-get dist-upgrade {} -y '
-                        r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg))
+                    if self.params.get("use_preinstalled_scylla"):
+                        package_path = self._download_packages_file(node, scylla_pkg)
+                        node.remoter.run(f"sudo apt-get install $(awk '{{print $1'}} {package_path}) -y "
+                                         r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" ')
+                    else:
+                        node.remoter.run(
+                            r'sudo apt-get dist-upgrade {} -y '
+                            r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg))
         if self.params.get('test_sst3'):
             node.remoter.run("echo 'enable_sstables_mc_format: true' |sudo tee --append /etc/scylla/scylla.yaml")
         if self.params.get('test_upgrade_from_installed_3_1_0'):
@@ -1146,3 +1155,17 @@ class UpgradeTest(FillDatabaseData):
                 self.log.warning("Couldn't extract version from %s", new_version)
         except Exception as exc:  # pylint: disable=broad-except
             self.log.exception("Failed to save upgraded Scylla version in Argus", exc_info=exc)
+
+    def _download_packages_file(self, node: BaseNode, package: str) -> str:
+        """Downloads scylla-packages file used for scylla and OS packages upgrade in AMI's.
+        Returns path to packages file.
+
+        https://docs.scylladb.com/stable/upgrade/upgrade-opensource/upgrade-guide-from-4.5-to-4.6/
+        upgrade-guide-from-4.5-to-4.6-ubuntu-20-04#update-3rd-party-and-os-packages"""
+        pkg, ver, url, _, arch, _ = node.remoter.run(f"apt-cache madison {package}").stdout.replace("|", "").split()
+        arch = "x86_64" if arch == "amd64" else "aarch64"
+        package_file_name = f"{pkg}-packages-{ver}-{arch}.txt"
+        download_path = "/home/scylla-packages"
+        self.log.debug("Downloading scylla-packages file from %s/%s to %s", url, package_file_name, download_path)
+        node.remoter.sudo(f"curl -o {download_path} -L {url}/{package_file_name}")
+        return download_path
