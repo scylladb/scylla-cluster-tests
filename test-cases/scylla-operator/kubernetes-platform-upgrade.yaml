@@ -1,15 +1,30 @@
-test_duration: 300
+test_duration: 360
 
-# workloads
-stress_cmd_r: cassandra-stress read no-warmup cl=QUORUM n=2010020 -schema 'keyspace=keyspace_entire_test replication(factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..2010020 -log interval=5
-stress_cmd_w: cassandra-stress write no-warmup cl=QUORUM n=2010020 -schema 'keyspace=keyspace_entire_test replication(factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..2010020 -log interval=5
+prepare_write_cmd: [
+    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000",
+    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..20000000",
+    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=20000001..30000000",
+    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=30000001..40000000"
+]
+stress_during_entire_upgrade: "cassandra-stress read no-warmup cl=QUORUM duration=90m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=10000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..40000000,30000000,15000000)' -log interval=5"
+stress_cmd_r: [
+    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=30000001..40000000 -log interval=5",
+    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=20000001..30000000 -log interval=5",
+    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..20000000 -log interval=5",
+    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000 -log interval=5"
+]
+round_robin: true
 
 n_db_nodes: 4
 k8s_n_scylla_pods_per_cluster: 3
 
-n_loaders: 1
+n_loaders: 4
+k8s_n_loader_pods_per_cluster: 4
+k8s_loader_run_type: 'dynamic'
+
 n_monitor_nodes: 1
 
+k8s_enable_performance_tuning: true
 k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'
 k8s_scylla_operator_chart_version: 'latest'
 k8s_scylla_operator_docker_image: ''  # default value from the Helm chart will be used

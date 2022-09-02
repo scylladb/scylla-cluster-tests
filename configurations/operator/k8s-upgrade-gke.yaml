@@ -1,0 +1,1 @@
+stress_during_entire_upgrade: "cassandra-stress read no-warmup cl=QUORUM duration=90m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=5000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..40000000,30000000,15000000)' -log interval=5"

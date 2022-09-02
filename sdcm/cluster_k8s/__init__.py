@@ -1531,6 +1531,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 pod_readiness_timeout_minutes=pod_readiness_timeout_minutes)
             LOGGER.info("The '%s' pod is ready, refresh IP addresses", pod_object.name)
             pod_object.refresh_ip_address()
+            # NOTE: update monitoring after each pod update
+            #       to minimize the loss of monitoring data
+            if monitors := self.test_config.tester_obj().monitors:
+                monitors.reconfigure_scylla_monitoring()
 
     @contextlib.contextmanager
     def scylla_config_map(self, namespace: str = SCYLLA_NAMESPACE) -> dict:

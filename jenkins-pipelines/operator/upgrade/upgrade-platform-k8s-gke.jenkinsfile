@@ -6,5 +6,5 @@ rollingOperatorUpgradePipeline(
     backend: 'k8s-gke',
     region: 'us-east1',
     test_name: 'upgrade_test.UpgradeTest.test_kubernetes_platform_upgrade',
-    test_config: 'test-cases/scylla-operator/kubernetes-platform-upgrade.yaml',
+    test_config: '''["test-cases/scylla-operator/kubernetes-platform-upgrade.yaml", "configurations/operator/k8s-upgrade-gke.yaml"]''',
 )
