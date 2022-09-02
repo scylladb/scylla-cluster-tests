@@ -35,6 +35,7 @@ from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused, \
     ignore_abort_requested_errors, decorate_with_context
+from sdcm.utils import loader_utils
 
 
 def truncate_entries(func):
@@ -100,7 +101,7 @@ def recover_conf(node):
             r'test -e $conf.backup && sudo cp -v $conf.backup $conf; done')
 
 
-class UpgradeTest(FillDatabaseData):
+class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     """
     Test a Scylla cluster upgrade.
     """
@@ -1023,25 +1024,25 @@ class UpgradeTest(FillDatabaseData):
     def test_kubernetes_platform_upgrade(self):
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
-        InfoEvent(message='Step1 - Populate DB with data').publish()
+        InfoEvent(message="Step1 - Populate DB with data").publish()
+        self.run_prepare_write_cmd()
         self.prepare_keyspaces_and_tables()
         self.fill_and_verify_db_data('', pre_fill=True)
 
-        InfoEvent(message='Step2 - Run c-s write workload').publish()
-        self.verify_stress_thread(self.run_stress_thread(
-            stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_w'))))
+        InfoEvent(message="Step2 - Start 'stress_during_entire_upgrade'").publish()
+        stress_during_entire_upgrade_thread_pool = self._run_stress_workload(
+            "stress_during_entire_upgrade", wait_for_finish=False)
 
-        InfoEvent(message='Step3 - Run c-s read workload').publish()
-        self.verify_stress_thread(self.run_stress_thread(
-            stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))))
-
-        InfoEvent(message='Step4 - Upgrade kubernetes platform').publish()
+        InfoEvent(message="Step3 - Upgrade kubernetes platform").publish()
         upgrade_version, scylla_pool = self.k8s_cluster.upgrade_kubernetes_platform(
             pod_objects=self.db_cluster.nodes,
             use_additional_scylla_nodepool=True)
+        # NOTE: refresh IP addresses of the Scylla nodes because they get changed in current case
+        for db_node in self.db_cluster.nodes:
+            db_node.refresh_ip_address()
         self.monitors.reconfigure_scylla_monitoring()
 
-        InfoEvent(message='Step5 - Validate versions after kubernetes platform upgrade').publish()
+        InfoEvent(message="Step4 - Validate K8S versions after the upgrade").publish()
         data_plane_versions = self.k8s_cluster.kubectl(
             f"get nodes --no-headers -l '{self.k8s_cluster.POOL_LABEL_NAME} "
             f"in ({self.k8s_cluster.AUXILIARY_POOL_NAME},{scylla_pool.name})' "
@@ -1062,20 +1063,20 @@ class UpgradeTest(FillDatabaseData):
                    for ver in control_plane_versions), (
             f"Got unexpected K8S control plane version: {control_plane_versions}")
 
-        InfoEvent(message='Step6 - Check scylla-operator pods after kubernetes platform upgrade').publish()
+        InfoEvent(message="Step5 - Check Scylla-operator pods").publish()
         self.k8s_cluster.kubectl_wait(
             "--all --for=condition=Ready pod",
             namespace=self.k8s_cluster._scylla_operator_namespace,  # pylint: disable=protected-access
             timeout=600)
 
-        InfoEvent(message='Step7 - Check scylla pods after kubernetes platform upgrade').publish()
+        InfoEvent(message="Step6 - Check Scylla pods").publish()
         self.k8s_cluster.kubectl_wait(
             "--all --for=condition=Ready pod",
             namespace=self.db_cluster.namespace,
             timeout=600)
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
-        InfoEvent(message='Step8 - Add new member to the Scylla cluster').publish()
+        InfoEvent(message="Step7 - Add new member to the Scylla cluster").publish()
         peer_db_node = self.db_cluster.nodes[0]
         new_nodes = self.db_cluster.add_nodes(
             count=1,
@@ -1088,15 +1089,19 @@ class UpgradeTest(FillDatabaseData):
         self.monitors.reconfigure_scylla_monitoring()
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
-        InfoEvent(message='Step9 - Verify data in the Scylla cluster').publish()
+        InfoEvent(message="Step8 - Wait for the end of 'stress_during_entire_upgrade'").publish()
+        self.verify_stress_thread(stress_during_entire_upgrade_thread_pool)
+
+        InfoEvent(message="Step9 - Run 'fill_and_verify_db_data'").publish()
         self.fill_and_verify_db_data(note='after operator upgrade and scylla member addition')
 
-        InfoEvent(message='Step10 - Run c-s read workload').publish()
-        # NOTE: refresh IP addresses of the Scylla nodes because they get changed in current case
-        for db_node in self.db_cluster.nodes:
-            db_node.refresh_ip_address()
-        self.verify_stress_thread(self.run_stress_thread(
-            stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))))
+        InfoEvent(message="Step10 - Run 'stress_cmd_r' to check all the preloaded data").publish()
+        read_stress_threads = self._run_all_stress_cmds([], params={
+            'stress_cmd': self.params.get('stress_cmd_r'),
+            'round_robin': self.params.get('round_robin'),
+        })
+        for read_stress_thread in read_stress_threads:
+            self.verify_stress_thread(read_stress_thread)
 
     def wait_till_scylla_is_upgraded_on_all_nodes(self, target_version: str) -> None:
         def _is_cluster_upgraded() -> bool:
