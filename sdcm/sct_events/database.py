@@ -278,9 +278,12 @@ class BootstrapEvent(ScyllaDatabaseContinuousEvent):
 
 
 class FullScanEvent(ScyllaDatabaseContinuousEvent):
-    def __init__(self, node: str, ks_cf: str, message: Optional[str] = None, severity=Severity.NORMAL, **__):
+    def __init__(self, node: str, ks_cf: str, message: Optional[str] = None, severity=Severity.NORMAL,
+                 **kwargs):
         self.ks_cf = ks_cf
         self.message = message
+        self.user = kwargs.get("user", None)
+        self.password = kwargs.get("password", None)
         super().__init__(node=node, severity=severity)
 
     @property
@@ -288,6 +291,10 @@ class FullScanEvent(ScyllaDatabaseContinuousEvent):
         fmt = super().msgfmt + " select_from={0.ks_cf}"
         if self.message:
             fmt += " message={0.message}"
+        if self.user:
+            fmt += " user={0.user}"
+        if self.password:
+            fmt += " password={0.password}"
         return fmt
 
 
