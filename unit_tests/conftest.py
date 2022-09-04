@@ -25,6 +25,7 @@ from sdcm.provision import provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_provision import region_definition_builder
 from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.sct_config import SCTConfiguration
 
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
@@ -47,6 +48,13 @@ def events():
 @pytest.fixture(scope='session')
 def prom_address():
     yield start_metrics_server()
+
+
+@pytest.fixture(name="params")
+def fixture_params():
+    os.environ["SCT_CLUSTER_BACKEND"] = "docker"
+    params = SCTConfiguration()
+    yield params
 
 
 @pytest.fixture(scope='session')

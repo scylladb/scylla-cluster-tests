@@ -49,7 +49,7 @@ def create_cql_ks_and_table(docker_scylla):
         session.execute(create_table_query)
 
 
-def test_01_scylla_bench(request, docker_scylla):
+def test_01_scylla_bench(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy()
 
     cmd = (
@@ -58,7 +58,7 @@ def test_01_scylla_bench(request, docker_scylla):
         + "-connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=60s -duration=1m"
     )
     bench_thread = ScyllaBenchThread(
-        loader_set=loader_set, stress_cmd=cmd, node_list=[docker_scylla], timeout=120
+        loader_set=loader_set, stress_cmd=cmd, node_list=[docker_scylla], timeout=120, params=params
     )
 
     def cleanup_thread():

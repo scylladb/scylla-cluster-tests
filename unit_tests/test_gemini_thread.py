@@ -30,7 +30,7 @@ class DBCluster:  # pylint: disable=too-few-public-methods
         return [node.cql_ip_address for node in self.nodes]
 
 
-def test_01_gemini_thread(request, docker_scylla):
+def test_01_gemini_thread(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy()
     test_cluster = DBCluster([docker_scylla])
     cmd = (
@@ -44,6 +44,7 @@ def test_01_gemini_thread(request, docker_scylla):
         test_cluster=test_cluster,
         oracle_cluster=test_cluster,
         timeout=120,
+        params=params,
     )
 
     def cleanup_thread():

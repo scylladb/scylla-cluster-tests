@@ -8,12 +8,12 @@ from unit_tests.dummy_remote import LocalLoaderSetDummy
 pytestmark = [pytest.mark.usefixtures('events'), pytest.mark.skip(reason="those are integration tests only")]
 
 
-def test_01_cql_api(request, docker_scylla):
+def test_01_cql_api(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy()
     cmd = 'ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=20000000 ; ' \
           'numReaders=8; numWriters=8 ; cass.writeConsistencyLevel=QUORUM ; ' \
           'cass.readConsistencyLevel=QUORUM ; readRateLimit=7200 ; writeRateLimit=1800'
-    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5)
+    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
     def cleanup_thread():
         ndbench_thread.kill()
@@ -22,7 +22,7 @@ def test_01_cql_api(request, docker_scylla):
     ndbench_thread.get_results()
 
 
-def test_02_cql_kill(request, docker_scylla):
+def test_02_cql_kill(request, docker_scylla, params):
     """
     verifies that kill command on the NdBenchStressThread is working
     """
@@ -30,7 +30,7 @@ def test_02_cql_kill(request, docker_scylla):
     cmd = 'ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=20000000 ; ' \
           'numReaders=8; numWriters=8 ; cass.writeConsistencyLevel=QUORUM ; ' \
           'cass.readConsistencyLevel=QUORUM ; readRateLimit=7200 ; writeRateLimit=1800'
-    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=500)
+    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=500, params=params)
 
     def cleanup_thread():
         ndbench_thread.kill()
@@ -41,7 +41,7 @@ def test_02_cql_kill(request, docker_scylla):
     ndbench_thread.get_results()
 
 
-def test_03_dynamodb_api(request, docker_scylla, events):
+def test_03_dynamodb_api(request, docker_scylla, events, params):
     """
     this test isn't working yet, since we didn't figured out a way to use ndbench with dynamodb
     """
@@ -52,7 +52,7 @@ def test_03_dynamodb_api(request, docker_scylla, events):
     cmd = f'ndbench cli.clientName=DynamoDBKeyValue ; numKeys=20000000 ; ' \
           f'numReaders=8; numWriters=8 ; readRateLimit=7200 ; writeRateLimit=1800; ' \
           f'dynamodb.autoscaling=false; dynamodb.endpoint=http://{docker_scylla.internal_ip_address}:8000'
-    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=20)
+    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=20, params=params)
 
     def cleanup_thread():
         ndbench_thread.kill()
@@ -68,12 +68,12 @@ def test_03_dynamodb_api(request, docker_scylla, events):
     assert 'BUILD FAILED' in critical_log_content_after
 
 
-def test_04_verify_data(request, docker_scylla, events):
+def test_04_verify_data(request, docker_scylla, events, params):
     loader_set = LocalLoaderSetDummy()
     cmd = 'ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=30 ; ' \
           'readEnabled=false; numReaders=0; numWriters=1 ; cass.writeConsistencyLevel=QUORUM ; ' \
           'cass.readConsistencyLevel=QUORUM ; generateChecksum=false'
-    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30)
+    ndbench_thread = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params)
 
     def cleanup_thread():
         ndbench_thread.kill()
@@ -85,7 +85,7 @@ def test_04_verify_data(request, docker_scylla, events):
     cmd = 'ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=30 ; ' \
           'writeEnabled=false; numReaders=1; numWriters=0 ; cass.writeConsistencyLevel=QUORUM ; ' \
           'cass.readConsistencyLevel=QUORUM ; validateChecksum=true ;'
-    ndbench_thread2 = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30)
+    ndbench_thread2 = NdBenchStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params)
 
     def cleanup_thread2():
         ndbench_thread2.kill()
