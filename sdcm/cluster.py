@@ -3182,8 +3182,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         if protocol_version is None:
             protocol_version = 3
 
-        credentials = self.get_db_auth()
-        user, password = credentials if credentials else (None, None)
+        if user is None and password is None:
+            credentials = self.get_db_auth()
+            user, password = credentials if credentials else (None, None)
 
         if user is not None:
             auth_provider = PlainTextAuthProvider(username=user, password=password)
@@ -3201,6 +3202,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                        port=port, ssl_options=ssl_opts,
                                        connect_timeout=connect_timeout)
         session = cluster_driver.connect()
+        LOGGER.debug("Session authorization provider: user '%s', password '%s'", cluster_driver.auth_provider.username,
+                     cluster_driver.auth_provider.password)
 
         # temporarily increase client-side timeout to 1m to determine
         # if the cluster is simply responding slowly to requests

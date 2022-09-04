@@ -101,7 +101,8 @@ class ScanOperationThread:
         self.wait_until_user_table_exists(db_node=db_node, table_name=self.ks_cf)
         if self.ks_cf.lower() == 'random':
             self.ks_cf = random.choice(self.db_cluster.get_non_system_ks_cf_list(db_node))
-        with self.scan_event(node=db_node.name, ks_cf=self.ks_cf, message="") as operation_event:
+        with self.scan_event(node=db_node.name, ks_cf=self.ks_cf, message="",
+                             user=self.user, password=self.password) as operation_event:
             cmd = cmd or self.randomly_form_cql_statement()
             if not cmd:
                 return

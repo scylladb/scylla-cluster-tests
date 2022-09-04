@@ -43,7 +43,8 @@ class LongevitySlaTest(LongevityTest):
                 self.roles.append(self.create_sla_auth(session=session, shares=shares, index=index))
 
             if self.params.get("run_fullscan"):
-                self.fullscan_role = self.create_sla_auth(session=session, shares=self.FULLSCAN_SERVICE_LEVEL_SHARES)
+                self.fullscan_role = self.create_sla_auth(session=session, shares=self.FULLSCAN_SERVICE_LEVEL_SHARES,
+                                                          index=0)
 
         self.add_sla_credentials_to_stress_cmds()
         super().test_custom_time()
