@@ -193,3 +193,6 @@ scylla_apt_keys:
 raid_level: 0
 
 bare_loaders: false
+
+stress_image:
+  ycsb: 'scylladb/hydra-loaders:ycsb-jdk8-20220904'
