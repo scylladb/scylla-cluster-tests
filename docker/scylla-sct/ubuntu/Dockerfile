@@ -12,7 +12,7 @@ SHELL ["/bin/bash", "-c"]
 #    00hzYw5m.HyAY
 #
 # For more details see man page for useradd(8)
-RUN apt-get update && apt-get install -y --no-install-recommends apt-transport-https gnupg2 software-properties-common curl
+RUN apt-get update && apt-get install -y --no-install-recommends apt-transport-https gnupg2 software-properties-common curl ssh
 RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
 RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 
@@ -25,17 +25,10 @@ RUN apt-get update && \
     echo "$USER  ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers && \
     apt install --no-install-recommends -y \
         iproute2 \
-        collectd \
         syslog-ng \
         rsync \
         docker-ce-cli && \
     rm -rf /var/lib/apt/lists/* && \
-    echo $'[program:collectd]\n\
-command=/usr/sbin/collectd\n\
-stdout_logfile=/dev/stdout\n\
-stdout_logfile_maxbytes=0\n\
-stderr_logfile=/dev/stderr\n\
-stderr_logfile_maxbytes=0' > /etc/supervisord.conf.d/collectd.conf && \
     echo $'[program:scylla-manager]\n\
 command=/usr/bin/scylla-manager --developer-mode\n\
 stdout_logfile=/dev/stdout\n\
@@ -44,3 +37,7 @@ stderr_logfile=/dev/stderr\n\
 stderr_logfile_maxbytes=0' > /etc/supervisord.conf.d/scylla-manager.conf && \
     echo "autostart=false" >> /etc/supervisord.conf.d/scylla-server.conf && \
     echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf
+
+RUN export SSH_VERSION=$(ssh -V 2>&1 | cut -f 1  --delimiter=' ' | cut -f 2 --delimiter='_') && \
+    dpkg --compare-versions "$SSH_VERSION" ">=" "8.8p1" && \
+    echo $'PubkeyAcceptedAlgorithms +ssh-rsa\nHostKeyAlgorithms +ssh-rsa' >> /etc/ssh/sshd_config ; /etc/init.d/ssh start || echo ""
