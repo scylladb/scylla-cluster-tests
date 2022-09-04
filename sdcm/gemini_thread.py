@@ -105,7 +105,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
         docker = RemoteDocker(loader, f"scylladb/hydra-loaders:gemini-{self.gemini_version}",
-                              extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker}')
+                              extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host')
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
