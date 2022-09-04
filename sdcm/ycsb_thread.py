@@ -229,7 +229,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        docker = RemoteDocker(loader, self.params.get('stress_image.ycdb'),
+        docker = RemoteDocker(loader, self.params.get('stress_image.ycsb'),
                               extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}')
         self.copy_template(docker)
         stress_cmd = self.build_stress_cmd()
