@@ -20,7 +20,7 @@ pytestmark = [pytest.mark.usefixtures('events'),
               pytest.mark.skip(reason="those are integration tests only")]
 
 
-def test_01_cassandra_harry(request, docker_scylla, events):
+def test_01_cassandra_harry(request, docker_scylla, events, params):
     """
     Test to help integrated new version/docker images of cassandra-harry
 
@@ -33,7 +33,7 @@ def test_01_cassandra_harry(request, docker_scylla, events):
     loader_set = LocalLoaderSetDummy()
 
     cmd = 'cassandra-harry -run-time 1 -run-time-unit MINUTES'
-    harry_thread = CassandraHarryThread(loader_set, cmd, node_list=[docker_scylla], timeout=5)
+    harry_thread = CassandraHarryThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
 
     def cleanup_thread():
         harry_thread.kill()
