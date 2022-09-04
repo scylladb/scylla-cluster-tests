@@ -1748,7 +1748,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             node_list=self.db_cluster.nodes,
             round_robin=round_robin,
             stop_test_on_failure=stop_test_on_failure,
-            credentials=self.db_cluster.get_db_auth()
+            credentials=self.db_cluster.get_db_auth(),
+            params=self.params,
         )
         bench_thread.run()
         scylla_encryption_options = self.params.get('scylla_encryption_options')
