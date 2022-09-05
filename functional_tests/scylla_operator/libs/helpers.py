@@ -15,10 +15,15 @@
 from enum import Enum
 import logging
 import time
+from typing import Union
 import yaml
 
 from kubernetes.client import exceptions as k8s_exceptions
 
+from sdcm.cluster import (
+    DB_LOG_PATTERN_RESHARDING_START,
+    DB_LOG_PATTERN_RESHARDING_FINISH,
+)
 from sdcm.cluster_k8s import (
     SCYLLA_MANAGER_NAMESPACE,
     SCYLLA_NAMESPACE,
@@ -162,3 +167,72 @@ def reinstall_scylla_manager(db_cluster: ScyllaPodCluster, manager_version: str)
         db_cluster.k8s_cluster.kubectl_wait(
             "--all --for=condition=Ready pod", namespace=SCYLLA_MANAGER_NAMESPACE, timeout=600)
         log.info("Scylla Manager '%s' has successfully been installed", manager_version)
+
+
+def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: Union[str, int, float]):
+    nodes_data = []
+    for node in reversed(db_cluster.nodes):
+        liveness_probe_failures = node.follow_system_log(
+            patterns=["healthz probe: can't connect to JMX"])
+        resharding_start = node.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_START])
+        resharding_finish = node.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_FINISH])
+        nodes_data.append((node, liveness_probe_failures, resharding_start, resharding_finish))
+
+    log.info(
+        "Update the cpu count to '%s' CPUs to make Scylla start "
+        "the resharding process on all the nodes 1 by 1", cpus)
+    db_cluster.replace_scylla_cluster_value(
+        "/spec/datacenter/racks/0/resources", {
+            "limits": {
+                "cpu": cpus,
+                "memory": db_cluster.k8s_cluster.calculated_memory_limit,
+            },
+            "requests": {
+                "cpu": cpus,
+                "memory": db_cluster.k8s_cluster.calculated_memory_limit,
+            },
+        })
+
+    # Wait for the start of the resharding.
+    # In K8S it starts from the last node of a rack and then goes to previous ones.
+    # One resharding with 100Gb+ may take about 3-4 minutes. So, set 5 minutes timeout per node.
+    try:
+        for node, liveness_probe_failures, resharding_start, resharding_finish in nodes_data:
+            assert wait_for(
+                func=lambda: list(resharding_start),  # pylint: disable=cell-var-from-loop
+                step=1, timeout=300, throw_exc=False,
+                text=f"Waiting for the start of resharding on the '{node.name}' node.",
+            ), f"Start of resharding hasn't been detected on the '{node.name}' node."
+            resharding_started = time.time()
+            log.debug("Resharding has been started on the '%s' node.", node.name)
+
+            # Wait for the end of resharding
+            assert wait_for(
+                func=lambda: list(resharding_finish),  # pylint: disable=cell-var-from-loop
+                step=3, timeout=600, throw_exc=False,
+                text=f"Waiting for the finish of resharding on the '{node.name}' node.",
+            ), f"Finish of the resharding hasn't been detected on the '{node.name}' node."
+            log.debug("Resharding has been finished successfully on the '%s' node.", node.name)
+
+            # Calculate the time spent for resharding. We need to have it be bigger than 2minutes
+            # because it is the timeout of the liveness probe for Scylla pods.
+            resharding_time = time.time() - resharding_started
+            if resharding_time < 120:
+                log.warning(
+                    "Resharding was too fast - '%s's (<120s) on the '%s' node",
+                    resharding_time, node.name)
+            else:
+                log.info(
+                    "Resharding took '%s's on the '%s' node",
+                    resharding_time, node.name)
+
+            # Check that liveness probe didn't report any errors
+            # https://github.com/scylladb/scylla-operator/issues/894
+            liveness_probe_failures = list(liveness_probe_failures)
+            assert not liveness_probe_failures, (
+                f"There are liveness probe failures: {liveness_probe_failures}")
+    finally:
+        # NOTE: refresh scylla pods IP addresses because it may get changed here
+        for node in nodes_data:
+            node[0].refresh_ip_address()
+    log.info("Resharding has successfully ended on whole Scylla cluster.")
