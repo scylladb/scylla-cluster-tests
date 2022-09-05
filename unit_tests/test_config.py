@@ -692,14 +692,14 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                          {'alternator-dns': 'scylladb/hydra-loaders:alternator-dns-0.1',
                           'cassandra-stress': 'scylla-bench',
                           'cdc-stresser': 'scylladb/hydra-loaders:cdc-stresser-A',
-                          'gemini': 'scylladb/hydra-loaders:gemini-1.7.6',
+                          'gemini': 'scylladb/hydra-loaders:gemini-1.7.7',
                           'ndbench': 'scylladb/hydra-loaders:ndbench-jdk8-A',
                           'nosqlbench': 'scylladb/hydra-loaders:nosqlbench-A',
                           'scylla-bench': 'scylladb/something',
                           'ycsb': 'scylladb/something_else',
                           'kcl': 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'})
 
-        self.assertEqual(conf.get('stress_image.gemini'), 'scylladb/hydra-loaders:gemini-1.7.6')
+        self.assertEqual(conf.get('stress_image.gemini'), 'scylladb/hydra-loaders:gemini-1.7.7')
         self.assertEqual(conf.get('stress_image.non-exist'), None)
 
         self.assertEqual(conf.get('stress_read_cmd'), ['cassandra_stress', ['cassandra_stress', 'cassandra_stress']])
