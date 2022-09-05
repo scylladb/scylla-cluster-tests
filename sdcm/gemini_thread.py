@@ -92,19 +92,13 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         self.gemini_commands.append(cmd)
         return cmd
 
-    @property
-    def gemini_version(self):
-        version = self.params.get('gemini_version') or '1.7.6'
-        version = '1.7.6' if version == 'latest' else version
-        return version
-
     def _run_stress(self, loader, loader_idx, cpu_idx):
 
         cpu_options = ""
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        docker = RemoteDocker(loader, f"scylladb/hydra-loaders:gemini-{self.gemini_version}",
+        docker = RemoteDocker(loader, self.params.get("stress_image.gemini"),
                               extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host')
 
         if not os.path.exists(loader.logdir):
