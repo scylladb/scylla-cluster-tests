@@ -15,7 +15,7 @@ gemini_cmd: "gemini -d --duration 3h \
 gemini_table_options:
   - "cdc={'enabled': true}"
 
-gemini_version: 'latest'
+
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
 
 db_type: scylla

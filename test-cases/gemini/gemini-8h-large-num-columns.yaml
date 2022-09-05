@@ -25,7 +25,7 @@ gemini_cmd: "gemini -d --duration 7h --warmup 1h \
 --max-clustering-keys 20 --min-clustering-keys 12 \
 --max-columns 100 --min-columns 80 --verbose"
 
-gemini_version: 'latest'
+
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
 
 db_type: scylla
