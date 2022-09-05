@@ -21,5 +21,8 @@ nemesis_filter_seeds: false
 user_prefix: 'longevity-100gb-4h'
 space_node_threshold: 64424
 
+server_encrypt: true
+client_encrypt: true
+
 pre_create_schema: True
 sstable_size: 100
