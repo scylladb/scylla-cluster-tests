@@ -205,13 +205,8 @@ class LongevityDataValidator:
         """
         if not self._mvs_for_updated_data:
             mvs_names = self.get_view_name_from_profile(self.SUFFIX_FOR_VIEW_AFTER_UPDATE, all_entries=True)
-            # Cover the case when there are 2 MVs in the profile with same prefix in the name. After replacing of
-            # SUFFIX_FOR_VIEW_AFTER_UPDATE from the name, two views with same names will be in the list. In this case
-            # creation table failure will be received.
-            # Example:
-            # blogposts_update_one_column_lwt_indicator AND blogposts_update_one_column_lwt_indicator_after_update
-            self._mvs_for_updated_data = list(set(view_name.replace(self.SUFFIX_FOR_VIEW_AFTER_UPDATE, '')
-                                                  for view_name in mvs_names))
+            self._mvs_for_updated_data = [view_name.replace(self.SUFFIX_FOR_VIEW_AFTER_UPDATE, '')
+                                          for view_name in mvs_names]
         return self._mvs_for_updated_data
 
     @property
@@ -270,7 +265,7 @@ class LongevityDataValidator:
 
         if not cs_profile:
             stress_cmd = self.longevity_self_object.params.get(self.stress_cmds_part) or []
-            cs_profile = [cmd for cmd in stress_cmd if self.user_profile_name in cmd]
+            cs_profile = list(set(cmd for cmd in stress_cmd if self.user_profile_name in cmd))
 
         if not cs_profile:
             return mv_names
@@ -289,9 +284,7 @@ class LongevityDataValidator:
                     if not all_entries:
                         break
 
-        # If same user profile is called in parallel, the same MVs will be included few time in the list and test data
-        # will be copied a few times. Return list of unique MVs to prevent to duplicate of copying test data
-        return list(set(mv_names))
+        return mv_names
 
     @staticmethod
     def get_view_cmd_from_profile(profile_content, name_substr, all_entries=False):
