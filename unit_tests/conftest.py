@@ -18,14 +18,13 @@ from pathlib import Path
 
 import pytest
 
-from sdcm import wait
+from sdcm import wait, sct_config
 from sdcm.cluster import BaseNode
 from sdcm.prometheus import start_metrics_server
 from sdcm.provision import provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_provision import region_definition_builder
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.sct_config import SCTConfiguration
 
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
@@ -48,13 +47,6 @@ def events():
 @pytest.fixture(scope='session')
 def prom_address():
     yield start_metrics_server()
-
-
-@pytest.fixture(name="params")
-def fixture_params():
-    os.environ["SCT_CLUSTER_BACKEND"] = "docker"
-    params = SCTConfiguration()
-    yield params
 
 
 @pytest.fixture(scope='session')
@@ -113,3 +105,22 @@ def fake_provisioner():  # pylint: disable=no-self-use
 @pytest.fixture(scope='session', autouse=True)
 def fake_region_definition_builder():  # pylint: disable=no-self-use
     region_definition_builder.register_builder(backend="fake", builder_class=FakeDefinitionBuilder)
+
+
+@pytest.fixture(scope="function", name="params")
+def fixture_params(request: pytest.FixtureRequest):
+    config_files = request.node.get_closest_marker("sct_config").kwargs.get('files')
+    if config_files:
+        os.environ['SCT_CONFIG_FILES'] = config_files
+
+    os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+    os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+    os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+    params = sct_config.SCTConfiguration()  # pylint: disable=attribute-defined-outside-init
+    params.verify_configuration()
+
+    yield params
+
+    for k in os.environ:
+        if k.startswith('SCT_'):
+            del os.environ[k]

@@ -461,6 +461,14 @@ class LongevityDataValidator:
                     LOGGER.debug('Verify immutable rows. Actual dataset length: %s, Expected dataset length: %s',
                                  len(actual_result), len(expected_result))
 
+    def list_of_view_names_for_update_test(self):
+        # List of tuples of correlated  view names for validation: before update, after update, expected data
+        return list(zip(self.view_names_for_updated_data,
+                        self.view_names_after_updated_data,
+                        [self.set_expected_data_table_name(view) for view in
+                         self.view_names_for_updated_data],
+                        self._validate_updated_per_view, ))
+
     def validate_range_expected_to_change(self, session, during_nemesis=False):
         """
         In user profile 'data_dir/c-s_lwt_basic.yaml' LWT updates the lwt_indicator and author columns with hard coded
@@ -487,13 +495,7 @@ class LongevityDataValidator:
 
         partition_keys = ', '.join(self.base_table_partition_keys)
 
-        # List of tuples of correlated  view names for validation: before update, after update, expected data
-        views_list = list(zip(self.view_names_for_updated_data,
-                              self.view_names_after_updated_data,
-                              [self.set_expected_data_table_name(view) for view in
-                               self.view_names_for_updated_data],
-                              self._validate_updated_per_view, ))
-        for views_set in views_list:
+        for views_set in self.list_of_view_names_for_update_test():
             # views_set[0] - view name with rows before update
             # views_set[1] - view name with rows after update
             # views_set[2] - view name with all expected partition keys
