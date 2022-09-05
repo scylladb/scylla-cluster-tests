@@ -4412,26 +4412,19 @@ class BaseLoaderSet():
         self._loader_cycle = None
         self.params = params
         self._gemini_version = None
-        self._gemini_base_path = None
         self.sb_write_timeseries_ts = None
 
     @property
     def gemini_version(self):
         if not self._gemini_version:
             try:
-                result = self.nodes[0].remoter.run('cd $HOME; ./gemini --version', ignore_status=True)
+                result = self.nodes[0].remoter.run(f'docker run --rm {self.params.get("stress_image.gemini")} '
+                                                   f'gemini --version', ignore_status=True)
                 if result.ok:
                     self._gemini_version = get_gemini_version(result.stdout)
             except Exception as details:  # pylint: disable=broad-except
                 self.log.error("Error get gemini version: %s", details)
         return self._gemini_version
-
-    @property
-    def gemini_base_path(self):
-        if not self._gemini_base_path:
-            result = self.nodes[0].remoter.run("echo $HOME", ignore_status=True)
-            self._gemini_base_path = result.stdout.strip()
-        return self._gemini_base_path
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):  # pylint: disable=unused-argument
         # pylint: disable=too-many-statements,too-many-branches

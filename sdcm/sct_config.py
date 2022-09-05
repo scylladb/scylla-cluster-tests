@@ -555,9 +555,6 @@ class SCTConfiguration(dict):
                     be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
-        dict(name="gemini_version", env="SCT_GEMINI_VERSION", type=str,
-             help="""Version of download of the binaries of gemini tool"""),
-
         dict(name="gemini_schema_url", env="SCT_GEMINI_SCHEMA_URL", type=str,
              help="""Url of the schema/configuration the gemini tool would use """),
 

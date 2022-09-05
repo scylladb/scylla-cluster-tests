@@ -112,7 +112,6 @@
 | **<a href="#user-content-space_node_threshold" name="space_node_threshold">space_node_threshold</a>**  | Space node threshold before starting nemesis (bytes)<br>The default value is 6GB (6x1024^3 bytes)<br>This value is supposed to reproduce<br>https://github.com/scylladb/scylla/issues/1140 | N/A | SCT_SPACE_NODE_THRESHOLD
 | **<a href="#user-content-nemesis_filter_seeds" name="nemesis_filter_seeds">nemesis_filter_seeds</a>**  | If true runs the nemesis only on non seed nodes | True | SCT_NEMESIS_FILTER_SEEDS
 | **<a href="#user-content-stress_cmd" name="stress_cmd">stress_cmd</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CMD
-| **<a href="#user-content-gemini_version" name="gemini_version">gemini_version</a>**  | Version of download of the binaries of gemini tool | 0.9.2 | SCT_GEMINI_VERSION
 | **<a href="#user-content-gemini_schema_url" name="gemini_schema_url">gemini_schema_url</a>**  | Url of the schema/configuration the gemini tool would use | N/A | SCT_GEMINI_SCHEMA_URL
 | **<a href="#user-content-gemini_cmd" name="gemini_cmd">gemini_cmd</a>**  | gemini command to run (for now used only in GeminiTest) | N/A | SCT_GEMINI_CMD
 | **<a href="#user-content-gemini_seed" name="gemini_seed">gemini_seed</a>**  | Seed number for gemini command | N/A | SCT_GEMINI_SEED

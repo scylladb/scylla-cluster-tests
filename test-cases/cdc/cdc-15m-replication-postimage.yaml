@@ -24,6 +24,6 @@ extra_network_interface: true
 # to test pre/post-images with concurrent writes happening to a single row.
 gemini_cmd: "gemini -d --duration 15m --warmup 0s -c 1 -m write --non-interactive --cql-features basic --max-mutation-retries 100 --max-mutation-retries-backoff 100ms --replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '3'}\" --table-options \"cdc = {'enabled': true, 'postimage': true}\""
 
-gemini_version: 'latest'
+
 # Required by SCT, although not used:
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
