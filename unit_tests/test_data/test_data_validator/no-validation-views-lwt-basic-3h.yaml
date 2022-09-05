@@ -1,0 +1,10 @@
+test_duration: 300
+prepare_write_cmd: ["cassandra-stress user profile=/tmp/lwt_builtin_functions.yaml n=1000000 ops'(insert_query=1)' cl=QUORUM -mode native cql3 -rate threads=20"]
+stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1)' cl=QUORUM duration=160m -mode native cql3 -rate threads=20",
+             "cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1)' cl=QUORUM duration=160m -mode native cql3 -rate threads=20",
+             "cassandra-stress user profile=/tmp/lwt_builtin_functions.yaml ops'(lwt_update_by_pk=1,lwt_update_by_ck=1)' cl=QUORUM duration=160m -mode native cql3 -rate threads=10"
+            ]
+stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(select=1)' cl=SERIAL duration=160m -mode native cql3 -rate threads=20" ]
+
+user_prefix: 'longevity-sla-3h'
+n_db_nodes: 4
