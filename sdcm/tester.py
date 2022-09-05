@@ -53,6 +53,7 @@ from sdcm.scan_operation_thread import FullScanThread, FullPartitionScanThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.cassandra_harry_thread import CassandraHarryThread
+from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_network_configuration, get_ec2_services, \
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
@@ -695,7 +696,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             schema = self.params.get("dynamodb_primarykey_type")
             self.alternator.create_table(node=node, schema=schema)
             self.alternator.create_table(node=node, schema=schema, isolation=alternator.enums.WriteIsolation.FORBID_RMW,
-                                         table_name='usertable_no_lwt')
+                                         table_name=NO_LWT_TABLE_NAME)
+            prepare_cmd = self.params.get('prepare_write_cmd')
+            stress_cmd = self.params.get('stress_cmd')
+            if any('dynamodb.ttlKey' in str(cmd) for cmd in [prepare_cmd, stress_cmd]):
+                self.alternator.update_table_ttl(node=node, table_name=alternator.consts.TABLE_NAME)
+                self.alternator.update_table_ttl(node=node, table_name=alternator.consts.NO_LWT_TABLE_NAME)
 
     def get_nemesis_class(self):
         """

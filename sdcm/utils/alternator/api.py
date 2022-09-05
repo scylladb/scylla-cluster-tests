@@ -19,6 +19,9 @@ class AlternatorApi(NamedTuple):
     client: DynamoDBClient
 
 
+TTL_SPECIFICATION = dict(AttributeName='ttl', Enabled=True)
+
+
 class Alternator:
     def __init__(self, sct_params):
         self.params = sct_params
@@ -72,6 +75,11 @@ class Alternator:
             self.set_write_isolation(node=node, isolation=isolation, table_name=table_name)
         LOGGER.debug("Table's schema and configuration are: {}".format(response))
         return table
+
+    def update_table_ttl(self, node, table_name, ttl_specification: dict = None):
+        dynamodb_api = self.get_dynamodb_api(node=node)
+        ttl_specification = ttl_specification or TTL_SPECIFICATION
+        dynamodb_api.client.update_time_to_live(TableName=table_name, TimeToLiveSpecification=ttl_specification)
 
     def scan_table(self, node, table_name=consts.TABLE_NAME, threads_num=None, **kwargs):
         is_parallel_scan = threads_num and threads_num > 0

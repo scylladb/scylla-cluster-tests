@@ -289,6 +289,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
     alternator_enforce_authorization: bool = False
     alternator_write_isolation: Literal["unsafe_rmw", "only_rmw_uses_lwt", "forbid_rmw", "always_use_lwt"] = None
     alternator_streams_time_window_s: int = 10
+    alternator_ttl_period_in_seconds: int = None
     abort_on_ebadf: bool = True
     redis_port: int = 0
     redis_ssl_port: int = 0

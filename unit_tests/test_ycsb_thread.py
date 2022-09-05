@@ -32,6 +32,19 @@ ALTERNATOR = alternator.api.Alternator(sct_params={"alternator_access_key_id": N
                                                    "alternator_secret_access_key": None,
                                                    "alternator_port": ALTERNATOR_PORT})
 
+USE_ALTERNATOR_TTL = False  # Set 'True' for using TTL
+ALTERNATOR_WITH_TTL = alternator.api.Alternator(sct_params={"alternator_access_key_id": None,
+                                                            "alternator_secret_access_key": None,
+                                                            "alternator_port": ALTERNATOR_PORT,
+                                                            "experimental": "true",
+                                                            "append_scylla_yaml": " | "
+                                                                                  "experimental_features: alternator-ttl"
+                                                                                  " alternator_ttl_period_in_seconds: 300"})
+
+ALTERNATOR = ALTERNATOR_WITH_TTL if USE_ALTERNATOR_TTL else alternator.api.Alternator(
+    sct_params={"alternator_access_key_id": None, "alternator_secret_access_key": None,
+                "alternator_port": ALTERNATOR_PORT})
+
 
 @pytest.fixture(scope='session')
 def create_table(docker_scylla):
@@ -209,3 +222,41 @@ def test_04_insert_new_data(docker_scylla):
                                    schema=alternator.schemas.HASH_AND_STR_RANGE_SCHEMA)
     diff = ALTERNATOR.compare_table_data(node=docker_scylla, table_data=new_items)
     assert diff
+
+
+def test_05_dynamodb_ttl(
+    request, docker_scylla, prom_address, params
+):
+
+    loader_set = LocalLoaderSetDummy()
+    params.update(TEST_PARAMS)
+
+    # 2. do write without dataintegrity=true
+    cmd = (
+        "bin/ycsb load dynamodb -P workloads/workloada -threads 5 "
+        "-p recordcount=50 -p fieldcount=1 -p fieldlength=100 -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=5"
+    )
+    ycsb_thread1 = YcsbStressThread(
+        loader_set, cmd, node_list=[docker_scylla], timeout=30, params=params
+    )
+
+    def cleanup_thread1():
+        ycsb_thread1.kill()
+
+    request.addfinalizer(cleanup_thread1)
+
+    ycsb_thread1.run()
+    ycsb_thread1.get_results()
+    ycsb_thread1.kill()
+
+    # 4. wait for expected metrics to be available
+    @timeout(timeout=120)
+    def check_metrics():
+        output = requests.get("http://{}/metrics".format(prom_address)).text
+        regex = re.compile(r"^collectd_ycsb_verify_gauge.*?([0-9\.]*?)$", re.MULTILINE)
+
+        assert "collectd_ycsb_verify_gauge" in output
+        assert 'type="UNEXPECTED_STATE"' in output
+        assert 'type="ERROR"' in output
+        matches = regex.findall(output)
+        assert all(float(i) >= 0 for i in matches), output
