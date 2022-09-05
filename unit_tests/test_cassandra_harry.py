@@ -16,8 +16,10 @@ import pytest
 from sdcm.cassandra_harry_thread import CassandraHarryThread
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 
-pytestmark = [pytest.mark.usefixtures('events'),
-              pytest.mark.skip(reason="those are integration tests only")]
+pytestmark = [
+    pytest.mark.usefixtures("events"),
+    pytest.mark.skip(reason="those are integration tests only"),
+]
 
 
 def test_01_cassandra_harry(request, docker_scylla, events, params):
@@ -32,8 +34,10 @@ def test_01_cassandra_harry(request, docker_scylla, events, params):
     """
     loader_set = LocalLoaderSetDummy()
 
-    cmd = 'cassandra-harry -run-time 1 -run-time-unit MINUTES'
-    harry_thread = CassandraHarryThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params)
+    cmd = "cassandra-harry -run-time 1 -run-time-unit MINUTES"
+    harry_thread = CassandraHarryThread(
+        loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
+    )
 
     def cleanup_thread():
         harry_thread.kill()
@@ -46,6 +50,6 @@ def test_01_cassandra_harry(request, docker_scylla, events, params):
 
     # 5. check that events with the expected error were raised
     cat = file_logger.get_events_by_category()
-    assert len(cat['ERROR']) == 2
-    assert '=UNEXPECTED_STATE' in cat['ERROR'][0]
-    assert '=ERROR' in cat['ERROR'][1]
+    assert len(cat["ERROR"]) == 2
+    assert "=UNEXPECTED_STATE" in cat["ERROR"][0]
+    assert "=ERROR" in cat["ERROR"][1]
