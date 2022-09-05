@@ -70,11 +70,20 @@ class MinimalK8SNodePool(CloudK8sNodePool):
 
     @cached_property
     def cpu_and_memory_capacity(self) -> Tuple[float, float]:
+        cpu_per_member = 1
+        # NOTE: Setting '1' to 'memory_for_cpu_multiplier' we will get failure incresing CPUs
+        #       Setting '2' to 'memory_for_cpu_multiplier' we will be able to add 1 CPU per member
+        #       And so on... Useful for tests with change of CPU for Scylla pods.
+        memory_for_cpu_multiplier = 2
+        memory_for_cpu = memory_for_cpu_multiplier * cpu_per_member
+        memory_base = 1.5
         return (
-            1 + COMMON_CONTAINERS_RESOURCES['cpu']
+            cpu_per_member
+            + COMMON_CONTAINERS_RESOURCES['cpu']
             + OPERATOR_CONTAINERS_RESOURCES['cpu']
             + SCYLLA_MANAGER_AGENT_RESOURCES['cpu'],
-            2.5 + COMMON_CONTAINERS_RESOURCES['memory']
+            memory_base + memory_for_cpu
+            + COMMON_CONTAINERS_RESOURCES['memory']
             + OPERATOR_CONTAINERS_RESOURCES['memory']
             + SCYLLA_MANAGER_AGENT_RESOURCES['memory'],
         )
