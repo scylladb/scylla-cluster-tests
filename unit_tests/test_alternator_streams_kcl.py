@@ -15,29 +15,15 @@ import time
 import logging
 import pytest
 
-from sdcm.utils import alternator
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.lib.alternator_utils import TEST_PARAMS
 
 pytestmark = [
     pytest.mark.usefixtures("events"),
     pytest.mark.skipif(True, reason="those are integration tests only"),
 ]
-
-ALTERNATOR_PORT = 8000
-TEST_PARAMS = dict(
-    dynamodb_primarykey_type="HASH",
-    alternator_use_dns_routing=True,
-    alternator_port=ALTERNATOR_PORT,
-)
-ALTERNATOR = alternator.api.Alternator(
-    sct_params={
-        "alternator_access_key_id": None,
-        "alternator_secret_access_key": None,
-        "alternator_port": ALTERNATOR_PORT,
-    }
-)
 
 
 def test_01_kcl_with_ycsb(
