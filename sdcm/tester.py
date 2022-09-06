@@ -484,7 +484,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if is_superuser:
             create_role_cmd += f' WITH SUPERUSER=true'
         if is_login:
-            create_role_cmd += f' WITH login=true and password=\'{LDAP_PASSWORD}\''
+            create_role_cmd += f' WITH login=true'  #  and password=\'{LDAP_PASSWORD}\''
         node.run_cqlsh(create_role_cmd)
 
     def _setup_ldap_roles(self, db_cluster: BaseScyllaCluster):
@@ -494,7 +494,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         for user in LDAP_USERS:
             node.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true')
         node.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with SUPERUSER=true and password=\'{LDAP_PASSWORD}\'')
-        node.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[1]}\' with and password=\'{LDAP_PASSWORD}\'')
+        # node.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[1]}\' with password=\'{LDAP_PASSWORD}\'')
         self.params['are_ldap_users_on_scylla'] = True
 
     def create_role_in_ldap(self, ldap_role_name: str, ldap_users: list):
