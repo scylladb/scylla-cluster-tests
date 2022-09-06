@@ -116,7 +116,7 @@ class TestUDF(TestCase):
             self.assertEqual(value, getattr(udf, key), f"Did not find expected value for {key} in the udf class.")
 
     def test_load_all_udfs(self):
-        self.assertIsNotNone(UDFS)
+        self.assertGreater(len(UDFS.keys()), 1, "UDF count was not greater than 1.")
         for udf in UDFS.values():
             self.assertTrue(udf.name)
             self.assertTrue(udf.args)
