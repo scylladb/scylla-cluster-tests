@@ -31,7 +31,9 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import wraps, partial
 from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union
 
+import pytest
 from cassandra import ConsistencyLevel
+from cassandra import Unauthorized
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.db.db_types import NemesisStatus, NemesisRunInfo, NodeDescription
@@ -87,7 +89,7 @@ from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units,
 )
-from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LDAP_USERS, LDAP_PASSWORD
+from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LDAP_USERS, LDAP_PASSWORD, LDAP_BASE_OBJECT
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
@@ -1040,7 +1042,71 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         ContainerManager.unpause_container(self.tester.localhost, 'ldap')
         self.log.info('finished with nemesis')
 
-    def disrupt_ldap_grant_revoke_permission(self):
+    def disrupt_ldap_grant_revoke_roles(self):
+        """
+        Scenario:
+        GRANT report_writer TO alice
+
+        """
+        if not self.cluster.params.get('use_ldap_authorization'):
+            raise UnsupportedNemesis('Cluster is not configured to run with LDAP authorization, hence skipping')
+        if not self.target_node.is_enterprise:
+            raise UnsupportedNemesis('Cluster is not enterprise. LDAP is supported only for enterprise. Skipping')
+        node = self.cluster.nodes[0]
+        # ldap_ks = 'ldap_ks'
+        # ldap_cf = 'standard1'
+
+        # self.log.debug("Create a new Ldap role")
+        # customer_ldap_role = 'customer_ldap_role'
+        # self.tester.create_role_in_ldap(ldap_role_name=customer_ldap_role, ldap_users=[customer_ldap_role])
+        try:
+            authorized_ldap_user = 'authorized_ldap_user'
+            unauthorized_ldap_user = 'unauthorized_ldap_user'
+            self.log.debug("Create new users in Scylla")
+            self.tester.create_role_in_scylla(node=node, role_name=authorized_ldap_user, is_superuser=False, is_login=True)
+            self.tester.create_role_in_scylla(node=node, role_name=unauthorized_ldap_user, is_superuser=False,
+                                              is_login=True)
+
+            self.log.debug("Grant Role permissions to a user")
+            with self.cluster.cql_connection_patient(node=node, user=LDAP_USERS[0], password=LDAP_PASSWORD) as session:
+
+                session.execute(
+                    """ CREATE KEYSPACE IF NOT EXISTS customer WITH replication = {'class': 'SimpleStrategy', 
+                    'replication_factor': 1} """)
+
+                session.execute(
+                    """ CREATE TABLE IF NOT EXISTS customer.info (ssid UUID, name text, DOB text, telephone text, 
+                    email text, memberid text, PRIMARY KEY (ssid,  name, memberid)) """)
+
+                session.execute(f"GRANT SELECT ON customer.info TO {authorized_ldap_user}")
+
+            self.log.debug("Create new users in Ldap")
+            self.tester.create_role_in_ldap(ldap_role_name=authorized_ldap_user, ldap_users=[authorized_ldap_user])
+            self.tester.create_role_in_ldap(ldap_role_name=unauthorized_ldap_user,
+                                            ldap_users=[unauthorized_ldap_user])
+
+            # self.tester.create_role_in_scylla(node=node, role_name=customer_ldap_role, is_superuser=False, is_login=False)
+
+            # *************************************************************************
+            # node.run_cqlsh(f'CREATE ROLE IF NOT EXISTS \'{customer_ldap_role}\'')
+            # new_ldap_role = 'bla'  # TODO: implement
+
+
+            # self.log.debug("Create a new Ldap user")
+            # self.tester.create_role_in_scylla(node=node, role_name=authorized_ldap_user, is_superuser=False, is_login=True)
+            # self.tester.create_role_in_ldap(ldap_role_name=authorized_ldap_user, ldap_users=[authorized_ldap_user])
+
+            with pytest.raises(Unauthorized, match=rf"User {unauthorized_ldap_user} has no SELECT permission on "):
+                with self.cluster.cql_connection_patient(node=node, user=unauthorized_ldap_user,
+                                                         password=LDAP_PASSWORD) as session:
+                    session.execute("SELECT * from customer.info LIMIT 1")
+
+            with self.cluster.cql_connection_patient(node=node, user=authorized_ldap_user, password=LDAP_PASSWORD) as session:
+                session.execute("SELECT * from customer.info")
+        except Exception as error:
+            self.log.error("disrupt_ldap_grant_revoke_roles got exception: %s", error)
+
+    def disrupt_grant_revoke_user_permission(self):
         if not self.cluster.params.get('use_ldap_authorization'):
             raise UnsupportedNemesis('Cluster is not configured to run with LDAP authorization, hence skipping')
         if not self.target_node.is_enterprise:

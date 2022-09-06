@@ -477,6 +477,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def _init_ldap_openldap(self):
         self.configure_ldap(node=self.localhost, use_ssl=False)
 
+    def create_role_in_scylla(self, node: BaseNode, role_name: str, is_superuser: bool = True,
+                              is_login: bool = True):
+        self.log.debug("Configuring an LDAP Role %s in Scylla DB", role_name)
+        create_role_cmd = f'CREATE ROLE IF NOT EXISTS \'{role_name}\''
+        if is_superuser:
+            create_role_cmd += f' WITH SUPERUSER=true'
+        if is_login:
+            create_role_cmd += f' WITH login=true and password=\'{LDAP_PASSWORD}\''
+        node.run_cqlsh(create_role_cmd)
+
     def _setup_ldap_roles(self, db_cluster: BaseScyllaCluster):
         self.log.debug("Configuring LDAP Roles.")
         node = db_cluster.nodes[0]
@@ -486,6 +496,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         node.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with SUPERUSER=true and password=\'{LDAP_PASSWORD}\'')
         node.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[1]}\' with and password=\'{LDAP_PASSWORD}\'')
         self.params['are_ldap_users_on_scylla'] = True
+
+    def create_role_in_ldap(self, ldap_role_name: str, ldap_users: list):
+        ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
+        ldap_address = list(self.test_config.LDAP_ADDRESS).copy()
+        unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
+        role_entry = [
+            f'cn={ldap_role_name},{LDAP_BASE_OBJECT}',
+            ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
+            {
+                'uniqueMember': unique_members_list,
+                'userPassword': LDAP_PASSWORD
+            }
+        ]
+        self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                      user=ldap_username, password=LDAP_PASSWORD, ldap_entry=role_entry)
 
     def configure_ldap(self, node, use_ssl=False):
         self.test_config.configure_ldap(node=node, use_ssl=use_ssl)
