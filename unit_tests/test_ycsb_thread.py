@@ -22,25 +22,12 @@ from sdcm.utils.decorators import timeout
 from sdcm.utils.docker_utils import running_in_docker
 from sdcm.ycsb_thread import YcsbStressThread
 from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.lib.alternator_utils import ALTERNATOR_PORT, ALTERNATOR, TEST_PARAMS
 
 pytestmark = [
     pytest.mark.usefixtures("events", "create_table", "create_cql_ks_and_table"),
     pytest.mark.skip(reason="those are integration tests only"),
 ]
-
-ALTERNATOR_PORT = 8000
-TEST_PARAMS = dict(
-    dynamodb_primarykey_type="HASH_AND_RANGE",
-    alternator_use_dns_routing=True,
-    alternator_port=ALTERNATOR_PORT,
-)
-ALTERNATOR = alternator.api.Alternator(
-    sct_params={
-        "alternator_access_key_id": None,
-        "alternator_secret_access_key": None,
-        "alternator_port": ALTERNATOR_PORT,
-    }
-)
 
 
 @pytest.fixture(scope="session")
