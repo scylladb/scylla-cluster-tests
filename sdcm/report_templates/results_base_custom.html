@@ -160,7 +160,7 @@
 {%- endblock -%}
 
 {%- block links -%}
-    {% if kibana_url or job_url or grafana_screenshots or grafana_snapshots %}
+    {% if kibana_url or job_url or grafana_screenshots or grafana_snapshots or relocatable_pkg %}
     <h3>Links:</h3>
     <ul>
         {% if kibana_url %}
@@ -190,6 +190,9 @@
             {% if grafana_snapshots[2] %}
                 <li><a href={{  grafana_snapshots[2] }}>Shared "Alternator metrics" Grafana Snapshot</a></li>
             {% endif %}
+        {% if relocatable_pkg %}
+            <li><a href={{ relocatable_pkg }}>Relocatable package url</a></li>
+        {% endif %}
         {% endif %}
     </ul>
     {% if logs_links %}

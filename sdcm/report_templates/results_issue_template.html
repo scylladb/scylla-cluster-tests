@@ -4,6 +4,9 @@
         *Installation details*<br>
         Kernel version: `{{ kernel_version }}`<br>
         Scylla version (or git commit hash): `{{ scylla_version }}`<br>
+        {% if relocatable_pkg %}
+        Relocatable package url: {{ relocatable_pkg }}<br>
+        {% endif %}
         Cluster size: {{ number_of_db_nodes }} nodes ({{ scylla_instance_type }})<br>
         {% if live_nodes_shards %}
             Scylla running with shards number (live nodes):<br>

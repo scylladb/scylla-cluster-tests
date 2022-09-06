@@ -31,6 +31,7 @@ from botocore.client import Config
 from pkg_resources import parse_version
 from repodataParser.RepoParser import Parser
 
+from sdcm.remote import LOCALRUNNER
 from sdcm.utils.common import ParallelObject, DEFAULT_AWS_REGION
 from sdcm.sct_events.system import ScyllaRepoEvent
 from sdcm.utils.decorators import retrying
@@ -552,3 +553,16 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
             raise MethodVersionNotFound("Method '{}' with version '{}' is not supported in '{}'!".format(
                 func.__name__, scylla_version, cls_self.__class__.__name__))
         return inner
+
+
+def get_relocatable_pkg_url(scylla_version: str) -> str:
+    relocatable_pkg = ""
+    if "build-id" in scylla_version:
+        try:
+            scylla_build_id = scylla_version.split('build-id')[-1].split()[0]
+            get_pkgs_cmd = f'curl -s -X POST http://backtrace.scylladb.com/index.html -d "build_id={scylla_build_id}&backtrace="'
+            res = LOCALRUNNER.run(get_pkgs_cmd)
+            relocatable_pkg = re.findall(fr"{scylla_build_id}.+(http:[/\w.:-]*\.tar\.gz)", res.stdout)[0]
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.warning("Couldn't get relocatable_pkg link due to: %s", exc)
+    return relocatable_pkg

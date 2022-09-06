@@ -142,6 +142,7 @@ class BaseEmailReporter:
         "region_name",
         "scylla_instance_type",
         "scylla_version",
+        "relocatable_pkg",
         "kernel_version",
         "start_time",
         "subject",

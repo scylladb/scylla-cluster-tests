@@ -84,6 +84,7 @@ from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
 from sdcm.utils.threads_and_processes_alive import gather_live_processes_and_dump_to_file, \
     gather_live_threads_and_dump_to_file
+from sdcm.utils.version_utils import get_relocatable_pkg_url
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.ndbench_thread import NdBenchStressThread
 from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
@@ -3221,6 +3222,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         try:
             email_data = self.get_email_data()
+            self._argus_add_relocatable_pkg(email_data)
             self.argus_collect_screenshots(email_data)
         except Exception as exc:  # pylint: disable=broad-except
             self.log.error("Error while saving email data. Error: %s", exc)
@@ -3239,6 +3241,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.argus_test_run.run_info.results.add_screenshot(link)
 
         self.argus_test_run.save()
+
+    def _argus_add_relocatable_pkg(self, email_data):
+        """Adds Package with url to relocatable package in Argus.
+
+        What is relocatable package:
+        https://docs.scylladb.com/stable/getting-started/install-scylla/unified-installer.html
+        """
+        if relocatable_pkg := email_data.get("relocatable_pkg"):
+            self.argus_test_run.run_info.details.packages.append(
+                PackageVersion(name="relocatable_pkg", date="", version=relocatable_pkg, revision_id="", build_id="")
+            )
+            self.argus_test_run.save()
 
     @silence()
     def send_email(self):
@@ -3357,7 +3371,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "test_status": test_status,
                 "username": get_username(),
                 "shard_awareness_driver": self.is_shard_awareness_driver,
-                "restore_monitor_job_base_link": restore_monitor_job_base_link}
+                "restore_monitor_job_base_link": restore_monitor_job_base_link,
+                "relocatable_pkg": get_relocatable_pkg_url(scylla_version)}
 
     @silence()
     def tag_ami_with_result(self):
