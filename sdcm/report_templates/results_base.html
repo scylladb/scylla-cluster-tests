@@ -307,7 +307,7 @@
 {% endblock %}
 
 {% block links %}
-    {% if kibana_url or job_url or grafana_screenshots or grafana_snapshots or parallel_timelines_report %}
+    {% if kibana_url or job_url or grafana_screenshots or grafana_snapshots or parallel_timelines_report or relocatable_pkg %}
     <h3>Links:</h3>
     <ul>
         {% if kibana_url %}
@@ -340,6 +340,9 @@
         {% endif %}
         {% if parallel_timelines_report %}
             <li><a href={{ parallel_timelines_report }}>Download Parallel Timelines report</a></li>
+        {% endif %}
+        {% if relocatable_pkg %}
+            <li><a href={{ relocatable_pkg }}>Relocatable package url</a></li>
         {% endif %}
     </ul>
         {% if grafana_screenshots %}
