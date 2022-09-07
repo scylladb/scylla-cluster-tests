@@ -3343,7 +3343,10 @@ class FillDatabaseData(ClusterTester):
         with self.db_cluster.cql_connection_patient(node) as session:
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
-
+            session.execute("""
+                CREATE KEYSPACE IF NOT EXISTS scylla_bench
+                WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
+                """)
             session.execute(f"""
                 CREATE KEYSPACE IF NOT EXISTS {self.base_ks}
                 WITH replication = {{'class': 'SimpleStrategy', 'replication_factor': '3'}} AND durable_writes = true;
