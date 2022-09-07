@@ -56,7 +56,7 @@ class IpAddressProvider:
                 public_ip_address_name=ip_name,
                 parameters={
                     "location": self._region,
-                    "zones": [self._az],
+                    "zones": [self._az] if self._az else [],
                     "sku": {
                         "name": "Standard",
                     },
