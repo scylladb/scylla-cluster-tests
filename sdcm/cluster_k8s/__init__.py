@@ -985,19 +985,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     @log_run_info
     def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool, namespace: str = SCYLLA_NAMESPACE,
                               cluster_name=None) -> None:
-        if self.params.get('reuse_cluster'):
-            try:
-                self.wait_till_cluster_is_operational()
-                LOGGER.debug("Check Scylla cluster")
-                self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=namespace)
-                self.start_scylla_cluster_events_thread()
-                return
-            except Exception as exc:
-                raise RuntimeError(
-                    "SCT_REUSE_CLUSTER is set, but target scylla cluster is unhealthy") from exc
-        LOGGER.info("Create and initialize a Scylla cluster")
-        self.create_scylla_manager_agent_config(namespace=namespace)
-
         # Calculate cpu and memory limits to occupy all available amounts by scylla pods
         cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
         # TBD: Remove reduction logic after https://github.com/scylladb/scylla-operator/issues/384 is fixed
@@ -1022,6 +1009,20 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         memory_limit = memory_limit / self.tenants_number
         self.calculated_cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
         self.calculated_memory_limit = convert_memory_units_to_k8s_value(memory_limit)
+
+        if self.params.get('reuse_cluster'):
+            try:
+                self.wait_till_cluster_is_operational()
+                LOGGER.debug("Check Scylla cluster")
+                self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=namespace)
+                self.start_scylla_cluster_events_thread()
+                return
+            except Exception as exc:
+                raise RuntimeError(
+                    "SCT_REUSE_CLUSTER is set, but target scylla cluster is unhealthy") from exc
+
+        LOGGER.info("Create and initialize a Scylla cluster")
+        self.create_scylla_manager_agent_config(namespace=namespace)
 
         # Init 'scylla-config' configMap before installation of Scylla to avoid redundant restart
         self.init_scylla_config_map(namespace=namespace)
