@@ -51,7 +51,7 @@ class VirtualNetworkProvider:
             virtual_network_name=name,
             parameters={
                 "location": self._region,
-                "zones": [self._az],
+                "zones": [self._az] if self._az else [],
                 "address_space": {
                     "address_prefixes": ["10.0.0.0/16"],
                 }

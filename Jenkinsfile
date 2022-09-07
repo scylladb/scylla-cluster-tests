@@ -20,6 +20,7 @@ def createRunConfiguration(String backend) {
         configuration.gce_datacenter = "us-east1"
     } else if (backend == 'azure') {
         configuration.azure_region_name = 'eastus'
+        configuration.availability_zone = ''
     } else if (backend == 'docker') {
         configuration.test_config = "test-cases/PR-provision-test-docker.yaml"
     } else if (backend == 'k8s-local-kind-aws') {

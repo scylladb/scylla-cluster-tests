@@ -6,5 +6,6 @@ longevityPipeline(
     backend: 'azure',
     azure_region_name: 'eastus',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-10gb-3h.yaml'
+    test_config: 'test-cases/longevity/longevity-10gb-3h.yaml',
+    availability_zone: ''
 )
