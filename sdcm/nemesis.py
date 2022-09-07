@@ -1104,6 +1104,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                      password=LDAP_PASSWORD) as session:
                 session.execute("SELECT * from customer.info LIMIT 1")
 
+                session.execute(
+                    """ CREATE KEYSPACE IF NOT EXISTS customer WITH replication = {'class': 'SimpleStrategy',
+                    'replication_factor': 1} """)
+
+                session.execute(
+                    """ CREATE TABLE IF NOT EXISTS customer.new_info (ssid UUID, name text, DOB text, telephone text,
+                    email text, memberid text, PRIMARY KEY (ssid,  name, memberid)) """)
+
             self.tester.create_role_in_ldap(ldap_role_name=customer_ldap_role, ldap_users=[authorized_ldap_user])
 
             with self.cluster.cql_connection_patient(node=node, user=authorized_ldap_user,
