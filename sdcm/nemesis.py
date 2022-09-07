@@ -1075,12 +1075,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 session.execute(
                     """ CREATE KEYSPACE IF NOT EXISTS customer WITH replication = {'class': 'SimpleStrategy', 
                     'replication_factor': 1} """)
-
+                self.cluster.wait_for_schema_agreement()
                 session.execute(
                     """ CREATE TABLE IF NOT EXISTS customer.info (ssid UUID, name text, DOB text, telephone text, 
                     email text, memberid text, PRIMARY KEY (ssid,  name, memberid)) """)
-
+                self.cluster.wait_for_schema_agreement()
                 session.execute(f"GRANT SELECT ON customer.info TO {customer_ldap_role}")
+                self.cluster.wait_for_schema_agreement()
 
             self.log.debug("Create new users in Ldap")
             self.tester.create_role_in_ldap(ldap_role_name=authorized_ldap_user, ldap_users=[authorized_ldap_user])
@@ -1098,10 +1099,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # self.tester.create_role_in_scylla(node=node, role_name=authorized_ldap_user, is_superuser=False, is_login=True)
             # self.tester.create_role_in_ldap(ldap_role_name=authorized_ldap_user, ldap_users=[authorized_ldap_user])
 
-            with pytest.raises(Unauthorized, match=rf"User {authorized_ldap_user} has no SELECT permission on "):
-                with self.cluster.cql_connection_patient(node=node, user=authorized_ldap_user,
-                                                         password=LDAP_PASSWORD) as session:
-                    session.execute("SELECT * from customer.info LIMIT 1")
+            # with pytest.raises(Unauthorized, match=rf"User {authorized_ldap_user} has no SELECT permission on "):  # TODO: catch expected failure
+            with self.cluster.cql_connection_patient(node=node, user=authorized_ldap_user,
+                                                     password=LDAP_PASSWORD) as session:
+                session.execute("SELECT * from customer.info LIMIT 1")
 
             self.tester.create_role_in_ldap(ldap_role_name=customer_ldap_role, ldap_users=[authorized_ldap_user])
 
