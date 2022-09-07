@@ -420,7 +420,7 @@ class LongevityTest(ClusterTester):
 
     @property
     def all_node_ips_for_stress_command(self):
-        return f' -node {[n.cql_ip_address for n in self.db_cluster.nodes]}'
+        return f' -node {",".join([n.cql_ip_address for n in self.db_cluster.nodes])}'
 
     def _create_counter_table(self):
         """
