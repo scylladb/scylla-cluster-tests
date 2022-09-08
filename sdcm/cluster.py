@@ -5126,7 +5126,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
             {scylla_manager_servers_arg} \
             -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} \
-            -b "-web.enable-admin-api -storage.tsdb.retention.time={self.prometheus_retention}" \
+            -b "--web.enable-admin-api --storage.tsdb.retention.time={self.prometheus_retention}" \
             -c 'GF_USERS_DEFAULT_THEME=dark'
         """)
         node.remoter.run("bash -ce '%s'" % run_script, verbose=True)
