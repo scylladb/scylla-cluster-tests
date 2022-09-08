@@ -1084,7 +1084,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.cluster.wait_for_schema_agreement()
 
             self.log.debug("Create new users in Ldap")
-            self.tester.create_role_in_ldap(ldap_role_name=authorized_ldap_user, ldap_users=[authorized_ldap_user])
+            self.tester.create_role_in_ldap(ldap_role_name=authorized_ldap_user+'_role', ldap_users=[authorized_ldap_user])
             # self.tester.create_role_in_ldap(ldap_role_name=unauthorized_ldap_user,
             #                                 ldap_users=[unauthorized_ldap_user])
 
@@ -1112,7 +1112,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     """ CREATE TABLE IF NOT EXISTS customer.new_info (ssid UUID, name text, DOB text, telephone text,
                     email text, memberid text, PRIMARY KEY (ssid,  name, memberid)) """)
 
-            self.tester.create_role_in_ldap(ldap_role_name=customer_ldap_role, ldap_users=[authorized_ldap_user])
+            self.tester.create_role_in_ldap(ldap_role_name=customer_ldap_role+'_role', ldap_users=[authorized_ldap_user])
 
             with self.cluster.cql_connection_patient(node=node, user=authorized_ldap_user,
                                                      password=LDAP_PASSWORD) as session:

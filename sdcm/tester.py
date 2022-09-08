@@ -486,6 +486,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if is_login:
             create_role_cmd += f' WITH login=true'  #  and password=\'{LDAP_PASSWORD}\''
         node.run_cqlsh(create_role_cmd)
+        if is_login:
+            node.run_cqlsh(f'ALTER ROLE \'{role_name}\' with password=\'{LDAP_PASSWORD}\'')
 
     def _setup_ldap_roles(self, db_cluster: BaseScyllaCluster):
         self.log.debug("Configuring LDAP Roles.")
