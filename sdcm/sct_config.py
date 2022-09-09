@@ -830,6 +830,13 @@ class SCTConfiguration(dict):
         dict(name="k8s_n_loader_pods_per_cluster", env="SCT_K8S_N_LOADER_PODS_PER_CLUSTER",
              type=int_or_list,
              help="Number of loader pods per loader cluster."),
+        dict(name="k8s_loader_run_type", env="SCT_K8S_LOADER_RUN_TYPE",
+             type=str, choices=("static", "dynamic"),
+             help="Defines how the loader pods must run. "
+                  "It may be either 'static' (default, run stress command on the constantly "
+                  "existing idle pod having reserved resources, perf-oriented) or "
+                  "'dynamic' (run stress commad in a separate pod as main thread and get logs "
+                  "in a searate retryable API call not having resource reservations)."),
 
         dict(name="mini_k8s_version", env="SCT_MINI_K8S_VERSION", type=str,
              help=""),

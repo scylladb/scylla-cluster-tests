@@ -162,6 +162,7 @@ k8s_log_api_calls: false
 k8s_deploy_monitoring: false
 k8s_minio_storage_size: '10Gi'
 k8s_n_scylla_pods_per_cluster: 3
+k8s_loader_run_type: 'static'
 
 # NOTE: 'k8s_enable_performance_tuning' is alpha feature in operator-1.6 , so it is disabled by default
 k8s_enable_performance_tuning: false

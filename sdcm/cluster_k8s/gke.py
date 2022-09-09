@@ -35,7 +35,6 @@ GKE_API_CALL_QUEUE_SIZE = 1000  # ops
 GKE_URLLIB_RETRY = 5  # How many times api request is retried before reporting failure
 GKE_URLLIB_BACKOFF_FACTOR = 0.1
 
-LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/gke-loaders.yaml")
 LOGGER = logging.getLogger(__name__)
 
 P = ParamSpec("P")  # pylint: disable=invalid-name

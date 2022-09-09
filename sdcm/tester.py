@@ -49,7 +49,7 @@ from sdcm.cluster_aws import CassandraAWSCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
-from sdcm.cluster_k8s import mini_k8s, gke, eks, LOADER_CLUSTER_CONFIG
+from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import provisioner_factory
@@ -1408,7 +1408,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             for i in range(self.k8s_cluster.tenants_number):
                 self.loaders_multitenant.append(cluster_k8s.LoaderPodCluster(
                     k8s_cluster=self.k8s_cluster,
-                    loader_cluster_config=LOADER_CLUSTER_CONFIG,
                     loader_cluster_name=self.params.get("k8s_loader_cluster_name") + (f"-{i + 1}" if i else ""),
                     user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
                     n_nodes=self.params.get("k8s_n_loader_pods_per_cluster") or self.params.get("n_loaders"),
@@ -1566,7 +1565,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             for i in range(self.k8s_cluster.tenants_number):
                 self.loaders_multitenant.append(cluster_k8s.LoaderPodCluster(
                     k8s_cluster=self.k8s_cluster,
-                    loader_cluster_config=LOADER_CLUSTER_CONFIG,
                     loader_cluster_name=self.params.get("k8s_loader_cluster_name") + (f"-{i + 1}" if i else ""),
                     user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
                     n_nodes=self.params.get("k8s_n_loader_pods_per_cluster") or self.params.get("n_loaders"),
