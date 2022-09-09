@@ -53,7 +53,10 @@ from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.test_config import TestConfig
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import NETWORK_EXCEPTIONS
-from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
+from sdcm.remote.kubernetes_cmd_runner import (
+    KubernetesCmdRunner,
+    KubernetesPodRunner,
+)
 from sdcm.coredump import CoredumpExportFileThread
 from sdcm.mgmt import AnyManagerCluster
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
@@ -92,7 +95,8 @@ ANY_KUBERNETES_RESOURCE = Union[  # pylint: disable=invalid-name
 NAMESPACE_CREATION_LOCK = Lock()
 
 CERT_MANAGER_TEST_CONFIG = sct_abs_path("sdcm/k8s_configs/cert-manager-test.yaml")
-LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/loaders.yaml")
+LOADER_POD_CONFIG_PATH = sct_abs_path("sdcm/k8s_configs/loaders/pod.yaml")
+LOADER_STS_CONFIG_PATH = sct_abs_path("sdcm/k8s_configs/loaders/sts.yaml")
 LOCAL_PROVISIONER_FILE = sct_abs_path("sdcm/k8s_configs/static-local-volume-provisioner.yaml")
 LOCAL_MINIO_DIR = sct_abs_path("sdcm/k8s_configs/minio")
 
@@ -297,6 +301,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.scylla_restart_required = False
         self.calculated_cpu_limit = None
         self.calculated_memory_limit = None
+        self.calculated_loader_cpu_limit = None
+        self.calculated_loader_memory_limit = None
+        self.calculated_loader_affinity_modifiers = []
         self.perf_pods_labels = [
             ('app.kubernetes.io/name', 'scylla-node-config'),
             ('app.kubernetes.io/name', 'node-config'),
@@ -1060,10 +1067,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             )
 
     @log_run_info
-    def deploy_loaders_cluster(self, config: str,
+    def deploy_loaders_cluster(self,
                                node_pool: CloudK8sNodePool = None,
-                               pods_number: int = 1,
-                               cluster_name: str = LOADER_NAMESPACE,
                                namespace: str = LOADER_NAMESPACE) -> None:
         LOGGER.info("Create and initialize a loaders cluster in the '%s' namespace", namespace)
         if node_pool:
@@ -1076,20 +1081,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             memory_limit = 4
             affinity_modifiers = []
 
-        cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
-        memory_limit = convert_memory_units_to_k8s_value(memory_limit)
-
-        self.apply_file(config, modifiers=affinity_modifiers, environ={
-            "CPU_LIMIT": cpu_limit,
-            "MEMORY_LIMIT": memory_limit,
-            "SCT_N_LOADERS": pods_number,
-            "SCT_K8S_LOADER_CLUSTER_NAME": cluster_name,
-            "SCT_K8S_LOADER_NAMESPACE": namespace,
-        })
-        LOGGER.debug("Check the '%s' loaders cluster in the '%s' namespace",
-                     cluster_name, namespace)
-        self.kubectl("get statefulset", namespace=namespace)
-        self.kubectl("get pods", namespace=namespace)
+        self.calculated_loader_cpu_limit = cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
+        self.calculated_loader_memory_limit = memory_limit = convert_memory_units_to_k8s_value(
+            memory_limit)
+        self.calculated_loader_affinity_modifiers = affinity_modifiers
 
     @log_run_info
     def deploy_monitoring_cluster(self, namespace: str = "monitoring",
@@ -2065,6 +2060,57 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
             namespace="default")
 
 
+class LoaderPodContainer(BasePodContainer):
+    TEMPLATE_PATH = LOADER_POD_CONFIG_PATH
+
+    def __init__(self, name: str, parent_cluster: PodCluster,
+                 node_prefix: str = "node", node_index: int = 1,
+                 base_logdir: Optional[str] = None, dc_idx: int = 0, rack=0):
+        self.loader_cluster_name = parent_cluster.loader_cluster_name
+        self.loader_name = name
+        self.loader_pod_name_template = f"{self.loader_name}-pod"
+        super().__init__(
+            name=name, parent_cluster=parent_cluster, node_prefix=node_prefix,
+            node_index=node_index, base_logdir=base_logdir, dc_idx=dc_idx, rack=rack,
+        )
+
+    def init(self):
+        environ = {
+            "K8S_NAMESPACE": self.parent_cluster.namespace,
+            "K8S_LOADER_CLUSTER_NAME": self.loader_cluster_name,
+            "K8S_LOADER_NAME": self.loader_name,
+            "POD_CPU_LIMIT": self.parent_cluster.k8s_cluster.calculated_loader_cpu_limit,
+            "POD_MEMORY_LIMIT": self.parent_cluster.k8s_cluster.calculated_loader_memory_limit,
+        }
+        self.remoter = KubernetesPodRunner(
+            kluster=self.parent_cluster.k8s_cluster,
+            template_path=self.TEMPLATE_PATH,
+            template_modifiers=self.parent_cluster.k8s_cluster.calculated_loader_affinity_modifiers,
+            pod_name_template=self.loader_pod_name_template,
+            namespace=self.parent_cluster.namespace,
+            environ=environ,
+        )
+
+    def _init_remoter(self, ssh_login_info):
+        pass
+
+    def terminate_k8s_host(self):
+        raise NotImplementedError()
+
+    def restart(self):
+        raise NotImplementedError()
+
+
+class LoaderStsContainer(BasePodContainer):
+    TEMPLATE_PATH = LOADER_STS_CONFIG_PATH
+
+    def terminate_k8s_host(self):
+        raise NotImplementedError()
+
+    def restart(self):
+        raise NotImplementedError()
+
+
 class PodCluster(cluster.BaseCluster):
     PodContainerClass: Type[BasePodContainer] = BasePodContainer
 
@@ -2254,7 +2300,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         self.wait_for_pods_readiness(pods_to_wait=len(nodes or self.nodes), total_pods=len(self.nodes))
         self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
-    @timeout_wrapper(timeout=180, sleep_time=3, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
+    @timeout_wrapper(timeout=300, sleep_time=3, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
                      message="Waiting for nodes to join the cluster")
     def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
         super().check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
@@ -2616,7 +2662,6 @@ class ManagerPodCluser(PodCluster):  # pylint: disable=abstract-method
 class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
     def __init__(self,
                  k8s_cluster: KubernetesCluster,
-                 loader_cluster_config: str,
                  loader_cluster_name: Optional[str] = None,
                  user_prefix: Optional[str] = None,
                  n_nodes: Union[list, int] = 3,
@@ -2626,16 +2671,23 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                  ) -> None:
 
         self.k8s_cluster = k8s_cluster
-        self.loader_cluster_config = loader_cluster_config
         self.loader_cluster_name = loader_cluster_name
         self.loader_cluster_created = False
         self.namespace = self.generate_namespace(namespace_template=LOADER_NAMESPACE)
 
         cluster.BaseLoaderSet.__init__(self, params=params)
+        self.k8s_loader_run_type = self.params.get("k8s_loader_run_type")
+        if self.k8s_loader_run_type == "static":
+            self.PodContainerClass = LoaderStsContainer  # pylint: disable=invalid-name
+        elif self.k8s_loader_run_type == "dynamic":
+            self.PodContainerClass = LoaderPodContainer  # pylint: disable=invalid-name
+        else:
+            raise ValueError(
+                "'k8s_loader_run_type' has unexpected value: %s" % self.k8s_loader_run_type)
         PodCluster.__init__(self,
                             k8s_cluster=self.k8s_cluster,
                             namespace=self.namespace,
-                            container="cassandra-stress",
+                            container="loader",
                             cluster_prefix=cluster.prepend_user_prefix(user_prefix, "loader-set"),
                             node_prefix=cluster.prepend_user_prefix(user_prefix, "loader-node"),
                             node_type="loader",
@@ -2654,30 +2706,70 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
 
+    def _get_docker_image(self):
+        # TODO: detect the stress type and apply appropriate docker image
+        #       `scylla-bench` stress commands will fail when c-s gets switched
+        #       to the docker approach.
+        docker_image = self.params.get('docker_image')
+        scylla_version = self.params.get('scylla_version')
+        return f"{docker_image}:{scylla_version}"
+
     def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",
                   dc_idx: int = 0,
                   rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
-
         if self.loader_cluster_created:
-            raise NotImplementedError("Changing number of nodes in LoaderPodCluster is not supported.")
+            raise NotImplementedError(
+                "Changing number of nodes in LoaderPodCluster is not supported.")
 
         self.k8s_cluster.deploy_loaders_cluster(
-            config=self.loader_cluster_config,
             node_pool=self.node_pool,
-            pods_number=count,
-            cluster_name=self.loader_cluster_name,
             namespace=self.namespace)
-        new_nodes = super().add_nodes(count=count,
-                                      ec2_user_data=ec2_user_data,
-                                      dc_idx=dc_idx,
-                                      rack=rack,
-                                      enable_auto_bootstrap=enable_auto_bootstrap)
-        self.loader_cluster_created = True
 
-        return new_nodes
+        if self.k8s_loader_run_type == "dynamic":
+            # TODO: if it is needed to catch coredumps of loader pods then need to create
+            #       appropriate daemonset with affinity rules for scheduling on the loader K8S nodes
+            for node_index in range(count):
+                node = self.PodContainerClass(
+                    name=f"{self.loader_cluster_name}-{node_index}",
+                    parent_cluster=self,
+                    base_logdir=self.logdir,
+                    node_prefix=self.node_prefix,
+                    node_index=node_index,
+                    dc_idx=dc_idx,
+                    rack=rack,
+                )
+                node.init()
+                self.nodes.append(node)
+                self.loader_cluster_created = True
+            return self.nodes
+
+        self.k8s_cluster.apply_file(
+            self.PodContainerClass.TEMPLATE_PATH,
+            modifiers=self.k8s_cluster.calculated_loader_affinity_modifiers,
+            environ={
+                "K8S_NAMESPACE": self.namespace,
+                "K8S_LOADER_CLUSTER_NAME": self.loader_cluster_name,
+                "DOCKER_IMAGE_WITH_TAG": self._get_docker_image(),
+                "N_LOADERS": self.params.get("n_loaders"),
+                "POD_CPU_LIMIT": self.k8s_cluster.calculated_loader_cpu_limit,
+                "POD_MEMORY_LIMIT": self.k8s_cluster.calculated_loader_memory_limit,
+            },
+        )
+        LOGGER.debug("Check the '%s' loaders cluster in the '%s' namespace",
+                     self.loader_cluster_name, self.namespace)
+        self.k8s_cluster.kubectl("get statefulset", namespace=self.namespace)
+        self.k8s_cluster.kubectl("get pods", namespace=self.namespace)
+
+        self.loader_cluster_created = True
+        return super().add_nodes(
+            count=count,
+            ec2_user_data=ec2_user_data,
+            dc_idx=dc_idx,
+            rack=rack,
+            enable_auto_bootstrap=enable_auto_bootstrap)
 
 
 def get_tags_from_params(params: dict) -> Dict[str, str]:

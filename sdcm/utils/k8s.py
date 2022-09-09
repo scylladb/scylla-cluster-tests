@@ -684,10 +684,17 @@ def get_helm_pool_affinity_values(pool_label_name, pool_name):
 
 
 def get_pool_affinity_modifiers(pool_label_name, pool_name):
-    def add_statefulset_or_daemonset_pool_affinity(obj):
-        if obj['kind'] in ('StatefulSet', 'DaemonSet'):
+    def add_pod_owner_pool_affinity(obj):
+        if obj['kind'] in ('StatefulSet', 'DaemonSet', 'Deployment', 'Job'):
             obj['spec']['template']['spec']['affinity'] = add_pool_node_affinity(
                 obj['spec']['template']['spec'].get('affinity', {}),
+                pool_label_name,
+                pool_name)
+
+    def add_pod_pool_affinity(obj):
+        if obj['kind'] == 'Pod':
+            obj['spec']['affinity'] = add_pool_node_affinity(
+                obj['spec'].get('affinity', {}),
                 pool_label_name,
                 pool_name)
 
@@ -707,7 +714,8 @@ def get_pool_affinity_modifiers(pool_label_name, pool_name):
                 pool_name)
 
     return [
-        add_statefulset_or_daemonset_pool_affinity,
+        add_pod_owner_pool_affinity,
+        add_pod_pool_affinity,
         add_scylla_cluster_pool_affinity,
         add_node_config_pool_affinity,
     ]

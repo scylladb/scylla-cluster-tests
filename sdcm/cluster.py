@@ -4621,8 +4621,13 @@ class BaseLoaderSet():
         return next(self._loader_cycle)
 
     def kill_stress_thread(self):
-        self.kill_cassandra_stress_thread()
-        self.kill_docker_loaders()
+        if self.nodes and self.nodes[0].is_kubernetes() and self.params.get(
+                'k8s_loader_run_type') != 'static':
+            for node in self.nodes:
+                node.remoter.stop()
+        else:
+            self.kill_cassandra_stress_thread()
+            self.kill_docker_loaders()
 
     def kill_cassandra_stress_thread(self):
         search_cmds = [
