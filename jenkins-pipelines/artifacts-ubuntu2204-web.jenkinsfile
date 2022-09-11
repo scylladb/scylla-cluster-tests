@@ -9,6 +9,6 @@ artifactsPipeline(
     provision_type: 'spot',
     scylla_mgmt_repo: '',
 
-    timeout: [time: 30, unit: 'MINUTES'],
+    timeout: [time: 35, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'
 )
