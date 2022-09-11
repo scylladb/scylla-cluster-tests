@@ -7,6 +7,6 @@ artifactsPipeline(
     test_config: 'test-cases/artifacts/docker.yaml',
     backend: 'docker',
 
-    timeout: [time: 30, unit: 'MINUTES'],
+    timeout: [time: 35, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'
 )
