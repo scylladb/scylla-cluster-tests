@@ -1057,11 +1057,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         authorized_ldap_user = 'authorized_ldap_user'
         try:
             self.log.debug("Create new users in Scylla")
-            self.tester.create_role_in_scylla(node=node, role_name=authorized_ldap_user, is_superuser=False, is_login=True)
-            # TODO: remove relevant permissions from this user.
+            self.tester.create_role_in_scylla(node=node, role_name=authorized_ldap_user, is_superuser=False,
+                                              is_login=True)
             self.tester.create_role_in_scylla(node=node, role_name=customer_ldap_role, is_superuser=False,
                                               is_login=False)
-            self.log.debug("Grant permissions to a role")
+            self.log.debug("Create keyspace and table")
             with self.cluster.cql_connection_patient(node=node, user=LDAP_USERS[0], password=LDAP_PASSWORD) as session:
 
                 session.execute(
@@ -1072,10 +1072,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     """ CREATE TABLE IF NOT EXISTS customer.info (ssid UUID, name text, DOB text, telephone text, 
                     email text, memberid text, PRIMARY KEY (ssid,  name, memberid)) """)
                 self.cluster.wait_for_schema_agreement()
+                # ")
+                self.log.debug("Grant and revoke permissions to different roles")
                 session.execute(f"GRANT SELECT ON customer.info TO {customer_ldap_role}")
-                session.execute(f"GRANT CREATE ON customer TO {customer_ldap_role}")
-                session.execute(f"REVOKE SELECT ON customer.info TO {authorized_ldap_user}")
-                session.execute(f"REVOKE CREATE ON customer TO {authorized_ldap_user}")
+                session.execute(f"GRANT CREATE ON KEYSPACE customer TO {customer_ldap_role}")
+                session.execute(f"REVOKE SELECT ON customer.info FROM {authorized_ldap_user}")
+                session.execute(f"REVOKE CREATE ON KEYSPACE customer FROM {authorized_ldap_user}")
                 self.cluster.wait_for_schema_agreement()
 
             self.log.debug("Create new users in Ldap")
@@ -1099,6 +1101,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with self.cluster.cql_connection_patient(node=node, user=authorized_ldap_user,
                                                      password=LDAP_PASSWORD) as session:
                 session.execute("SELECT * from customer.info")
+                session.execute(
+                    """ CREATE TABLE IF NOT EXISTS customer.new_info (ssid UUID, name text, DOB text, telephone text,
+                    email text, memberid text, PRIMARY KEY (ssid,  name, memberid)) """)
         except Exception as error:
             self.log.error("disrupt_ldap_grant_revoke_roles got exception: %s", error)
 
