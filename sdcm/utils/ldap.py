@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
+import logging
 from time import sleep
 from enum import Enum
 
@@ -36,6 +36,8 @@ LDAP_ROLE = 'scylla_ldap'
 LDAP_USERS = ['scylla-qa', 'dummy-user']
 LDAP_BASE_OBJECT = (lambda l: ','.join([f'dc={part}' for part in l.split('.')]))(LDAP_DOMAIN)
 SASLAUTHD_AUTHENTICATOR = 'com.scylladb.auth.SaslauthdAuthenticator'
+
+LOGGER = logging.getLogger(__name__)
 
 
 class LdapServerNotReady(Exception):
@@ -67,13 +69,15 @@ class LdapContainerMixin:  # pylint: disable=too-few-public-methods
                     )
 
     @staticmethod
-    @retrying(n=10, sleep_time=6, allowed_exceptions=(LdapServerNotReady, LDAPSocketOpenError))
+    @retrying(n=10, sleep_time=6, message="Could not establish Ldap connection, retrying..",
+              allowed_exceptions=(LdapServerNotReady, LDAPSocketOpenError))
     def create_ldap_connection(ip, ldap_port, user, password):
         LdapContainerMixin.ldap_server = Server(host=f'ldap://{ip}:{ldap_port}', get_info=ALL)
         LdapContainerMixin.ldap_conn = Connection(server=LdapContainerMixin.ldap_server, user=user, password=password)
         sleep(5)
         LdapContainerMixin.ldap_conn.open()
         LdapContainerMixin.ldap_conn.bind()
+        sleep(5)
 
     @staticmethod
     def is_ldap_connection_bound():
@@ -81,9 +85,21 @@ class LdapContainerMixin:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def add_ldap_entry(ip, ldap_port, user, password, ldap_entry):
+
+        @retrying(n=10, sleep_time=6, message="Could not add Ldap entry, retrying..",
+                  allowed_exceptions=(LdapServerNotReady,))
+        def _retry_add_ldap_entry():
+            try:
+                LdapContainerMixin.ldap_conn.add(*ldap_entry)
+            except Exception as error:  # pylint: disable=broad-except
+                LOGGER.error("Could not add Ldap entry: %s", error)
+                LdapContainerMixin.create_ldap_connection(ip, ldap_port, user, password)
+                raise LdapServerNotReady
+
         if not LdapContainerMixin.is_ldap_connection_bound():
+            LOGGER.debug("Ldap connection is not bounded!")
             LdapContainerMixin.create_ldap_connection(ip, ldap_port, user, password)
-        LdapContainerMixin.ldap_conn.add(*ldap_entry)
+        _retry_add_ldap_entry()
 
     @staticmethod
     def search_ldap_entry(search_base, search_filter):

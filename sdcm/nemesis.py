@@ -1159,14 +1159,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not ContainerManager.is_running(self.tester.localhost, 'ldap'):
             raise LdapNotRunning("LDAP server was supposed to be running, but it is not")
 
-        InfoEvent(message='Disable LDAP Authorization Configuration').publish()
-        for node in self.cluster.nodes:
-            remove_ldap_configuration_from_node(node)
-        destroy_ldap_container()
-
-        self.log.debug('Will wait few minutes with LDAP disabled, before re-enabling it')
-        time.sleep(600)
-
         def create_ldap_container():
             self.tester.configure_ldap(self.tester.localhost)
 
@@ -1176,13 +1168,28 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 scylla_yaml.update(ldap_config)
             node.restart_scylla_server()
 
-        InfoEvent(message='Re-enable LDAP Authorization Configuration').publish()
-        create_ldap_container()
-        for node in self.cluster.nodes:
-            add_ldap_configuration_to_node(node)
+        try:
+            InfoEvent(message='Disable LDAP Authorization Configuration').publish()
+            for node in self.cluster.nodes:
+                remove_ldap_configuration_from_node(node)
+            destroy_ldap_container()
 
-        if not ContainerManager.is_running(self.tester.localhost, 'ldap'):
-            raise LdapNotRunning("LDAP server was supposed to be running, but it is not")
+            self.log.debug('Will wait few minutes with LDAP disabled, before re-enabling it')
+            time.sleep(600)
+
+            InfoEvent(message='Re-enable LDAP Authorization Configuration').publish()
+            create_ldap_container()
+            for node in self.cluster.nodes:
+                add_ldap_configuration_to_node(node)
+            if not ContainerManager.is_running(self.tester.localhost, 'ldap'):
+                raise LdapNotRunning("LDAP server was supposed to be running, but it is not")
+        finally:
+            if not ContainerManager.is_running(self.tester.localhost, 'ldap'):
+                InfoEvent(message='Re-enable LDAP Authorization Configuration').publish()
+                create_ldap_container()
+                for node in self.cluster.nodes:
+                    add_ldap_configuration_to_node(node)
+
 
     @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
     def _add_and_init_new_cluster_node(self, old_node_ip=None, host_id=None,
