@@ -23,6 +23,7 @@ from sdcm.cluster import BaseNode
 from sdcm.prometheus import start_metrics_server
 from sdcm.provision import provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.common import update_certificates
@@ -134,3 +135,8 @@ def fixture_params(request: pytest.FixtureRequest):
     for k in os.environ:
         if k.startswith('SCT_'):
             del os.environ[k]
+
+
+@pytest.fixture(scope='function', autouse=True)
+def fixture_cleanup_continuous_events_registry():
+    ContinuousEventsRegistry().cleanup_registry()
