@@ -1044,8 +1044,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_ldap_grant_revoke_roles(self):
         """
-        Scenario: TBD
-        GRANT report_writer TO alice
+        Scenario:
+        1. Create a new keyspace and a table (by root user).
+        2. Add a role named authorized_ldap_user to scylla and Ldap without permissions as a user.
+        3. Add a role named customer_ldap_role to Scylla with permissions.
+        4. Try select/create operations by authorized_ldap_user ==> expected to fail)
+        5. Add a role named customer_ldap_role to Ldap, including member authorized_ldap_user.
+        6. Try again select/create operations by authorized_ldap_user ==> expected to succeed.
+        7. Remove all created schema and roles in Scylla and Ldap.
 
         """
         if not self.cluster.params.get('use_ldap_authorization'):
@@ -1077,7 +1083,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 session.execute(f"GRANT SELECT ON customer.info TO {customer_ldap_role}")
                 session.execute(f"GRANT CREATE ON KEYSPACE customer TO {customer_ldap_role}")
                 session.execute(f"REVOKE SELECT ON customer.info FROM {authorized_ldap_user}")
-                session.execute(f"REVOKE CREATE ON KEYSPACE customer FROM {authorized_ldap_user}")
+                # session.execute(f"REVOKE ALL ON KEYSPACE customer FROM {authorized_ldap_user}")
                 self.cluster.wait_for_schema_agreement()
 
             self.log.debug("Create new users in Ldap")
@@ -1087,10 +1093,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with self.cluster.cql_connection_patient(node=node, user=authorized_ldap_user,
                                                      password=LDAP_PASSWORD) as session:
                 session.execute("SELECT * from customer.info LIMIT 1")
-
-                # session.execute(
-                #     """ CREATE KEYSPACE IF NOT EXISTS customer WITH replication = {'class': 'SimpleStrategy',
-                #     'replication_factor': 1} """)
 
                 session.execute(
                     """ CREATE TABLE IF NOT EXISTS customer.new_info (ssid UUID, name text, DOB text, telephone text,
@@ -1107,7 +1109,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         except Exception as error:
             self.log.error("disrupt_ldap_grant_revoke_roles got exception: %s", error)
 
-        #  TODO: delete all created roles and schemas
         with self.cluster.cql_connection_patient(node=node, user=LDAP_USERS[0], password=LDAP_PASSWORD) as session:
 
             session.execute(""" DROP TABLE IF EXISTS customer.info """)
@@ -1116,21 +1117,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             session.execute(f" DROP ROLE IF EXISTS {authorized_ldap_user} ")
             session.execute(f" DROP ROLE IF EXISTS {customer_ldap_role} ")
 
-        dn = str(self.tester.localhost.search_ldap_entry(LDAP_BASE_OBJECT,
-                                                         f'(cn={authorized_ldap_user})')).split()[1]
-        res = self.tester.localhost.modify_ldap_object(dn, {'uniqueMember': [('MODIFY_DELETE',
-                                                                              [f'uid={authorized_ldap_user},ou=Person,'
-                                                                               f'{LDAP_BASE_OBJECT}'])]})
-        if not res:
-            raise Exception('Failed to delete user from LDAP')
-
-        dn = str(self.tester.localhost.search_ldap_entry(LDAP_BASE_OBJECT,
-                                                         f'(cn={customer_ldap_role})')).split()[1]
-        res = self.tester.localhost.modify_ldap_object(dn, {'uniqueMember': [('MODIFY_DELETE',
-                                                                              [f'uid={customer_ldap_role},ou=Person,'
-                                                                               f'{LDAP_BASE_OBJECT}'])]})
-        if not res:
-            raise Exception('Failed to delete user from LDAP')
+        self.tester.delete_role_in_ldap(ldap_role_name=authorized_ldap_user)
+        self.tester.delete_role_in_ldap(ldap_role_name=customer_ldap_role)
 
     def disrupt_disable_enable_ldap_authorization(self):
         if not self.cluster.params.get('use_ldap_authorization'):

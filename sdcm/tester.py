@@ -514,6 +514,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                       user=ldap_username, password=LDAP_PASSWORD, ldap_entry=role_entry)
 
+    def delete_role_in_ldap(self, ldap_role_name: str, raise_error: bool = True):
+        distinguished_name = str(self.localhost.search_ldap_entry(LDAP_BASE_OBJECT,
+                                                         f'(cn={ldap_role_name})')).split()[1]
+        res = self.localhost.modify_ldap_entry(distinguished_name, {'uniqueMember': [('MODIFY_DELETE',
+                                                                              [f'uid={ldap_role_name},ou=Person,'
+                                                                               f'{LDAP_BASE_OBJECT}'])]})
+        if not res and raise_error:
+            raise Exception(f'Failed to delete user {ldap_role_name} from Ldap.')
+
     def configure_ldap(self, node, use_ssl=False):
         self.test_config.configure_ldap(node=node, use_ssl=use_ssl)
         ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
