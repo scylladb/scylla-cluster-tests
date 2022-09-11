@@ -1073,6 +1073,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     email text, memberid text, PRIMARY KEY (ssid,  name, memberid)) """)
                 self.cluster.wait_for_schema_agreement()
                 session.execute(f"GRANT SELECT ON customer.info TO {customer_ldap_role}")
+                session.execute(f"GRANT CREATE ON customer TO {customer_ldap_role}")
                 session.execute(f"REVOKE SELECT ON customer.info TO {authorized_ldap_user}")
                 session.execute(f"REVOKE CREATE ON customer TO {authorized_ldap_user}")
                 self.cluster.wait_for_schema_agreement()
@@ -1085,9 +1086,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                      password=LDAP_PASSWORD) as session:
                 session.execute("SELECT * from customer.info LIMIT 1")
 
-                session.execute(
-                    """ CREATE KEYSPACE IF NOT EXISTS customer WITH replication = {'class': 'SimpleStrategy',
-                    'replication_factor': 1} """)
+                # session.execute(
+                #     """ CREATE KEYSPACE IF NOT EXISTS customer WITH replication = {'class': 'SimpleStrategy',
+                #     'replication_factor': 1} """)
 
                 session.execute(
                     """ CREATE TABLE IF NOT EXISTS customer.new_info (ssid UUID, name text, DOB text, telephone text,
