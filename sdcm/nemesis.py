@@ -1109,16 +1109,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         except Exception as error:
             self.log.error("disrupt_ldap_grant_revoke_roles got exception: %s", error)
 
-        with self.cluster.cql_connection_patient(node=node, user=LDAP_USERS[0], password=LDAP_PASSWORD) as session:
+        try:
+            with self.cluster.cql_connection_patient(node=node, user=LDAP_USERS[0], password=LDAP_PASSWORD) as session:
 
-            session.execute(""" DROP TABLE IF EXISTS customer.info """)
-            session.execute(""" DROP TABLE IF EXISTS customer.new_info """)
-            session.execute(""" DROP KEYSPACE IF EXISTS customer """)
-            session.execute(f" DROP ROLE IF EXISTS {authorized_ldap_user} ")
-            session.execute(f" DROP ROLE IF EXISTS {customer_ldap_role} ")
+                session.execute(""" DROP TABLE IF EXISTS customer.info """)
+                session.execute(""" DROP TABLE IF EXISTS customer.new_info """)
+                session.execute(""" DROP KEYSPACE IF EXISTS customer """)
+                session.execute(f" DROP ROLE IF EXISTS {authorized_ldap_user} ")
+                session.execute(f" DROP ROLE IF EXISTS {customer_ldap_role} ")
 
-        self.tester.delete_role_in_ldap(ldap_role_name=authorized_ldap_user)
-        self.tester.delete_role_in_ldap(ldap_role_name=customer_ldap_role)
+            self.tester.delete_role_in_ldap(ldap_role_name=authorized_ldap_user)
+            self.tester.delete_role_in_ldap(ldap_role_name=customer_ldap_role)
+        except Exception as error:
+            self.log.error("disrupt_ldap_grant_revoke_roles got exception on cleanup: %s", error)
 
     def disrupt_disable_enable_ldap_authorization(self):
         if not self.cluster.params.get('use_ldap_authorization'):
