@@ -6,7 +6,7 @@ test_duration: 36000
 #             "cassandra-stress read  cl=ONE duration=24000m -schema 'replication(factor=2) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..209715 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 #             ]
 
-n_db_nodes: 1
+n_db_nodes: 2
 n_loaders: 0
 n_monitor_nodes: 0
 #seeds_num: 3
