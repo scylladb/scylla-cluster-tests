@@ -64,6 +64,9 @@ class ContinuousEventsRegistry(metaclass=Singleton):
         if event in hash_bucket:
             hash_bucket.remove(event)
 
+    def cleanup_registry(self):
+        self.hashed_continuous_events.clear()
+
     def find_continuous_events_by_hash(self, continuous_hash: int) -> list[ContinuousEvent]:
         return self.hashed_continuous_events.get(continuous_hash, []).copy()
 
