@@ -20,7 +20,7 @@ from unit_tests.dummy_remote import LocalLoaderSetDummy
 from test_lib.scylla_bench_tools import create_scylla_bench_table_query
 
 pytestmark = [
-    pytest.mark.usefixtures("events", "create_cql_ks_and_table"),
+    pytest.mark.usefixtures("events",),
     pytest.mark.skip(reason="those are integration tests only"),
 ]
 
