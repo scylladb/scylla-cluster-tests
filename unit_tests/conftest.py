@@ -109,15 +109,12 @@ def fake_region_definition_builder():  # pylint: disable=no-self-use
 
 @pytest.fixture(scope="function", name="params")
 def fixture_params(request: pytest.FixtureRequest):
-    config_files = request.node.get_closest_marker("sct_config").kwargs.get('files')
-    if config_files:
+    if sct_config_marker := request.node.get_closest_marker("sct_config"):
+        config_files = sct_config_marker.kwargs.get('files')
         os.environ['SCT_CONFIG_FILES'] = config_files
 
-    os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-    os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
-    os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+    os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
     params = sct_config.SCTConfiguration()  # pylint: disable=attribute-defined-outside-init
-    params.verify_configuration()
 
     yield params
 
