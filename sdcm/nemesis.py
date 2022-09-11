@@ -1046,11 +1046,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         Scenario:
         1. Create a new keyspace and a table (by root user).
-        2. Add a role named authorized_ldap_user to scylla and Ldap without permissions as a user.
-        3. Add a role named customer_ldap_role to Scylla with permissions.
-        4. Try select/create operations by authorized_ldap_user ==> expected to fail)
-        5. Add a role named customer_ldap_role to Ldap, including member authorized_ldap_user.
-        6. Try again select/create operations by authorized_ldap_user ==> expected to succeed.
+        2. Add a role named authorized_user to scylla and Ldap without permissions as a user.
+        3. Add a role named customer_role to Scylla with permissions.
+        4. Try select/create operations by authorized_user ==> expected to fail)
+        5. Add a role named customer_role to Ldap, including member authorized_user.
+        6. Try again select/create operations by authorized_user ==> expected to succeed.
         7. Remove all created schema and roles in Scylla and Ldap.
 
         """
@@ -1059,13 +1059,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.target_node.is_enterprise:
             raise UnsupportedNemesis('Cluster is not enterprise. LDAP is supported only for enterprise. Skipping')
         node = self.cluster.nodes[0]
-        customer_ldap_role = 'customer_ldap_role'
-        authorized_ldap_user = 'authorized_ldap_user'
+        customer_role = 'customer_role'
+        empty_role = 'empty_role'
+        authorized_user = 'authorized_user'
         try:
             self.log.debug("Create new users in Scylla")
-            self.tester.create_role_in_scylla(node=node, role_name=authorized_ldap_user, is_superuser=False,
+            self.tester.create_role_in_scylla(node=node, role_name=authorized_user, is_superuser=False,
                                               is_login=True)
-            self.tester.create_role_in_scylla(node=node, role_name=customer_ldap_role, is_superuser=False,
+            self.tester.create_role_in_scylla(node=node, role_name=customer_role, is_superuser=False,
+                                              is_login=False)
+            self.tester.create_role_in_scylla(node=node, role_name=empty_role, is_superuser=False,
                                               is_login=False)
             self.log.debug("Create keyspace and table")
             with self.cluster.cql_connection_patient(node=node, user=LDAP_USERS[0], password=LDAP_PASSWORD) as session:
@@ -1078,19 +1081,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     """ CREATE TABLE IF NOT EXISTS customer.info (ssid UUID, name text, DOB text, telephone text, 
                     email text, memberid text, PRIMARY KEY (ssid,  name, memberid)) """)
                 self.cluster.wait_for_schema_agreement()
-                # ")
                 self.log.debug("Grant and revoke permissions to different roles")
-                session.execute(f"GRANT SELECT ON customer.info TO {customer_ldap_role}")
-                session.execute(f"GRANT CREATE ON KEYSPACE customer TO {customer_ldap_role}")
-                session.execute(f"REVOKE SELECT ON customer.info FROM {authorized_ldap_user}")
-                # session.execute(f"REVOKE ALL ON KEYSPACE customer FROM {authorized_ldap_user}")
+                session.execute(f"GRANT SELECT ON customer.info TO {customer_role}")
+                session.execute(f"GRANT CREATE ON KEYSPACE customer TO {customer_role}")
+                session.execute(f"REVOKE SELECT ON customer.info FROM {empty_role}")
+                session.execute(f"REVOKE MODIFY ON ALL KEYSPACES FROM {empty_role}")
+                session.execute(f"REVOKE CREATE ON ALL KEYSPACES FROM {empty_role}")
                 self.cluster.wait_for_schema_agreement()
+                res = session.execute(f"LIST ALL PERMISSIONS OF {authorized_user}") # TODO: DBG REMOVE
+                authorized_ldap_user_permissions = [row for row in res]
+                self.log.debug("authorized_user permissions list: %s", authorized_ldap_user_permissions)
 
             self.log.debug("Create new users in Ldap")
-            self.tester.create_role_in_ldap(ldap_role_name=authorized_ldap_user, ldap_users=[authorized_ldap_user])
+            self.tester.create_role_in_ldap(ldap_role_name=empty_role, ldap_users=[authorized_user])
 
-            # with pytest.raises(Unauthorized, match=rf"User {authorized_ldap_user} has no SELECT permission on "):  # TODO: catch expected failure
-            with self.cluster.cql_connection_patient(node=node, user=authorized_ldap_user,
+            # with pytest.raises(Unauthorized, match=rf"User {authorized_user} has no SELECT permission on "):  # TODO: catch expected failure
+            with self.cluster.cql_connection_patient(node=node, user=authorized_user,
                                                      password=LDAP_PASSWORD) as session:
                 session.execute("SELECT * from customer.info LIMIT 1")
 
@@ -1098,9 +1104,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     """ CREATE TABLE IF NOT EXISTS customer.new_info (ssid UUID, name text, DOB text, telephone text,
                     email text, memberid text, PRIMARY KEY (ssid,  name, memberid)) """)
 
-            self.tester.create_role_in_ldap(ldap_role_name=customer_ldap_role, ldap_users=[authorized_ldap_user])
+            self.tester.create_role_in_ldap(ldap_role_name=customer_role, ldap_users=[authorized_user])
 
-            with self.cluster.cql_connection_patient(node=node, user=authorized_ldap_user,
+            with self.cluster.cql_connection_patient(node=node, user=authorized_user,
                                                      password=LDAP_PASSWORD) as session:
                 session.execute("SELECT * from customer.info")
                 session.execute(
@@ -1115,11 +1121,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 session.execute(""" DROP TABLE IF EXISTS customer.info """)
                 session.execute(""" DROP TABLE IF EXISTS customer.new_info """)
                 session.execute(""" DROP KEYSPACE IF EXISTS customer """)
-                session.execute(f" DROP ROLE IF EXISTS {authorized_ldap_user} ")
-                session.execute(f" DROP ROLE IF EXISTS {customer_ldap_role} ")
+                session.execute(f" DROP ROLE IF EXISTS {authorized_user} ")
+                session.execute(f" DROP ROLE IF EXISTS {customer_role} ")
+                session.execute(f" DROP ROLE IF EXISTS {empty_role} ")
 
-            self.tester.delete_role_in_ldap(ldap_role_name=authorized_ldap_user)
-            self.tester.delete_role_in_ldap(ldap_role_name=customer_ldap_role)
+            self.tester.delete_role_in_ldap(ldap_role_name=customer_role)
+            self.tester.delete_role_in_ldap(ldap_role_name=empty_role)
         except Exception as error:
             self.log.error("disrupt_ldap_grant_revoke_roles got exception on cleanup: %s", error)
 
