@@ -1,13 +1,13 @@
 test_duration: 36000
 
-prepare_write_cmd:  "cassandra-stress write cl=ONE n=209715 -schema 'replication(factor=2) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..209715 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
-
-stress_cmd: ["cassandra-stress write cl=ONE duration=24000m -schema 'replication(factor=2) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..209715 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-             "cassandra-stress read  cl=ONE duration=24000m -schema 'replication(factor=2) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..209715 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
-             ]
+#prepare_write_cmd:  "cassandra-stress write cl=ONE n=209715 -schema 'replication(factor=2) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..209715 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+#
+#stress_cmd: ["cassandra-stress write cl=ONE duration=24000m -schema 'replication(factor=2) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..209715 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+#             "cassandra-stress read  cl=ONE duration=24000m -schema 'replication(factor=2) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..209715 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+#             ]
 
 n_db_nodes: 2
-n_loaders: 1
+n_loaders: 0
 n_monitor_nodes: 0
 #seeds_num: 3
 
@@ -19,7 +19,7 @@ nemesis_interval: 50
 nemesis_filter_seeds: false
 
 user_prefix: 'longevity-grant-revoke'
-space_node_threshold: 64424
+space_node_threshold: 0  # 64424
 
 pre_create_schema: True
 sstable_size: 100
