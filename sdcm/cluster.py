@@ -2018,7 +2018,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # patch of the supported releases will include the fix.
         package_manager = 'yum' if self.is_rhel_like() else 'apt'
         self.remoter.sudo(f'{package_manager} install zip unzip -y')
-        self.remoter.run('curl -s "https://get.sdkman.io" | bash')
+        self.remoter.run('curl -s "https://get.sdkman.io" | bash', retry=5)
         self.remoter.run(shell_script_cmd("""
             source "/home/$USER/.sdkman/bin/sdkman-init.sh"
             sed -i s/sdkman_auto_answer=false/sdkman_auto_answer=true/  ~/.sdkman/etc/config
