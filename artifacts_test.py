@@ -209,11 +209,7 @@ class ArtifactsTest(ClusterTester):
                             )
 
     def verify_write_back_cache_param(self) -> None:
-        if self.params["cluster_backend"] in ("gce", "azure") and self.params["use_preinstalled_scylla"]:
-            expected_write_back_cache_param = 0
-        else:
-            expected_write_back_cache_param = None
-        self.assertEqual(self.write_back_cache, expected_write_back_cache_param)
+        self.assertEqual(self.write_back_cache, None)
 
     def verify_docker_locale_settings(self) -> None:
         run = self.node.remoter.run
