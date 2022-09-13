@@ -15,8 +15,13 @@
 import unittest
 
 from sdcm.sct_events import Severity
-from sdcm.utils.health_checker import check_nodes_status, check_nulls_in_peers, \
-    check_node_status_in_gossip_and_nodetool_status, check_schema_version
+from sdcm.utils.health_checker import (
+    check_node_status_in_gossip_and_nodetool_status,
+    check_nodes_status,
+    check_nulls_in_peers,
+    check_schema_agreement_in_gossip_and_peers,
+    check_schema_version,
+)
 
 
 class Node:
@@ -34,6 +39,43 @@ class Node:
     @staticmethod
     def run_cqlsh(cmd, split, verbose):
         pass
+
+    @staticmethod
+    def get_gossip_info():
+        return GOSSIP_INFO
+
+    @staticmethod
+    def get_peers_info():
+        return PEERS_INFO
+
+
+class ProblematicNode(Node):
+    def __init__(self, ip_address, name, num_of_failed_attempts=0):
+        super().__init__(ip_address=ip_address, name=name)
+        self.get_gossip_info_call_counter = 0
+        self.num_of_failed_attempts = num_of_failed_attempts
+
+    def get_gossip_info(self):
+        self.get_gossip_info_call_counter += 1
+        if self.get_gossip_info_call_counter > self.num_of_failed_attempts:
+            return super().get_gossip_info()
+        return {
+            node1: {
+                'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
+                'status': 'NORMAL',
+                'dc': 'datacenter1'
+            },
+            node2: {
+                'schema': 'who_cares_about_this_node_is_shutdown',
+                'status': 'shutdown',
+                'dc': 'datacenter1'
+            },
+            node3: {
+                'schema': 'bad-schema',
+                'status': 'NORMAL',
+                'dc': 'datacenter1'
+            },
+        }
 
 
 node1 = Node('127.0.0.1', "node-0")
@@ -153,3 +195,41 @@ class TestHealthChecker(unittest.TestCase):
     def test_check_schema_version_all_ok(self):
         event = next(check_schema_version(GOSSIP_INFO, PEERS_INFO, NODES_STATUS, node1), None)
         self.assertIsNone(event)
+
+    def test_check_schema_agreement_in_gossip_and_peers(self):
+        attempts = 3
+
+        with unittest.mock.patch("time.sleep") as mocked_sleep:
+            err = check_schema_agreement_in_gossip_and_peers(node1, attempts)
+
+        self.assertEqual(
+            mocked_sleep.call_count, 0,
+            "Looks like redundant retries were executed")
+        self.assertIsInstance(err, str)
+        self.assertFalse(err)
+
+    def test_check_schema_agreement_in_gossip_and_peers_error_on_first_attempt(self):
+        problem_node = ProblematicNode('127.0.0.1', "node-0", num_of_failed_attempts=1)
+        attempts = 3
+
+        with unittest.mock.patch("time.sleep") as mocked_sleep:
+            err = check_schema_agreement_in_gossip_and_peers(problem_node, attempts)
+
+        self.assertEqual(
+            mocked_sleep.call_count, 1,
+            "Unexpected number of retries applied")
+        self.assertIsInstance(err, str)
+        self.assertFalse(err)
+
+    def test_check_schema_agreement_in_gossip_and_peers_constant_error(self):
+        attempts = 3
+        problem_node = ProblematicNode('127.0.0.1', "node-0", num_of_failed_attempts=attempts)
+
+        with unittest.mock.patch("time.sleep") as mocked_sleep:
+            err = check_schema_agreement_in_gossip_and_peers(problem_node, attempts)
+
+        self.assertEqual(
+            mocked_sleep.call_count, attempts - 1,
+            "Unexpected number of retries applied")
+        self.assertIsInstance(err, str)
+        self.assertTrue(err)
