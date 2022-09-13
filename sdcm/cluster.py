@@ -2619,21 +2619,34 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @retrying(n=5, sleep_time=5, raise_on_exceeded=False)
     def get_peers_info(self):
-        cql_result = self.run_cqlsh('select peer, data_center, host_id, rack, release_version, '
-                                    'rpc_address, schema_version, supported_features from system.peers',
-                                    split=True, verbose=False)
+        columns = (
+            'peer', 'data_center', 'host_id', 'rack', 'release_version',
+            'rpc_address', 'schema_version', 'supported_features',
+        )
+        cql_result = self.run_cqlsh(
+            f"select {', '.join(columns)} from system.peers", split=True, verbose=False)
         # peer | data_center | host_id | rack | release_version | rpc_address | schema_version | supported_features
         # ------+-------------+---------+------+-----------------+-------------+----------------+--------------------
 
         peers_details = {}
+        err = ''
         for line in cql_result:
+            if '|' not in line or all(column in line for column in columns):
+                # NOTE: skip non-rows and header lines
+                continue
             line_splitted = line.split('|')
-            if len(line_splitted) < 8:
+            if len(line_splitted) != len(columns):
+                current_err = f"Failed to parse the cqlsh command output line: \n{line}\n"
+                LOGGER.warning(current_err)
+                err += current_err
                 continue
             peer = line_splitted[0].strip()
             try:
                 ipaddress.ip_address(peer)
-            except ValueError:
+            except ValueError as exc:
+                current_err = f"Peer '{peer}' is not an IP address, err: {exc}\n"
+                LOGGER.warning(current_err)
+                err += current_err
                 continue
 
             if node := self.parent_cluster.find_node_by_ip(peer):
@@ -2647,9 +2660,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     'supported_features': line_splitted[7].strip(),
                 }
             else:
-                if peer:
-                    LOGGER.error("Get peers info. Failed to find a node in the cluster by IP: %s", peer)
+                current_err = f"'get_peers_info' failed to find a node by IP: {peer}\n"
+                LOGGER.error(current_err)
+                err += current_err
 
+        if not (peers_details or err):
+            LOGGER.error(
+                "No data, no errors. Check the output from the cqlsh for the correctness:\n%s",
+                cql_result)
         return peers_details
 
     @retrying(n=5, sleep_time=10, raise_on_exceeded=False)
@@ -3901,7 +3919,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def wait_for_schema_agreement(self):
 
         for node in self.nodes:
-            assert check_schema_agreement_in_gossip_and_peers(node), 'Schema agreement is not reached'
+            err = check_schema_agreement_in_gossip_and_peers(node)
+            assert not err, err
         self.log.debug('Schema agreement is reached')
         return True
 
