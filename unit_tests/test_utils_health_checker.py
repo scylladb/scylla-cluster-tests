@@ -15,8 +15,13 @@
 import unittest
 
 from sdcm.sct_events import Severity
-from sdcm.utils.health_checker import check_nodes_status, check_nulls_in_peers, \
-    check_node_status_in_gossip_and_nodetool_status, check_schema_version
+from sdcm.utils.health_checker import (
+    check_node_status_in_gossip_and_nodetool_status,
+    check_nodes_status,
+    check_nulls_in_peers,
+    check_schema_agreement_in_gossip_and_peers,
+    check_schema_version,
+)
 
 
 class Node:
@@ -34,6 +39,14 @@ class Node:
     @staticmethod
     def run_cqlsh(cmd, split, verbose):
         pass
+
+    @staticmethod
+    def get_gossip_info():
+        return GOSSIP_INFO
+
+    @staticmethod
+    def get_peers_info():
+        return PEERS_INFO
 
 
 node1 = Node('127.0.0.1', "node-0")
@@ -153,3 +166,33 @@ class TestHealthChecker(unittest.TestCase):
     def test_check_schema_version_all_ok(self):
         event = next(check_schema_version(GOSSIP_INFO, PEERS_INFO, NODES_STATUS, node1), None)
         self.assertIsNone(event)
+
+    def test_check_schema_agreement_in_gossip_and_peers(self):
+        err = check_schema_agreement_in_gossip_and_peers(node1, 1)
+        self.assertIsInstance(err, str)
+        self.assertFalse(err)
+
+    def test_check_schema_agreement_in_gossip_and_peers_error(self):
+        class ProblematicNode(Node):
+            def get_gossip_info(self):
+                return {
+                    node1: {
+                        'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
+                        'status': 'NORMAL',
+                        'dc': 'datacenter1'
+                    },
+                    node2: {
+                        'schema': 'who_cares_about_this_node_is_shutdown',
+                        'status': 'shutdown',
+                        'dc': 'datacenter1'
+                    },
+                    node3: {
+                        'schema': 'bad-schema',
+                        'status': 'NORMAL',
+                        'dc': 'datacenter1'
+                    },
+                }
+        problem_node = ProblematicNode('127.0.0.1', "node-0")
+        err = check_schema_agreement_in_gossip_and_peers(problem_node, 1)
+        self.assertIsInstance(err, str)
+        self.assertTrue(err)

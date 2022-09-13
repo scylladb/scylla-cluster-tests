@@ -221,35 +221,42 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
         )
 
 
-def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_HEALTH_RETRIES) -> bool:
+def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_HEALTH_RETRIES) -> str:
+    err = ''
     for retry_n in range(retries):
         if retry_n:
             time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
         message_pref = f'Check for schema agreement on the node {node.name} ({node}) [attempt #{retry_n}].'
         gossip_info = node.get_gossip_info()
-        peers_info = node.get_peers_info()
         LOGGER.debug("%s Gossip info: %s", message_pref, gossip_info)
-        LOGGER.debug("%s Peers info: %s", message_pref, peers_info)
-
-        if gossip_info is None or peers_info is None:
-            LOGGER.warning("%s Unable to get gossip or peers information", message_pref)
+        if not gossip_info:
+            err = f"{message_pref} Unable to get the gossip info"
+            LOGGER.warning(err)
             continue
 
-        gossip_schema = {data["schema"] for data in gossip_info.values() if data['status'] == "NORMAL"}
+        peers_info = node.get_peers_info()
+        LOGGER.debug("%s Peers info: %s", message_pref, peers_info)
+        if not peers_info:
+            err = f"{message_pref} Unable to get the peers info"
+            LOGGER.warning(err)
+            continue
+
+        gossip_schema = {data["schema"] for data in gossip_info.values()
+                         if data['status'] == "NORMAL"}
         if len(gossip_schema) > 1:
-            LOGGER.warning("%s Schema version is not same on nodes in the gossip", message_pref)
+            err = f"{message_pref} Schema version is not same on nodes in the gossip"
+            LOGGER.warning(err)
             continue
 
         for current_node, data in gossip_info.items():
-            if data['status'] == "NORMAL" and current_node in peers_info:
-                if data["schema"] != peers_info[current_node]['schema_version']:
-                    LOGGER.warning("%s Schema version is not same in the gossip and peers for %s",
-                                   message_pref, current_node)
-                    continue
-
-        break  # Everything is OK, break the cycle.
-    else:
-        return False  # Something was wrong even on the last cycle.
-
-    LOGGER.debug('Schema agreement has been completed on all nodes')
-    return True
+            if not (data['status'] == "NORMAL" and current_node in peers_info):
+                continue
+            if data["schema"] != peers_info[current_node]['schema_version']:
+                current_err = (f"{message_pref} Schema version is not same in "
+                               f"the gossip and peers for {current_node}")
+                LOGGER.warning(current_err)
+                err += f"{current_err}\n"
+                continue
+    if not err:
+        LOGGER.debug('Schema agreement has been completed on all nodes')
+    return err
