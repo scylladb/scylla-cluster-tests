@@ -4539,8 +4539,6 @@ class BaseLoaderSet():
 
     def kill_stress_thread(self):
         self.kill_cassandra_stress_thread()
-        self.kill_stress_thread_bench()
-        self.kill_gemini_thread()
         self.kill_docker_loaders()
 
     def kill_cassandra_stress_thread(self):
@@ -4679,23 +4677,6 @@ class BaseLoaderSet():
                 results['lat999'].append(lat999)
                 results['latmax'].append(latmax)
         return results
-
-    def kill_stress_thread_bench(self):
-        for loader in self.nodes:
-            sb_active = loader.remoter.run(cmd='pgrep -f scylla-bench', verbose=False, ignore_status=True)
-            if sb_active.exit_status == 0:
-                kill_result = loader.remoter.run('pkill -f -SIGINT scylla-bench', ignore_status=True)
-                if kill_result.exit_status != 0:
-                    self.log.warning('Terminate scylla-bench on node %s:\n%s',
-                                     loader, kill_result)
-
-    def kill_gemini_thread(self):
-        for loader in self.nodes:
-            sb_active = loader.remoter.run(cmd='pgrep -f gemini', verbose=False, ignore_status=True)
-            if sb_active.exit_status == 0:
-                kill_result = loader.remoter.run('pkill -f -SIGINT gemini', ignore_status=True)
-                if kill_result.exit_status != 0:
-                    self.log.warning('Terminate gemini on node %s:\n%s', loader, kill_result)
 
 
 class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instance-attributes
