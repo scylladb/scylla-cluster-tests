@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import contextlib
+from types import SimpleNamespace
 
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.sct_events.group_common_events import ignore_operation_errors, ignore_alternator_client_errors
@@ -45,7 +46,10 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
 
     def create_alternator_table(self, schema, alternator_write_isolation):
-        node = self.db_cluster.nodes[0]
+        if self.params.get('db_type') == 'dynamodb':
+            node = SimpleNamespace(name='dynamodb')
+        else:
+            node = self.db_cluster.nodes[0]
 
         # drop tables
         table_name = alternator.consts.TABLE_NAME
@@ -117,10 +121,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         base_cmd_w = self.params.get('stress_cmd_w')
         stress_multiplier = self.params.get('stress_multiplier')
 
-        self.create_cql_ks_and_table(field_number=10)
+        if self.params.get('db_type') != 'dynamodb':
+            self.create_cql_ks_and_table(field_number=10)
 
-        self._workload(sub_type='cql', stress_cmd=base_cmd_w,
-                       stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
+            self._workload(sub_type='cql', stress_cmd=base_cmd_w,
+                           stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
 
         schema = self.params.get("dynamodb_primarykey_type")
         # run a workload without lwt as baseline
@@ -151,15 +156,17 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         stress_multiplier = self.params.get('stress_multiplier')
         self.run_fstrim_on_all_db_nodes()
         # run a prepare write workload
-        self.create_cql_ks_and_table(field_number=10)
+        if self.params.get('db_type') != 'dynamodb':
+            self.create_cql_ks_and_table(field_number=10)
 
         self.create_alternator_table(schema=self.params.get("dynamodb_primarykey_type"),
                                      alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW)
 
         self.preload_data()
 
-        self._workload(sub_type='cql', stress_cmd=base_cmd_r,
-                       stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
+        if self.params.get('db_type') != 'dynamodb':
+            self._workload(sub_type='cql', stress_cmd=base_cmd_r,
+                           stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
 
         # run a workload without lwt as baseline
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
@@ -186,15 +193,16 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         stress_multiplier = self.params.get('stress_multiplier')
         self.run_fstrim_on_all_db_nodes()
 
-        self.create_cql_ks_and_table(field_number=10)
+        if self.params.get('db_type') != 'dynamodb':
+            self.create_cql_ks_and_table(field_number=10)
         self.create_alternator_table(schema=self.params.get("dynamodb_primarykey_type"),
                                      alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW)
 
         # run a write workload as a preparation
         self.preload_data()
-
-        self._workload(sub_type='cql', stress_cmd=base_cmd_m,
-                       stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
+        if self.params.get('db_type') != 'dynamodb':
+            self._workload(sub_type='cql', stress_cmd=base_cmd_m,
+                           stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
 
         # run a mixed workload
         # run a workload without lwt as baseline
@@ -229,7 +237,8 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                                      alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW)
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
 
-        self.create_cql_ks_and_table(field_number=10)
+        if self.params.get('db_type') != 'dynamodb':
+            self.create_cql_ks_and_table(field_number=10)
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
 
@@ -241,9 +250,10 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.wait_no_compactions_running(n=120)
 
         self.run_fstrim_on_all_db_nodes()
-        self._workload(
-            test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
-            keyspace_num=1, is_alternator=False)
+        if self.params.get('db_type') != 'dynamodb':
+            self._workload(
+                test_name=self.id() + '_read', sub_type='cql', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
+                keyspace_num=1, is_alternator=False)
 
         # run a workload without lwt as baseline
         self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
@@ -262,10 +272,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         stress_multiplier = 1
         self.run_fstrim_on_all_db_nodes()
 
-        self.wait_no_compactions_running()
-        self._workload(
-            test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w + " -target 10000",
-            stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
+        if self.params.get('db_type') != 'dynamodb':
+            self.wait_no_compactions_running()
+            self._workload(
+                test_name=self.id() + '_write', sub_type='cql', stress_cmd=base_cmd_w + " -target 10000",
+                stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline
@@ -286,9 +297,10 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         self.wait_no_compactions_running(n=120)
         self.run_fstrim_on_all_db_nodes()
 
-        self._workload(
-            test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m + " -target 10000",
-            stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
+        if self.params.get('db_type') != 'dynamodb':
+            self._workload(
+                test_name=self.id() + '_mixed', sub_type='cql', stress_cmd=base_cmd_m + " -target 10000",
+                stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline

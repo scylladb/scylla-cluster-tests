@@ -150,6 +150,11 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                     dynamodb.primaryKeyType = {alternator.enums.YCSBSchemaTypes.HASH_SCHEMA.value}
                 ''')
 
+            if self.params.get('region_name'):
+                dynamodb_teample += dedent(f'''
+                    dynamodb.region = {self.params.region_names[0]}
+                ''')
+
             if target_address:
                 dynamodb_teample += dedent(f'''
                     dynamodb.endpoint = http://{target_address}:{self.params.get('alternator_port')}

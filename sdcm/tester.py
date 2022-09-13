@@ -28,6 +28,7 @@ import threading
 import signal
 import sys
 import json
+from types import SimpleNamespace
 
 import botocore
 import yaml
@@ -802,10 +803,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @cache
     def pre_create_alternator_tables(self):
         if self.params.get('alternator_port'):
-            node = self.db_cluster.nodes[0]
+            if self.params.get('db_type') == 'dynamodb':
+                node = SimpleNamespace(name='dynamodb')
+            else:
+                node = self.db_cluster.nodes[0]
             self.log.info("Going to create alternator tables")
             if self.params.get('alternator_enforce_authorization'):
-                with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+                with self.db_cluster.cql_connection_patient(node) as session:
                     session.execute("""
                         INSERT INTO system_auth.roles (role, salted_hash) VALUES (%s, %s)
                     """, (self.params.get('alternator_access_key_id'),
@@ -2983,6 +2987,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def wait_no_compactions_running(self, n=80, sleep_time=60):  # pylint: disable=invalid-name
         # Wait for up to 80 mins that there are no running compactions
+        if self.params.get('db_type') == 'dynamodb':
+            return
+
         @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
         def is_compactions_done():
             compaction_query = "sum(scylla_compaction_manager_compactions{})"

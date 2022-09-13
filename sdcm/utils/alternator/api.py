@@ -25,7 +25,10 @@ class Alternator:
         self.alternator_apis = {}
 
     def create_endpoint_url(self, node):
-        return 'http://{}:{}'.format(normalize_ipv6_url(node.external_address), self.params.get("alternator_port"))
+        if self.params.get("db_type") == 'dynamodb':
+            return 'dynamodb'
+        else:
+            return 'http://{}:{}'.format(normalize_ipv6_url(node.external_address), self.params.get("alternator_port"))
 
     def get_dynamodb_api(self, node) -> AlternatorApi:
         endpoint_url = self.create_endpoint_url(node=node)
@@ -33,6 +36,8 @@ class Alternator:
             aws_params = dict(endpoint_url=endpoint_url, aws_access_key_id=self.params.get("alternator_access_key_id"),
                               aws_secret_access_key=self.params.get("alternator_secret_access_key"),
                               region_name="None")
+            if endpoint_url == 'dynamodb':
+                aws_params = dict(region_name=self.params.region_names[0])
             resource: DynamoDBServiceResource = boto3.resource('dynamodb', **aws_params)
             client: DynamoDBClient = boto3.client('dynamodb', **aws_params)
             self.alternator_apis[endpoint_url] = AlternatorApi(resource=resource, client=client)
