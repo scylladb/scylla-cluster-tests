@@ -15,6 +15,7 @@ import pprint
 import re
 import typing
 from functools import cached_property
+import json
 
 import yaml
 import requests
@@ -36,7 +37,7 @@ BACKENDS = {
 }
 
 
-class ArtifactsTest(ClusterTester):
+class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
     REPO_TABLE = "housekeeping.repo"
     CHECK_VERSION_TABLE = "housekeeping.checkversion"
 
@@ -123,6 +124,21 @@ class ArtifactsTest(ClusterTester):
         self.node.run_nodetool("status")
         self.run_cassandra_stress("write n=10000 -mode cql3 native -pop seq=1..10000")
         self.run_cassandra_stress("mixed duration=1m -mode cql3 native -rate threads=10 -pop seq=1..10000")
+
+    def check_cqlsh(self):
+        output = self.node.run_cqlsh("desc keyspaces")
+        self.log.debug(output.stdout)
+
+        output = self.node.run_cqlsh('select JSON host_id,broadcast_address from system.local ;', split=True)
+
+        for line in output:
+            try:
+                host = json.loads(line)
+            except json.decoder.JSONDecodeError:
+                continue
+            self.log.debug(host)
+            assert 'broadcast_address' in host and 'host_id' in host, (
+                f"system.local: {host}, doesn't have 'broadcast_address' or 'host_id'")
 
     def check_housekeeping_service_status(self, backend: str):
         housekeeping_service_name = "scylla-housekeeping" if backend == "docker" else "scylla-housekeeping-restart"
@@ -316,6 +332,9 @@ class ArtifactsTest(ClusterTester):
 
         with self.subTest("check Scylla server after installation"):
             self.check_scylla()
+
+        with self.subTest("check cqlsh installation"):
+            self.check_cqlsh()
 
         if backend == "docker":
             with self.subTest("check locale settings in the docker image"):
