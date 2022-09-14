@@ -952,6 +952,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         return file_for_destroy
 
+    @decorate_with_context(ignore_ycsb_connection_refused)
     def _destroy_data_and_restart_scylla(self):
 
         ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_empty_tables=False)
@@ -2775,11 +2776,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         assert removed_node_status is not None, "failed to get host_id using nodetool status"
         host_id = removed_node_status["host_id"]
 
-        # node stop and make sure its "DN"
-        node_to_remove.stop_scylla_server(verify_up=True, verify_down=True)
+        with ignore_ycsb_connection_refused():
+            # node stop and make sure its "DN"
+            node_to_remove.stop_scylla_server(verify_up=True, verify_down=True)
 
-        # terminate node
-        self._terminate_cluster_node(node_to_remove)
+            # terminate node
+            self._terminate_cluster_node(node_to_remove)
 
         def remove_node():
             # nodetool removenode 'host_id'
@@ -3001,15 +3003,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.debug(f"{name}: failed to execute cleanup command "
                                f"{cmd} on node {node} due to the following error: {str(exc)}")
 
+    @decorate_with_context([
+        ignore_ycsb_connection_refused,
+        ignore_view_error_gate_closed_exception
+    ])
     def reboot_node(self, target_node, hard=True, verify_ssh=True):
-        with ignore_view_error_gate_closed_exception():
-            target_node.reboot(hard=hard, verify_ssh=verify_ssh)
-            if self.tester.params.get('print_kernel_callstack'):
-                save_kallsyms_map(node=target_node)
-            # pods can change their ip address during the process,
-            # so we update the monitor at this point
-            if self._is_it_on_kubernetes():
-                self.refresh_nodes_ip_and_reconfigure_monitor(nodes=[target_node])
+        target_node.reboot(hard=hard, verify_ssh=verify_ssh)
+        if self.tester.params.get('print_kernel_callstack'):
+            save_kallsyms_map(node=target_node)
+        # pods can change their ip address during the process,
+        # so we update the monitor at this point
+        if self._is_it_on_kubernetes():
+            self.refresh_nodes_ip_and_reconfigure_monitor(nodes=[target_node])
 
     def disrupt_network_start_stop_interface(self):  # pylint: disable=invalid-name
         if not self.cluster.extra_network_interface:
