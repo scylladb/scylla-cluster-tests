@@ -1,0 +1,13 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'uda_udf_test.UDAUDFTest.test_uda_and_udf',
+    test_config: 'test-cases/features/uda_udf.yaml',
+
+    timeout: [time: 90, unit: 'MINUTES']
+)

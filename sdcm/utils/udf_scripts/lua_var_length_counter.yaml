@@ -1,6 +1,6 @@
 # UDF script: returns the string length of the provided text var
 
-name: 'var_length_counter'
+name: 'lua_var_length_counter'
 args: '(var text)'
 called_on_null_input_returns: 'NULL'
 return_type: 'int'
