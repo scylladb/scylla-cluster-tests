@@ -1,8 +1,0 @@
-# UDF script: return the arg
-
-name: 'simple_return'
-args: '(acc tuple<int, int>)'
-called_on_null_input_returns: 'NULL'
-return_type: 'int'
-language: 'lua'
-script: 'return acc[1]'

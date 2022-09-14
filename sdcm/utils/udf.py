@@ -49,7 +49,7 @@ class UDF(BaseModel):
     script: str
 
     def get_create_query(self, ks: str, create_or_replace: bool = True) -> str:
-        create_part = "CREATE OR REPLACE" if create_or_replace else "CREATE"
+        create_part = "CREATE OR REPLACE FUNCTION" if create_or_replace else "CREATE FUNCTION"
         return f"{create_part} {ks}.{self.name}{self.args} " \
                f"RETURNS {self.called_on_null_input_returns} ON NULL INPUT " \
                f"RETURNS {self.return_type} " \

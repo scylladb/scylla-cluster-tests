@@ -1,0 +1,16 @@
+test_duration: 90
+
+prepare_write_cmd: "cassandra-stress user profile=/tmp/c-s_uda_udf.yaml ops'(insert=1)' cl=QUORUM duration=2m -mode native cql3 -rate threads=10"
+stress_cmd: ["cassandra-stress user profile=/tmp/c-s_uda_udf.yaml ops'(my_avg=1, lua_var_length_counter=33, xwasm_plus=33, xwasm_div=32)' cl=QUORUM duration=30m -mode native cql3 -rate threads=20"]
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i4i.2xlarge'
+append_scylla_yaml: |
+  experimental_features:
+     - udf
+  enable_user_defined_functions: true
+  user_defined_function_time_limit_ms: 10000
+  user_defined_function_allocation_limit_bytes: 1048576

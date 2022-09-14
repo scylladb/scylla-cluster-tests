@@ -19,7 +19,7 @@ from sdcm.utils.udf import UDF, UDFS
 
 class TestUDF(TestCase):
     MOCK_LUA_UDF_VALS = {
-        "name": "var_length_counter",
+        "name": "lua_var_length_counter",
         "args": "(var text)",
         "called_on_null_input_returns": "NULL",
         "return_type": "int",
@@ -28,26 +28,37 @@ class TestUDF(TestCase):
     }
 
     MOCK_XWASM_UDF_VALS = {
-        "name": 'plus',
-        "args": '(input1 tinyint, input2 tinyint)',
+        "name": 'xwasm_plus',
+        "args": '(input1 int, input2 int)',
         "called_on_null_input_returns": 'NULL',
-        "return_type": 'tinyint',
+        "return_type": 'int',
         "language": 'xwasm',
         "script": r"""(module
-(type (;0;) (func (param i32 i32) (result i32)))
-(func ${plus_name} (type 0) (param i32 i32) (result i32)
+(type (;0;) (func))
+(type (;1;) (func (param i32 i32) (result i32)))
+(func $__wasm_call_ctors (type 0))
+(func $plus (type 1) (param i32 i32) (result i32)
   local.get 1
   local.get 0
   i32.add)
 (table (;0;) 1 1 funcref)
-(table (;1;) 32 externref)
-(memory (;0;) 17)
+(memory (;0;) 2)
+(global (;0;) (mut i32) (i32.const 66560))
+(global (;1;) i32 (i32.const 1024))
+(global (;2;) i32 (i32.const 1024))
+(global (;3;) i32 (i32.const 1024))
+(global (;4;) i32 (i32.const 66560))
+(global (;5;) i32 (i32.const 0))
+(global (;6;) i32 (i32.const 1))
 (export "memory" (memory 0))
-(export "{plus_name}" (func ${plus_name}))
-(elem (;0;) (i32.const 0) func)
-(global (;0;) i32 (i32.const 1024))
-(export "_scylla_abi" (global 0))
-(data $.rodata (i32.const 1024) "\\01"))"""
+(export "__wasm_call_ctors" (func $__wasm_call_ctors))
+(export "xwasm_plus" (func $plus))
+(export "__dso_handle" (global 1))
+(export "__data_end" (global 2))
+(export "__global_base" (global 3))
+(export "__heap_base" (global 4))
+(export "__memory_base" (global 5))
+(export "__table_base" (global 6)))"""
     }
 
     def test_create_udf_instance(self):
@@ -59,7 +70,7 @@ class TestUDF(TestCase):
             self.assertEqual(value, getattr(udf, key), f"Did not find expected value for {key} in the udf class.")
 
     def test_get_create_query_from_udf(self):
-        expected_query = "CREATE mock_keyspace.var_length_counter(var text) RETURNS NULL ON NULL INPUT " \
+        expected_query = "CREATE FUNCTION mock_keyspace.lua_var_length_counter(var text) RETURNS NULL ON NULL INPUT " \
                          "RETURNS int LANGUAGE lua AS 'return #var'"
         udf = UDF(**self.MOCK_LUA_UDF_VALS)
         actual_query = udf.get_create_query(ks="mock_keyspace", create_or_replace=False)
@@ -67,7 +78,7 @@ class TestUDF(TestCase):
         self.assertEqual(expected_query, actual_query)
 
     def test_get_create_or_replace_query_from_udf(self):
-        expected_query = "CREATE OR REPLACE mock_keyspace.var_length_counter(var text) RETURNS NULL ON NULL INPUT " \
+        expected_query = "CREATE OR REPLACE FUNCTION mock_keyspace.lua_var_length_counter(var text) RETURNS NULL ON NULL INPUT " \
                          "RETURNS int LANGUAGE lua AS 'return #var'"
         udf = UDF(**self.MOCK_LUA_UDF_VALS)
         actual_query = udf.get_create_query(ks="mock_keyspace")

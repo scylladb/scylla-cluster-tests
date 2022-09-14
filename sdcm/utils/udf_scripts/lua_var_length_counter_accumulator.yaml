@@ -1,6 +1,6 @@
 # UDF script: accumulator function counting up the number of chars in a given column
 
-name: 'var_length_counter'
+name: 'lua_var_length_counter_acc'
 args: '(acc tuple<int, int>, characters text)'
 called_on_null_input_returns: 'NULL'
 return_type: 'tuple<int, int>'

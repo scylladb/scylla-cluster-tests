@@ -1,0 +1,8 @@
+# UDF function returns a tuple with the accumulator incremented by arg and counter incremented by 1
+
+name: 'lua_plus_acc'
+args: '(acc tuple<int, int>, val int)'
+called_on_null_input_returns: 'NULL'
+return_type: 'tuple <int, int>'
+language: 'lua'
+script: 'return {acc[1] + 1, acc[2] + val}'

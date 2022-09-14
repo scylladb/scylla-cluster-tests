@@ -1,9 +1,0 @@
-# UDA: creates a custom function returning the sum of character lengths in a column
-
-name: "my_char_counter"
-args: "text"
-return_type: "bigint"
-accumulator_udf_name: "lua_var_length_counter_accumulator"
-reduce_udf_name: null
-final_udf_name: "lua_simple_return"
-initial_condition: "(0, 0)"

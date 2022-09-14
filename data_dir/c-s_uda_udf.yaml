@@ -1,0 +1,73 @@
+# Keyspace Name
+keyspace: ks
+
+# The CQL for creating a keyspace (optional if it already exists)
+keyspace_definition: |
+  CREATE KEYSPACE ks WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+
+# Table name
+table: uda_udf
+
+# The CQL for creating a table you wish to stress (optional if it already exists)
+table_definition: |
+  CREATE TABLE uda_udf (
+        pk timeuuid,
+        ck_int int,
+        c1_timeuuid timeuuid,
+        c2_int int,
+        c3_int int,
+        c4_bigint bigint,
+        c5_double double,
+        c6_float float,
+        c7_text text,
+        PRIMARY KEY(pk, ck_int)
+  ) WITH comment='A test table for testing UDAs and UDFs'
+
+### Column Distribution Specifications ###
+
+columnspec:
+  - name: pk
+    population: uniform(1..20M)
+  - name: ck_int
+    cluster: uniform(1..1k)
+    population: uniform(1..20M)
+  - name: c1_timeuuid
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+  - name: c2_int
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+  - name: c3_int
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+  - name: c4_bigint
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+  - name: c5_double
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+  - name: c6_float
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+  - name: c7_text
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+
+insert:
+  partitions: fixed(2)
+  select:    fixed(2)/10240M
+  batchtype: UNLOGGED
+
+queries:
+  my_avg:
+    cql: "SELECT ks.my_avg(c2_int) AS result FROM ks.uda_udf"
+    fields: samerow
+  lua_var_length_counter:
+    cql: "SELECT ks.lua_var_length_counter(c7_text) AS result FROM ks.uda_udf LIMIT 10"
+    fields: samerow
+  xwasm_plus:
+    cql: "SELECT ks.xwasm_plus(c2_int, c3_int) AS result FROM ks.uda_udf LIMIT 10"
+    fields: samerow
+  xwasm_div:
+    cql: "SELECT ks.xwasm_div(c2_int, c3_int) AS result FROM ks.uda_udf LIMIT 10"
+    fields: samerow
