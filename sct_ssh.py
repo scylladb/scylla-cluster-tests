@@ -115,7 +115,7 @@ def select_instance(region: str = None, **tags) -> dict | None:
     return question.ask()
 
 
-def select_instance_group(region: str = None, **tags) -> dict | None:
+def select_instance_group(region: str = None, **tags) -> list:
     user = tags.get('user')
     test_id = tags.get('test_id')
     node_name = tags.get('node_name')
@@ -129,11 +129,11 @@ def select_instance_group(region: str = None, **tags) -> dict | None:
     vms = list_instances_aws(tags, running=True, region_name=region)
 
     if len(vms) == 1:
-        return vms[0]
+        return vms
 
     if not vms:
         click.echo(click.style("Found no matching instances", fg='red'))
-        return {}
+        return []
 
     choices = [
         Choice(f"{get_tags(vm).get('Name')} - {vm['PublicIpAddress']} {vm['PrivateIpAddress']} - {get_region(vm)}",

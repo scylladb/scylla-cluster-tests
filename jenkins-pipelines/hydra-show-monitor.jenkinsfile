@@ -12,6 +12,7 @@ pipeline {
     environment {
         AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
         AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+        SCT_TEST_ID = UUID.randomUUID().toString()
     }
     parameters {
         string(defaultValue: 'master',
@@ -70,6 +71,13 @@ pipeline {
                     export RESTORED_TEST_ID="${params.test_id}"
 
                     ./docker/env/hydra.sh --execute-on-new-runner investigate show-monitor "${params.test_id}"
+                """
+            }
+        }
+        stage('Run hydra attach-test-sg') {
+            steps {
+                sctScript """
+                    ./docker/env/hydra.sh  attach-test-sg --test-id "${SCT_TEST_ID}"
                 """
             }
         }
