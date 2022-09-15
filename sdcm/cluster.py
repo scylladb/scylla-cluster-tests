@@ -35,6 +35,7 @@ from functools import cached_property, wraps
 from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
+import packaging.version
 
 import yaml
 import requests
@@ -1995,25 +1996,55 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo update-java-alternatives --jre-headless '
                              '-s java-1.8.0-openjdk-${dpkg-architecture -q DEB_BUILD_ARCH}')
 
+        package_version_cmds_v2 = dedent("""
+            tar -xzO --wildcards -f ./unified_package.tar.gz .relocatable_package_version
+        """)
+        package_version_cmds_v3 = dedent("""
+            tar -xzO --wildcards -f ./unified_package.tar.gz scylla-*/.relocatable_package_version
+        """)
+        result = self.remoter.run('bash -cxe "%s"' % package_version_cmds_v3, ignore_status=True)
+        if not result.ok:
+            logging.info('v3 version of .relocatable_package_version does not detected, retry with v2 version')
+            result = self.remoter.run('bash -cxe "%s"' % package_version_cmds_v2)
+        package_version = packaging.version.parse(result.stdout.strip())
+
         if nonroot:
             # Make sure env variable (XDG_RUNTIME_DIR) is set, which is necessary for systemd user
             if not 'XDG_RUNTIME_DIR=' in self.remoter.run('env').stdout:
                 # Reload the env variables by ssh reconnect
                 self.remoter.run('env', verbose=True, change_context=True)
                 assert 'XDG_RUNTIME_DIR' in self.remoter.run('env', verbose=True).stdout
-            install_cmds = dedent("""
-                tar xvfz ./unified_package.tar.gz
-                ./install.sh --nonroot
-                sudo rm -f /tmp/scylla.yaml
-            """)
+            if package_version < packaging.version.parse('3'):
+                install_cmds = dedent("""
+                    tar xvfz ./unified_package.tar.gz
+                    ./install.sh --nonroot
+                    sudo rm -f /tmp/scylla.yaml
+                """)
+            else:
+                install_cmds = dedent("""
+                    tar xvfz ./unified_package.tar.gz
+                    cd ./scylla-*
+                    ./install.sh --nonroot
+                    cd -
+                    sudo rm -f /tmp/scylla.yaml
+                """)
             # Known issue: https://github.com/scylladb/scylla/issues/7071
             self.remoter.run('bash -cxe "%s"' % install_cmds)
         else:
-            install_cmds = dedent("""
-                tar xvfz ./unified_package.tar.gz
-                ./install.sh --housekeeping
-                rm -f /tmp/scylla.yaml
-            """)
+            if package_version < packaging.version.parse('3'):
+                install_cmds = dedent("""
+                    tar xvfz ./unified_package.tar.gz
+                    ./install.sh --housekeeping
+                    rm -f /tmp/scylla.yaml
+                """)
+            else:
+                install_cmds = dedent("""
+                    tar xvfz ./unified_package.tar.gz
+                    cd ./scylla-*
+                    ./install.sh --housekeeping
+                    cd -
+                    rm -f /tmp/scylla.yaml
+                """)
             self.remoter.run('sudo bash -cxe "%s"' % install_cmds)
 
     def web_install_scylla(self, scylla_version: Optional[str] = None) -> None:
