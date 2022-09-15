@@ -1,10 +1,17 @@
 FROM openjdk:8 as builder
 
+ARG BRANCH
+ARG REPO
+
+ENV BRANCH=${BRANCH:-master}
+ENV REPO=${REPO:-https://github.com/scylladb/YCSB.git}
+
 RUN apt-get update && apt-get install -y \
     git \
     maven
 
-RUN git clone https://github.com/scylladb/YCSB.git -b master
+RUN git clone ${REPO} -b ${BRANCH}
+
 RUN cd YCSB; mvn -pl dynamodb -am clean package -DskipTests
 RUN cd /YCSB/dynamodb/target && mkdir -p YCSB && tar xvvf ycsb-dynamo*.tar.gz -C YCSB --strip-components 1
 
