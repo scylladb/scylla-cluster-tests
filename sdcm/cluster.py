@@ -1976,6 +1976,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         else:
             additional_pkgs = 'xfsprogs mdadm'
 
+        # scylla current cqlsh still need python2 to work
+        additional_pkgs += ' python2'
+
         # Offline install does't provide openjdk-8, it has to be installed in advance
         # https://github.com/scylladb/scylla-jmx/issues/127
         if self.is_rhel_like():
