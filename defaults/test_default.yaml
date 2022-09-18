@@ -175,8 +175,6 @@ backup_bucket_region: ''  # use the same region as a cluster
 
 events_limit_in_email: 10
 
-scylla_bench_version: v0.1.8
-
 data_volume_disk_num: 0
 data_volume_disk_type: ''
 data_volume_disk_size: 0

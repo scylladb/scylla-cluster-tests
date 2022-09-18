@@ -443,9 +443,6 @@ class SCTConfiguration(dict):
         dict(name="server_encrypt", env="SCT_SERVER_ENCRYPT", type=boolean,
              help="when enable scylla will use encryption on the server side"),
 
-        dict(name="scylla_bench_version", env="SCT_SCYLLA_BENCH_VERSION", type=str,
-             help="A valid tag under the scylla bench repo: https://github.com/scylladb/scylla-bench"),
-
         dict(name="client_encrypt", env="SCT_CLIENT_ENCRYPT", type=boolean,
              help="when enable scylla will use encryption on the client side"),
 

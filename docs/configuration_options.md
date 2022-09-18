@@ -82,7 +82,6 @@
 | **<a href="#user-content-fullscan" name="fullscan">fullscan</a>**  | If true would kill the fullscan thread in the test teardown | N/A | SCT_FULLSCAN
 | **<a href="#user-content-experimental" name="experimental">experimental</a>**  | when enabled scylla will use it's experimental features | True | SCT_EXPERIMENTAL
 | **<a href="#user-content-server_encrypt" name="server_encrypt">server_encrypt</a>**  | when enable scylla will use encryption on the server side | N/A | SCT_SERVER_ENCRYPT
-| **<a href="#user-content-scylla_bench_version" name="scylla_bench_version">scylla_bench_version</a>**  | A valid tag under the scylla bench repo: https://github.com/scylladb/scylla-bench | v0.1.8 | SCT_SCYLLA_BENCH_VERSION
 | **<a href="#user-content-client_encrypt" name="client_encrypt">client_encrypt</a>**  | when enable scylla will use encryption on the client side | N/A | SCT_CLIENT_ENCRYPT
 | **<a href="#user-content-hinted_handoff" name="hinted_handoff">hinted_handoff</a>**  | when enable or disable scylla hinted handoff (enabled/disabled) | enabled | SCT_HINTED_HANDOFF
 | **<a href="#user-content-authenticator" name="authenticator">authenticator</a>**  | which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator | N/A | SCT_AUTHENTICATOR
