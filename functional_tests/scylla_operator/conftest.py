@@ -116,6 +116,7 @@ def fixture_db_cluster(tester: ScyllaOperatorFunctionalClusterTester):
     if dataset_name := tester.db_cluster.params.get("k8s_functional_test_dataset"):
         tester.db_cluster.wait_for_nodes_up_and_normal(nodes=tester.db_cluster.nodes,
                                                        verification_node=tester.db_cluster.nodes[0])
+        tester.db_cluster.wait_for_init(node_list=tester.db_cluster.nodes, wait_for_db_logs=True)
         tester.db_cluster.prefill_cluster(dataset_name)
     yield tester.db_cluster
 

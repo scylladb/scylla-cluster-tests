@@ -3447,7 +3447,8 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
         node_list = kwargs.get('node_list', None) or cl_inst.nodes
         timeout = kwargs.get('timeout', None)
         # remove all arguments which is not supported by BaseScyllaCluster.node_setup method
-        setup_kwargs = {k: v for k, v in kwargs.items() if k not in ["node_list", "check_node_health"]}
+        setup_kwargs = {k: v for k, v in kwargs.items()
+                        if k not in ["node_list", "check_node_health", "wait_for_db_logs"]}
 
         _queue = queue.Queue()
 
