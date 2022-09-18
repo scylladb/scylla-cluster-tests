@@ -7,6 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-200GB-48h-network-monkey.yaml'
-
+    test_config: 'test-cases/longevity/longevity-200GB-48h-network-monkey.yaml',
+    ip_ssh_connections: 'public'
 )
