@@ -333,8 +333,9 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         with self.subTest("check Scylla server after installation"):
             self.check_scylla()
 
-        with self.subTest("check cqlsh installation"):
-            self.check_cqlsh()
+        if not self.node.is_nonroot_install:
+            with self.subTest("check cqlsh installation"):
+                self.check_cqlsh()
 
         if backend == "docker":
             with self.subTest("check locale settings in the docker image"):
