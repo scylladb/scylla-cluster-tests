@@ -3223,8 +3223,6 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                        port=port, ssl_options=ssl_opts,
                                        connect_timeout=connect_timeout)
         session = cluster_driver.connect()
-        LOGGER.debug("Session authorization provider: user '%s', password '%s'", cluster_driver.auth_provider.username,
-                     cluster_driver.auth_provider.password)
 
         # temporarily increase client-side timeout to 1m to determine
         # if the cluster is simply responding slowly to requests
