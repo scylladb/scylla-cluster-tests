@@ -2260,9 +2260,13 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         super().check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=arguments-differ
+    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, wait_for_db_logs=False, **__):  # pylint: disable=arguments-differ
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list)
+
+        if wait_for_db_logs:
+            super().wait_for_init(node_list=node_list, check_node_health=False)
+
         if self.scylla_restart_required:
             self.restart_scylla()
             self.scylla_restart_required = False
