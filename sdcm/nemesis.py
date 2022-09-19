@@ -3310,7 +3310,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.cluster.params.get('server_encrypt'):
             raise UnsupportedNemesis('Server Encryption is not enabled, hence skipping')
 
-        @timeout_decor(timeout=20, allowed_exceptions=(LogContentNotFound, ))
+        @timeout_decor(timeout=600, allowed_exceptions=(LogContentNotFound, ))
         def check_ssl_reload_log(node_system_log):
             if not list(node_system_log):
                 raise LogContentNotFound('Reload SSL message not found in node log')
