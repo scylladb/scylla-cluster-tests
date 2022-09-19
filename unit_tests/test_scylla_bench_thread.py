@@ -49,11 +49,14 @@ def create_cql_ks_and_table(docker_scylla):
         session.execute(create_table_query)
 
 
-def test_01_scylla_bench(request, docker_scylla, params):
+@pytest.mark.parametrize("extra_cmd", argvalues=[
+    pytest.param('', id="regular"),
+    pytest.param('-tls', id="tls", marks=[pytest.mark.docker_scylla_args(ssl=True)])])
+def test_01_scylla_bench(request, docker_scylla, params, extra_cmd):
     loader_set = LocalLoaderSetDummy()
 
     cmd = (
-        "scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=10 "
+        f"scylla-bench -workload=sequential {extra_cmd} -mode=write -replication-factor=1 -partition-count=10 "
         + "-clustering-row-count=5555 -clustering-row-size=uniform:10..20 -concurrency=10 "
         + "-connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=60s -duration=1m"
     )
