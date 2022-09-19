@@ -10,6 +10,6 @@ artifactsPipeline(
     provision_type: 'spot_low_price',
     manager_version: '',  // scylla manager doesn't currently support arm processors
 
-    timeout: [time: 35, unit: 'MINUTES'],
+    timeout: [time: 30, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'
 )
