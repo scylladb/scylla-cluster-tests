@@ -1431,8 +1431,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_major_compaction(self):
         self.target_node.run_nodetool("compact")
 
-    # NOTE: '2022.1.rc0' is set in advance, not guaranteed to match when appears
-    @scylla_versions(("4.5.rc1", None), ("2022.1.rc0", None))
     def disrupt_load_and_stream(self):
         # Checking the columns number of keyspace1.standard1
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
