@@ -1493,6 +1493,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert '(1 rows)' in result.stdout, f'The key {key} is not loaded by `nodetool refresh`'
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
+        raise UnsupportedNemesis('disabling ENOSPC nemesis until #11245 will be fixed')
+
         if isinstance(self.cluster, LocalKindCluster):
             # Kind cluster has shared file system, it is shared not only among cluster nodes, but
             # also among kubernetes services which make kubernetes inoperational once enospc is reached.
