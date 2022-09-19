@@ -25,7 +25,7 @@ from sdcm.provision import provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_provision import region_definition_builder
 from sdcm.utils.docker_remote import RemoteDocker
-
+from sdcm.utils.common import update_certificates
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
 
@@ -49,22 +49,36 @@ def prom_address():
     yield start_metrics_server()
 
 
-@pytest.fixture(scope='session')
-def docker_scylla():
+@pytest.fixture(name='docker_scylla', scope='function')
+def fixture_docker_scylla(request: pytest.FixtureRequest):
+    docker_scylla_args = {}
+    if test_marker := request.node.get_closest_marker("docker_scylla_args"):
+        docker_scylla_args = test_marker.kwargs
+    ssl = docker_scylla_args.get('ssl')
     # make sure the path to the file is base on the host path, and not as the docker internal path i.e. /sct/
     # since we are going to mount it in a DinD (docker-inside-docker) setup
     base_dir = os.environ.get("_SCT_BASE_DIR", None)
     entryfile_path = Path(base_dir) if base_dir else Path(__file__).parent.parent
-    entryfile_path = entryfile_path.joinpath('./docker/scylla-sct/entry.sh')
+    entryfile_path = entryfile_path / 'docker' / 'scylla-sct' / ('entry_ssl.sh' if ssl else 'entry.sh')
 
     alternator_flags = "--alternator-port 8000 --alternator-write-isolation=always"
     docker_version = "scylladb/scylla-nightly:5.2.0-dev-0.20220820.516089beb0b8"
     cluster = LocalScyllaClusterDummy()
+
+    if ssl:
+        curr_dir = os.getcwd()
+        try:
+            os.chdir(Path(__file__).parent.parent)
+            update_certificates()
+        finally:
+            os.chdir(curr_dir)
+
+    ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
                           command_line=f"--smp 1 --experimental 1 {alternator_flags}",
-                          extra_docker_opts=f'-p 8000 -p 9042 --cpus="1" -v {entryfile_path}:/entry.sh --entrypoint'
-                          f' /entry.sh')
-
+                          extra_docker_opts=(f'-p 8000 -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
+                                             f' -v {ssl_dir}:/etc/scylla/ssl_conf'
+                                             ' --entrypoint /entry.sh'))
     DummyRemoter = collections.namedtuple('DummyRemoter', ['run', 'sudo'])
     scylla.remoter = DummyRemoter(run=scylla.run, sudo=scylla.run)
 
@@ -87,7 +101,6 @@ def docker_scylla():
                   timeout=30, throw_exc=True)
 
     yield scylla
-
     scylla.kill()
 
 
