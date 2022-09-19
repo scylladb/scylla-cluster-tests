@@ -42,8 +42,8 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a Azure Image to run against',
                    name: 'azure_image_db')
-            string(defaultValue: "${pipelineParams.get('region', '')}",
-                   description: 'AWS region with Scylla AMI (for AMI test, ignored otherwise)',
+            string(defaultValue: "${pipelineParams.get('region', 'us-east-1')}",
+                   description: 'AWS region with Scylla AMI (for AMI test)',
                    name: 'region')
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
