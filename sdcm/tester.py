@@ -2028,7 +2028,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             If it's int, the default of replication_strategy will be 'SimpleStrategy'
             If it's dict, the default of replication_strategy will be 'NetworkTopologyStrategy'
 
-        In the case of NetworkTopologyStrategy, replication_strategy should be a dict that contains the name of
+        In the case of NetworkTopologyStrategy, replication_factor should be a dict that contains the name of
         every dc that the keyspace should be replicated to as keys, and the replication factor of each of those dc
         as values, like so:
         {"dc_name1": 4, "dc_name2": 6, "<dc_name>": <int>...}
