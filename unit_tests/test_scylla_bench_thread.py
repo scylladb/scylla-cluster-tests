@@ -17,7 +17,7 @@ from cassandra.cluster import Cluster  # pylint: disable=no-name-in-module
 from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.utils.docker_utils import running_in_docker
 from unit_tests.dummy_remote import LocalLoaderSetDummy
-from test_lib.scylla_bench_tools import create_scylla_bench_table_query
+from test_lib.scylla_bench_tools import create_scylla_bench_test_table_query
 
 pytestmark = [
     pytest.mark.usefixtures("events",),
@@ -35,7 +35,7 @@ def create_cql_ks_and_table(docker_scylla):
     port = int(port)
 
     cluster_driver = Cluster([node_ip], port=port)
-    create_table_query = create_scylla_bench_table_query(
+    create_table_query = create_scylla_bench_test_table_query(
         compaction_strategy="SizeTieredCompactionStrategy", seed=None
     )
 

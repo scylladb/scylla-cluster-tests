@@ -20,7 +20,7 @@ import six
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.decorators import measure_time, retrying
-from test_lib.scylla_bench_tools import create_scylla_bench_table_query
+from test_lib.scylla_bench_tools import create_scylla_bench_test_table_query
 
 THOUSAND = 1000
 MILLION = THOUSAND ** 2
@@ -133,7 +133,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
     def _pre_create_schema_scylla_bench(self):
         node = self.db_cluster.nodes[0]
-        create_table_query = create_scylla_bench_table_query()
+        create_table_query = create_scylla_bench_test_table_query()
         # pylint: disable=no-member
         with self.db_cluster.cql_connection_patient(node) as session:
             session.execute("""

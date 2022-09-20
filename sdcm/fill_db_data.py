@@ -34,7 +34,8 @@ from pkg_resources import parse_version
 from sdcm.tester import ClusterTester
 from sdcm.utils.decorators import retrying
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
-
+from test_lib.compaction import CompactionStrategy
+from test_lib.scylla_bench_tools import create_scylla_bench_test_table_query, SCYLLA_BENCH_TEST_COUNTERS_TABLE_QUERY
 
 LOGGER = logging.getLogger(__name__)
 
@@ -3343,10 +3344,17 @@ class FillDatabaseData(ClusterTester):
         with self.db_cluster.cql_connection_patient(node) as session:
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
+            table_setup_seed = self.params.get('cql_schema_seed')
+            create_sb_table_queries = [
+                create_scylla_bench_test_table_query(compaction_strategy=CompactionStrategy.SIZE_TIERED.value,
+                                                     seed=table_setup_seed),
+                SCYLLA_BENCH_TEST_COUNTERS_TABLE_QUERY]
             session.execute("""
                 CREATE KEYSPACE IF NOT EXISTS scylla_bench
                 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
                 """)
+            for query in create_sb_table_queries:
+                session.execute(query)
             session.execute(f"""
                 CREATE KEYSPACE IF NOT EXISTS {self.base_ks}
                 WITH replication = {{'class': 'SimpleStrategy', 'replication_factor': '3'}} AND durable_writes = true;
