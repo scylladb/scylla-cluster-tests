@@ -299,7 +299,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         def set_tags_as_labels(_instance):
             self.log.debug(f"Expected tags are {self.tags}")
             # https://cloud.google.com/resource-manager/docs/tags/tags-creating-and-managing#adding_tag_values
-            regex_key = re.compile(r'[^a-z-_]')
+            regex_key = re.compile(r'[^a-z0-9-_]')
 
             def to_short_name(value):
                 return regex_key.sub('_', value.lower())[:60]
