@@ -98,6 +98,7 @@ from sdcm.wait import wait_for
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
     get_gc_mode, GcMode
 from test_lib.cql_types import CQLTypeBuilder
+from test_lib.sla import ServiceLevel
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1522,6 +1523,28 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         if self._is_it_on_kubernetes():
             self.refresh_nodes_ip_and_reconfigure_monitor(nodes=nodes)
+
+    def disrupt_remove_service_level_while_load(self):
+        if not getattr(self.tester, "roles", None):
+            raise UnsupportedNemesis('This nemesis is supported for SLA test only')
+
+        role = self.tester.roles[0]
+
+        with self.cluster.cql_connection_patient(node=self.cluster.nodes[0], user=self.tester.DEFAULT_USER,
+                                                 password=self.tester.DEFAULT_USER_PASSWORD) as session:
+            self.log.info("Drop service level %s", role.attached_service_level_name)
+            removed_shares = role.attached_service_level.shares
+            role.attached_service_level.session = session
+            role.session = session
+            try:
+                role.attached_service_level.drop(if_exists=False)
+                time.sleep(300)  # let load to run without service level for 5 minutes
+            finally:
+                role.attach_service_level(
+                    ServiceLevel(session=session,
+                                 name=self.tester.SERVICE_LEVEL_NAME_TEMPLATE % (
+                                     removed_shares, random.randint(0, 10)),
+                                 shares=removed_shares).create())
 
     def refresh_nodes_ip_and_reconfigure_monitor(self, nodes: list = None):
         # relevant for kubernetes
@@ -3920,6 +3943,13 @@ class RefreshBigMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_nodetool_refresh(big_sstable=True)
+
+
+class RemoveServiceLevelMonkey(Nemesis):
+    disruptive = True
+
+    def disrupt(self):
+        self.disrupt_remove_service_level_while_load()
 
 
 class EnospcMonkey(Nemesis):
