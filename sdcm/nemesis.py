@@ -93,6 +93,7 @@ from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
 from sdcm.wait import wait_for
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
+from test_lib.sla import ServiceLevel
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1336,6 +1337,28 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     reach_enospc_on_node(target_node=node)
                 finally:
                     clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
+
+    def disrupt_remove_service_level_while_load(self):
+        if not getattr(self.tester, "roles", None):
+            raise UnsupportedNemesis('This nemesis is supported for SLA test only')
+
+        role = self.tester.roles[0]
+
+        with self.cluster.cql_connection_patient(node=self.cluster.nodes[0], user=self.tester.DEFAULT_USER,
+                                                 password=self.tester.DEFAULT_USER_PASSWORD) as session:
+            self.log.info("Drop service level %s", role.attached_service_level_name)
+            removed_shares = role.attached_service_level.shares
+            role.attached_service_level.session = session
+            role.session = session
+            try:
+                role.attached_service_level.drop(if_exists=False)
+                time.sleep(300)  # let load to run without service level for 5 minutes
+            finally:
+                role.attach_service_level(
+                    ServiceLevel(session=session,
+                                 name=self.tester.SERVICE_LEVEL_NAME_TEMPLATE % (
+                                     removed_shares, random.randint(0, 10)),
+                                 shares=removed_shares).create())
 
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
@@ -3642,6 +3665,13 @@ class RefreshBigMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_nodetool_refresh(big_sstable=True)
+
+
+class RemoveServiceLevelMonkey(Nemesis):
+    disruptive = True
+
+    def disrupt(self):
+        self.disrupt_remove_service_level_while_load()
 
 
 class EnospcMonkey(Nemesis):

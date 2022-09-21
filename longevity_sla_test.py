@@ -43,7 +43,7 @@ class LongevitySlaTest(LongevityTest):
         self.add_sla_credentials_to_stress_cmds()
         super().test_custom_time()
 
-    def create_sla_auth(self, session, shares: int, index: int):
+    def create_sla_auth(self, session, shares: int, index: int) -> Role:
         role = Role(session=session, name=self.STRESS_ROLE_NAME_TEMPLATE % (shares, index),
                     password=self.STRESS_ROLE_PASSWORD_TEMPLATE % shares, login=True).create()
         role.attach_service_level(ServiceLevel(session=session, name=self.SERVICE_LEVEL_NAME_TEMPLATE % (shares, index),
