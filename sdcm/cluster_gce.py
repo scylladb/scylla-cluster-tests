@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
+import re
 import time
 import logging
 from textwrap import dedent
@@ -286,7 +287,34 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 },
                 "autoDelete": True}
 
-    def _create_instance(self, node_index, dc_idx, spot=False):
+    def _get_disks_struct(self, name, dc_idx):
+        gce_disk_struct = [self._get_root_disk_struct(name=name,
+                                                      disk_type=self._gce_image_type,
+                                                      dc_idx=dc_idx)]
+        for i in range(self._gce_n_local_ssd):
+            gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, dc_idx=dc_idx))
+        if self._add_disks:
+            for disk_type, disk_size in self._add_disks.items():
+                disk_size = int(disk_size)
+                if disk_size:
+                    gce_disk_struct.append(self._get_persistent_disk_struct(name=name, disk_size=disk_size,
+                                                                            disk_type=disk_type, dc_idx=dc_idx))
+        self.log.debug(gce_disk_struct)
+        return gce_disk_struct
+
+    def _create_instance(self, node_index, dc_idx, spot=False, enable_auto_bootstrap=False):
+        def set_tags_as_labels(_instance):
+            self.log.debug(f"Expected tags are {self.tags}")
+            # https://cloud.google.com/resource-manager/docs/tags/tags-creating-and-managing#adding_tag_values
+            regex_key = re.compile(r'[^a-z0-9-_]')
+
+            def to_short_name(value):
+                return regex_key.sub('_', value.lower())[:60]
+
+            normalized_tags = {to_short_name(k): to_short_name(v) for k, v in self.tags.items()}
+            self.log.debug(f"normalized tags are {normalized_tags}")
+            self._gce_services[dc_idx].ex_set_node_labels(_instance, normalized_tags)
+
         # if size of disk is larget than 80G, then
         # change the timeout of job completion to default * 3.
 
