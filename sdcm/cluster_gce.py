@@ -13,6 +13,7 @@
 
 import os
 import json
+import re
 import time
 import logging
 from typing import Dict, Any, ParamSpec, TypeVar
@@ -305,9 +306,15 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def _create_instance(self, node_index, dc_idx, spot=False):
         def set_tags_as_labels(_instance):
             self.log.debug(f"Expected tags are {self.tags}")
-            lower_tags = dict((k.lower(), v.lower().replace('.', '-')) for k, v in self.tags.items())
-            self.log.debug(f"Lower tags are {lower_tags}")
-            self._gce_services[dc_idx].ex_set_node_labels(_instance, lower_tags)
+            # https://cloud.google.com/resource-manager/docs/tags/tags-creating-and-managing#adding_tag_values
+            regex_key = re.compile(r'[^a-z0-9-_]')
+
+            def to_short_name(value):
+                return regex_key.sub('_', value.lower())[:60]
+
+            normalized_tags = {to_short_name(k): to_short_name(v) for k, v in self.tags.items()}
+            self.log.debug(f"normalized tags are {normalized_tags}")
+            self._gce_services[dc_idx].ex_set_node_labels(_instance, normalized_tags)
 
         # if size of disk is larget than 80G, then
         # change the timeout of job completion to default * 3.
