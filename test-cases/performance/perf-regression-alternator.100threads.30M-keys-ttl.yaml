@@ -1,0 +1,71 @@
+test_duration: 300
+
+round_robin: true
+prepare_write_cmd:
+  - >-
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 150 -p recordcount=30000000
+    -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
+    -p insertorder=hashed -p insertstart=0 -p insertcount=10000000
+
+  - >-
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 150 -p recordcount=30000000
+    -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
+    -p insertorder=hashed -p insertstart=10000000 -p insertcount=10000000
+
+  - >-
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 150 -p recordcount=30000000
+    -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
+    -p insertorder=hashed -p insertstart=20000000 -p insertcount=10000000
+
+stress_cmd_w: >-2
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run  dynamodb -P workloads/workloada -threads 100 -p recordcount=30000000
+  -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
+  -p readproportion=0 -p updateproportion=0 -p scanproportion=0 -p insertproportion=1
+  -p maxexecutiontime=1200 -p operationcount=60000000
+  -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=240 -p insertstart=2000000
+
+stress_cmd_r: >-2
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run  dynamodb -P workloads/workloada -threads 200 -p recordcount=2000000
+  -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
+  -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0
+  -p maxexecutiontime=1200 -p operationcount=60000000
+
+stress_cmd_m: >-2
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run  dynamodb -P workloads/workloada -threads 100 -p recordcount=30000000
+  -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
+  -p readproportion=0.5 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0.5
+  -p maxexecutiontime=1200 -p operationcount=60000000
+  -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=240 -p insertstart=2000000
+
+stress_multiplier: 6
+alternator_write_isolation: 'forbid'
+
+n_db_nodes: 3
+n_loaders: 3
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.2xlarge'
+instance_type_loader: 'c5.2xlarge'
+instance_type_monitor: 't3.small'
+
+alternator_port: 8080
+dynamodb_primarykey_type: HASH_AND_RANGE
+
+user_prefix: 'perf-alternator-ttl'
+space_node_threshold: 644245094
+
+store_perf_results: true
+send_email: true
+email_recipients: ['scylla-perf-results@scylladb.com', 'alternator@scylladb.com']
+
+print_kernel_callstack: true
+# Set Alternator TTL parameters
+# ---------------------------------------------
+# TTL mode is experimental in version 5.1.
+# Enable TTL feature in Scylla.
+# Set 'alternator_ttl_period_in_seconds' to 3 minutes for the TTL scan interval.
+experimental: true
+append_scylla_yaml: |
+  experimental_features:
+    - alternator-ttl
+  alternator_ttl_period_in_seconds: 180
