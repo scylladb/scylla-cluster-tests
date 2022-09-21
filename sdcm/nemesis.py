@@ -1691,7 +1691,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             stress_cmd = "cassandra-stress write n=400000 cl=QUORUM -mode native cql3 " \
                          f"-schema 'replication(factor={self.tester.reliable_replication_factor})' -log interval=5"
             cs_thread = self.tester.run_stress_thread(
-                stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False)
+                stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False, round_robin=True)
             cs_thread.verify_results()
 
     def disrupt_truncate(self):
