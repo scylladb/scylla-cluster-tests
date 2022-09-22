@@ -7384,6 +7384,208 @@
         "yaxis": {
           "align": false
         }
+      },
+      {
+        "class": "text_panel",
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "editable": true,
+        "error": false,
+        "gridPos": {
+          "h": 3,
+          "w": 24,
+          "x": 0,
+          "y": 277
+        },
+        "links": [],
+        "options": {
+          "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">SLA per User metrics</h1>",
+          "mode": "html"
+        },
+        "pluginVersion": "8.5.2",
+        "style": {},
+        "transparent": true,
+        "type": "text"
+      },
+      {
+        "aliasColors": {},
+        "bars": false,
+        "class": "graph_panel",
+        "dashLength": 10,
+        "dashes": false,
+        "datasource": "prometheus",
+        "description": "",
+        "editable": true,
+        "error": false,
+        "fill": 0,
+        "fillGradient": 0,
+        "grid": {},
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 0,
+          "y": 280
+        },
+        "hiddenSeries": false,
+        "legend": {
+          "avg": false,
+          "current": false,
+          "max": false,
+          "min": false,
+          "show": false,
+          "total": false,
+          "values": false
+        },
+        "lines": true,
+        "linewidth": 2,
+        "links": [],
+        "nullPointMode": "connected",
+        "options": {
+          "alertThreshold": true
+        },
+        "percentage": false,
+        "pluginVersion": "8.5.2",
+        "pointradius": 1,
+        "points": false,
+        "renderer": "flot",
+        "seriesOverrides": [],
+        "spaceLength": 10,
+        "stack": false,
+        "steppedLine": false,
+        "targets": [
+          {
+              "expr": "collectd_cassandra_stress_read_gauge{type=\"ops\"}",
+              "format": "time_series",
+              "interval": "15s",
+              "intervalFactor": 1,
+              "refId": "C"
+            },
+            {
+              "expr": "collectd_cassandra_stress_write_gauge{type=\"ops\"}",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "refId": "A"
+            }
+        ],
+        "thresholds": [],
+        "timeRegions": [],
+        "title": "cassandra-stress ops",
+        "tooltip": {
+          "msResolution": false,
+          "shared": true,
+          "sort": 0,
+          "value_type": "cumulative"
+        },
+        "type": "graph",
+        "xaxis": {
+          "mode": "time",
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "ms",
+            "logBase": 1,
+            "min": 0,
+            "show": true
+          },
+          {
+            "format": "short",
+            "logBase": 1,
+            "show": true
+          }
+        ],
+        "yaxis": {
+          "align": false
+        }
+      },
+      {
+        "aliasColors": {},
+        "bars": false,
+        "class": "graph_panel",
+        "dashLength": 10,
+        "dashes": false,
+        "datasource": "prometheus",
+        "description": "",
+        "editable": true,
+        "error": false,
+        "fill": 0,
+        "fillGradient": 0,
+        "grid": {},
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 12,
+          "y": 280
+        },
+        "hiddenSeries": false,
+        "legend": {
+          "avg": false,
+          "current": false,
+          "max": false,
+          "min": false,
+          "show": false,
+          "total": false,
+          "values": false
+        },
+        "lines": true,
+        "linewidth": 2,
+        "links": [],
+        "nullPointMode": "connected",
+        "options": {
+          "alertThreshold": true
+        },
+        "percentage": false,
+        "pluginVersion": "8.5.2",
+        "pointradius": 1,
+        "points": false,
+        "renderer": "flot",
+        "seriesOverrides": [],
+        "spaceLength": 10,
+        "stack": false,
+        "steppedLine": false,
+        "targets": [
+          {
+          "expr": "avg(irate(scylla_scheduler_runtime_ms{group=~\"sl:.*\"} [30s] )) by (group, instance)",
+          "format": "time_series",
+          "interval": "15s",
+          "intervalFactor": 1,
+          "refId": "C"
+        }
+        ],
+        "thresholds": [],
+        "timeRegions": [],
+        "title": "SLA per User metrics",
+        "tooltip": {
+          "msResolution": false,
+          "shared": true,
+          "sort": 0,
+          "value_type": "cumulative"
+        },
+        "type": "graph",
+        "xaxis": {
+          "mode": "time",
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "ms",
+            "logBase": 1,
+            "min": 0,
+            "show": true
+          },
+          {
+            "format": "short",
+            "logBase": 1,
+            "show": true
+          }
+        ],
+        "yaxis": {
+          "align": false
+        }
       }
     ],
     "refresh": false,
