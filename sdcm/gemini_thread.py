@@ -66,6 +66,8 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         self.oracle_cluster = oracle_cluster
         self._gemini_result_file = None
         self.gemini_commands = []
+        self.gemini_request_timeout = 180
+        self.gemini_connect_timeout = 120
 
     @property
     def gemini_result_file(self):
@@ -81,10 +83,13 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
         oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips()) if self.oracle_cluster else None
 
-        cmd = "{} --test-cluster={} --outfile {} --seed {} ".format(self.stress_cmd.strip(),
-                                                                    test_nodes,
-                                                                    self.gemini_result_file,
-                                                                    seed)
+        cmd = "{} --test-cluster={} --outfile {} --seed {} --request-timeout {}s --connect-timeout {}s".format(
+            self.stress_cmd.strip(),
+            test_nodes,
+            self.gemini_result_file,
+            seed,
+            self.gemini_request_timeout,
+            self.gemini_connect_timeout)
         if oracle_nodes:
             cmd += "--oracle-cluster={} ".format(oracle_nodes)
         if table_options:
