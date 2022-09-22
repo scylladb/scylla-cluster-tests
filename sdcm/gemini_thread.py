@@ -70,6 +70,8 @@ class GeminiStressThread:  # pylint: disable=too-many-instance-attributes
         self.gemini_commands = []
         self._gemini_result_file = None
         self.params = params if params else {}
+        self.gemini_request_timeout = 180
+        self.gemini_connect_timeout = 120
 
     @property
     def gemini_result_file(self):
@@ -86,10 +88,13 @@ class GeminiStressThread:  # pylint: disable=too-many-instance-attributes
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
         oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips()) if self.oracle_cluster else None
 
-        cmd = "/$HOME/{} --test-cluster={} --outfile {} --seed {} ".format(self.gemini_cmd.strip(),
-                                                                           test_nodes,
-                                                                           self.gemini_result_file,
-                                                                           seed)
+        cmd = "{} --test-cluster={} --outfile {} --seed {} --request-timeout {}s --connect-timeout {}s".format(
+            self.stress_cmd.strip(),
+            test_nodes,
+            self.gemini_result_file,
+            seed,
+            self.gemini_request_timeout,
+            self.gemini_connect_timeout)
         if oracle_nodes:
             cmd += "--oracle-cluster={} ".format(oracle_nodes)
         if table_options:
