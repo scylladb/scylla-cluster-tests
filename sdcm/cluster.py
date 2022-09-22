@@ -746,6 +746,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def start_network_interface(self, interface_name="eth1"):
         if self.is_rhel_like():
             startup_interface_command = "/sbin/ifup {}"
+        elif self.distro.uses_systemd and \
+                self.remoter.run("systemctl is-active --quiet systemd-networkd.service", ignore_status=True).ok:
+            startup_interface_command = "networkctl reconfigure {}"
         else:
             startup_interface_command = "ip link set {} up"
         self.remoter.sudo(startup_interface_command.format(interface_name))
