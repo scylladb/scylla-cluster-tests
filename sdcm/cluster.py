@@ -65,7 +65,7 @@ from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificate
 from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.provision.helpers.certificate import install_client_certificate, install_encryption_at_rest_files
-from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd
+from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd, RetryableNetworkException
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
 from sdcm import wait, mgmt
 from sdcm.sct_config import SCTConfiguration
@@ -2645,7 +2645,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 nodetool_event.duration = result.duration
                 return result
             except Exception as details:  # pylint: disable=broad-except
-                if coredump_on_timeout and isinstance(details, CommandTimedOut):
+                if isinstance(details, RetryableNetworkException):
+                    details = details.original
+                if details.__class__.__name__.endswith("CommandTimedOut"):
                     self.generate_coredump_file()
 
                 nodetool_event.add_error([f"{error_message}{str(details)}"])

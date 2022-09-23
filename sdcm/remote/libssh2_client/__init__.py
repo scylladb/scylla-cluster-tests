@@ -94,10 +94,10 @@ class SSHReaderThread(Thread):  # pylint: disable=too-many-instance-attributes
         eof_result = stdout_size = stderr_size = 1
         while eof_result == LIBSSH2_ERROR_EAGAIN or stdout_size == LIBSSH2_ERROR_EAGAIN or \
                 stdout_size > 0 or stderr_size == LIBSSH2_ERROR_EAGAIN or stderr_size > 0:  # pylint: disable=consider-using-in
-            if not self._can_run.is_set():
-                break
             if perf_counter() > end_time:
                 self.timeout_reached = True
+                break
+            if not self._can_run.is_set():
                 break
             with session.lock:
                 if stdout_size == LIBSSH2_ERROR_EAGAIN and stderr_size == LIBSSH2_ERROR_EAGAIN:  # pylint: disable=consider-using-in
