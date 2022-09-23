@@ -223,16 +223,15 @@ def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: Union[str, int,
                     resharding_time, node.name)
             else:
                 log.info(
-                    "Resharding took '%s's on the '%s' node",
-                    resharding_time, node.name)
+                    "Resharding has taken '%s's on the '%s' node", resharding_time, node.name)
 
             # Check that liveness probe didn't report any errors
             # https://github.com/scylladb/scylla-operator/issues/894
-            liveness_probe_failures = list(liveness_probe_failures)
-            assert not liveness_probe_failures, (
-                f"There are liveness probe failures: {liveness_probe_failures}")
+            liveness_probe_failures_list = list(liveness_probe_failures)
+            assert not liveness_probe_failures_list, (
+                f"liveness probe has failures: {liveness_probe_failures_list}")
     finally:
-        # NOTE: refresh scylla pods IP addresses because it may get changed here
+        # NOTE: refresh Scylla pods IP addresses because it may get changed at this step
         for node in nodes_data:
             node[0].refresh_ip_address()
     log.info("Resharding has successfully ended on whole Scylla cluster.")
