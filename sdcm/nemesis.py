@@ -1016,7 +1016,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.repair_nodetool_rebuild()
 
     def disrupt_nodetool_drain(self):
-        result = self.target_node.run_nodetool("drain", timeout=3600, coredump_on_timeout=True)
+        result = self.target_node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
         self.target_node.run_nodetool("status", ignore_status=True, verbose=True,
                                       warning_event_on_exception=(Exception,))
 
@@ -4231,7 +4231,7 @@ class RollbackNemesis(Nemesis):
         node.remoter.run(
             'sudo yum downgrade scylla scylla-server scylla-jmx scylla-tools scylla-conf scylla-kernel-conf scylla-debuginfo -y')
         # flush all memtables to SSTables
-        node.run_nodetool("drain", timeout=3600, coredump_on_timeout=True)
+        node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
         node.remoter.run('sudo cp {0}-backup {0}'.format(SCYLLA_YAML_PATH))
         node.remoter.run('sudo systemctl restart scylla-server.service')
         node.wait_db_up(verbose=True)
