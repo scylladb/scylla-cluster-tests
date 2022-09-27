@@ -244,13 +244,13 @@ class ArgusTestRun:
         LOGGER.info("Preparing Test Details...")
         job_name = get_job_name()
         job_url = get_job_url()
-        if job_name == "local_run":
+        if not job_name or job_name == "local_run":
             raise ArgusTestRunError("Will not track a locally run job")
 
         config_files = sct_config.get("config_files")
         started_by = get_username()
 
-        details = TestDetails(scm_revision_id=get_git_commit_id(), started_by=started_by, build_job_url=job_url,
+        details = TestDetails(scm_revision_id=get_git_commit_id(), started_by=started_by, build_job_url=job_url,   # pylint: disable=no-value-for-parameter
                               yaml_test_duration=sct_config.get("test_duration"),
                               start_time=datetime.utcnow().replace(microsecond=0),
                               config_files=config_files, packages=[])
@@ -276,7 +276,7 @@ class ArgusTestRun:
 
         run_info = TestRunInfo(details=details, setup=setup_details, resources=resources, logs=logs, results=results)
         LOGGER.info("Initializing TestRun...")
-        cls.TESTRUN_INSTANCE = TestRunWithHeartbeat(test_id=test_id, build_id=job_name,
+        cls.TESTRUN_INSTANCE = TestRunWithHeartbeat(test_id=test_id, build_id=job_name,  # pylint: disable=unexpected-keyword-arg,no-value-for-parameter
                                                     assignee=None,
                                                     run_info=run_info,
                                                     config=cls.config())
