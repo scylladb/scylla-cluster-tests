@@ -23,7 +23,7 @@ backtrace_decoding: false
 print_kernel_callstack: true
 
 round_robin: true
-append_scylla_args: '--blocked-reactor-notify-ms 4'
+append_scylla_args: '--blocked-reactor-notify-ms 5'
 
 store_perf_results: true
 send_email: true
