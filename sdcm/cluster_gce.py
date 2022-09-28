@@ -65,14 +65,14 @@ class GCENode(cluster.BaseNode):
         self._gce_logging_client = GceLoggingClient(name, self._instance.extra["zone"].name)
         self._last_logs_fetch_time = 0.0
         ssh_login_info = {'hostname': None,
-                          'user': gce_image_username,
                           'key_file': credentials.key_file,
+                          'user': gce_image_username,
                           'extra_ssh_options': '-tt'}
         super().__init__(name=name,
                          parent_cluster=parent_cluster,
-                         ssh_login_info=ssh_login_info,
                          base_logdir=base_logdir,
                          node_prefix=node_prefix,
+                         ssh_login_info=ssh_login_info,
                          dc_idx=dc_idx)
 
     @staticmethod
