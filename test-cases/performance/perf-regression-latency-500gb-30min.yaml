@@ -22,7 +22,7 @@ ami_id_db_scylla_desc: 'VERSION_DESC'
 backtrace_decoding: false
 
 round_robin: true
-append_scylla_args: '--blocked-reactor-notify-ms 4'
+append_scylla_args: '--blocked-reactor-notify-ms 5'
 
 store_perf_results: true
 send_email: true
