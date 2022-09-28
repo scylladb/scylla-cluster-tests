@@ -892,12 +892,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         user_credentials = self.params.get('user_credentials_path')
         self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
-        gce_image_db = self.params.get('gce_image_db')
+        gce_image_db = self.params.get('gce_image_db').strip()
         if not gce_image_db:
-            gce_image_db = self.params.get('gce_image')
-        gce_image_monitor = self.params.get('gce_image_monitor')
+            gce_image_db = self.params.get('gce_image').strip()
+        gce_image_monitor = self.params.get('gce_image_monitor').strip()
         if not gce_image_monitor:
-            gce_image_monitor = self.params.get('gce_image')
+            gce_image_monitor = self.params.get('gce_image').strip()
         cluster_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_db'),
                                     'pd-standard': self.params.get('gce_pd_standard_disk_size_db')}
 
@@ -987,7 +987,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 loader_info['n_nodes'] = [int(n) for n in n_loader_nodes.split()]
             else:
                 self.fail('Unsupported parameter type: {}'.format(type(n_loader_nodes)))
-        azure_image = self.params.get("azure_image_db")
+        azure_image = self.params.get("azure_image_db").strip()
         user_prefix = self.params.get('user_prefix')
         self.credentials.append(UserRemoteCredentials(key_file="~/.ssh/scylla-test"))
 
