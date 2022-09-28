@@ -426,11 +426,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info("Collection Scylla version for argus...")
             version_regex = re.compile(r'(([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)')
             version_str = self.db_cluster.nodes[0].get_scylla_binary_version()
-            if (match := version_regex.match(version_str)):
+            if version_str and (match := version_regex.match(version_str)):
                 self.argus_test_run.run_info.details.scylla_version = match.group(2)
                 self.argus_test_run.save()
+                return
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error getting scylla version for argus", exc_info=True)
+
+        TestFrameworkEvent(
+            source=self.__class__.__name__,
+            source_method="argus_get_scylla_version",
+            message="Failed to get scylla version for argus",
+            severity=Severity.ERROR,
+        )
 
     def argus_finalize_test_run(self):
         try:
