@@ -82,9 +82,9 @@ from sdcm.utils.get_username import get_username
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
-from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module
-from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module
-from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module
+from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
+from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
+from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
 
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
