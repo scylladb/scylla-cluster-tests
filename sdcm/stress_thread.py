@@ -141,7 +141,9 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
             return stress_cmd
         return stress_cmd.replace(current_error_option, 'errors ' + ' '.join(new_error_suboptions))
 
-    def _get_available_suboptions(self, node, option):
+    def _get_available_suboptions(self, node, option, _cache={}):  # pylint: disable=dangerous-default-value
+        if cached_value := _cache.get(node.name):
+            return cached_value
         try:
             result = node.remoter.run(
                 cmd=f'cassandra-stress help {option} | grep "^Usage:"',
@@ -149,7 +151,15 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
                 ignore_status=True).stdout
         except Exception:  # pylint: disable=broad-except
             return []
-        return re.findall(r' *\[([\w-]+?)[=?]*] *', result)
+        findings = re.findall(r' *\[([\w-]+?)[=?]*] *', result)
+        _cache[node.name] = findings
+        return findings
+
+    @staticmethod
+    def _disable_logging_for_cs(node, _cache={}):  # pylint: disable=dangerous-default-value
+        if not (node.is_kubernetes() or node.name in _cache):
+            node.remoter.run("cp /etc/scylla/cassandra/logback-tools.xml .", ignore_status=True)
+            _cache[node.name] = 'done'
 
     def _run_stress(self, node, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals
         stress_cmd = self.create_stress_cmd(node, keyspace_idx)
@@ -182,9 +192,7 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
         node_cmd = f'echo {tag}; {node_cmd}'
 
         result = None
-
-        # disable logging for cassandra stress
-        node.remoter.run("cp /etc/scylla/cassandra/logback-tools.xml .", ignore_status=True)
+        self._disable_logging_for_cs(node)
 
         with CassandraStressExporter(instance_name=node.cql_ip_address,
                                      metrics=nemesis_metrics_obj(),
