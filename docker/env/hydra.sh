@@ -4,6 +4,8 @@ CMD=$@
 DOCKER_ENV_DIR=$(dirname $(readlink -f $0 ))
 SCT_DIR=$(dirname $(dirname ${DOCKER_ENV_DIR}))
 VERSION=v$(cat ${DOCKER_ENV_DIR}/version)
+DOCKER_REPO=scylladb/hydra
+DOCKER_REGISTRY=docker.io
 PY_PREREQS_FILE=requirements-python.txt
 CENTOS_PREREQS_FILE=install-prereqs.sh
 WORK_DIR=/sct
@@ -25,15 +27,12 @@ if ! docker --version; then
     exit 1
 fi
 
-echo "Cleaning unused Docker resources..."
-# will clean
-#  - all stopped containers
-#  - all networks not used by at least one container
-#  - all volumes not used by at least one container
-#  - all dangling images
-#  - all dangling build cache
-docker system prune --volumes -f
-
+if [[ ${USER} == "jenkins" || -z "`docker images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
+    echo "Pull version $VERSION from Docker Hub..."
+    docker pull ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION}
+else
+    echo "There is ${DOCKER_REPO}:${VERSION} in local cache, using it."
+fi
 
 if [[ ! -z "`docker images scylladb/hydra:${VERSION} -q`" ]]; then
     echo "Image up-to-date"
