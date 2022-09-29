@@ -138,7 +138,7 @@ def call(Map params, String region){
     if [[ -n "\${RUNNER_IP}" ]] ; then
         ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} provision-resources -b "${params.backend}" -t "${params.test_name}"
     else
-        ./docker/env/hydra.sh provision-resources -b "${params.backend}" -t "${params.test_name}" --logdir "`pwd`"
+        ./docker/env/hydra.sh provision-resources -b "${params.backend}" -t "${params.test_name}"
     fi
     echo "Finished resource provision"
     """
