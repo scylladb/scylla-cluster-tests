@@ -277,7 +277,7 @@ class LongevityDataValidator:
     def get_profile_content(self, cs_profile=None):
         if not cs_profile:
             stress_cmd = self.longevity_self_object.params.get(self.stress_cmds_part) or []
-            cs_profile = list(set(cmd for cmd in stress_cmd if self.user_profile_name in cmd))
+            cs_profile = [cmd for cmd in stress_cmd if self.user_profile_name in cmd]
 
         if not cs_profile:
             return []
@@ -309,7 +309,7 @@ class LongevityDataValidator:
                     if not all_entries:
                         break
 
-        return mv_names
+        return list(dict.fromkeys(mv_names))  # list of unique view names and keep the elements order
 
     @staticmethod
     def get_view_cmd_from_profile(profile_content, name_substr, all_entries=False):
