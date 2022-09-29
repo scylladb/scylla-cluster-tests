@@ -3150,7 +3150,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         trigger = partial(
             self.target_node.run_nodetool, sub_cmd="rebuild", warning_event_on_exception=(Exception,), retry=0,
         )
-        timeout = 1800 if self._is_it_on_kubernetes() else 300
+        timeout = 1800 if self._is_it_on_kubernetes() else 400
 
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
