@@ -1,0 +1,42 @@
+test_duration: 3000
+
+bench_run: true
+
+prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=50000 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=50000 -partition-offset=101 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=50000 -partition-offset=201 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=50000 -partition-offset=301 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=50000 -partition-offset=401 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=50000 -partition-offset=501 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=50000 -partition-offset=601 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=50000 -partition-offset=701 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150"
+]
+stress_cmd: ["scylla-bench -workload=uniform -mode=read -select-order-by=desc -replication-factor=3 -partition-count=800 -clustering-row-count=50000 -clustering-row-size=uniform:100..5120 -rows-per-request=2000 -timeout=240s -retry-number=10 -concurrency=400 -duration=44h -connection-count 400",
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=200 -clustering-row-count=50000 -partition-offset=801 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150"
+]
+
+n_db_nodes: 3
+n_loaders: 2
+n_monitor_nodes: 1
+
+instance_type_db: 'i4i.4xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '156'
+# Set cql_schema_seed in order to get: "CLUSTERING ORDER BY (ck ASC)"
+cql_schema_seed: '930'
+instance_type_loader: 'c5n.4xlarge'
+round_robin: true
+nemesis_interval: 30
+nemesis_during_prepare: false
+
+user_prefix: 'longevity-large-partitions-2d-order-by-desc'
+
+# To validate rows in partitions: collect data about partitions and their rows amount
+# before and after running nemesis and compare it
+validate_partitions: true
+table_name: "scylla_bench.test"
+primary_key_column: "pk"
+
+
+run_fullscan: ['{"mode": "random", "ks_cf": "scylla_bench.test", "interval": 3600, "pk_name":"pk", "rows_count": 50000, "validate_data": true}']
