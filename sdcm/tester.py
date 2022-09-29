@@ -72,7 +72,7 @@ from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import format_timestamp, wait_ami_available, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
     rows_to_list, make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, \
-    change_default_password
+    change_default_password, get_partition_keys
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.git import get_git_commit_id
@@ -2546,16 +2546,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.warning('Can\'t collect partitions data. Missed "table name" or "primary key column" info')
             return {}
 
-        get_distinct_partition_keys_cmd = 'select distinct {pk} from {table}'.format(pk=primary_key_column,
-                                                                                     table=table_name)
         try:
-            out = self.db_cluster.nodes[0].run_cqlsh(cmd=get_distinct_partition_keys_cmd, timeout=600, split=True,
-                                                     num_retry_on_failure=5)
+            with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0],
+                                                        connect_timeout=600) as session:
+                session.default_consistency_level = ConsistencyLevel.QUORUM
+                pk_list = get_partition_keys(ks_cf=table_name, session=session, pk_name=primary_key_column)
         except Exception as exc:  # pylint: disable=broad-except
             self.log.error("Failed to collect partition info. Error details: %s", str(exc))
             return None
-
-        pk_list = sorted([int(pk) for pk in out[3:-3]])
 
         # Collect data about partitions' rows amount.
         partitions = {}
@@ -2563,16 +2561,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         with open(partitions_stats_file, 'a', encoding="utf-8") as stats_file:
             for i in pk_list:
                 self.log.debug("Next PK: {}".format(i))
-                count_partition_keys_cmd = f'select count(*) from {table_name} where {primary_key_column} = {i}'
+                count_pk_rows_cmd = f'select count(*) from {table_name} where {primary_key_column} = {i}' \
+                                    ' using timeout 5m'
                 try:
-                    out = self.db_cluster.nodes[0].run_cqlsh(cmd=count_partition_keys_cmd, timeout=600, split=True,
-                                                             num_retry_on_failure=5)
+                    with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0],
+                                                                connect_timeout=600) as session:
+                        session.default_consistency_level = ConsistencyLevel.QUORUM
+                        result = session.execute(count_pk_rows_cmd)
+                        pk_rows_num_result = result.current_rows[0].count
                 except Exception as exc:  # pylint: disable=broad-except
                     self.log.error("Failed to collect partition info. Error details: %s", str(exc))
                     return None
 
-                self.log.debug('Count result: {}'.format(out))
-                partitions[i] = out[3] if len(out) > 3 else None
+                self.log.debug('Count result: %s', pk_rows_num_result)
+                partitions[i] = pk_rows_num_result
                 stats_file.write('{i}:{rows}, '.format(i=i, rows=partitions[i]))
         self.log.info('File with partitions row data: {}'.format(partitions_stats_file))
 
