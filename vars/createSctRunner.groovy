@@ -15,12 +15,15 @@ def call(Map params, Integer test_duration, String region) {
     // NOTE: EKS jobs have 'availability_zone' be defined as 'a,b'
     //       So, just pick up the first one for the SCT runner in such a case.
     def availability_zone = ""
+    def availability_zone_arg = ""
     if ( params.availability_zone.contains(',') ) {
         availability_zone = params.availability_zone[0]
     } else {
         availability_zone = params.availability_zone
     }
-
+    if ( availability_zone ) {
+        availability_zone_arg = "--availability-zone " + availability_zone
+    }
     println(params)
     sh """
     #!/bin/bash
@@ -32,7 +35,7 @@ def call(Map params, Integer test_duration, String region) {
         ./docker/env/hydra.sh create-runner-instance \
             --cloud-provider ${cloud_provider} \
             --region ${region} \
-            --availability-zone ${availability_zone} \
+            $availability_zone_arg \
             $instance_type_arg \
             $root_disk_size_gb_arg \
             --test-id \${SCT_TEST_ID} \
