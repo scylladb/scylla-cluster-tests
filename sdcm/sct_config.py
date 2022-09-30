@@ -1559,7 +1559,12 @@ class SCTConfiguration(dict):
                 self["gce_image_db"] = gce_image.extra["selfLink"]
             elif not self.get("azure_image_db") and self.get("cluster_backend") == "azure":
                 scylla_azure_images = []
-                for region in self.get('azure_region_name'):
+                if isinstance(self.get('azure_region_name'), list):
+                    azure_region_names = self.get('azure_region_name')
+                else:
+                    azure_region_names = [self.get('azure_region_name')]
+
+                for region in azure_region_names:
                     azure_image = azure_utils.get_scylla_images(scylla_version, region)[0]
                     self.log.debug("Found AMI %s for scylla_version='%s' in %s",
                                    azure_image.name, scylla_version, region)
