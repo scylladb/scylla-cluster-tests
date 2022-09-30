@@ -11,21 +11,24 @@ prepare_write_cmd: [
     "cassandra-stress write no-warmup cl=ALL n=5000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=4 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
     "cassandra-stress write no-warmup cl=ALL n=5000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=4 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000",
 ]
-# NOTE: 'stress_cmd_w', 'stress_cmd_r' and 'stress_cmd_m' are lists of strs where
-#       one str is dedicated for one of DB clusters.
-#       If it is just one str then the same command will be used for each of DB clusters
 
 # NOTE: main values divided by 7
 # read = 10000 / 7
-stress_cmd_r: [
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-]
+stress_cmd_r: [[
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1428/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+]]
 # write = 15000 / 7
 stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=2142/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' "
 # mixed = 9000 / 7
