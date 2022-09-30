@@ -15,6 +15,12 @@ def call(Map pipelineParams) {
             SCT_GCE_PROJECT = "${params.gce_project}"
         }
         parameters {
+            string(defaultValue: '',
+                   description: 'a Azure Image to run against',
+                   name: 'azure_image_db')
+            string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
+                   description: 'Azure location',
+                   name: 'azure_region_name')
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
                description: 'aws|gce',
                name: 'backend')
@@ -181,6 +187,17 @@ def call(Map pipelineParams) {
                                                             export SCT_CONFIG_FILES=${test_config}
                                                             export SCT_SCYLLA_VERSION=${base_version}
                                                             export SCT_NEW_SCYLLA_REPO=${params.new_scylla_repo}
+
+                                                            if [[ ! -z "${params.azure_image_db}" ]]; then
+                                                                export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
+                                                            fi
+                                                            if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
+                                                                export SCT_AZURE_REGION_NAME=${params.azure_region_name}
+                                                            fi
+
+                                                            if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
+                                                                export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                                            fi
 
                                                             if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
                                                                 export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
