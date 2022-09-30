@@ -323,8 +323,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             stress_cmds = self.params.get(stress_param)
             if not isinstance(stress_cmds, list):
                 continue
-            if stress_param == 'prepare_write_cmd' and not any(
-                    (isinstance(stress_cmd, list) for stress_cmd in stress_cmds)):
+            if not any((isinstance(stress_cmd, list) for stress_cmd in stress_cmds)):
                 continue
             if (tenants_number := len(stress_cmds)) > 1:
                 return tenants_number

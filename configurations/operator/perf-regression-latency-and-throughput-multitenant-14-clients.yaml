@@ -82,63 +82,102 @@ prepare_write_cmd: [[
 #       If it is just one str then the same command will be used for each of DB clusters
 
 # NOTE: main values divided by 14
-stress_cmd_r: [
+stress_cmd_r: [[
     # latency
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
     # throughput
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+], [
     # latency
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' ",
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=714/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,1000000,5000000)' "
+], [
     # throughput
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
-    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
-]
-stress_cmd_w: [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+], [
+    "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+]]
+stress_cmd_w: [[
     # latency
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' ",
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' ",
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' ",
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' ",
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' "
+], [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' "
+], [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' "
+], [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' "
+], [
     # throughput
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000",
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000",
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000",
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
+], [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
+], [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
+], [
     # latency
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' ",
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' ",
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' ",
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' ",
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' "
+], [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' "
+], [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' "
+], [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=1071/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,15000000,5000000)' "
+], [
     # throughput
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000",
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000",
-    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000",
-]
-stress_cmd_m: [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
+], [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
+], [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
+]]
+stress_cmd_m: [[
     # latency
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' ",
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' ",
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' ",
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' ",
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' "
+], [
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' "
+], [
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' "
+], [
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' "
+], [
     # throughput
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+], [
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+], [
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+], [
     # latency
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' ",
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' ",
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' ",
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' ",
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' "
+], [
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' "
+], [
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' "
+], [
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=642/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..20000000,10000000,5000000)' "
+], [
     # throughput
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
-    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' ",
-]
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+], [
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+], [
+    "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+]]
