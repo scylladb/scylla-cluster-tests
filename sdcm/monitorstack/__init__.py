@@ -24,7 +24,7 @@ PROMETHEUS_DOCKER_NAME = "aprom"
 ALERT_DOCKER_NAME = "aalert"
 
 GRAFANA_DOCKER_PORT = get_free_port(ports_to_try=(3000, 0, ))
-ALERT_DOCKER_PORT = get_free_port(ports_to_try=(9093, 0, ))
+ALERT_DOCKER_PORT = get_free_port(ports_to_try=(6000, 0, ))
 PROMETHEUS_DOCKER_PORT = get_free_port(ports_to_try=(9090, 0, ))
 COMMAND_TIMEOUT = 1800
 
@@ -37,7 +37,7 @@ class ErrorUploadAnnotations(Exception):
     pass
 
 
-def restore_monitoring_stack(test_id, date_time=None):  # pylint: disable=too-many-return-statements
+def restore_monitoring_stack(test_id, date_time=None):  # pylint: disable=too-many-return-statements,too-many-locals
     if not is_docker_available():
         return False
 
@@ -69,29 +69,44 @@ def restore_monitoring_stack(test_id, date_time=None):  # pylint: disable=too-ma
         LOGGER.error("No monitoring stack archive were found in arch %s", arch['file_path'])
         return False
 
-    monitoring_data_dir = create_monitoring_data_dir(monitoring_stack_base_dir, monitoring_data_arch)
-    monitoring_stack_dir = create_monitoring_stack_dir(monitoring_stack_base_dir, monitoring_stack_arch)
-
-    if not monitoring_stack_dir or not monitoring_data_dir:
-        LOGGER.error('Creating monitoring stack directories failed:\ndata_dir: %s; stack_dir: %s',
-                     monitoring_data_dir, monitoring_stack_dir)
-    _, scylla_version = get_monitoring_stack_scylla_version(monitoring_stack_dir)
-
-    status = run_monitoring_stack_containers(monitoring_stack_dir, monitoring_data_dir, scylla_version)
-    if not status:
+    if sorted(monitoring_data_arch) != sorted(monitoring_stack_arch):
+        LOGGER.error("Prometheus data is not fitting to to monitoring stack. Clusters are not same."
+                     "\n Prometheus data for clusters: %s"
+                     "\nMonitoring stack for clusters: %s",
+                     monitoring_data_arch, monitoring_stack_arch)
         return False
 
-    status = restore_grafana_dashboards_and_annotations(monitoring_stack_dir)
-    if not status:
-        return False
+    monitors_containers = {}
+    for monitoring_cluster, monitoring_arch in monitoring_stack_arch.items():
+        LOGGER.info("Creating monitoring stack directories for %s cluster", monitoring_cluster)
+        monitoring_data_dir = create_monitoring_data_dir(monitoring_stack_base_dir,
+                                                         monitoring_data_arch[monitoring_cluster],
+                                                         tenant_dir=monitoring_cluster)
+        monitoring_stack_dir = create_monitoring_stack_dir(monitoring_stack_base_dir, monitoring_arch)
 
-    status = verify_monitoring_stack()
-    if not status:
-        remove_files(monitoring_stack_base_dir)
-        return False
+        if not monitoring_stack_dir or not monitoring_data_dir:
+            LOGGER.error('Creating monitoring stack directories failed:\ndata_dir: %s; stack_dir: %s',
+                         monitoring_data_dir, monitoring_stack_dir)
+        _, scylla_version = get_monitoring_stack_scylla_version(monitoring_stack_dir)
 
-    LOGGER.info("Monitoring stack is running")
-    return True
+        containers_ports = run_monitoring_stack_containers(monitoring_stack_dir, monitoring_data_dir, scylla_version,
+                                                           tenants_number=len(monitoring_stack_arch))
+        if not containers_ports:
+            return False
+
+        status = restore_grafana_dashboards_and_annotations(monitoring_stack_dir,
+                                                            grafana_docker_port=containers_ports["grafana_docker_port"])
+        if not status:
+            return False
+
+        status = verify_monitoring_stack(containers_ports=containers_ports)
+        if not status:
+            remove_files(monitoring_stack_base_dir)
+            return False
+
+        LOGGER.info("Monitoring stack for cluster %s is running", monitoring_cluster)
+        monitors_containers[monitoring_cluster] = containers_ports
+    return monitors_containers
 
 
 def get_monitoring_stack_archive(test_id, date_time):
@@ -137,8 +152,11 @@ def get_monitoring_stack_archive(test_id, date_time):
     return arch
 
 
-def create_monitoring_data_dir(base_dir, archive):
+def create_monitoring_data_dir(base_dir, archive, tenant_dir=""):
     monitoring_data_base_dir = os.path.join(base_dir, 'monitoring_data_dir')
+    if tenant_dir:
+        monitoring_data_base_dir = os.path.join(monitoring_data_base_dir, tenant_dir)
+
     cmd = dedent("""
         mkdir -p {data_dir}
         cd {data_dir}
@@ -216,7 +234,7 @@ def is_path_outside_of_dir(path, base) -> bool:
 
 
 def extract_file_from_tar_archive(pattern, archive, extract_dir):
-    found_file = None
+    found_file = {}
     with tarfile.open(archive) as tar_file:
         for name in tar_file.getnames():
             if pattern in name:
@@ -225,8 +243,7 @@ def extract_file_from_tar_archive(pattern, archive, extract_dir):
                     LOGGER.warning('Skipping %s file it leads to outside of the target dir', name)
                     continue
                 tar_file.extract(name, extract_dir)
-                found_file = target_dir
-                break
+                found_file[os.path.dirname(target_dir).split("/")[-1]] = target_dir
     return found_file
 
 
@@ -261,11 +278,11 @@ def get_monitoring_stack_scylla_version(monitoring_stack_dir):
         return 'branch-3.0', 'master'
 
 
-def restore_grafana_dashboards_and_annotations(monitoring_dockers_dir):
+def restore_grafana_dashboards_and_annotations(monitoring_dockers_dir, grafana_docker_port):
     status = []
     try:
-        status.append(restore_sct_dashboards(monitoring_dockers_dir))
-        status.append(restore_annotations_data(monitoring_dockers_dir))
+        status.append(restore_sct_dashboards(monitoring_dockers_dir, grafana_docker_port=grafana_docker_port))
+        status.append(restore_annotations_data(monitoring_dockers_dir, grafana_docker_port=grafana_docker_port))
     except Exception as details:  # pylint: disable=broad-except
         LOGGER.error("Error during uploading sct monitoring data %s", details)
         status.append(False)
@@ -273,17 +290,16 @@ def restore_grafana_dashboards_and_annotations(monitoring_dockers_dir):
     return all(status)
 
 
-def run_monitoring_stack_containers(monitoring_stack_dir, monitoring_data_dir, scylla_version):
+def run_monitoring_stack_containers(monitoring_stack_dir, monitoring_data_dir, scylla_version, tenants_number=1):
     try:
-        start_dockers(monitoring_stack_dir, monitoring_data_dir, scylla_version)
-        return True
+        return start_dockers(monitoring_stack_dir, monitoring_data_dir, scylla_version, tenants_number)
     except Exception as details:  # pylint: disable=broad-except
         LOGGER.error("Dockers are not started. Error: %s", details)
-        return False
+        return {}
 
 
 @retrying(n=3, sleep_time=20, message='Uploading sct dashboard')
-def restore_sct_dashboards(monitoring_dockers_dir):
+def restore_sct_dashboards(monitoring_dockers_dir, grafana_docker_port):
     sct_dashboard_file_name = "*scylla-dash-per-server-nemesis.*.json"
     sct_dashboard_files = list((Path(monitoring_dockers_dir) / 'sct_monitoring_addons').glob(sct_dashboard_file_name))
 
@@ -292,7 +308,7 @@ def restore_sct_dashboards(monitoring_dockers_dir):
         sct_dashboard_file_name = "scylla-dash-per-server-nemesis.master.json"
         sct_dashboard_files = [Path(__file__).parent.parent.parent / 'data_dir' / sct_dashboard_file_name]
 
-    dashboard_url = f'http://localhost:{GRAFANA_DOCKER_PORT}/api/dashboards/db'
+    dashboard_url = f'http://localhost:{grafana_docker_port}/api/dashboards/db'
     sct_dashboard_file = sct_dashboard_files[0]
     with open(sct_dashboard_file, encoding="utf-8") as f:  # pylint: disable=invalid-name
         dashboard_config = json.load(f)
@@ -323,7 +339,7 @@ def restore_sct_dashboards(monitoring_dockers_dir):
 
 
 @retrying(n=3, sleep_time=20, message='Uploading annotations data')
-def restore_annotations_data(monitoring_stack_dir):
+def restore_annotations_data(monitoring_stack_dir, grafana_docker_port):
     annotations_file = os.path.join(monitoring_stack_dir,
                                     'sct_monitoring_addons',
                                     'annotations.json')
@@ -335,7 +351,7 @@ def restore_annotations_data(monitoring_stack_dir):
         with open(annotations_file, encoding="utf-8") as f:  # pylint: disable=invalid-name
             annotations = json.load(f)
 
-        annotations_url = f"http://localhost:{GRAFANA_DOCKER_PORT}/api/annotations"
+        annotations_url = f"http://localhost:{grafana_docker_port}/api/annotations"
         for an in annotations:  # pylint: disable=invalid-name
             res = requests.post(annotations_url, data=json.dumps(an), headers={'Content-Type': 'application/json'})
             if res.status_code != 200:
@@ -350,10 +366,11 @@ def restore_annotations_data(monitoring_stack_dir):
 
 
 @retrying(n=3, sleep_time=5, message='Start docker containers')
-def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version):  # pylint: disable=unused-argument
-    graf_port = GRAFANA_DOCKER_PORT
-    alert_port = ALERT_DOCKER_PORT
-    prom_port = PROMETHEUS_DOCKER_PORT
+def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version, tenants_number):  # pylint: disable=unused-argument
+    graf_port = get_free_port(ports_to_try=(GRAFANA_DOCKER_PORT + i for i in range(tenants_number)))
+    alert_port = get_free_port(ports_to_try=(ALERT_DOCKER_PORT + i for i in range(tenants_number)))
+    prom_port = get_free_port(ports_to_try=(PROMETHEUS_DOCKER_PORT + i for i in range(tenants_number)))
+
     lr = LocalCmdRunner()  # pylint: disable=invalid-name
     lr.run('cd {monitoring_dockers_dir}; ./kill-all.sh -g {graf_port} -m {alert_port} -p {prom_port}'.format(**locals()),
            ignore_status=True, verbose=False)
@@ -386,6 +403,10 @@ def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_vers
     if res.ok:
         LOGGER.info("Docker containers for monitoring stack are started")
 
+    return {"grafana_docker_port": graf_port,
+            "alert_docker_port": alert_port,
+            "prometheus_docker_port": prom_port}
+
 
 def is_docker_available():
     LOGGER.info("Checking that docker is available...")
@@ -398,27 +419,31 @@ def is_docker_available():
         return False
 
 
-def verify_monitoring_stack():
+def verify_monitoring_stack(containers_ports):
     checked_statuses = []
-    checked_statuses.append(verify_dockers_are_running())
-    checked_statuses.append(verify_grafana_is_available())
-    checked_statuses.append(verify_prometheus_is_available())
+    checked_statuses.append(verify_dockers_are_running(containers_ports=containers_ports))
+    checked_statuses.append(verify_grafana_is_available(grafana_docker_port=containers_ports["grafana_docker_port"]))
+    checked_statuses.append(verify_prometheus_is_available(
+        prometheus_docker_port=containers_ports["prometheus_docker_port"]))
     return all(checked_statuses)
 
 
-def verify_dockers_are_running():
+def verify_dockers_are_running(containers_ports):
     result = LocalCmdRunner().run("docker ps --format '{{.Names}}'", ignore_status=True)  # pylint: disable=invalid-name
     docker_names = result.stdout.strip().split()
+    result = LocalCmdRunner().run("docker ps --format '{{.Names}}'", ignore_status=True)  # pylint: disable=invalid-name
+    grafana_docker_port = containers_ports["grafana_docker_port"]
+    prometheus_docker_port = containers_ports["prometheus_docker_port"]
     if result.ok and docker_names:
-        if f"{GRAFANA_DOCKER_NAME}-{GRAFANA_DOCKER_PORT}" in docker_names \
-                and f"{PROMETHEUS_DOCKER_NAME}-{PROMETHEUS_DOCKER_PORT}" in docker_names:
+        if f"{GRAFANA_DOCKER_NAME}-{grafana_docker_port}" in docker_names \
+                and f"{PROMETHEUS_DOCKER_NAME}-{prometheus_docker_port}" in docker_names:
             LOGGER.info("Monitoring stack docker containers are running.\n%s", result.stdout)
             return True
     LOGGER.error("Monitoring stack containers are not running\nStdout:\n%s\nstderr:%s", result.stdout, result.stderr)
     return False
 
 
-def verify_grafana_is_available():
+def verify_grafana_is_available(grafana_docker_port=GRAFANA_DOCKER_PORT):
     # pylint: disable=import-outside-toplevel
     from sdcm.logcollector import GrafanaEntity, MonitoringStack
     grafana_statuses = []
@@ -426,7 +451,7 @@ def verify_grafana_is_available():
         try:
             LOGGER.info("Check dashboard %s", dashboard.title)
             result = MonitoringStack.get_dashboard_by_title(grafana_ip="localhost",
-                                                            port=GRAFANA_DOCKER_PORT,
+                                                            port=grafana_docker_port,
                                                             title=dashboard.title)
             grafana_statuses.append(result)
             LOGGER.info("Dashboard {} is available".format(dashboard.title))
@@ -442,7 +467,7 @@ def verify_grafana_is_available():
     return result
 
 
-def verify_prometheus_is_available():
+def verify_prometheus_is_available(prometheus_docker_port=PROMETHEUS_DOCKER_PORT):
     """Get result from prometheus for latest 10 minutes
 
     Validate that request to Prometheus container is not failed
@@ -457,7 +482,7 @@ def verify_prometheus_is_available():
     time_start = time_end - 600
     try:
         LOGGER.info("Send request to Prometheus")
-        prom_client = PrometheusDBStats("localhost", port=PROMETHEUS_DOCKER_PORT)
+        prom_client = PrometheusDBStats("localhost", port=prometheus_docker_port)
         prom_client.get_throughput(time_start, time_end)
         LOGGER.info("Prometheus is up")
         return True
@@ -466,15 +491,19 @@ def verify_prometheus_is_available():
         return False
 
 
-def get_monitoring_stack_services():
-    return [{"service": "Grafana service", "name": GRAFANA_DOCKER_NAME, "port": GRAFANA_DOCKER_PORT},
-            {"service": "Prometheus service", "name": PROMETHEUS_DOCKER_NAME, "port": PROMETHEUS_DOCKER_PORT},
-            {"service": "Alert service", "name": ALERT_DOCKER_NAME, "port": ALERT_DOCKER_PORT}]
+def get_monitoring_stack_services(ports):
+    return [{"service": "Grafana service", "name": GRAFANA_DOCKER_NAME, "port": ports["grafana_docker_port"]},
+            {"service": "Prometheus service", "name": PROMETHEUS_DOCKER_NAME, "port": ports["prometheus_docker_port"]},
+            {"service": "Alert service", "name": ALERT_DOCKER_NAME, "port": ports["alert_docker_port"]}]
 
 
-def kill_running_monitoring_stack_services():
+def kill_running_monitoring_stack_services(ports=None):
+    dockers_ports = ports or {"grafana_docker_port": GRAFANA_DOCKER_PORT,
+                              "prometheus_docker_port": PROMETHEUS_DOCKER_PORT,
+                              "alert_docker_port": ALERT_DOCKER_PORT}
+
     lr = LocalCmdRunner()  # pylint: disable=invalid-name
-    for docker in get_monitoring_stack_services():
+    for docker in get_monitoring_stack_services(ports=dockers_ports):
         LOGGER.info("Killing %s", docker['service'])
         lr.run('docker rm -f {name}-{port}'.format(name=docker['name'], port=docker['port']),
                ignore_status=True)
