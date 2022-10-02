@@ -850,31 +850,36 @@ def show_log(test_id, output_format):
 
 @investigate.command('show-monitor', help="Run monitoring stack with saved data locally")
 @click.argument('test_id')
+@click.option("--cluster-name", type=str, required=False, help='Cluster name (relevant for multi-tenant test)')
 @click.option("--date-time", type=str, required=False, help='Datetime of monitor-set archive is collected')
 @click.option("--kill", type=bool, required=False, help='Kill and remove containers')
-def show_monitor(test_id, date_time, kill):
+def show_monitor(test_id, date_time, kill, cluster_name):
     add_file_logger()
 
     click.echo('Search monitoring stack archive files for test id {} and restoring...'.format(test_id))
+    containers = {}
     try:
-        status = restore_monitoring_stack(test_id, date_time)
+        containers = restore_monitoring_stack(test_id, date_time)
     except Exception as details:  # pylint: disable=broad-except
         LOGGER.error(details)
-        status = False
 
-    table = PrettyTable(['Service', 'Container', 'Link'], align="l")
-    if status:
-        click.echo('Monitoring stack restored')
-        for docker in get_monitoring_stack_services():
-            table.add_row([docker["service"], docker["name"], f"http://{SCT_RUNNER_HOST}:{docker['port']}"])
-        click.echo(table.get_string(title='Monitoring stack services'))
-        if kill:
-            kill_running_monitoring_stack_services()
-
-    else:
+    if not containers:
         click.echo('Errors were found when restoring Scylla monitoring stack')
         kill_running_monitoring_stack_services()
         sys.exit(1)
+
+    for cluster, containers_ports in containers.items():
+        if cluster_name and cluster != cluster_name:
+            continue
+
+        click.echo(f'Monitoring stack for cluster {cluster} restored')
+        table = PrettyTable(['Service', 'Container', 'Link'], align="l")
+        for docker in get_monitoring_stack_services(ports=containers_ports):
+            table.add_row([docker["service"], docker["name"], f"http://{SCT_RUNNER_HOST}:{docker['port']}"])
+        click.echo(table.get_string(title=f'Monitoring stack services for cluster {cluster}'))
+        click.echo("")
+        if kill:
+            kill_running_monitoring_stack_services(ports=containers_ports)
 
 
 @investigate.command('show-jepsen-results', help="Run a server with Jepsen results")
