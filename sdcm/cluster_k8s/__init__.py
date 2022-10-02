@@ -699,6 +699,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 namespace=SCYLLA_OPERATOR_NAMESPACE,
                 values=values
             ))
+            if (version.LegacyVersion(self._scylla_operator_chart_version.split("-")[0]) >= version.LegacyVersion("v1.8.0") and
+                    self.params.get('k8s_enable_tls')):
+                patch_cmd = ('patch deployment scylla-operator --type=json -p=\'[{"op": "add",'
+                             '"path": "/spec/template/spec/containers/0/args/-", '
+                             '"value": "--feature-gates=AutomaticTLSCertificates=true" }]\' ')
+                self.kubectl(patch_cmd, namespace=SCYLLA_OPERATOR_NAMESPACE)
 
             KubernetesOps.wait_for_pods_readiness(
                 kluster=self,
@@ -706,6 +712,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 readiness_timeout=5,
                 namespace=SCYLLA_OPERATOR_NAMESPACE
             )
+
         # Start the Scylla Operator logging thread
         self.start_scylla_operator_journal_thread()
 

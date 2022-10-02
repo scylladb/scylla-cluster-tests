@@ -16,8 +16,13 @@ import logging
 import random
 import threading
 import time
+import ssl
+import base64
+import path
+
 import pytest
 import yaml
+from cassandra.cluster import Cluster  # pylint: disable=no-name-in-module
 
 from sdcm.cluster_k8s import (
     ScyllaPodCluster,
@@ -741,3 +746,47 @@ def test_nodetool_flush_and_reshard(db_cluster: ScyllaPodCluster):
     final_target_pod_stats = _check_pod_stats(target_node)
     assert final_target_pod_stats
     assert final_target_pod_stats.get("restart_count") == origin_target_pod_stats.get("restart_count")
+
+
+@pytest.mark.required_operator("v1.8.0")
+@pytest.mark.requires_tls
+def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path):
+    # pylint: disable=too-many-locals
+
+    cluster_name = db_cluster.k8s_cluster.k8s_scylla_cluster_name
+
+    crt_filename = tmp_path / 'tls.crt'
+    key_filename = tmp_path / 'tls.key'
+    ca_filename = tmp_path / 'ca.crt'
+
+    crt_data = db_cluster.k8s_cluster.kubectl(fr"get secret/{cluster_name}-local-client-ca -o jsonpath='{{.data.tls\.crt}}'",
+                                              namespace=db_cluster.namespace)
+    key_data = db_cluster.k8s_cluster.kubectl(fr"get secret/{cluster_name}-local-client-ca -o jsonpath='{{.data.tls\.key}}'",
+                                              namespace=db_cluster.namespace)
+    ca_data = db_cluster.k8s_cluster.kubectl(fr"get secret/{cluster_name}-local-serving-ca -o jsonpath='{{.data.tls\.crt}}'",
+                                             namespace=db_cluster.namespace)
+
+    crt_filename.write_bytes(base64.decodebytes(bytes(crt_data.stdout.strip(), encoding='utf-8')))
+    key_filename.write_bytes(base64.decodebytes(bytes(key_data.stdout.strip(), encoding='utf-8')))
+    ca_filename.write_bytes(base64.decodebytes(bytes(ca_data.stdout.strip(), encoding='utf-8')))
+
+    for file in (crt_filename, key_filename, ca_filename):
+        log.debug(file)
+        log.debug(file.read_text())
+
+    cluster = Cluster(contact_points=[db_cluster.nodes[0].cql_ip_address], port=db_cluster.nodes[0].CQL_SSL_PORT)
+    ssl_context = ssl.SSLContext(protocol=ssl.PROTOCOL_SSLv23)
+    ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED  # pylint: disable=no-member
+
+    ssl_context.load_verify_locations(cadata=ca_filename.read_text())
+    ssl_context.load_cert_chain(keyfile=key_filename, certfile=crt_filename)
+
+    cluster.ssl_context = ssl_context
+
+    with cluster.connect(wait_for_all_pools=True) as session:
+        for host in cluster.metadata.all_hosts():
+            log.debug(host)
+        res = session.execute("SELECT * FROM system.local")
+        output = res.all()
+        assert len(output) == 1
+        log.debug(output)

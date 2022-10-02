@@ -199,6 +199,7 @@ class UserRemoteCredentials():
 
 class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     CQL_PORT = 9042
+    CQL_SSL_PORT = 9142
     MANAGER_AGENT_PORT = 10001
     MANAGER_SERVER_PORT = 5080
     OLD_MANAGER_PORT = 56080

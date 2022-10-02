@@ -21,6 +21,7 @@ import contextlib
 from typing import Optional
 
 import pytest
+from packaging import version
 
 from functional_tests.scylla_operator.libs.auxiliary import ScyllaOperatorFunctionalClusterTester, sct_abs_path
 from sdcm.cluster_k8s import ScyllaPodCluster
@@ -199,3 +200,19 @@ def skip_if_scylla_not_semver(request, tester: ScyllaOperatorFunctionalClusterTe
             tester.db_cluster.params.get("scylla_version")):
         pytest.skip(
             "test calls 'restart_scylla()' DB method that won't have any effect using non-semver Scylla")
+
+
+@pytest.fixture(autouse=True)
+def skip_based_on_operator_version(request: pytest.FixtureRequest, tester: ScyllaOperatorFunctionalClusterTester):
+    # pylint: disable=protected-access
+    if required_operator := request.node.get_closest_marker('required_operator'):
+        if (version.LegacyVersion(tester.k8s_cluster._scylla_operator_chart_version.split("-")[0])
+                < version.LegacyVersion(required_operator.args[0])):
+            pytest.skip(f"require operator version: {required_operator.args[0]} , "
+                        f"current version: {tester.k8s_cluster._scylla_operator_chart_version}")
+
+
+@pytest.fixture(autouse=True)
+def skip_if_no_tls(request, tester: ScyllaOperatorFunctionalClusterTester) -> None:
+    if request.node.get_closest_marker('requires_tls') and not tester.params.get('k8s_enable_tls'):
+        pytest.skip('test requires k8s_enable_tls to be enabled')
