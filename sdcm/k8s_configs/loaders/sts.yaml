@@ -31,4 +31,20 @@ spec:
             requests:
               cpu: ${POD_CPU_LIMIT}
               memory: ${POD_MEMORY_LIMIT}
+          # TODO: those mounts/securityContext should be remove once we'll stop using bare docker for loaders
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /usr/bin/docker
+              name: docker-binary
+            - mountPath: /var/run/docker.sock
+              name: docker-socket
+      volumes:
+        - name: docker-binary
+          hostPath:
+            path: /usr/bin/docker
+            type: File
+        - name: docker-socket
+          hostPath:
+            type: Socket
       hostNetwork: false
