@@ -849,6 +849,9 @@ class SCTConfiguration(dict):
              help="Defines whether the K8S API server logging must be enabled and "
                   "it's logs gathered. Be aware that it may be really huge set of data."),
 
+        dict(name="k8s_enable_tls", env="SCT_K8S_ENABLE_TLS", type=boolean,
+             help="Defines whether the we enable the operator serverless options"),
+
         # docker config options
         dict(name="mgmt_docker_image", env="SCT_MGMT_DOCKER_IMAGE", type=str,
              help="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' "),
