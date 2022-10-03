@@ -17,6 +17,7 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # all parameters were taken from scylla-stress-orch repo
+        # Planned data size is 3 TB in total: 1tb per node
         self.NUM_THREADS = 500  # pylint: disable=invalid-name
         self.CLUSTER_SIZE = self.params.get("n_db_nodes")  # pylint: disable=invalid-name
         self.REPLICATION_FACTOR = 3  # pylint: disable=invalid-name
