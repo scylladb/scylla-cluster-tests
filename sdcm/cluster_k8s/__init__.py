@@ -2756,7 +2756,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                 "K8S_NAMESPACE": self.namespace,
                 "K8S_LOADER_CLUSTER_NAME": self.loader_cluster_name,
                 "DOCKER_IMAGE_WITH_TAG": self._get_docker_image(),
-                "N_LOADERS": self.params.get("n_loaders"),
+                "N_LOADERS": count,
                 "POD_CPU_LIMIT": self.k8s_cluster.calculated_loader_cpu_limit,
                 "POD_MEMORY_LIMIT": self.k8s_cluster.calculated_loader_memory_limit,
             },
