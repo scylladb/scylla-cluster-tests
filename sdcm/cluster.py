@@ -4659,6 +4659,16 @@ class BaseLoaderSet():
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
 
+        # Install java-8 for workaround hdrhistogram
+        if node.is_rhel_like():
+            node.remoter.sudo('yum install -y java-1.8.0-openjdk-devel', verbose=True, ignore_status=True)
+            node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.*/jre/bin/java* /etc/alternatives/java",
+                              verbose=True, ignore_status=True)
+        else:
+            node.remoter.sudo('apt install -y openjdk-8-jre', verbose=True, ignore_status=True)
+            node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-*/bin/java* /etc/alternatives/java",
+                              verbose=True, ignore_status=True)
+
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         node.remoter.sudo("bash -cxe \"echo '*\t\thard\tcore\t\tunlimited\n*\t\tsoft\tcore\t\tunlimited' "
                           ">> /etc/security/limits.d/20-coredump.conf\"")
@@ -4697,6 +4707,28 @@ class BaseLoaderSet():
                 apt-get update
                 apt-get install -y openjdk-11-jre openjdk-11-jre-headless
             """))
+
+        scylla_repo_loader = self.params.get('scylla_repo_loader')
+        if not scylla_repo_loader:
+            scylla_repo_loader = self.params.get('scylla_repo')
+        node.download_scylla_repo(scylla_repo_loader)
+        if node.is_rhel_like():
+            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
+            node.remoter.sudo('yum install -y java-1.8.0-openjdk-devel', verbose=True, ignore_status=True)
+            node.remote.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-amd64/jre/bin/java* /etc/alternatives/java",
+                             verbose=True, ignore_status=True)
+        else:
+            node.remoter.run('sudo apt-get update')
+            node.remoter.run('sudo apt-get install -y '
+                             ' {}-tools '.format(node.scylla_pkg()))
+            node.remoter.sudo('apt instally -y openjdk-8-jre', verbose=True, ignore_status=True)
+            node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-amd64/bin/java* /etc/alternatives/java",
+                              verbose=True, ignore_status=True)
+
+        if db_node_address is not None:
+            node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
+
+        node.wait_cs_installed(verbose=verbose)
 
         scylla_repo_loader = self.params.get('scylla_repo_loader')
         if not scylla_repo_loader:

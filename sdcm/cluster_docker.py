@@ -351,7 +351,12 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
                                n_nodes=n_nodes,
                                params=params)
 
-    def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
+    def node_setup(self, node: DockerNode, verbose=False, db_node_address=None, **kwargs):
+        node.wait_ssh_up(verbose=verbose)
+        node.remoter.sudo("apt update", verbose=True, ignore_status=True)
+        node.remoter.sudo("apt install -y openjdk-8-jre", verbose=True, ignore_status=True)
+        node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-amd64/jre/bin/java* /etc/alternatives/java",
+                          verbose=True, ignore_status=True)
 
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
