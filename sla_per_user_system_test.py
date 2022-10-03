@@ -845,9 +845,9 @@ class SlaPerUserTest(LongevityTest):
         self.log.info("C-s comparison uploaded to ES.")
 
     def get_email_data(self):
-        self.log.info("Prepare data for email")
-        email_data = {}
+        self.log.info("Prepare data for email for SLA test")
         grafana_dataset = {}
+        email_data = {}
 
         try:
             email_data = self._get_common_email_data()
