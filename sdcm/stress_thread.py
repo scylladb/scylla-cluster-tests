@@ -23,7 +23,7 @@ from pathlib import Path
 from functools import cached_property
 
 from sdcm.loader import CassandraStressExporter
-from sdcm.cluster import BaseLoaderSet
+from sdcm.cluster import BaseLoaderSet  # , BaseNode
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, get_profile_content, get_data_dir_path
@@ -31,6 +31,8 @@ from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTER
 from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.version_utils import get_docker_image_by_version
+from sdcm.utils.remote_logger import SSHLoggerBase
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +63,17 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                     if pattern.search(line):
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
                         break  # Stop iterating patterns to avoid creating two events for one line of the log
+
+
+class CSHDRFileLogger(SSHLoggerBase):
+    @property
+    def _logger_cmd(self) -> str:
+        return f"tail -f {self._target_log_file}"
+
+    def _retrieve(self, since):
+        self._remoter.run(self._logger_cmd.format(since=since),
+                          verbose=True, ignore_status=True,
+                          log_file=os.path.join(self.node.logdir, self._target_log_file))
 
 
 class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
@@ -188,6 +201,8 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                                                                           f' --entrypoint /bin/bash')
 
         stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx)
+        with_hdr = False
+        hdr_logger_transfer = None
         if self.params.get('cs_debug'):
             cmd_runner.send_files(get_data_dir_path('logback-tools-debug.xml'),
                                   '/etc/scylla/cassandra/logback-tools.xml', delete_dst=True)
@@ -218,6 +233,16 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         log_file_name = \
             os.path.join(loader.logdir, f'cassandra-stress-l{loader_idx}-c{cpu_idx}-k{keyspace_idx}-{uuid.uuid4()}.log')
 
+        if "%LOG%" in stress_cmd:
+            hdr_file_name = f"cs_hdr_{stress_cmd_opt}_{loader_idx}_c{cpu_idx}_k{keyspace_idx}_{uuid.uuid4()}.hdr"
+            LOGGER.info("HDR log file: %s", hdr_file_name)
+            stress_cmd = re.sub(r"%LOG%",
+                                f"-log hdrfile={hdr_file_name} interval=5s",
+                                stress_cmd)
+            LOGGER.info('Stress command with hdr:\n%s', stress_cmd)
+            hdr_logger_transfer = CSHDRFileLogger(node, target_log_file=hdr_file_name)
+            with_hdr = True
+
         LOGGER.debug('cassandra-stress local log: %s', log_file_name)
 
         # This tag will be output in the header of c-stress result,
@@ -243,11 +268,15 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 CassandraStressEvent(node=loader, stress_cmd=self.stress_cmd,
                                      log_file_name=log_file_name) as cs_stress_event:
             publisher.event_id = cs_stress_event.event_id
+            if with_hdr:
+                hdr_logger_transfer.start()
             try:
                 result = cmd_runner.run(cmd=node_cmd, timeout=self.timeout, log_file=log_file_name, retry=0)
             except Exception as exc:  # pylint: disable=broad-except
                 cs_stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
                 cs_stress_event.add_error(errors=[format_stress_cmd_error(exc)])
+            if with_hdr:
+                hdr_logger_transfer.stop()
 
         return loader, result, cs_stress_event
 
