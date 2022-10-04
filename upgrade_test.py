@@ -530,7 +530,7 @@ class UpgradeTest(FillDatabaseData):
         InfoEvent(message='pre-test - prepare test keyspaces and tables').publish()
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
-        self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
+        # self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
 
         # write workload during entire test
         InfoEvent(message='Starting c-s write workload during entire test').publish()
@@ -558,16 +558,16 @@ class UpgradeTest(FillDatabaseData):
         InfoEvent(message='pre-test - Run stress workload before upgrade').publish()
         # complex workload: prepare write
         InfoEvent(message='Starting c-s complex workload (5M) to prepare data').publish()
-        stress_cmd_complex_prepare = self.params.get('stress_cmd_complex_prepare')
-        complex_cs_thread_pool = self.run_stress_thread(
-            stress_cmd=stress_cmd_complex_prepare, profile='data_dir/complex_schema.yaml')
+        # stress_cmd_complex_prepare = self.params.get('stress_cmd_complex_prepare')
+        # complex_cs_thread_pool = self.run_stress_thread(
+        #     stress_cmd=stress_cmd_complex_prepare, profile='data_dir/complex_schema.yaml')
 
         # wait for the complex workload to finish
-        self.verify_stress_thread(complex_cs_thread_pool)
+        # self.verify_stress_thread(complex_cs_thread_pool)
 
-        InfoEvent(message='Will check paged query before upgrading nodes').publish()
-        self.paged_query()
-        InfoEvent(message='Done checking paged query before upgrading nodes').publish()
+        # InfoEvent(message='Will check paged query before upgrading nodes').publish()
+        # self.paged_query()
+        # InfoEvent(message='Done checking paged query before upgrading nodes').publish()
 
         # prepare write workload
         InfoEvent(message='Starting c-s prepare write workload (n=10000000)').publish()
@@ -578,12 +578,12 @@ class UpgradeTest(FillDatabaseData):
             metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
 
         # start gemini write workload
-        if self.version_cdc_support():
-            InfoEvent(message="Start gemini during upgrade").publish()
-            gemini_thread = self.run_gemini(self.params.get("gemini_cmd"))
-            # Let to write_stress_during_entire_test complete the schema changes
-            self.metric_has_data(
-                metric_query='gemini_cql_requests', n=10)
+        # if self.version_cdc_support():
+        #     InfoEvent(message="Start gemini during upgrade").publish()
+        #     gemini_thread = self.run_gemini(self.params.get("gemini_cmd"))
+        #     # Let to write_stress_during_entire_test complete the schema changes
+        #     self.metric_has_data(
+        #         metric_query='gemini_cql_requests', n=10)
 
         with ignore_upgrade_schema_errors():
 
@@ -600,19 +600,19 @@ class UpgradeTest(FillDatabaseData):
             self.verify_stress_thread(prepare_write_cs_thread_pool)
 
             # read workload (cl=QUORUM)
-            InfoEvent(message='Starting c-s read workload (cl=QUORUM n=10000000)').publish()
-            stress_cmd_read_cl_quorum = self.params.get('stress_cmd_read_cl_quorum')
-            read_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_cl_quorum)
+            # InfoEvent(message='Starting c-s read workload (cl=QUORUM n=10000000)').publish()
+            # stress_cmd_read_cl_quorum = self.params.get('stress_cmd_read_cl_quorum')
+            # read_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_cl_quorum)
             # wait for the read workload to finish
-            self.verify_stress_thread(read_stress_queue)
-            InfoEvent(message='after upgraded one node').publish()
-            self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
-                                                          step=step+' - after upgraded one node')
+            # self.verify_stress_thread(read_stress_queue)
+            # InfoEvent(message='after upgraded one node').publish()
+            # self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+            #                                               step=step+' - after upgraded one node')
 
             # read workload
-            InfoEvent(message='Starting c-s read workload for 10m').publish()
-            stress_cmd_read_10m = self.params.get('stress_cmd_read_10m')
-            read_10m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
+            # InfoEvent(message='Starting c-s read workload for 10m').publish()
+            # stress_cmd_read_10m = self.params.get('stress_cmd_read_10m')
+            # read_10m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
 
             InfoEvent(message='Running s-b large partitions workload before and during upgrade').publish()
             large_partition_stress_during_upgrade = self.params.get('stress_before_upgrade')
@@ -631,17 +631,17 @@ class UpgradeTest(FillDatabaseData):
             self.db_cluster.node_to_upgrade.check_node_health()
 
             # wait for the 10m read workload to finish
-            self.verify_stress_thread(read_10m_cs_thread_pool)
-            self.fill_and_verify_db_data('after upgraded two nodes')
-            self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
-                                                          step=step+' - after upgraded two nodes')
+            # self.verify_stress_thread(read_10m_cs_thread_pool)
+            # self.fill_and_verify_db_data('after upgraded two nodes')
+            # self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+            #                                               step=step+' - after upgraded two nodes')
 
             # read workload (60m)
-            InfoEvent(message='Starting c-s read workload for 60m').publish()
-            stress_cmd_read_60m = self.params.get('stress_cmd_read_60m')
-            read_60m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_60m)
-            InfoEvent(message='Sleeping for 60s to let cassandra-stress start before the rollback...').publish()
-            time.sleep(60)
+            # InfoEvent(message='Starting c-s read workload for 60m').publish()
+            # stress_cmd_read_60m = self.params.get('stress_cmd_read_60m')
+            # read_60m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_60m)
+            # InfoEvent(message='Sleeping for 60s to let cassandra-stress start before the rollback...').publish()
+            # time.sleep(60)
 
             InfoEvent(message='Step3 - Rollback Second Node ').publish()
             # rollback second node
@@ -652,7 +652,7 @@ class UpgradeTest(FillDatabaseData):
 
         step = 'Step4 - Verify data during mixed cluster mode '
         InfoEvent(message=step).publish()
-        self.fill_and_verify_db_data('after rollback the second node')
+        # self.fill_and_verify_db_data('after rollback the second node')
         InfoEvent(message='Repair the first upgraded Node').publish()
         self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
         self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
@@ -675,7 +675,7 @@ class UpgradeTest(FillDatabaseData):
         InfoEvent(message='Step6 - Verify stress results after upgrade ').publish()
         InfoEvent(message='Waiting for stress threads to complete after upgrade').publish()
         # wait for the 60m read workload to finish
-        self.verify_stress_thread(read_60m_cs_thread_pool)
+        # self.verify_stress_thread(read_60m_cs_thread_pool)
 
         self.verify_stress_thread(entire_write_cs_thread_pool)
 
@@ -770,9 +770,9 @@ class UpgradeTest(FillDatabaseData):
                                         'entire test, actual: %d' % (
                 error_factor, schema_load_error_num)
 
-        InfoEvent(message='Step10 - Verify that gemini did not failed during upgrade').publish()
-        if self.version_cdc_support():
-            self.verify_gemini_results(queue=gemini_thread)
+        # InfoEvent(message='Step10 - Verify that gemini did not failed during upgrade').publish()
+        # if self.version_cdc_support():
+        #     self.verify_gemini_results(queue=gemini_thread)
 
         InfoEvent(message='all nodes were upgraded, and last workaround is verified.').publish()
 
