@@ -14,6 +14,7 @@ ScyllaHelpErrorEvent.filtered: WARNING
 FullScanEvent: ERROR
 FullPartitionScanReversedOrderEvent: ERROR
 FullPartitionScanEvent: ERROR
+FullScanAggregateEvent: ERROR
 DatabaseLogEvent.WARNING: WARNING
 DatabaseLogEvent.NO_SPACE_ERROR: ERROR
 DatabaseLogEvent.UNKNOWN_VERB: WARNING
