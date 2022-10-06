@@ -42,6 +42,6 @@ user_prefix: 'longevity-large-partitions-3h'
 
 space_node_threshold: 644245094
 
-run_fullscan: '{"ks_cf": "scylla_bench.test", "interval": 10}' # 'ks.cf|random, interval(min)'
+#run_fullscan: '{"ks_cf": "scylla_bench.test", "interval": 10}' # 'ks.cf|random, interval(min)'
 
-run_full_partition_scan: '{"ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 5000, "validate_data": "true", "include_data_column": "true"}' # 'ks.cf, interval(sec), partition-key name, number-of-rows-per-partition, validate reversed query output, include data-column or only validate pk + ck'
+run_fullscan: '{"mode": "partition", "ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 5000, "validate_data": "true", "include_data_column": "true"}' # 'ks.cf, interval(sec), partition-key name, number-of-rows-per-partition, validate reversed query output, include data-column or only validate pk + ck'
