@@ -69,7 +69,7 @@ KclStressEvent.failure: ERROR
 KclStressEvent.start: NORMAL
 KclStressEvent.finish: NORMAL
 NoSQLBenchStressEvent: CRITICAL
-NoSQLBenchStressLogEvents.ProgressIndicatorRunningEvent: DEBUG
+NoSQLBenchStressLogEvents.ProgressIndicatorRunningEvent: NORMAL
 NoSQLBenchStressLogEvents.ProgressIndicatorFinishedEvent: NORMAL
 NoSQLBenchStressLogEvents.ProgressIndicatorStoppedEvent: CRITICAL
 CassandraStressLogEvent.IOException: ERROR
