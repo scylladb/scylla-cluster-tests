@@ -40,12 +40,10 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.log.info('Tombstone GC verification params are: %s', params)
         return params
 
-    def _get_scan_operation_params(self, scan_operation: str) -> dict:
-        params = {}
-        if scan_operation_params := self.params.get(scan_operation):
-            params = json.loads(scan_operation_params)
-            self.log.info('Scan operation %s params are: %s', scan_operation, params)
-        return params
+    def _get_scan_operation_params(self) -> list[dict]:
+        params = self.params.get("run_fullscan") if self.params.get("run_fullscan") else {}
+        self.log.info('Scan operation params are: %s', params)
+        return [json.loads(item) for item in params]
 
     def run_pre_create_schema(self):
         pre_create_schema = self.params.get('pre_create_schema')
@@ -77,11 +75,11 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.run_pre_create_keyspace()
         self.run_pre_create_schema()
 
-        if fullscan_params := self._get_scan_operation_params(scan_operation='run_fullscan'):
-            self.run_fullscan_thread(ks_cf=fullscan_params['ks_cf'], interval=fullscan_params['interval'])
-
-        if full_partition_scan_params := self._get_scan_operation_params(scan_operation='run_full_partition_scan'):
-            self.run_full_partition_scan_thread(**full_partition_scan_params)
+        if scan_operation_params := self._get_scan_operation_params():
+            for scan_param in scan_operation_params:
+                self.log.info("Starting fullscan operation thread with the following params: %s", scan_param)
+                self.run_fullscan_thread(fullscan_params=scan_param,
+                                         thread_name=str(scan_operation_params.index(scan_param)))
 
         if tombstone_gc_verification_params := self._get_tombstone_gc_verification_params():
             self.run_tombstone_gc_verification_thread(**tombstone_gc_verification_params)

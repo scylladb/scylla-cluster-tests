@@ -325,7 +325,6 @@ class FullPartitionScanEvent(ScyllaDatabaseContinuousEvent):
             fmt += " message={0.message}"
         return fmt
 
-
 class TombstoneGcVerificationEvent(ScyllaDatabaseContinuousEvent):
     def __init__(self, node: str, ks_cf: str, message: Optional[str] = None, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
@@ -339,6 +338,18 @@ class TombstoneGcVerificationEvent(ScyllaDatabaseContinuousEvent):
             fmt += " message={0.message}"
         return fmt
 
+class FullScanAggregateEvent(ScyllaDatabaseContinuousEvent):
+    def __init__(self, node: str, ks_cf: str, message: str | None = None, severity=Severity.NORMAL, **__):
+        super().__init__(node=node, severity=severity)
+        self.ks_cf = ks_cf
+        self.message = message
+
+    @property
+    def msgfmt(self):
+        fmt = super().msgfmt + " select_from={0.ks_cf}"
+        if self.message:
+            fmt += " message={0.message}"
+        return fmt
 
 class RepairEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Repair 1 out of \d+ ranges, id=\[id=\d+, uuid=(?P<uuid>[\d\w-]{36})\w*\], shard=(?P<shard>\d+)'
