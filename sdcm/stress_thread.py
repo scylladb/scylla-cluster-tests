@@ -22,7 +22,7 @@ from itertools import chain
 from pathlib import Path
 from functools import cached_property
 
-from sdcm.loader import CassandraStressExporter
+from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.cluster import BaseLoaderSet  # , BaseNode
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
@@ -72,8 +72,15 @@ class CSHDRFileLogger(SSHLoggerBase):
 
     def _retrieve(self, since):
         self._remoter.run(self._logger_cmd.format(since=since),
-                          verbose=True, ignore_status=True,
+                          verbose=False, ignore_status=True,
                           log_file=os.path.join(self.node.logdir, self._target_log_file))
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
 
 
 class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
@@ -165,6 +172,25 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner.run("cp /etc/scylla/cassandra/logback-tools.xml .", ignore_status=True)
             _cache[node.name] = 'done'
 
+    @staticmethod
+    def _add_hdr_log_option(stress_cmd: str, hdr_log_name: str) -> str:
+        if "-log" in stress_cmd:
+            if match := re.search(r"\s-log ([^-]*)-?", stress_cmd):
+                cs_log_option = match.group(1)
+                if "hdrfile" not in cs_log_option:
+                    stress_cmd.replace("-log", f"-log hdrfile={hdr_log_name}")
+                else:
+                    if replacing_hdr_file := re.search(r"hdrfile=(.*?)\s", cs_log_option):
+                        stress_cmd.replace(f"hdrfile={replacing_hdr_file.group(1)}", f"hdrfile={hdr_log_name}")
+        else:
+            stress_cmd += f" -log hdrfile={hdr_log_name} interval=10s"
+
+        return stress_cmd
+
+    @staticmethod
+    def _build_log_file_id(loader_idx, cpu_idx, keyspace_idx):
+        return f"l{loader_idx}-c{cpu_idx}-k{keyspace_idx}-{uuid.uuid4()}"
+
     def _run_stress(self, loader, loader_idx, cpu_idx):
         pass
 
@@ -177,6 +203,20 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
     def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         cleanup_context = contextlib.nullcontext()
+        os.makedirs(loader.logdir, exist_ok=True)
+
+        # This tag will be output in the header of c-stress result,
+        # we parse it to know the loader & cpu info in _parse_cs_summary().
+        stress_cmd_opt = self.stress_cmd.split("cassandra-stress", 1)[1].split(None, 1)[0]
+
+        log_id = self._build_log_file_id(loader_idx, cpu_idx, keyspace_idx)
+        log_file_name = \
+            os.path.join(loader.logdir, f'cassandra-stress-{stress_cmd_opt}-{log_id}.log')
+        LOGGER.debug('cassandra-stress local log: %s', log_file_name)
+        remote_hdr_file_name = f"cs-hdr-{stress_cmd_opt}-{log_id}.hdr"
+        LOGGER.debug("cassandra-stress remote HDR log file: %s", remote_hdr_file_name)
+        local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
+        LOGGER.debug("cassandra-stress HDR local file %s", local_hdr_file_name)
 
         if "k8s" in self.params.get("cluster_backend"):
             cmd_runner = loader.remoter
@@ -188,6 +228,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner = loader.remoter
             cmd_runner_name = loader.ip_address
         else:
+            loader.remoter.run(f"touch $HOME/{remote_hdr_file_name}", ignore_status=True, verbose=False)
             cmd_runner_name = loader.ip_address
 
             cpu_options = ""
@@ -198,11 +239,10 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                                                         command_line="-c 'tail -f /dev/null'",
                                                         extra_docker_opts=f'{cpu_options} '
                                                                           f'--label shell_marker={self.shell_marker}'
-                                                                          f' --entrypoint /bin/bash')
+                                                                          f' --entrypoint /bin/bash'
+                                                                          f' -v $HOME/{remote_hdr_file_name}:/{remote_hdr_file_name}')
 
         stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx)
-        with_hdr = False
-        hdr_logger_transfer = None
         if self.params.get('cs_debug'):
             cmd_runner.send_files(get_data_dir_path('logback-tools-debug.xml'),
                                   '/etc/scylla/cassandra/logback-tools.xml', delete_dst=True)
@@ -223,30 +263,9 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner.send_files(str(connection_bundle_file),
                                   self.target_connection_bundle_file, delete_dst=True, verbose=True)
 
-        # Get next word after `cassandra-stress' in stress_cmd.
-        # Do it this way because stress_cmd can contain env variables before `cassandra-stress'.
-        stress_cmd_opt = stress_cmd.split("cassandra-stress", 1)[1].split(None, 1)[0]
-
+        stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)
         LOGGER.info('Stress command:\n%s', stress_cmd)
 
-        os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = \
-            os.path.join(loader.logdir, f'cassandra-stress-l{loader_idx}-c{cpu_idx}-k{keyspace_idx}-{uuid.uuid4()}.log')
-
-        if "%LOG%" in stress_cmd:
-            hdr_file_name = f"cs_hdr_{stress_cmd_opt}_{loader_idx}_c{cpu_idx}_k{keyspace_idx}_{uuid.uuid4()}.hdr"
-            LOGGER.info("HDR log file: %s", hdr_file_name)
-            stress_cmd = re.sub(r"%LOG%",
-                                f"-log hdrfile={hdr_file_name} interval=5s",
-                                stress_cmd)
-            LOGGER.info('Stress command with hdr:\n%s', stress_cmd)
-            hdr_logger_transfer = CSHDRFileLogger(node, target_log_file=hdr_file_name)
-            with_hdr = True
-
-        LOGGER.debug('cassandra-stress local log: %s', log_file_name)
-
-        # This tag will be output in the header of c-stress result,
-        # we parse it to know the loader & cpu info in _parse_cs_summary().
         tag = f'TAG: loader_idx:{loader_idx}-cpu_idx:{cpu_idx}-keyspace_idx:{keyspace_idx}'
 
         if self.stress_num > 1:
@@ -266,17 +285,19 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                                         loader_idx=loader_idx, cpu_idx=cpu_idx), \
                 CassandraStressEventsPublisher(node=loader, cs_log_filename=log_file_name) as publisher, \
                 CassandraStressEvent(node=loader, stress_cmd=self.stress_cmd,
-                                     log_file_name=log_file_name) as cs_stress_event:
+                                     log_file_name=log_file_name) as cs_stress_event, \
+                CSHDRFileLogger(node=loader, target_log_file=remote_hdr_file_name), \
+                CassandraStressHDRExporter(instance_name=cmd_runner_name,
+                                           metrics=nemesis_metrics_obj(),
+                                           stress_operation=stress_cmd_opt,
+                                           stress_log_filename=local_hdr_file_name,
+                                           loader_idx=loader_idx, cpu_idx=cpu_idx):
             publisher.event_id = cs_stress_event.event_id
-            if with_hdr:
-                hdr_logger_transfer.start()
             try:
                 result = cmd_runner.run(cmd=node_cmd, timeout=self.timeout, log_file=log_file_name, retry=0)
             except Exception as exc:  # pylint: disable=broad-except
                 cs_stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
                 cs_stress_event.add_error(errors=[format_stress_cmd_error(exc)])
-            if with_hdr:
-                hdr_logger_transfer.stop()
 
         return loader, result, cs_stress_event
 

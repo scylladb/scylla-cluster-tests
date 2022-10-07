@@ -20,6 +20,7 @@ from typing import NamedTuple
 
 from sdcm.prometheus import NemesisMetrics
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
+from sdcm.utils.csrangehistogram import CSRangeHistogramBuilder, CSHistogramTags, CSRangeHistogramSummary
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,9 +36,18 @@ class MetricsPosition(NamedTuple):
     errors: int
 
 
+class HDRPositions(NamedTuple):
+    lat_perc_50: int
+    lat_perc_90: int
+    lat_perc_99: int
+    lat_perc_999: int
+    lat_perc_9999: int
+
+
 # pylint: disable=too-many-instance-attributes
 class StressExporter(FileFollowerThread, metaclass=ABCMeta):
     METRICS_GAUGES = {}
+    METRIC_NAMES = ['lat_mean', 'lat_med', 'lat_perc_95', 'lat_perc_99', 'lat_perc_999', 'lat_max']
 
     # pylint: disable=too-many-arguments
     def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
@@ -83,9 +93,11 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
     def get_metric_value(self, columns: list, metric_name: str) -> str:
         try:
             value = columns[getattr(self.metrics_positions, metric_name)]
+        except AttributeError:
+            value = ''
         except (ValueError, IndexError) as exc:
             value = ''
-            LOGGER.warning("Faile to get %s metric value. Error: %s", metric_name, str(exc))
+            LOGGER.warning("Failed to get %s metric value. Error: %s", metric_name, str(exc))
 
         return value
 
@@ -105,19 +117,20 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
 
                 cols = self.split_line(line=line)
 
-                for metric in ['lat_mean', 'lat_med', 'lat_perc_95', 'lat_perc_99', 'lat_perc_999', 'lat_max']:
+                for metric in self.METRIC_NAMES:
                     if metric_value := self.get_metric_value(columns=cols, metric_name=metric):
-                        self.set_metric(metric, convert_metric_to_ms(metric_value))
+                        self.set_metric(metric, convert_metric_to_ms(str(metric_value)))
 
                 if ops := self.get_metric_value(columns=cols, metric_name='ops'):
                     self.set_metric('ops', float(ops))
 
-                if errors := cols[self.metrics_positions.errors]:
+                if errors := self.get_metric_value(columns=cols, metric_name='errors'):
                     self.set_metric('errors', int(errors))
 
 
 class CassandraStressExporter(StressExporter):
     # pylint: disable=too-many-arguments
+
     def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
                  loader_idx: int, cpu_idx: int = 1):
 
@@ -148,6 +161,46 @@ class CassandraStressExporter(StressExporter):
     @staticmethod
     def split_line(line: str) -> list:
         return [element.strip() for element in line.split(',')]
+
+
+class CassandraStressHDRExporter(StressExporter):
+    # pylint: disable=too-many-arguments
+    METRIC_NAMES = ['lat_perc_50', 'lat_perc_90', 'lat_perc_99', 'lat_perc_999', "lat_perc_9999"]
+
+    def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str,
+                 stress_log_filename: str, loader_idx: int, cpu_idx: int = 1):
+        super().__init__(instance_name, metrics, stress_operation, stress_log_filename, loader_idx, cpu_idx)
+        self.log_start_time = 0
+        self.hdr_tag = ''
+
+    def create_metrix_gauge(self):
+        gauge_name = f'collectd_cassandra_stress_hdr_{self.stress_operation}_gauge'
+        if gauge_name not in self.METRICS_GAUGES:
+            self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
+                gauge_name,
+                'Gauge for cassandra stress hdr percentiles',
+                [f'cassandra_stress_hdr_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', "keyspace"])
+        return gauge_name
+
+    def merics_position_in_log(self) -> HDRPositions:
+        return HDRPositions(lat_perc_50=3, lat_perc_90=4,
+                            lat_perc_99=6, lat_perc_999=7, lat_perc_9999=8)
+
+    def skip_line(self, line: str) -> bool:
+        if match := re.match(r"^#\[StartTime:\s(\d+)", line):
+            self.log_start_time = int(match.group(1))
+        return not (CSHistogramTags.WRITE.value in line or CSHistogramTags.READ.value in line)
+
+    def set_metric(self, name: str, value: float) -> None:
+        self.stress_metric.labels(self.hdr_tag, self.instance_name, self.loader_idx,
+                                  self.cpu_idx, name, self.keyspace).set(value)
+
+    def split_line(self, line: str) -> list:
+        histogram = CSRangeHistogramBuilder.build_from_log_line(log_line=line,
+                                                                hst_log_start_time=self.log_start_time)
+        summary_data = CSRangeHistogramSummary(histogram).get_summary_for_operation(self.stress_operation)[0]
+        self.hdr_tag, percentiles = summary_data.popitem()
+        return list(percentiles.values())
 
 
 class ScyllaBenchStressExporter(StressExporter):

@@ -28,7 +28,7 @@ from functools import cached_property
 import jinja2
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.common import list_instances_gce, list_instances_aws, list_resources_docker
+from sdcm.utils.common import list_instances_gce, list_instances_aws, list_resources_docker, format_timestamp
 
 LOGGER = logging.getLogger(__name__)
 
@@ -193,6 +193,7 @@ class BaseEmailReporter:
         self.log.info("Rendering results to html using '%s' template...", current_template)
         loader = jinja2.FileSystemLoader(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'report_templates'))
         env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'])
+        env.filters["format_timestamp"] = format_timestamp
         if template_str is None:
             template = env.get_template(current_template)
         else:

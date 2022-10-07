@@ -1876,7 +1876,12 @@ def create_remote_storage_dir(node, path='') -> Optional[str, None]:
 
 
 def format_timestamp(timestamp):
-    return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    try:
+        # try convert seconds
+        return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    except ValueError:
+        # try convert miliseconds
+        return datetime.datetime.utcfromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
 
 
 def wait_ami_available(client, ami_id):

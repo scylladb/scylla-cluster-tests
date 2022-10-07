@@ -27,81 +27,18 @@
         {% endfor %}
         </ul>
     </div>
+    <h2> HDR latency by interval per operation </h2>
     <div>
-        <h3>
-            <span>Amount of reactor stalls:</span>
-            <span class="blue">{{ reactor_stall_events_summary.get('DEBUG', 0) }}</span>
-        </h3>
-        <h3>
-            <span>Amount of kernel callstacks:</span>
-            <span class="blue">{{ kernel_callstack_events_summary.get('DEBUG', 0) }}</span>
-        </h3>
-    </div>
-        <div>
+        <table id="results_table">
+            <th> Workload </th>
+            <th> Start time </th>
+            <th> End time </th>
+            <th> Percentile 50 </th>
+            <th> Percentile 90 </th>
+            <th> Percentile 99 </th>
+            <th> Percentile 99.9 </th>
             {% for operation, results in stats.items() %}
-                {% if operation != 'Steady State' %}
-                    <h2>{{ operation }}</h2>
-                    <table id="results_table">
-                        <caption>{{ results['legend'] }}</caption>
-                        <th>Latency Type</th>
-                        {% for cycle in results['cycles'] %}
-                            <th>Cycle #{{ loop.index }}</th>
-                        {% endfor %}
-                        <th>Cycles Average</th>
-                        <th>Steady State</th>
-                        <th>Relative to Steady</th>
-                        {% set lat_type_list = [] %}
-                        {% for cycle in results['cycles'] %}
-                            {% for key, value in cycle.items() %}
-                                {% if key not in lat_type_list %}
-                                    {{ lat_type_list.append(key) }}
-                                {% endif %}
-                            {% endfor %}
-                        {% endfor %}
-
-                        {% for lat_type in lat_type_list|sort %}
-                            {% if 'color' in results and lat_type in results['color'] and results['color'][lat_type] == 'red' %}
-                                <tr style ="background-color: red">
-                            {% else %}
-                                   <tr>
-                            {% endif %}
-                                <td>{{ lat_type }}</td>
-                                {% for cycle in results['cycles'] %}
-                                    <td>{{ cycle[lat_type] }}</td>
-                                {% endfor %}
-                                <td>{{ results['Cycles Average'][lat_type] }}</td>
-                                <td>{{ stats['Steady State'][lat_type] }}</td>
-                                <td>{{ results['Relative to Steady'][lat_type] }}</td>
-                            </tr>
-                        {% endfor %}
-                    </table>
-                    <span STYLE="font-size:12px" class="red">* All latency values are in ms.</span>
-                    <div>
-                        <table id="results_table">
-                            <caption>{{ results['legend'] }}</caption>
-
-                        </table>
-                    </div>
-                    <div>
-                        {% for cycle in results['cycles'] %}
-                            {% for screenshot in cycle['screenshots'] %}
-                                <span style="vertical-align: top"><img src="{{ screenshot }}"  height="250" width="150"></span>
-                            {% endfor %}
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            {% endfor %}
-        </div>
-        <div>
-            <table id="results_table">
-                <th> Workload </th>
-                <th> Start time </th>
-                <th> End time </th>
-                <th> Percentile 50 </th>
-                <th> Percentile 90 </th>
-                <th> Percentile 99 </th>
-                <th> Percentile 99.9 </th>
-                {% for operation, results in stats.items() %}
+                {% if operation != "summary" %}
                     <tr>
                         <td colspan="100%"> {{ operation }} - {{ results.get('legend', '') }} </td>
                     </tr>
@@ -142,8 +79,35 @@
                             {% endif %}
                         {% endfor %}
                     {% endif %}
-                {% endfor %}
-            </table>
-        </div>
+                {% endif %}
+            {% endfor %}
+        </table>
+    </div>
+
+    <h2> Full test hdr 10 minutes interval histogram </h2>
+    <table id="results_table">
+        <th> Workload </th>
+        <th> Start time </th>
+        <th> End time </th>
+        <th> Percentile 50 </th>
+        <th> Percentile 90 </th>
+        <th> Percentile 99 </th>
+        <th> Percentile 99.9 </th>
+        {% for row in stats['summary']['hdr'] %}
+            {% for workload, by_interval in row.items() %}
+            <tr>
+                <td> {{ workload }} </td>
+                <td> {{ by_interval['start_time'] | format_timestamp }} </td>
+                <td> {{ by_interval['end_time'] | format_timestamp }} </td>
+                <td> {{ by_interval["percentile_50"] }}</td>
+                <td style="background-color: {{ by_interval["color"]["percentile_90"] }}"> {{ by_interval["percentile_90"] }}</td>
+                <td style="background-color: {{ by_interval["color"]["percentile_99"] }}"> {{ by_interval["percentile_99"] }}</td>
+                <td> {{ by_interval["percentile_99_9"] }}</td>
+            </tr>
+            {% endfor %}
+        {% endfor %}
+
+    </table>
+
 
 {% endblock %}

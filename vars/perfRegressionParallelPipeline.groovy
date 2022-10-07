@@ -167,7 +167,7 @@ def call(Map pipelineParams) {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-                                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+                                                    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
                                                     timeout(time: testRunTimeout, unit: 'MINUTES') { dir('scylla-cluster-tests') {
 
                                                         sh """#!/bin/bash
