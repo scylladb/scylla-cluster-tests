@@ -848,6 +848,8 @@ class SCTConfiguration(dict):
         dict(name="k8s_log_api_calls", env="SCT_K8S_LOG_API_CALLS", type=boolean,
              help="Defines whether the K8S API server logging must be enabled and "
                   "it's logs gathered. Be aware that it may be really huge set of data."),
+        dict(name="k8s_tenants_num", env="SCT_TENANTS_NUM", type=int,
+             help="Number of Scylla clusters to create in the K8S cluster."),
 
         dict(name="k8s_enable_tls", env="SCT_K8S_ENABLE_TLS", type=boolean,
              help="Defines whether the we enable the operator serverless options"),

@@ -5,6 +5,7 @@
 # - stress_cmd_r
 # - n_loaders
 # - k8s_n_loader_pods_per_cluster
+# - k8s_tenants_num
 
 test_duration: 480
 user_prefix: 'k8s-perf-regression-latency'

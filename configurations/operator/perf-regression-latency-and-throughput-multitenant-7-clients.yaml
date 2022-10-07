@@ -4,6 +4,7 @@ user_prefix: 'perf-regrn-lat-and-thpt-7-clients'
 # NOTE: deploy 28 K8S nodes of the 'loader' type and then create 4 loader pod per DB cluster
 n_loaders: 28
 k8s_n_loader_pods_per_cluster: 4
+k8s_tenants_num: 7
 
 prepare_write_cmd: [[
     "cassandra-stress write no-warmup cl=ALL n=5000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=4 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
