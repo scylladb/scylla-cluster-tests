@@ -4,6 +4,7 @@ user_prefix: 'perf-regression-latency-2-clients'
 # NOTE: deploy 8 K8S nodes of the 'loader' type and then create 4 loader pods per DB cluster
 n_loaders: 8
 k8s_n_loader_pods_per_cluster: 4
+k8s_tenants_num: 2
 
 prepare_write_cmd: [
     "cassandra-stress write no-warmup cl=ALL n=15000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=20 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..15000000",

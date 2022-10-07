@@ -17,6 +17,7 @@ stress_read_cmd: [
                   ["cassandra-stress read  cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"],
                   ["cassandra-stress read  cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"]
                  ]
+k8s_tenants_num: 2
 
 # NOTE: we disable second type of monitoring - K8S based one. It is redundant while we use standalone ones.
 k8s_deploy_monitoring: false

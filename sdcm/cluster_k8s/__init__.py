@@ -321,15 +321,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     @cached_property
     def tenants_number(self) -> int:
-        for stress_param in self.params.stress_cmd_params:
-            stress_cmds = self.params.get(stress_param)
-            if not isinstance(stress_cmds, list):
-                continue
-            if not any((isinstance(stress_cmd, list) for stress_cmd in stress_cmds)):
-                continue
-            if (tenants_number := len(stress_cmds)) > 1:
-                return tenants_number
-        return 1
+        return self.params.get("k8s_tenants_num") or 1
 
     @property
     def allowed_labels_on_scylla_node(self):
