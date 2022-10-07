@@ -110,7 +110,8 @@ from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.gce_utils import get_gce_services
 from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
-from sdcm.utils.latency import calculate_latency
+from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
+from sdcm.utils.csrangehistogram import CSRangeHistogramBuilder, CSRangeHistogramSummary
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
@@ -2973,23 +2974,34 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                              f"current size is: '{used}'"
 
     def check_latency_during_ops(self):
+        start_time = self.start_time if not self.create_stats else self._stats["test_details"]["start_time"]
+        end_time = time.time()
         results_analyzer = LatencyDuringOperationsPerformanceAnalyzer(es_index=self._test_index,
                                                                       es_doc_type=self._es_doc_type,
                                                                       email_recipients=self.params.get(
                                                                           'email_recipients'),
                                                                       events=get_events_grouped_by_category(
                                                                           _registry=self.events_processes_registry))
+        workload = self._test_index.split("-")[-1]
+        histogram_total_data = self.get_cs_range_histogram(stress_operation=workload,
+                                                           start_time=start_time,
+                                                           end_time=end_time)
+        histogram_data_by_interval = self.get_cs_range_histogram_by_interval(stress_operation=workload,
+                                                                             start_time=start_time,
+                                                                             end_time=end_time)
         with open(self.latency_results_file, encoding="utf-8") as file:
             latency_results = json.load(file)
         self.log.debug('latency_results were loaded from file %s and its result is %s',
                        self.latency_results_file, latency_results)
         if latency_results and self.create_stats:
+            latency_results["summary"] = {"hdr_summary": histogram_total_data,
+                                          "hdr": histogram_data_by_interval}
             latency_results = calculate_latency(latency_results)
+            latency_results = analyze_hdr_percentiles(latency_results)
             with open(self.latency_results_file, 'w', encoding="utf-8") as file:
                 json.dump(latency_results, file)
             self.log.debug('collected latency values are: %s', latency_results)
             self.update({"latency_during_ops": latency_results})
-
             self.update_test_details()
             results_analyzer.check_regression(test_id=self._test_id, data=latency_results)
 
@@ -3509,3 +3521,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             if "type=ShardAwareDriver" in event_str:
                 return True
         return False
+
+    def get_cs_range_histogram(self, stress_operation: str, start_time: float, end_time: float) -> dict[str, Any]:
+        self.log.info("Build HDR histogram with start time: %s, end time: %s; for operation: %s",
+                      start_time, end_time, stress_operation)
+        range_histogram = CSRangeHistogramBuilder.build_histogram_from_dir(base_path=self.loaders.logdir,
+                                                                           start_time=start_time,
+                                                                           end_time=end_time)
+        return CSRangeHistogramSummary(range_histogram).get_summary_for_operation(stress_operation)[0]
+
+    def get_cs_range_histogram_by_interval(self, stress_operation, start_time, end_time, time_interval=600) -> list[dict[str, Any]]:
+        self.log.info("Build HDR histogram with start time: %s, end time: %s, time interval: %s for operation: %s",
+                      start_time, end_time, time_interval, stress_operation)
+        range_histograms = CSRangeHistogramBuilder.build_histograms_range_with_interval(path=self.loaders.logdir,
+                                                                                        start_time=start_time,
+                                                                                        end_time=end_time,
+                                                                                        interval=time_interval)
+        return CSRangeHistogramSummary(range_histograms).get_summary_for_operation(stress_operation)

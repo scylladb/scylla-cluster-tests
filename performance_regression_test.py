@@ -169,7 +169,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         with EventsSeverityChangerFilter(new_severity=Severity.NORMAL,  # killing stress creates Critical error
                                          event_class=CassandraStressEvent,
                                          extra_time_to_expiration=60):
-            self.loaders.kill_cassandra_stress_thread()
+            self.loaders.kill_stress_thread()
 
     def preload_data(self, compaction_strategy=None):
         # if test require a pre-population of data

@@ -37,59 +37,73 @@
             <span class="blue">{{ kernel_callstack_events_summary.get('DEBUG', 0) }}</span>
         </h3>
     </div>
+    <div>
+        <h2> Total test HDR Histogram percentiles</h2>
+        <table id="results_table">
+            <tr>
+                <th> Workload </th>
+                <th> Start time </th>
+                <th> End time </th>
+                <th> Percentile 50 </th>
+                <th> Percentile 90 </th>
+                <th> Percentile 99 </th>
+                <th> Percentile 99.9 </th>
+            </tr>
+            {% for workload, total in stats['summary']['hdr_summary'].items() %}
+                <tr>
+                    <td> {{ workload }} </td>
+                    <td> {{ total['start_time'] | format_timestamp }} </td>
+                    <td> {{ total['end_time'] | format_timestamp }} </td>
+                    <td> {{ total["percentile_50"] }}</td>
+                    <td style="background-color: {{ total["color"]["percentile_90"] }}"> {{ total["percentile_90"] }}</td>
+                    <td style="background-color: {{ total["color"]["percentile_99"] }}"> {{ total["percentile_99"] }}</td>
+                    <td> {{ total["percentile_99_9"] }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
         <div>
             {% for operation, results in stats.items() %}
-                {% if operation != 'Steady State' %}
+                {% if operation not in ['Steady State', 'summary'] %}
                     <h2>{{ operation }}</h2>
                     <table id="results_table">
                         <caption>{{ results['legend'] }}</caption>
-                        <th> Scylla build </th>
-                        <th>Latency Type</th>
-                        {% for cycle in results['cycles'] %}
-                            <th>Cycle #{{ loop.index }}</th>
-                            <th>STDEV #{{ loop.index }}</th>
-                            <th>Points Above Threshold #{{ loop.index }}</th>
-                        {% endfor %}
-                        <th>Cycles Average</th>
-                        <th>Steady State</th>
-                        <th>Relative to Steady</th>
-                        <th>Commit id, date</th>
-                        {% set lat_type_list = ['c-s P99'] %}
+                        <tr>
+                            <th> Cycle </th>
+                            <th> Scylla build </th>
+                            <th> Workload operation </th>
+                            {% set lat_type_list = ['percentile_90', 'percentile_99'] %}
+                            {% set lat_color_list = ['color_90', 'color_99'] %}
+                            {% for lat_type in lat_type_list %}
+                                <th>Latency {{ lat_type }}</th>
+                                <th>Steady State {{lat_type}}</th>
+                            {% endfor %}
 
-                        {% for lat_type in lat_type_list|sort %}
-                            {% if 'color' in results and lat_type in results['color'] %}
-                                {% if results['color'][lat_type] == 'red' %}
-                                    <tr style ="background-color: red">
-                                {% elif results['color'][lat_type] == 'yellow' %}
-                                    <tr style ="background-color: yellow">
-                                {% else %}
-                                    <tr>
-                                {% endif %}
-                            {% else %}
-                                <tr>
-                            {% endif %}
-                            <td> current build </td>
-                            <td>{{ lat_type }}</td>
-                            {% for cycle in results['cycles'] %}
-                                <td>{{ cycle[lat_type] }}</td>
-                                {% if lat_type ~ "_stdev" in cycle %}
-                                    <td>{{ cycle[lat_type ~ "_stdev"] }}</td>
-                                {% else %}
-                                    <td>-</td>
-                                {% endif %}
-                                {% if lat_type ~ "_points_above_threshold" in cycle %}
-                                    <td>{{ cycle[lat_type ~ "_points_above_threshold"] }}</td>
-                                {% else %}
-                                    <td>-</td>
-                                {% endif %}
-                        {% endfor %}
-                        <td>{{ results['Cycles Average'][lat_type] }}</td>
-                        <td>{{ stats['Steady State'][lat_type] }}</td>
-                        <td>{{ results['Relative to Steady'][lat_type] }}</td>
-                        <td>{{ test_version }}
+                            <th>Commit id, date</th>
                         </tr>
-
-                        {% if best_stat_per_version and best_stat_per_version.get(operation) %}
+                        {% for cycle in results["cycles"] %}
+                            {% set row_span = cycle["hdr_summary"]|length %}
+                            {% for workload in cycle["hdr_summary"] %}
+                                <tr>
+                                    {% if loop.first %}
+                                            <td rowspan="{{ row_span }}"> Cycle #{{ loop.index }} </td>
+                                            <td rowspan="{{ row_span }}"> current build </td>
+                                            <td> {{ workload }}</td>
+                                            {% for perc in lat_type_list %}
+                                                <td style="background-color: {{ cycle['hdr_summary'][workload]['color'][perc] }}"" }};"> {{ cycle['hdr_summary'][workload][perc]}} </td>
+                                                <td> {{ stats["Steady State"]["hdr_summary"][workload][perc] }} </td>
+                                            {% endfor %}
+                                            <td rowspan="{{ row_span }}"> {{ test_version }}</td>
+                                    {% else %}
+                                            <td> {{ workload }}</td>
+                                            {% for perc in lat_type_list %}
+                                                <td style="background-color: {{ cycle['hdr_summary'][workload]['color'][perc] }};"> {{ cycle['hdr_summary'][workload][perc]}} </td>
+                                                <td> {{ stats["Steady State"]["hdr_summary"][workload][perc] }} </td>
+                                            {% endfor %}
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        <!-- {% if best_stat_per_version and best_stat_per_version.get(operation) %}
                             {% for version, best in best_stat_per_version[operation].items() %}
                             <tr>
                                 <td> {{ version }} </td>
@@ -103,8 +117,8 @@
                                 <td>{{ best.get('version')['commit_id'] }},<br/>{{ best.get('version')['date'] }}</td>
                             </tr>
                             {% endfor %}
-                        {% endif %}
-                    {% endfor %}
+                        {% endif %} -->
+                        {% endfor %}
                     </table>
                     <span STYLE="font-size:12px" class="red">* All latency values are in ms.</span>
                     <div>
@@ -117,5 +131,4 @@
                 {% endif %}
             {% endfor %}
         </div>
-
 {% endblock %}

@@ -27,7 +27,7 @@ from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.setup import start_events_device, stop_events_device
 
 from sdcm.stress_thread import CassandraStressThread, CassandraStressEventsPublisher
-from sdcm.loader import CassandraStressExporter
+from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.ycsb_thread import YcsbStressThread
 
 if TYPE_CHECKING:
@@ -127,6 +127,109 @@ class TestCassandraStressExporter(unittest.TestCase):
         cs_exporter.stop()
 
         res.result()
+
+
+@unittest.skip("manual tests")
+class TestCassandraStressHDRExporter(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.prom_address = start_metrics_server()
+        cls.metrics = nemesis_metrics_obj()
+
+    def test_01_mixed(self):
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
+        cs_exporter = CassandraStressHDRExporter("127.0.0.1", self.metrics, 'mixed',
+                                                 tmp_file.name, loader_idx=1, cpu_idx=0)
+
+        res = cs_exporter.start()
+
+        line = 'Tag=WRITE-rt,0.000,5.000,54.329,HISTFAAAA/R42i1Uy47cRBQt3y5XV3vcxt1d8Xgcxxi3KSxjHMfpWKYz5IHCRDwiFCGEUIQQiwghlogVCzZILFhGWUQIIRaIBSvEGvEBfAHiC9jxB8O57qnuqvKtc++59ThV6TdPNkK4f4hDmV30zmScn5/f/u8w8Of3Dr1Iz9NlWpEgukRHJKRckKuWbHOd4S9RXFIkGRXkYnxGSpIUeiaVJi0UQPZA4XEltPBIS/LAgAghtULDdIC1FAouJJSHnkDucxiK4hgNZ6lRfYal70tfo/hKyUCSUeSHWksPnlIjiR8oFQZrE5o4TAr0mVmnUZyHUZZ4iQmjdZrEUZQkVZ0nWRLnUVEWWWIzk6RFV/hZWfVZbm1W5WlWpmOeFF2V2bztG5t3XdPuh6be19lQlk03jvumbevdYIey6++09TgU49i31b3dnbo53VVNP/Q72/Xj6/as3I/1kDVddy/t+tPWjsPOlkN51vZd079TvNXtz/bjrb447fouL+q+3dd9nFR9miPpbqh23dg0dqiqqi6qelc2Rd12XTe0tr1VDG1dNk3RtGVTd4VNq7qubNumpi7zOikb25exraosK6o8K9IsK/ukjps8TlvbpI2NsjRKbWWiPonTNAlzs8YuRUlkbBgGEay0MPE6x/7GmYnjOAUaRGEYB8ZIs7aeWftxGEUmWvsogR8avfaNVkZFYRx6XiADE4TaD1kha208H0encOYhTk/hwPlbBZ72ICqFA/fAAgRHq8mXk5K08iEM6A3DxNEwoCjNKAHV0Ch4lIZ2pD6IkiQLVrAipceqUyy6mRLggQonmEUnOAPLULI96Zwm9pkE7UKyXmfKBcIiRoSYvPEtCR9sHiyFG4FY+PEF4VvjsuqnhIdLxB2JCUAel6/EarJBu+SEh6ALFNdvMV28ORqe1MWixBQy42hA8KINLiw7cm54YvBoItqgfQ49aFBn0+KmUIHAE9oCml/MZzGFIA8teRKImPMmXJlI53RZrkhusZwFjM005OKdwMcxfux/A0tZ0EYe0yVM+wryIhs3N9HOAW8BC8S6yLRE3RBdBXQNwBF9DvCJgyfoCn0C1KX7iLtBH9BjzPMxHidaSn6WXqProDwB9INDD+glMC9RjxFxFRHyZRhfor5L79FnSLGa0t0GEX1NK7mhR/Stg4kvpwU8gN9DJN0iwZaeOfQRfUW/O8jwJr0AwqcOKH5yMKU5/eJg6IT+cjCHh7ybSM6btaWnh127DqebBLbfHDykM7hdw/IQdER3iT7G9r+P0TfwW2H69+lHXu6/zvTaHuNzDtolpo0M/zj0zMU6fnXob6K36VP62aFXCBkfYS30BbzoVZB9R/Qh/Q8V5nMQ'
+        tmp_file.file.write(line + '\n')
+        tmp_file.file.flush()
+        time.sleep(2)
+
+        line = 'Tag=READ-rt,0.999,5.000,60.588,HISTFAAAA+F42j1Uv6/dNBROTnz9/Pz8/IxfmmfS4KapSfNCuETR7e2lPGiXqkOFEKoqBoaKATEyMSE2mBDq0AExVLDwJyCEmJgQM2LkL2DhP3h89gUSxfb59X3H9jlpPn92mmWr37L9U/w750m4vLy8+/de8c13Od2kjM4ZnRDLqKCCMWKENct4RhAzwgwxaohTJmDGxBjjTHCecYGXC8YEE0ozLjWXVkmurBQq+khjpTFKV5aXUMrWl1IbVUJRVsYbZ6wvrdGybLRxTeM629TK9GNfu7r1g61bVXelbHvnXNWEpvbW14Nvu+D7yU5+68ZpO3bDehknvyy7dRO6sGznobnTh6mf1hf9rl2H9bgN5Th1y2bqNsvFPG/DsN3O07DsuuXezl8MgNkt3bxxfp4298I4D35zcWcZ5k3ft+6tadzs2nmYwtCG4P3U1d3Ydt3omqHrwlSFcWyX0fUuTLWvwjCt2z4gsJ+W0COs8eu57Ta9vwhNMzRLOZk1OFzfYddtMGNbd86FfvZBNjgUX7eTqofKh6oOlW7LWmscgK+crqquKvHaujJlg7PR8WyMhUpZHGZTaVPaSpeuspW02jpnSl1r19cNPHRpjDYkJS7GOqWlkKKqDNdcU62qUimppIyRRljQylKT0CXHLXLcrJGVdfCVioTQSijDpORCGM1LziXuXSj4cq40FpI0k0oJlIYlJoTgoONgFODjkUiksjGWRyMTGtWkhWVcodTgAggUmERVcgZkjKi2UgmMMDCRwQVr1K2ATTKNUkViMMUHE4lYrLDKvRsKmHFBBLKMJAEAHjKqY5nzIjJQDBUZ4xRrPZY6TOgLQqoYZXRMnZBaIYurgmKLFDw2DACTJaOjSIInef3XXGi5Fb4DigDRP7Za6jrEs9iDMQDNB2bwRICo4hGbyWREuyXYLB5MkULRp+CM7JErpoYj+b+BozfoDiNaauaMFSkgou8/JLiKCr6XYpvHOM5XdJjgDvCu0kYhnBEdQU67eSHuBYYTfHsXmAvY6RgDS9h0yKI+/mXwsf0BILUixV2hqxgT8TGShCnq6RSaKwn0Vayvw3KXMDyE6pweI+IA+Kf0Gt1PhK/Qx3SLvs+B8QhpHAL0FPNVdgbzEb2EROlN+K3oNr1HH0F5Tr/m6Treh+Ea7H9F8RZCz6C6SV8QvUtPCaEP2NOcbhC9DpYb9AbelwG/onfoy5wuGeB/yukPQsy3RD/n9Al9ABQQvogcjul3AvwBfZ3TA8h/FsC5hg09z9kjbAQh18F6GzxvA+kk7uFZDsN9+gzSY/olpyegfJ4T/bCCzxP6Kqcfc/qQPgXOP5zIbjo='
+        tmp_file.file.write(line + '\n')
+        tmp_file.file.flush()
+        time.sleep(2)
+
+        output = requests.get("http://{}/metrics".format(self.prom_address)).text
+        expected_lines = output.split("\n")[-12:]
+
+        assert 'collectd_cassandra_stress_hdr_mixed_gauge{cassandra_stress_hdr_mixed="WRITE",cpu_idx="0",instance="127.0.0.1",keyspace="",loader_idx="1",type="lat_perc_50"} 0.62' in expected_lines
+        assert 'collectd_cassandra_stress_hdr_mixed_gauge{cassandra_stress_hdr_mixed="READ",cpu_idx="0",instance="127.0.0.1",keyspace="",loader_idx="1",type="lat_perc_999"} 36.54' in expected_lines
+        time.sleep(1)
+        cs_exporter.stop()
+
+        res.result(10)
+
+    def test_02_write(self):
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
+        cs_exporter = CassandraStressHDRExporter("127.0.0.1", self.metrics, 'write',
+                                                 tmp_file.name, loader_idx=1, cpu_idx=0)
+
+        res = cs_exporter.start()
+
+        line = 'Tag=WRITE-rt,0.000,5.000,54.329,HISTFAAAA/R42i1Uy47cRBQt3y5XV3vcxt1d8Xgcxxi3KSxjHMfpWKYz5IHCRDwiFCGEUIQQiwghlogVCzZILFhGWUQIIRaIBSvEGvEBfAHiC9jxB8O57qnuqvKtc++59ThV6TdPNkK4f4hDmV30zmScn5/f/u8w8Of3Dr1Iz9NlWpEgukRHJKRckKuWbHOd4S9RXFIkGRXkYnxGSpIUeiaVJi0UQPZA4XEltPBIS/LAgAghtULDdIC1FAouJJSHnkDucxiK4hgNZ6lRfYal70tfo/hKyUCSUeSHWksPnlIjiR8oFQZrE5o4TAr0mVmnUZyHUZZ4iQmjdZrEUZQkVZ0nWRLnUVEWWWIzk6RFV/hZWfVZbm1W5WlWpmOeFF2V2bztG5t3XdPuh6be19lQlk03jvumbevdYIey6++09TgU49i31b3dnbo53VVNP/Q72/Xj6/as3I/1kDVddy/t+tPWjsPOlkN51vZd079TvNXtz/bjrb447fouL+q+3dd9nFR9miPpbqh23dg0dqiqqi6qelc2Rd12XTe0tr1VDG1dNk3RtGVTd4VNq7qubNumpi7zOikb25exraosK6o8K9IsK/ukjps8TlvbpI2NsjRKbWWiPonTNAlzs8YuRUlkbBgGEay0MPE6x/7GmYnjOAUaRGEYB8ZIs7aeWftxGEUmWvsogR8avfaNVkZFYRx6XiADE4TaD1kha208H0encOYhTk/hwPlbBZ72ICqFA/fAAgRHq8mXk5K08iEM6A3DxNEwoCjNKAHV0Ch4lIZ2pD6IkiQLVrAipceqUyy6mRLggQonmEUnOAPLULI96Zwm9pkE7UKyXmfKBcIiRoSYvPEtCR9sHiyFG4FY+PEF4VvjsuqnhIdLxB2JCUAel6/EarJBu+SEh6ALFNdvMV28ORqe1MWixBQy42hA8KINLiw7cm54YvBoItqgfQ49aFBn0+KmUIHAE9oCml/MZzGFIA8teRKImPMmXJlI53RZrkhusZwFjM005OKdwMcxfux/A0tZ0EYe0yVM+wryIhs3N9HOAW8BC8S6yLRE3RBdBXQNwBF9DvCJgyfoCn0C1KX7iLtBH9BjzPMxHidaSn6WXqProDwB9INDD+glMC9RjxFxFRHyZRhfor5L79FnSLGa0t0GEX1NK7mhR/Stg4kvpwU8gN9DJN0iwZaeOfQRfUW/O8jwJr0AwqcOKH5yMKU5/eJg6IT+cjCHh7ybSM6btaWnh127DqebBLbfHDykM7hdw/IQdER3iT7G9r+P0TfwW2H69+lHXu6/zvTaHuNzDtolpo0M/zj0zMU6fnXob6K36VP62aFXCBkfYS30BbzoVZB9R/Qh/Q8V5nMQ'
+        tmp_file.file.write(line + '\n')
+        tmp_file.file.flush()
+        time.sleep(2)
+
+        output = requests.get("http://{}/metrics".format(self.prom_address)).text
+        expected_lines = output.split("\n")[-6:]
+        assert 'collectd_cassandra_stress_hdr_write_gauge{cassandra_stress_hdr_write="WRITE",cpu_idx="0",instance="127.0.0.1",keyspace="",loader_idx="1",type="lat_perc_50"} 0.62' in expected_lines
+        time.sleep(1)
+        cs_exporter.stop()
+
+        res.result(10)
+
+    def test_03_read(self):
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
+        cs_exporter = CassandraStressHDRExporter("127.0.0.1", self.metrics, 'read',
+                                                 tmp_file.name, loader_idx=1, cpu_idx=0)
+
+        res = cs_exporter.start()
+
+        line = 'Tag=READ-rt,0.999,5.000,60.588,HISTFAAAA+F42j1Uv6/dNBROTnz9/Pz8/IxfmmfS4KapSfNCuETR7e2lPGiXqkOFEKoqBoaKATEyMSE2mBDq0AExVLDwJyCEmJgQM2LkL2DhP3h89gUSxfb59X3H9jlpPn92mmWr37L9U/w750m4vLy8+/de8c13Od2kjM4ZnRDLqKCCMWKENct4RhAzwgwxaohTJmDGxBjjTHCecYGXC8YEE0ozLjWXVkmurBQq+khjpTFKV5aXUMrWl1IbVUJRVsYbZ6wvrdGybLRxTeM629TK9GNfu7r1g61bVXelbHvnXNWEpvbW14Nvu+D7yU5+68ZpO3bDehknvyy7dRO6sGznobnTh6mf1hf9rl2H9bgN5Th1y2bqNsvFPG/DsN3O07DsuuXezl8MgNkt3bxxfp4298I4D35zcWcZ5k3ft+6tadzs2nmYwtCG4P3U1d3Ydt3omqHrwlSFcWyX0fUuTLWvwjCt2z4gsJ+W0COs8eu57Ta9vwhNMzRLOZk1OFzfYddtMGNbd86FfvZBNjgUX7eTqofKh6oOlW7LWmscgK+crqquKvHaujJlg7PR8WyMhUpZHGZTaVPaSpeuspW02jpnSl1r19cNPHRpjDYkJS7GOqWlkKKqDNdcU62qUimppIyRRljQylKT0CXHLXLcrJGVdfCVioTQSijDpORCGM1LziXuXSj4cq40FpI0k0oJlIYlJoTgoONgFODjkUiksjGWRyMTGtWkhWVcodTgAggUmERVcgZkjKi2UgmMMDCRwQVr1K2ATTKNUkViMMUHE4lYrLDKvRsKmHFBBLKMJAEAHjKqY5nzIjJQDBUZ4xRrPZY6TOgLQqoYZXRMnZBaIYurgmKLFDw2DACTJaOjSIInef3XXGi5Fb4DigDRP7Za6jrEs9iDMQDNB2bwRICo4hGbyWREuyXYLB5MkULRp+CM7JErpoYj+b+BozfoDiNaauaMFSkgou8/JLiKCr6XYpvHOM5XdJjgDvCu0kYhnBEdQU67eSHuBYYTfHsXmAvY6RgDS9h0yKI+/mXwsf0BILUixV2hqxgT8TGShCnq6RSaKwn0Vayvw3KXMDyE6pweI+IA+Kf0Gt1PhK/Qx3SLvs+B8QhpHAL0FPNVdgbzEb2EROlN+K3oNr1HH0F5Tr/m6Treh+Ea7H9F8RZCz6C6SV8QvUtPCaEP2NOcbhC9DpYb9AbelwG/onfoy5wuGeB/yukPQsy3RD/n9Al9ABQQvogcjul3AvwBfZ3TA8h/FsC5hg09z9kjbAQh18F6GzxvA+kk7uFZDsN9+gzSY/olpyegfJ4T/bCCzxP6Kqcfc/qQPgXOP5zIbjo='
+        tmp_file.file.write(line + '\n')
+        tmp_file.file.flush()
+        time.sleep(2)
+
+        output = requests.get("http://{}/metrics".format(self.prom_address)).text
+        expected_lines = output.split("\n")[-6:]
+        assert 'collectd_cassandra_stress_hdr_read_gauge{cassandra_stress_hdr_read="READ",cpu_idx="0",instance="127.0.0.1",keyspace="",loader_idx="1",type="lat_perc_999"} 36.54' in expected_lines
+        time.sleep(1)
+        cs_exporter.stop()
+
+        res.result(10)
+
+    def test_04_mixed_only_write(self):
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
+        cs_exporter = CassandraStressHDRExporter("127.0.0.1", self.metrics, 'mixed',
+                                                 tmp_file.name, loader_idx=1, cpu_idx=0)
+
+        res = cs_exporter.start()
+
+        line = 'Tag=WRITE-rt,0.000,5.000,54.329,HISTFAAAA/R42i1Uy47cRBQt3y5XV3vcxt1d8Xgcxxi3KSxjHMfpWKYz5IHCRDwiFCGEUIQQiwghlogVCzZILFhGWUQIIRaIBSvEGvEBfAHiC9jxB8O57qnuqvKtc++59ThV6TdPNkK4f4hDmV30zmScn5/f/u8w8Of3Dr1Iz9NlWpEgukRHJKRckKuWbHOd4S9RXFIkGRXkYnxGSpIUeiaVJi0UQPZA4XEltPBIS/LAgAghtULDdIC1FAouJJSHnkDucxiK4hgNZ6lRfYal70tfo/hKyUCSUeSHWksPnlIjiR8oFQZrE5o4TAr0mVmnUZyHUZZ4iQmjdZrEUZQkVZ0nWRLnUVEWWWIzk6RFV/hZWfVZbm1W5WlWpmOeFF2V2bztG5t3XdPuh6be19lQlk03jvumbevdYIey6++09TgU49i31b3dnbo53VVNP/Q72/Xj6/as3I/1kDVddy/t+tPWjsPOlkN51vZd079TvNXtz/bjrb447fouL+q+3dd9nFR9miPpbqh23dg0dqiqqi6qelc2Rd12XTe0tr1VDG1dNk3RtGVTd4VNq7qubNumpi7zOikb25exraosK6o8K9IsK/ukjps8TlvbpI2NsjRKbWWiPonTNAlzs8YuRUlkbBgGEay0MPE6x/7GmYnjOAUaRGEYB8ZIs7aeWftxGEUmWvsogR8avfaNVkZFYRx6XiADE4TaD1kha208H0encOYhTk/hwPlbBZ72ICqFA/fAAgRHq8mXk5K08iEM6A3DxNEwoCjNKAHV0Ch4lIZ2pD6IkiQLVrAipceqUyy6mRLggQonmEUnOAPLULI96Zwm9pkE7UKyXmfKBcIiRoSYvPEtCR9sHiyFG4FY+PEF4VvjsuqnhIdLxB2JCUAel6/EarJBu+SEh6ALFNdvMV28ORqe1MWixBQy42hA8KINLiw7cm54YvBoItqgfQ49aFBn0+KmUIHAE9oCml/MZzGFIA8teRKImPMmXJlI53RZrkhusZwFjM005OKdwMcxfux/A0tZ0EYe0yVM+wryIhs3N9HOAW8BC8S6yLRE3RBdBXQNwBF9DvCJgyfoCn0C1KX7iLtBH9BjzPMxHidaSn6WXqProDwB9INDD+glMC9RjxFxFRHyZRhfor5L79FnSLGa0t0GEX1NK7mhR/Stg4kvpwU8gN9DJN0iwZaeOfQRfUW/O8jwJr0AwqcOKH5yMKU5/eJg6IT+cjCHh7ybSM6btaWnh127DqebBLbfHDykM7hdw/IQdER3iT7G9r+P0TfwW2H69+lHXu6/zvTaHuNzDtolpo0M/zj0zMU6fnXob6K36VP62aFXCBkfYS30BbzoVZB9R/Qh/Q8V5nMQ'
+        tmp_file.file.write(line + '\n')
+        tmp_file.file.flush()
+        time.sleep(2)
+
+        line = 'Tag=READ-st,0.999,5.000,60.588,HISTFAAAA+F42j1Uv6/dNBROTnz9/Pz8/IxfmmfS4KapSfNCuETR7e2lPGiXqkOFEKoqBoaKATEyMSE2mBDq0AExVLDwJyCEmJgQM2LkL2DhP3h89gUSxfb59X3H9jlpPn92mmWr37L9U/w750m4vLy8+/de8c13Od2kjM4ZnRDLqKCCMWKENct4RhAzwgwxaohTJmDGxBjjTHCecYGXC8YEE0ozLjWXVkmurBQq+khjpTFKV5aXUMrWl1IbVUJRVsYbZ6wvrdGybLRxTeM629TK9GNfu7r1g61bVXelbHvnXNWEpvbW14Nvu+D7yU5+68ZpO3bDehknvyy7dRO6sGznobnTh6mf1hf9rl2H9bgN5Th1y2bqNsvFPG/DsN3O07DsuuXezl8MgNkt3bxxfp4298I4D35zcWcZ5k3ft+6tadzs2nmYwtCG4P3U1d3Ydt3omqHrwlSFcWyX0fUuTLWvwjCt2z4gsJ+W0COs8eu57Ta9vwhNMzRLOZk1OFzfYddtMGNbd86FfvZBNjgUX7eTqofKh6oOlW7LWmscgK+crqquKvHaujJlg7PR8WyMhUpZHGZTaVPaSpeuspW02jpnSl1r19cNPHRpjDYkJS7GOqWlkKKqDNdcU62qUimppIyRRljQylKT0CXHLXLcrJGVdfCVioTQSijDpORCGM1LziXuXSj4cq40FpI0k0oJlIYlJoTgoONgFODjkUiksjGWRyMTGtWkhWVcodTgAggUmERVcgZkjKi2UgmMMDCRwQVr1K2ATTKNUkViMMUHE4lYrLDKvRsKmHFBBLKMJAEAHjKqY5nzIjJQDBUZ4xRrPZY6TOgLQqoYZXRMnZBaIYurgmKLFDw2DACTJaOjSIInef3XXGi5Fb4DigDRP7Za6jrEs9iDMQDNB2bwRICo4hGbyWREuyXYLB5MkULRp+CM7JErpoYj+b+BozfoDiNaauaMFSkgou8/JLiKCr6XYpvHOM5XdJjgDvCu0kYhnBEdQU67eSHuBYYTfHsXmAvY6RgDS9h0yKI+/mXwsf0BILUixV2hqxgT8TGShCnq6RSaKwn0Vayvw3KXMDyE6pweI+IA+Kf0Gt1PhK/Qx3SLvs+B8QhpHAL0FPNVdgbzEb2EROlN+K3oNr1HH0F5Tr/m6Treh+Ea7H9F8RZCz6C6SV8QvUtPCaEP2NOcbhC9DpYb9AbelwG/onfoy5wuGeB/yukPQsy3RD/n9Al9ABQQvogcjul3AvwBfZ3TA8h/FsC5hg09z9kjbAQh18F6GzxvA+kk7uFZDsN9+gzSY/olpyegfJ4T/bCCzxP6Kqcfc/qQPgXOP5zIbjo='
+        tmp_file.file.write(line + '\n')
+        tmp_file.file.flush()
+        time.sleep(2)
+
+        output = requests.get("http://{}/metrics".format(self.prom_address)).text
+        expected_lines = output.split("\n")[-6:]
+        logging.getLogger(__file__).info(output)
+        logging.getLogger(__file__).info(expected_lines)
+        assert 'collectd_cassandra_stress_hdr_mixed_gauge{cassandra_stress_hdr_mixed="WRITE",cpu_idx="0",instance="127.0.0.1",keyspace="",loader_idx="1",type="lat_perc_50"} 0.62' in expected_lines, "Expected log message was not found"
+        assert 'collectd_cassandra_stress_hdr_mixed_gauge{cassandra_stress_hdr_mixed="READ",cpu_idx="0",instance="127.0.0.1",keyspace="",loader_idx="1",type="lat_perc_999"} 36.54' not in expected_lines, "Not expected log message was found"
+        time.sleep(1)
+        cs_exporter.stop()
+
+        res.result(10)
 
 
 class BaseSCTEventsTest(unittest.TestCase):

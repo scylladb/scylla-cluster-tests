@@ -300,6 +300,9 @@ filelock==3.8.2 \
     --hash=sha256:7565f628ea56bfcd8e54e42bdc55da899c85c1abfe1b5bcfd147e9188cebb3b2 \
     --hash=sha256:8df285554452285f79c035efb0c861eb33a4bcfa5b7a137016e32e6a90f9792c
     # via virtualenv
+future==0.18.2 \
+    --hash=sha256:b1bead90b70cf6ec3f0710ae53a525360fa360d306a86583adc6bf83a4db537d
+    # via hdrhistogram
 geomet==0.2.1.post1 \
     --hash=sha256:91d754f7c298cbfcabd3befdb69c641c27fe75e808b27aa55028605761d17e95 \
     --hash=sha256:a41a1e336b381416d6cbed7f1745c848e91defaa4d4c1bdc1312732e46ffad2b
@@ -475,6 +478,10 @@ grpcio-status==1.51.1 \
     --hash=sha256:a52cbdc4b18f325bfc13d319ae7c7ae7a0fee07f3d9a005504d6097896d7a495 \
     --hash=sha256:ac2617a3095935ebd785e2228958f24b10a0d527a0c9eb5a0863c784f648a816
     # via google-api-core
+hdrhistogram==0.9.2 \
+    --hash=sha256:81a6f86fa500b3eddff43467332c58716a0224a668bf68c2be0f5dbff7d3e783 \
+    --hash=sha256:e0cf35ff34ca6af337362d7fe0fe03f4247f31f677e793efb086ebbf984b90f5
+    # via -r ../../requirements.in
 httplib2==0.21.0 \
     --hash=sha256:987c8bb3eb82d3fa60c68699510a692aa2ad9c4bd4f123e51dfb1488c14cdd01 \
     --hash=sha256:fc144f091c7286b82bec71bdbd9b27323ba709cc612568d3000893bfd9cb4b34
@@ -714,10 +721,13 @@ pathvalidate==2.5.2 \
     --hash=sha256:5ff57d0fabe5ecb7a4f1e4957bfeb5ad8ab5ab4c0fa71f79c6bbc24bd9b7d14d \
     --hash=sha256:e39a4dfacdba70e3a96d3e4c6ff617a39e991cf242e6e1f2017f1f67c3408d33
     # via simplesqlite
-pbr==5.11.0 \
-    --hash=sha256:b97bc6695b2aff02144133c2e7399d5885223d42b7912ffaec2ca3898e673bfe \
-    --hash=sha256:db2317ff07c84c4c63648c9064a79fe9d9f5c7ce85a9099d4b6258b3db83225a
-    # via python-jenkins
+pbr==1.4.0 \
+    --hash=sha256:01e05c9397732fa27e4feabd77756c1da6070bc69b5c9584b02d07ecb8f6fde4 \
+    --hash=sha256:f080232fb6b208615b4c1854bf4277bb097d19c9ef89f94f203c1436fe600e92
+    # via
+    #   -r ../../requirements.in
+    #   hdrhistogram
+    #   python-jenkins
 pep517==0.13.0 \
     --hash=sha256:4ba4446d80aed5b5eac6509ade100bff3e7943a8489de249654a5ae9b33ee35b \
     --hash=sha256:ae69927c5c172be1add9203726d4b84cf3ebad1edcd5f71fcdc746e66e829f59

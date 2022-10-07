@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import statistics
+from typing import Any
 
 from sdcm.db_stats import PrometheusDBStats
 
@@ -96,11 +97,14 @@ def calculate_latency(latency_results):
         steady_key = all_keys.pop(all_keys.index(steady_key[0]))
     result_dict[steady_key] = latency_results[steady_key].copy()
     for key in all_keys:
+        if key == "summary":
+            result_dict[key] = latency_results[key].copy()
+            continue
         result_dict[key] = latency_results[key].copy()
         temp_dict = {}
         for cycle in latency_results[key]['cycles']:
             for metric, value in cycle.items():
-                if metric == "screenshots" or 'stdev' in metric or 'threshold' in metric:
+                if metric in ["screenshots", "hdr", "hdr_summary"] or 'stdev' in metric or 'threshold' in metric:
                     continue
                 if metric not in temp_dict:
                     temp_dict[metric] = []
@@ -125,5 +129,45 @@ def calculate_latency(latency_results):
                     result_dict[key]['color'][temp_key] = 'yellow'
                 else:
                     result_dict[key]['color'][temp_key] = 'blue'
-
     return result_dict
+
+
+def analyze_hdr_percentiles(result_stats: dict[str, Any]) -> dict[str, Any]:
+    top_limit_perc_values = {
+        "replace_node": {
+            "percentile_90": 15,
+            "percentile_99": 20
+        },
+        "default": {
+            "percentile_90": 10,
+            "percentile_99": 15
+        }
+    }
+    for operation, stats_data in result_stats.items():
+        top_limit_operation = operation if operation in top_limit_perc_values else "default"
+        stats = stats_data.get("cycles") or [stats_data]
+        for cycle in stats:
+            for workload, results in cycle["hdr_summary"].items():
+                cycle["hdr_summary"][workload]["color"] = {}
+                if results["percentile_90"] > top_limit_perc_values[top_limit_operation]["percentile_90"]:
+                    cycle["hdr_summary"][workload]["color"].update({"percentile_90": "red"})
+                else:
+                    cycle["hdr_summary"][workload]["color"].update({"percentile_90": ""})
+                if results["percentile_99"] > top_limit_perc_values[top_limit_operation]["percentile_99"]:
+                    cycle["hdr_summary"][workload]["color"].update({"percentile_99": "red"})
+                else:
+                    cycle["hdr_summary"][workload]["color"].update({"percentile_99": ""})
+
+            for interval in cycle["hdr"]:
+                for workload, results in interval.items():
+                    interval[workload]["color"] = {}
+                    if results["percentile_90"] > top_limit_perc_values[top_limit_operation]["percentile_90"]:
+                        interval[workload]["color"].update({"percentile_90": "red"})
+                    else:
+                        interval[workload]["color"].update({"percentile_90": ""})
+                    if results["percentile_99"] > top_limit_perc_values[top_limit_operation]["percentile_99"]:
+                        interval[workload]["color"].update({"percentile_99": "red"})
+                    else:
+                        interval[workload]["color"].update({"percentile_99": ""})
+
+    return result_stats
