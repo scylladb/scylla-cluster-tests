@@ -30,7 +30,7 @@ from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps, partial
 from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union
-from types import MethodType
+from types import MethodType  # pylint: disable=no-name-in-module
 
 from cassandra import ConsistencyLevel
 from invoke import UnexpectedExit
