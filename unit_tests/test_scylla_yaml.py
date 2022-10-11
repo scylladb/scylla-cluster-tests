@@ -181,7 +181,7 @@ class ScyllaYamlTest(unittest.TestCase):
                         'parameters': [{'seeds': ['1.1.1.1', '2.2.2.2']}],
                     },
                 ],
-                'compaction_throughput_mb_per_sec': 16,
+                'compaction_throughput_mb_per_sec': 0,
                 'compaction_large_partition_warning_threshold_mb': 1000,
                 'compaction_large_row_warning_threshold_mb': 10,
                 'compaction_large_cell_warning_threshold_mb': 1,
