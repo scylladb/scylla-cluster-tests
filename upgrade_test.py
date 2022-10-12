@@ -531,6 +531,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message='pre-test - prepare test keyspaces and tables').publish()
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
+        InfoEvent(message='Running s-b to create schemas to avoid #11459').publish()
+        large_partition_stress_during_upgrade = self.params.get('stress_before_upgrade')
+        sb_create_schema = self.run_stress_thread(stress_cmd=f'{large_partition_stress_during_upgrade} -duration=1m')
+        self.verify_stress_thread(sb_create_schema)
         self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
 
         # write workload during entire test
