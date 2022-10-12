@@ -3161,6 +3161,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             delay=1
         )
         ParallelObject(objects=[trigger, watcher], timeout=timeout + 60).call_objects()
+        self.target_node.wait_db_up(timeout=300)
         self.target_node.run_nodetool("rebuild")
 
     def disrupt_decommission_streaming_err(self):
