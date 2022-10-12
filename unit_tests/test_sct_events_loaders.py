@@ -398,6 +398,7 @@ class TestCassandraStressLogEvent(unittest.TestCase):
         self.assertTrue(issubclass(CassandraStressLogEvent.ConsistencyError, CassandraStressLogEvent))
         self.assertTrue(issubclass(CassandraStressLogEvent.OperationOnKey, CassandraStressLogEvent))
         self.assertTrue(issubclass(CassandraStressLogEvent.TooManyHintsInFlight, CassandraStressLogEvent))
+        self.assertTrue(issubclass(CassandraStressLogEvent.SchemaDisagreement, CassandraStressLogEvent))
 
     def test_known_cs_normal(self):
         self.assertTrue(issubclass(CassandraStressLogEvent.ShardAwareDriver, CassandraStressLogEvent))
