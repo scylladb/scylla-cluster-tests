@@ -257,7 +257,8 @@ class S3Storage():
 def list_logs_by_test_id(test_id):
     log_types = ['db-cluster', 'monitor-set', 'loader-set', 'sct', 'jepsen-data', 'siren-manager-set',
                  'prometheus', 'grafana', 'kubernetes', 'job', 'monitoring_data_stack', 'event', 'output', 'error',
-                 'summary', 'warning', 'critical', 'normal', 'debug', 'left_processes', 'email_data', 'corrupted-sstables']
+                 'summary', 'warning', 'critical', 'normal', 'debug', 'left_processes', 'email_data', 'corrupted-sstables',
+                 'sstables']
 
     results = []
 

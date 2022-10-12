@@ -21,7 +21,7 @@ import dateutil.parser
 from invoke.runners import Result
 
 from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import LogEvent, LogEventProtocol, T_log_event
+from sdcm.sct_events.base import LogEvent, LogEventProtocol, T_log_event, SctEvent
 from sdcm.sct_events.stress_events import BaseStressEvent, StressEvent, StressEventProtocol
 
 LOGGER = logging.getLogger(__name__)
@@ -165,6 +165,38 @@ class CassandraStressLogEvent(LogEvent, abstract=True):
     OperationOnKey: Type[LogEventProtocol]
     TooManyHintsInFlight: Type[LogEventProtocol]
     ShardAwareDriver: Type[LogEventProtocol]
+    SchemaDisagreement: Type[LogEventProtocol]
+
+
+class SchemaDisagreementErrorEvent(SctEvent):
+    """Thrown when schema mismatch is detected with collected data for bug report. """
+
+    def __init__(self, severity: Severity = Severity.UNKNOWN):
+        super().__init__(severity=severity)
+        self.sstable_links: list[str] = []
+        self.gossip_info: dict = {}
+        self.peers_info: dict = {}
+
+    def add_sstable_link(self, link):
+        self.sstable_links.append(link)
+
+    def add_gossip_info(self, info):
+        self.gossip_info = json.dumps({node.name: values for node, values in info.items()}, indent=2)
+
+    def add_peers_info(self, info):
+        self.peers_info = json.dumps({node.name: values for node, values in info.items()}, indent=2)
+
+    @property
+    def sstable_links_formatted(self):
+        return "\n".join(self.sstable_links) if self.sstable_links else ""
+
+    @property
+    def msgfmt(self):
+        fmt = super().msgfmt + ":"
+        fmt += "\ncollected sstables:\n{0.sstable_links_formatted}"
+        fmt += "\ngossip info:\n{0.gossip_info}"
+        fmt += "\npeers info:\n{0.peers_info}"
+        return fmt
 
 
 # Task: https://trello.com/c/kGply3WI/2718-stress-failure-should-stop-the-test-immediately
@@ -181,12 +213,16 @@ CassandraStressLogEvent.add_subevent_type("ConsistencyError", severity=Severity.
                                           regex="Cannot achieve consistency level")
 CassandraStressLogEvent.add_subevent_type("ShardAwareDriver", severity=Severity.NORMAL,
                                           regex="Using optimized driver")
+CassandraStressLogEvent.add_subevent_type("SchemaDisagreement", severity=Severity.WARNING,
+                                          regex="No schema agreement")
+
 
 CS_ERROR_EVENTS = (
     CassandraStressLogEvent.TooManyHintsInFlight(),
     CassandraStressLogEvent.OperationOnKey(),
     CassandraStressLogEvent.IOException(),
     CassandraStressLogEvent.ConsistencyError(),
+    CassandraStressLogEvent.SchemaDisagreement(),
 )
 CS_NORMAL_EVENTS = (CassandraStressLogEvent.ShardAwareDriver(), )
 

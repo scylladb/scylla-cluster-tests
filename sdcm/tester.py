@@ -56,6 +56,7 @@ from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import provisioner_factory
 from sdcm.scan_operation_thread import FullScanThread, FullPartitionScanThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
+from sdcm.sct_events.event_handler import stop_events_handler
 from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.cassandra_harry_thread import CassandraHarryThread
 from sdcm.utils.aws_region import AwsRegion
@@ -2651,6 +2652,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             InfoEvent(message="TEST_END").publish()
         self.log.info('TearDown is starting...')
         self.stop_timeout_thread()
+        self.stop_event_handler()
         self.stop_event_analyzer()
         self.stop_resources()
         self.get_test_failures()
@@ -2741,6 +2743,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @silence()
     def stop_event_analyzer(self):  # pylint: disable=no-self-use
         stop_events_analyzer(_registry=self.events_processes_registry)
+
+    @silence()
+    def stop_event_handler(self):  # pylint: disable=no-self-use
+        stop_events_handler(_registry=self.events_processes_registry)
 
     @silence()
     def stop_timeout_thread(self):

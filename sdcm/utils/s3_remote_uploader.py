@@ -71,7 +71,7 @@ def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str
     size = get_dir_size_kb(session, files)
     if size > max_size_gb:
         LOGGER.warning("Skipping upload '%s' directory to S3 due its size: %s GB", files, size)
-        return []
+        return ""
     chan = session.open_session()
     chan.execute(f'tar -czf - {" ".join(files)}')
     chan_response = SshOutAsFile(chan)

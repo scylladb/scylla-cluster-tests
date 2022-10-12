@@ -79,6 +79,8 @@ CassandraStressLogEvent.OperationOnKey: CRITICAL
 # TODO: mechanism.
 CassandraStressLogEvent.TooManyHintsInFlight: ERROR
 CassandraStressLogEvent.ShardAwareDriver: NORMAL
+CassandraStressLogEvent.SchemaDisagreement: WARNING
+SchemaDisagreementErrorEvent: ERROR
 ScyllaBenchLogEvent.ConsistencyError: ERROR
 GeminiStressLogEvent.GeminiEvent: CRITICAL
 PrometheusAlertManagerEvent: CRITICAL
