@@ -182,8 +182,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.monitoring_set = tester_obj.monitors
         self.target_node = None
         self.disruptions_list = []
-        logger = logging.getLogger(__name__)
-        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.termination_event = termination_event
         self.operation_log = []
         self.current_disruption = None
@@ -193,6 +191,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.start_time = time.time()
         self.stats = {}
         self.metrics_srv = nemesis_metrics_obj()
+        # NOTE: 'cluster_index' is set in K8S multitenant case
+        if hasattr(self.tester, "cluster_index"):
+            tenant_short_name = f"db{self.tester.cluster_index}"
+            logger = logging.getLogger(f"{__name__} | {tenant_short_name}")
+        else:
+            logger = logging.getLogger(__name__)
+        self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.task_used_streaming = None
         self.filter_seed = self.cluster.params.get('nemesis_filter_seeds')
         self._random_sequence = None
