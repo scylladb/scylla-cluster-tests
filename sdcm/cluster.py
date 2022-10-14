@@ -3624,7 +3624,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     node_setup_requires_scylla_restart = True
     name: str
     nodes: List[BaseNode]
-    params: dict
     log: logging.Logger
 
     def __init__(self, *args, **kwargs):
@@ -3634,6 +3633,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.nemesis_count = 0
         self.test_config = TestConfig()
         self._node_cycle = None
+        self.params = kwargs.get('params', {})
         super().__init__(*args, **kwargs)
 
     def get_node_ips_param(self, public_ip=True):
