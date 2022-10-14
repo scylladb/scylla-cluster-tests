@@ -29,6 +29,7 @@ import traceback
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps, partial
+from threading import Lock
 from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union
 from types import MethodType  # pylint: disable=no-name-in-module
 
@@ -101,6 +102,13 @@ from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel
 
 LOGGER = logging.getLogger(__name__)
+# NOTE: following lock is needed in the K8S multitenant case
+NEMESIS_LOCK = Lock()
+NEMESIS_RUN_INFO = {}
+EXCLUSIVE_NEMESIS_NAMES = (
+    "disrupt_terminate_and_replace_node_kubernetes",
+    "disrupt_terminate_decommission_add_node_kubernetes",
+)
 
 
 class NoFilesFoundToDestroy(Exception):
@@ -171,9 +179,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def __init__(self, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(self, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
-            if name.startswith(self.DISRUPT_NAME_PREF):
-                # add "disrupt_method_wrapper" decorator to all methods are started with "disrupt_"
-                setattr(self, name, MethodType(disrupt_method_wrapper(member), self))
+            if not name.startswith(self.DISRUPT_NAME_PREF):
+                continue
+            is_exclusive = name in EXCLUSIVE_NEMESIS_NAMES
+            # add "disrupt_method_wrapper" decorator to all methods are started with "disrupt_"
+            setattr(self, name,
+                    MethodType(disrupt_method_wrapper(member, is_exclusive=is_exclusive), self))
 
         # *args -  compatible with CategoricalMonkey
         self.tester = tester_obj  # ClusterTester object
@@ -3610,7 +3621,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.cluster.decommission(new_node)
 
 
-def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
+def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
     """
     Log time elapsed for method to run
 
@@ -3694,7 +3705,16 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
                              node=args[0].target_node, publish_event=True) as nemesis_event:
             nemesis_info = argus_create_nemesis_info(nemesis=args[0], class_name=class_name,
                                                      method_name=method_name, start_time=start_time)
+            nemesis_run_info_key = f"{id(args[0])}--{method_name}"
             try:
+                NEMESIS_LOCK.acquire()  # pylint: disable=consider-using-with
+                if not is_exclusive:
+                    NEMESIS_RUN_INFO[nemesis_run_info_key] = "Running"
+                    NEMESIS_LOCK.release()
+                else:
+                    while NEMESIS_RUN_INFO:
+                        # NOTE: exclusive nemesis will wait before the end of all other ones
+                        time.sleep(10)
                 result = method(*args[1:], **kwargs)
             except (UnsupportedNemesis, MethodVersionNotFound) as exp:
                 skip_reason = str(exp)
@@ -3708,6 +3728,11 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
                 args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
                 log_info.update({'error': str(details), 'full_traceback': traceback.format_exc()})
                 status = False
+            finally:
+                if is_exclusive:
+                    NEMESIS_LOCK.release()
+                else:
+                    NEMESIS_RUN_INFO.pop(nemesis_run_info_key)
 
         end_time = time.time()
         time_elapsed = int(end_time - start_time)
