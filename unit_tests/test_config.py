@@ -18,7 +18,7 @@ import unittest
 from collections import namedtuple
 
 from sdcm import sct_config
-from sdcm.utils.operator.miltitenant_common import set_stress_command_to_tenant
+from sdcm.utils.operator.multitenant_common import set_stress_command_to_tenant
 
 RPM_URL = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/' \
           '9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1' \
