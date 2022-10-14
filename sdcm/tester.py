@@ -12,6 +12,7 @@
 # Copyright (c) 2016 ScyllaDB
 # pylint: disable=too-many-lines
 from collections import defaultdict
+from copy import deepcopy
 from dataclasses import asdict
 
 import logging
@@ -1401,7 +1402,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 scylla_cluster_name=self.params.get("k8s_scylla_cluster_name") + (f"-{i + 1}" if i else ""),
                 user_prefix=self.params.get("user_prefix"),
                 n_nodes=self.params.get("k8s_n_scylla_pods_per_cluster") or self.params.get("n_db_nodes"),
-                params=self.params,
+                params=deepcopy(self.params),
                 node_pool=scylla_pool,
                 add_nodes=False,
             ))
@@ -1558,7 +1559,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 scylla_cluster_name=self.params.get("k8s_scylla_cluster_name") + (f"-{i + 1}" if i else ""),
                 user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
                 n_nodes=self.params.get("k8s_n_scylla_pods_per_cluster") or self.params.get("n_db_nodes"),
-                params=self.params,
+                params=deepcopy(self.params),
                 node_pool=scylla_pool,
                 add_nodes=False,
             ))
