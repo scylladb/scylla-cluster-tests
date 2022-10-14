@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'k8s-eks',
     region: 'eu-north-1',
-    test_name: 'longevity_operator_multi_tenant_test.LongevityOperatorMulitiTenantTest.test_custom_time',
+    test_name: 'longevity_operator_multi_tenant_test.LongevityOperatorMultiTenantTest.test_custom_time',
     test_config: 'test-cases/scylla-operator/longevity-scylla-operator-3h-multitenant.yaml',
     email_recipients: 'qa@scylladb.com,scylla-operator@scylladb.com',
     availability_zone: 'a,b',

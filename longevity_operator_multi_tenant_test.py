@@ -22,15 +22,15 @@ from longevity_test import LongevityTest
 from sdcm.utils.common import ParallelObject
 
 
-from sdcm.utils.operator.miltitenant_common import set_stress_command_to_tenant
+from sdcm.utils.operator.multitenant_common import set_stress_command_to_tenant
 
 
-class MulitiTenantBase(LongevityTest):
+class MultiTenantBase(LongevityTest):
     _testMethodName = "runTest"
 
 
 # pylint: disable=too-many-instance-attributes
-class ScyllaClusterStats(MulitiTenantBase):
+class ScyllaClusterStats(MultiTenantBase):
     # pylint: disable=too-many-arguments,super-init-not-called
     def __init__(self, db_cluster, loaders, monitors, prometheus_db, params, test_config, cluster_index):
         self.db_cluster = db_cluster
@@ -64,7 +64,7 @@ class ScyllaClusterStats(MulitiTenantBase):
         return self.__str__()
 
 
-class LongevityOperatorMulitiTenantTest(MulitiTenantBase):
+class LongevityOperatorMulitiTenantTest(MultiTenantBase):
     scylla_clusters_stats = []
 
     def setUp(self):
