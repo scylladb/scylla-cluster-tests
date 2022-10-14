@@ -33,7 +33,7 @@ STOP = 'stop'
 
 
 LOGGER = logging.getLogger(__name__)
-NM_OBJ = None
+NM_OBJ = {}
 
 
 class _ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
@@ -67,26 +67,31 @@ def start_metrics_server():
     return None
 
 
-def nemesis_metrics_obj():
-    global NM_OBJ  # pylint: disable=global-statement
-    if not NM_OBJ:
-        NM_OBJ = NemesisMetrics()
-    return NM_OBJ
+def nemesis_metrics_obj(metric_name_suffix=''):
+    global NM_OBJ  # pylint: disable=global-statement,global-variable-not-assigned
+    if not NM_OBJ.get(metric_name_suffix):
+        NM_OBJ[metric_name_suffix] = NemesisMetrics(metric_name_suffix)
+    return NM_OBJ[metric_name_suffix]
 
 
 class NemesisMetrics:
+    # NOTE: make sure that the following attr is used in the grafana dashboard
+    #       and as an expression like the following:
+    #       {__name__=~'nemesis(.*)(?:gauge)(.*)'}
+    NAME_PREFIX = 'nemesis'
 
-    DISRUPT_COUNTER = 'nemesis_disruptions_counter'
-    DISRUPT_GAUGE = 'nemesis_disruptions_gauge'
-
-    def __init__(self):
-        super().__init__()
-        self._disrupt_counter = self.create_counter(self.DISRUPT_COUNTER,
-                                                    'Counter for nemesis disruption methods',
-                                                    ['method', 'event'])
-        self._disrupt_gauge = self.create_gauge(self.DISRUPT_GAUGE,
-                                                'Gauge for nemesis disruption methods',
-                                                ['method'])
+    def __init__(self, metric_name_suffix=''):
+        name = self.NAME_PREFIX
+        if metric_name_suffix:
+            name += f"_{metric_name_suffix.replace('-', '_')}"
+        self._disrupt_counter = self.create_counter(
+            f"{name}_counter",
+            'Counter for nemesis disruption methods',
+            ['method', 'event'])
+        self._disrupt_gauge = self.create_gauge(
+            f"{name}_gauge",
+            'Gauge for nemesis disruption methods',
+            ['method'])
 
     @staticmethod
     def create_counter(name, desc, param_list):

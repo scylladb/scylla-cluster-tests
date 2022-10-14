@@ -537,7 +537,7 @@
                                 "step": 1
                             },
                             {
-                                "expr": "nemesis_disruptions_gauge",
+                                "expr": "{__name__=~'nemesis(.*)(?:gauge)(.*)'}",
                                 "format": "time_series",
                                 "intervalFactor": 2,
                                 "refId": "B"
@@ -3005,7 +3005,7 @@
                                 "step": 1
                             },
                             {
-                                "expr": "nemesis_disruptions_gauge",
+                                "expr": "{__name__=~'nemesis(.*)(?:gauge)(.*)'}",
                                 "format": "time_series",
                                 "intervalFactor": 2,
                                 "refId": "B"
