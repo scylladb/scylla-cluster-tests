@@ -190,12 +190,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.interval = 60 * self.tester.params.get('nemesis_interval')  # convert from min to sec
         self.start_time = time.time()
         self.stats = {}
-        self.metrics_srv = nemesis_metrics_obj()
         # NOTE: 'cluster_index' is set in K8S multitenant case
         if hasattr(self.tester, "cluster_index"):
             tenant_short_name = f"db{self.tester.cluster_index}"
+            self.metrics_srv = nemesis_metrics_obj(metric_name_suffix=tenant_short_name)
             logger = logging.getLogger(f"{__name__} | {tenant_short_name}")
         else:
+            self.metrics_srv = nemesis_metrics_obj()
             logger = logging.getLogger(__name__)
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.task_used_streaming = None
