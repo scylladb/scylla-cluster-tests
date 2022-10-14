@@ -1,22 +1,15 @@
 test_duration: 300
 prepare_write_cmd:  [
-                     ["cassandra-stress write cl=QUORUM n=209715 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"],
-                     ["cassandra-stress write cl=QUORUM n=209715 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"]
-                    ]
+    "cassandra-stress write cl=QUORUM n=5485760 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..5485760 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+    "cassandra-stress write cl=QUORUM n=5485760 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=5485761..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+]
 
 stress_cmd: [
-             ["cassandra-stress write cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-             "cassandra-stress read  cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
-             ],
-             [ "cassandra-stress write cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-               "cassandra-stress read  cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
-             ]
-            ]
+    "cassandra-stress write cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=2500/s -pop seq=1..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+    "cassandra-stress read  cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=2500/s -pop seq=1..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+]
+round_robin: true
 
-stress_read_cmd: [
-                  ["cassandra-stress read  cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"],
-                  ["cassandra-stress read  cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"]
-                 ]
 k8s_tenants_num: 2
 
 # NOTE: we disable second type of monitoring - K8S based one. It is redundant while we use standalone ones.
@@ -24,18 +17,17 @@ k8s_deploy_monitoring: false
 
 n_db_nodes: 4
 k8s_n_scylla_pods_per_cluster: 3
+
 n_monitor_nodes: 1
 
 # NOTE: we deploy here 4 K8S nodes of the 'loader' type and going to create 2 pairs of loader pods.
 n_loaders: 4
 k8s_n_loader_pods_per_cluster: 2
 
-
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_interval: 5
+nemesis_class_name: ['SisyphusMonkey', 'SisyphusMonkey']
+nemesis_interval: [5, 6]
+nemesis_seed: ['385', '543']
+space_node_threshold: [64424, 64423]
 
 user_prefix: 'longevity-scylla-operator-3h-multitenant'
-
-space_node_threshold: 64424
-
 cluster_health_check: false

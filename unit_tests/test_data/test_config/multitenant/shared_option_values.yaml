@@ -1,0 +1,42 @@
+test_duration: 300
+user_prefix: 'longevity-scylla-operator-3h-multitenant'
+n_db_nodes: 4
+scylla_version: "5.0.2"
+k8s_tenants_num: 2
+
+prepare_write_cmd: [
+    "fake__prepare_write_cmd__all_tenants__part1",
+    "fake__prepare_write_cmd__all_tenants__part2"
+]
+prepare_verify_cmd: "fake__prepare_verify_cmd__all_tenants__single_str"
+stress_cmd: [
+    "fake__stress_cmd__all_tenants__part1",
+    "fake__stress_cmd__all_tenants__part2"
+]
+stress_read_cmd: "fake__stress_read_cmd__all_tenants__single_str"
+stress_cmd_w: "fake__stress_cmd_w__all_tenants__single_str"
+stress_cmd_r: [
+    "fake__stress_cmd_r__all_tenants__part1",
+    "fake__stress_cmd_r__all_tenants__part2"
+]
+stress_cmd_m: [
+    "fake__stress_cmd_m__all_tenants__part1",
+    "fake__stress_cmd_m__all_tenants__part2"
+]
+
+# Non-stress options
+nemesis_class_name: "FakeNemesisClassName"
+nemesis_selector: [
+    "fake__nemesis_selector__all_tenants__part1",
+    "fake__nemesis_selector__all_tenants__part2"
+]
+nemesis_interval: 5
+nemesis_sequence_sleep_between_ops: 3
+nemesis_during_prepare: False
+nemesis_seed: "013"
+nemesis_add_node_cnt: 1
+space_node_threshold: 13531
+nemesis_filter_seeds: False
+nemesis_exclude_disabled: True
+nemesis_multiply_factor: 5
+round_robin: True

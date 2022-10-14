@@ -52,7 +52,26 @@ from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import get_gce_image_tags
 
 
-def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:  # pylint: disable=unsubscriptable-object
+def _str(value: str) -> str:
+    if isinstance(value, str):
+        return value
+    raise ValueError(f"{value} isn't a string, it is '{type(value)}'")
+
+
+def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        for element in value:
+            if isinstance(element, str):
+                continue
+            raise ValueError(
+                f"Found non-str ({type(element)}) element in the list: {value}")
+        return value
+    raise ValueError(f"{value} isn't a string or a list of strings.")
+
+
+def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
     """Convert an environment variable into a Python's list."""
 
     if isinstance(value, str):
@@ -134,7 +153,7 @@ class SCTConfiguration(dict):
     ]
 
     config_options = [
-        dict(name="config_files", env="SCT_CONFIG_FILES", type=str_or_list,
+        dict(name="config_files", env="SCT_CONFIG_FILES", type=str_or_list_or_eval,
              help="a list of config files that would be used"),
 
         dict(name="cluster_backend", env="SCT_CLUSTER_BACKEND", type=str,
@@ -502,7 +521,8 @@ class SCTConfiguration(dict):
 
         # Nemesis config options
 
-        dict(name="nemesis_class_name", env="SCT_NEMESIS_CLASS_NAME", type=str,
+        dict(name="nemesis_class_name", env="SCT_NEMESIS_CLASS_NAME",
+             type=_str, k8s_multitenancy_supported=True,
              help="""
                     Nemesis class to use (possible types in sdcm.nemesis).
                     Next syntax supporting:
@@ -514,16 +534,19 @@ class SCTConfiguration(dict):
                       parallel threads. Ex.: "DisruptiveMonkey:1 NonDisruptiveMonkey:2"
             """),
 
-        dict(name="nemesis_interval", env="SCT_NEMESIS_INTERVAL", type=int,
+        dict(name="nemesis_interval", env="SCT_NEMESIS_INTERVAL",
+             type=int, k8s_multitenancy_supported=True,
              help="""Nemesis sleep interval to use if None provided specifically in the test"""),
-
-        dict(name="nemesis_sequence_sleep_between_ops", env="SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS", type=int,
+        dict(name="nemesis_sequence_sleep_between_ops", env="SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS",
+             type=int, k8s_multitenancy_supported=True,
              help="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests"""),
 
-        dict(name="nemesis_during_prepare", env="SCT_NEMESIS_DURING_PREPARE", type=boolean,
+        dict(name="nemesis_during_prepare", env="SCT_NEMESIS_DURING_PREPARE",
+             type=boolean, k8s_multitenancy_supported=True,
              help="""Run nemesis during prepare stage of the test"""),
 
-        dict(name="nemesis_seed", env="SCT_NEMESIS_SEED", type=int,
+        dict(name="nemesis_seed", env="SCT_NEMESIS_SEED",
+             type=int, k8s_multitenancy_supported=True,
              help="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey"""),
 
         dict(name="cql_schema_seed", env="SCT_CQL_SCHEMA_SEED", type=int,
@@ -531,13 +554,14 @@ class SCTConfiguration(dict):
 
         dict(name="nemesis_add_node_cnt",
              env="SCT_NEMESIS_ADD_NODE_CNT",
-             type=int,
+             type=int, k8s_multitenancy_supported=True,
              help="""Add/remove nodes during GrowShrinkCluster nemesis"""),
 
         dict(name="cluster_target_size", env="SCT_CLUSTER_TARGET_SIZE", type=int,
              help="""Used for scale test: max size of the cluster"""),
 
-        dict(name="space_node_threshold", env="SCT_SPACE_NODE_THRESHOLD", type=int,
+        dict(name="space_node_threshold", env="SCT_SPACE_NODE_THRESHOLD",
+             type=int, k8s_multitenancy_supported=True,
              help="""
                  Space node threshold before starting nemesis (bytes)
                  The default value is 6GB (6x1024^3 bytes)
@@ -545,12 +569,14 @@ class SCTConfiguration(dict):
                  https://github.com/scylladb/scylla/issues/1140
              """),
 
-        dict(name="nemesis_filter_seeds", env="SCT_NEMESIS_FILTER_SEEDS", type=boolean,
+        dict(name="nemesis_filter_seeds", env="SCT_NEMESIS_FILTER_SEEDS",
+             type=boolean, k8s_multitenancy_supported=True,
              help="""If true runs the nemesis only on non seed nodes"""),
 
         # Stress Commands
 
-        dict(name="stress_cmd", env="SCT_STRESS_CMD", type=str_or_list,
+        dict(name="stress_cmd", env="SCT_STRESS_CMD",
+             type=str_or_list, k8s_multitenancy_supported=True,
              help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
                     be provided by the test suite infrastructure.
@@ -582,7 +608,7 @@ class SCTConfiguration(dict):
         dict(name="instance_type_db_oracle", env="SCT_INSTANCE_TYPE_DB_ORACLE", type=str,
              help="AWS image type of the oracle node"),
 
-        dict(name="region_name", env="SCT_REGION_NAME", type=str_or_list,
+        dict(name="region_name", env="SCT_REGION_NAME", type=str_or_list_or_eval,
              help="AWS regions to use"),
 
         dict(name="security_group_ids", env="SCT_SECURITY_GROUP_IDS", type=str_or_list,
@@ -714,7 +740,7 @@ class SCTConfiguration(dict):
              help=""),
 
         # azure options
-        dict(name="azure_region_name", env="SCT_AZURE_REGION_NAME", type=str_or_list,
+        dict(name="azure_region_name", env="SCT_AZURE_REGION_NAME", type=str_or_list_or_eval,
              help="Supported: eastus "),
 
         dict(name="azure_instance_type_loader", env="SCT_AZURE_INSTANCE_TYPE_LOADER", type=str,
@@ -863,22 +889,22 @@ class SCTConfiguration(dict):
 
         # baremetal config options
 
-        dict(name="db_nodes_private_ip", env="SCT_DB_NODES_PRIVATE_IP", type=str_or_list,
+        dict(name="db_nodes_private_ip", env="SCT_DB_NODES_PRIVATE_IP", type=str_or_list_or_eval,
              help=""),
 
-        dict(name="db_nodes_public_ip", env="SCT_DB_NODES_PUBLIC_IP", type=str_or_list,
+        dict(name="db_nodes_public_ip", env="SCT_DB_NODES_PUBLIC_IP", type=str_or_list_or_eval,
              help=""),
 
-        dict(name="loaders_private_ip", env="SCT_LOADERS_PRIVATE_IP", type=str_or_list,
+        dict(name="loaders_private_ip", env="SCT_LOADERS_PRIVATE_IP", type=str_or_list_or_eval,
              help=""),
 
-        dict(name="loaders_public_ip", env="SCT_LOADERS_PUBLIC_IP", type=str_or_list,
+        dict(name="loaders_public_ip", env="SCT_LOADERS_PUBLIC_IP", type=str_or_list_or_eval,
              help=""),
 
-        dict(name="monitor_nodes_private_ip", env="SCT_MONITOR_NODES_PRIVATE_IP", type=str_or_list,
+        dict(name="monitor_nodes_private_ip", env="SCT_MONITOR_NODES_PRIVATE_IP", type=str_or_list_or_eval,
              help=""),
 
-        dict(name="monitor_nodes_public_ip", env="SCT_MONITOR_NODES_PUBLIC_IP", type=str_or_list,
+        dict(name="monitor_nodes_public_ip", env="SCT_MONITOR_NODES_PUBLIC_IP", type=str_or_list_or_eval,
              help=""),
 
         # test specific config parameters
@@ -900,7 +926,8 @@ class SCTConfiguration(dict):
              help="Runs a background thread that issues reversed-queries on a table random partition by an interval"),
         dict(name="keyspace_num", env="SCT_KEYSPACE_NUM", type=int,
              help=""),
-        dict(name="round_robin", env="SCT_ROUND_ROBIN", type=boolean,
+        dict(name="round_robin", env="SCT_ROUND_ROBIN",
+             type=boolean, k8s_multitenancy_supported=True,
              help=""),
         dict(name="batch_size", env="SCT_BATCH_SIZE", type=int,
              help=""),
@@ -933,13 +960,15 @@ class SCTConfiguration(dict):
         dict(name="primary_key_column", env="SCT_PRIMARY_KEY_COLUMN", type=str,
              help="primary key of the table to check for the validate_partitions check"),
 
-        dict(name="stress_read_cmd", env="SCT_STRESS_READ_CMD", type=str_or_list,
+        dict(name="stress_read_cmd", env="SCT_STRESS_READ_CMD",
+             type=str_or_list, k8s_multitenancy_supported=True,
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
                 be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
-        dict(name="prepare_verify_cmd", env="SCT_PREPARE_VERIFY_CMD", type=str_or_list,
+        dict(name="prepare_verify_cmd", env="SCT_PREPARE_VERIFY_CMD",
+             type=str_or_list, k8s_multitenancy_supported=True,
              help="""cassandra-stress commands.
             You can specify everything but the -node parameter, which is going to
             be provided by the test suite infrastructure.
@@ -963,25 +992,29 @@ class SCTConfiguration(dict):
              help="""Relevant for scylla-bench. MAX partition keys (partition-count) in the scylla_bench.test table.
                     Mandatory parameter for DeleteByPartitionsMonkey and DeleteByRowsRangeMonkey"""),
 
-        dict(name="stress_cmd_w", env="SCT_STRESS_CMD_W", type=str_or_list,
+        dict(name="stress_cmd_w", env="SCT_STRESS_CMD_W",
+             type=str_or_list, k8s_multitenancy_supported=True,
              help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
                     be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
-        dict(name="stress_cmd_r", env="SCT_STRESS_CMD_R", type=str_or_list,
+        dict(name="stress_cmd_r", env="SCT_STRESS_CMD_R",
+             type=str_or_list, k8s_multitenancy_supported=True,
              help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
                     be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
-        dict(name="stress_cmd_m", env="SCT_STRESS_CMD_M", type=str_or_list,
+        dict(name="stress_cmd_m", env="SCT_STRESS_CMD_M",
+             type=str_or_list, k8s_multitenancy_supported=True,
              help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
                     be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
-        dict(name="prepare_write_cmd", env="SCT_PREPARE_WRITE_CMD", type=str_or_list,
+        dict(name="prepare_write_cmd", env="SCT_PREPARE_WRITE_CMD",
+             type=str_or_list, k8s_multitenancy_supported=True,
              help="""cassandra-stress commands.
                     You can specify everything but the -node parameter, which is going to
                     be provided by the test suite infrastructure.
@@ -1318,20 +1351,20 @@ class SCTConfiguration(dict):
              type=boolean,
              help="Flag for running db node benchmarks before the tests"),
         dict(name="nemesis_selector", env="SCT_NEMESIS_SELECTOR",
-             type=str_or_list,
+             type=str_or_list, k8s_multitenancy_supported=True,
              help="""nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has
              ALL the properties in that list which are set to true (the intersection of all properties).
              (In other words filters out all nemesis that doesn't ONE of these properties set to true)
              IMPORTANT: If a property doesn't exist, ALL the nemesis will be included."""),
         dict(name="nemesis_exclude_disabled", env="SCT_NEMESIS_EXCLUDE_DISABLED",
-             type=boolean,
+             type=boolean, k8s_multitenancy_supported=True,
              help="""nemesis_exclude_disabled determines whether 'disabled' nemeses are filtered out from list
              or are allowed to be used. This allows to easily disable too 'risky' or 'extreme' nemeses by default,
              for all longevities. For example: it is unwanted to run the ToggleGcModeMonkey in standard longevities
              that runs a stress with data validation."""),
 
         dict(name="nemesis_multiply_factor", env="SCT_NEMESIS_MULTIPLY_FACTOR",
-             type=int,
+             type=int, k8s_multitenancy_supported=True,
              help="Multiply the list of nemesis to execute by the specified factor"),
 
         dict(name="raid_level", env="SCT_RAID_LEVEL",
@@ -1666,8 +1699,6 @@ class SCTConfiguration(dict):
                 raise ValueError("For PasswordAuthenticator authenticator authenticator_user and authenticator_password"
                                  " have to be provided")
 
-        self._update_environment_variables()
-
     def log_config(self):
         self.log.info(self.dump_config())
 
@@ -1729,11 +1760,6 @@ class SCTConfiguration(dict):
 
         return environment_vars
 
-    def _update_environment_variables(self, replace=False):
-        for opt in self.config_options:
-            if opt["name"] in self and (opt["env"] not in os.environ or replace):
-                os.environ[opt["env"]] = str(self[opt["name"]])
-
     def get(self, key: str):
         """
         get the value of test configuration parameter by the name
@@ -1763,14 +1789,30 @@ class SCTConfiguration(dict):
         return current
 
     def _validate_value(self, opt):
+        opt['is_k8s_multitenant_value'] = False
         try:
             opt['type'](self.get(opt['name']))
         except Exception as ex:  # pylint: disable=broad-except
-            raise ValueError("failed to validate {}".format(opt['name'])) from ex
+            if not (self.get("cluster_backend").startswith("k8s")
+                    and self.get("k8s_tenants_num") > 1
+                    and opt.get("k8s_multitenancy_supported")
+                    and isinstance(self.get(opt['name']), list)):
+                raise ValueError("failed to validate {}".format(opt['name'])) from ex
+            for list_element in self.get(opt['name']):
+                try:
+                    opt['type'](list_element)
+                except Exception as ex:  # pylint: disable=broad-except
+                    raise ValueError("failed to validate {}".format(opt['name'])) from ex
+            opt['is_k8s_multitenant_value'] = True
+
         choices = opt.get('choices')
         if choices:
             cur_val = self.get(opt['name'])
-            assert cur_val in choices, "failed to validate '{}': {} not in {}".format(opt['name'], cur_val, choices)
+            if not opt.get('is_k8s_multitenant_value'):
+                cur_val = [cur_val]
+            for cur_val_element in cur_val:
+                assert cur_val_element in choices, "failed to validate '{}': {} not in {}".format(
+                    opt['name'], cur_val_element, choices)
 
     @property
     def list_of_stress_tools(self) -> Set[str]:
