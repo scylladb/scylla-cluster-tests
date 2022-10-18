@@ -54,6 +54,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
       https://github.com/scylladb/scylla-cluster-tests/blob/master/docs/sct-events.md
     """
 
+    DOCKER_IMAGE_PARAM_NAME = "stress_image.nosqlbench"
     GRAPHITE_EXPORTER_CONFIG_SRC_PATH = "docker/graphite-exporter/graphite_mapping.conf"
     GRAPHITE_EXPORTER_CONFIG_DST_PATH = "/tmp/"
 
@@ -61,7 +62,6 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
         super().__init__(*args, **kwargs)
         self._per_loader_count = {}
         self._per_loader_count_lock = threading.Semaphore()
-        self._nosqlbench_image = self.loader_set.params.get('stress_image.nosqlbench')
 
     def build_stress_cmd(self, loader_idx: int):
         if hasattr(self.node_list[0], 'parent_cluster'):
@@ -109,7 +109,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                 return loader.remoter.run(cmd=f'docker run '
                                               '--name=nb '
                                               '--network=nosql '
-                                              f'{self._nosqlbench_image} '
+                                              f'{self.docker_image_name} '
                                               f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
                                           timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except
