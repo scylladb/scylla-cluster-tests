@@ -114,6 +114,8 @@ class YcsbStatsPublisher(FileFollowerThread):
 
 class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
 
+    DOCKER_IMAGE_PARAM_NAME = "stress_image.ycsb"
+
     def copy_template(self, docker):
         if self.params.get('alternator_use_dns_routing'):
             target_address = 'alternator'
@@ -229,7 +231,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        docker = RemoteDocker(loader, self.params.get('stress_image.ycsb'),
+        docker = RemoteDocker(loader, self.docker_image_name,
                               extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}')
         self.copy_template(docker)
         stress_cmd = self.build_stress_cmd()

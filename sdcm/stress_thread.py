@@ -27,7 +27,7 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, generate_random_string, get_profile_content
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
-
+from sdcm.utils.docker_remote import RemoteDocker
 
 LOGGER = logging.getLogger(__name__)
 
@@ -303,6 +303,8 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
 
 class DockerBasedStressThread:
     # pylint: disable=too-many-instance-attributes
+    DOCKER_IMAGE_PARAM_NAME = ""  # test yaml param that stores image
+
     def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None,  # pylint: disable=too-many-arguments
                  round_robin=False, params=None, stop_test_on_failure=True):
         self.loader_set: BaseLoaderSet = loader_set
@@ -320,6 +322,9 @@ class DockerBasedStressThread:
         self.shell_marker = generate_random_string(20)
         self.shutdown_timeout = 180  # extra 3 minutes
         self.stop_test_on_failure = stop_test_on_failure
+        self.docker_image_name = self.params.get(self.DOCKER_IMAGE_PARAM_NAME)
+        for loader in self.loader_set.nodes:
+            RemoteDocker.pull_image(loader, self.docker_image_name)
 
     def run(self):
         if self.round_robin:
