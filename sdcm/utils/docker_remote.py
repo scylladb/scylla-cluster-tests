@@ -1,6 +1,6 @@
 import logging
 import shlex
-from functools import cached_property
+from functools import cached_property, cache
 
 from sdcm.cluster import BaseNode
 
@@ -103,3 +103,10 @@ class RemoteDocker(BaseNode):
 
     def __str__(self):
         return f'RemoteDocker [{self.image_name}] on [{self.node}]'
+
+    @staticmethod
+    @cache
+    def pull_image(node, image):
+        prefix = "sudo" if node.is_docker else ""
+        node.remoter.run(
+            f'{prefix} docker pull {image}', verbose=True)

@@ -29,6 +29,7 @@ PP = pprint.PrettyPrinter(indent=2)
 
 
 class CDCLogReaderThread(DockerBasedStressThread):
+    DOCKER_IMAGE_PARAM_NAME = "stress_image.cdc-stresser"
 
     def __init__(self, *args, **kwargs):
 
@@ -57,7 +58,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
         self.build_stress_command(worker_id, worker_count)
 
         LOGGER.info(self.stress_cmd)
-        docker = RemoteDocker(loader, self.params.get('stress_image.cdc-stresser'),
+        docker = RemoteDocker(loader, self.docker_image_name,
                               extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
 
         node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {self.stress_cmd}'

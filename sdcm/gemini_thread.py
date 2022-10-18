@@ -60,6 +60,8 @@ class GeminiEventsPublisher(FileFollowerThread):
 
 class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
 
+    DOCKER_IMAGE_PARAM_NAME = "stress_image.gemini"
+
     def __init__(self, test_cluster, oracle_cluster, loaders, stress_cmd, timeout=None, params=None):  # pylint: disable=too-many-arguments
         super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
         self.test_cluster = test_cluster
@@ -103,7 +105,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        docker = RemoteDocker(loader, self.params.get("stress_image.gemini"),
+        docker = RemoteDocker(loader, self.docker_image_name,
                               extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host')
 
         if not os.path.exists(loader.logdir):
