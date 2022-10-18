@@ -51,6 +51,9 @@ class CassandraHarryStressEventsPublisher(FileFollowerThread):
 
 #  pylint: disable=too-many-instance-attributes
 class CassandraHarryThread(DockerBasedStressThread):
+
+    DOCKER_IMAGE_PARAM_NAME = "stress_image.harry"
+
     #  pylint: disable=too-many-arguments
     def __init__(self, *args, **kwargs):
         credentials = kwargs.pop('credentials', None)
@@ -76,7 +79,7 @@ class CassandraHarryThread(DockerBasedStressThread):
         else:
             node_cmd = self.stress_cmd
 
-        docker = RemoteDocker(loader, 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816',
+        docker = RemoteDocker(loader, self.docker_image_name,
                               extra_docker_opts=f' --label shell_marker={self.shell_marker}')
 
         node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}'

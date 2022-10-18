@@ -33,6 +33,8 @@ LOGGER = logging.getLogger(__name__)
 
 class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
 
+    DOCKER_IMAGE_PARAM_NAME = "stress_image.kcl"
+
     def run(self):
         _self = super().run()
         # wait for the KCL thread to create the tables, so the YCSB thread beat this one, and start failing
@@ -49,7 +51,7 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
         return stress_cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
-        docker = RemoteDocker(loader, self.params.get('stress_image.kcl'),
+        docker = RemoteDocker(loader, self.docker_image_name,
                               extra_docker_opts=f'--label shell_marker={self.shell_marker}')
         stress_cmd = self.build_stress_cmd()
 

@@ -112,6 +112,8 @@ class NdBenchStatsPublisher(FileFollowerThread):
 
 class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
 
+    DOCKER_IMAGE_PARAM_NAME = "stress_image.ndbench"
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # remove the ndbench command, and parse the rest of the ; separated values
@@ -134,7 +136,7 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
         else:
             node_cmd = self.stress_cmd
 
-        docker = RemoteDocker(loader, self.params.get('stress_image.ndbench'),
+        docker = RemoteDocker(loader, self.docker_image_name,
                               extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
 
         node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}'
