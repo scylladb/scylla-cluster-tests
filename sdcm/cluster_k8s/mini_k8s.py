@@ -117,6 +117,7 @@ class MinimalK8SOps:
 
             cat <<EOF > /etc/sysctl.d/99-sct-local-k8s.conf
             fs.aio-max-nr=1048576
+            fs.inotify.max_user_instances=8192
             net.ipv4.ip_forward=1
             net.ipv4.conf.all.forwarding=1
             kernel.core_pattern=/var/lib/scylla/coredumps/%h-%P-%u-%g-%s-%t.core
