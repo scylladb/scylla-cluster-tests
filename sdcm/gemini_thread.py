@@ -83,7 +83,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
         oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips()) if self.oracle_cluster else None
 
-        cmd = "{} --test-cluster={} --outfile {} --seed {} --request-timeout {}s --connect-timeout {}s".format(
+        cmd = "{} --test-cluster={} --outfile {} --seed {} --request-timeout {}s --connect-timeout {}s ".format(
             self.stress_cmd.strip(),
             test_nodes,
             self.gemini_result_file,
