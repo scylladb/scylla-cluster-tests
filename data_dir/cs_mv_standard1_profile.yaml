@@ -1,0 +1,15 @@
+keyspace: keyspace1
+
+table: standard1
+
+extra_definitions:
+  - CREATE MATERIALIZED VIEW keyspace1.standard1_by_c0 AS SELECT * FROM keyspace1.standard1 WHERE "C0" IS NOT NULL and key IS NOT NULL PRIMARY KEY ("C0", key);
+
+insert:
+  partitions: fixed(1)
+  batchtype: UNLOGGED
+
+queries:
+  read1:
+    cql: select * from keyspace1.standard1_by_c0 where key = ? and "C0" = ? LIMIT 10
+    fields: samerow

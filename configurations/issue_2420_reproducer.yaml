@@ -1,0 +1,18 @@
+test_duration: 1500
+
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=412575112 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..412575112",
+                    "cassandra-stress write cl=QUORUM n=412575112 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=412575113..825150224",
+                    "cassandra-stress write cl=QUORUM n=412575112 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=825150225..1237725337",
+                    "cassandra-stress write cl=QUORUM n=412575112 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1237725338..1650300450"]
+
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=1020m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..825150224  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+             "cassandra-stress mixed cl=QUORUM duration=1020m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=825150225..1650300450  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+             "cassandra-stress user profile=/tmp/cs_mv_standard1_profile.yaml ops'(insert=3,read1=3)' cl=QUORUM duration=1020m -mode cql3 native -rate threads=10"]
+
+stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=1020m -mode cql3 native  -rate threads=10 -pop seq=1..1650300450  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'" ]
+
+n_db_nodes: 12
+
+nemesis_selector: ['topology_changes']
+
+user_prefix: 'longevity-tls-1tb-1d-repr'
