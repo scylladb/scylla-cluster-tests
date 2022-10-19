@@ -227,7 +227,9 @@ class SctEvent:
                 return
 
             for nemesis in running_disruption_events:
-                self.subcontext.append(nemesis)
+                # To prevent multiplying of subcontext for LogEvent
+                if nemesis not in self.subcontext:
+                    self.subcontext.append(nemesis)
 
     def publish(self, warn_not_ready: bool = True) -> None:
         # pylint: disable=import-outside-toplevel; to avoid cyclic imports
@@ -430,6 +432,7 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
         self.line_number = 0
         self.backtrace = None
         self.raw_backtrace = None
+        self.subcontext = []
 
         self._ready_to_publish: bool = False  # set it to True in `.add_info()'
 
@@ -460,6 +463,8 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
         self.node = str(node)
         self.line = line
         self.line_number = line_number
+
+        self.add_subcontext()
 
         self._ready_to_publish = True  # this property not included to the clones, so need to call `.add_info()' first.
 
