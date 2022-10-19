@@ -1,0 +1,51 @@
+keyspace: keyspace1
+
+keyspace_definition: |
+
+  CREATE KEYSPACE keyspace1 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3} AND durable_writes = true;
+
+table: users
+
+table_definition: |
+
+  CREATE TABLE users (
+    username text,
+    first_name text,
+    last_name text,
+    password text,
+    email text,
+    last_access timeuuid,
+    PRIMARY KEY(username)
+  );
+
+extra_definitions:
+  - CREATE MATERIALIZED VIEW keyspace1.users_by_first_name AS SELECT * FROM keyspace1.users WHERE first_name IS NOT NULL and username IS NOT NULL PRIMARY KEY (first_name, username);
+  - CREATE MATERIALIZED VIEW keyspace1.users_by_last_name AS SELECT * FROM keyspace1.users WHERE last_name IS NOT NULL and username IS NOT NULL PRIMARY KEY (last_name, username);
+  - CREATE MATERIALIZED VIEW keyspace1.standard1_by_c0 AS SELECT * FROM keyspace1.standard1 WHERE "C0" IS NOT NULL and key IS NOT NULL PRIMARY KEY ("C0", key);
+
+columnspec:
+  - name: username
+    size: uniform(10..30)
+  - name: first_name
+    size: fixed(16)
+  - name: last_name
+    size: uniform(1..32)
+  - name: password
+    size: fixed(80) # sha-512
+  - name: email
+    size: uniform(16..50)
+
+insert:
+  partitions: fixed(1)
+  batchtype: UNLOGGED
+
+queries:
+  read1:
+    cql: select * from keyspace1.users where username = ? LIMIT 10
+    fields: samerow
+  read2:
+    cql: select * from keyspace1.users_by_first_name where username = ? and first_name = ? LIMIT 1
+    fields: samerow
+  read3:
+    cql: select * from keyspace1.users_by_last_name where username = ? and last_name = ? LIMIT 1
+    fields: samerow
