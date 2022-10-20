@@ -74,4 +74,4 @@ stop_test_on_stress_failure: false
 stress_image:
   scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.3'
 
-run_full_partition_scan: '{"ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 100000, "validate_data": "true"}' # 'ks.cf, interval(sec), partition-key name, number-of-rows-per-partition, validate reversed query output, include data-column or only validate pk + ck'
+run_fullscan: ['{"mode": "partition", "ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 100000, "validate_data": "true"}']

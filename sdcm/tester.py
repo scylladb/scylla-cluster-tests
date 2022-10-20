@@ -2007,7 +2007,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             )
         ).start()
 
-
     @staticmethod
     def is_keyspace_in_cluster(session, keyspace_name):
         query_result = session.execute("SELECT * FROM system_schema.keyspaces;")

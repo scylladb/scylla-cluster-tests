@@ -2,7 +2,7 @@
 test_duration: 3600
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=QUORUM n=4000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=20 -pop seq=1..4000000 -log interval=30"]
 stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=48h -schema 'replication(factor=3)' -mode cql3 native -rate threads=10 -pop seq=1..4000000 -log interval=90"]
-run_fullscan: '{"ks_cf": "random", "interval": 30}' # 'ks.cf|random, interval(min)'
+run_fullscan: ['{"mode": "table", "ks_cf": "random", "interval": 30}']
 
 pre_create_schema: true
 
