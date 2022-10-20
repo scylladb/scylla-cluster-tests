@@ -1977,7 +1977,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                          'errors': stats['errors']})
         return stats
 
-    def run_fullscan_thread(self, fullscan_params: dict):
+    def run_fullscan_thread(self, fullscan_params: dict, thread_name: str):
         """Run thread of cql command select *
 
         Calculate test duration and timeout interval between
@@ -1995,6 +1995,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             sla_role_password = fullscan_role.password
 
         ScanOperationThread(
+            thread_name=thread_name,
             fullscan_params=(
                 FullScanParams(
                     db_cluster=self.db_cluster,

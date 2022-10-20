@@ -920,7 +920,7 @@ class SCTConfiguration(dict):
         # LongevityTest
         dict(name="stress_multiplier", env="SCT_STRESS_MULTIPLIER", type=int,
              help=""),
-        dict(name="run_fullscan", env="SCT_RUN_FULLSCAN", type=str,
+        dict(name="run_fullscan", env="SCT_RUN_FULLSCAN", type=list,
              help=""),
         dict(name="run_full_partition_scan", env="SCT_run_full_partition_scan", type=str,
              help="Runs a background thread that issues reversed-queries on a table random partition by an interval"),
