@@ -302,11 +302,10 @@ class KubernetesPodWatcher(KubernetesRunner):
             self.context.config.k8s_pod_name, command)
         self._start()
 
-    def _get_docker_image(self) -> str:
-        # TODO: parse 'command' and pick up proper image.
-        #       Need to sync with the loaders-from-docker logic
-        #       which is implemented for everything except c-s
+    def _get_docker_image(self, command) -> str:
         params = self.context.config.k8s_kluster.params
+        if all((str_part in command for str_part in ("scylla-bench", " -workload=", " -mode="))):
+            return params.get('stress_image.scylla-bench')
         return f"{params.get('docker_image')}:{params.get('scylla_version')}"
 
     def _get_pod_status(self) -> dict:
@@ -462,7 +461,7 @@ class KubernetesPodWatcher(KubernetesRunner):
         environ = self.context.config.k8s_environ
         environ["K8S_POD_COMMAND"] = command
         environ["K8S_POD_NAME"] = pod_name
-        environ["DOCKER_IMAGE_WITH_TAG"] = self._get_docker_image()
+        environ["DOCKER_IMAGE_WITH_TAG"] = self._get_docker_image(command)
 
         # NOTE: create loader pod and wait for it's readiness
         KubernetesOps.apply_file(
