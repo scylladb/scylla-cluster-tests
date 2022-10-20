@@ -8,7 +8,7 @@ stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_profile_4mv_5queries.y
                   "cassandra-stress user profile=/tmp/c-s_profile_2si_2queries.yaml ops'(insert=10,si_p_read1=1,si_p_read2=1)' cl=QUORUM duration=5760m -mode cql3 native -rate threads=10"
 
                  ]
-run_fullscan: '{"ks_cf": "random", "interval": 15}' # 'ks.cf|random, interval(min)'
+run_fullscan: ['{"mode": "table", "ks_cf": "random", "interval": 15}']
 
 n_db_nodes: 5
 n_loaders: 2
