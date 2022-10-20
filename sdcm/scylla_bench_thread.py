@@ -137,14 +137,21 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         return sb_summary, errors
 
-    def _run_stress(self, loader, loader_idx, cpu_idx):
-        cpu_options = ""
-
-        if self.stress_num > 1:
-            cpu_options = f'--cpuset-cpus="{cpu_idx}"'
-
-        docker = RemoteDocker(loader, self.params.get('stress_image.scylla-bench'),
-                              extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host')
+    def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=too-many-locals
+        cmd_runner = None
+        if "k8s" in self.params.get("cluster_backend") and self.params.get(
+                "k8s_loader_run_type") == 'dynamic':
+            cmd_runner = loader.remoter
+            cmd_runner_name = loader.remoter.pod_name
+        else:
+            cpu_options = ""
+            if self.stress_num > 1:
+                cpu_options = f'--cpuset-cpus="{cpu_idx}"'
+            cmd_runner = RemoteDocker(
+                loader, self.params.get('stress_image.scylla-bench'),
+                extra_docker_opts=(
+                    f'{cpu_options} --label shell_marker={self.shell_marker} --network=host'))
+            cmd_runner_name = loader.ip_address
 
         if self.sb_mode == ScyllaBenchModes.WRITE and self.sb_workload == ScyllaBenchWorkloads.TIMESERIES:
             loader.parent_cluster.sb_write_timeseries_ts = write_timestamp = time.time_ns()
@@ -172,7 +179,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         # Select first seed node to send the scylla-bench cmds
         ips = ",".join([n.cql_ip_address for n in self.node_list])
 
-        with ScyllaBenchStressExporter(instance_name=loader.ip_address,
+        with ScyllaBenchStressExporter(instance_name=cmd_runner_name,
                                        metrics=nemesis_metrics_obj(),
                                        stress_operation=self.sb_mode,
                                        stress_log_filename=log_file_name,
@@ -183,7 +190,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             publisher.event_id = scylla_bench_event.event_id
             result = None
             try:
-                result = docker.run(
+                result = cmd_runner.run(
                     cmd="{name} -nodes {ips}".format(name=stress_cmd.strip(), ips=ips),
                     timeout=self.timeout,
                     log_file=log_file_name)
