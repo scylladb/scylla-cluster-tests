@@ -143,46 +143,6 @@ def test_rolling_restart_cluster(db_cluster):
             f"iotune was run after reboot on {pod_name_and_status['name']}"
 
 
-@pytest.mark.requires_node_termination_support('drain_k8s_node')
-def test_drain_and_replace_node_kubernetes(db_cluster):
-    target_node = random.choice(db_cluster.non_seed_nodes)
-    old_uid = target_node.k8s_pod_uid
-    log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
-    target_node.drain_k8s_node()
-    target_node.mark_to_be_replaced()
-    target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
-    target_node.wait_for_pod_readiness()
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-    target_node.refresh_ip_address()
-
-
-@pytest.mark.requires_node_termination_support('drain_k8s_node')
-def test_drain_wait_and_replace_node_kubernetes(db_cluster):
-    target_node = random.choice(db_cluster.non_seed_nodes)
-    old_uid = target_node.k8s_pod_uid
-    log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
-    target_node.drain_k8s_node()
-    target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
-    old_uid = target_node.k8s_pod_uid
-    log.info('Mark %s (uid=%s) to be replaced', target_node, old_uid)
-    target_node.mark_to_be_replaced()
-    target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
-    target_node.wait_for_pod_readiness()
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-    target_node.refresh_ip_address()
-
-
-@pytest.mark.requires_node_termination_support('drain_k8s_node')
-@pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-operator/issues/982")
-def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
-    target_rack = random.choice([*db_cluster.racks])
-    target_node = db_cluster.get_rack_nodes(target_rack)[-1]
-    target_node.drain_k8s_node()
-    db_cluster.decommission(target_node)
-    db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-
-
 # NOTE: Scylla manager versions notes:
 #       - '2.6.3' is broken: https://github.com/scylladb/scylla-manager/issues/3156
 #       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147
@@ -236,6 +196,46 @@ def test_mgmt_backup(db_cluster, manager_version):
     assert mgr_task, "Failed to create backup task"
     status = mgr_task.wait_and_get_final_status(timeout=7200, step=5, only_final=True)
     assert TaskStatus.DONE == status
+
+
+@pytest.mark.requires_node_termination_support('drain_k8s_node')
+def test_drain_and_replace_node_kubernetes(db_cluster):
+    target_node = random.choice(db_cluster.non_seed_nodes)
+    old_uid = target_node.k8s_pod_uid
+    log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
+    target_node.drain_k8s_node()
+    target_node.mark_to_be_replaced()
+    target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
+    target_node.wait_for_pod_readiness()
+    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+    target_node.refresh_ip_address()
+
+
+@pytest.mark.requires_node_termination_support('drain_k8s_node')
+def test_drain_wait_and_replace_node_kubernetes(db_cluster):
+    target_node = random.choice(db_cluster.non_seed_nodes)
+    old_uid = target_node.k8s_pod_uid
+    log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
+    target_node.drain_k8s_node()
+    target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
+    old_uid = target_node.k8s_pod_uid
+    log.info('Mark %s (uid=%s) to be replaced', target_node, old_uid)
+    target_node.mark_to_be_replaced()
+    target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
+    target_node.wait_for_pod_readiness()
+    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+    target_node.refresh_ip_address()
+
+
+@pytest.mark.requires_node_termination_support('drain_k8s_node')
+@pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-operator/issues/982")
+def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
+    target_rack = random.choice([*db_cluster.racks])
+    target_node = db_cluster.get_rack_nodes(target_rack)[-1]
+    target_node.drain_k8s_node()
+    db_cluster.decommission(target_node)
+    db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)
+    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
 @pytest.mark.readonly
