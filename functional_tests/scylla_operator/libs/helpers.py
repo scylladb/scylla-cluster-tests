@@ -200,7 +200,7 @@ def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: Union[str, int,
         for node, liveness_probe_failures, resharding_start, resharding_finish in nodes_data:
             assert wait_for(
                 func=lambda: list(resharding_start),  # pylint: disable=cell-var-from-loop
-                step=1, timeout=300, throw_exc=False,
+                step=1, timeout=600, throw_exc=False,
                 text=f"Waiting for the start of resharding on the '{node.name}' node.",
             ), f"Start of resharding hasn't been detected on the '{node.name}' node."
             resharding_started = time.time()
