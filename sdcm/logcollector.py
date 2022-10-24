@@ -817,7 +817,9 @@ class ScyllaLogCollector(LogCollector):
                     CommandLog(name='cassandra-rackdc.properties',
                                command=f'cat {SCYLLA_PROPERTIES_PATH}'),
                     CommandLog(name='scylla-manager-agent.yaml',
-                               command=f'cat {SCYLLA_MANAGER_AGENT_YAML_PATH}')
+                               command=f'cat {SCYLLA_MANAGER_AGENT_YAML_PATH}'),
+                    CommandLog(name='setup_scripts_errors.log',
+                               command='for i in /var/tmp/scylla/*.log;do echo [$i]; cat $i;done')
                     ]
     cluster_log_type = "db-cluster"
     cluster_dir_prefix = "db-cluster"
