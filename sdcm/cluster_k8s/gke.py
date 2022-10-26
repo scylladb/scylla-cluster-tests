@@ -55,6 +55,7 @@ class GkeNodePool(CloudK8sNodePool):
             disk_type: str = None,
             image_type: str = "UBUNTU_CONTAINERD",
             labels: dict = None,
+            taints: list = None,
             local_ssd_count: int = None,
             gce_project: str = None,
             is_deployed: bool = False
@@ -68,6 +69,7 @@ class GkeNodePool(CloudK8sNodePool):
             image_type=image_type,
             instance_type=instance_type,
             labels=labels,
+            taints=taints,
             is_deployed=is_deployed,
         )
         self.local_ssd_count = local_ssd_count
@@ -100,6 +102,8 @@ class GkeNodePool(CloudK8sNodePool):
             # Stable API: --local-ssd-count 3
             # Beta API  : --ephemeral-storage="local-ssd-count=3"
             cmd.append(f"--ephemeral-storage=\"local-ssd-count={self.local_ssd_count}\"")
+        if self.taints:
+            cmd.append(f"--node-taints {' '.join(self.taints)}")
         if self.tags:
             cmd.append(f"--metadata {','.join(f'{key}={value}' for key, value in self.tags.items())}")
         return ' '.join(cmd)

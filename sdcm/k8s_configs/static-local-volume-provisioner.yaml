@@ -89,6 +89,11 @@ spec:
       serviceAccountName: "static-local-volume-provisioner-sa"
       # NOTE: 'affinity' option will be updated in the code
       affinity: {}
+      tolerations:
+      - key: role
+        operator: Equal
+        value: scylla-clusters
+        effect: NoSchedule
       containers:
         - image: "quay.io/external_storage/local-volume-provisioner:v2.3.4"
           imagePullPolicy: IfNotPresent
