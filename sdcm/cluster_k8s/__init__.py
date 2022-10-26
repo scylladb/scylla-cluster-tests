@@ -165,6 +165,7 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-insta
             disk_size: int = None,
             disk_type: str = None,
             labels: dict = None,
+            taints: list = None,
             is_deployed: bool = False):
         self.k8s_cluster = k8s_cluster
         self.name = name
@@ -174,6 +175,7 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-insta
         self.disk_type = disk_type
         self.image_type = image_type
         self.labels = labels
+        self.taints = taints
         self.is_deployed = is_deployed
 
     @property
@@ -823,6 +825,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 "key": "scylla/cluster", "operator": "In", "values": [cluster_name],
             }]}
         }]}
+        placement["tolerations"] = [{
+            "key": "role",
+            "value": "scylla-clusters",
+            "operator": "Equal",
+            "effect": "NoSchedule",
+        }]
         return HelmValues({
             'nameOverride': '',
             'fullnameOverride': cluster_name,

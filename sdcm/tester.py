@@ -1388,6 +1388,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             disk_type=self.params.get("gce_root_disk_type_db"),
             instance_type=self.params.get("gce_instance_type_db"),
             num_nodes=self.params.get("n_db_nodes"),
+            taints=["role=scylla-clusters:NoSchedule"],
             k8s_cluster=self.k8s_cluster)
         self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
 
