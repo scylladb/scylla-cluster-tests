@@ -343,8 +343,9 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
 @click.option('--get-all-running', is_flag=True, default=False, help='All running resources')
 @sct_option('--test-id', 'test_id', help='test id to filter by')
 @click.option('--verbose', is_flag=True, default=False, help='if enable, will log progress')
+@click.option('-b', '--backend', 'backend_type', type=click.Choice(SCTConfiguration.available_backends + ['all']), default='all', help="use specific backend")
 @click.pass_context
-def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):  # noqa: PLR0912, PLR0914, PLR0915
+def list_resources(ctx, user, test_id, get_all, get_all_running, verbose, backend_type):  # noqa: PLR0912, PLR0914, PLR0915
     # pylint: disable=too-many-locals,too-many-arguments,too-many-branches,too-many-statements
 
     add_file_logger()
@@ -357,264 +358,285 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):  # no
         params['TestId'] = test_id
     if all([not get_all, not get_all_running, not user, not test_id]):
         click.echo(list_resources.get_help(ctx))
+        sys.exit(1)
 
     if get_all_running:
         table_header = ["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "LaunchTime"]
     else:
         table_header = ["Name", "Region-AZ", "State", "TestId", "RunByUser", "LaunchTime"]
 
-    click.secho("Checking AWS EC2...", fg='green')
-    aws_instances = list_instances_aws(tags_dict=params, running=get_all_running, verbose=verbose)
+    def list_resources_on_aws():
+        click.secho("Checking AWS EC2...", fg='green')
+        aws_instances = list_instances_aws(tags_dict=params, running=get_all_running, verbose=verbose)
 
-    if aws_instances:
-        aws_table = PrettyTable(table_header)
-        aws_table.align = "l"
-        aws_table.sortby = 'LaunchTime'
-        for instance in aws_instances:
-            tags = aws_tags_to_dict(instance.get('Tags'))
-            name = tags.get("Name", "N/A")
-            test_id = tags.get("TestId", "N/A")
-            run_by_user = tags.get("RunByUser", "N/A")
-            aws_table.add_row([
-                name,
-                instance['Placement']['AvailabilityZone'],
-                instance.get('PublicIpAddress', 'N/A') if get_all_running else instance['State']['Name'],
-                test_id,
-                run_by_user,
-                instance['LaunchTime'].ctime()])
-        click.echo(aws_table.get_string(title="Instances used on AWS"))
-    else:
-        click.secho("Nothing found for selected filters in AWS!", fg="yellow")
+        if aws_instances:
+            aws_table = PrettyTable(table_header)
+            aws_table.align = "l"
+            aws_table.sortby = 'LaunchTime'
+            for instance in aws_instances:
+                tags = aws_tags_to_dict(instance.get('Tags'))
+                name = tags.get("Name", "N/A")
+                test_id = tags.get("TestId", "N/A")
+                run_by_user = tags.get("RunByUser", "N/A")
+                aws_table.add_row([
+                    name,
+                    instance['Placement']['AvailabilityZone'],
+                    instance.get('PublicIpAddress', 'N/A') if get_all_running else instance['State']['Name'],
+                    test_id,
+                    run_by_user,
+                    instance['LaunchTime'].ctime()])
+            click.echo(aws_table.get_string(title="Instances used on AWS"))
+        else:
+            click.secho("Nothing found for selected filters in AWS!", fg="yellow")
 
-    click.secho("Checking AWS Elastic IPs...", fg='green')
-    elastic_ips_aws = list_elastic_ips_aws(tags_dict=params, verbose=verbose)
-    if elastic_ips_aws:
-        aws_table = PrettyTable(["AllocationId", "PublicIP", "TestId", "RunByUser", "InstanceId (attached to)"])
-        aws_table.align = "l"
-        aws_table.sortby = 'AllocationId'
-        for eip in elastic_ips_aws:
-            tags = aws_tags_to_dict(eip.get('Tags'))
-            test_id = tags.get("TestId", "N/A")
-            run_by_user = tags.get("RunByUser", "N/A")
-            aws_table.add_row([
-                eip['AllocationId'],
-                eip['PublicIp'],
-                test_id,
-                run_by_user,
-                eip.get('InstanceId', 'N/A')])
-        click.echo(aws_table.get_string(title="EIPs used on AWS"))
-    else:
-        click.secho("No elastic ips found for selected filters in AWS!", fg="yellow")
+        click.secho("Checking AWS Elastic IPs...", fg='green')
+        elastic_ips_aws = list_elastic_ips_aws(tags_dict=params, verbose=verbose)
+        if elastic_ips_aws:
+            aws_table = PrettyTable(["AllocationId", "PublicIP", "TestId", "RunByUser", "InstanceId (attached to)"])
+            aws_table.align = "l"
+            aws_table.sortby = 'AllocationId'
+            for eip in elastic_ips_aws:
+                tags = aws_tags_to_dict(eip.get('Tags'))
+                test_id = tags.get("TestId", "N/A")
+                run_by_user = tags.get("RunByUser", "N/A")
+                aws_table.add_row([
+                    eip['AllocationId'],
+                    eip['PublicIp'],
+                    test_id,
+                    run_by_user,
+                    eip.get('InstanceId', 'N/A')])
+            click.echo(aws_table.get_string(title="EIPs used on AWS"))
+        else:
+            click.secho("No elastic ips found for selected filters in AWS!", fg="yellow")
 
-    click.secho("Checking AWS Security Groups...", fg='green')
-    security_groups = list_test_security_groups(tags_dict=params, verbose=verbose)
-    if security_groups:
-        aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser"])
-        aws_table.align = "l"
-        aws_table.sortby = 'Id'
-        for group in security_groups:
-            tags = aws_tags_to_dict(group.get('Tags'))
-            test_id = tags.get("TestId", "N/A")
-            run_by_user = tags.get("RunByUser", "N/A")
-            name = tags.get("Name", "N/A")
-            aws_table.add_row([
-                name,
-                group['GroupId'],
-                test_id,
-                run_by_user])
-        click.echo(aws_table.get_string(title="SGs used on AWS"))
-    else:
-        click.secho("No security groups found for selected filters in AWS!", fg="yellow")
+        click.secho("Checking AWS Security Groups...", fg='green')
+        security_groups = list_test_security_groups(tags_dict=params, verbose=verbose)
+        if security_groups:
+            aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser"])
+            aws_table.align = "l"
+            aws_table.sortby = 'Id'
+            for group in security_groups:
+                tags = aws_tags_to_dict(group.get('Tags'))
+                test_id = tags.get("TestId", "N/A")
+                run_by_user = tags.get("RunByUser", "N/A")
+                name = tags.get("Name", "N/A")
+                aws_table.add_row([
+                    name,
+                    group['GroupId'],
+                    test_id,
+                    run_by_user])
+            click.echo(aws_table.get_string(title="SGs used on AWS"))
+        else:
+            click.secho("No security groups found for selected filters in AWS!", fg="yellow")
 
-    click.secho("Checking AWS Placement Groups...", fg='green')
-    placement_groups = list_placement_groups_aws(tags_dict=params, available=get_all_running, verbose=verbose)
-    if placement_groups:
-        aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser"])
-        aws_table.align = "l"
-        aws_table.sortby = 'Id'
-        for group in placement_groups:
-            tags = aws_tags_to_dict(group.get('Tags'))
-            test_id = tags.get("TestId", "N/A")
-            run_by_user = tags.get("RunByUser", "N/A")
-            name = tags.get("Name", "N/A")
-            aws_table.add_row([
-                name,
-                group['GroupId'],
-                test_id,
-                run_by_user])
-        click.echo(aws_table.get_string(title="SGs used on AWS"))
-    else:
-        click.secho("No placement groups found for selected filters in AWS!", fg="yellow")
+        click.secho("Checking AWS Placement Groups...", fg='green')
+        placement_groups = list_placement_groups_aws(tags_dict=params, available=get_all_running, verbose=verbose)
+        if placement_groups:
+            aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser"])
+            aws_table.align = "l"
+            aws_table.sortby = 'Id'
+            for group in placement_groups:
+                tags = aws_tags_to_dict(group.get('Tags'))
+                test_id = tags.get("TestId", "N/A")
+                run_by_user = tags.get("RunByUser", "N/A")
+                name = tags.get("Name", "N/A")
+                aws_table.add_row([
+                    name,
+                    group['GroupId'],
+                    test_id,
+                    run_by_user])
+            click.echo(aws_table.get_string(title="SGs used on AWS"))
+        else:
+            click.secho("No placement groups found for selected filters in AWS!", fg="yellow")
 
-    click.secho("Checking AWS Load Balancers...", fg='green')
-    load_balancers = list_load_balancers_aws(tags_dict=params, verbose=verbose)
-    if load_balancers:
-        aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser"])
-        aws_table.align = "l"
-        aws_table.sortby = 'Name'
-        for elb in load_balancers:
-            tags = aws_tags_to_dict(elb.get('Tags'))
-            test_id = tags.get("TestId", "N/A")
-            run_by_user = tags.get("RunByUser", "N/A")
-            _, _, _, region, _, name = elb['ResourceARN'].split(':')
-            aws_table.add_row([
-                name,
-                region,
-                test_id,
-                run_by_user,
-            ])
-        click.echo(aws_table.get_string(title="ELBs used on AWS"))
-    else:
-        click.secho("No load balancers found for selected filters in AWS!", fg="yellow")
+    def list_resources_on_gce():
+        for project in SUPPORTED_PROJECTS:
+            with environment(SCT_GCE_PROJECT=project):
+                click.secho(f"Checking GCE ({project})...", fg='green')
+                gce_instances = list_instances_gce(tags_dict=params, running=get_all_running, verbose=verbose)
+                if gce_instances:
+                    gce_table = PrettyTable(table_header)
+                    gce_table.align = "l"
+                    gce_table.sortby = 'LaunchTime'
+                    for instance in gce_instances:
+                        tags = gce_meta_to_dict(instance.metadata)
+                        public_ips = gce_public_addresses(instance)
+                        public_ips = ", ".join(public_ips) if None not in public_ips else "N/A"
+                        gce_table.add_row([instance.name,
+                                           instance.zone.split('/')[-1],
+                                           public_ips if get_all_running else instance.status,
+                                           tags.get('TestId', 'N/A') if tags else "N/A",
+                                           tags.get('RunByUser', 'N/A') if tags else "N/A",
+                                           instance.creation_timestamp,
+                                           ])
+                    click.echo(gce_table.get_string(title="Resources used on GCE"))
+                else:
+                    click.secho("Nothing found for selected filters in GCE!", fg="yellow")
 
-    click.secho("Checking AWS Cloudformation Stacks ...", fg='green')
-    cfn_stacks = list_cloudformation_stacks_aws(tags_dict=params, verbose=verbose)
-    if cfn_stacks:
-        aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser"])
-        aws_table.align = "l"
-        aws_table.sortby = 'Name'
-        for stack in cfn_stacks:
-            tags = aws_tags_to_dict(stack.get('Tags'))
-            test_id = tags.get("TestId", "N/A")
-            run_by_user = tags.get("RunByUser", "N/A")
-            _, _, _, region, _, name = stack['ResourceARN'].split(':')
-            aws_table.add_row([
-                name,
-                region,
-                test_id,
-                run_by_user,
-            ])
-        click.echo(aws_table.get_string(title="Cloudformation Stacks used on AWS"))
-    else:
-        click.secho("No Cloudformation stacks found for selected filters in AWS!", fg="yellow")
+    def list_resources_on_eks():
+        click.secho("Checking EKS...", fg='green')
+        eks_clusters = list_clusters_eks(tags_dict=params, verbose=verbose)
+        if eks_clusters:
+            eks_table = PrettyTable(["Name", "TestId", "Region", "RunByUser", "CreateTime"])
+            eks_table.align = "l"
+            eks_table.sortby = 'CreateTime'
+            for cluster in eks_clusters:
+                tags = gce_meta_to_dict(cluster.extra['metadata'])
+                eks_table.add_row([cluster.name,
+                                   tags.get('TestId', 'N/A') if tags else "N/A",
+                                   cluster.region_name,
+                                   tags.get('RunByUser', 'N/A') if tags else "N/A",
+                                   cluster.create_time,
+                                   ])
+            click.echo(eks_table.get_string(title="EKS clusters"))
+        else:
+            click.secho("Nothing found for selected filters in EKS!", fg="yellow")
 
-    click.secho("Checking GKE...", fg='green')
-    gke_clusters = list_clusters_gke(tags_dict=params, verbose=verbose)
-    if gke_clusters:
-        gke_table = PrettyTable(["Name", "Region-AZ", "TestId", "RunByUser", "CreateTime"])
-        gke_table.align = "l"
-        gke_table.sortby = 'CreateTime'
-        for cluster in gke_clusters:
-            tags = gce_meta_to_dict(cluster.metadata)
-            gke_table.add_row([cluster.name,
-                               cluster.zone,
-                               tags.get('TestId', 'N/A') if tags else "N/A",
-                               tags.get('RunByUser', 'N/A') if tags else "N/A",
-                               cluster.cluster_info['createTime'],
-                               ])
-        click.echo(gke_table.get_string(title="GKE clusters"))
-    else:
-        click.secho("Nothing found for selected filters in GKE!", fg="yellow")
+        click.secho("Checking AWS Load Balancers...", fg='green')
+        load_balancers = list_load_balancers_aws(tags_dict=params, verbose=verbose)
+        if load_balancers:
+            aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser"])
+            aws_table.align = "l"
+            aws_table.sortby = 'Name'
+            for elb in load_balancers:
+                tags = aws_tags_to_dict(elb.get('Tags'))
+                test_id = tags.get("TestId", "N/A")
+                run_by_user = tags.get("RunByUser", "N/A")
+                _, _, _, region, _, name = elb['ResourceARN'].split(':')
+                aws_table.add_row([
+                    name,
+                    region,
+                    test_id,
+                    run_by_user,
+                ])
+            click.echo(aws_table.get_string(title="ELBs used on AWS"))
+        else:
+            click.secho("No load balancers found for selected filters in AWS!", fg="yellow")
 
-    for project in SUPPORTED_PROJECTS:
-        with environment(SCT_GCE_PROJECT=project):
-            click.secho(f"Checking GCE ({project})...", fg='green')
-            gce_instances = list_instances_gce(tags_dict=params, running=get_all_running, verbose=verbose)
-            if gce_instances:
-                gce_table = PrettyTable(table_header)
-                gce_table.align = "l"
-                gce_table.sortby = 'LaunchTime'
-                for instance in gce_instances:
-                    tags = gce_meta_to_dict(instance.metadata)
-                    public_ips = gce_public_addresses(instance)
-                    public_ips = ", ".join(public_ips) if None not in public_ips else "N/A"
-                    gce_table.add_row([instance.name,
-                                       instance.zone.split('/')[-1],
-                                       public_ips if get_all_running else instance.status,
-                                       tags.get('TestId', 'N/A') if tags else "N/A",
-                                       tags.get('RunByUser', 'N/A') if tags else "N/A",
-                                       instance.creation_timestamp,
-                                       ])
-                click.echo(gce_table.get_string(title="Resources used on GCE"))
-            else:
-                click.secho("Nothing found for selected filters in GCE!", fg="yellow")
+        click.secho("Checking AWS Cloudformation Stacks ...", fg='green')
+        cfn_stacks = list_cloudformation_stacks_aws(tags_dict=params, verbose=verbose)
+        if cfn_stacks:
+            aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser"])
+            aws_table.align = "l"
+            aws_table.sortby = 'Name'
+            for stack in cfn_stacks:
+                tags = aws_tags_to_dict(stack.get('Tags'))
+                test_id = tags.get("TestId", "N/A")
+                run_by_user = tags.get("RunByUser", "N/A")
+                _, _, _, region, _, name = stack['ResourceARN'].split(':')
+                aws_table.add_row([
+                    name,
+                    region,
+                    test_id,
+                    run_by_user,
+                ])
+            click.echo(aws_table.get_string(title="Cloudformation Stacks used on AWS"))
+        else:
+            click.secho("No Cloudformation stacks found for selected filters in AWS!", fg="yellow")
 
-    click.secho("Checking EKS...", fg='green')
-    eks_clusters = list_clusters_eks(tags_dict=params, verbose=verbose)
-    if eks_clusters:
-        eks_table = PrettyTable(["Name", "TestId", "Region", "RunByUser", "CreateTime"])
-        eks_table.align = "l"
-        eks_table.sortby = 'CreateTime'
-        for cluster in eks_clusters:
-            tags = gce_meta_to_dict(cluster.metadata)
-            eks_table.add_row([cluster.name,
-                               tags.get('TestId', 'N/A') if tags else "N/A",
-                               cluster.region_name,
-                               tags.get('RunByUser', 'N/A') if tags else "N/A",
-                               cluster.create_time,
-                               ])
-        click.echo(eks_table.get_string(title="EKS clusters"))
-    else:
-        click.secho("Nothing found for selected filters in EKS!", fg="yellow")
+    def list_resources_on_gke():
+        click.secho("Checking GKE...", fg='green')
+        gke_clusters = list_clusters_gke(tags_dict=params, verbose=verbose)
+        if gke_clusters:
+            gke_table = PrettyTable(["Name", "Region-AZ", "TestId", "RunByUser", "CreateTime"])
+            gke_table.align = "l"
+            gke_table.sortby = 'CreateTime'
+            for cluster in gke_clusters:
+                tags = gce_meta_to_dict(cluster.metadata)
+                gke_table.add_row([cluster.name,
+                                   cluster.zone,
+                                   tags.get('TestId', 'N/A') if tags else "N/A",
+                                   tags.get('RunByUser', 'N/A') if tags else "N/A",
+                                   cluster.cluster_info['createTime'],
+                                   ])
+            click.echo(gke_table.get_string(title="GKE clusters"))
+        else:
+            click.secho("Nothing found for selected filters in GKE!", fg="yellow")
 
-    click.secho("Checking Docker...", fg="green")
-    docker_resources = \
-        list_resources_docker(tags_dict=params, running=get_all_running, group_as_builder=True, verbose=verbose)
+    def list_resources_on_docker():
+        click.secho("Checking Docker...", fg="green")
+        docker_resources = \
+            list_resources_docker(tags_dict=params, running=get_all_running, group_as_builder=True, verbose=verbose)
 
-    if any(docker_resources.values()):
-        if docker_resources.get("containers"):
-            docker_table = PrettyTable(["Name", "Builder", "Public IP" if get_all_running else "Status",
-                                        "TestId", "RunByUser", "Created"])
-            docker_table.align = "l"
-            docker_table.sortby = "Created"
-            for builder_name, docker_containers in docker_resources["containers"].items():
-                for container in docker_containers:
-                    container.reload()
-                    docker_table.add_row([
-                        container.name,
-                        builder_name,
-                        container.attrs["NetworkSettings"]["IPAddress"] if get_all_running else container.status,
-                        container.labels.get("TestId", "N/A"),
-                        container.labels.get("RunByUser", "N/A"),
-                        container.attrs.get("Created", "N/A"),
-                    ])
-            click.echo(docker_table.get_string(title="Containers used on Docker"))
-        if docker_resources.get("images"):
-            docker_table = PrettyTable(["Name", "Builder", "TestId", "RunByUser", "Created"])
-            docker_table.align = "l"
-            docker_table.sortby = "Created"
-            for builder_name, docker_images in docker_resources["images"].items():
-                for image in docker_images:
-                    image.reload()
-                    for tag in image.tags:
+        if any(docker_resources.values()):
+            if docker_resources.get("containers"):
+                docker_table = PrettyTable(["Name", "Builder", "Public IP" if get_all_running else "Status",
+                                            "TestId", "RunByUser", "Created"])
+                docker_table.align = "l"
+                docker_table.sortby = "Created"
+                for builder_name, docker_containers in docker_resources["containers"].items():
+                    for container in docker_containers:
+                        container.reload()
                         docker_table.add_row([
-                            tag,
+                            container.name,
                             builder_name,
-                            image.labels.get("TestId", "N/A"),
-                            image.labels.get("RunByUser", "N/A"),
-                            image.attrs.get("Created", "N/A"),
+                            container.attrs["NetworkSettings"]["IPAddress"] if get_all_running else container.status,
+                            container.labels.get("TestId", "N/A"),
+                            container.labels.get("RunByUser", "N/A"),
+                            container.attrs.get("Created", "N/A"),
                         ])
-            click.echo(docker_table.get_string(title="Images used on Docker"))
-    else:
-        click.secho("Nothing found for selected filters in Docker!", fg="yellow")
+                click.echo(docker_table.get_string(title="Containers used on Docker"))
+            if docker_resources.get("images"):
+                docker_table = PrettyTable(["Name", "Builder", "TestId", "RunByUser", "Created"])
+                docker_table.align = "l"
+                docker_table.sortby = "Created"
+                for builder_name, docker_images in docker_resources["images"].items():
+                    for image in docker_images:
+                        image.reload()
+                        for tag in image.tags:
+                            docker_table.add_row([
+                                tag,
+                                builder_name,
+                                image.labels.get("TestId", "N/A"),
+                                image.labels.get("RunByUser", "N/A"),
+                                image.attrs.get("Created", "N/A"),
+                            ])
+                click.echo(docker_table.get_string(title="Images used on Docker"))
+        else:
+            click.secho("Nothing found for selected filters in Docker!", fg="yellow")
 
-    click.secho("Checking Azure instances...", fg='green')
-    instances: List[VmInstance] = []
-    for provisioner in AzureProvisioner.discover_regions(params.get("TestId", "")):
-        instances += provisioner.list_instances()
-    if user:
-        instances = [inst for inst in instances if inst.tags.get("RunByUser") == user]
-    if instances:
-        azure_table = PrettyTable(["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "LaunchTime"])
-        azure_table.align = "l"
-        azure_table.sortby = 'RunByUser'
+    def list_resources_on_azure():
+        click.secho("Checking Azure instances...", fg='green')
+        instances: List[VmInstance] = []
+        for provisioner in AzureProvisioner.discover_regions(params.get("TestId", "")):
+            instances += provisioner.list_instances()
+        if user:
+            instances = [inst for inst in instances if inst.tags.get("RunByUser") == user]
+        if instances:
+            azure_table = PrettyTable(["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "LaunchTime"])
+            azure_table.align = "l"
+            azure_table.sortby = 'RunByUser'
 
-        for instance in instances:
-            creation_time = instance.creation_time.isoformat(
-                sep=" ", timespec="seconds") if instance.creation_time else "N/A"
-            tags = instance.tags
-            test_id = tags.get("TestId", "N/A")
-            run_by_user = tags.get("RunByUser", "N/A")
-            azure_table.add_row([
-                instance.name,
-                instance.region,
-                instance.public_ip_address,
-                test_id,
-                run_by_user,
-                creation_time])
-        click.echo(azure_table.get_string(title="Instances used on Azure"))
+            for instance in instances:
+                creation_time = instance.creation_time.isoformat(
+                    sep=" ", timespec="seconds") if instance.creation_time else "N/A"
+                tags = instance.tags
+                test_id = tags.get("TestId", "N/A")
+                run_by_user = tags.get("RunByUser", "N/A")
+                azure_table.add_row([
+                    instance.name,
+                    instance.region,
+                    instance.public_ip_address,
+                    test_id,
+                    run_by_user,
+                    creation_time])
+            click.echo(azure_table.get_string(title="Instances used on Azure"))
+        else:
+            click.secho("Nothing found for selected filters in Azure!", fg="yellow")
+
+    backend_listing_map = {
+        "aws": list_resources_on_aws,
+        "gce": list_resources_on_gce,
+        "k8s-gke": list_resources_on_gke,
+        "k8s-eks": list_resources_on_eks,
+        "docker": list_resources_on_docker,
+        "azure": list_resources_on_azure
+    }
+    if list_resources_per_backend_type := backend_listing_map.get(backend_type):
+        list_resources_per_backend_type()
     else:
-        click.secho("Nothing found for selected filters in Azure!", fg="yellow")
+        for list_resources_per_backend_type in backend_listing_map.values():
+            list_resources_per_backend_type()
 
 
 @cli.command('list-images', help="List machine images")
