@@ -36,6 +36,7 @@ from functools import cached_property, wraps
 from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 import packaging.version
 
 import yaml
@@ -48,7 +49,7 @@ from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver  # pylint: disable=no-name-in-module
 from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-module
 from cassandra.policies import RetryPolicy
-from cassandra.policies import WhiteListRoundRobinPolicy
+from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy
 
 from argus.db.cloud_types import ResourceState, CloudInstanceDetails, CloudResource
 from argus.db.db_types import NemesisStatus
@@ -3297,7 +3298,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                         # pylint: disable=too-many-arguments, too-many-locals
                         protocol_version, load_balancing_policy=None,
                         port=None, ssl_opts=None, node_ips=None, connect_timeout=None,
-                        verbose=True):
+                        verbose=True, connection_bundle_file=None):
         if not port:
             port = node.CQL_PORT
 
@@ -3316,13 +3317,16 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         if ssl_opts is None and self.params.get('client_encrypt'):
             ssl_opts = {'ca_certs': './data_dir/ssl_conf/client/catest.pem'}
         self.log.debug(str(ssl_opts))
-        cluster_driver = ClusterDriver(node_ips, auth_provider=auth_provider,
+        kwargs = dict(contact_points=node_ips, port=port, ssl_options=ssl_opts)
+        if connection_bundle_file:
+            kwargs = dict(scylla_cloud=connection_bundle_file)
+        cluster_driver = ClusterDriver(auth_provider=auth_provider,
                                        compression=compression,
                                        protocol_version=protocol_version,
                                        load_balancing_policy=load_balancing_policy,
                                        default_retry_policy=FlakyRetryPolicy(),
-                                       port=port, ssl_options=ssl_opts,
-                                       connect_timeout=connect_timeout)
+                                       connect_timeout=connect_timeout, **kwargs
+                                       )
         session = cluster_driver.connect()
 
         # temporarily increase client-side timeout to 1m to determine
@@ -3340,23 +3344,42 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def cql_connection(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
                        password=None, compression=True, protocol_version=None,
                        port=None, ssl_opts=None, connect_timeout=100, verbose=True):
-        node_ips = self.get_node_cql_ips()
-        wlrr = WhiteListRoundRobinPolicy(node_ips)
+        if connection_bundle_file := node.parent_cluster.connection_bundle_file:
+            wlrr = None
+            node_ips = []
+        else:
+            node_ips = self.get_node_cql_ips()
+            wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
                                     compression=compression, protocol_version=protocol_version,
                                     load_balancing_policy=wlrr, port=port, ssl_opts=ssl_opts, node_ips=node_ips,
-                                    connect_timeout=connect_timeout, verbose=verbose)
+                                    connect_timeout=connect_timeout, verbose=verbose,
+                                    connection_bundle_file=connection_bundle_file)
 
-    def cql_connection_exclusive(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
+    def cql_connection_exclusive(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments,too-many-locals
                                  password=None, compression=True,
                                  protocol_version=None, port=None,
                                  ssl_opts=None, connect_timeout=100, verbose=True):
-        node_ips = [node.cql_ip_address]
-        wlrr = WhiteListRoundRobinPolicy(node_ips)
+        if connection_bundle_file := node.parent_cluster.connection_bundle_file:
+            # TODO: handle the case of multiple datacenters
+            bundle_yaml = yaml.safe_load(connection_bundle_file.open('r', encoding='utf-8'))
+            node_domain = None
+            for _, connection_data in bundle_yaml.get('datacenters', {}).items():
+                node_domain = connection_data.get('nodeDomain').strip()
+            assert node_domain, f"didn't found nodeDomain in bundle [{connection_bundle_file}]"
+
+            def host_filter(host):
+                return str(host.host_id) == str(node.host_id) or node_domain == host.endpoint._server_name  # pylint: disable=protected-access
+            wlrr = HostFilterPolicy(child_policy=RoundRobinPolicy(), predicate=host_filter)
+            node_ips = []
+        else:
+            node_ips = [node.cql_ip_address]
+            wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
                                     compression=compression, protocol_version=protocol_version,
                                     load_balancing_policy=wlrr, port=port, ssl_opts=ssl_opts, node_ips=node_ips,
-                                    connect_timeout=connect_timeout, verbose=verbose)
+                                    connect_timeout=connect_timeout, verbose=verbose,
+                                    connection_bundle_file=connection_bundle_file)
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,
@@ -3696,6 +3719,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             msldap_server_info=KeyStore().get_ldap_ms_ad_credentials()
         )
         return ScyllaYaml(**cluster_params_builder.dict(exclude_unset=True, exclude_none=True))
+
+    @property
+    def connection_bundle_file(self) -> Path | None:
+        bundle_file = self.params.get("k8s_connection_bundle_file")
+        return Path(bundle_file) if bundle_file else None
 
     @property
     def racks(self) -> Set[int]:
