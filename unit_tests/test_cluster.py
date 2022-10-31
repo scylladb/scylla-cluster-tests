@@ -42,10 +42,13 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.test_utils_common import DummyNode
 
 
-class DummyDbCluster(BaseCluster):  # pylint: disable=abstract-method
+class DummyDbCluster(BaseCluster, BaseScyllaCluster):  # pylint: disable=abstract-method
     # pylint: disable=super-init-not-called
-    def __init__(self, nodes):
+    def __init__(self, nodes, params=None):
         self.nodes = nodes
+        self.params = params
+        self.added_password_suffix = False
+        self.log = logging.getLogger(__name__)
 
 
 class DummyDbLogReader(DbLogReader):
