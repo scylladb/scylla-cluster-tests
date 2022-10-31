@@ -323,8 +323,9 @@ class DockerBasedStressThread:
         self.shutdown_timeout = 180  # extra 3 minutes
         self.stop_test_on_failure = stop_test_on_failure
         self.docker_image_name = self.params.get(self.DOCKER_IMAGE_PARAM_NAME)
-        for loader in self.loader_set.nodes:
-            RemoteDocker.pull_image(loader, self.docker_image_name)
+        if "k8s" not in self.params.get("cluster_backend"):
+            for loader in self.loader_set.nodes:
+                RemoteDocker.pull_image(loader, self.docker_image_name)
 
     def run(self):
         if self.round_robin:
