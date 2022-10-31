@@ -33,8 +33,7 @@ def notify_by_email(general_report: BaseReport,
     email_client = Email()
     LOGGER.info("Sending email to '%s'", recipients)
     subject = f"Cloud resources: {group_str} usage report - {datetime.now()}"
-    random_subject = rand(string_to_manipulate=subject)
-    email_client.send(subject=random_subject,
+    email_client.send(subject=subject,
                       content=general_report.to_html(),
                       recipients=recipients,
                       html=True,
