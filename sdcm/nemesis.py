@@ -1266,6 +1266,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """Covers https://github.com/scylladb/scylla-operator/issues/894"""
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('It is supported only on kubernetes')
+        if self.cluster.params.get('cluster_backend') == "k8s-gke":
+            raise UnsupportedNemesis(
+                "Skipped due to the following bug: "
+                "https://github.com/scylladb/scylla-operator/issues/1077")
 
         def _check_pod_stats(node):
             # Pod info:
