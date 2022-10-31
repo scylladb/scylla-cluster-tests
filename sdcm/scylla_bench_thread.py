@@ -118,8 +118,6 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         self.sb_mode: ScyllaBenchModes = ScyllaBenchModes(re.search(r"-mode=(.+?) ", stress_cmd).group(1))
         self.sb_workload: ScyllaBenchWorkloads = ScyllaBenchWorkloads(
             re.search(r"-workload=(.+?) ", stress_cmd).group(1))
-        for loader in self.loader_set.nodes:
-            RemoteDocker.pull_image(loader, self.params.get('stress_image.scylla-bench'))
 
     def verify_results(self):
         sb_summary = []
