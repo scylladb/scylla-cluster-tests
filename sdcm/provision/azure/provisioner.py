@@ -92,7 +92,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         else:
             # extract test_id from rg names where rg.name format is: SCT-<test_id>-<region>-<az>
             provisioner_params = [(test_id, rg.location, cls._get_az_from_name(rg), azure_service) for rg in all_resource_groups
-                                  if (test_id := rg.name.split("SCT-")[-1][:36])]
+                                  if (test_id := rg.name.split("SCT-")[-1][:36]) and len(test_id) == 36]
         return [cls(*params) for params in provisioner_params]
 
     def get_or_create_instance(self, definition: InstanceDefinition,
