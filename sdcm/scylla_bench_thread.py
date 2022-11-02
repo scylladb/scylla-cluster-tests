@@ -146,6 +146,16 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         return sb_summary, errors
 
+    def create_stress_cmd(self, stress_cmd):
+        if self.connection_bundle_file:
+            stress_cmd = f'{stress_cmd.strip()} -cloud-config-path={self.target_connection_bundle_file}'
+        else:
+            # Select first seed node to send the scylla-bench cmds
+            ips = ",".join([n.cql_ip_address for n in self.node_list])
+            stress_cmd = f'{stress_cmd.strip()} -nodes {ips}'
+
+        return stress_cmd
+
     def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=too-many-locals
         cmd_runner = None
         if "k8s" in self.params.get("cluster_backend") and self.params.get(
@@ -159,9 +169,12 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 cpu_options = f'--cpuset-cpus="{cpu_idx}"'
             cmd_runner = cleanup_context = RemoteDocker(
                 loader, self.params.get('stress_image.scylla-bench'),
-                extra_docker_opts=(
-                    f'{cpu_options} --label shell_marker={self.shell_marker} --network=host'))
+                extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host',
+            )
             cmd_runner_name = loader.ip_address
+
+        if self.connection_bundle_file:
+            cmd_runner.send_files(str(self.connection_bundle_file), self.target_connection_bundle_file)
 
         if self.sb_mode == ScyllaBenchModes.WRITE and self.sb_workload == ScyllaBenchWorkloads.TIMESERIES:
             loader.parent_cluster.sb_write_timeseries_ts = write_timestamp = time.time_ns()
@@ -186,9 +199,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             os.makedirs(loader.logdir, exist_ok=True)
 
         log_file_name = os.path.join(loader.logdir, f'scylla-bench-l{loader_idx}-{uuid.uuid4()}.log')
-        # Select first seed node to send the scylla-bench cmds
-        ips = ",".join([n.cql_ip_address for n in self.node_list])
-
+        stress_cmd = self.create_stress_cmd(stress_cmd)
         with ScyllaBenchStressExporter(instance_name=cmd_runner_name,
                                        metrics=nemesis_metrics_obj(),
                                        stress_operation=self.sb_mode,
@@ -202,7 +213,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             result = None
             try:
                 result = cmd_runner.run(
-                    cmd="{name} -nodes {ips}".format(name=stress_cmd.strip(), ips=ips),
+                    cmd=stress_cmd,
                     timeout=self.timeout,
                     log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except
