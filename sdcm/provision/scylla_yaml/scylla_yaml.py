@@ -172,6 +172,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
         'org.apache.cassandra.scheduler.NoScheduler',
         'org.apache.cassandra.scheduler.RoundRobinScheduler'
     ] = "org.apache.cassandra.scheduler.NoScheduler"
+    stream_io_throughput_mb_per_sec: int = 0
 
     # pylint: disable=no-self-argument,no-self-use
     @validator("request_scheduler", pre=True, always=True)
