@@ -14,6 +14,7 @@
 import logging
 import random
 import concurrent.futures
+from pathlib import Path
 
 from sdcm.cluster import BaseLoaderSet
 from sdcm.utils.common import generate_random_string
@@ -115,6 +116,14 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
             LOGGER.debug("Selected '%s' to query for local nodes", node_to_query)
             return node_to_query.cql_ip_address
         return self.node_list[0].cql_ip_address
+
+    @property
+    def connection_bundle_file(self) -> Path:
+        return self.node_list[0].parent_cluster.connection_bundle_file
+
+    @property
+    def target_connection_bundle_file(self) -> str:
+        return str(Path('/tmp/') / self.connection_bundle_file.name)
 
 
 def format_stress_cmd_error(exc: Exception) -> str:

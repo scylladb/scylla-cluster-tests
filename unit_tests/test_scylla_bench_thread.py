@@ -22,12 +22,20 @@ pytestmark = [
 
 
 @pytest.mark.skip(reason="those are integration tests only")
-@pytest.mark.parametrize("extra_cmd", argvalues=[
-    pytest.param('', id="regular"),
-    pytest.param('-tls', id="tls", marks=[pytest.mark.docker_scylla_args(ssl=True)])])
+@pytest.mark.parametrize(
+    "extra_cmd",
+    argvalues=[
+        pytest.param("", id="regular"),
+        pytest.param("-tls", id="tls", marks=[pytest.mark.docker_scylla_args(ssl=True)]),
+        pytest.param("cloud-config", id="sni_proxy"),
+    ],
+)
 def test_01_scylla_bench(request, docker_scylla, params, extra_cmd):
     loader_set = LocalLoaderSetDummy()
-
+    if extra_cmd == "cloud-config":
+        params["k8s_connection_bundle_file"] = "/home/fruch/Downloads/k8s_config.yaml"
+        docker_scylla.parent_cluster.params = params
+        extra_cmd = ""
     cmd = (
         f"scylla-bench -workload=sequential {extra_cmd} -mode=write -replication-factor=1 -partition-count=10 "
         + "-clustering-row-count=5555 -clustering-row-size=uniform:10..20 -concurrency=10 "
