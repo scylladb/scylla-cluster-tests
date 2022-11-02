@@ -2095,7 +2095,8 @@ class LoaderPodContainer(BasePodContainer):
         self.remoter = KubernetesPodRunner(
             kluster=self.parent_cluster.k8s_cluster,
             template_path=self.TEMPLATE_PATH,
-            template_modifiers=self.parent_cluster.k8s_cluster.calculated_loader_affinity_modifiers,
+            template_modifiers=list(
+                self.parent_cluster.k8s_cluster.calculated_loader_affinity_modifiers),
             pod_name_template=self.loader_pod_name_template,
             namespace=self.parent_cluster.namespace,
             environ=environ,
