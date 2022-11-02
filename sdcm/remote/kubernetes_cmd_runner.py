@@ -29,7 +29,10 @@ from urllib3.exceptions import (
 
 from sdcm.cluster import TestConfig
 from sdcm.utils.k8s import KubernetesOps
-from sdcm.utils.common import deprecation
+from sdcm.utils.common import (
+    deprecation,
+    generate_random_string,
+)
 from sdcm.utils.decorators import retrying
 from sdcm.wait import wait_for
 
@@ -548,6 +551,57 @@ class KubernetesPodRunner(KubernetesCmdRunner):
 
     # pylint: disable=too-many-arguments,unused-argument
     def send_files(self, src, dst, delete_dst=False, preserve_symlinks=False, verbose=False):
-        # TODO: make this method create configmap with provided file and then
-        #       add it to the template and mount it's files.
-        raise NotImplementedError()
+        """Mount single files to a 'dynamic'aly created pods.
+
+        'src' and 'dst' params must contain filename.
+        'delete_dst', 'preserve_symlinks' and 'verbose' are ignored.
+
+        Usage example:
+
+            loader.remoter.send_files(
+                src='/home/sct-runner/scylla-cluster-tests/data_dir/c-s_lwt_basic.yaml',
+                dst='/tmp/c-s_lwt_basic.yaml',
+            )
+        """
+        # Generate name for the configMap
+        cm_name = f"cm--{self.pod_name_template}--{generate_random_string(5).lower()}"
+        filename = dst.split('/')[-1]
+
+        # Create configMap from the 'src' file
+        self.kluster.kubectl(
+            f"create configmap {cm_name} --from-file={src}",
+            namespace=self.namespace)
+
+        # Create modifier function for the pod template
+        #
+        # kind: Pod
+        # spec:
+        #   containers:
+        #     - volumeMounts:
+        #       - name: {cm_name}
+        #         mountPath: {dst}
+        #         subPath: {filename}
+        #   volumes:
+        #     - name: {cm_name}
+        #       configMap:
+        #         name: {cm_name}
+        def add_file_mount(obj):
+            if obj['kind'] != 'Pod':
+                return
+            if 'volumes' not in obj['spec']:
+                obj['spec']['volumes'] = []
+            obj['spec']['volumes'].append({
+                'name': cm_name,
+                'configMap': {'name': cm_name},
+            })
+            for i, _ in enumerate(obj['spec']['containers']):
+                if 'volumeMounts' not in obj['spec']['containers'][i]:
+                    obj['spec']['containers'][i]['volumeMounts'] = []
+                obj['spec']['containers'][i]['volumeMounts'].append({
+                    'name': cm_name,
+                    'mountPath': dst,
+                    'subPath': filename,
+                })
+
+        # Add new modifier function to the list of pod template's modifiers
+        self.template_modifiers.append(add_file_mount)
