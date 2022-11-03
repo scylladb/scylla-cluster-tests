@@ -146,27 +146,51 @@ def _prepare_bare_metal_resource_setup(sct_config: SCTConfiguration) -> BaseClou
 
 
 def _prepare_k8s_gce_minikube_resource_setup(sct_config: SCTConfiguration) -> BaseCloudSetupDetails:
-    cloud_setup = _prepare_gce_resource_setup(sct_config)
-
+    num_db_nodes, n_loaders = _get_node_amounts(sct_config)
     image_id = sct_config.get("scylla_version")
-    cloud_setup.db_node.image_id = f"scylladb/scylladb:{image_id}"
-    cloud_setup.db_node.instance_type = sct_config.get("gce_instance_type_minikube")
+    db_node_setup = CloudNodesInfo(image_id=f"scylladb/scylladb:{image_id}",
+                                   instance_type=sct_config.get("gce_instance_type_minikube"),
+                                   node_amount=num_db_nodes,
+                                   post_behaviour=sct_config.get("post_behavior_db_nodes"))
+    loader_node_setup = CloudNodesInfo(image_id=sct_config.get("gce_image_loader"),
+                                       instance_type=sct_config.get("gce_instance_type_loader"),
+                                       node_amount=n_loaders,
+                                       post_behaviour=sct_config.get("post_behavior_loader_nodes"))
+    monitor_node_setup = CloudNodesInfo(image_id=sct_config.get("gce_image_monitor"),
+                                        instance_type=sct_config.get("gce_instance_type_monitor"),
+                                        node_amount=sct_config.get("n_monitor_nodes"),
+                                        post_behaviour=sct_config.get("post_behavior_monitor_nodes"))
+    cloud_setup = GCESetupDetails(db_node=db_node_setup, loader_node=loader_node_setup,
+                                  monitor_node=monitor_node_setup)
 
     return cloud_setup
 
 
 def _prepare_k8s_gke_resource_setup(sct_config: SCTConfiguration) -> BaseCloudSetupDetails:
-    cloud_setup = _prepare_gce_resource_setup(sct_config)
+    num_db_nodes, n_loaders = _get_node_amounts(sct_config)
     image_id = sct_config.get("scylla_version")
-    cloud_setup.db_node.image_id = f"scylladb/scylladb:{image_id}"
-    cloud_setup.monitor_node.image_id = sct_config.get("mgmt_docker_image")
-    cloud_setup.loader_node.image_id = f"scylladb/scylladb:{image_id}"
+    db_node_setup = CloudNodesInfo(image_id=f"scylladb/scylladb:{image_id}",
+                                   instance_type=sct_config.get("gce_instance_type_db"),
+                                   node_amount=num_db_nodes,
+                                   post_behaviour=sct_config.get("post_behavior_db_nodes"))
+    loader_node_setup = CloudNodesInfo(image_id=f"scylladb/scylladb:{image_id}",
+                                       instance_type=sct_config.get("gce_instance_type_loader"),
+                                       node_amount=n_loaders,
+                                       post_behaviour=sct_config.get("post_behavior_loader_nodes"))
+    monitor_node_setup = CloudNodesInfo(image_id=sct_config.get("gce_image_monitor"),
+                                        instance_type=sct_config.get("gce_instance_type_monitor"),
+                                        node_amount=sct_config.get("n_monitor_nodes"),
+                                        post_behaviour=sct_config.get("post_behavior_monitor_nodes"))
+    cloud_setup = GCESetupDetails(db_node=db_node_setup, loader_node=loader_node_setup,
+                                  monitor_node=monitor_node_setup)
 
     return cloud_setup
 
 
 def _prepare_k8s_eks_resource_setup(sct_config: SCTConfiguration) -> BaseCloudSetupDetails:
     cloud_setup = _prepare_aws_resource_setup(sct_config)
+    image_id = sct_config.get("scylla_version")
+    cloud_setup.db_node.image_id = f"scylladb/scylladb:{image_id}"
 
     return cloud_setup
 
