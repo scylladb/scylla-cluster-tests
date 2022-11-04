@@ -34,6 +34,7 @@ from uuid import UUID
 import pytest
 import click
 import click_completion
+import yaml
 from prettytable import PrettyTable
 
 import sct_ssh
@@ -618,8 +619,7 @@ def list_repos(dist_type, dist_version):
               help='Scylla version, eg: 4.5, 2021.1')
 @click.option('-r', '--scylla-repo', type=str,
               help='Scylla repo')
-@click.option('-d', '--linux-distro', type=str,
-              default='centos', help='Linux Distribution type')
+@click.option('-d', '--linux-distro', type=str, help='Linux Distribution type')
 @click.option('-o', '--only-print-versions', type=bool, default=False, required=False, help='')
 def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions):  # pylint: disable=too-many-locals
     """
@@ -628,6 +628,12 @@ def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_pri
     the base version for each branch.
     """
     add_file_logger()
+
+    with Path("defaults/test_default.yaml").open(mode="r", encoding="utf-8") as test_defaults_yaml:
+        test_defaults = yaml.safe_load(test_defaults_yaml)
+
+    if not linux_distro or linux_distro == "null":
+        linux_distro = test_defaults.get("scylla_linux_distro")
 
     version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, scylla_version)
 
