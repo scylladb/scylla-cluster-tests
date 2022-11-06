@@ -140,6 +140,7 @@
 | **<a href="#user-content-backup_bucket_location" name="backup_bucket_location">backup_bucket_location</a>**  | the bucket name to be used for backup (e.g., 'manager-backup-tests') | N/A | SCT_BACKUP_BUCKET_LOCATION
 | **<a href="#user-content-backup_bucket_region" name="backup_bucket_region">backup_bucket_region</a>**  | the AWS region of a bucket to be used for backup (e.g., 'eu-west-1') | N/A | SCT_BACKUP_BUCKET_REGION
 | **<a href="#user-content-tag_ami_with_result" name="tag_ami_with_result">tag_ami_with_result</a>**  | If True, would tag the ami with the test final result | N/A | SCT_TAG_AMI_WITH_RESULT
+| **<a href="#user-content-aws_use_prepared_loaders" name="aws_use_prepared_loaders">aws_use_prepared_loaders</a>**  | If True, we use prepared VMs for loader (instead of using docker images) | N/A | SCT_AWS_USE_PREPARED_LOADERS
 | **<a href="#user-content-gce_project" name="gce_project">gce_project</a>**  | gcp project name to use | N/A | SCT_GCE_PROJECT
 | **<a href="#user-content-gce_datacenter" name="gce_datacenter">gce_datacenter</a>**  | Supported: us-east1 - means that the zone will be selected automatically or you can mention the zone explicitly, for example: us-east1-b | N/A | SCT_GCE_DATACENTER
 | **<a href="#user-content-gce_network" name="gce_network">gce_network</a>**  |  | N/A | SCT_GCE_NETWORK
