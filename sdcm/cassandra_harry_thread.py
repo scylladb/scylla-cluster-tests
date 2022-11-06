@@ -79,8 +79,8 @@ class CassandraHarryThread(DockerBasedStressThread):
         else:
             node_cmd = self.stress_cmd
 
-        docker = RemoteDocker(loader, self.docker_image_name,
-                              extra_docker_opts=f' --label shell_marker={self.shell_marker}')
+        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
+                                                extra_docker_opts=f' --label shell_marker={self.shell_marker}')
 
         node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}'
 
@@ -91,7 +91,8 @@ class CassandraHarryThread(DockerBasedStressThread):
                                           stress_operation='write',
                                           stress_log_filename=log_file_name,
                                           loader_idx=loader_idx), \
-                CassandraHarryStressEventsPublisher(node=loader, harry_log_filename=log_file_name):
+                CassandraHarryStressEventsPublisher(node=loader, harry_log_filename=log_file_name), \
+                cleanup_context:
             result = None
             try:
                 docker_run_result = docker.run(cmd=f"{node_cmd} -node {ip}",
