@@ -51,8 +51,8 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
         return stress_cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
-        docker = RemoteDocker(loader, self.docker_image_name,
-                              extra_docker_opts=f'--label shell_marker={self.shell_marker}')
+        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
+                                                extra_docker_opts=f'--label shell_marker={self.shell_marker}')
         stress_cmd = self.build_stress_cmd()
 
         if not os.path.exists(loader.logdir):
@@ -73,12 +73,13 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
         KclStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
 
         try:
-            result = docker.run(cmd=node_cmd,
-                                timeout=self.timeout + self.shutdown_timeout,
-                                log_file=log_file_name,
-                                )
+            with cleanup_context:
+                result = docker.run(cmd=node_cmd,
+                                    timeout=self.timeout + self.shutdown_timeout,
+                                    log_file=log_file_name,
+                                    )
 
-            return result
+                return result
 
         except Exception as exc:  # pylint: disable=broad-except
             errors_str = format_stress_cmd_error(exc)

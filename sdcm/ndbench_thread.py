@@ -136,15 +136,16 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
         else:
             node_cmd = self.stress_cmd
 
-        docker = RemoteDocker(loader, self.docker_image_name,
-                              extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
+        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
+                                                extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
 
         node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}'
 
         NdBenchStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
 
         with NdBenchStatsPublisher(loader, loader_idx, ndbench_log_filename=log_file_name), \
-                NdBenchStressEventsPublisher(node=loader, ndbench_log_filename=log_file_name):
+                NdBenchStressEventsPublisher(node=loader, ndbench_log_filename=log_file_name), \
+                cleanup_context:
             try:
                 docker_run_result = docker.run(cmd=node_cmd,
                                                timeout=self.timeout + self.shutdown_timeout,
