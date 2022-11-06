@@ -16,6 +16,7 @@ import re
 import uuid
 import time
 import logging
+import contextlib
 from enum import Enum
 
 from sdcm.loader import ScyllaBenchStressExporter
@@ -145,11 +146,12 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 "k8s_loader_run_type") == 'dynamic':
             cmd_runner = loader.remoter
             cmd_runner_name = loader.remoter.pod_name
+            cleanup_context = contextlib.nullcontext()
         else:
             cpu_options = ""
             if self.stress_num > 1:
                 cpu_options = f'--cpuset-cpus="{cpu_idx}"'
-            cmd_runner = RemoteDocker(
+            cmd_runner = cleanup_context = RemoteDocker(
                 loader, self.params.get('stress_image.scylla-bench'),
                 extra_docker_opts=(
                     f'{cpu_options} --label shell_marker={self.shell_marker} --network=host'))
@@ -186,6 +188,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                                        stress_operation=self.sb_mode,
                                        stress_log_filename=log_file_name,
                                        loader_idx=loader_idx), \
+                cleanup_context, \
                 ScyllaBenchStressEventsPublisher(node=loader, sb_log_filename=log_file_name) as publisher, \
                 ScyllaBenchEvent(node=loader, stress_cmd=stress_cmd,
                                  log_file_name=log_file_name) as scylla_bench_event:

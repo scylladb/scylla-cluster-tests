@@ -105,8 +105,8 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        docker = RemoteDocker(loader, self.docker_image_name,
-                              extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host')
+        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
+                                                extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host')
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
@@ -115,7 +115,8 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         LOGGER.debug('gemini local log: %s', log_file_name)
 
         gemini_cmd = self._generate_gemini_command()
-        with GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, \
+        with cleanup_context, \
+                GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, \
                 GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:
             try:
                 publisher.event_id = gemini_stress_event.event_id
@@ -138,16 +139,17 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                     gemini_stress_event.add_result(result=result)
                     gemini_stress_event.severity = Severity.WARNING
 
-        return docker, result, self.gemini_result_file
+            local_gemini_result_file = os.path.join(docker.node.logdir, os.path.basename(self.gemini_result_file))
+            results_copied = docker.receive_files(src=self.gemini_result_file, dst=local_gemini_result_file)
+            assert results_copied, "gemini results aren't available, did gemini even run ?"
+
+        return docker, result, local_gemini_result_file
 
     def get_gemini_results(self):
         parsed_results = []
         raw_results = self.get_results()
-        for docker, _, result_file in raw_results:
-
-            local_gemini_result_file = os.path.join(docker.node.logdir, os.path.basename(result_file))
-            results_copied = docker.receive_files(src=result_file, dst=local_gemini_result_file)
-            assert results_copied, "gemini results aren't available, did gemini even run ?"
+        for _, _, local_gemini_result_file in raw_results:
+            assert local_gemini_result_file, "gemini results aren't available, did gemini even run ?"
             with open(local_gemini_result_file, encoding="utf-8") as local_file:
                 content = local_file.read()
                 res = self._parse_gemini_summary_json(content)
