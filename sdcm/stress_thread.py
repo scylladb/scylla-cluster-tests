@@ -231,7 +231,7 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
                                timeout=self.timeout,
                                ignore_status=True)
 
-    def get_results(self) -> list[dict | None]:
+    def get_results(self):
         ret = []
         results = []
 
