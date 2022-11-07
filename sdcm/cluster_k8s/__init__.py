@@ -830,6 +830,24 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             "operator": "Equal",
             "effect": "NoSchedule",
         }]
+
+        dns_domains = []
+        expose_options = {}
+        if (version.LegacyVersion(self._scylla_operator_chart_version.split("-")[0]) >= version.LegacyVersion(
+                "v1.8.0") and self.params.get('k8s_enable_tls')):
+            dns_domains = [f"{cluster_name}.sct.scylladb.com"]
+            expose_options = {
+                "cql": {
+                    "ingress": {
+                        "ingressClassName": "haproxy",
+                        "annotations": {
+                            "haproxy-ingress.github.io/scale-server-slots": "1",
+                            "haproxy-ingress.github.io/ssl-passthrough": "true"
+                        }
+                    }
+                }
+            }
+
         return HelmValues({
             'nameOverride': '',
             'fullnameOverride': cluster_name,
@@ -895,7 +913,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                     },
                     'placement': placement,
                 }
-            ]
+            ],
+            "dnsDomains": dns_domains,
+            "exposeOptions": expose_options
         })
 
     def wait_till_cluster_is_operational(self):
@@ -1205,6 +1225,30 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                     self.k8s_monitoring_node_ip, self.k8s_prometheus_external_port)
         LOGGER.info("K8S Grafana is available at %s:%s",
                     self.k8s_monitoring_node_ip, self.k8s_grafana_external_port)
+
+    @log_run_info
+    def deploy_ingress(self, pool_name: str = None):
+        """
+        kubectl_create -f "${deploy_dir}"/ingress-controller
+        kubectl -n haproxy-controller rollout status --timeout=5m deployment.apps/haproxy-kubernetes-ingress
+        """
+
+        if pool_name is None:
+            pool_name = self.AUXILIARY_POOL_NAME
+            # TODO: handle affinity
+
+        LOGGER.info("Create and initialize a monitoring cluster")
+        with TemporaryDirectory() as tmp_dir_name:
+            scylla_operator_dir = os.path.join(tmp_dir_name, 'scylla-operator')
+            LOGGER.info("Download scylla-monitoring sources")
+            download_from_github(
+                repo='zimnx/scylla-operator',
+                tag='mz/ingress-e2e',
+                dst_dir=scylla_operator_dir)
+            self.kubectl(f"apply -f {scylla_operator_dir}/examples/common/ingress-controller/",
+                         namespace="haproxy-controller")
+            self.kubectl_wait("rollout status --timeout=5m deployment.apps/haproxy-kubernetes-ingress",
+                              namespace="haproxy-controller")
 
     @property
     def k8s_monitoring_node_ip(self):

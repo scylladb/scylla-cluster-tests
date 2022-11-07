@@ -1276,6 +1276,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.deploy_scylla_operator(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
+        if self.params.get('k8s_enable_tls'):
+            self.k8s_cluster.deploy_ingress(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
 
         self.db_cluster = mini_k8s.LocalMinimalScyllaPodCluster(
             k8s_cluster=self.k8s_cluster,
@@ -1361,6 +1363,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.deploy_scylla_operator()
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
+        if self.params.get('k8s_enable_tls'):
+            self.k8s_cluster.deploy_ingress(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
 
         loader_pool = None
         if self.params.get("n_loaders"):
@@ -1553,6 +1557,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.prepare_k8s_scylla_nodes(node_pools=scylla_pool)
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
+        if self.params.get('k8s_enable_tls'):
+            self.k8s_cluster.deploy_ingress(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
 
         for i in range(self.k8s_cluster.tenants_number):
             self.db_clusters_multitenant.append(eks.EksScyllaPodCluster(
