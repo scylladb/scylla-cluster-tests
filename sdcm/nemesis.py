@@ -888,6 +888,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.info(f"Restarting node {node}")
             node.restart_scylla_server()
 
+    @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_restart_with_resharding(self):
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis(
