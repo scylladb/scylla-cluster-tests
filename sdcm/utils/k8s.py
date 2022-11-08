@@ -316,7 +316,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         return remoter.run(final_command, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
 
     @classmethod
-    def apply_file(cls, kluster, config_path, namespace=None,  # pylint: disable=too-many-locals
+    def apply_file(cls, kluster, config_path, namespace=None,  # pylint: disable=too-many-locals,too-many-branches
                    timeout=KUBECTL_TIMEOUT, environ=None, envsubst=True,
                    modifiers: List[Callable] = None):
         if environ:
@@ -324,33 +324,47 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         else:
             environ_str = ''
 
-        with NamedTemporaryFile(mode='tw') as temp_file:
-            resulted_content = []
-            if envsubst:
-                data = LOCALRUNNER.run(f'{environ_str}envsubst<{config_path}', verbose=False).stdout
-            else:
-                with open(config_path, encoding="utf-8") as config_file_stream:
-                    data = config_file_stream.read()
-            file_content = yaml.safe_load_all(data)
+        config_paths = []
+        if os.path.isdir(config_path):
+            for root, _, subfiles in os.walk(config_path):
+                for subfile in subfiles:
+                    if not subfile.endswith('yaml'):
+                        continue
+                    config_paths.append(os.path.join(root, subfile))
+        else:
+            config_paths.append(config_path)
 
-            for doc in file_content:
-                if modifiers:
-                    for modifier in modifiers:
-                        modifier(doc)
-                resulted_content.append(doc)
-            temp_file.write(yaml.safe_dump_all(resulted_content))
-            temp_file.flush()
+        for current_config_path in sorted(config_paths):
+            LOGGER.debug("Processing '%s' file.", current_config_path)
+            with NamedTemporaryFile(mode='tw') as temp_file:
+                resulted_content = []
+                if envsubst:
+                    data = LOCALRUNNER.run(
+                        f'{environ_str}envsubst<{current_config_path}', verbose=False).stdout
+                else:
+                    with open(current_config_path, encoding="utf-8") as config_file_stream:
+                        data = config_file_stream.read()
+                file_content = yaml.safe_load_all(data)
 
-            @retrying(n=0, sleep_time=5, timeout=timeout, allowed_exceptions=RuntimeError)
-            def run_kubectl():
-                try:
-                    cls.kubectl(kluster, "apply", "-f", temp_file.name, namespace=namespace, timeout=timeout)
-                except invoke.exceptions.UnexpectedExit as exc:
-                    if 'did you specify the right host or port' in exc.result.stderr:
-                        raise RuntimeError(str(exc)) from None
-                    raise
+                for doc in file_content:
+                    if modifiers:
+                        for modifier in modifiers:
+                            modifier(doc)
+                    resulted_content.append(doc)
+                temp_file.write(yaml.safe_dump_all(resulted_content))
+                temp_file.flush()
 
-            run_kubectl()
+                @retrying(n=0, sleep_time=5, timeout=timeout, allowed_exceptions=RuntimeError)
+                def run_kubectl(file_name):
+                    try:
+                        cls.kubectl(kluster, "apply", "-f", file_name,
+                                    namespace=namespace, timeout=timeout)
+                    except invoke.exceptions.UnexpectedExit as exc:
+                        if 'did you specify the right host or port' in exc.result.stderr:
+                            raise RuntimeError(str(exc)) from None
+                        raise
+
+                run_kubectl(temp_file.name)
 
     @classmethod
     def copy_file(cls, kluster, src, dst, container=None, timeout=KUBECTL_TIMEOUT):

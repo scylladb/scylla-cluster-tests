@@ -99,6 +99,7 @@ LOADER_POD_CONFIG_PATH = sct_abs_path("sdcm/k8s_configs/loaders/pod.yaml")
 LOADER_STS_CONFIG_PATH = sct_abs_path("sdcm/k8s_configs/loaders/sts.yaml")
 LOCAL_PROVISIONER_FILE = sct_abs_path("sdcm/k8s_configs/static-local-volume-provisioner.yaml")
 LOCAL_MINIO_DIR = sct_abs_path("sdcm/k8s_configs/minio")
+INGRESS_CONTROLLER_CONFIG_PATH = sct_abs_path("sdcm/k8s_configs/ingress-controller")
 
 SCYLLA_MANAGER_SERVICE_MONITOR_CONFIG_PATH = sct_abs_path(
     "sdcm/k8s_configs/monitoring/scylla-manager-service-monitor.yaml")
@@ -112,6 +113,7 @@ DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
 SCYLLA_OPERATOR_NAMESPACE = "scylla-operator"
 SCYLLA_MANAGER_NAMESPACE = "scylla-manager"
 SCYLLA_NAMESPACE = "scylla"
+INGRESS_CONTROLLER_NAMESPACE = "haproxy-controller"
 LOADER_NAMESPACE = "sct-loaders"
 MINIO_NAMESPACE = "minio"
 SCYLLA_CONFIG_NAME = "scylla-config"
@@ -830,6 +832,20 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             "operator": "Equal",
             "effect": "NoSchedule",
         }]
+
+        dns_domains = []
+        expose_options = {}
+        if (version.LegacyVersion(self._scylla_operator_chart_version.split("-")[0]) >= (
+                version.LegacyVersion("v1.8.0")) and self.params.get('k8s_enable_tls')):
+            dns_domains = [f"{cluster_name}.sct.scylladb.com"]
+            expose_options = {"cql": {"ingress": {
+                "annotations": {
+                    "haproxy.org/scale-server-slots": "1",
+                    "haproxy.org/ssl-passthrough": "true",
+                },
+                "disabled": False,
+                "ingressClassName": "haproxy",
+            }}}
         return HelmValues({
             'nameOverride': '',
             'fullnameOverride': cluster_name,
@@ -863,6 +879,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 'create': False
             },
             'datacenter': self.params.get('k8s_scylla_datacenter'),
+            'dnsDomains': dns_domains,
+            'exposeOptions': expose_options,
             'racks': [
                 {
                     'name': self.params.get('k8s_scylla_rack'),
@@ -994,6 +1012,18 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         #       Scylla pods will get in sync automatically.
         #       Just sleep for some time to avoid races.
         time.sleep(5)
+
+    @log_run_info
+    def deploy_ingress_controller(self, pool_name: str = None):
+        LOGGER.info("Create and initialize ingress controller")
+        if not self.params.get('reuse_cluster'):
+            pool_name = pool_name or self.AUXILIARY_POOL_NAME
+            self.apply_file(
+                INGRESS_CONTROLLER_CONFIG_PATH,
+                modifiers=get_pool_affinity_modifiers(self.POOL_LABEL_NAME, pool_name),
+                envsubst=False)
+        self.kubectl_wait("--all --for=condition=Ready pod",
+                          namespace=INGRESS_CONTROLLER_NAMESPACE, timeout=306)
 
     @log_run_info
     def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool, namespace: str = SCYLLA_NAMESPACE,

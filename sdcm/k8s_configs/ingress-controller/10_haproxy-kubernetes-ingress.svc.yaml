@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: haproxy-kubernetes-ingress
+  namespace: haproxy-controller
+spec:
+  selector:
+    app.kubernetes.io/name: haproxy-ingress
+  type: LoadBalancer
+  ports:
+  - name: cql
+    port: 9042
+    protocol: TCP
+    targetPort: 80
+  - name: cql-ssl
+    port: 9142
+    protocol: TCP
+    targetPort: 443
+  - name: stat
+    port: 1024
+    protocol: TCP
+    targetPort: 1024
