@@ -1273,6 +1273,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             node_pools=scylla_pool)
 
         self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
+        if self.params.get('k8s_enable_tls'):
+            self.k8s_cluster.deploy_ingress_controller(
+                pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
@@ -1358,6 +1361,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.set_nodeselector_for_deployments(
             pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME, namespace="kube-system")
         self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
+        if self.params.get('k8s_enable_tls'):
+            self.k8s_cluster.deploy_ingress_controller(
+                pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator()
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
@@ -1462,7 +1468,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors = NoMonitorSet()
             self.monitors_multitenant = [self.monitors]
 
-    def get_cluster_k8s_eks(self):
+    def get_cluster_k8s_eks(self):  # pylint: disable=too-many-statements
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
         regions = self.params.region_names
 
@@ -1549,6 +1555,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.wait_all_node_pools_to_be_ready()
 
         self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
+        if self.params.get('k8s_enable_tls'):
+            self.k8s_cluster.deploy_ingress_controller(
+                pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator()
         self.k8s_cluster.prepare_k8s_scylla_nodes(node_pools=scylla_pool)
         if self.params.get('use_mgmt'):

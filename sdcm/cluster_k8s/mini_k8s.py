@@ -13,6 +13,7 @@
 import abc
 import getpass
 import logging
+import os
 from typing import Tuple, Optional, List, Callable
 from textwrap import dedent
 from functools import cached_property
@@ -33,6 +34,7 @@ from sdcm.cluster_k8s import (
     BaseScyllaPodContainer,
     ScyllaPodCluster,
     COMMON_CONTAINERS_RESOURCES,
+    INGRESS_CONTROLLER_CONFIG_PATH,
     LOCAL_MINIO_DIR,
     LOCAL_PROVISIONER_FILE,
     OPERATOR_CONTAINERS_RESOURCES,
@@ -333,6 +335,25 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
             f"{base_repo}/cert-manager-webhook:{tag}",
         ]
 
+    @cached_property
+    def ingress_controller_images(self):
+        ingress_images = set()
+        for root, _, subfiles in os.walk(INGRESS_CONTROLLER_CONFIG_PATH):
+            for subfile in subfiles:
+                if not subfile.endswith('yaml'):
+                    continue
+                with open(os.path.join(root, subfile), mode='r', encoding='utf8') as file_stream:
+                    for doc in yaml.safe_load_all(file_stream):
+                        if doc["kind"] != "Deployment":
+                            continue
+                        for container in doc["spec"]["template"]["spec"]["containers"]:
+                            try:
+                                ingress_images.add(container["image"])
+                            except Exception as exc:  # pylint: disable=broad-except
+                                LOGGER.warning(
+                                    "Could not read the ingress controller related image: %s", exc)
+        return ingress_images
+
     @property
     def scylla_image(self):
         docker_repo = self.params.get('docker_image')
@@ -515,7 +536,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
     def stop_k8s_software(self):
         self.host_node.remoter.run('/var/tmp/kind delete cluster', ignore_status=True)
 
-    def on_deploy_completed(self):
+    def on_deploy_completed(self):  # pylint: disable=too-many-branches
         images_to_cache, images_to_retag, new_scylla_image_tag = [], {}, ""
 
         images_to_cache.extend(self.cert_manager_images)
@@ -544,6 +565,8 @@ class LocalKindCluster(LocalMinimalClusterBase):
         if self.params.get("scylla_mgmt_agent_version"):
             images_to_cache.append(
                 "scylladb/scylla-manager-agent:" + self.params.get("scylla_mgmt_agent_version"))
+        if self.params.get('k8s_enable_tls'):
+            images_to_cache.extend(self.ingress_controller_images)
 
         try:
             images_to_cache.append(self.get_operator_image())

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: ingress-default-backend
+  name: haproxy-kubernetes-ingress-default-backend
+  namespace: haproxy-controller
+spec:
+  selector:
+    app.kubernetes.io/name: ingress-default-backend
+  ports:
+  - name: cql-ssl
+    port: 9142
+    protocol: TCP
+    targetPort: 443
