@@ -1,0 +1,23 @@
+test_duration: 180
+# using scylla-bench instead cassandra-stress as c-s rapidly retries on failure (e.g. due per-partition limit error)
+# causing overloading cluster due flood of failing requests
+
+stress_cmd_w: "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=1000000 -clustering-row-count=1 -concurrency=50 -connection-count=10 -rows-per-request=1 -consistency-level=quorum -iterations=0 -timeout=300s -duration=10m"
+stress_cmd_r: "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=1000000 -clustering-row-count=1 -concurrency=50 -connection-count=10 -rows-per-request=1 -consistency-level=quorum -iterations=0 -timeout=300s -duration=10m"
+
+# stress that hits only several partitions to hit per-partition limit, ignoring errors as we expect them
+stress_cmd: [
+  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=20 -clustering-row-count=1 -concurrency=100 -connection-count=100 -rows-per-request=10 -consistency-level=quorum -iterations=0 -timeout=300s -duration=10m -partition-offset=1000001 -error-at-row-limit 0",
+  "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=20 -clustering-row-count=1 -concurrency=100 -connection-count=100 -rows-per-request=10 -consistency-level=quorum -iterations=0 -timeout=300s -duration=10m -partition-offset=1000001 -error-at-row-limit 0"
+]
+
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.large'
+instance_type_loader: 'c5.large'
+instance_type_monitor: 't2.small'
+
+user_prefix: 'per-part-limit'
