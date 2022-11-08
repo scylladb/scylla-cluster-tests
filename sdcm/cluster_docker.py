@@ -251,7 +251,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
     def _get_nodes(self):
         containers = ContainerManager.get_containers_by_prefix(self.node_prefix)
-        for node_index, container in sorted((int(c.labels["NodeIndex"]), c) for c in containers):
+        for node_index, container in sorted(((int(c.labels["NodeIndex"]), c) for c in containers), key=lambda x: x[0]):
             LOGGER.debug("Found container %s with name `%s' and index=%d", container, container.name, node_index)
             node = self._create_node(node_index, container)
             self.nodes.append(node)
