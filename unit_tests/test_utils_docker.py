@@ -314,7 +314,7 @@ class TestContainerManager(unittest.TestCase):
 
     def test_get_containers_by_prefix(self):
         self.assertEqual(ContainerManager.get_containers_by_prefix("blah"),
-                         ((), {"all": True, "filters": {"name": "blah"}, }, ))
+                         ((), {"all": True, "filters": {"name": "blah*"}, }, ))
 
     def test_get_container_name_by_id(self):
         with self.subTest("Try to get name of non-existent container"):

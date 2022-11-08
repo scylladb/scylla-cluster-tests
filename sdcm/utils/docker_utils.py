@@ -406,7 +406,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
     @classmethod
     def get_containers_by_prefix(cls, prefix: str, docker_client: DockerClient = None) -> List[Container]:
         docker_client = docker_client or cls.default_docker_client
-        return docker_client.containers.list(all=True, filters={"name": prefix})
+        return docker_client.containers.list(all=True, filters={"name": f'{prefix}*'})
 
     @classmethod
     def get_container_name_by_id(cls, c_id: str, docker_client: DockerClient = None) -> str:
