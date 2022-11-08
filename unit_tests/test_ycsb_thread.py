@@ -15,9 +15,9 @@ import re
 
 import pytest
 import requests
-from cassandra.cluster import Cluster  # pylint: disable=no-name-in-module
 
 from sdcm.utils import alternator
+from sdcm.utils.cluster_utils import get_cluster_driver
 from sdcm.utils.decorators import timeout
 from sdcm.utils.docker_utils import running_in_docker
 from sdcm.ycsb_thread import YcsbStressThread
@@ -48,14 +48,7 @@ def create_table(docker_scylla):
 
 @pytest.fixture(scope="session")
 def create_cql_ks_and_table(docker_scylla):
-    if running_in_docker():
-        address = f"{docker_scylla.internal_ip_address}:9042"
-    else:
-        address = docker_scylla.get_port("9042")
-    node_ip, port = address.split(":")
-    port = int(port)
-
-    cluster_driver = Cluster([node_ip], port=port)
+    cluster_driver = get_cluster_driver(docker_scylla)
     session = cluster_driver.connect()
     session.execute(
         """create keyspace ycsb WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor': 1 };"""

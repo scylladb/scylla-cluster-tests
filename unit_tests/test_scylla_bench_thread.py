@@ -12,10 +12,9 @@
 # Copyright (c) 2022 ScyllaDB
 
 import pytest
-from cassandra.cluster import Cluster  # pylint: disable=no-name-in-module
 
 from sdcm.scylla_bench_thread import ScyllaBenchThread
-from sdcm.utils.docker_utils import running_in_docker
+from sdcm.utils.cluster_utils import get_cluster_driver
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 from test_lib.scylla_bench_tools import create_scylla_bench_table_query
 
@@ -27,14 +26,7 @@ pytestmark = [
 
 @pytest.fixture(scope="session")
 def create_cql_ks_and_table(docker_scylla):
-    if running_in_docker():
-        address = f"{docker_scylla.internal_ip_address}:9042"
-    else:
-        address = docker_scylla.get_port("9042")
-    node_ip, port = address.split(":")
-    port = int(port)
-
-    cluster_driver = Cluster([node_ip], port=port)
+    cluster_driver = get_cluster_driver(docker_scylla)
     create_table_query = create_scylla_bench_table_query(
         compaction_strategy="SizeTieredCompactionStrategy", seed=None
     )
