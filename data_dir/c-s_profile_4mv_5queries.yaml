@@ -19,7 +19,7 @@ table_definition: |
     userdata blob,
     last_access timeuuid,
     PRIMARY KEY(userid)
-  );
+  ) WITH compaction = {'class': 'SizeTieredCompactionStrategy'};
 
 extra_definitions:
   - CREATE MATERIALIZED VIEW mview.users_by_first_name AS SELECT userid, first_name, email FROM mview.users WHERE first_name IS NOT NULL and userid IS NOT NULL PRIMARY KEY (first_name, userid);
