@@ -3584,6 +3584,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_add_remove_dc(self) -> None:
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Operator doesn't support multi-DC yet. Skipping.")
+        if self.cluster.test_config.MULTI_REGION:
+            raise UnsupportedNemesis(
+                "add_remove_dc skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)")
         InfoEvent(message='Starting New DC Nemesis').publish()
         node = self.cluster.nodes[0]
         system_keyspaces = ["system_auth", "system_distributed", "system_traces"]
