@@ -19,7 +19,7 @@ table_definition: |
     userdata blob,
     last_access timeuuid,
     PRIMARY KEY(userid)
-  );
+  ) WITH compaction = {'class': 'SizeTieredCompactionStrategy'};
 
 extra_definitions:
   - CREATE INDEX IF NOT EXISTS  users_last_name_ind ON sec_index.users (last_name)
