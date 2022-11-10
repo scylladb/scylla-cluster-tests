@@ -2,11 +2,21 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field, fields
+from typing import Optional
 
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
+
+DEFAULT_USER = "cassandra"
+DEFAULT_USER_PASSWORD = "cassandra"
+STRESS_ROLE_NAME_TEMPLATE = 'role%s_%d'
+STRESS_ROLE_PASSWORD_TEMPLATE = 'rolep%s'
+SERVICE_LEVEL_NAME_TEMPLATE = 'sl%s_%d'
 
 
 def sla_result_to_dict(sla_result):
@@ -59,7 +69,7 @@ class ServiceLevel:
     # pylint: disable=too-many-arguments
     def __init__(self, session,
                  name: str,
-                 shares: int = 1000,
+                 shares: Optional[int] = 1000,
                  timeout: str = None,
                  workload_type: str = None):
         self.session = session
@@ -341,3 +351,57 @@ class User(UserRoleBase):
         self.session.execute(query)
         LOGGER.debug('User %s has been created', self.name)
         return self
+
+
+def create_sla_auth(session, shares: int, index: int) -> Role:
+    role = Role(session=session, name=STRESS_ROLE_NAME_TEMPLATE % (shares or '', index),
+                password=STRESS_ROLE_PASSWORD_TEMPLATE % shares or '', login=True).create()
+    role.attach_service_level(ServiceLevel(session=session, name=SERVICE_LEVEL_NAME_TEMPLATE % (shares or '', index),
+                                           shares=shares).create())
+
+    return role
+
+
+def add_sla_credentials_to_stress_cmds(workload_names: list, roles, params, parent_class_name: str):
+    def _set_credentials_to_cmd(cmd):
+        if roles and "<sla credentials " in cmd:
+            if 'user=' in cmd:
+                # if stress command is not defined as expected, stop the tests and fix it. Then re-run
+                raise EnvironmentError("Stress command is defined wrong. Credentials already applied. Remove "
+                                       f"unnecessary and re-run the test. Command: {cmd}")
+
+            index = re.search(r"<sla credentials (\d+)>", cmd)
+            role_index = int(index.groups(0)[0]) if index else None
+            if role_index is None:
+                # if stress command is not defined as expected, stop the tests and fix it. Then re-run
+                raise EnvironmentError("Stress command is defined wrong. Expected pattern '<credentials \\d>' was "
+                                       f"not found. Fix the command and re-run the test. Command: {cmd}")
+            sla_role_name = roles[role_index].name.replace('"', '')
+            sla_role_password = roles[role_index].password
+            return re.sub(r'<sla credentials \d+>', f'user={sla_role_name} password={sla_role_password}', cmd)
+        return cmd
+
+    try:
+        for stress_op in workload_names:
+            stress_cmds = []
+            stress_params = params.get(stress_op)
+            if isinstance(stress_params, str):
+                stress_params = [stress_params]
+
+            if not stress_params:
+                continue
+
+            for stress_cmd in stress_params:
+                # cover multitenant test
+                if isinstance(stress_cmd, list):
+                    cmds = []
+                    for current_cmd in stress_cmd:
+                        cmds.append(_set_credentials_to_cmd(cmd=current_cmd))
+                    stress_cmds.append(cmds)
+                else:
+                    stress_cmds.append(_set_credentials_to_cmd(cmd=stress_cmd))
+
+            params[stress_op] = stress_cmds
+    except EnvironmentError as error_message:
+        TestFrameworkEvent(source=parent_class_name, message=error_message, severity=Severity.CRITICAL).publish()
+        raise
