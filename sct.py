@@ -802,8 +802,7 @@ def update_conf_docs():
 @cli.command("perf-regression-report", help="Generate and send performance regression report")
 @click.option("-i", "--es-id", required=True, type=str, help="Id of the run in Elastic Search")
 @click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
-@click.option("-l", "--logdir", required=True, type=str, help="Dir configured to store SCT logs")
-def perf_regression_report(es_id, emails, logdir):
+def perf_regression_report(es_id, emails):
     add_file_logger()
     emails = emails.split(',')
     if not emails:
@@ -812,7 +811,9 @@ def perf_regression_report(es_id, emails, logdir):
     results_analyzer = PerformanceResultsAnalyzer(es_index="performanceregressiontest", es_doc_type="test_stats",
                                                   email_recipients=emails, logger=LOGGER)
     results_analyzer.check_regression(es_id)
-    email_results_file = "email_data.json"
+
+    logdir = Path(get_test_config().logdir())
+    email_results_file = logdir / "email_data.json"
     test_results = read_email_data_from_file(email_results_file)
     if not test_results:
         LOGGER.error("Test Results file not found")
