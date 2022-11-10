@@ -26,25 +26,6 @@ root_disk_size_monitor: 100
 
 user_prefix: 'longevity-1000-keyspaces'
 
-# loader AMI with c-s ver. 4 and few fixes:
-#  - fix NoSuchElementException
-#  - enable control over both consistency levels: regular and serial
-#  - bring shard awareness
-regions_data:
-  us-east-1:
-    ami_id_loader: 'ami-0b94f0e897d884b1b'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
-  eu-west-1:
-    ami_id_loader: 'ami-0bf19545bc7bc9e1f'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
-  eu-west-2:
-    ami_id_loader: 'ami-043f248f98c105419'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
-  eu-central-1:
-    ami_id_loader: 'ami-0114531e650c08b74'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
-  us-west-2:
-    ami_id_loader: 'ami-063a97bde47353690'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
-  eu-north-1:
-    ami_id_loader: 'ami-04af71cc28c321f61'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
-
-
 # disables coredump on bad alloc temporary cause of https://github.com/scylladb/scylla/issues/4951
 append_scylla_args: '--blocked-reactor-notify-ms 500'
 
