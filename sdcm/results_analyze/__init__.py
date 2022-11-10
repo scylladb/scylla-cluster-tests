@@ -523,7 +523,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return PerformanceFilterScyllaBench(test_doc, is_gce, use_wide_query, lastyear)()
         elif test_doc['_source']['test_details'].get('ycsb'):
             return PerformanceFilterYCSB(test_doc, is_gce, use_wide_query, lastyear)()
-        elif "cdc" in test_doc['_source']['test_details'].get('sub_type'):
+        elif "cdc" in test_doc['_source']['test_details'].get('sub_type', ''):
             return CDCQueryFilterCS(test_doc, is_gce, use_wide_query, lastyear)()
         else:
             return PerformanceFilterCS(test_doc, is_gce, use_wide_query, lastyear)()
