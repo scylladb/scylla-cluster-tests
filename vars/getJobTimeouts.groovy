@@ -22,8 +22,20 @@ List<Integer> call(Map params, String region){
     """
     def testData = sh(script: cmd, returnStdout: true).trim()
     println(testData)
-    testData = testData =~ /test_duration: (\d+)/
-    testDuration = testData[0][1].toInteger()
+    if (params.stress_duration == "") {
+        testData = testData =~ /test_duration: (\d+)/
+        testDuration = testData[0][1].toInteger()
+    } else {
+        stressDuration = params.stress_duration.toInteger()
+        try {
+            prepareDuration = params.prepare_stress_duration.toInteger()
+        } catch (e) {
+            testData = testData =~ /prepare_stress_duration: (\d+)/
+            prepareDuration = testData[0][1].toInteger()
+        }
+        Integer stressEndup = 10
+        testDuration = prepareDuration + stressDuration + stressEndup
+    }
     Integer testStartupTimeout = 20
     Integer testTeardownTimeout = 40
     Integer collectLogsTimeout = 90

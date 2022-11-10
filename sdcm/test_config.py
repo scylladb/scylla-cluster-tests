@@ -28,6 +28,7 @@ LOGGER = logging.getLogger(__name__)
 
 class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-methods
     TEST_DURATION = 60
+    TEST_WARMUP_TEARDOWN = 60
     RSYSLOG_SSH_TUNNEL_LOCAL_PORT = 5000
     RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL = 600
     RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST = 20000

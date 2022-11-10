@@ -172,7 +172,17 @@ class SCTConfiguration(dict):
                   Test duration (min). Parameter used to keep instances produced by tests
                   and for jenkins pipeline timeout and TimoutThread.
              """),
-
+        dict(name="prepare_stress_duration", env="SCT_PREPARE_STRESS_DURATION", type=int,
+             help="""
+                  Time in minutes, which is required to run prepare stress commands
+                  defined in prepare_*_cmd for dataset generation, and is used in
+                  test duration calculation
+             """),
+        dict(name="stress_duration", env="SCT_STRESS_DURATION", type=int,
+             help="""
+                  Time in minutes, Time of execution for stress commands from stress_cmd parameters
+                  and is used in test duration calculation
+             """),
         dict(name="n_db_nodes", env="SCT_N_DB_NODES", type=int_or_list,
              help="Number list of database nodes in multiple data centers."),
 
@@ -1781,6 +1791,20 @@ class SCTConfiguration(dict):
             if not (authenticator_password and authenticator_user):
                 raise ValueError("For PasswordAuthenticator authenticator authenticator_user and authenticator_password"
                                  " have to be provided")
+
+        # 13) validate stress and prepare duration:
+        if stress_duration := self.get('stress_duration'):
+            try:
+                self['stress_duration'] = abs(int(stress_duration))
+            except ValueError:
+                raise ValueError(f'Configured stress duration for generic test duratinon have to be \
+                                 positive integer number in minutes. Current value: {stress_duration}') from ValueError
+        if prepare_stress_duration := self.get('prepare_stress_duration'):
+            try:
+                self['prepare_stress_duration'] = abs(int(prepare_stress_duration))
+            except ValueError:
+                raise ValueError(f'Configured stress duration for generic test duratinon have to be \
+                                 positive integer number in minutes. Current value: {prepare_stress_duration}') from ValueError
 
         # 14 Validate run_fullscan parmeters
         if run_fullscan_params := self.get("run_fullscan"):
