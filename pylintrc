@@ -145,7 +145,8 @@ disable=print-statement,
         logging-format-interpolation,
         possibly-unused-variable,
         bad-continuation,
-        cyclic-import
+        cyclic-import,
+        duplicate-code,
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
