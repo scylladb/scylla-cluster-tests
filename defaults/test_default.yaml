@@ -1,6 +1,8 @@
 db_type: "scylla"
 
 test_duration: 60
+prepare_stress_duration: 300 # 5 hours
+stress_duration: 0
 
 ip_ssh_connections: 'private'
 

@@ -311,7 +311,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug("IP used for SSH connections is '%s'",
                        ip_ssh_connections)
         self.test_config.set_ip_ssh_connections(ip_ssh_connections)
-        self._duration = self.params.get(key='test_duration')
+        self._init_test_duration()
         post_behavior_db_nodes = self.params.get('post_behavior_db_nodes')
         self.log.debug('Post behavior for db nodes %s', post_behavior_db_nodes)
         self.test_config.keep_cluster(node_type='db_nodes', val=post_behavior_db_nodes)
@@ -373,6 +373,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
+
+    def _init_test_duration(self):
+        self._stress_duration: int = self.params.get('stress_duration')
+        self._prepare_stress_duration: int = self.params.get('prepare_stress_duration')
+        if self._stress_duration:
+            self._duration = int(self._prepare_stress_duration) + int(self._stress_duration) + \
+                self.test_config.TEST_WARMUP_TEARDOWN
+
+            self.log.info("SCT Test duration: %s; Stress duration: %s; Prepare duration: %s",
+                          self._duration, self._stress_duration, self._prepare_stress_duration)
+        else:
+            self._duration = self.params.get("test_duration")
 
     def init_argus_run(self):
         try:
@@ -1895,6 +1907,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration:
             timeout = self.get_duration(duration)
+        elif self._stress_duration and ' duration=' in stress_cmd:
+            timeout = self.get_duration(self._stress_duration)
+            stress_cmd = re.sub(r'\sduration=\d+[mhd]\s', f' duration={self._stress_duration}m ', stress_cmd)
         else:
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
 
@@ -1929,6 +1944,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if duration:
             timeout = self.get_duration(duration)
+        elif self._stress_duration and '-duration=' in stress_cmd:
+            timeout = self.get_duration(self._stress_duration)
+            stress_cmd = re.sub(r'\s-duration[=\s]+\d+[mhd]+\s*', f' -duration={self._stress_duration}m ', stress_cmd)
         else:
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
@@ -2080,6 +2098,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def run_gemini(self, cmd, duration=None):
         if duration:
             timeout = self.get_duration(duration)
+        elif self._stress_duration and ' --duration' in cmd:
+            timeout = self.get_duration(self._stress_duration)
+            cmd = re.sub(r'\s--duration\s+\d+[mhd]\s', f' --duration {self._stress_duration}m ', cmd)
+            cmd = re.sub(r'\s--warmup\s+\d+[mhd]\s', f' --warmup {int(self._stress_duration * .2)}m ', cmd)
         else:
             timeout = get_timeout_from_stress_cmd(cmd) or self.get_duration(duration)
         if self.create_stats:
