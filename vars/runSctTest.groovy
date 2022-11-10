@@ -27,6 +27,14 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     export SCT_CONFIG_FILES=${test_config}
     export SCT_COLLECT_LOGS=false
 
+    if [[ -n "${params.stress_duration ? params.stress_duration : ''}" ]] ; then
+        export SCT_STRESS_DURATION=${params.stress_duration}
+    fi
+
+    if [[ -n "${params.prepare_stress_duration ? params.prepare_stress_duration : ''}" ]] ; then
+        export SCT_PREPARE_STRESS_DURATION=${params.prepare_stress_duration}
+    fi
+
     if [[ -n "${params.region ? params.region : ''}" ]] ; then
         export SCT_REGION_NAME=${current_region}
     fi

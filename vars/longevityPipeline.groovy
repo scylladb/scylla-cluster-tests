@@ -38,6 +38,15 @@ def call(Map pipelineParams) {
                description: 'Availability zone',
                name: 'availability_zone')
 
+            string(defaultValue: "",
+               description: 'Duration in minutes for stress commands(gemini, c-s, s-b)',
+               name: 'stress_duration')
+
+            string(defaultValue: "",
+               description: ('Time duration in minutes for preparing dataset with commands prepare_*_cmd, if empty value, default value is 5h = 300 minutes.' +
+                             'Prepare commands could finish earlier and have not to run full prepare_stress_duration time'),
+               name: 'prepare_stress_duration')
+
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'gce_image_db')
             string(defaultValue: '', description: '', name: 'azure_image_db')
