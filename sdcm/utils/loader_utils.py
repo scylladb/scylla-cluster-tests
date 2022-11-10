@@ -16,6 +16,15 @@
 import re
 import time
 
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import TestFrameworkEvent
+
+DEFAULT_USER = "cassandra"
+DEFAULT_USER_PASSWORD = "cassandra"
+STRESS_ROLE_NAME_TEMPLATE = 'role%d_%d'
+STRESS_ROLE_PASSWORD_TEMPLATE = 'rolep%d'
+SERVICE_LEVEL_NAME_TEMPLATE = 'sl%d_%d'
+
 
 class LoaderUtilsMixin:
     """This mixin can be added to any class that inherits the 'ClusterTester' one"""
@@ -190,3 +199,48 @@ class LoaderUtilsMixin:
                 node.run_nodetool("compact")
             self.wait_no_compactions_running(n=prepare_wait_no_compactions_timeout)
         self.log.info('Prepare finished')
+
+    @staticmethod
+    def add_sla_credentials_to_stress_cmds(workload_names: list, roles, params, parent_class_name: str):
+        def _set_credentials_to_cmd(cmd):
+            if roles and "<sla credentials " in cmd:
+                if 'user=' in cmd:
+                    # if stress command is not defined as expected, stop the tests and fix it. Then re-run
+                    raise EnvironmentError("Stress command is defined wrong. Credentials already applied. Remove "
+                                           f"unnecessary and re-run the test. Command: {cmd}")
+
+                index = re.search(r"<sla credentials (\d+)>", cmd)
+                role_index = int(index.groups(0)[0]) if index else None
+                if role_index is None:
+                    # if stress command is not defined as expected, stop the tests and fix it. Then re-run
+                    raise EnvironmentError("Stress command is defined wrong. Expected pattern '<credentials \\d>' was "
+                                           f"not found. Fix the command and re-run the test. Command: {cmd}")
+                sla_role_name = roles[role_index].name.replace('"', '')
+                sla_role_password = roles[role_index].password
+                return re.sub(r'<sla credentials \d+>', f'user={sla_role_name} password={sla_role_password}', cmd)
+            return cmd
+
+        try:
+            for stress_op in workload_names:
+                stress_cmds = []
+                stress_params = params.get(stress_op)
+                if isinstance(stress_params, str):
+                    stress_params = [stress_params]
+
+                if not stress_params:
+                    continue
+
+                for stress_cmd in stress_params:
+                    # cover multitenant test
+                    if isinstance(stress_cmd, list):
+                        cmds = []
+                        for current_cmd in stress_cmd:
+                            cmds.append(_set_credentials_to_cmd(cmd=current_cmd))
+                        stress_cmds.append(cmds)
+                    else:
+                        stress_cmds.append(_set_credentials_to_cmd(cmd=stress_cmd))
+
+                params[stress_op] = stress_cmds
+        except EnvironmentError as error_message:
+            TestFrameworkEvent(source=parent_class_name, message=error_message, severity=Severity.CRITICAL).publish()
+            raise

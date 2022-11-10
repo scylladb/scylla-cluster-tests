@@ -36,6 +36,7 @@ from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused, \
     ignore_abort_requested_errors, decorate_with_context
 from sdcm.utils import loader_utils
+from test_lib.sla import create_sla_auth
 
 
 def truncate_entries(func):
@@ -101,6 +102,7 @@ def recover_conf(node):
             r'test -e $conf.backup && sudo cp -v $conf.backup $conf; done')
 
 
+# pylint: disable=too-many-instance-attributes
 class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     """
     Test a Scylla cluster upgrade.
@@ -792,20 +794,47 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message='Rollback Node %s ended' % node).publish()
         node.check_node_health()
 
-    def _run_stress_workload(self, workload_name: str, wait_for_finish: bool = False) -> CassandraStressThread:
+    def _run_stress_workload(self, workload_name: str, wait_for_finish: bool = False) -> [CassandraStressThread]:
         """Runs workload from param name specified in test-case yaml"""
         InfoEvent(message=f"Starting {workload_name}").publish()
-        stress_before_upgrade = self.params.get(workload_name)
-        workload_thread_pool = self.run_stress_thread(stress_cmd=stress_before_upgrade)
+        stress_commands = self.params.get(workload_name)
+        workload_thread_pools = []
+        if isinstance(stress_commands, str):
+            stress_commands = [stress_commands]
+
+        for stress_command in stress_commands:
+            workload_thread_pools.append(self.run_stress_thread(stress_cmd=stress_command))
+
         if self.params.get('alternator_port'):
             self.pre_create_alternator_tables()
         if wait_for_finish is True:
             InfoEvent(message=f"Waiting for {workload_name} to finish").publish()
-            self.verify_stress_thread(workload_thread_pool)
+            for thread_pool in workload_thread_pools:
+                self.verify_stress_thread(thread_pool)
         else:
             InfoEvent(message='Sleeping for 60s to let cassandra-stress start before the next steps...').publish()
             time.sleep(60)
-        return workload_thread_pool
+        return workload_thread_pools
+
+    def _add_sla_credentials_to_stress_commands(self, workloads_with_sla: list):
+        if not workloads_with_sla:
+            self.log.debug("No workloads supplied")
+            return
+
+        stress_during_entire_upgrade = self.params.get(workloads_with_sla[0])
+        if not [cmd for cmd in stress_during_entire_upgrade if "<sla credentials " in cmd]:
+            self.log.debug("No need to set SLA credentials for stress command: %s", stress_during_entire_upgrade)
+            return
+
+        roles = []
+        service_level_shares = self.params.get("service_level_shares")
+        with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], user=loader_utils.DEFAULT_USER,
+                                                    password=loader_utils.DEFAULT_USER_PASSWORD) as session:
+            for index, shares in enumerate(service_level_shares):
+                roles.append(create_sla_auth(session=session, shares=shares, index=index))
+
+        self.add_sla_credentials_to_stress_cmds(workload_names=workloads_with_sla, roles=roles,
+                                                params=self.params, parent_class_name=self.__class__.__name__)
 
     def test_generic_cluster_upgrade(self):
         """
@@ -816,9 +845,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         For multi-dc upgrades, alternates upgraded nodes between dc's.
         """
+        self._add_sla_credentials_to_stress_commands(workloads_with_sla=['stress_during_entire_upgrade',
+                                                                         'stress_after_cluster_upgrade'])
         step = itertools_count(start=1)
         self._run_stress_workload("stress_before_upgrade", wait_for_finish=True)
-        stress_thread_pool = self._run_stress_workload("stress_during_entire_upgrade", wait_for_finish=False)
+        stress_thread_pools = self._run_stress_workload("stress_during_entire_upgrade", wait_for_finish=False)
 
         # generate random order to upgrade
         nodes_to_upgrade = self.shuffle_nodes_and_alternate_dcs(list(self.db_cluster.nodes))
@@ -842,7 +873,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message="All nodes were upgraded successfully").publish()
 
         InfoEvent(message="Waiting for stress_during_entire_upgrade to finish").publish()
-        self.verify_stress_thread(stress_thread_pool)
+        for stress_thread_pool in stress_thread_pools:
+            self.verify_stress_thread(stress_thread_pool)
 
         self._run_stress_workload("stress_after_cluster_upgrade", wait_for_finish=True)
 
@@ -1025,7 +1057,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.fill_and_verify_db_data('', pre_fill=True)
 
         InfoEvent(message="Step2 - Start 'stress_during_entire_upgrade'").publish()
-        stress_during_entire_upgrade_thread_pool = self._run_stress_workload(
+        stress_during_entire_upgrade_thread_pools = self._run_stress_workload(
             "stress_during_entire_upgrade", wait_for_finish=False)
 
         InfoEvent(message="Step3 - Upgrade kubernetes platform").publish()
@@ -1085,7 +1117,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message="Step8 - Wait for the end of 'stress_during_entire_upgrade'").publish()
-        self.verify_stress_thread(stress_during_entire_upgrade_thread_pool)
+        for stress_during_entire_upgrade_thread_pool in stress_during_entire_upgrade_thread_pools:
+            self.verify_stress_thread(stress_during_entire_upgrade_thread_pool)
 
         InfoEvent(message="Step9 - Run 'fill_and_verify_db_data'").publish()
         self.fill_and_verify_db_data(note='after operator upgrade and scylla member addition')
