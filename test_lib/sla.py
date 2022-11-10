@@ -5,6 +5,9 @@ import logging
 from dataclasses import dataclass, field, fields
 
 from sdcm.utils.decorators import retrying
+from sdcm.utils.loader_utils import (STRESS_ROLE_NAME_TEMPLATE,
+                                     STRESS_ROLE_PASSWORD_TEMPLATE,
+                                     SERVICE_LEVEL_NAME_TEMPLATE)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -341,3 +344,12 @@ class User(UserRoleBase):
         self.session.execute(query)
         LOGGER.debug('User %s has been created', self.name)
         return self
+
+
+def create_sla_auth(session, shares: int, index: int) -> Role:
+    role = Role(session=session, name=STRESS_ROLE_NAME_TEMPLATE % (shares, index),
+                password=STRESS_ROLE_PASSWORD_TEMPLATE % shares, login=True).create()
+    role.attach_service_level(ServiceLevel(session=session, name=SERVICE_LEVEL_NAME_TEMPLATE % (shares, index),
+                                           shares=shares).create())
+
+    return role
