@@ -19,7 +19,7 @@ from typing import List, Dict
 
 from sdcm.sct_events.loaders import CDCReaderStressEvent
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
 
 

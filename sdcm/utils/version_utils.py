@@ -20,7 +20,6 @@ from typing import List, Optional
 from collections import namedtuple
 from urllib.parse import urlparse
 from functools import lru_cache, wraps
-from itertools import count
 
 import yaml
 import boto3
@@ -327,38 +326,6 @@ def get_scylla_docker_repo_from_version(version: str):
     if is_enterprise(version):
         return 'scylladb/scylla-enterprise'
     return 'scylladb/scylla'
-
-
-def get_docker_image_by_version(scylla_version: str):
-    # get shorter version, for getting releases, and check if it's enterprise.
-    short_scylla_version = SCYLLA_VERSION_RE.match(scylla_version)
-    assert short_scylla_version, f"'{scylla_version}' isn't acceptable version string"
-    short_scylla_version = short_scylla_version.group().replace('~', '-')
-
-    # select the repo to use, and the scylla_versio to match
-    docker_repo = 'scylladb/scylla'
-    if is_enterprise(short_scylla_version):
-        docker_repo += '-enterprise'
-
-    default_image = f"{docker_repo}:latest"
-
-    if 'dev' in scylla_version:
-        docker_repo += '-nightly'
-        scylla_version = scylla_version.replace('~', '-')
-    else:
-        scylla_version = short_scylla_version
-
-    for page_number in count(start=1):
-        all_tags = requests.get(url=f'https://hub.docker.com/v2/repositories/{docker_repo}/'
-                                    f'tags?page_size=50&page={page_number}').json()
-        for image in all_tags['results']:
-            if scylla_version == image['name']:
-                return f"{docker_repo}:{image['name']}"
-        if not all_tags.get('next'):
-            break
-
-    # if image wasn't found, default to the latest releases
-    return default_image
 
 
 def _list_repo_file_etag(s3_client: S3Client, prefix: str) -> Optional[dict]:

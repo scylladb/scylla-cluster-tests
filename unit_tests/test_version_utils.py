@@ -21,7 +21,6 @@ from sdcm.utils.version_utils import (
     VERSION_NOT_FOUND_ERROR,
     SCYLLA_VERSION_GROUPED_RE,
     get_specific_tag_of_docker_image,
-    get_docker_image_by_version,
 )
 
 BASE_S3_DOWNLOAD_URL = 'https://s3.amazonaws.com/downloads.scylladb.com'
@@ -389,26 +388,3 @@ def test_scylla_version_grouped_regexp(full_version, version, date, commit_id):
     assert parsed_version.group("version") == version
     assert parsed_version.group("date") == date
     assert parsed_version.group("commit_id") == commit_id
-
-
-@pytest.mark.integration
-@pytest.mark.need_network
-@pytest.mark.skip(reason="those are integration tests only")
-@pytest.mark.parametrize("version, expected", (
-    ("4.6.rc2-20220102.e8a1cfb6f", "scylladb/scylla:4.6.rc2"),
-    ("5.0.1-0.20220719.b177dacd3", "scylladb/scylla:5.0.1"),
-    ("5.1", "scylladb/scylla:5.1"),
-    ("5.1.0~rc1", "scylladb/scylla:5.1.0-rc1"),
-    ("5.0.1", "scylladb/scylla:5.0.1"),
-    ("5.2.0~dev-0.20220824.6ce5e9079c1e", "scylladb/scylla-nightly:5.2.0-dev-0.20220824.6ce5e9079c1e"),
-    ("5.1.0~dev-0.20220726.29c28dcb0c33", "scylladb/scylla-nightly:5.1.0-dev-0.20220726.29c28dcb0c33"),
-    ("2022.2.dev-20220515.no_such_sha", "scylladb/scylla-enterprise:latest"),
-    ("5.2.0~dev-20220515.no_such_sha", "scylladb/scylla:latest"),
-))
-def test_get_docker_image_by_version(version, expected):
-    assert get_docker_image_by_version(scylla_version=version) == expected
-
-
-def test_get_docker_image_by_version_broken_string_version():
-    with pytest.raises(AssertionError):
-        get_docker_image_by_version(scylla_version="broken_version")
