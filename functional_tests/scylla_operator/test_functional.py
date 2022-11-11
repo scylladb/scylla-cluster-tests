@@ -693,6 +693,7 @@ def test_default_dns_policy(db_cluster: ScyllaPodCluster):
         f"Pods: {yaml.safe_dump(pods_with_wrong_dns_policy, indent=2)}")
 
 
+@pytest.mark.requires_scylla_versions(("5.2.0-dev-0.0.0", None))
 def test_nodetool_flush_and_reshard(db_cluster: ScyllaPodCluster):
     target_node = db_cluster.nodes[0]
 
