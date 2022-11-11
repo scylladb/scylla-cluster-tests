@@ -576,10 +576,11 @@ class LocalKindCluster(LocalMinimalClusterBase):
         for image_repo in ('kube-controllers', 'cni', 'node'):
             images_to_cache.append(f"calico/{image_repo}:{CNI_CALICO_VERSION}")
 
-        for image in images_to_cache:
-            self.docker_pull(image)
-            self.host_node.remoter.run(
-                f"/var/tmp/kind load docker-image {image}", ignore_status=True)
+        if not self.params.get('reuse_cluster'):
+            for image in images_to_cache:
+                self.docker_pull(image)
+                self.host_node.remoter.run(
+                    f"/var/tmp/kind load docker-image {image}", ignore_status=True)
         if new_scylla_image_tag:
             self.params['scylla_version'] = new_scylla_image_tag
         for src_image, dst_image in images_to_retag.items():
