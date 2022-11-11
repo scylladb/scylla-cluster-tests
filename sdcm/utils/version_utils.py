@@ -28,7 +28,7 @@ import dateutil.parser
 from mypy_boto3_s3 import S3Client
 from botocore import UNSIGNED
 from botocore.client import Config
-from pkg_resources import parse_version
+from packaging import version
 from repodataParser.RepoParser import Parser
 
 from sdcm.remote import LOCALRUNNER
@@ -262,12 +262,12 @@ def get_branch_version_for_multiple_repositories(urls):
     return [thread.result for thread in threads]
 
 
-def is_enterprise(version):
+def is_enterprise(scylla_version):
     """
-    :param version: version string
+    :param scylla_version: scylla version string
     :return: True if this version string passed is a scylla enterprise version
     """
-    return parse_version(version) > parse_version('2000')
+    return version.LegacyVersion(scylla_version) > version.LegacyVersion('2000')
 
 
 def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> tuple[bool, str]:
@@ -280,17 +280,17 @@ def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> t
     LOGGER.debug("scylla_version_source: %s", scylla_version_source)
     if match := re.match(r'[\D\d]*-(\d+\.\d+)', scylla_version_source) or \
             re.match(r'\D*(\d+\.\d+)', scylla_version_source):
-        version = f"nightly-{match.group(1)}"
+        version_type = f"nightly-{match.group(1)}"
         is_enterprise_version = is_enterprise(match.group(1))
     elif scylla_version_source and 'enterprise' in scylla_version_source:
-        version = "nightly-enterprise"
+        version_type = "nightly-enterprise"
         is_enterprise_version = True
     elif scylla_version_source and 'master' in scylla_version_source:
-        version = "nightly-master"
+        version_type = "nightly-master"
         is_enterprise_version = False
     else:
         raise Exception("Scylla version for web install isn't identified")
-    return is_enterprise_version, version
+    return is_enterprise_version, version_type
 
 
 def get_gemini_version(output: str):
@@ -320,10 +320,10 @@ def get_systemd_version(output: str) -> int:
     return 0
 
 
-def get_scylla_docker_repo_from_version(version: str):
-    if version == 'latest':
+def get_scylla_docker_repo_from_version(scylla_version: str):
+    if scylla_version == 'latest':
         return 'scylladb/scylla-nightly'
-    if is_enterprise(version):
+    if is_enterprise(scylla_version):
         return 'scylladb/scylla-enterprise'
     return 'scylladb/scylla'
 
@@ -527,7 +527,7 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
             min_v = min_v or ("3.0.0" if scylla_type == "oss" else "2019.1.rc0")
             max_v = max_v or ("99.99.99" if scylla_type == "oss" else "2099.99.99")
             if max_v.count(".") == 1:
-                # NOTE: 'parse_version' function considers 4.4 as lower than 4.4.1,
+                # NOTE: version parse function considers 4.4 as lower than 4.4.1,
                 #       but we expect it to be any of the 4.4.x versions.
                 #       So, update all such short versions with the patch part and make it to be huge.
                 max_v = f"{max_v}.999"
@@ -548,7 +548,8 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
                 scylla_version = "n/a"
             func_version_mapping = self.VERSIONS.get((func.__name__, func.__code__.co_filename), {})
             for (min_v, max_v), mapped_func in func_version_mapping.items():
-                if parse_version(min_v) <= parse_version(scylla_version) <= parse_version(max_v):
+                if version.LegacyVersion(min_v) <= version.LegacyVersion(
+                        scylla_version) <= version.LegacyVersion(max_v):
                     return mapped_func(*args, **kwargs)
             raise MethodVersionNotFound("Method '{}' with version '{}' is not supported in '{}'!".format(
                 func.__name__, scylla_version, cls_self.__class__.__name__))
