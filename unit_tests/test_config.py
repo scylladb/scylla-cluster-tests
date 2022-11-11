@@ -115,6 +115,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_06b_docker_development():
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_VERSION'] = '666.development-blah'
+        os.environ['SCT_SCYLLA_REPO_LOADER'] = RPM_URL
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -239,6 +240,39 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertIn('scylla_repo', conf.dump_config())
         self.assertEqual(conf.get('scylla_repo'),
                          expected_repo)
+        self.assertEqual(conf.get('scylla_repo_loader'),
+                         "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.6.repo")
+
+    def test_12_scylla_version_repo_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
+        os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
+        os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
+        os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
+        os.environ['SCT_GCE_IMAGE_DB'] = 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+
+        expected_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list'
+        with unittest.mock.patch.object(sct_config, 'get_branch_version', return_value="4.7.dev", clear=True), \
+                unittest.mock.patch.object(sct_config, 'find_scylla_repo', return_value=expected_repo, clear=True):
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+
+        self.assertIn('scylla_repo', conf.dump_config())
+        self.assertEqual(conf.get('scylla_repo'),
+                         expected_repo)
+        self.assertEqual(conf.get('scylla_repo_loader'),
+                         "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.6.repo")
+
+    def test_12_k8s_scylla_version_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
+        os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-local-kind'
+        os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
+        os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertIn('scylla_repo', conf.dump_config())
+        self.assertFalse(conf.get('scylla_repo'))
+        self.assertEqual(conf.get('scylla_repo_loader'),
+                         'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.6.repo')
 
     def test_13_scylla_version_ami_branch(self):  # pylint: disable=invalid-name
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
