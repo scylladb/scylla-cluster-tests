@@ -105,8 +105,8 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host')
+        docker = RemoteDocker(loader, self.docker_image_name,
+                              extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host')
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
@@ -115,8 +115,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         LOGGER.debug('gemini local log: %s', log_file_name)
 
         gemini_cmd = self._generate_gemini_command()
-        with cleanup_context, \
-                GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, \
+        with GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, \
                 GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:
             try:
                 publisher.event_id = gemini_stress_event.event_id
