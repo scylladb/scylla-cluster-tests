@@ -671,9 +671,6 @@ class SCTConfiguration(dict):
         dict(name="tag_ami_with_result", env="SCT_TAG_AMI_WITH_RESULT", type=boolean,
              help="If True, would tag the ami with the test final result"),
 
-        dict(name="aws_use_prepared_loaders", env="SCT_AWS_USE_PREPARED_LOADERS", type=boolean,
-             help="If True, we use prepared VMs for loader (instead of using docker images)"),
-
         # GCE config options
         dict(name="gce_project", env="SCT_GCE_PROJECT", type=str,
              help="gcp project name to use"),
