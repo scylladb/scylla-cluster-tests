@@ -203,6 +203,19 @@ def skip_if_scylla_not_semver(request, tester: ScyllaOperatorFunctionalClusterTe
 
 
 @pytest.fixture(autouse=True)
+def skip_if_not_supported_scylla_version(request: pytest.FixtureRequest,
+                                         tester: ScyllaOperatorFunctionalClusterTester):
+    requires_scylla_versions = request.node.get_closest_marker('requires_scylla_versions')
+    if not requires_scylla_versions:
+        return
+    requires_scylla_versions = requires_scylla_versions.args
+    try:
+        version_utils.scylla_versions(*requires_scylla_versions)(lambda c: None)(tester.db_cluster)
+    except version_utils.MethodVersionNotFound as exc:
+        pytest.skip(str(exc))
+
+
+@pytest.fixture(autouse=True)
 def skip_based_on_operator_version(request: pytest.FixtureRequest, tester: ScyllaOperatorFunctionalClusterTester):
     # pylint: disable=protected-access
     if required_operator := request.node.get_closest_marker('required_operator'):
