@@ -266,6 +266,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.replacement_node_ip = None
 
         self._kernel_version = None
+        self._cassandra_stress_version = None
         self._uuid = None
 
     def init(self) -> None:
@@ -465,6 +466,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @property
     def continuous_events_registry(self) -> ContinuousEventsRegistry:
         return self._continuous_events_registry
+
+    @property
+    def cassandra_stress_version(self):
+        if not self._cassandra_stress_version:
+            result = self.remoter.run(cmd="cassandra-stress version", ignore_status=True, verbose=True)
+            match = re.search("Version: (.*)", result.stdout)
+            if match:
+                self._cassandra_stress_version = match.group(1)
+            else:
+                self.log.error("C-S version not found!")
+                self._cassandra_stress_version = "unknown"
+        return self._cassandra_stress_version
 
     @property
     def running_nemesis(self):
@@ -1361,6 +1374,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verbose:
             text = '%s: Waiting for DB services to be down' % self
         wait.wait_for(func=lambda: not self.db_up(), step=check_interval, text=text, timeout=timeout, throw_exc=True)
+
+    def wait_cs_installed(self, verbose=True):
+        text = None
+        if verbose:
+            text = '%s: Waiting for cassandra-stress' % self
+        wait.wait_for(func=self.cs_installed, step=60,
+                      text=text, throw_exc=False)
 
     def mark_log(self):
         """
@@ -4609,6 +4629,22 @@ class BaseLoaderSet():
                 apt-get install -y openjdk-11-jre openjdk-11-jre-headless
             """))
 
+        scylla_repo_loader = self.params.get('scylla_repo_loader')
+        if not scylla_repo_loader:
+            scylla_repo_loader = self.params.get('scylla_repo')
+        node.download_scylla_repo(scylla_repo_loader)
+        if node.is_rhel_like():
+            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
+        else:
+            node.remoter.run('sudo apt-get update')
+            node.remoter.run('sudo apt-get install -y '
+                             ' {}-tools '.format(node.scylla_pkg()))
+
+        if db_node_address is not None:
+            node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
+
+        node.wait_cs_installed(verbose=verbose)
+
         # install docker
         docker_install = dedent("""
             curl -fsSL get.docker.com -o get-docker.sh
@@ -4642,7 +4678,34 @@ class BaseLoaderSet():
             for node in self.nodes:
                 node.remoter.stop()
         else:
+            self.kill_cassandra_stress_thread()
             self.kill_docker_loaders()
+
+    def kill_cassandra_stress_thread(self):
+        search_cmds = [
+            'pgrep -f .*cassandra.*',
+            'pgrep -f cassandra.stress',
+            'pgrep -f cassandra-stress'
+        ]
+
+        def kill_cs_process(loader, filter_cmd):
+            list_of_processes = loader.remoter.run(cmd=filter_cmd,
+                                                   verbose=True, ignore_status=True)
+            if not list_of_processes.stdout.strip():
+                return True
+            loader.remoter.run(cmd=f'{filter_cmd} | xargs -I{{}}  kill -TERM {{}}',
+                               verbose=True, ignore_status=True)
+            return False
+
+        for loader in self.nodes:
+            try:
+                for search_cmd in search_cmds:
+                    wait.wait_for(kill_cs_process, text="Search and kill c-s processes", timeout=30, throw_exc=False,
+                                  loader=loader, filter_cmd=search_cmd)
+
+            except Exception as ex:  # pylint: disable=broad-except
+                self.log.warning("failed to kill stress-command on [%s]: [%s]",
+                                 str(loader), str(ex))
 
     def kill_docker_loaders(self):
         for loader in self.nodes:
@@ -4723,6 +4786,36 @@ class BaseLoaderSet():
         if not enable_parse:
             LOGGER.warning('Cannot find summary in c-stress results: %s', lines[-10:])
             return {}
+        return results
+
+    @staticmethod
+    def _parse_cs_results(lines):
+        results = {}
+        results['time'] = []
+        results['ops'] = []
+        results['totalops'] = []
+        results['latmax'] = []
+        results['lat999'] = []
+        results['lat99'] = []
+        results['lat95'] = []
+        for line in lines:
+            line.strip()
+            if line.startswith('total,'):
+                items = line.split(',')
+                totalops = items[1]
+                ops = items[2]
+                lat95 = items[7]
+                lat99 = items[8]
+                lat999 = items[9]
+                latmax = items[10]
+                time_point = items[11]
+                results['time'].append(time_point)
+                results['totalops'].append(totalops)
+                results['ops'].append(ops)
+                results['lat95'].append(lat95)
+                results['lat99'].append(lat99)
+                results['lat999'].append(lat999)
+                results['latmax'].append(latmax)
         return results
 
 
