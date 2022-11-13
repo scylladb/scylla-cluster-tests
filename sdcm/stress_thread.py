@@ -19,12 +19,13 @@ import logging
 import contextlib
 from typing import Any
 from itertools import chain
+from pathlib import Path
 
 from sdcm.loader import CassandraStressExporter
 from sdcm.cluster import BaseLoaderSet
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
-from sdcm.utils.common import FileFollowerThread, get_profile_content
+from sdcm.utils.common import FileFollowerThread, get_profile_content, get_data_dir_path
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
 from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
 from sdcm.utils.docker_remote import RemoteDocker
@@ -66,7 +67,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
     def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # pylint: disable=too-many-arguments
                  profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True,
-                 params=None, ssl_dir=None):
+                 params=None):
         super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout,
                          stress_num=stress_num, node_list=node_list,  # pylint: disable=too-many-arguments
                          round_robin=round_robin, stop_test_on_failure=stop_test_on_failure, params=params)
@@ -76,10 +77,6 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         self.client_encrypt = client_encrypt
         self.stop_test_on_failure = stop_test_on_failure
         self.compaction_strategy = compaction_strategy
-
-        # option used for integration tests only when the mount point
-        # can't be hardcoded as default
-        self.ssl_dir = ssl_dir or '/etc/scylla/ssl_conf'
 
     def create_stress_cmd(self, cmd_runner, keyspace_idx):
         stress_cmd = self.stress_cmd
@@ -155,7 +152,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
     def _run_stress(self, loader, loader_idx, cpu_idx):
         pass
 
-    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals
+    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches
         cleanup_context = contextlib.nullcontext()
 
         if "k8s" in self.params.get("cluster_backend"):
@@ -180,7 +177,6 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner = cleanup_context = RemoteDocker(loader, cassandra_stress,
                                                         command_line="-c 'tail -f /dev/null'",
                                                         extra_docker_opts=f'{cpu_options} '
-                                                                          f'-v {self.ssl_dir}:/etc/scylla/ssl_conf '
                                                                           f'--label shell_marker={self.shell_marker}'
                                                                           f' --entrypoint /bin/bash')
 
@@ -190,6 +186,14 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             with open(self.profile, encoding="utf-8") as profile_file:
                 LOGGER.info('Profile content:\n%s', profile_file.read())
             cmd_runner.send_files(self.profile, os.path.join('/tmp', os.path.basename(self.profile)), delete_dst=True)
+
+        if self.client_encrypt:
+            ssl_conf_dir = Path(get_data_dir_path('ssl_conf', 'client'))
+            for ssl_file in ssl_conf_dir.iterdir():
+                if ssl_file.is_file():
+                    cmd_runner.send_files(str(ssl_file),
+                                          str(Path('/etc/scylla/ssl_conf/client') / ssl_file.name),
+                                          verbose=True)
 
         # Get next word after `cassandra-stress' in stress_cmd.
         # Do it this way because stress_cmd can contain env variables before `cassandra-stress'.

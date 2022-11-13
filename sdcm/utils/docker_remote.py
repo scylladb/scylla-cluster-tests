@@ -1,6 +1,7 @@
 import logging
 import shlex
 from functools import cached_property, cache
+from pathlib import Path
 
 from sdcm.cluster import BaseNode
 
@@ -72,8 +73,10 @@ class RemoteDocker(BaseNode):
         return self.node.remoter.run(f"{self.sudo_needed} docker rm -f {self.docker_id}", verbose=False, ignore_status=True)
 
     def send_files(self, src, dst, **kwargs):
-        result = self.node.remoter.send_files(src, src, **kwargs)
-        result &= self.node.remoter.run(f"{self.sudo_needed} docker cp {src} {self.docker_id}:{dst}",
+        remote_tempfile = self.node.remoter.run("mktemp", verbose=kwargs.get('verbose')).stdout.strip()
+        result = self.node.remoter.send_files(src, remote_tempfile, **kwargs)
+        result &= self.run(f'mkdir -p {Path(dst).parent}', ignore_status=True, verbose=kwargs.get('verbose')).ok
+        result &= self.node.remoter.run(f"{self.sudo_needed} docker cp {remote_tempfile} {self.docker_id}:{dst}",
                                         verbose=kwargs.get('verbose'), ignore_status=True).ok
         return result
 

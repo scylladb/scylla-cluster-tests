@@ -10,8 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-from pathlib import Path
-
 import pytest
 
 from sdcm.stress_thread import CassandraStressThread
@@ -95,7 +93,6 @@ def test_03_cassandra_stress_client_encrypt(request, docker_scylla, params):
         node_list=[docker_scylla],
         timeout=120,
         client_encrypt=True,
-        ssl_dir=(Path(__file__).parent.parent / "data_dir" / "ssl_conf").absolute(),
         params=params,
     )
 
