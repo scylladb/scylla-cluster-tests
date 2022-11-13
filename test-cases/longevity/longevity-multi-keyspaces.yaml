@@ -21,6 +21,7 @@ n_loaders: 10
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.8xlarge'
+root_disk_size_db: 60 # twice as as default, cause each keyspace generate lots of logs
 instance_type_loader: 'c5.4xlarge'
 root_disk_size_monitor: 100
 
