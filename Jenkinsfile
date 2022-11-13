@@ -13,7 +13,7 @@ def createRunConfiguration(String backend) {
         test_name: 'longevity_test.LongevityTest.test_custom_time',
         test_config: 'test-cases/PR-provision-test.yaml',
         availability_zone: 'a',
-        scylla_version: '4.6.3',
+        scylla_version: params.scylla_version,
         region: 'eu-west-1',
     ]
     if (backend == 'gce') {
@@ -63,6 +63,11 @@ pipeline {
         label {
             label "sct-builders"
         }
+    }
+    parameters {
+        string(defaultValue: "5.0.5",
+               description: 'the scylla version to use for the provision tests',
+               name: 'scylla_version')
     }
     environment {
         AWS_ACCESS_KEY_ID         = credentials('qa-aws-secret-key-id')
