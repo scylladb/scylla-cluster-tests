@@ -235,7 +235,7 @@ spec:
 
             # Create directories for each Scylla cluster on each K8S node which will host PVs
             while true; do
-              if [[ -z $(mount | grep  "/dev/md0") ]]; then
+              if [[ -z $(mount | grep -e "/dev/md0" -e "/dev/nvme") ]]; then
                 sleep 5;
                 continue
               fi
