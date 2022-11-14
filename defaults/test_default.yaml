@@ -112,7 +112,7 @@ authenticator_password: ''
 # gemini defaults
 n_test_oracle_db_nodes: 1
 gemini_seed: 0
-oracle_scylla_version: '4.4.7'
+oracle_scylla_version: '4.6.9'
 append_scylla_args_oracle: '--enable-cache false'
 
 # cassandra-stress defaults
