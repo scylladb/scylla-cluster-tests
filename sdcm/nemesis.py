@@ -1417,6 +1417,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for i in range(10):
             self.log.debug('Prepare test tables if they do not exist')
             self._prepare_test_table(ks=f'drop_table_during_repair_ks_{i}', table='standard1')
+            self.cluster.wait_for_schema_agreement()
 
         self.log.debug("Start repair target_node in background")
         with ThreadPoolExecutor(max_workers=1, thread_name_prefix='NodeToolRepairThread') as thread_pool:
