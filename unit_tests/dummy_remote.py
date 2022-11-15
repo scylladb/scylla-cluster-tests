@@ -71,9 +71,9 @@ class LocalNode(BaseNode):
 
 
 class LocalLoaderSetDummy:
-    def __init__(self):
+    def __init__(self, nodes=None):
         self.name = "LocalLoaderSetDummy"
-        self.nodes = [LocalNode("loader_node", parent_cluster=self), ]
+        self.nodes = nodes if nodes is not None else [LocalNode("loader_node", parent_cluster=self)]
         self.params = {}
 
     @staticmethod
