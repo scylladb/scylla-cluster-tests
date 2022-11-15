@@ -20,6 +20,7 @@ import os
 import re
 import stat
 import time
+import traceback
 import unittest
 import unittest.mock
 from typing import NamedTuple, Optional, Union, List, Dict, Any
@@ -3261,7 +3262,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self._argus_add_relocatable_pkg(email_data)
             self.argus_collect_screenshots(email_data)
         except Exception as exc:  # pylint: disable=broad-except
-            self.log.error("Error while saving email data. Error: %s", exc)
+            self.log.error("Error while saving email data. Error: %s\nTraceback: %s", exc, traceback.format_exc())
 
         json_file_path = os.path.join(self.logdir, "email_data.json")
 

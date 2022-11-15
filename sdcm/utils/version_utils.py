@@ -591,7 +591,7 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
 
 def get_relocatable_pkg_url(scylla_version: str) -> str:
     relocatable_pkg = ""
-    if "build-id" in scylla_version:
+    if scylla_version and "build-id" in scylla_version:
         try:
             scylla_build_id = scylla_version.split('build-id')[-1].split()[0]
             get_pkgs_cmd = f'curl -s -X POST http://backtrace.scylladb.com/index.html -d "build_id={scylla_build_id}&backtrace="'
