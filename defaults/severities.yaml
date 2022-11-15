@@ -93,7 +93,7 @@ TestFrameworkEvent: CRITICAL
 ElasticsearchEvent: ERROR
 SpotTerminationEvent: CRITICAL
 ScyllaRepoEvent: WARNING
-InfoEvent: NORMAL
+InfoEvent: ERROR
 ThreadFailedEvent: ERROR
 CoreDumpEvent: ERROR
 TestResultEvent: ERROR
