@@ -122,8 +122,8 @@ class ScyllaRepoEvent(InformationalEvent):
 
 
 class InfoEvent(SctEvent):
-    def __init__(self, message: str):
-        super().__init__(severity=Severity.NORMAL)
+    def __init__(self, message: str, severity=Severity.NORMAL):
+        super().__init__(severity=severity)
 
         self.message = message
 

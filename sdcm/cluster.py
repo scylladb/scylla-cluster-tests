@@ -98,7 +98,7 @@ from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version, get_
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PATTERNS
+from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PATTERNS, InfoEvent
 from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, ScyllaHelpErrorEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
@@ -2448,9 +2448,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.run('cp -r %s %s' % (f, new_full_path), ignore_status=True)
         return root_dir
 
-    def generate_coredump_file(self, restart_scylla=True):
-        self.log.info('Generate scylla core')
-        self.remoter.run("sudo pkill -f --signal 3 /usr/bin/scylla")
+    def generate_coredump_file(self, restart_scylla=True, node_name: str = None, message: str = None):
+        message = message or "Generating a Scylla core dump by SIGQUIT..\n"
+        if node_name:
+            message += f"Node: {node_name}"
+        InfoEvent(severity=Severity.ERROR, message=message)
+        self.remoter.sudo("pkill -f --signal 3 /usr/bin/scylla")
         self.wait_db_down(timeout=600)
         if restart_scylla:
             self.log.debug('Restart scylla server')
@@ -2551,8 +2554,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             except Exception as details:  # pylint: disable=broad-except
                 if isinstance(details, RetryableNetworkException):
                     details = details.original
-                if details.__class__.__name__.endswith("CommandTimedOut"):
-                    self.generate_coredump_file()
+                if coredump_on_timeout and details.__class__.__name__.endswith("CommandTimedOut"):
+                    message = f"Generating a Scylla core dump by SIGQUIT due to a nodetool command '{sub_cmd}' timeout"
+                    self.generate_coredump_file(node_name=self.name, message=message)
 
                 nodetool_event.add_error([f"{error_message}{str(details)}"])
                 nodetool_event.full_traceback = traceback.format_exc()
