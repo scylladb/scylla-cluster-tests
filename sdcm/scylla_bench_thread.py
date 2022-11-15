@@ -112,7 +112,13 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                          stop_test_on_failure=stop_test_on_failure)
         if credentials and 'username=' not in self.stress_cmd:
             self.stress_cmd += " -username {} -password {}".format(*credentials)
-        self.stress_cmd += ' -error-at-row-limit 1000'  # make it fail after having 1000 errors at row
+
+        if not any(opt in self.stress_cmd for opt in ('-error-at-row-limit', '-error-limit')):
+            result = re.search(r"-retry-number[= ]+(\d+) ", self.stress_cmd)
+            if not (result and int(result.group(1)) > 1):
+                # make it fail after having 1000 errors at row
+                self.stress_cmd += ' -error-at-row-limit 1000'
+
         # Find stress mode:
         #    "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
         #    "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=100"
