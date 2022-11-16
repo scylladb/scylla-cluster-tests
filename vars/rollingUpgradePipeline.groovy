@@ -221,8 +221,12 @@ def call(Map pipelineParams) {
                                                                 export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
                                                             fi
                                                             export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
-                                                            export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
 
+                                                            if [[ -n \$SCT_AMI_ID_DB_SCYLLA_DESC  ]]; then
+                                                                export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
+                                                            else
+                                                                export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_SCYLLA_LINUX_DISTRO"
+                                                            fi
                                                             export SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE=${pipelineParams.workaround_kernel_bug_for_iotune}
                                                             if [[ ${pipelineParams.internode_compression} != null ]] ; then
                                                                 export SCT_INTERNODE_COMPRESSION=${pipelineParams.internode_compression}
