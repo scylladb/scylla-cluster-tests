@@ -26,6 +26,10 @@ from packaging import version
 from functional_tests.scylla_operator.libs.auxiliary import ScyllaOperatorFunctionalClusterTester, sct_abs_path
 from sdcm.cluster_k8s import ScyllaPodCluster
 from sdcm.utils import version_utils
+from sdcm.test_config import TestConfig
+from sdcm.cluster_k8s.mini_k8s import LocalKindCluster
+from sdcm.localhost import LocalHost
+from sdcm.tester import ClusterTester
 
 
 TESTER: Optional[ScyllaOperatorFunctionalClusterTester] = None
@@ -229,3 +233,35 @@ def skip_based_on_operator_version(request: pytest.FixtureRequest, tester: Scyll
 def skip_if_no_tls(request, tester: ScyllaOperatorFunctionalClusterTester) -> None:
     if request.node.get_closest_marker('requires_tls') and not tester.params.get('k8s_enable_tls'):
         pytest.skip('test requires k8s_enable_tls to be enabled')
+
+
+def pytest_markeval_namespace():
+    """
+        enable use to pass values into skipif conditions
+        we need to be able to get those values in advance, before any of the fixtures are called
+
+        @pytest.mark.skipif('operator_version > v("1.8.0") and scylla_version > v("5.0")', reason="cause of issue")
+
+    """
+    test_config = TestConfig()
+
+    class HelmOnly(ClusterTester):
+        def __init__(self, *args, **kwargs):
+            self.test_config = TestConfig()
+            self.test_config.set_tester_obj(self)
+            self._init_logging()
+            self._init_params()
+            self._move_kubectl_config()
+            self.localhost = LocalHost(user_prefix=self.params.get("user_prefix"), test_id=test_config.test_id())
+
+    obj = HelmOnly()
+
+    kluster = LocalKindCluster('', user_prefix=obj.params.get("user_prefix"), params=obj.params)
+    operator_version = kluster._scylla_operator_chart_version
+
+    return dict(
+        scylla_version=version.LegacyVersion(obj.params.get('scylla_version')),
+        operator_version=version.LegacyVersion(operator_version),
+        params=obj.params,
+        v=version.LegacyVersion
+    )
