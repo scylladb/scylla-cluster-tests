@@ -3613,8 +3613,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 InfoEvent(message='execute rebuild on new datacenter').publish()
                 new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}")
                 InfoEvent(message='Running full cluster repair on each node').publish()
-                for node in self.cluster.nodes:
-                    node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
+                for cluster_node in self.cluster.nodes:
+                    cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
                 datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
                 self._write_read_data_to_multi_dc_keyspace(datacenters)
             self.cluster.decommission(new_node)
