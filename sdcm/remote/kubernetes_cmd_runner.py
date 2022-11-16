@@ -530,6 +530,12 @@ class KubernetesPodRunner(KubernetesCmdRunner):
         # NOTE: we increase counter here because each new usage of the "KubernetesPodWatcher" class
         #       instance is triggered by the need to created a new pod with a unique name.
         self._pod_counter += 1
+
+        if self.kluster.params.get('reuse_cluster'):
+            pod_names = self.kluster.kubectl("get pods -o name", namespace=self.namespace).stdout.split()
+            while f'pod/{self.pod_name}' in pod_names:
+                self._pod_counter += 1
+
         connection = KubernetesPodWatcher(Context(Config(overrides={
             "k8s_kluster": self.kluster,
             "k8s_template_path": self.template_path,
