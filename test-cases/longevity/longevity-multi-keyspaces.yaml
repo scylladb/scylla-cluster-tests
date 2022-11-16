@@ -24,6 +24,7 @@ instance_type_db: 'i3.8xlarge'
 root_disk_size_db: 60 # twice as as default, cause each keyspace generate lots of logs
 instance_type_loader: 'c5.4xlarge'
 root_disk_size_monitor: 100
+root_disk_size_runner: 120
 
 user_prefix: 'longevity-1000-keyspaces'
 

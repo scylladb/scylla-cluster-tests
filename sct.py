@@ -1404,12 +1404,20 @@ def create_runner_image(cloud_provider, region, availability_zone):
               help="Test ID of the test that the runner is created for restore monitor")
 def create_runner_instance(cloud_provider, region, availability_zone, instance_type, root_disk_size_gb,
                            test_id, duration, restore_monitor=False, restored_test_id=""):
+    # pylint: disable=too-many-locals
+
     if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
     sct_runner_ip_path = Path("sct_runner_ip")
     sct_runner_ip_path.unlink(missing_ok=True)
     sct_runner = get_sct_runner(cloud_provider=cloud_provider, region_name=region, availability_zone=availability_zone)
+
+    os.environ.setdefault('SCT_CLUSTER_BACKEND', cloud_provider)
+    sct_config = SCTConfiguration()
+    instance_type = instance_type or sct_config.get('instance_type_runner')
+    root_disk_size_gb = root_disk_size_gb or sct_config.get('root_disk_size_runner')
+
     instance = sct_runner.create_instance(
         instance_type=instance_type,
         root_disk_size_gb=root_disk_size_gb,

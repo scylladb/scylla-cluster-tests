@@ -605,6 +605,9 @@ class SCTConfiguration(dict):
         dict(name="instance_type_db_oracle", env="SCT_INSTANCE_TYPE_DB_ORACLE", type=str,
              help="AWS image type of the oracle node"),
 
+        dict(name="instance_type_runner", env="SCT_INSTANCE_TYPE_RUNNER", type=str,
+             help="instance type of the sct-runner node"),
+
         dict(name="region_name", env="SCT_REGION_NAME", type=str_or_list_or_eval,
              help="AWS regions to use"),
 
@@ -637,6 +640,9 @@ class SCTConfiguration(dict):
 
         dict(name="root_disk_size_loader", env="SCT_ROOT_DISK_SIZE_LOADER", type=int,
              help=""),
+
+        dict(name="root_disk_size_runner", env="SCT_ROOT_DISK_SIZE_RUNNER", type=int,
+             help="root disk size in Gb for sct-runner"),
 
         dict(name="ami_db_scylla_user", env="SCT_AMI_DB_SCYLLA_USER", type=str,
              help=""),
@@ -1477,8 +1483,12 @@ class SCTConfiguration(dict):
         "gce-siren": [sct_abs_path('defaults/gce_config.yaml')],
         "k8s-local-kind": [sct_abs_path('defaults/k8s_local_kind_config.yaml')],
         "k8s-local-kind-aws": [
-            sct_abs_path('defaults/aws_config.yaml'), sct_abs_path('defaults/k8s_local_kind_config.yaml')],
-        "k8s-local-kind-gce": [sct_abs_path('defaults/k8s_local_kind_config.yaml')],
+            sct_abs_path('defaults/aws_config.yaml'),
+            sct_abs_path('defaults/k8s_local_kind_aws_config.yaml'),
+            sct_abs_path('defaults/k8s_local_kind_config.yaml')],
+        "k8s-local-kind-gce": [
+            sct_abs_path('defaults/k8s_local_kind_gce_config.yaml'),
+            sct_abs_path('defaults/k8s_local_kind_config.yaml')],
         "k8s-gke": [sct_abs_path('defaults/k8s_gke_config.yaml')],
         "k8s-eks": [sct_abs_path('defaults/aws_config.yaml'), sct_abs_path('defaults/k8s_eks_config.yaml')],
     }
