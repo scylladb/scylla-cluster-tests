@@ -63,6 +63,10 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
     EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                 event_class=DatabaseLogEvent.DATABASE_ERROR,
                                 regex='cdc - Could not update CDC description table with generation').publish()
+    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                event_class=DatabaseLogEvent.DATABASE_ERROR,
+                                regex='ldap_connection - Seastar read failed: std::system_error '
+                                '(error system:104, read: Connection reset by peer)').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line='abort_requested_exception').publish()
