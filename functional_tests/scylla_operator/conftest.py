@@ -193,6 +193,15 @@ def fixture_scylla_yaml(db_cluster: ScyllaPodCluster):
     return db_cluster.remote_scylla_yaml
 
 
+@pytest.fixture(autouse=True)
+def skip_if_not_supported_backend(request: pytest.FixtureRequest,
+                                  tester: ScyllaOperatorFunctionalClusterTester):
+    if requires_backend := request.node.get_closest_marker('requires_backend'):
+        backend_name = tester.params.get("cluster_backend")
+        if backend_name not in requires_backend.args:
+            pytest.skip(f"'{backend_name}' backend is not supported.")
+
+
 # NOTE: Reason: https://github.com/scylladb/scylla/issues/9543
 @pytest.fixture(autouse=True)
 def skip_if_scylla_not_semver(request, tester: ScyllaOperatorFunctionalClusterTester) -> None:
