@@ -279,6 +279,7 @@ class AwsRegion:
             security_group.create_tags(Tags=[{"Key": "Name",
                                               "Value": name},
                                              {"Key": "RunByUser", "Value": get_username()},
+                                             {"Key": "CreatedBy", "Value": "SCT"},
                                              {"Key": "TestId", "Value": test_id}])
             LOGGER.debug("'%s' with id '%s' created. ", name, self.sct_security_group.group_id)
             LOGGER.debug("Creating common ingress rules...")
