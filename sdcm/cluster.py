@@ -528,33 +528,41 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @property
     def cpuset(self):
-        # Possible output of grep:
-        #   'CPUSET="--cpuset 1-7 "'
-        #   'CPUSET="--cpuset 1-7,9-15 "'
-
-        # If Scylla is installed as nonroot, we can't run scylla_prepare and perftune so cpuset doesn't help (by Avi).
-        # Ignore it
+        # If Scylla is installed as nonroot then we can't run scylla_prepare
+        # and perftune so cpuset doesn't help (by Avi). So, Ignore it.
         if self.is_nonroot_install:
             return ''
 
         try:
+            # Possible output of grep:
+            #   'CPUSET="--cpuset 1 "'
+            # or
+            #   'CPUSET="--cpuset 1-7 "'
+            # or
+            #   'CPUSET="--cpuset 1-7,9 "'
+            # or
+            #   'CPUSET="--cpuset 1,9-15 "'
+            # or
+            #   'CPUSET="--cpuset 1-7,9-15 "'
+            # or
+            #   'CPUSET="--cpuset 1-7,9-15,17-23,25-31 "'
+            # And so on...
             grep_result = self.remoter.run('grep "^CPUSET" /etc/scylla.d/cpuset.conf')
         except Exception as exc:  # pylint: disable=broad-except
             self.log.error(f"Failed to get CPUSET. Error: {exc}")
             return ''
 
-        scylla_cpu_set = re.findall(r'(\d+)', grep_result.stdout)
+        scylla_cpu_set = re.findall(r'(\d+)-(\d+)|(\d+)', grep_result.stdout)
         self.log.debug(f"CPUSET on node {self.name}: {grep_result}")
-
-        if scylla_cpu_set:
-            cpuset = int(scylla_cpu_set[1]) - int(scylla_cpu_set[0]) + 1
-
-            if len(scylla_cpu_set) == 4:
-                cpuset += int(scylla_cpu_set[3]) - int(scylla_cpu_set[2]) + 1
-
-            return cpuset
-
-        return ''
+        core_counter = 0
+        for range_or_singular in scylla_cpu_set:
+            # Output of finding is of the following structure:
+            #   [('1', '7', ''), ('', '', '15')]
+            # First element is caught range, second element is caught singular
+            core_counter += 1
+            if not range_or_singular[2]:
+                core_counter += int(range_or_singular[1]) - int(range_or_singular[0])
+        return core_counter or ''
 
     @property
     def smp(self):

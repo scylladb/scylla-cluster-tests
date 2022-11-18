@@ -25,6 +25,7 @@ from functools import cached_property
 from typing import List
 from weakref import proxy as weakproxy
 
+import pytest
 from invoke import Result
 
 from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet, BaseScyllaCluster
@@ -517,3 +518,50 @@ class TestNodetoolStatus(unittest.TestCase):
                                                   'tokens': '256'}
                                      }
                           }
+
+
+@pytest.mark.parametrize("grep_results,expected_core_number", (
+    ("1", 1), ("2", 1), ("9", 1), ("10", 1), ("11", 1),
+
+    ("1-7", 7), ("2-7", 6), ("1-6", 6), ("2-6", 5),
+
+    ("1-7,9", 8), ("1,9-15", 8), ("1-7,9-15", 14), ("2-7,10-15", 12),
+
+    ("1-7,9-15,17-23", 21),
+    ("1-7,9-15,17", 15),
+    ("1-7,9,17-23", 15),
+    ("1,9-15,17-23", 15),
+    ("1,9,17", 3),
+    ("1,9-15,17", 9),
+    ("1-7,9,17", 9),
+    ("1,9,17-23", 9),
+
+    ("1-7,9-15,17-23,25-31", 28),
+    ("1,9-15,17-23,25-31", 22),
+    ("1-7,9,17-23,25-31", 22),
+    ("1-7,9-15,23,25-31", 22),
+    ("1-7,9-15,17-23,31", 22),
+    ("1-7,15,17,25-31", 16),
+    ("1,9-15,17-23,31", 16),
+    ("1,15,17-23,31", 10),
+    ("1,15,17,31", 4),
+    ("1,9-15,17,25-31", 16),
+    ("1-7,9,17-23,25", 16),
+))
+def test_base_node_cpuset(grep_results, expected_core_number):
+    dummy_node = DummyNode(
+        name='dummy_node',
+        parent_cluster=None,
+        base_logdir=tempfile.mkdtemp(),
+        ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
+    )
+    dummy_node.init()
+    grep_results_obj = type("FakeGrepResults", (), {"stdout": f'CPUSET="--cpuset {grep_results} "'})
+    dummy_node.remoter = type("FakeRemoter", (), {
+        "run": (lambda *args, **kwargs: grep_results_obj),
+    })
+
+    cpuset_value = dummy_node.cpuset
+
+    assert isinstance(cpuset_value, int)
+    assert cpuset_value == expected_core_number
