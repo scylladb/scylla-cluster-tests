@@ -765,8 +765,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.monitors and not self.monitors_multitenant:
             self.monitors_multitenant = [self.monitors]
-        for monitors in self.monitors_multitenant:
-            monitors.wait_for_init()
+
+        if self.monitors_multitenant:
+            monitors_init_in_parallel = ParallelObject(
+                timeout=3600,
+                objects=[[monitor] for monitor in self.monitors_multitenant],
+                num_workers=len(self.monitors_multitenant))
+            monitors_init_in_parallel.run(
+                func=(lambda m: m.wait_for_init()),
+                unpack_objects=True, ignore_exceptions=False)
 
         self.argus_collect_packages()
         self.argus_get_scylla_version()
