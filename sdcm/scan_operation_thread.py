@@ -109,7 +109,7 @@ class ScanOperationThread:
     config yaml files. Has 4 main modes:
     - random: uses a seeded random generator to generate a queue of fullscan
     operations using all the available operation types
-    - select: uses only FullScanOperation
+    - table: uses only FullScanOperation
     - partition: uses only FullPartitionScanOperation
     - aggregate: uses only FullScanAggregatesOperation
 
@@ -290,7 +290,7 @@ class FullscanOperationBase:
         return self.run_scan_event(cmd=cmd or self.randomly_form_cql_statement(), scan_event=self.scan_event)
 
     def fetch_result_pages(self, result, read_pages):
-        self.log.debug('Will fetch up to %s result pages.."', read_pages)
+        self.log.debug('Will fetch up to %s result pages..', read_pages)
         pages = 0
         while result.has_more_pages and pages <= read_pages:
             result.fetch_next_page()

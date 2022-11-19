@@ -4,7 +4,7 @@ prepare_verify_cmd: ["cassandra-stress read                          cl=QUORUM n
 stress_cmd:         ["cassandra-stress mixed 'ratio(write=1,read=8)' cl=QUORUM duration=1400m -schema 'replication(factor=3)' -mode cql3 native -rate threads=200 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]
 stress_read_cmd:    ["cassandra-stress read                          cl=QUORUM duration=1400m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]
 
-run_fullscan: ['{"mode": "table", "ks_cf": "random", "interval": 30}']
+run_fullscan: ['{"mode": "random", "ks_cf": "random", "interval": 30}']
 n_db_nodes: 5
 n_loaders: 2
 n_monitor_nodes: 1
