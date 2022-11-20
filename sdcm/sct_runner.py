@@ -14,6 +14,7 @@
 #pylint: disable=too-many-lines
 from __future__ import annotations
 
+import os
 import logging
 import string
 import tempfile
@@ -47,7 +48,7 @@ from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
 from sdcm.utils.common import list_instances_aws, aws_tags_to_dict, list_instances_gce, gce_meta_to_dict
 from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
 from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.gce_utils import get_gce_service
+from sdcm.utils.gce_utils import get_gce_service, SUPPORTED_PROJECTS
 from sdcm.utils.azure_utils import AzureService, list_instances_azure
 from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
 from sdcm.utils.get_username import get_username
@@ -792,7 +793,11 @@ class GceSctRunner(SctRunner):
     @classmethod
     def list_sct_runners(cls) -> list[SctRunnerInfo]:
         sct_runners = []
-        for instance in list_instances_gce(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True):
+        instances = []
+        for project in SUPPORTED_PROJECTS:
+            os.environ['SCT_GCE_PROJECT'] = project
+            instances += list_instances_gce(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True)
+        for instance in instances:
             tags = gce_meta_to_dict(instance.extra["metadata"])
             region = instance.extra["zone"].name
             if launch_time := tags.get("launch_time"):
@@ -1107,7 +1112,7 @@ def clean_sct_runners(test_status: str,
                       test_runner_ip: str = None,
                       dry_run: bool = False,
                       force: bool = False) -> None:
-    # pylint: disable=too-many-branches
+    # pylint: disable=too-many-branches,too-many-statements
     sct_runners_list = list_sct_runners(test_runner_ip=test_runner_ip)
     timeout_flag = False
     runners_terminated = 0
@@ -1129,9 +1134,14 @@ def clean_sct_runners(test_status: str,
         else:
             sct_runner_name = sct_runner_info.instance_name
 
-        ssh_run_cmd_result = ssh_run_cmd(command=cmd, test_id=sct_runner_info.test_id,
-                                         node_name=sct_runner_name)
-        timeout_flag = bool(ssh_run_cmd_result.stdout) if ssh_run_cmd_result else False
+        # ssh_run_cmd currently only works on AWS, no point of wasting time
+        # trying to lookup on AWS instance from GCP/Azure
+        if sct_runner_info.cloud_provider == "aws":
+            ssh_run_cmd_result = ssh_run_cmd(command=cmd, test_id=sct_runner_info.test_id,
+                                             node_name=sct_runner_name)
+
+            timeout_flag = bool(ssh_run_cmd_result.stdout) if ssh_run_cmd_result else False
+
         utc_now = datetime.datetime.now(tz=datetime.timezone.utc)
         LOGGER.info("UTC now: %s", utc_now)
 
