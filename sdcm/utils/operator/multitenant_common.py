@@ -18,7 +18,7 @@ import logging
 import time
 
 from sdcm.utils.common import ParallelObject
-
+from sdcm.tester import silence
 
 LOGGER = logging.getLogger(__name__)
 
@@ -130,12 +130,17 @@ def get_tenants(test_class_instance):  # pylint: disable=too-many-branches,too-m
 #       - save_email_data
 #       - _check_if_db_log_time_consistency_looks_good
 class MultiTenantTestMixin:
+    tenants = None
 
     def setUp(self):  # pylint: disable=invalid-name
         super().setUp()
         self.tenants = get_tenants(self)
 
+    @silence()
     def stop_resources(self):
+        if not self.tenants:
+            self.tenants = get_tenants(self)
+
         def _stop_resources(tenant):
             tenant.stop_resources()
 
