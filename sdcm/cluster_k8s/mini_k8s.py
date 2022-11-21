@@ -53,7 +53,7 @@ DST_APISERVER_AUDIT_POLICY = "/etc/kubernetes/policies/audit-policy.yaml"
 DST_APISERVER_AUDIT_LOG = "/var/log/kubernetes/kube-apiserver-audit.log"
 
 CNI_CALICO_CONFIG = sct_abs_path("sdcm/k8s_configs/cni-calico.yaml")
-CNI_CALICO_VERSION = "v3.23.0"
+CNI_CALICO_VERSION = "v3.24.5"
 LOGGER = logging.getLogger(__name__)
 POOL_LABEL_NAME = 'minimal-k8s-nodepool'
 
