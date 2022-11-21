@@ -536,8 +536,26 @@ class LocalKindCluster(LocalMinimalClusterBase):
     def stop_k8s_software(self):
         self.host_node.remoter.run('/var/tmp/kind delete cluster', ignore_status=True)
 
+    def load_images(self, images_list: [str]):
+        for image in images_list:
+            self.docker_pull(image)
+            self.host_node.remoter.run(
+                f"/var/tmp/kind load docker-image {image}", ignore_status=True)
+
     def on_deploy_completed(self):  # pylint: disable=too-many-branches
         images_to_cache, images_to_retag, new_scylla_image_tag = [], {}, ""
+
+        # first setup CNI plugin, otherwise everything else might get broken
+        cni_images_to_cache = []
+        for image_repo in ('kube-controllers', 'cni', 'node'):
+            cni_images_to_cache.append(f"calico/{image_repo}:{CNI_CALICO_VERSION}")
+
+        if not self.params.get('reuse_cluster'):
+            self.load_images(cni_images_to_cache)
+
+        self.apply_file(CNI_CALICO_CONFIG, environ={
+            "SCT_K8S_CNI_CALICO_VERSION": CNI_CALICO_VERSION,
+        })
 
         images_to_cache.extend(self.cert_manager_images)
         if provisioner_image := self.static_local_volume_provisioner_image:
@@ -573,24 +591,15 @@ class LocalKindCluster(LocalMinimalClusterBase):
         except ValueError as exc:
             LOGGER.warning("scylla-operator image won't be cached. Error: %s", str(exc))
 
-        for image_repo in ('kube-controllers', 'cni', 'node'):
-            images_to_cache.append(f"calico/{image_repo}:{CNI_CALICO_VERSION}")
-
         if not self.params.get('reuse_cluster'):
-            for image in images_to_cache:
-                self.docker_pull(image)
-                self.host_node.remoter.run(
-                    f"/var/tmp/kind load docker-image {image}", ignore_status=True)
+            self.load_images(images_to_cache)
+
         if new_scylla_image_tag:
             self.params['scylla_version'] = new_scylla_image_tag
         for src_image, dst_image in images_to_retag.items():
             self.docker_tag(src_image, dst_image)
             self.host_node.remoter.run(
                 f"/var/tmp/kind load docker-image {dst_image}", ignore_status=True)
-
-        self.apply_file(CNI_CALICO_CONFIG, environ={
-            "SCT_K8S_CNI_CALICO_VERSION": CNI_CALICO_VERSION,
-        })
 
     def install_static_local_volume_provisioner(
             self, node_pools: list[CloudK8sNodePool] | CloudK8sNodePool) -> None:
