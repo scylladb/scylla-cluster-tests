@@ -21,8 +21,6 @@ user_prefix: 'kubernetes-scylla-upgrade'
 #authenticator: 'PasswordAuthenticator'
 #authenticator_user: 'cassandra'
 #authenticator_password: 'cassandra'
-#authorization_in_upgrade: 'CassandraAuthorizer'
-#remove_authorization_in_rollback: true
 #recover_system_tables: true
 
 # Does not work due to the lack of support, could be anabled after - https://github.com/scylladb/scylla-cluster-tests/issues/2747
