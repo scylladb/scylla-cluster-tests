@@ -133,11 +133,9 @@ new_scylla_repo: ''
 new_version: ''
 upgrade_node_packages: ''
 test_sst3: false
-authorization_in_upgrade: ''
 new_introduced_pkgs: ''
 recover_system_tables: false
 scylla_version: ''
-remove_authorization_in_rollback: false
 test_upgrade_from_installed_3_1_0: false
 target_upgrade_version: ''
 

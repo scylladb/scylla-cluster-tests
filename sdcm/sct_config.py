@@ -1040,12 +1040,6 @@ class SCTConfiguration(dict):
         dict(name="test_upgrade_from_installed_3_1_0", env="SCT_TEST_UPGRADE_FROM_INSTALLED_3_1_0", type=boolean,
              help="Enable an option for installed 3.1.0 for work around a scylla issue if it's true"),
 
-        dict(name="authorization_in_upgrade", env="SCT_AUTHORIZATION_IN_UPGRADE", type=str,
-             help="Which Authorization to enable after upgrade"),
-
-        dict(name="remove_authorization_in_rollback", env="SCT_REMOVE_AUTHORIZATION_IN_ROLLBACK", type=boolean,
-             help="Disable Authorization after rollback to old Scylla"),
-
         dict(name="new_introduced_pkgs", env="SCT_NEW_INTRODUCED_PKGS", type=str,
              help=""),
 

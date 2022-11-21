@@ -255,8 +255,6 @@
 | **<a href="#user-content-upgrade_node_packages" name="upgrade_node_packages">upgrade_node_packages</a>**  |  | N/A | SCT_UPGRADE_NODE_PACKAGES
 | **<a href="#user-content-test_sst3" name="test_sst3">test_sst3</a>**  |  | N/A | SCT_TEST_SST3
 | **<a href="#user-content-test_upgrade_from_installed_3_1_0" name="test_upgrade_from_installed_3_1_0">test_upgrade_from_installed_3_1_0</a>**  | Enable an option for installed 3.1.0 for work around a scylla issue if it's true | N/A | SCT_TEST_UPGRADE_FROM_INSTALLED_3_1_0
-| **<a href="#user-content-authorization_in_upgrade" name="authorization_in_upgrade">authorization_in_upgrade</a>**  | Which Authorization to enable after upgrade | N/A | SCT_AUTHORIZATION_IN_UPGRADE
-| **<a href="#user-content-remove_authorization_in_rollback" name="remove_authorization_in_rollback">remove_authorization_in_rollback</a>**  | Disable Authorization after rollback to old Scylla | N/A | SCT_REMOVE_AUTHORIZATION_IN_ROLLBACK
 | **<a href="#user-content-new_introduced_pkgs" name="new_introduced_pkgs">new_introduced_pkgs</a>**  |  | N/A | SCT_NEW_INTRODUCED_PKGS
 | **<a href="#user-content-recover_system_tables" name="recover_system_tables">recover_system_tables</a>**  |  | N/A | SCT_RECOVER_SYSTEM_TABLES
 | **<a href="#user-content-stress_cmd_1" name="stress_cmd_1">stress_cmd_1</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CMD_1

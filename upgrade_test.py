@@ -237,10 +237,6 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run("echo 'enable_sstables_mc_format: true' |sudo tee --append /etc/scylla/scylla.yaml")
         if self.params.get('test_upgrade_from_installed_3_1_0'):
             node.remoter.run("echo 'enable_3_1_0_compatibility_mode: true' |sudo tee --append /etc/scylla/scylla.yaml")
-        authorization_in_upgrade = self.params.get('authorization_in_upgrade')
-        if authorization_in_upgrade:
-            node.remoter.run("echo 'authorizer: \"%s\"' |sudo tee --append /etc/scylla/scylla.yaml" %
-                             authorization_in_upgrade)
         check_reload_systemd_config(node)
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
@@ -327,8 +323,6 @@ class UpgradeTest(FillDatabaseData):
         if self.params.get('test_upgrade_from_installed_3_1_0'):
             node.remoter.run(
                 r'sudo sed -i -e "s/enable_3_1_0_compatibility_mode:/#enable_3_1_0_compatibility_mode:/g" /etc/scylla/scylla.yaml')
-        if self.params.get('remove_authorization_in_rollback'):
-            node.remoter.run('sudo sed -i -e "s/authorizer:/#authorizer:/g" /etc/scylla/scylla.yaml')
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
         node.run_scylla_sysconfig_setup()
