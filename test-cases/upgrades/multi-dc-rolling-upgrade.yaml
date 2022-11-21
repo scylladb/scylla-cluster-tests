@@ -20,8 +20,6 @@ authenticator: 'PasswordAuthenticator'
 authenticator_user: 'cassandra'
 authenticator_password: 'cassandra'
 
-authorization_in_upgrade: 'CassandraAuthorizer'
-remove_authorization_in_rollback: true
 recover_system_tables: true
 
 internode_compression: 'all'
