@@ -3,6 +3,11 @@ kind: Service
 metadata:
   name: haproxy-kubernetes-ingress
   namespace: haproxy-controller
+  annotations:
+    # AWS based labeling base on those instructions:
+    # https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.4/guide/service/annotations/#aws-resource-tags
+    service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: $TAGS
+
 spec:
   selector:
     app.kubernetes.io/name: haproxy-ingress

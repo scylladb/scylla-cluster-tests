@@ -1018,10 +1018,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         LOGGER.info("Create and initialize ingress controller")
         if not self.params.get('reuse_cluster'):
             pool_name = pool_name or self.AUXILIARY_POOL_NAME
+            comma_separated_tags = ", ".join([f'{k}={v}' for k, v in self.tags.items()])
             self.apply_file(
                 INGRESS_CONTROLLER_CONFIG_PATH,
                 modifiers=get_pool_affinity_modifiers(self.POOL_LABEL_NAME, pool_name),
-                envsubst=False)
+                environ=dict(TAGS=comma_separated_tags))
         self.kubectl_wait("--all --for=condition=Ready pod",
                           namespace=INGRESS_CONTROLLER_NAMESPACE, timeout=306)
 
