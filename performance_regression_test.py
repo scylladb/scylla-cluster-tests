@@ -19,11 +19,12 @@ import time
 
 import yaml
 
-from sdcm.tester import ClusterTester
+from sdcm.tester import ClusterTester, teardown_on_exception
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressEvent
-
+from sdcm.sct_events.system import HWPerforanceEvent
+from sdcm.utils.decorators import log_run_info
 
 KB = 1024
 
@@ -46,7 +47,33 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self._clean_email_data()
         super().__init__(*args)
 
+    @teardown_on_exception
+    @log_run_info
+    def setUp(self):
+        super().setUp()
+        if self.params.get("run_db_node_benchmarks"):
+            self.log.info("Validate node benchmarks results")
+            compare_results = self.db_cluster.get_node_benchmarks_results() or {}
+            ready_nodes = []
+            for node, results in compare_results.items():
+                for item, result in results.items():
+                    ready_nodes.append(result["is_within_margin"])
+                    if not result["is_within_margin"]:
+                        self.log.error("HW performance test on node %s has bad results for %s : %s", node, item, result)
+            if not all(ready_nodes):
+                err_msg = f"DB Cluster doesn't have equal hw performance result {compare_results}"
+                self.log.debug(err_msg)
+                if self.params.get("stop_on_hw_perf_failure"):
+                    HWPerforanceEvent(message=err_msg, severity=Severity.CRITICAL).publish()
+                else:
+                    HWPerforanceEvent(message=err_msg, severity=Severity.WARNING).publish()
+            else:
+                self.log.debug("DB cluster passed hardware performance test")
+                HWPerforanceEvent(message="DB cluster passed hardware performance test",
+                                  severity=Severity.NORMAL).publish()
+
     # Helpers
+
     def display_single_result(self, result):
         self.log.info(self.str_pattern, result['op rate'],
                       result['partition rate'],

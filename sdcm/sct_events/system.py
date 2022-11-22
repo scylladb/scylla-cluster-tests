@@ -40,6 +40,16 @@ class TestTimeoutEvent(SctEvent):
         return f"{super().msgfmt}, Test started at {start_time}, reached it's timeout ({self.duration} minute)"
 
 
+class HWPerforanceEvent(SctEvent):
+    def __init__(self, message: str, severity: Severity = Severity.NORMAL):
+        super().__init__(severity)
+        self.message = message
+
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": message={0.message}"
+
+
 class TestFrameworkEvent(InformationalEvent):  # pylint: disable=too-many-instance-attributes
     __test__ = False  # Mark this class to be not collected by pytest.
 

@@ -131,4 +131,43 @@
                 {% endif %}
             {% endfor %}
         </div>
+    {% if node_benchmarks %}
+        <h4>Node benchmarks</h4>
+        <div>
+            <table class='nodes_info_table'>
+                <tr>
+                    <th>Node Name</th>
+                    {% for item in node_benchmarks|dictsort|first|last|sort %}
+                    <th>{{ item }}</th>
+                    {% endfor %}
+                </tr>
+                {% for item in node_benchmarks|dictsort %}
+                <tr>
+                    <td>{{ item|first }}</td>
+                    {% for name in node_benchmarks|dictsort|first|last|sort %}
+                    <td>
+                        <table class="'">
+                            {% for key, value in (item|last)[name].items() %}
+                            <tr>
+                                <td style="font-weight: bold">{{ key }}</td>
+                                {% if value is boolean() %}
+                                    {% if value is true() %}
+                                        <td style="color: green">{{ value }}</td>
+                                    {% else %}
+                                        <td style="color: red">{{ value }}</td>
+                                    {% endif %}
+                                {% else %}
+                                    <td>{{ "%.2f"|format(value) }}</td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </table>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    {% endif %}
+
 {% endblock %}

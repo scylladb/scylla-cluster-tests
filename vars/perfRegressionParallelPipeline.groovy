@@ -52,6 +52,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${groovy.json.JsonOutput.toJson(pipelineParams.get('sub_tests'))}",
                    description: 'subtests in format ["sub_test1", "sub_test2"] or empty',
                    name: 'sub_tests')
+            string(defaultValue: "false",
+                   description: 'Stop test if perf hardware test values exceed the set limits',
+                   name: 'stop_on_hw_perf_failure')
 
             string(defaultValue: "${pipelineParams.get('email_recipients', 'scylla-perf-results@scylladb.com')}",
                    description: 'email recipients of email report',
@@ -194,6 +197,10 @@ def call(Map pipelineParams) {
                                                         fi
 
                                                         export SCT_EMAIL_RECIPIENTS="${email_recipients}"
+
+                                                        if [[ "${params.stop_on_hw_perf_failure}" == "true" ]] ; then
+                                                            export SCT_STOP_ON_HW_PERF_FAILURE="true"
+                                                        fi
                                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                                             export SCT_AMI_ID_DB_SCYLLA=${params.scylla_ami_id}
                                                         elif [[ ! -z "${params.scylla_version}" ]] ; then

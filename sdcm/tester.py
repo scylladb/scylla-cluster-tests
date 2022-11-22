@@ -41,7 +41,7 @@ from cassandra import ConsistencyLevel
 from argus.db.db_types import TestStatus, PackageVersion
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
-    BaseScyllaCluster, BaseNode
+    BaseScyllaCluster, BaseNode, BaseCluster
 from sdcm.argus_test_run import ArgusTestRun
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
 from sdcm.cluster_gce import ScyllaGCECluster
@@ -268,7 +268,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     events_processes_registry = None
     monitors: BaseMonitorSet = None
     loaders: Union[BaseLoaderSet, LoaderSetAWS, LoaderSetGCE] = None
-    db_cluster: BaseScyllaCluster = None
+    db_cluster: Union[BaseCluster, BaseScyllaCluster] = None
     k8s_cluster: Union[eks.EksCluster, gke.GkeCluster, mini_k8s.LocalKindCluster, None] = None
 
     def __init__(self, *args, **kwargs):  # pylint: disable=too-many-statements,too-many-locals,too-many-branches
@@ -3021,6 +3021,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             latency_results = json.load(file)
         self.log.debug('latency_results were loaded from file %s and its result is %s',
                        self.latency_results_file, latency_results)
+        benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
         if latency_results and self.create_stats:
             latency_results["summary"] = {"hdr_summary": histogram_total_data,
                                           "hdr": histogram_data_by_interval}
@@ -3031,7 +3032,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.debug('collected latency values are: %s', latency_results)
             self.update({"latency_during_ops": latency_results})
             self.update_test_details()
-            results_analyzer.check_regression(test_id=self._test_id, data=latency_results)
+            results_analyzer.check_regression(test_id=self._test_id, data=latency_results,
+                                              node_benchmarks=benchmarks_results)
 
     def check_regression(self):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,
@@ -3042,10 +3044,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                           limit=self.params.get('events_limit_in_email'))
                                                       )
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
+        benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
         try:
             results_analyzer.check_regression(self._test_id, is_gce,
                                               email_subject_postfix=self.params.get('email_subject_postfix'),
-                                              use_wide_query=True)
+                                              use_wide_query=True,
+                                              node_benchmarks=benchmarks_results)
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 

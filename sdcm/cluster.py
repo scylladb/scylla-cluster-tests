@@ -3584,11 +3584,12 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def run_node_benchmarks(self):
         if not self.params.get("run_db_node_benchmarks") or not self.nodes:
             return
+        if "db-cluster" not in self.name:
+            return
 
         self.node_benchmark_manager.add_nodes(self.nodes)
         self.node_benchmark_manager.install_benchmark_tools()
         self.node_benchmark_manager.run_benchmarks()
-        self.get_node_benchmarks_results()
 
     def get_node_benchmarks_results(self):
         if not self.params.get("run_db_node_benchmarks") or not self.nodes:
