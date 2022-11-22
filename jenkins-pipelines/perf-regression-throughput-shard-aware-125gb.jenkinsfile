@@ -7,8 +7,8 @@ perfRegressionParallelPipeline(
     backend: "aws",
     region: "us-east-1",
     test_name: "performance_regression_test.PerformanceRegressionTest",
-    test_config: """["test-cases/performance/perf-regression.100threads.30M-keys.yaml"]""",
+    test_config: '''["test-cases/performance/perf-regression-throughput-125gb.yaml","configurations/perf-loaders-shard-aware-config.yaml"]''',
     sub_tests: ["test_write", "test_read", "test_mixed"],
 
-    timeout: [time: 350, unit: "MINUTES"]
+    timeout: [time: 600, unit: "MINUTES"]
 )

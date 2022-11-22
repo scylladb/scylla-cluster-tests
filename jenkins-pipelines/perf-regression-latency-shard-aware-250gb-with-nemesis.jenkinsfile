@@ -5,10 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
     backend: "aws",
-    region: "us-east-1",
     test_name: "performance_regression_test.PerformanceRegressionTest",
-    test_config: """["test-cases/performance/perf-regression.100threads.30M-keys.yaml"]""",
-    sub_tests: ["test_write", "test_read", "test_mixed"],
-
-    timeout: [time: 350, unit: "MINUTES"]
+    test_config: '''["test-cases/performance/perf-regression-latency-250gb-with-nemesis.yaml", "configurations/perf-loaders-shard-aware-config.yaml"]''',
+    sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"]
 )
