@@ -22,7 +22,3 @@ server_encrypt: true
 internode_encryption: 'dc'
 
 use_legacy_cluster_init: false
-
-# Temporarily downgrade scylla_bench to a stable version
-stress_image:
-  scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.3'

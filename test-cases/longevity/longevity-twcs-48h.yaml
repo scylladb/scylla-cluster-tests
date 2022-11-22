@@ -27,8 +27,5 @@ user_prefix: 'longevity-twcs-48h'
 
 post_prepare_cql_cmds: "ALTER TABLE scylla_bench.test with gc_grace_seconds = 15000 and default_time_to_live = 21600 and compaction = {'class':'TimeWindowCompactionStrategy', 'compaction_window_size': 60, 'compaction_window_unit': 'MINUTES'};"
 
-# Temporarily downgrade scylla_bench to a stable version
-stress_image:
-  scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.3'
 
 round_robin: true
