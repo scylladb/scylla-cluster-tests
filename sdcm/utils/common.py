@@ -545,6 +545,7 @@ def clean_cloud_resources(tags_dict, dry_run=False):
     clean_instances_aws(tags_dict, dry_run=dry_run)
     clean_elastic_ips_aws(tags_dict, dry_run=dry_run)
     clean_test_security_groups(tags_dict, dry_run=dry_run)
+    clean_load_balancers_aws(tags_dict, dry_run=dry_run)
     clean_clusters_gke(tags_dict, dry_run=dry_run)
     clean_orphaned_gke_disks(dry_run=dry_run)
     clean_clusters_eks(tags_dict, dry_run=dry_run)
@@ -906,6 +907,81 @@ def clean_test_security_groups(tags_dict, dry_run=False):
             if not dry_run:
                 try:
                     response = client.delete_security_group(GroupId=group_id)
+                    LOGGER.debug("Done. Result: %s\n", response)
+                except Exception as ex:  # pylint: disable=broad-except
+                    LOGGER.debug("Failed with: %s", str(ex))
+
+
+def list_load_balancers_aws(tags_dict=None, region_name=None, group_as_region=False, verbose=False):
+    """
+    list all load balancers with specific tags AWS
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param region_name: name of the region to list
+    :param group_as_region: if True the results would be grouped into regions
+    :param verbose: if True will log progress information
+
+    :return: load balancers dict where region is a key
+    """
+    load_balancers = {}
+    aws_regions = [region_name] if region_name else all_aws_regions()
+
+    def get_load_balancers(region):
+        if verbose:
+            LOGGER.info('Going to list aws region "%s"', region)
+        time.sleep(random.random())
+        tagging = boto3.client('resourcegroupstaggingapi', region_name=region)
+        paginator = tagging.get_paginator('get_resources')
+        tag_filter = [{'Key': key, 'Values': [value]}
+                      for key, value in tags_dict.items() if key != 'NodeType']
+
+        tag_mappings = itertools.chain.from_iterable(
+            page['ResourceTagMappingList']
+            for page in paginator.paginate(TagFilters=tag_filter, ResourceTypeFilters=['elasticloadbalancing:loadbalancer'])
+        )
+        load_balancers[region] = list(tag_mappings)
+        if verbose:
+            LOGGER.info("%s: done [%s/%s]", region, len(list(load_balancers.keys())), len(aws_regions))
+
+    ParallelObject(aws_regions, timeout=100).run(get_load_balancers, ignore_exceptions=False)
+
+    if not group_as_region:
+        load_balancers = list(itertools.chain(*list(load_balancers.values())))  # flatten the list of lists
+        total_items = load_balancers
+    else:
+        total_items = sum([len(value) for _, value in load_balancers.items()])
+    if verbose:
+        LOGGER.info("Found total of %s ips.", total_items)
+    return load_balancers
+
+
+def clean_load_balancers_aws(tags_dict, dry_run=False):
+    """
+    Remove all load balancers with specific tags AWS
+
+    :param tags_dict: a dict of the tag to select the groups, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param dry_run: if True, wouldn't delete any resource
+    :return: None
+    """
+
+    # don't if `post_behavior_k8s_cluster` was set to not destroy
+    if "NodeType" in tags_dict and tags_dict.get("NodeType") != "k8s":
+        return
+
+    assert tags_dict, "tags_dict not provided (can't clean all instances)"
+    elbs_per_region = list_load_balancers_aws(tags_dict=tags_dict, group_as_region=True)
+
+    for region, elb_list in elbs_per_region.items():
+        if not elb_list:
+            LOGGER.info("There are no ELBs to remove in AWS region %s", region)
+            continue
+        client = boto3.client('elb', region_name=region)
+        for elb in elb_list:
+            arn = elb.get('ResourceARN')
+            LOGGER.info("Going to delete '%s'", arn)
+            if not dry_run:
+                try:
+                    response = client.delete_load_balancer(LoadBalancerName=arn.split('/')[1])
                     LOGGER.debug("Done. Result: %s\n", response)
                 except Exception as ex:  # pylint: disable=broad-except
                     LOGGER.debug("Failed with: %s", str(ex))

@@ -69,6 +69,7 @@ from sdcm.utils.common import (
     list_clusters_gke,
     list_elastic_ips_aws,
     list_test_security_groups,
+    list_load_balancers_aws,
     list_instances_aws,
     list_instances_gce,
     list_logs_by_test_id,
@@ -387,6 +388,28 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         click.echo(aws_table.get_string(title="SGs used on AWS"))
     else:
         click.secho("No security groups found for selected filters in AWS!", fg="yellow")
+
+    click.secho("Checking AWS Load Balancers...", fg='green')
+    load_balancers = list_load_balancers_aws(tags_dict=params, verbose=verbose)
+    if load_balancers:
+        aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser"])
+        aws_table.align = "l"
+        aws_table.sortby = 'Name'
+        for elb in load_balancers:
+            tags = aws_tags_to_dict(elb.get('Tags'))
+            test_id = tags.get("TestId", "N/A")
+            run_by_user = tags.get("RunByUser", "N/A")
+            _, _, _, region, _, name = elb['ResourceARN'].split(':')
+            print(elb)
+            aws_table.add_row([
+                name,
+                region,
+                test_id,
+                run_by_user,
+            ])
+        click.echo(aws_table.get_string(title="ELBs used on AWS"))
+    else:
+        click.secho("No load balancers found for selected filters in AWS!", fg="yellow")
 
     click.secho("Checking GKE...", fg='green')
     gke_clusters = list_clusters_gke(tags_dict=params, verbose=verbose)
