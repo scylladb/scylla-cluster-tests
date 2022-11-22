@@ -22,6 +22,7 @@ from sdcm.test_config import TestConfig
 from sdcm.utils.common import ParallelObject
 from sdcm.utils.git import clone_repo
 from sdcm.utils.metaclasses import Singleton
+from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 ES_INDEX = "node_benchmarks"
@@ -88,11 +89,13 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
     ElasticSearch is used to store the results.
     """
 
-    def __init__(self):
+    def __init__(self, global_compare: bool = False):
         self._nodes: list["BaseNode"] = []
         self._benchmark_runners: list[ScyllaNodeBenchmarkRunner] = []
         self._es = ES()
         self._comparison = {}
+        self._global_compare = global_compare
+        self._test_id = TestConfig().test_id()
 
     @property
     def comparison(self):
@@ -129,25 +132,60 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
         Collect the results from ScyllaClusterBenchmarkRunner
         instances and post them to Elasticsearch.
         """
-        test_id = TestConfig().test_id()
 
         for runner in self._benchmark_runners:
             if runner.benchmark_results:
                 results = {
-                    "test_id": test_id,
+                    "test_id": self._test_id,
                     "node_instance_type": runner.node_instance_type,
                     "node_name": runner.node_name,
                     **runner.benchmark_results
                 }
-                doc_id = f"{test_id}-{runner.node_name.split('-')[-1]}"
+                doc_id = f"{self._test_id}-{runner.node_name.split('-')[-1]}"
                 self._es.create_doc(index=ES_INDEX, doc_type=None, doc_id=doc_id, body=results)
             else:
-                LOGGER.info("No benchmarks results for node: %s", runner.node_name)
+                LOGGER.debug("No benchmarks results for node: %s", runner.node_name)
 
-    def _get_all_benchmark_results(self) -> dict:
-        return self._es.get_all("node_benchmarks")
+    def _get_benchmark_results(self, instance_type: str = "") -> list[dict]:
+        filter_path = ['hits.hits._id',
+                       'hits.hits._source.test_id',
+                       'hits.hits._source.node_instance_type',
+                       'hits.hits._source',
+                       ]
+        query = f"test_id: \"{self._test_id}\""
+
+        if self._global_compare:
+            query = f"NOT {query}"
+
+        if instance_type:
+            query += f" AND node_instance_type: \"{instance_type}\""
+
+        LOGGER.debug("QUERY ES: %s", query)
+
+        @retrying(n=3, sleep_time=1, message="Get hw performance nodes result...", raise_on_exceeded=False)
+        def search_results():
+            results = self._es.search(index=ES_INDEX,  # pylint: disable=unexpected-keyword-arg
+                                      q=query,
+                                      filter_path=filter_path,
+                                      size=1000)
+
+            LOGGER.debug("Found results: %s", results)
+            if not results:
+                raise Exception("No results found")
+
+            return [doc["_source"] for doc in results["hits"]["hits"]]
+
+        result = search_results()
+        return result or []
 
     def _compare_results(self):
+        if not self._benchmark_runners:
+            return
+
+        # assume that cluster nodes have same instance type
+        instance_type = self._benchmark_runners[0].node_instance_type
+        averages = self._get_average_results(es_docs=self._get_benchmark_results(instance_type))
+
         for runner in self._benchmark_runners:
             if not runner.benchmark_results:
                 continue
@@ -157,9 +195,6 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                     cassandra_fio_read_bw=runner.benchmark_results["cassandra_fio_lcs_64k_read"]["read"]["bw"],
                     cassandra_fio_write_bw=runner.benchmark_results["cassandra_fio_lcs_64k_write"]["write"]["bw"]
                 )
-                averages = self._get_average_results(es_docs=self._get_all_benchmark_results(),
-                                                     instance_type=runner.node_instance_type,
-                                                     test_id=TestConfig().test_id())
                 self._comparison.update(
                     self._check_results(node_name=runner.node_name,
                                         averages=averages,
@@ -188,15 +223,13 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
         return results
 
     @staticmethod
-    def _get_average_results(es_docs: dict, instance_type: str, test_id: str):
-        sources = [item["_source"] for item in es_docs["hits"]["hits"]]
-        docs = [doc for doc in sources if doc["node_instance_type"] == instance_type and doc["test_id"] != test_id]
+    def _get_average_results(es_docs: list):
         results = []
-
-        if not docs:
+        if not es_docs:
+            LOGGER.warning("Results were not found for averages calculation")
             return Averages()
 
-        for item in docs:
+        for item in es_docs:
             try:
                 results.append(ComparableResult(
                     sysbench_eps=item["sysbench_events_per_second"],
@@ -245,7 +278,7 @@ class ScyllaNodeBenchmarkRunner:
         self._install_ubuntu_prerequisites()
         self._build_and_install_sysbench()
 
-    def _get_db_node_instance_type(self):
+    def _get_db_node_instance_type(self) -> str:
         backend = self._node.parent_cluster.params.get("cluster_backend")
         if backend in ("aws", "aws-siren"):
             return self._node.parent_cluster.params.get("instance_type_db")
@@ -254,7 +287,7 @@ class ScyllaNodeBenchmarkRunner:
         else:
             LOGGER.warning("Unrecognized backend type, defaulting to 'Unknown' for"
                            "db instance type.")
-            return None
+            return ""
 
     def _install_ubuntu_prerequisites(self):
         package_list = ["make", "automake", "libtool", "pkg-config", "libaio-dev", "fio"]

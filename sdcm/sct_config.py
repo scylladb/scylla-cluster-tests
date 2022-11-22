@@ -1426,6 +1426,21 @@ class SCTConfiguration(dict):
              help="""add/remove num of process on each round"""),
         dict(name="use_hdr_cs_histogram", env="SCT_USE_HDR_CS_HISTOGRAM", type=boolean,
              help="""Enable hdr histogram logging for cs"""),
+
+        dict(name="stop_on_hw_perf_failure", env="SCT_STOP_ON_HW_PERF_FAILURE", type=boolean,
+             help="""Stop sct performance test if hardware performance test failed
+
+                    Hardware performance tests runs on each node with sysbench and cassandra-fio tools.
+                    Results stored in ES. HW perf tests run during cluster setups and not affect
+                    SCT Performance tests. Results calculated as average among all results for certain
+                    instance type or among all nodes during single run.
+                    if results for a single node is not in margin 0.01 of
+                    average result for all nodes, hw test considered as Failed.
+                    If stop_on_hw_perf_failure is True, then sct performance test will be terminated
+                       after hw perf tests detect node with hw results not in margin with average
+                    If stop_on_hw_perf_failure is False, then sct performance test will be run
+                       even after hw perf tests detect node with hw results not in margin with average"""),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

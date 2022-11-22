@@ -1,0 +1,2 @@
+run_db_node_benchmarks: true
+stop_on_hw_perf_failure: false

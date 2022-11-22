@@ -286,7 +286,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
         return best_results
 
-    def check_regression(self, test_id, data, is_gce=False):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         doc = self.get_test_by_id(test_id)
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.LongevityTest.test_custom_time
@@ -335,7 +335,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             grafana_snapshots=self._get_grafana_snapshot(doc),
             grafana_screenshots=self._get_grafana_screenshot(doc),
             job_url=doc['_source']['test_details'].get('job_url', ""),
-            # best_stat_per_version=best_results_per_nemesis,
+            node_benchmarks=node_benchmarks,
         )
         attachment_file = [
             self.save_html_to_file(results,
@@ -571,7 +571,9 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return cmp_res
 
     # pylint: disable=too-many-arguments
-    def check_regression(self, test_id, is_gce=False, email_subject_postfix=None, use_wide_query=False, lastyear=False):
+    def check_regression(self, test_id, is_gce=False, email_subject_postfix=None,
+                         use_wide_query=False, lastyear=False,
+                         node_benchmarks=None):
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -717,6 +719,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             "kibana_url": self.gen_kibana_dashboard_url(dashboard_path),
             "events_summary": events_summary,
             "last_events": last_events,
+            "node_benchmarks": node_benchmarks,
         }
         self.log.debug('Regression analysis:')
         self.log.debug(PP.pformat(results))

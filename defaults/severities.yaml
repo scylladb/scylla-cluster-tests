@@ -127,3 +127,4 @@ WorkloadPrioritisationEvent.EmptyPrometheusData: ERROR
 ScyllaSysconfigSetupEvent: NORMAL
 TestStepEvent: ERROR
 CpuNotHighEnoughEvent: ERROR
+HWPerforanceEvent: CRITICAL
