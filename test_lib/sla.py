@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field, fields
+from typing import Optional
 
 from sdcm.utils.decorators import retrying
 from sdcm.utils.loader_utils import (STRESS_ROLE_NAME_TEMPLATE,
@@ -62,7 +63,7 @@ class ServiceLevel:
     # pylint: disable=too-many-arguments
     def __init__(self, session,
                  name: str,
-                 shares: int = 1000,
+                 shares: Optional[int] = 1000,
                  timeout: str = None,
                  workload_type: str = None):
         self.session = session
@@ -347,9 +348,9 @@ class User(UserRoleBase):
 
 
 def create_sla_auth(session, shares: int, index: int) -> Role:
-    role = Role(session=session, name=STRESS_ROLE_NAME_TEMPLATE % (shares, index),
-                password=STRESS_ROLE_PASSWORD_TEMPLATE % shares, login=True).create()
-    role.attach_service_level(ServiceLevel(session=session, name=SERVICE_LEVEL_NAME_TEMPLATE % (shares, index),
+    role = Role(session=session, name=STRESS_ROLE_NAME_TEMPLATE % (shares or '', index),
+                password=STRESS_ROLE_PASSWORD_TEMPLATE % shares or '', login=True).create()
+    role.attach_service_level(ServiceLevel(session=session, name=SERVICE_LEVEL_NAME_TEMPLATE % (shares or '', index),
                                            shares=shares).create())
 
     return role
