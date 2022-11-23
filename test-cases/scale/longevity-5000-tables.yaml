@@ -19,24 +19,8 @@ jmx_heap_memory: 1024 # this is a fix/workaround for https://github.com/scylladb
 instance_type_db: 'i3.8xlarge'
 instance_type_loader: 'c5.4xlarge'
 user_prefix: 'longevity-5000-tables'
+root_disk_size_runner: 120
 
-# loader AMI with c-s ver. 4 and few fixes:
-#  - fix NoSuchElementException
-#  - enable control over both consistency levels: regular and serial
-#  - bring shard awareness
-#regions_data:
-#  us-east-1:
-#    ami_id_loader: 'ami-0b94f0e897d884b1b'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
-#  eu-west-1:
-#    ami_id_loader: 'ami-0bf19545bc7bc9e1f'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
-#  eu-west-2:
-#    ami_id_loader: 'ami-043f248f98c105419'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
-#  eu-central-1:
-#    ami_id_loader: 'ami-0114531e650c08b74'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
-#  eu-north-1:
-#    ami_id_loader: 'ami-036150abbde18c61a'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
-#  us-west-2:
-#    ami_id_loader: 'ami-063a97bde47353690'  # A copy of ami-lwt-v5 which is the last supported for this test (java 1.8)
 
 cluster_health_check: false
 
