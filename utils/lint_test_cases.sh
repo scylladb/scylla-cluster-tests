@@ -4,7 +4,6 @@ OUT=0
 SCT_SCYLLA_VERSION=4.4.1 ./sct.py lint-yamls -i '.yaml' -e 'azure,multi-dc,multiDC,multidc,multiple-dc,rolling,docker,artifacts,private-repo,ics/long,scylla-operator,gce,jepsen,repair-based-operations'
 OUT=$(($OUT + $?))
 
-OUT=0
 SCT_SCYLLA_VERSION=5.0.1 SCT_AZURE_REGION_NAME="eastus" ./sct.py lint-yamls --backend azure -i azure
 OUT=$(($OUT + $?))
 
