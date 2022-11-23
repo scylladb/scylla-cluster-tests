@@ -1514,10 +1514,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.debug('Key %s already exists before refresh', key)
 
             # Executing rolling refresh one by one
+            shards_num = self.cluster.nodes[0].scylla_shards
             for node in self.cluster.nodes:
                 SstableLoadUtils.upload_sstables(node, test_data=test_data[0])
                 system_log_follower = SstableLoadUtils.run_refresh(node, test_data=test_data[0])
-                SstableLoadUtils.validate_resharding_after_refresh(node=node, system_log_follower=system_log_follower)
+                # NOTE: resharding happens only if we have more than 1 core.
+                #       We may have 1 core in a K8S multitenant setup.
+                if shards_num > 1:
+                    SstableLoadUtils.validate_resharding_after_refresh(
+                        node=node, system_log_follower=system_log_follower)
 
             # Verify that the special key is loaded by SELECT query
             result = self.target_node.run_cqlsh(query_verify)
