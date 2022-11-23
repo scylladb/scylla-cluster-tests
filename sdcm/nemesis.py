@@ -1273,7 +1273,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """Covers https://github.com/scylladb/scylla-operator/issues/894"""
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('It is supported only on kubernetes')
-        if self.cluster.params.get('cluster_backend') == "k8s-gke":
+        if self.cluster.params.get('cluster_backend') != "k8s-eks" or self.cluster.nodes[0].scylla_shards < 14:
+            # NOTE: bug https://github.com/scylladb/scylla-operator/issues/1077 reproduces better
+            #       on slower machines with smaller amount number of cores.
+            #       So, allow it to run only on fast K8S-EKS backend having at least 14 cores per pod.
             raise UnsupportedNemesis(
                 "Skipped due to the following bug: "
                 "https://github.com/scylladb/scylla-operator/issues/1077")
