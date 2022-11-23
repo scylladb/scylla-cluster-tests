@@ -215,7 +215,9 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 result = cmd_runner.run(
                     cmd=stress_cmd,
                     timeout=self.timeout,
-                    log_file=log_file_name)
+                    log_file=log_file_name,
+                    retry=0,
+                )
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = format_stress_cmd_error(exc)
                 if "truncate: seastar::rpc::timeout_error" in errors_str:

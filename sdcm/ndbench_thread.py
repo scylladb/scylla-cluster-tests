@@ -151,7 +151,9 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
                                                timeout=self.timeout + self.shutdown_timeout,
                                                ignore_status=True,
                                                log_file=log_file_name,
-                                               verbose=True)
+                                               verbose=True,
+                                               retry=0,
+                                               )
                 return docker_run_result
             except Exception as exc:  # pylint: disable=broad-except
                 NdBenchStressEvent.failure(node=str(loader),
