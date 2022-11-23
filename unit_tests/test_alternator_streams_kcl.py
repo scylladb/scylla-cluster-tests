@@ -22,7 +22,7 @@ from unit_tests.lib.alternator_utils import TEST_PARAMS
 
 pytestmark = [
     pytest.mark.usefixtures("events"),
-    pytest.mark.skipif(True, reason="those are integration tests only"),
+    pytest.mark.integration,
 ]
 
 

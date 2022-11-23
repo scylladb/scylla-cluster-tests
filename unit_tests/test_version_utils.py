@@ -370,9 +370,8 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_attr():
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
 
 
-@pytest.mark.integration
 @pytest.mark.need_network
-@pytest.mark.skip(reason="those are integration tests only")
+@pytest.mark.integration
 @pytest.mark.parametrize('docker_repo', ['scylladb/scylla-nightly', 'scylladb/scylla-enterprise-nightly'])
 def test_get_specific_tag_of_docker_image(docker_repo):
     assert get_specific_tag_of_docker_image(docker_repo=docker_repo) != 'latest'
@@ -395,7 +394,6 @@ def test_scylla_version_grouped_regexp(full_version, version, date, commit_id):
 
 @pytest.mark.integration
 @pytest.mark.need_network
-@pytest.mark.skip(reason="those are integration tests only")
 @pytest.mark.parametrize("version, expected", (
     ("4.6.rc2-20220102.e8a1cfb6f", "scylladb/scylla:4.6.rc2"),
     ("5.0.1-0.20220719.b177dacd3", "scylladb/scylla:5.0.1"),

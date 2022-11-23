@@ -142,6 +142,26 @@ pipeline {
                 }
             }
         }
+        stage("integration tests") {
+            when {
+                expression {
+                    return pullRequestContainsLabels("test-integration") && currentBuild.result == null
+                }
+            }
+            options {
+                timeout(time: 30, unit: 'MINUTES')
+            }
+            steps {
+                script {
+                    try {
+                        sh './docker/env/hydra.sh integration-tests'
+                        pullRequestSetResult('success', 'jenkins/integration-tests', 'All integration tests are passed')
+                    } catch(Exception ex) {
+                        pullRequestSetResult('failure', 'jenkins/integration-tests', 'Some integration tests failed')
+                    }
+                }
+            }
+        }
         stage("provision test") {
             when {
                 expression {
