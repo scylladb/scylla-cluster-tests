@@ -3,11 +3,12 @@ test_duration: 90
 
 stress_cmd_no_mv: "cassandra-stress user profile=/tmp/cs_no_mv_basic_profile.yaml ops'(insert=1)' cl=QUORUM duration=30m -pop seq=1..10000000 -mode cql3 native -rate threads=100"
 stress_cmd_no_mv_profile: 'data_dir/cs_no_mv_basic_profile.yaml'
-stress_cmd_mv:
-  - cmd: "cassandra-stress user profile=/tmp/cs_mv_basic_profile_by_id_firstname.yaml ops'(insert=1)' cl=QUORUM duration=5m -pop seq=10000000..20000000 -mode cql3 native -rate threads=100"
-    profile: 'data_dir/cs_mv_basic_profile_by_id_firstname.yaml'
-  - cmd: "cassandra-stress user profile=/tmp/cs_mv_basic_profile_by_firstname_id.yaml ops'(insert=1)' cl=QUORUM duration=5m -pop seq=20000000..30000000 -mode cql3 native -rate threads=100"
-    profile: 'data_dir/cs_mv_basic_profile_by_firstname_id.yaml'
+# breaks SCT configuration check, those are consider to be strings or list of strings, should be renamed
+# stress_cmd_mv:
+# - cmd: "cassandra-stress user profile=/tmp/cs_mv_basic_profile_by_id_firstname.yaml ops'(insert=1)' cl=QUORUM duration=5m -pop seq=10000000..20000000 -mode cql3 native -rate threads=100"
+#    profile: 'data_dir/cs_mv_basic_profile_by_id_firstname.yaml'
+#  - cmd: "cassandra-stress user profile=/tmp/cs_mv_basic_profile_by_firstname_id.yaml ops'(insert=1)' cl=QUORUM duration=5m -pop seq=20000000..30000000 -mode cql3 native -rate threads=100"
+#    profile: 'data_dir/cs_mv_basic_profile_by_firstname_id.yaml'
 
 n_db_nodes: 4
 n_loaders: 4
