@@ -21,9 +21,9 @@ from sdcm.sct_events.system import TestFrameworkEvent
 
 DEFAULT_USER = "cassandra"
 DEFAULT_USER_PASSWORD = "cassandra"
-STRESS_ROLE_NAME_TEMPLATE = 'role%d_%d'
-STRESS_ROLE_PASSWORD_TEMPLATE = 'rolep%d'
-SERVICE_LEVEL_NAME_TEMPLATE = 'sl%d_%d'
+STRESS_ROLE_NAME_TEMPLATE = 'role%s_%d'
+STRESS_ROLE_PASSWORD_TEMPLATE = 'rolep%s'
+SERVICE_LEVEL_NAME_TEMPLATE = 'sl%s_%d'
 
 
 class LoaderUtilsMixin:
