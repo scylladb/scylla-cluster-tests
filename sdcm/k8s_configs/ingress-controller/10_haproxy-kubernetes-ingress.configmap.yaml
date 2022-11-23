@@ -3,39 +3,3 @@ kind: ConfigMap
 metadata:
   name: haproxy-kubernetes-ingress
   namespace: haproxy-controller
-data:
-  hard-stop-after: "60s"
-  maxconn: "38000"
-  scale-server-slots: "5"
-  rate-limit-period: "1s"
-  rate-limit-status-code: "429"
-  rate-limit-size: "1000000"
-  timeout-client: "55s"
-  timeout-connect: "7s"
-  timeout-http-request: "5m"
-  timeout-http-keep-alive: "65s"
-  timeout-queue: "8s"
-  timeout-server: "4s"
-  timeout-tunnel: "29m"
-  dontlognull: "true"
-  src-ip-header: "True-Client-IP"
-  forwarded-for: "true"
-  http-keep-alive: "true"
-  http-server-close: "false"
-  load-balance: "roundrobin"
-  logasap: "false"
-  syslog-server: "address:stdout, format: raw, facility:daemon, level: trace"
-  global-config-snippet: |
-    tune.bufsize 32768
-    tune.idletimer 0
-    tune.ssl.cachesize 200000
-    tune.ssl.lifetime 300000
-    tune.pipesize 10485760
-    maxpipes 400000
-  backend-config-snippet: |
-    option splice-auto
-    option splice-request
-    option splice-response
-    option tcplog
-  stats-config-snippet: |
-    option dontlog-normal
