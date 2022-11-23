@@ -634,6 +634,12 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         self.assertEqual(conf.get('stress_read_cmd'), ['cassandra_stress', 'cassandra_stress'])
 
+    def test_22_convert_none_shares(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_data/service_level_shares_none.yaml'
+        conf = sct_config.SCTConfiguration()
+        self.assertEqual(conf["service_level_shares"], [None, None])
+
 
 if __name__ == "__main__":
     unittest.main()

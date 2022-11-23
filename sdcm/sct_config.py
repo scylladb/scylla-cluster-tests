@@ -1711,6 +1711,14 @@ class SCTConfiguration(dict):
                 raise ValueError("For PasswordAuthenticator authenticator authenticator_user and authenticator_password"
                                  " have to be provided")
 
+        # 14) convert service_level_shares 'None' to pythonic None
+        if self.get('service_level_shares'):
+            service_level_shares = []
+            for shares in self.get('service_level_shares'):
+                service_level_shares.append(None if shares == "None" else shares)
+
+            self["service_level_shares"] = service_level_shares
+
     def log_config(self):
         self.log.info(self.dump_config())
 
