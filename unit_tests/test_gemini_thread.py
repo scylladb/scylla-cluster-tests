@@ -18,7 +18,7 @@ from unit_tests.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
     pytest.mark.usefixtures("events"),
-    pytest.mark.skip(reason="those are integration tests only"),
+    pytest.mark.integration,
 ]
 
 
