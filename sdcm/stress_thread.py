@@ -237,7 +237,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                                      log_file_name=log_file_name) as cs_stress_event:
             publisher.event_id = cs_stress_event.event_id
             try:
-                result = cmd_runner.run(cmd=node_cmd, timeout=self.timeout, log_file=log_file_name)
+                result = cmd_runner.run(cmd=node_cmd, timeout=self.timeout, log_file=log_file_name, retry=0)
             except Exception as exc:  # pylint: disable=broad-except
                 cs_stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
                 cs_stress_event.add_error(errors=[format_stress_cmd_error(exc)])

@@ -77,6 +77,7 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
                 result = docker.run(cmd=node_cmd,
                                     timeout=self.timeout + self.shutdown_timeout,
                                     log_file=log_file_name,
+                                    retry=0,
                                     )
 
                 return result

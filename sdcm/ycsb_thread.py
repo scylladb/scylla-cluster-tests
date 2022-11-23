@@ -264,7 +264,8 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                             callback=raise_event_callback,
                             raise_exception=False
                         )
-                    ]
+                    ],
+                    retry=0,
                 )
                 return self.parse_final_output(result)
 

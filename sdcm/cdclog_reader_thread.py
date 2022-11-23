@@ -71,7 +71,9 @@ class CDCLogReaderThread(DockerBasedStressThread):
                                     timeout=self.timeout + self.shutdown_timeout,
                                     ignore_status=True,
                                     log_file=log_file_name,
-                                    verbose=True)
+                                    verbose=True,
+                                    retry=0
+                                    )
                 if not result.ok:
                     CDCReaderStressEvent.error(node=loader,
                                                stress_cmd=self.stress_cmd,

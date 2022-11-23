@@ -124,7 +124,9 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                 result = docker.run(cmd=gemini_cmd,
                                     timeout=self.timeout,
                                     ignore_status=False,
-                                    log_file=log_file_name)
+                                    log_file=log_file_name,
+                                    retry=0,
+                                    )
                 # sleep to gather all latest log messages
                 time.sleep(5)
             except Exception as details:  # pylint: disable=broad-except

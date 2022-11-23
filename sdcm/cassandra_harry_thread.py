@@ -98,7 +98,9 @@ class CassandraHarryThread(DockerBasedStressThread):
                 docker_run_result = docker.run(cmd=f"{node_cmd} -node {ip}",
                                                timeout=self.timeout + self.shutdown_timeout,
                                                log_file=log_file_name,
-                                               verbose=True)
+                                               verbose=True,
+                                               retry=0,
+                                               )
                 result = self._parse_harry_summary(docker_run_result.stdout.splitlines())
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = format_stress_cmd_error(exc)
