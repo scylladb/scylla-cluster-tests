@@ -708,10 +708,9 @@ class LogCollector:
         if not self.nodes and not os.listdir(self.local_dir):
             LOGGER.warning('No nodes found for %s cluster. Logs will not be collected', self.cluster_log_type)
             return []
-        if self.nodes:
+        if workers_number := len(self.nodes):
+            workers_number = min(workers_number, 30)
             try:
-                workers_number = int(len(self.nodes) / 2)
-                workers_number = len(self.nodes) if workers_number < 2 else workers_number
                 ParallelObject(self.nodes, num_workers=workers_number, timeout=self.collect_timeout).run(
                     collect_logs_per_node, ignore_exceptions=True)
             except Exception as details:  # pylint: disable=broad-except
