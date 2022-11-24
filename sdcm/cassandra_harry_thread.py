@@ -86,7 +86,7 @@ class CassandraHarryThread(DockerBasedStressThread):
 
         CassandraHarryEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
 
-        with CassandraHarryStressExporter(instance_name=loader.cql_ip_address,
+        with CassandraHarryStressExporter(instance_name=loader.ip_address,
                                           metrics=nemesis_metrics_obj(),
                                           stress_operation='write',
                                           stress_log_filename=log_file_name,

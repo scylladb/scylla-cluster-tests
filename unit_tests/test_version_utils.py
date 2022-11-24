@@ -397,7 +397,7 @@ def test_scylla_version_grouped_regexp(full_version, version, date, commit_id):
 @pytest.mark.parametrize("version, expected", (
     ("4.6.rc2-20220102.e8a1cfb6f", "scylladb/scylla:4.6.rc2"),
     ("5.0.1-0.20220719.b177dacd3", "scylladb/scylla:5.0.1"),
-    ("5.1", "scylladb/scylla:5.1"),
+    ("5.1", "scylladb/scylla:latest"),
     ("5.1.0~rc1", "scylladb/scylla:5.1.0-rc1"),
     ("5.0.1", "scylladb/scylla:5.0.1"),
     ("5.2.0~dev-0.20220824.6ce5e9079c1e", "scylladb/scylla-nightly:5.2.0-dev-0.20220824.6ce5e9079c1e"),
