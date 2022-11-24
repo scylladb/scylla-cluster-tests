@@ -521,15 +521,6 @@ class LocalKindCluster(LocalMinimalClusterBase):
         """
         for _ in range(self.params.get("n_db_nodes")):
             script_start_part += scylla_node_definition
-
-        loader_node_definition = f"""
-          - role: worker
-            labels:
-              {POOL_LABEL_NAME}: {self.LOADER_POOL_NAME}
-        """
-        for _ in range(self.params.get("n_loaders")):
-            script_start_part += loader_node_definition
-
         script_end_part = """
         EndOfSpec
         /var/tmp/kind delete cluster || true
