@@ -75,7 +75,8 @@ from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors, ignore_no_space_errors,
                                                  ignore_scrub_invalid_errors, ignore_view_error_gate_closed_exception,
                                                  ignore_stream_mutation_fragments_errors,
-                                                 ignore_ycsb_connection_refused, decorate_with_context)
+                                                 ignore_ycsb_connection_refused, decorate_with_context,
+                                                 ignore_reactor_stall_errors)
 from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent
@@ -3541,6 +3542,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         experiment.start()
         experiment.wait_until_finished()
 
+    @decorate_with_context(ignore_reactor_stall_errors)
     def disrupt_memory_stress(self):
         """
         Try to run stress-ng to preempt allocated memory of scylla process,
