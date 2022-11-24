@@ -38,6 +38,7 @@ class Distro(enum.Enum):
     UBUNTU16 = ("ubuntu", "16.04")
     UBUNTU18 = ("ubuntu", "18.04")
     UBUNTU20 = ("ubuntu", "20.04")
+    UBUNTU22 = ("ubuntu", "22.04")
 
     @classmethod
     def _missing_(cls, value):

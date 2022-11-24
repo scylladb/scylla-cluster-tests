@@ -213,10 +213,18 @@ class Setup:
     def get_startup_script(cls):
         post_boot_script = '#!/bin/bash'
         post_boot_script += dedent(r'''
-               sudo sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
-               sudo sed -i 's/#MaxStartups \(.*\)$/MaxStartups 60/' /etc/ssh/sshd_config
-               sudo sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config
-               sudo systemctl restart sshd
+               sudo sed -i 's/#MaxSessions \(.* \)$/MaxSessions 1000/' /etc/ssh/sshd_config || true
+               sudo sed -i 's/#MaxStartups \(.*\)$/MaxStartups 60/' /etc/ssh/sshd_config || true
+               sudo sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config || true
+               SSH_VERSION=$(ssh -V 2>&1 | tr -d "[:alpha:][:blank:][:punct:]" | cut -c-2)
+               sudo echo $SSH_VERSION || true
+
+               if [ ${SSH_VERSION} -gt 88 ]; then
+                   sudo sed -i "s/#PubkeyAuthentication \(.*\)$/PubkeyAuthentication yes/" /etc/ssh/sshd_config || true
+                   sudo sed -i -e "\$aPubkeyAcceptedAlgorithms +ssh-rsa" /etc/ssh/sshd_config || true
+                   sudo sed -i -e "\$aHostKeyAlgorithms +ssh-rsa" /etc/ssh/sshd_config || true
+               fi
+               sudo systemctl restart sshd || true
                ''')
         if cls.RSYSLOG_ADDRESS:
 
@@ -3422,6 +3430,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
         if not Setup.REUSE_CLUSTER:
             self._scylla_pre_install(node)
             self._scylla_install(node)
+            node.remoter.run('sudo apt-get install -y rsync', ignore_status=True)
 
             if Setup.BACKTRACE_DECODING:
                 node.install_scylla_debuginfo()
