@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
+import os
 import re
 import logging
 from functools import partial
@@ -22,8 +22,6 @@ from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_eve
 
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEvent
 from sdcm.sct_events.system import TestFrameworkEvent
-
-TOLERABLE_REACTOR_STALL: int = 500  # ms
 
 LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +64,7 @@ MILLI_RE = re.compile(r"(\d+) ms")
 
 # pylint: disable=too-few-public-methods
 class ReactorStalledMixin(Generic[T_log_event]):
-    tolerable_reactor_stall: int = TOLERABLE_REACTOR_STALL
+    tolerable_reactor_stall: int = os.environ.get('SCT_REACTOR_STALL_TOLERABLE_THRESHOLD')
 
     def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event:
         try:

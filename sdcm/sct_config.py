@@ -564,6 +564,9 @@ class SCTConfiguration(dict):
         dict(name="cluster_target_size", env="SCT_CLUSTER_TARGET_SIZE", type=int,
              help="""Used for scale test: max size of the cluster"""),
 
+        dict(name="reactor_stall_tolerable_threshold", env="SCT_REACTOR_STALL_TOLERABLE_THRESHOLD", type=int,
+             help="""Threshold value for reactor stall event, where above it it will be marked as ERROR"""),
+
         dict(name="space_node_threshold", env="SCT_SPACE_NODE_THRESHOLD",
              type=int, k8s_multitenancy_supported=True,
              help="""

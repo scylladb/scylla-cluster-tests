@@ -13,6 +13,7 @@ manager_scylla_backend_version: '2022'
 experimental: true
 round_robin: false
 
+reactor_stall_tolerable_threshold: 500
 append_scylla_args: '--blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1'
 append_scylla_setup_args: ''
 
