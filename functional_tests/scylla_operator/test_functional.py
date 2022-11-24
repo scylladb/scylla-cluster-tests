@@ -793,38 +793,3 @@ def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path)
         output = res.all()
         assert len(output) == 1
         log.debug(output)
-
-
-@pytest.mark.required_operator("v1.8.0")
-@pytest.mark.requires_tls
-def test_cloud_bundle_connectivity_python(db_cluster: ScyllaPodCluster):
-
-    assert db_cluster.connection_bundle_file, "cloud bundle wasn't found"
-
-    with db_cluster.cql_connection_patient(db_cluster.nodes[0]) as session:
-        res = session.execute("SELECT * FROM system.local")
-        output = res.all()
-        log.debug(output)
-        assert len(output) == 1
-
-
-@pytest.mark.required_operator("v1.8.0")
-@pytest.mark.requires_tls
-def test_cloud_bundle_connectivity_cassandra_stress(tester):
-
-    assert tester.db_cluster.connection_bundle_file, "cloud bundle wasn't found"
-
-    cmd = (
-        """cassandra-stress write cl=ONE duration=1m -schema 'replication(factor=1) """
-        """compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native """
-        """-rate threads=10 -pop seq=1..10000000 -log interval=5"""
-    )
-
-    stress_obj = tester.run_stress_thread(cmd, stop_test_on_failure=False)
-    output = stress_obj.get_results()
-
-    assert "latency mean" in output[0]
-    assert float(output[0]["latency mean"]) > 0
-
-    assert "latency 99th percentile" in output[0]
-    assert float(output[0]["latency 99th percentile"]) > 0

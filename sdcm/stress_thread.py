@@ -106,9 +106,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             stress_cmd += \
                 " -transport 'truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra'"
 
-        if (connection_bundle_file := self.node_list[0].parent_cluster.connection_bundle_file) and '-node' not in stress_cmd:
-            stress_cmd += f" -cloudconf file={Path('/tmp') / connection_bundle_file.name}"
-        elif self.node_list and '-node' not in stress_cmd:
+        if self.node_list and '-node' not in stress_cmd:
             node_ip_list = [n.cql_ip_address for n in self.node_list]
             stress_cmd += " -node {}".format(",".join(node_ip_list))
         if 'skip-unsupported-columns' in self._get_available_suboptions(cmd_runner, '-errors'):
@@ -154,7 +152,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
     def _run_stress(self, loader, loader_idx, cpu_idx):
         pass
 
-    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches
         cleanup_context = contextlib.nullcontext()
 
         if "k8s" in self.params.get("cluster_backend"):
@@ -196,10 +194,6 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                     cmd_runner.send_files(str(ssl_file),
                                           str(Path('/etc/scylla/ssl_conf/client') / ssl_file.name),
                                           verbose=True)
-
-        if connection_bundle_file := self.node_list[0].parent_cluster.connection_bundle_file:
-            cmd_runner.send_files(str(connection_bundle_file),
-                                  str(Path('/tmp') / connection_bundle_file.name), delete_dst=True, verbose=True)
 
         # Get next word after `cassandra-stress' in stress_cmd.
         # Do it this way because stress_cmd can contain env variables before `cassandra-stress'.

@@ -58,13 +58,6 @@ def _str(value: str) -> str:
     raise ValueError(f"{value} isn't a string, it is '{type(value)}'")
 
 
-def _file(value: str) -> str:
-    file_path = pathlib.Path(value)
-    if file_path.is_file() and file_path.exists():
-        return value
-    raise ValueError(f"{value} isn't an existing file")
-
-
 def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:
     if isinstance(value, str):
         return [value]
@@ -892,9 +885,6 @@ class SCTConfiguration(dict):
 
         dict(name="k8s_enable_tls", env="SCT_K8S_ENABLE_TLS", type=boolean,
              help="Defines whether the we enable the operator serverless options"),
-
-        dict(name="k8s_connection_bundle_file", env="SCT_K8S_CONNECTION_BUNDLE_FILE", type=_file,
-             help="Serverless configuration bundle file", k8s_multitenancy_supported=True),
 
         # docker config options
         dict(name="mgmt_docker_image", env="SCT_MGMT_DOCKER_IMAGE", type=str,

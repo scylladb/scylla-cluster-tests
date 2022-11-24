@@ -201,9 +201,8 @@
 | **<a href="#user-content-k8s_cert_manager_version" name="k8s_cert_manager_version">k8s_cert_manager_version</a>**  |  | N/A | SCT_K8S_CERT_MANAGER_VERSION
 | **<a href="#user-content-k8s_minio_storage_size" name="k8s_minio_storage_size">k8s_minio_storage_size</a>**  |  | 10Gi | SCT_K8S_MINIO_STORAGE_SIZE
 | **<a href="#user-content-k8s_log_api_calls" name="k8s_log_api_calls">k8s_log_api_calls</a>**  | Defines whether the K8S API server logging must be enabled and it's logs gathered. Be aware that it may be really huge set of data. | N/A | SCT_K8S_LOG_API_CALLS
-| **<a href="#user-content-k8s_tenants_num" name="k8s_tenants_num">k8s_tenants_num</a>**  | Number of Scylla clusters to create in the K8S cluster. | 1 | SCT_TENANTS_NUM
 | **<a href="#user-content-k8s_enable_tls" name="k8s_enable_tls">k8s_enable_tls</a>**  | Defines whether the we enable the operator serverless options | N/A | SCT_K8S_ENABLE_TLS
-| **<a href="#user-content-k8s_connection_bundle_file" name="k8s_connection_bundle_file">k8s_connection_bundle_file</a>**  | Serverless configuration bundle file | N/A | SCT_K8S_CONNECTION_BUNDLE_FILE
+| **<a href="#user-content-k8s_tenants_num" name="k8s_tenants_num">k8s_tenants_num</a>**  | Number of Scylla clusters to create in the K8S cluster. | 1 | SCT_TENANTS_NUM
 | **<a href="#user-content-mgmt_docker_image" name="mgmt_docker_image">mgmt_docker_image</a>**  | Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' | N/A | SCT_MGMT_DOCKER_IMAGE
 | **<a href="#user-content-docker_image" name="docker_image">docker_image</a>**  | Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version | N/A | SCT_DOCKER_IMAGE
 | **<a href="#user-content-db_nodes_private_ip" name="db_nodes_private_ip">db_nodes_private_ip</a>**  |  | N/A | SCT_DB_NODES_PRIVATE_IP
