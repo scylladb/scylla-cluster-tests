@@ -56,16 +56,15 @@ def test_02_cql_kill(request, docker_scylla, params):
 
 def test_03_dynamodb_api(request, docker_scylla, events, params):
     """
-    this test isn't working yet, since we didn't figured out a way to use ndbench with dynamodb
+    this test isn't working yet, since we didn't figure out a way to use ndbench with dynamodb
     """
-    critical_log_content_before = events.get_event_log_file("critical.log")
 
     # start a command that would yield errors
     loader_set = LocalLoaderSetDummy()
     cmd = (
         f"ndbench cli.clientName=DynamoDBKeyValue ; numKeys=20000000 ; "
         f"numReaders=8; numWriters=8 ; readRateLimit=7200 ; writeRateLimit=1800; "
-        f"dynamodb.autoscaling=false; dynamodb.endpoint=http://{docker_scylla.internal_ip_address}:8000"
+        f"dynamodb.autoscaling=false; dynamodb.endpoint=http://{docker_scylla.ip_address}:8000"
     )
     ndbench_thread = NdBenchStressThread(
         loader_set, cmd, node_list=[docker_scylla], timeout=20, params=params
@@ -76,16 +75,19 @@ def test_03_dynamodb_api(request, docker_scylla, events, params):
 
     request.addfinalizer(cleanup_thread)
 
-    ndbench_thread.run()
-    ndbench_thread.get_results()
+    file_logger = events.get_events_logger()
+    with events.wait_for_n_events(file_logger, count=4, timeout=60):
+
+        ndbench_thread.run()
+        ndbench_thread.get_results()
 
     # check that events with the errors were sent out
-    critical_log_content_after = events.wait_for_event_log_change(
-        "critical.log", critical_log_content_before
-    )
+    cat = file_logger.get_events_by_category()
+    assert len(cat["ERROR"]) >= 1
+    assert any("Encountered an exception when driving load" in err for err in cat["ERROR"])
 
-    assert "Encountered an exception when driving load" in critical_log_content_after
-    assert "BUILD FAILED" in critical_log_content_after
+    assert len(cat["CRITICAL"]) >= 3
+    assert "BUILD FAILED" in cat["CRITICAL"][-1]
 
 
 def test_04_verify_data(request, docker_scylla, events, params):
@@ -121,11 +123,11 @@ def test_04_verify_data(request, docker_scylla, events, params):
 
     request.addfinalizer(cleanup_thread2)
 
-    critical_log_content_before = events.get_event_log_file("critical.log")
-    ndbench_thread2.run()
+    file_logger = events.get_events_logger()
+    with events.wait_for_n_events(file_logger, count=3, timeout=60):
 
-    time.sleep(15)
-    critical_log_content_after = events.wait_for_event_log_change(
-        "critical.log", critical_log_content_before
-    )
-    assert "Failed to process NdBench read operation" in critical_log_content_after
+        ndbench_thread2.run()
+
+    cat = file_logger.get_events_by_category()
+
+    assert any("Failed to process NdBench read operation" in err for err in cat["ERROR"])

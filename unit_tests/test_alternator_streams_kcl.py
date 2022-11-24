@@ -26,6 +26,7 @@ pytestmark = [
 ]
 
 
+@pytest.mark.skip("test isn't yet fully working")
 def test_01_kcl_with_ycsb(
     request, docker_scylla, events, params
 ):  # pylint: disable=too-many-locals
