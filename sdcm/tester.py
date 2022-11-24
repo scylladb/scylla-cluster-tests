@@ -1255,6 +1255,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def get_cluster_k8s_local_kind_cluster(self):
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
+        container_node_params = dict(
+            docker_image=self.params.get('docker_image'),
+            docker_image_tag=self.params.get('scylla_version'),
+            node_key_file=self.credentials[0].key_file,
+        )
         self.k8s_cluster = mini_k8s.LocalKindCluster(
             software_version=self.params.get("mini_k8s_version"),
             user_prefix=self.params.get("user_prefix"),
@@ -1264,16 +1269,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         for namespace in ('kube-system', 'local-path-storage'):
             self.k8s_cluster.set_nodeselector_for_deployments(
                 pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME, namespace=namespace)
-
-        loader_pool = None
-        if self.params.get("n_loaders"):
-            loader_pool = mini_k8s.MinimalK8SNodePool(
-                k8s_cluster=self.k8s_cluster,
-                name=self.k8s_cluster.LOADER_POOL_NAME,
-                num_nodes=self.params.get("n_loaders"),
-                image_type="fake-image-type",
-                instance_type="fake-instance-type")
-            self.k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
 
         scylla_pool = mini_k8s.MinimalK8SNodePool(
             k8s_cluster=self.k8s_cluster,
@@ -1300,26 +1295,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             n_nodes=self.params.get("k8s_n_scylla_pods_per_cluster") or self.params.get("n_db_nodes"),
             params=self.params,
             node_pool=scylla_pool,
-            add_nodes=False,
         )
 
         if self.params.get('k8s_deploy_monitoring'):
             self.k8s_cluster.deploy_monitoring_cluster(
                 is_manager_deployed=self.params.get('use_mgmt')
             )
-
         if self.params.get("n_loaders"):
-            self.loaders = cluster_k8s.LoaderPodCluster(
-                k8s_cluster=self.k8s_cluster,
-                loader_cluster_name=self.params.get("k8s_loader_cluster_name"),
+            self.loaders = cluster_docker.LoaderSetDocker(
+                **container_node_params,
+                n_nodes=self.params.get("n_loaders"),
                 user_prefix=self.params.get("user_prefix"),
-                n_nodes=self.params.get("k8s_n_loader_pods_per_cluster") or self.params.get("n_loaders"),
                 params=self.params,
-                node_pool=loader_pool,
-                add_nodes=False,
             )
-
-        self._add_and_wait_for_cluster_nodes_in_parallel([self.db_cluster, self.loaders])
 
         if self.params.get("n_monitor_nodes") > 0:
             self.monitors = cluster_docker.MonitorSetDocker(

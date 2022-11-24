@@ -197,9 +197,9 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                                           str(Path('/etc/scylla/ssl_conf/client') / ssl_file.name),
                                           verbose=True)
 
-        if connection_bundle_file := self.connection_bundle_file:
+        if connection_bundle_file := self.node_list[0].parent_cluster.connection_bundle_file:
             cmd_runner.send_files(str(connection_bundle_file),
-                                  self.target_connection_bundle_file, delete_dst=True, verbose=True)
+                                  str(Path('/tmp') / connection_bundle_file.name), delete_dst=True, verbose=True)
 
         # Get next word after `cassandra-stress' in stress_cmd.
         # Do it this way because stress_cmd can contain env variables before `cassandra-stress'.

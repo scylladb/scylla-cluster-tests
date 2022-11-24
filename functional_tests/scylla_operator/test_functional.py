@@ -828,24 +828,3 @@ def test_cloud_bundle_connectivity_cassandra_stress(tester):
 
     assert "latency 99th percentile" in output[0]
     assert float(output[0]["latency 99th percentile"]) > 0
-
-
-@pytest.mark.required_operator("v1.8.0")
-@pytest.mark.requires_tls
-def test_cloud_bundle_connectivity_scylla_bench(tester):
-
-    assert tester.db_cluster.connection_bundle_file, "cloud bundle wasn't found"
-
-    cmd = (
-        "scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=10 "
-        "-clustering-row-count=5555 -clustering-row-size=uniform:10..20 -concurrency=10 "
-        "-connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=60s -duration=1m"
-    )
-
-    stress_obj = tester.run_stress_thread(cmd, stop_test_on_failure=False)
-    summaries, errors = stress_obj.verify_results()
-    assert not errors
-    assert summaries[0]["Clustering row size"] == "Uniform(min=10, max=20)"
-
-    # TODO: add verification that the output say it's using the cloud bundle
-    #  (need to add that to log output in scylla-bench)
