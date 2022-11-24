@@ -28,3 +28,5 @@ send_email: true
 email_recipients: ['qa@scylladb.com', 'rnd-internal@scylladb.com']
 backtrace_decoding: false
 print_kernel_callstack: true
+
+logs_transport: "ssh"
