@@ -1028,6 +1028,7 @@ def get_scylla_ami_versions(region):
         Owners=['797456418907'],  # ScyllaDB
         Filters=[
             {'Name': 'name', 'Values': ['ScyllaDB *']},
+            {'Name': 'architecture', 'Values': ['x86_64']}
         ],
     )
 
@@ -1352,6 +1353,7 @@ def get_branched_ami(ami_version, region_name):
     else:
         filters = [{'Name': 'tag:branch', 'Values': [branch]}, {'Name': 'tag:build-id', 'Values': [build_id]}]
 
+    filters += [{'Name': 'architecture', 'Values': ['x86_64']}]
     amis = list(ec2_resource.images.filter(Filters=filters))
 
     amis = sorted(amis, key=lambda x: x.creation_date, reverse=True)
