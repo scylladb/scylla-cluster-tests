@@ -634,7 +634,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             if not row['_source']['versions'] or 'scylla-server' not in row['_source']['versions']:
                 continue
             version_info = self._test_version(row)
-            version = version_info['version']
+            version = version_info.get('version')
             self.log.debug("version_info={} version={}".format(version_info, version))
             if not version:
                 continue
