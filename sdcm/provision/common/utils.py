@@ -32,7 +32,9 @@ def configure_rsyslog_rate_limits_script(interval: int, burst: int) -> str:
 
 
 def configure_rsyslog_target_script(host: str, port: int) -> str:
-    return f'echo "action(type=\\"omfwd\\" Target=\\"{host}\\" Port=\\"{port}\\" Protocol=\\"tcp\\")" >> /etc/rsyslog.conf\n'
+    return dedent(f"""
+    echo "action(type=\\"omfwd\\" Target=\\"{host}\\" Port=\\"{port}\\" Protocol=\\"tcp\\")" >> /etc/rsyslog.conf\n
+    """)
 
 
 def configure_rsyslog_set_hostname_script(host: str) -> str:
@@ -58,12 +60,30 @@ def configure_sshd_script():
     sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
     sed -i 's/#MaxStartups \(.*\)$/MaxStartups 60/' /etc/ssh/sshd_config
     sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config
+    SSH_VERSION=$(ssh -V 2>&1 | tr -d "[:alpha:][:blank:][:punct:]" | cut -c-2)
+    sudo echo $SSH_VERSION || true
+    if [ ${SSH_VERSION} -gt 88 ]; then
+        sudo sed -i "s/#PubkeyAuthentication \(.*\)$/PubkeyAuthentication yes/" /etc/ssh/sshd_config || true
+        sudo sed -i -e "\$aPubkeyAcceptedAlgorithms +ssh-rsa" /etc/ssh/sshd_config || true
+        sudo sed -i -e "\$aHostKeyAlgorithms +ssh-rsa" /etc/ssh/sshd_config || true
+    fi\n
     """)
 
 
 def restart_sshd_service():
-    return "systemctl restart sshd\n"
+    return dedent("""
+    systemctl restart sshd || true\n
+    """)
 
+
+def install_rsyslog():
+    return dedent("""
+    sleep 10
+    apt update
+    echo "Y" | apt install -y rsyslog
+    """)
 
 def restart_rsyslog_service():
-    return "systemctl restart rsyslog\n"
+    return dedent("""
+    systemctl restart rsyslog\n
+    """)

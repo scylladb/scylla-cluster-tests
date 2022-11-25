@@ -40,7 +40,7 @@ from sdcm import ec2_client, cluster, wait
 from sdcm.provision.aws.utils import configure_eth1_script, network_config_ipv6_workaround_script, \
     configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_rsyslog_set_hostname_script, configure_hosts_set_hostname_script, \
-    restart_rsyslog_service
+    restart_rsyslog_service, install_rsyslog
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.ec2_client import CreateSpotInstancesError
@@ -505,7 +505,8 @@ class AWSNode(cluster.BaseNode):
         # FIXME: workaround to avoid host rename generating errors on other commands
         if self.is_debian():
             return
-        script = configure_rsyslog_set_hostname_script(self.name)
+        script = install_rsyslog()
+        script += configure_rsyslog_set_hostname_script(self.name)
         script += self.test_config.get_rsyslog_configuration_script()
         script += restart_rsyslog_service()
         if wait.wait_for(func=self._set_hostname, step=10, text='Retrying set hostname on the node', timeout=300):

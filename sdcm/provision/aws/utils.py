@@ -356,5 +356,14 @@ def configure_eth1_script():
 
 
 def configure_set_preserve_hostname_script():
-    return 'grep "preserve_hostname: true" /etc/cloud/cloud.cfg 1>/dev/null 2>&1 ' \
-           '|| echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg\n'
+    return dedent(r"""
+    if ! grep -q "preserve_hostname: true" /etc/cloud/cloud.cfg; then
+        echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg
+    fi\n
+    if command -v rsyslog >/dev/null 2>&1; then
+        if ! grep "\\$LocalHostname {self.name}" /etc/rsyslog.conf; then
+            echo "" >> /etc/rsyslog.conf
+            echo "\\$LocalHostname {self.name}" >> /etc/rsyslog.conf
+        fi
+    fi\n
+    """)

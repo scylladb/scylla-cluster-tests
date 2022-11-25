@@ -16,7 +16,7 @@ from typing import Tuple
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
-    configure_rsyslog_target_script, configure_sshd_script, restart_sshd_service, restart_rsyslog_service)
+    configure_rsyslog_target_script, configure_sshd_script, restart_sshd_service, restart_rsyslog_service, install_rsyslog)
 
 
 class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
@@ -27,6 +27,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         script += configure_sshd_script()
         script += restart_sshd_service()
         if self.rsyslog_host_port:
+            script += install_rsyslog()
             script += configure_rsyslog_target_script(host=self.rsyslog_host_port[0], port=self.rsyslog_host_port[1])
             script += restart_rsyslog_service()
         return script

@@ -42,6 +42,7 @@ class Distro(enum.Enum):
     UBUNTU18 = ("ubuntu", "18.04")
     UBUNTU20 = ("ubuntu", "20.04")
     UBUNTU21 = ("ubuntu", "21.04")
+    UBUNTU22 = ("ubuntu", "22.04")
     SLES15 = ("sles", "15")
 
     @classmethod
@@ -143,6 +144,10 @@ class Distro(enum.Enum):
     @property
     def is_ubuntu20(self):
         return self == self.UBUNTU20
+
+    @property
+    def is_ubuntu22(self):
+        return self == self.UBUNTU22
 
     @property
     def is_ubuntu(self):

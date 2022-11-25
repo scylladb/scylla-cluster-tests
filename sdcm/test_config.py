@@ -8,7 +8,7 @@ import requests
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.common.utils import configure_sshd_script, configure_rsyslog_rate_limits_script, \
-    configure_rsyslog_target_script, restart_sshd_service, restart_rsyslog_service
+    configure_rsyslog_target_script, restart_sshd_service, restart_rsyslog_service, install_rsyslog
 from sdcm.utils.net import get_my_ip
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
@@ -221,6 +221,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         script = "#!/bin/bash\n"
         script += configure_sshd_script()
         script += restart_sshd_service()
+        script += install_rsyslog()
         script += cls.get_rsyslog_configuration_script()
         script += restart_rsyslog_service()
         return script
