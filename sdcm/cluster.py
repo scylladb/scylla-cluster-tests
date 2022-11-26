@@ -303,7 +303,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             instance_details = CloudInstanceDetails(public_ip=self.public_ip_address, region=self.region,
                                                     provider=self.parent_cluster.cluster_backend,
                                                     private_ip=self.ip_address, creation_time=int(time.time()))
-            resource = CloudResource(name=self.name, state=ResourceState.RUNNING,
+            resource = CloudResource(name=self.name, state=ResourceState.RUNNING,  # pylint: disable=no-value-for-parameter
                                      instance_info=instance_details)
             self.argus_resource = resource
             run.run_info.resources.attach_resource(resource)
@@ -4230,6 +4230,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 self.log.info("Waiting for preinstalled Scylla")
                 self._wait_for_preinstalled_scylla(node)
                 self.log.info("Done waiting for preinstalled Scylla")
+                node.install_package("rsync")
                 if self.params.get('workaround_kernel_bug_for_iotune'):
                     self.copy_preconfigured_iotune_files(node)
             if node.is_nonroot_install:
