@@ -114,9 +114,16 @@ def configure_sshd_script():
         echo "*    hard    nproc    unlimited" > /etc/security/limits.d/20-nproc.conf || true
     fi
 
-    sed -i "s/#MaxSessions \(.*\)$/MaxSessions 1000/" /etc/ssh/sshd_config || true
-    sed -i "s/#MaxStartups \(.*\)$/MaxStartups 60/" /etc/ssh/sshd_config || true
-    sed -i "s/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/" /etc/ssh/sshd_config || true
+    sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
+    sed -i 's/#MaxStartups \(.*\)$/MaxStartups 60/' /etc/ssh/sshd_config
+    sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config
+    SSH_VERSION=$(ssh -V 2>&1 | tr -d "[:alpha:][:blank:][:punct:]" | cut -c-2)
+    echo $SSH_VERSION
+    if [ ${SSH_VERSION} -gt 88 ]; then
+        sed -i "s/#PubkeyAuthentication \(.*\)$/PubkeyAuthentication yes/" /etc/ssh/sshd_config
+        sed -i -e "\$aPubkeyAcceptedAlgorithms +ssh-rsa" /etc/ssh/sshd_config
+        sed -i -e "\$aHostKeyAlgorithms +ssh-rsa" /etc/ssh/sshd_config
+    fi
     """)
 
 
@@ -125,7 +132,11 @@ def restart_sshd_service():
 
 
 def restart_rsyslog_service():
-    return "systemctl restart rsyslog || true\n"
+    return dedent("""
+            if command -v rsyslog >/dev/null 2>&1; then
+                systemctl restart rsyslog
+            fi
+        """)
 
 
 def restart_syslogng_service():
