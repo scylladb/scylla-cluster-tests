@@ -96,7 +96,7 @@ class KeyStore:  # pylint: disable=too-many-public-methods
         return self.get_json("azure.json")
 
     def get_argusdb_credentials(self):
-        return self.get_json("argusdb_config.json")
+        return self.get_json("argusdb_config_v2.json")
 
 
 def pub_key_from_private_key_file(key_file):
