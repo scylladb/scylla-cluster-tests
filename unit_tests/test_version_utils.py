@@ -2,8 +2,10 @@ from __future__ import absolute_import
 
 import os
 import unittest
+from unittest import mock
 
 import pytest
+import requests
 
 import sdcm
 from sdcm.utils.version_utils import (
@@ -412,3 +414,25 @@ def test_get_docker_image_by_version(version, expected):
 def test_get_docker_image_by_version_broken_string_version():
     with pytest.raises(AssertionError):
         get_docker_image_by_version(scylla_version="broken_version")
+
+
+def test_get_docker_image_by_version_fallback_on_errors():
+    def mock_requests_factory(response_stub):
+        return mock.Mock(**{
+            'json.return_value': response_stub,
+        })
+
+    def raise_request_error(**kwargs):
+        raise requests.HTTPError()
+
+    non_existing_version = '5.2.0~dev-0.20221124.999b7f5d9b77'
+    expected_fallback = 'scylladb/scylla:latest'
+    with unittest.mock.patch("requests.get") as get_mock:
+        get_mock.side_effect = lambda **_: mock_requests_factory({})
+        assert get_docker_image_by_version(scylla_version=non_existing_version) == expected_fallback
+
+        get_mock.side_effect = lambda **_: mock_requests_factory({"results": [{'name': ''}, {}]})
+        assert get_docker_image_by_version(scylla_version=non_existing_version) == expected_fallback
+
+        get_mock.side_effect = raise_request_error
+        assert get_docker_image_by_version(scylla_version=non_existing_version) == expected_fallback

@@ -349,14 +349,17 @@ def get_docker_image_by_version(scylla_version: str):
         scylla_version = short_scylla_version
 
     for page_number in count(start=1):
-        all_tags = requests.get(url=f'https://hub.docker.com/v2/repositories/{docker_repo}/'
-                                    f'tags?page_size=50&page={page_number}').json()
-        for image in all_tags['results']:
-            if scylla_version == image['name']:
-                return f"{docker_repo}:{image['name']}"
+        try:
+            all_tags = requests.get(url=f'https://hub.docker.com/v2/repositories/{docker_repo}/'
+                                        f'tags?page_size=50&page={page_number}').json()
+        except requests.RequestException:
+            break
+        for image in all_tags.get('results', []):
+            image_name = image.get('name')
+            if image_name and scylla_version == image_name:
+                return f"{docker_repo}:{image_name}"
         if not all_tags.get('next'):
             break
-
     # if image wasn't found, default to the latest releases
     return default_image
 
