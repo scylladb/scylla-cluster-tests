@@ -5004,8 +5004,6 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 self.log.info("Swap file for the monitor is not configured")
             else:
                 node.create_swap_file(monitor_swap_size)
-        # update repo cache and system after system is up
-        node.update_repo_cache()
         self.mgmt_auth_token = self.monitor_id  # pylint: disable=attribute-defined-outside-init
 
         if self.test_config.REUSE_CLUSTER:
@@ -5032,6 +5030,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             self.install_scylla_manager(node)
 
     def install_scylla_manager(self, node):
+        node.update_repo_cache()
         if self.params.get("scylla_repo_m"):
             scylla_repo = self.params.get("scylla_repo_m")
         else:
@@ -5079,7 +5078,24 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         pass
 
     @staticmethod
-    def install_scylla_monitoring_prereqs(node):  # pylint: disable=invalid-name
+    def install_scylla_monitoring_prereqs(node: BaseNode):  # pylint: disable=invalid-name
+        prepared_image = node.remoter.run('test -e ~/PREPARED-MONITOR', ignore_status=True)
+        formal_image = node.remoter.run('test -e /home/centos/scylla-grafana-monitoring-scylla-monitoring/'
+                                        'CURRENT_VERSION.sh', ignore_status=True)
+        if prepared_image.ok or formal_image.ok:
+            node.log.debug('Skip monitor `install_scylla_monitoring_prereqs` for using a prepared AMI')
+            if formal_image.ok:
+                node.install_package('unzip')
+                node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
+                if node.is_debian9():
+                    node.reboot(hard=False)
+                else:
+                    node.remoter.run(cmd='sudo systemctl restart docker', timeout=60)
+
+                docker_hub_login(remoter=node.remoter)
+            return
+
+        node.update_repo_cache()
         if node.is_rhel_like():
             node.install_epel()
             node.update_repo_cache()
