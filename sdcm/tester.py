@@ -55,7 +55,7 @@ from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import provisioner_factory
-from sdcm.scan_operation_thread import FullScanParams, ScanOperationThread
+from sdcm.scan_operation_thread import FullScanThread, FullPartitionScanThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.sct_events.event_handler import stop_events_handler
 from sdcm.scylla_bench_thread import ScyllaBenchThread
@@ -1995,7 +1995,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                          'errors': stats['errors']})
         return stats
 
-    def run_fullscan_thread(self, fullscan_params: dict):
+    def run_fullscan_thread(self, ks_cf='random', interval=1, duration=None):
         """Run thread of cql command select *
 
         Calculate test duration and timeout interval between
@@ -2004,26 +2004,42 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         random choosen from current configuration'
 
         Keyword Arguments:
-            fullscan_params: dict with params relevant for starting
-            the ScanOperationThread
+            interval {number} -- interval between requests in min (default: {1})
+            duration {int} -- duration of running thread in min (default: {None})
         """
         sla_role_name, sla_role_password = None, None
         if fullscan_role := getattr(self, "fullscan_role", None):
             sla_role_name = fullscan_role.name
             sla_role_password = fullscan_role.password
 
-        ScanOperationThread(
-            fullscan_params=(
-                FullScanParams(
-                    db_cluster=self.db_cluster,
-                    fullscan_user=sla_role_name,
-                    fullscan_user_password=sla_role_password,
-                    duration=self.get_duration(fullscan_params.get("duration")),
-                    **fullscan_params
-                )
-            )
+        FullScanThread(
+            db_cluster=self.db_cluster,
+            ks_cf=ks_cf,
+            duration=self.get_duration(duration),
+            interval=interval * 60,
+            termination_event=self.db_cluster.nemesis_termination_event,
+            user=sla_role_name,
+            password=sla_role_password,
         ).start()
 
+    def run_full_partition_scan_thread(self, duration=None, interval=1, **kwargs):
+        """Run thread of cql command select with a clustering key reversed query.
+
+        Calculate test duration and timeout interval between
+        requests and execute the thread with cqlsh command to
+        db node: select * from ks.cf where pk = ? order by ck desc'
+
+        Keyword Arguments:
+            interval {number} -- interval between requests in seconds (default: {1})
+            duration {int} -- duration of running thread in min (default: {None})
+        """
+        FullPartitionScanThread(
+            db_cluster=self.db_cluster,
+            termination_event=self.db_cluster.nemesis_termination_event,
+            duration=self.get_duration(duration),
+            interval=interval,
+            **kwargs
+        ).start()
 
     @staticmethod
     def is_keyspace_in_cluster(session, keyspace_name):
@@ -2238,7 +2254,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         Copy data from <src_keyspace>.<src_view> to <dest_keyspace>.<dest_table> if copy_data is True
         """
         result = True
-        create_statement = "SELECT * FROM system_schema.table where ks_cf = '%s' " \
+        create_statement = "SELECT * FROM system_schema.table where table_name = '%s' " \
                            "and keyspace_name = '%s'" % (src_table, src_keyspace)
         if not self.create_table_as(node, src_keyspace, src_table, dest_keyspace,
                                     dest_table, create_statement, columns_list):
@@ -2314,7 +2330,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
                 for column in columns_list or result.column_names:
                     column_kind = session.execute("select kind from system_schema.columns where keyspace_name='{ks}' "
-                                                  "and ks_cf='{name}' and column_name='{column}'".format(
+                                                  "and table_name='{name}' and column_name='{column}'".format(
                                                       ks=src_keyspace,
                                                       name=src_table,
                                                       column=column))
@@ -2469,7 +2485,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return table_id[0]
 
     def get_tables_name_of_keyspace(self, session, keyspace_name):
-        query = "SELECT ks_cf FROM system_schema.tables WHERE keyspace_name='{}' ".format(keyspace_name)
+        query = "SELECT table_name FROM system_schema.tables WHERE keyspace_name='{}' ".format(keyspace_name)
         table_id = self.rows_to_list(session.execute(query))
         return table_id[0]
 
