@@ -41,4 +41,4 @@ table_name: "scylla_bench.test"
 primary_key_column: "pk"
 
 
-run_fullscan: ['{"mode": "random", "ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 10000000, "validate_data": "true"}']
+run_fullscan: ['{"mode": "partition", "ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 10000000, "validate_data": "true"}']
