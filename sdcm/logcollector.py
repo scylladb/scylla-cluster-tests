@@ -1291,7 +1291,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         except ImportError:
             LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
         else:
-            cloud_cluster_id = self.params["cloud_cluster_id"] if "cloud_cluster_id" in self.params else None
+            cloud_cluster_id = self.params.get("cloud_cluster_id")
             if not cloud_cluster_id:
                 LOGGER.error("Cloud cluster id is not found. Probably the cluster has not been created")
                 return
@@ -1307,7 +1307,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             LOGGER.info("Manager instance: %s", instance)
             ssh_login_info = {"hostname": instance["publicip"],
                               "user": "support",
-                              "key_file": self.params["cloud_credentials_path"]}
+                              "key_file": self.params.get("cloud_credentials_path")}
             LOGGER.info("Manager instance ssh_login_info: %s", ssh_login_info)
             self.siren_manager_set.append(CollectingNode(name=instance["externalid"],
                                                          ssh_login_info=ssh_login_info,
@@ -1326,8 +1326,8 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             self.db_cluster.append(CollectingNode(name=name[0],
                                                   ssh_login_info={
                                                       "hostname": self.get_aws_ip_address(instance),
-                                                      "user": self.params['ami_db_scylla_user'],
-                                                      "key_file": self.params['user_credentials_path']},
+                                                      "user": self.params.get('ami_db_scylla_user'),
+                                                      "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
                                                   global_ip=self.get_aws_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "scylla-db", }))
@@ -1337,12 +1337,12 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             self.monitor_set.append(CollectingNode(name=name[0],
                                                    ssh_login_info={
                                                        "hostname": self.get_aws_ip_address(instance),
-                                                       "user": self.params['ami_monitor_user'],
-                                                       "key_file": self.params['user_credentials_path']},
+                                                       "user": self.params.get('ami_monitor_user'),
+                                                       "key_file": self.params.get('user_credentials_path')},
                                                    instance=instance,
                                                    global_ip=self.get_aws_ip_address(instance),
                                                    tags={**self.tags, "NodeType": "monitor", }))
-        if self.params["use_cloud_manager"]:
+        if self.params.get("use_cloud_manager"):
             self.find_and_append_cloud_manager_instance_to_collecting_nodes()
 
         for instance in filtered_instances['loader_nodes']:
@@ -1351,8 +1351,8 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             self.loader_set.append(CollectingNode(name=name[0],
                                                   ssh_login_info={
                                                       "hostname": self.get_aws_ip_address(instance),
-                                                      "user": self.params['ami_loader_user'],
-                                                      "key_file": self.params['user_credentials_path']},
+                                                      "user": self.params.get('ami_loader_user'),
+                                                      "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
                                                   global_ip=self.get_aws_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "loader", }))
@@ -1362,8 +1362,8 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             self.kubernetes_set.append(CollectingNode(name=name[0],
                                                       ssh_login_info={
                 "hostname": self.get_aws_ip_address(instance),
-                "user": self.params['ami_loader_user'],
-                "key_file": self.params['user_credentials_path']},
+                "user": self.params.get('ami_loader_user'),
+                "key_file": self.params.get('user_credentials_path')},
                 instance=instance,
                 global_ip=self.get_aws_ip_address(instance),
                 tags={**self.tags, "NodeType": "loader", }))
@@ -1375,8 +1375,8 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             self.db_cluster.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
                                                       "hostname": instance.public_ips[0],
-                                                      "user": self.params['gce_image_username'],
-                                                      "key_file": self.params['user_credentials_path']},
+                                                      "user": self.params.get('gce_image_username'),
+                                                      "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
                                                   global_ip=instance.public_ips[0],
                                                   tags={**self.tags, "NodeType": "scylla-db", }))
@@ -1384,8 +1384,8 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             self.monitor_set.append(CollectingNode(name=instance.name,
                                                    ssh_login_info={
                                                        "hostname": instance.public_ips[0],
-                                                       "user": self.params['gce_image_username'],
-                                                       "key_file": self.params['user_credentials_path']},
+                                                       "user": self.params.get('gce_image_username'),
+                                                       "key_file": self.params.get('user_credentials_path')},
                                                    instance=instance,
                                                    global_ip=instance.public_ips[0],
                                                    tags={**self.tags, "NodeType": "monitor", }))
@@ -1393,8 +1393,8 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             self.loader_set.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
                                                       "hostname": instance.public_ips[0],
-                                                      "user": self.params['gce_image_username'],
-                                                      "key_file": self.params['user_credentials_path']},
+                                                      "user": self.params.get('gce_image_username'),
+                                                      "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
                                                   global_ip=instance.public_ips[0],
                                                   tags={**self.tags, "NodeType": "loader", }))
@@ -1402,12 +1402,12 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             self.kubernetes_set.append(CollectingNode(name=instance.name,
                                                       ssh_login_info={
                                                           "hostname": instance.public_ips[0],
-                                                          "user": self.params['gce_image_username'],
-                                                          "key_file": self.params['user_credentials_path']},
+                                                          "user": self.params.get('gce_image_username'),
+                                                          "key_file": self.params.get('user_credentials_path')},
                                                       instance=instance,
                                                       global_ip=instance.public_ips[0],
                                                       tags={**self.tags, "NodeType": "loader", }))
-        if self.params["use_cloud_manager"]:
+        if self.params.get("use_cloud_manager"):
             self.find_and_append_cloud_manager_instance_to_collecting_nodes()
 
     def create_collecting_nodes(self):
@@ -1430,7 +1430,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                         self.monitor_set.append(c_node)
                     case "loader":
                         self.loader_set.append(c_node)
-            if self.params["use_cloud_manager"]:
+            if self.params.get("use_cloud_manager"):
                 self.find_and_append_cloud_manager_instance_to_collecting_nodes()
         except ProvisionerError:
             LOGGER.debug("get_running_cluster_sets: unknown backend type: %s", self.backend)
@@ -1443,7 +1443,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                   ssh_login_info={
                                                       "hostname": instance.public_ips[0],
                                                       "user": 'scylla-test',
-                                                      "key_file": self.params['user_credentials_path']},
+                                                      "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
                                                   global_ip=instance.public_ips[0],
                                                   tags={**self.tags, "NodeType": "scylla-db", }))
@@ -1456,7 +1456,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                   ssh_login_info={
                                                       "hostname": instance.public_ips[0],
                                                       "user": 'scylla-test',
-                                                      "key_file": self.params['user_credentials_path']},
+                                                      "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
                                                   global_ip=instance.public_ips[0],
                                                   tags={**self.tags, "NodeType": "loader", }))

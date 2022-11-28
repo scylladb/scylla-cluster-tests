@@ -925,7 +925,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     def create_scylla_manager_agent_config(self, namespace=SCYLLA_NAMESPACE):
         data = {}
-        if self.params['use_mgmt']:
+        if self.params.get('use_mgmt'):
             data["s3"] = {
                 'provider': 'Minio',
                 'endpoint': self.s3_provider_endpoint,

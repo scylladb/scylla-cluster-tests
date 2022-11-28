@@ -228,8 +228,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             # If self.instance_provision == "spot_low_price"
             instances_provision_fallbacks = [self.instance_provision]
 
-        if 'instance_provision_fallback_on_demand' in self.params \
-                and self.params['instance_provision_fallback_on_demand']:
+        if self.params.get('instance_provision_fallback_on_demand'):
             instances_provision_fallbacks.append(INSTANCE_PROVISION_ON_DEMAND)
 
         self.log.debug(f"Instances provision fallbacks : {instances_provision_fallbacks}")
