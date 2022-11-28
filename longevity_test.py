@@ -35,7 +35,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     def _get_scan_operation_params(self) -> list[dict]:
         params = self.params.get("run_fullscan") if self.params.get("run_fullscan") else {}
-        self.log.info('Scan operation params are: %s', params)
+        self.log.debug('Scan operation params are: %s', params)
         return [json.loads(item) for item in params]
 
     def run_pre_create_schema(self):
