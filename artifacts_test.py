@@ -199,7 +199,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         Verify that the snitch used in the cluster is appropriate for
         the backend used.
         """
-        if not self.params["use_preinstalled_scylla"]:
+        if not self.params.get("use_preinstalled_scylla"):
             self.log.info("Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False")
             return
 
@@ -225,7 +225,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                             )
 
     def verify_write_back_cache_param(self) -> None:
-        if self.params["cluster_backend"] in ("gce", "azure") and self.params["use_preinstalled_scylla"]:
+        if self.params.get("cluster_backend") in ("gce", "azure") and self.params.get("use_preinstalled_scylla"):
             expected_write_back_cache_param = 0
         else:
             expected_write_back_cache_param = None
@@ -298,7 +298,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
     # pylint: disable=too-many-statements,too-many-branches
     def test_scylla_service(self):
-        backend = self.params["cluster_backend"]
+        backend = self.params.get("cluster_backend")
 
         if backend == "aws":
             with self.subTest("check ENA support"):
@@ -320,7 +320,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
         expected_housekeeping_status_code = 'cr' if backend == "docker" else 'r'
 
-        if self.params["use_preinstalled_scylla"] and backend != "docker":
+        if self.params.get("use_preinstalled_scylla") and backend != "docker":
             with self.subTest("check the cluster name"):
                 self.check_cluster_name()
 

@@ -753,7 +753,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
         if self.cs_db_cluster:
-            init_value = self.params["use_mgmt"]
+            init_value = self.params.get("use_mgmt")
             self.params["use_mgmt"] = False
             self.init_nodes(db_cluster=self.cs_db_cluster)
             self.params["use_mgmt"] = init_value
@@ -3365,7 +3365,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         alive_node = self._get_live_node() or None
 
         start_time = format_timestamp(self.start_time)
-        config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
+        config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[
+                                    0] for cfg in self.params.get("config_files"))
         test_status = self.get_test_status()
         backend = self.params.get("cluster_backend")
         region_name = self.params.get('region_name') or self.params.get('gce_datacenter')
