@@ -161,6 +161,9 @@ class CoredumpExportSystemdTest(CoredumpExportTestBase):
     def test_success_test(self):
         self._run_coredump_with_fake_remoter('success_test')
 
+    def test_success_test_systemd_248(self):
+        self._run_coredump_with_fake_remoter('success_test_systemd_248')
+
     def test_fail_upload_test(self):
         self._run_coredump_with_fake_remoter('fail_upload_test')
 
