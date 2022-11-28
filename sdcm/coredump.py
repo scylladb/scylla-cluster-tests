@@ -14,6 +14,7 @@
 import os
 import re
 import time
+import json
 from abc import abstractmethod
 from typing import List, Optional, Dict
 from datetime import datetime
@@ -24,6 +25,7 @@ from dataclasses import dataclass
 from sdcm.log import SDCMAdapter
 from sdcm.remote import NETWORK_EXCEPTIONS
 from sdcm.utils.decorators import timeout
+from sdcm.utils.version_utils import get_systemd_version
 from sdcm.sct_events.system import CoreDumpEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 
@@ -287,7 +289,45 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
     Relay on coredumpctl on the host-side to do all things
     """
 
+    @cached_property
+    def systemd_version(self):
+        systemd_version = 0
+        try:
+            systemd_version = get_systemd_version(self.node.remoter.run(
+                "systemctl --version", ignore_status=True).stdout)
+        except Exception:  # pylint: disable=broad-except
+            self.log.warning("failed to get systemd version:", exc_info=True)
+        return systemd_version
+
+    def get_list_of_cores_json(self) -> Optional[List[CoreDumpInfo]]:
+        result = self.node.remoter.run(
+            'sudo coredumpctl -q --json=short', verbose=False, ignore_status=True)
+        if not result.ok:
+            return []
+
+        # example of json output
+        # [{"time":1669548359983740,"pid":11218,"uid":0,"gid":0,"sig":11,
+        #   "corefile":"missing","exe":"/usr/bin/bash","size":null},
+        # {"time":1669585690901244,"pid":6755,"uid":112,"gid":118,"sig":6,
+        #  "corefile":"present","exe":"/opt/scylladb/libexec/scylla","size":61750136832}]
+        coredump_infos = []
+        try:
+            coredump_infos = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            self.log.warning("couldn't parse:\n %s", result.stdout)
+
+        pid_list = []
+        for dump in coredump_infos:
+            if "bash" not in dump['exe'] and "fwupd" not in dump['exe']:
+                pid_list.append(CoreDumpInfo(pid=str(dump['pid']), node=self.node))
+        return pid_list
+
     def get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
+        if self.systemd_version >= 248:
+            # since systemd/systemd@0689cfd we have option to get
+            # the coredump information in json format
+            return self.get_list_of_cores_json()
+
         result = self.node.remoter.run(
             'sudo coredumpctl --no-pager --no-legend 2>&1', verbose=False, ignore_status=True)
         if "No coredumps found" in result.stdout or not result.ok:
@@ -365,6 +405,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                 # Storage: /var/lib/systemd/coredump/core.vi.1000.6c4de4c206a0476e88444e5ebaaac482.18554.1578994298000000.lz4 (inaccessible)
                 if "inaccessible" in line:
                     continue
+                line = line.replace('(present)', '')
                 corefile = line[line.find(':') + 1:].strip()
             elif line.startswith('Timestamp:'):
                 timestring = None
