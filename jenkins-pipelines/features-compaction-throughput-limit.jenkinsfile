@@ -6,8 +6,8 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
-    test_name: 'throughput_limit_test.ThroughputLimitFunctionalTest.test_per_partition_limit',
-    test_config: 'test-cases/features/per-partition-limit.yaml',
+    test_name: 'throughput_limit_test.ThroughputLimitFunctionalTest.test_compaction_throughput_limit',
+    test_config: 'test-cases/features/compaction-throughput-limit.yaml',
 
     timeout: [time: 180, unit: 'MINUTES']
 )

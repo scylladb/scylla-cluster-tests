@@ -3008,6 +3008,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         return statistics_files
 
+    def reload_config(self):
+        """
+        Reloads scylla configuration without restarting scylla.
+        Works only for some parameters (marked as liveUpdate in config.cc)
+        """
+        result = self.remoter.run("ps -C scylla -o pid --no-headers", ignore_status=True)
+        if result.ok:
+            pid = result.stdout.strip()
+        else:
+            LOGGER.error("Failed to obtain scylla pid - config not reloaded")
+            return
+        self.remoter.run(f"sudo kill -s SIGHUP {pid}")
+
 
 class FlakyRetryPolicy(RetryPolicy):
 
