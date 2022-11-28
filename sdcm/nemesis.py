@@ -260,7 +260,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return func  # returning func means func can still be used normally
 
     def use_nemesis_seed(self):
-        if nemesis_seed := self.tester.params["nemesis_seed"]:
+        if nemesis_seed := self.tester.params.get("nemesis_seed"):
             random.seed(nemesis_seed)
 
     def update_stats(self, disrupt, status=True, data=None):
