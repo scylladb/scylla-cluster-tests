@@ -87,12 +87,12 @@ class FullscanException(Exception):
 
 # pylint: disable=too-many-instance-attributes
 class ScanOperationThread:
-    def __init__(self, fullscan_params: FullScanParams, thread_name: str = ""):
+    def __init__(self, fullscan_params: FullScanParams):
         self.fullscan_params = fullscan_params
         self.fullscan_stats = FullScanStats()
         self.current_scan_event = None
         self.log = logging.getLogger(self.__class__.__name__)
-        self._thread = threading.Thread(daemon=True, name=f"{self.__class__.__name__}_{thread_name}", target=self.run)
+        self._thread = threading.Thread(daemon=True, name=self.__class__.__name__, target=self.run)
 
     def _get_random_node(self) -> BaseNode:
         return random.choice(self.fullscan_params.db_cluster.nodes)
