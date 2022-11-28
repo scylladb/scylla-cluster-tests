@@ -2238,7 +2238,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         Copy data from <src_keyspace>.<src_view> to <dest_keyspace>.<dest_table> if copy_data is True
         """
         result = True
-        create_statement = "SELECT * FROM system_schema.table where table_name = '%s' " \
+        create_statement = "SELECT * FROM system_schema.table where ks_cf = '%s' " \
                            "and keyspace_name = '%s'" % (src_table, src_keyspace)
         if not self.create_table_as(node, src_keyspace, src_table, dest_keyspace,
                                     dest_table, create_statement, columns_list):
