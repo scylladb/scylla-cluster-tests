@@ -94,7 +94,7 @@ class FullScanCommand(NamedTuple):
 
 class FullScanAggregateCommands(NamedTuple):
     SELECT_ALL = FullScanCommand("SELECT_ALL", Template("SELECT * from $ks_cf$bypass_cache$timeout"))
-    AGG_COUNT_ALL = FullScanCommand("AGG_COUNT_ALL", Template("SELECT count(*) FROM $ks_cf$bypass_cache$timeout"))
+    AGG_COUNT_ALL = FullScanCommand("AGG_COUNT_ALL", Template("SELECT count(*) FROM $ks_cf$timeout$bypass_cache"))
 
 
 class FullscanException(Exception):
@@ -552,7 +552,7 @@ class FullScanAggregatesOperation(FullscanOperationBase):
         bypass_cache = self.generator.choice(BYPASS_CACHE_VALUES)
         cmd = FullScanAggregateCommands.AGG_COUNT_ALL.base_query.substitute(
             ks_cf=self.fullscan_params.ks_cf,
-            timeout=f" USING TIMEOUT {timeout}s" if timeout else "",
+            timeout=f" {timeout}s",
             bypass_cache=bypass_cache
         )
         return cmd
