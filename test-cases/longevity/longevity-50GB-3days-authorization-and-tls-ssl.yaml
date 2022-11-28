@@ -6,7 +6,7 @@ stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=4320m -schema 'replicati
 
 stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=4320m -mode cql3 native  -rate threads=50 -pop seq=1..100000000 -log interval=5"]
 
-run_fullscan: ['{"mode": "random", "ks_cf": "keyspace1.standard1", "interval": 60}']
+run_fullscan: ['{"mode": "table", "ks_cf": "keyspace1.standard1", "interval": 60}']
 n_db_nodes: 6
 n_loaders: 3
 n_monitor_nodes: 1
