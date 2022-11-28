@@ -25,7 +25,7 @@ import time
 import uuid
 import itertools
 import traceback
-
+import json
 from typing import List, Optional
 from textwrap import dedent
 from datetime import datetime
@@ -51,12 +51,11 @@ from sdcm.utils.common import log_run_info, retrying, get_data_dir_path, verify_
 from sdcm.utils.distro import Distro
 from sdcm.utils.thread import raise_event_on_failure
 from sdcm.utils.remotewebbrowser import RemoteWebDriverContainer
-from sdcm.utils.version_utils import SCYLLA_VERSION_RE
+from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_systemd_version
 from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
     ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent
 from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
-
 
 CREDENTIALS = []
 DEFAULT_USER_PREFIX = getpass.getuser()
@@ -970,8 +969,46 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         except NETWORK_EXCEPTIONS as exc:
             self.log.error(f"Following network error occurred during getting back traces: {str(exc)}")
 
+    @cached_property
+    def systemd_version(self):
+        systemd_version = 0
+        try:
+            systemd_version = get_systemd_version(self.remoter.run(
+                "systemctl --version", ignore_status=True).stdout)
+        except Exception:  # pylint: disable=broad-except
+            self.log.warning("failed to get systemd version:", exc_info=True)
+        return systemd_version
+
+    def get_list_of_cores_json(self):
+        result = self.remoter.run(
+            'sudo coredumpctl -q --json=short', verbose=False, ignore_status=True)
+        if not result.ok:
+            return []
+
+        # example of json output
+        # [{"time":1669548359983740,"pid":11218,"uid":0,"gid":0,"sig":11,
+        #   "corefile":"missing","exe":"/usr/bin/bash","size":null},
+        # {"time":1669585690901244,"pid":6755,"uid":112,"gid":118,"sig":6,
+        #  "corefile":"present","exe":"/opt/scylladb/libexec/scylla","size":61750136832}]
+        coredump_infos = []
+        try:
+            coredump_infos = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            self.log.warning("couldn't parse:\n %s", result.stdout)
+
+        pid_list = []
+        for dump in coredump_infos:
+            if "bash" not in dump['exe'] and "fwupd" not in dump['exe']:
+                pid_list.append(str(dump['pid']))
+        return pid_list
+
     @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on getting pid of cores")
     def _get_core_pids(self):
+        if self.systemd_version >= 248:
+            # since systemd/systemd@0689cfd we have option to get
+            # the coredump information in json format
+            return self.get_list_of_cores_json()
+
         result = self.remoter.run('sudo coredumpctl --no-pager --no-legend 2>&1',
                                   verbose=False, ignore_status=True, new_session=True)
         if "No coredumps found" in result.stdout or result.exit_status == 127:  # exit_status 127: coredumpctl command not found
