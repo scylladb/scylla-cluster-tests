@@ -847,3 +847,15 @@ def test_cloud_bundle_connectivity_scylla_bench(tester):
 
     # TODO: add verification that the output say it's using the cloud bundle
     #  (need to add that to log output in scylla-bench)
+
+
+@pytest.mark.required_operator("v1.8.0")
+@pytest.mark.requires_tls
+def test_cloud_bundle_connectivity_cqlsh(db_cluster: ScyllaPodCluster):
+
+    assert db_cluster.connection_bundle_file, "cloud bundle wasn't found"
+
+    res = db_cluster.nodes[0].run_cqlsh("SELECT * FROM system.local")
+
+    assert not res.stderr
+    assert '(1 rows)' in res.stdout

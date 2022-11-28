@@ -2755,6 +2755,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                   "--connect-timeout={connect_timeout} {ssl_params}".format(
                       auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout,
                       connect_timeout=connect_timeout, ssl_params=ssl_params)
+
+        if self.parent_cluster.connection_bundle_file:
+            connection_bundle_file = self.parent_cluster.connection_bundle_file
+            target_connection_bundle_file = str(Path('/tmp/') / connection_bundle_file.name)
+            self.remoter.send_files(str(connection_bundle_file), target_connection_bundle_file)
+
+            return f'cqlsh {options} -e "{command}" --cloudconf {target_connection_bundle_file}'
         return 'cqlsh {options} -e "{command}" {host} {port}'.format(options=options, command=command, host=host,
                                                                      port=port)
 
