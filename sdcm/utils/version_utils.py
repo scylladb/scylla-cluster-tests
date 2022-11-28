@@ -11,6 +11,12 @@ from repodataParser.RepoParser import Parser
 #   - 2019.1.4-0.20191217.b59e92dbd
 SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
 
+# Example of output for `systemctl --version' command:
+#   $ systemctl --version
+#   systemd 237
+#   +PAM ... default-hierarchy=hybrid
+SYSTEMD_VERSION_RE = re.compile(r"^systemd (?P<version>\d+)")
+
 
 def get_branch_version(url):
     try:
@@ -71,3 +77,12 @@ def is_enterprise(version):
     :return: True if this version string passed is a scylla enterprise version
     """
     return parse_version(version) > parse_version('2000')
+
+
+def get_systemd_version(output: str) -> int:
+    if match := SYSTEMD_VERSION_RE.match(output):
+        try:
+            return int(match.group("version"))
+        except ValueError:
+            pass
+    return 0
