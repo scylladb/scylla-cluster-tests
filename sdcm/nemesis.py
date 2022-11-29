@@ -178,6 +178,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     kubernetes: bool = False        # flag that signal that nemesis run with k8s cluster
     limited: bool = False           # flag that signal that nemesis are belong to limited set of nemesises
     has_steady_run: bool = False    # flag that signal that nemesis should be run with perf tests with steady run
+    free_tier_set: bool = False     # nemesis should be run in FreeTierNemesisSet
 
     def __init__(self, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(self, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
@@ -391,7 +392,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             run_with_gemini: Optional[bool] = None,
             networking: Optional[bool] = None,
             limited: Optional[bool] = None,
-            topology_changes: Optional[bool] = None) -> List[str]:
+            topology_changes: Optional[bool] = None,
+            free_tier_set: Optional[bool] = None,
+    ) -> List[str]:
         return self.get_list_of_methods_by_flags(
             disruptive=disruptive,
             run_with_gemini=run_with_gemini,
@@ -399,6 +402,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             kubernetes=self._is_it_on_kubernetes() or None,
             limited=limited,
             topology_changes=topology_changes,
+            free_tier_set=free_tier_set,
         )
 
     def _is_it_on_kubernetes(self) -> bool:
@@ -412,14 +416,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             networking: Optional[bool] = None,
             kubernetes: Optional[bool] = None,
             limited: Optional[bool] = None,
-            topology_changes: Optional[bool] = None) -> List[str]:
+            topology_changes: Optional[bool] = None,
+            free_tier_set: Optional[bool] = None,
+    ) -> List[str]:
         subclasses_list = self._get_subclasses(
             disruptive=disruptive,
             run_with_gemini=run_with_gemini,
             networking=networking,
             kubernetes=kubernetes,
             limited=limited,
-            topology_changes=topology_changes
+            topology_changes=topology_changes,
+            free_tier_set=free_tier_set,
         )
         disrupt_methods_list = []
         for subclass in subclasses_list:
@@ -1673,7 +1680,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Here it kept for future usages and unit testing ability.
         more about nemesis_selector behaviour in sct_config.py
         """
-        nemesis_selector = self.nemesis_selector_list
+        nemesis_selector = nemesis_selector or self.nemesis_selector_list
+        nemesis_multiply_factor = self.cluster.params.get('nemesis_multiply_factor') or nemesis_multiply_factor
         if nemesis_selector:
             subclasses = self.get_list_of_subclasses_by_property_name(
                 list_of_properties_to_include=nemesis_selector)
@@ -1685,7 +1693,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disruptions = [attr[1] for attr in inspect.getmembers(self)
                            if attr[0].startswith('disrupt_') and callable(attr[1])]
 
-        nemesis_multiply_factor = self.cluster.params.get('nemesis_multiply_factor')
         if nemesis_multiply_factor:
             disruptions = disruptions * nemesis_multiply_factor
 
@@ -4003,6 +4010,7 @@ class StopStartMonkey(Nemesis):
 class MultipleHardRebootNodeMonkey(Nemesis):
     disruptive = True
     kubernetes = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_multiple_hard_reboot_node()
@@ -4012,6 +4020,7 @@ class HardRebootNodeMonkey(Nemesis):
     disruptive = True
     kubernetes = True
     limited = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_hard_reboot_node()
@@ -4021,6 +4030,7 @@ class SoftRebootNodeMonkey(Nemesis):
     disruptive = True
     kubernetes = True
     limited = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_soft_reboot_node()
@@ -4153,6 +4163,7 @@ class TruncateMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     limited = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_truncate()
@@ -4161,6 +4172,7 @@ class TruncateMonkey(Nemesis):
 class TruncateLargeParititionMonkey(Nemesis):
     disruptive = False
     kubernetes = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_truncate_large_partition()
@@ -4169,6 +4181,7 @@ class TruncateLargeParititionMonkey(Nemesis):
 class DeleteByPartitionsMonkey(Nemesis):
     disruptive = False
     kubernetes = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_delete_10_full_partitions()
@@ -4177,6 +4190,7 @@ class DeleteByPartitionsMonkey(Nemesis):
 class DeleteByRowsRangeMonkey(Nemesis):
     disruptive = False
     kubernetes = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_delete_by_rows_range()
@@ -4185,6 +4199,7 @@ class DeleteByRowsRangeMonkey(Nemesis):
 class DeleteOverlappingRowRangesMonkey(Nemesis):
     disruptive = False
     kubernetes = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_delete_overlapping_row_ranges()
@@ -4463,6 +4478,7 @@ class ModifyTableMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     limited = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_modify_table()
@@ -4474,6 +4490,7 @@ class AddDropColumnMonkey(Nemesis):
     networking = False
     kubernetes = True
     limited = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_add_drop_column()
@@ -4481,6 +4498,7 @@ class AddDropColumnMonkey(Nemesis):
 
 class ToggleTableIcsMonkey(Nemesis):
     kubernetes = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_toggle_table_ics()
@@ -4489,6 +4507,7 @@ class ToggleTableIcsMonkey(Nemesis):
 class ToggleGcModeMonkey(Nemesis):
     kubernetes = True
     disruptive = False
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_toggle_table_gc_mode()
@@ -4561,6 +4580,7 @@ class OperatorNodeTerminateDecommissionAdd(Nemesis):
 class OperatorNodeReplace(Nemesis):
     disruptive = True
     kubernetes = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_replace_node_kubernetes()
@@ -4577,6 +4597,7 @@ class OperatorNodetoolFlushAndReshard(Nemesis):
 class ScyllaKillMonkey(Nemesis):
     disruptive = True
     kubernetes = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_kill_scylla()
@@ -4585,6 +4606,7 @@ class ScyllaKillMonkey(Nemesis):
 class ValidateHintedHandoffShortDowntime(Nemesis):
     disruptive = True
     kubernetes = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disable_disrupt_validate_hh_short_downtime()
@@ -4611,6 +4633,7 @@ class NodeRestartWithResharding(Nemesis):
 class ClusterRollingRestart(Nemesis):
     disruptive = True
     kubernetes = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_rolling_restart_cluster(random_order=False)
@@ -4627,6 +4650,7 @@ class RollingRestartConfigChangeInternodeCompression(Nemesis):
 class ClusterRollingRestartRandomOrder(Nemesis):
     disruptive = True
     kubernetes = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_rolling_restart_cluster(random_order=True)
@@ -4670,6 +4694,7 @@ class RejectInterNodeNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
     run_with_gemini = False
+    free_tier_set = True
 
     def disrupt(self):
         self._disrupt_network_reject_inter_node_communication()
@@ -4840,6 +4865,7 @@ class SisyphusMonkey(Nemesis):
 
 class ToggleCDCMonkey(Nemesis):
     disruptive = False
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_toggle_cdc_feature_properties_on_table()
@@ -4847,6 +4873,7 @@ class ToggleCDCMonkey(Nemesis):
 
 class CDCStressorMonkey(Nemesis):
     disruptive = False
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_run_cdcstressor_tool()
@@ -4897,6 +4924,7 @@ class CorruptThenScrubMonkey(Nemesis):
 
 class MemoryStressMonkey(Nemesis):
     disruptive = True
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_memory_stress()
@@ -4904,6 +4932,7 @@ class MemoryStressMonkey(Nemesis):
 
 class ResetLocalSchemaMonkey(Nemesis):
     disruptive = False
+    free_tier_set = True
 
     def disrupt(self):
         self.disrupt_resetlocalschema()
@@ -4935,3 +4964,18 @@ class StartStopValidationCompaction(Nemesis):
 
     def disrupt(self):
         self.disrupt_start_stop_validation_compaction()
+
+
+class FreeTierSetMonkey(SisyphusMonkey):
+    """Nemesis set for testing Scylla Cloud free tier.
+
+    Disruptions that can be caused by random failures and user actions and human operator:
+    - doesn't include any topology changes (scale up/down, decommission)
+    - doesn't include manager backup/repairs
+    - doesn't include k8s nodes related (i.e. one title as exclusive)"""
+
+    def __init__(self, *args, **kwargs):
+        # skip SisyphusMonkey __init__ to not repeat build disruption logic, but still we want to run Nemesis class __init__
+        super(SisyphusMonkey, self).__init__(*args, **kwargs)  # pylint: disable=bad-super-call
+        self.build_list_of_disruptions_to_execute(nemesis_selector=['free_tier_set'])
+        self.shuffle_list_of_disruptions()
