@@ -1671,7 +1671,7 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
     else:
         images = [ec2_resource.images.filter(Filters=filters), ]
     images = sorted(itertools.chain.from_iterable(images), key=lambda x: x.creation_date, reverse=True)
-    images = [image for image in images if not image.name.startswith('debug-')]
+    images = [image for image in images if not (image.name.startswith('debug-') or '-debug-' in image.name)]
 
     assert images, f"AMIs for {scylla_version=} with {arch} architecture not found in {region_name}"
 
