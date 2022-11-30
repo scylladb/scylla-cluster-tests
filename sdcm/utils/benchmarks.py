@@ -238,6 +238,7 @@ class ScyllaNodeBenchmarkRunner:
         return self._benchmark_results
 
     def install_benchmark_tools(self):
+        self._node.install_package("git")
         clone_repo(self._remoter, "https://github.com/akopytov/sysbench.git")
         # upstream repo: https://github.com/ibspoof/cassandra-fio
         clone_repo(self._remoter, "https://github.com/KnifeyMoloko/cassandra-fio.git")
