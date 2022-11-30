@@ -1,0 +1,3 @@
+use_prepared_loaders: false
+stress_image:
+  cassandra-stress: 'scylladb/hydra-loaders:cassandra-stress-java18-20221129' # default would be same version as scylla under test

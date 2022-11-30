@@ -33,4 +33,4 @@ print_kernel_callstack: true
 store_perf_results: true
 send_email: true
 email_recipients: ["scylla-perf-results@scylladb.com"]
-aws_use_prepared_loaders: true
+use_prepared_loaders: true
