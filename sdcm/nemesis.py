@@ -34,6 +34,7 @@ from functools import wraps, partial
 
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import wait as wait_for_futures
 from threading import Lock
 from types import MethodType  # pylint: disable=no-name-in-module
 
@@ -1841,12 +1842,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_nodetool_cleanup(self):
         # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
-        test_keyspaces = self.cluster.get_test_keyspaces()
-        for node in self.cluster.nodes:
+        # test_keyspaces = self.cluster.get_test_keyspaces()
+
+        # Inner disrupt function for ParallelObject
+        def _dis_nodetool_cleanup(node):
             InfoEvent('NodetoolCleanupMonkey %s' % node).publish()
             with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC * 48):
-                for keyspace in test_keyspaces:
-                    node.run_nodetool(sub_cmd="cleanup", args=keyspace)
+                # for keyspace in test_keyspaces:
+                node.run_nodetool(sub_cmd="cleanup")
+
+        threads = ParallelObject(self.cluster.nodes, num_workers=min(32, len(self.cluster.nodes)))
+        thread_results = threads.run(_dis_nodetool_cleanup, unpack_objects=True)
+        wait_for_futures(thread_results)
 
     def _prepare_test_table(self, ks='keyspace1', table=None):
         ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
