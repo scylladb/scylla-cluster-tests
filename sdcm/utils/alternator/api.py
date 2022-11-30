@@ -9,6 +9,7 @@ from mypy_boto3_dynamodb import DynamoDBClient, DynamoDBServiceResource
 from mypy_boto3_dynamodb.service_resource import Table
 
 from sdcm.utils.alternator import schemas, enums, consts
+from sdcm.utils.alternator.consts import TABLE_NAME, NO_LWT_TABLE_NAME
 from sdcm.utils.common import normalize_ipv6_url
 
 LOGGER = logging.getLogger(__name__)
@@ -17,6 +18,10 @@ LOGGER = logging.getLogger(__name__)
 class AlternatorApi(NamedTuple):
     resource: DynamoDBServiceResource
     client: DynamoDBClient
+
+
+TTL_ENABLED_SPECIFICATION = dict(AttributeName='ttl', Enabled=True)
+TTL_DISABLED_SPECIFICATION = dict(AttributeName='ttl', Enabled=False)
 
 
 class Alternator:
@@ -72,6 +77,15 @@ class Alternator:
             self.set_write_isolation(node=node, isolation=isolation, table_name=table_name)
         LOGGER.debug("Table's schema and configuration are: {}".format(response))
         return table
+
+    def update_table_ttl(self, node, table_name, enabled: bool = True):
+        dynamodb_api = self.get_dynamodb_api(node=node)
+        ttl_specification = TTL_ENABLED_SPECIFICATION if enabled else TTL_DISABLED_SPECIFICATION
+        dynamodb_api.client.update_time_to_live(TableName=table_name, TimeToLiveSpecification=ttl_specification)
+
+    def modify_alternator_ttl_spec(self, node, enabled: bool):
+        self.update_table_ttl(node=node, table_name=TABLE_NAME, enabled=enabled)
+        self.update_table_ttl(node=node, table_name=NO_LWT_TABLE_NAME, enabled=enabled)
 
     def scan_table(self, node, table_name=consts.TABLE_NAME, threads_num=None, **kwargs):
         is_parallel_scan = threads_num and threads_num > 0
