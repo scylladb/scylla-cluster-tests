@@ -4813,7 +4813,7 @@ class BaseLoaderSet():
     def kill_docker_loaders(self):
         for loader in self.nodes:
             try:
-                loader.remoter.run(cmd='docker ps -a -q | docker rm -f', verbose=False, ignore_status=True)
+                loader.remoter.run(cmd='docker ps -a -q | xargs docker rm -f', verbose=True, ignore_status=True)
                 self.log.info("Killed docker loader on node: %s", loader.name)
             except Exception as ex:  # pylint: disable=broad-except
                 self.log.warning("failed to kill docker stress command on [%s]: [%s]",
