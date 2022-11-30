@@ -1,0 +1,71 @@
+test_duration: 3000
+# Run ycsb load using max integer value of 2147483647 (2^31-1) for number of records per client.
+# ( The prepare_write_cmd is for the later read-stress and in order to trigger post_prepare_cql_cmds )
+prepare_write_cmd:
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 20 -p recordcount=5200301
+    -p fieldcount=2 -p fieldlength=16
+    -p insertstart=0 -p insertcount=5200300  -p table=usertable_no_lwt
+
+stress_cmd:
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 13 -p recordcount=8589934401
+    -p fieldcount=2 -p fieldlength=16
+    -p insertstart=0 -p insertcount=2147483600  -p table=usertable_no_lwt -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=43200
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 13 -p recordcount=8589934401
+    -p fieldcount=2 -p fieldlength=16
+    -p insertstart=2147483600 -p insertcount=2147483600 -p table=usertable_no_lwt -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=43200
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 13 -p recordcount=8589934401
+    -p fieldcount=2 -p fieldlength=16
+    -p insertstart=4294967200 -p insertcount=2147483600  -p table=usertable_no_lwt -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=43200
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 13 -p recordcount=8589934401
+    -p fieldcount=2 -p fieldlength=16
+    -p insertstart=6442450800 -p insertcount=2147483600 -p table=usertable_no_lwt -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=43200
+
+  - >-
+    bin/ycsb run dynamodb -P workloads/workloada -threads 10 -p recordcount=2147483600
+    -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+    -p fieldcount=2 -p fieldlength=16 -p operationcount=2147483600 -p table=usertable_no_lwt
+
+round_robin: true
+
+dynamodb_primarykey_type: HASH_AND_RANGE
+
+n_loaders: 4
+instance_type_db: 'i3.4xlarge'
+n_monitor_nodes: 1
+n_db_nodes: 4
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '033'
+nemesis_interval: 10
+nemesis_during_prepare: true
+
+user_prefix: 'alternator-ttl-4-loaders-no-lwt-sisyphus'
+
+alternator_port: 8080
+alternator_use_dns_routing: true
+
+alternator_enforce_authorization: true
+alternator_access_key_id: 'alternator'
+alternator_secret_access_key: 'password'
+
+# Set Alternator TTL parameters
+# ---------------------------------------------
+# TTL mode is experimental in version 5.1.
+# Enable TTL feature in Scylla.
+# Set 'alternator_ttl_period_in_seconds' to 1 hour for the TTL scan interval.
+experimental: true
+append_scylla_yaml: |
+  experimental_features:
+    - alternator-ttl
+  alternator_ttl_period_in_seconds: 3600
+
+# Set 'gc_grace_seconds' for 2 hours
+post_prepare_cql_cmds: "ALTER TABLE alternator_usertable_no_lwt.usertable_no_lwt with gc_grace_seconds = 7200;"
