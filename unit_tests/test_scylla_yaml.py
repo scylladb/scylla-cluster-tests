@@ -370,6 +370,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'alternator_enforce_authorization': False,
                 'alternator_write_isolation': None,
                 'alternator_streams_time_window_s': 10,
+                'alternator_ttl_period_in_seconds': None,
                 'abort_on_ebadf': True,
                 'redis_port': 0,
                 'redis_ssl_port': 0,
