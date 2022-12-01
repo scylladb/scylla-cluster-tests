@@ -15,7 +15,8 @@ class RemoteDocker(BaseNode):
         self.log = LOGGER
         ports = " ".join([f'-p {port}:{port}' for port in ports]) if ports else ""
         res = self.node.remoter.run(
-            f'{self.sudo_needed} docker run {extra_docker_opts} -d {ports} {image_name} {command_line}', verbose=True)
+            f'{self.sudo_needed} docker run {extra_docker_opts} -d {ports} {image_name} {command_line}',
+            verbose=True, retry=3)
         self.docker_id = res.stdout.strip()
         self.image_name = image_name
         super().__init__(name=image_name, parent_cluster=node.parent_cluster)
@@ -112,7 +113,7 @@ class RemoteDocker(BaseNode):
     def pull_image(node, image):
         prefix = "sudo" if node.is_docker else ""
         node.remoter.run(
-            f'{prefix} docker pull {image}', verbose=True)
+            f'{prefix} docker pull {image}', verbose=True, retry=3)
 
     def __enter__(self):
         return self

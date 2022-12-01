@@ -20,6 +20,7 @@ import contextlib
 from typing import Any
 from itertools import chain
 from pathlib import Path
+from functools import cached_property
 
 from sdcm.loader import CassandraStressExporter
 from sdcm.cluster import BaseLoaderSet
@@ -154,6 +155,13 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
     def _run_stress(self, loader, loader_idx, cpu_idx):
         pass
 
+    @cached_property
+    def docker_image_name(self):
+        if cassandra_stress_image := super().docker_image_name:
+            return cassandra_stress_image
+        else:
+            return get_docker_image_by_version(self.node_list[0].get_scylla_binary_version())
+
     def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         cleanup_context = contextlib.nullcontext()
 
@@ -167,16 +175,13 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner = loader.remoter
             cmd_runner_name = loader.ip_address
         else:
-            cassandra_stress = self.params.get(self.DOCKER_IMAGE_PARAM_NAME)
             cmd_runner_name = loader.ip_address
-            if not cassandra_stress:
-                cassandra_stress = get_docker_image_by_version(self.node_list[0].get_scylla_binary_version())
 
             cpu_options = ""
             if self.stress_num > 1:
                 cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-            cmd_runner = cleanup_context = RemoteDocker(loader, cassandra_stress,
+            cmd_runner = cleanup_context = RemoteDocker(loader, self.docker_image_name,
                                                         command_line="-c 'tail -f /dev/null'",
                                                         extra_docker_opts=f'{cpu_options} '
                                                                           f'--label shell_marker={self.shell_marker}'
