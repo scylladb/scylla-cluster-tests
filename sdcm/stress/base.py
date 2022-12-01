@@ -15,6 +15,7 @@ import logging
 import random
 import concurrent.futures
 from pathlib import Path
+from functools import cached_property
 
 from sdcm.cluster import BaseLoaderSet
 from sdcm.utils.common import generate_random_string
@@ -44,10 +45,13 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         self.shutdown_timeout = 180  # extra 3 minutes
         self.stop_test_on_failure = stop_test_on_failure
 
-        self.docker_image_name = self.params.get(self.DOCKER_IMAGE_PARAM_NAME)
         if "k8s" not in self.params.get("cluster_backend") and self.docker_image_name:
             for loader in self.loader_set.nodes:
                 RemoteDocker.pull_image(loader, self.docker_image_name)
+
+    @cached_property
+    def docker_image_name(self):
+        return self.params.get(self.DOCKER_IMAGE_PARAM_NAME)
 
     def configure_executer(self):
 
