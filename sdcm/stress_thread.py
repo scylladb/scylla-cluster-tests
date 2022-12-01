@@ -263,7 +263,9 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner.send_files(str(connection_bundle_file),
                                   self.target_connection_bundle_file, delete_dst=True, verbose=True)
 
-        stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)
+        if self.params.get("use_hdr_cs_histogram"):
+            stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)
+
         LOGGER.info('Stress command:\n%s', stress_cmd)
 
         tag = f'TAG: loader_idx:{loader_idx}-cpu_idx:{cpu_idx}-keyspace_idx:{keyspace_idx}'
