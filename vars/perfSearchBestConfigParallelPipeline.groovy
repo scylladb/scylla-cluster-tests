@@ -76,7 +76,10 @@ def call(Map pipelineParams) {
 
             string(defaultValue: '', description: 'Relative difference between current and best to choose new best result', name: 'max_deviation')
 
-
+            string(defaultValue: '', description: 'Prepare Cassandra Stress command to run', name: 'prepare_write_cmd')
+            string(defaultValue: '', description: 'Write Cassandra Stress command to run', name: 'stress_cmd_w')
+            string(defaultValue: '', description: 'Read Cassandra Stress command to run', name: 'stress_cmd_r')
+            string(defaultValue: '', description: 'Mixed Cassandra Stress command to run', name: 'stress_cmd_m')
 
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', 'https://storage.googleapis.com/scylla-operator-charts/latest')}",
                    description: 'Scylla Operator helm repo',
@@ -236,6 +239,21 @@ def call(Map pipelineParams) {
                                                         if [[ ! -z "${params.loader_ami_id}" ]] ; then
                                                             export SCT_AMI_ID_LOADER=${params.loader_ami_id}
                                                         fi
+
+
+                                                        if [[ ! -z "${params.prepare_write_cmd}" ]] ; then
+                                                            export SCT_PREPARE_WRITE_CMD="${params.prepare_write_cmd}"
+                                                        fi
+                                                        if [[ ! -z "${params.stress_cmd_w}" ]] ; then
+                                                            export SCT_STRESS_CMD_W="${params.stress_cmd_w}"
+                                                        fi
+                                                        if [[ ! -z "${params.stress_cmd_r}" ]] ; then
+                                                            export SCT_STRESS_CMD_R="${params.stress_cmd_r}"
+                                                        fi
+                                                        if [[ ! -z "${params.stress_cmd_m}" ]] ; then
+                                                            export SCT_STRESS_CMD_M="${params.stress_cmd_m}"
+                                                        fi
+
 
                                                         export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
 
