@@ -1,5 +1,5 @@
 test_duration: 3000
-# Run ycsb load using max integer value of 2147483647 (2^31-1) for number of records per client.
+
 # ( The prepare_write_cmd is for the later read-stress and in order to trigger post_prepare_cql_cmds )
 prepare_write_cmd:
   - >-
