@@ -214,3 +214,5 @@ stress_image:
   harry: 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816'
 
 service_level_shares: [1000]
+
+use_hdr_cs_histogram: false

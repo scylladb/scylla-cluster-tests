@@ -1413,6 +1413,8 @@ class SCTConfiguration(dict):
              help="""Number of stress processes per loader"""),
         dict(name="stress_process_step", env="SCT_STRESS_PROCESS_STEP", type=int,
              help="""add/remove num of process on each round"""),
+        dict(name="use_hdr_cs_histogram", env="SCT_USE_HDR_CS_HISTOGRAM", type=boolean,
+             help="""Enable hdr histogram logging for cs""")
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
