@@ -420,9 +420,30 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info("Saving collected packages...")
             if len(versions) == 0:
                 self.argus_test_run.run_info.details.packages.append(self.generate_scylla_server_package())
+
+            self.argus_test_run.run_info.details.packages.extend(self.generate_operator_packages())
+
             self.argus_test_run.save()
         except Exception:  # pylint: disable=broad-except
             self.log.error("Unable to collect package versions for Argus - skipping...", exc_info=True)
+
+    def generate_operator_packages(self) -> list[PackageVersion]:
+        operator_packages = []
+        if self.k8s_cluster:
+            operator_helm_chart_version = self.k8s_cluster._scylla_operator_chart_version  # pylint: disable=protected-access
+            operator_packages.append(PackageVersion(name="operator-chart", date="",
+                                                    version=operator_helm_chart_version,
+                                                    revision_id="", build_id=""))
+            operator_image_version = self.k8s_cluster.get_operator_image()
+            operator_packages.append(PackageVersion(name="operator-image", date="",
+                                                    version=operator_image_version,
+                                                    revision_id="", build_id=""))
+
+            operator_helm_repo = self.params.get('k8s_scylla_operator_helm_repo')
+            operator_packages.append(PackageVersion(name="operator-helm-repo", date="",
+                                                    version=operator_helm_repo,
+                                                    revision_id="", build_id=""))
+        return operator_packages
 
     def argus_get_scylla_version(self):
         try:
