@@ -2646,11 +2646,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                         if node_ip:
                             LOGGER.error("Get nodes statuses. Failed to find a node in cluster by IP: %s", node_ip)
 
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as error:  # pylint: disable=broad-except
             ClusterHealthValidatorEvent.NodeStatus(
                 severity=Severity.WARNING,
                 node=self.name,
-                message=f"Unable to get nodetool status from `{self.name}': {exc}",
+                message=f"Unable to get nodetool status from `{self.name}': {error=}",
             ).publish()
         return nodes_status
 
