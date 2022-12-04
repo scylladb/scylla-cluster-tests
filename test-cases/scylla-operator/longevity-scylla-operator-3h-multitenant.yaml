@@ -1,12 +1,12 @@
 test_duration: 300
 prepare_write_cmd:  [
-    "cassandra-stress write cl=QUORUM n=5485760 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..5485760 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-    "cassandra-stress write cl=QUORUM n=5485760 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=5485761..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+    "cassandra-stress write cl=QUORUM n=5485760 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=1000/s -pop seq=1..5485760 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+    "cassandra-stress write cl=QUORUM n=5485760 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=1000/s -pop seq=5485761..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
 ]
 
 stress_cmd: [
-    "cassandra-stress write cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=2500/s -pop seq=1..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-    "cassandra-stress read  cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=2500/s -pop seq=1..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+    "cassandra-stress write cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=1000/s -pop seq=1..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+    "cassandra-stress read  cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=1000/s -pop seq=1..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 ]
 round_robin: true
 
@@ -30,4 +30,7 @@ nemesis_seed: ['385', '543']
 space_node_threshold: [64424, 64423]
 
 user_prefix: 'longevity-scylla-operator-3h-multitenant'
-cluster_health_check: false
+cluster_health_check: true
+
+# switch to EBS for MS3
+k8s_scylla_disk_class: 'gp2'
