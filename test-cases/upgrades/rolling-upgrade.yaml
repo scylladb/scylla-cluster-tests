@@ -1,6 +1,6 @@
 # TODO: need to qualify on GCE and AWS
 
-test_duration: 360
+test_duration: 400
 
 # workloads
 write_stress_during_entire_test: cassandra-stress write no-warmup cl=QUORUM n=20100200 -schema 'keyspace=keyspace_entire_test replication(factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..20100200 -log interval=5
