@@ -234,9 +234,9 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
     def verify_docker_locale_settings(self) -> None:
         run = self.node.remoter.run
         expected_locale_settings = {
-            "LC_ALL": "en_US.UTF-8",
-            "LANG": "en_US.UTF-8",
-            "LANGUAGE": "en_US:en",
+            "LC_ALL": ["en_US.UTF-8", "C.UTF-8"],
+            "LANG": ["en_US.UTF-8", "C.UTF-8"],
+            "LANGUAGE": ["en_US:en", ""],
         }
 
         locale_settings_raw = run("locale").stdout.split(sep="\n")
@@ -245,7 +245,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
         for setting_key, expected_value in expected_locale_settings.items():
             configured_value = locale_settings.get(setting_key)
-            self.assertEqual(configured_value, expected_value)
+            self.assertIn(configured_value, expected_value, f'value for key {setting_key} differs')
 
     def verify_docker_latest_match_release(self) -> None:
         for product in typing.get_args(ScyllaProduct):
