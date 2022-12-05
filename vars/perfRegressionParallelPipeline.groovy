@@ -170,8 +170,7 @@ def call(Map pipelineParams) {
                                                     def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                     timeout(time: testRunTimeout, unit: 'MINUTES') { dir('scylla-cluster-tests') {
 
-                                                        sh """
-                                                        #!/bin/bash
+                                                        sh """#!/bin/bash
                                                         set -xe
                                                         env
 

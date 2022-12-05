@@ -7,8 +7,7 @@ def runSctTest(Map params, String region){
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = params.backend.trim().toLowerCase()
 
-    sh """
-    #!/bin/bash
+    sh """#!/bin/bash
     set -xe
     env
 

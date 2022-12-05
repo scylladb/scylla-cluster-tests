@@ -15,8 +15,7 @@ def call(Map params, RunWrapper currentBuild){
     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
 
-    sh """
-    #!/bin/bash
+    sh """#!/bin/bash
     set -xe
     env
     echo "Start send email ..."

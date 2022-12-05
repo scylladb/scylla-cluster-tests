@@ -25,8 +25,7 @@ def call(Map params, Integer test_duration, String region) {
     }
 
     println(params)
-    sh """
-    #!/bin/bash
+    sh """#!/bin/bash
     set -xe
     env
 

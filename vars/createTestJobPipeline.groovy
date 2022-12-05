@@ -63,8 +63,7 @@ def call() {
                                 script {
                                     wrap([$class: 'BuildUser']) {
                                         dir('scylla-cluster-tests') {
-                                            sh """
-                                                #!/bin/bash
+                                            sh """#!/bin/bash
                                                 set -xe
                                                 env
 
