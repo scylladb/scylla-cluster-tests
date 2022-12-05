@@ -1226,8 +1226,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def get_cfstats(self, keyspace, tcpdump=False):
         def keyspace_available():
-            self.run_nodetool("flush", ignore_status=True, timeout=60)
-            res = self.run_nodetool(sub_cmd='cfstats', args=keyspace, ignore_status=True, timeout=60)
+            self.run_nodetool("flush", ignore_status=True, timeout=300)
+            res = self.run_nodetool(sub_cmd='cfstats', args=keyspace, ignore_status=True, timeout=300)
             return res.exit_status == 0
         tcpdump_id = uuid.uuid4()
         if tcpdump:
@@ -1235,11 +1235,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs, name='TcpDumpUploadingThread',
                                               kwargs={'tcpdump_id': tcpdump_id}, daemon=True)
             tcpdump_thread.start()
-        wait.wait_for(keyspace_available, timeout=120, step=60,
+        wait.wait_for(keyspace_available, timeout=600, step=60,
                       text='Waiting until keyspace {} is available'.format(keyspace), throw_exc=False)
         try:
             # Don't need NodetoolEvent when waiting for space_node_threshold before start the nemesis, not publish it
-            result = self.run_nodetool(sub_cmd='cfstats', args=keyspace, timeout=60,
+            result = self.run_nodetool(sub_cmd='cfstats', args=keyspace, timeout=300,
                                        warning_event_on_exception=(Failure, UnexpectedExit), publish_event=False)
         except (Failure, UnexpectedExit):
             self.log.error('nodetool error - see tcpdump thread uuid %s for '
@@ -4177,7 +4177,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             if keyspace and not isinstance(keyspace, list):
                 keyspace = [keyspace]
             key = 'Space used (total)'
-            wait.wait_for(func=self.cfstat_reached_threshold, step=10, timeout=300,
+            wait.wait_for(func=self.cfstat_reached_threshold, step=10, timeout=600,
                           text="Waiting until cfstat '%s' reaches value '%s'" % (key, size),
                           key=key, threshold=size, keyspaces=keyspace, throw_exc=False)
 
