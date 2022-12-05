@@ -2234,7 +2234,7 @@ class PodCluster(cluster.BaseCluster):
         #       as 'NotReady' and will fail the pod waiter function below.
 
         # Wait while whole cluster (on all racks) including new nodes are up and running
-        self.wait_for_pods_readiness(pods_to_wait=count, total_pods=len(self.nodes) + count)
+        self.wait_for_pods_running(pods_to_wait=count, total_pods=len(self.nodes) + count)
 
         # Register new nodes and return whatever was registered
         k8s_pods = KubernetesOps.list_pods(self, namespace=self.namespace)
@@ -2288,11 +2288,19 @@ class PodCluster(cluster.BaseCluster):
     def get_nodes_readiness_delay(self) -> Union[float, int]:
         return self.PodContainerClass.pod_readiness_delay
 
-    def wait_for_pods_readiness(self, pods_to_wait: int, total_pods: int):
+    def wait_for_pods_readiness(self, pods_to_wait: int, total_pods: int, readiness_timeout: int = None):
         KubernetesOps.wait_for_pods_readiness(
             kluster=self.k8s_cluster,
             total_pods=total_pods,
-            readiness_timeout=self.get_nodes_reboot_timeout(pods_to_wait),
+            readiness_timeout=readiness_timeout or self.get_nodes_reboot_timeout(pods_to_wait),
+            namespace=self.namespace
+        )
+
+    def wait_for_pods_running(self, pods_to_wait: int, total_pods: int | callable):
+        KubernetesOps.wait_for_pods_running(
+            kluster=self.k8s_cluster,
+            total_pods=total_pods,
+            timeout=self.get_nodes_reboot_timeout(pods_to_wait),
             namespace=self.namespace
         )
 
@@ -2348,7 +2356,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=None, sleep_time=None,
                                      timeout=None):  # pylint: disable=too-many-arguments
-        self.wait_for_pods_readiness(pods_to_wait=len(nodes or self.nodes), total_pods=len(self.nodes))
+        self.wait_for_pods_readiness(pods_to_wait=len(nodes or self.nodes),
+                                     total_pods=len(self.nodes), readiness_timeout=timeout)
         self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
     @timeout_wrapper(timeout=300, sleep_time=3, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
@@ -2359,7 +2368,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
     @cluster.wait_for_init_wrap
     def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, wait_for_db_logs=False, **__):  # pylint: disable=arguments-differ
         node_list = node_list if node_list else self.nodes
-        self.wait_for_nodes_up_and_normal(nodes=node_list)
+        self.wait_for_nodes_up_and_normal(nodes=node_list, timeout=timeout)
 
         if wait_for_db_logs:
             super().wait_for_init(node_list=node_list, check_node_health=False)
@@ -2367,7 +2376,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         if self.scylla_restart_required:
             self.restart_scylla()
             self.scylla_restart_required = False
-            self.wait_for_nodes_up_and_normal(nodes=node_list)
+            self.wait_for_nodes_up_and_normal(nodes=node_list, timeout=timeout)
 
     @property
     def _k8s_scylla_cluster_api(self) -> Resource:
@@ -2741,12 +2750,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
 
 class ManagerPodCluser(PodCluster):  # pylint: disable=abstract-method
-    def wait_for_pods_readiness(self, pods_to_wait: int, total_pods: int):
-        KubernetesOps.wait_for_pods_readiness(
-            kluster=self.k8s_cluster,
-            total_pods=lambda x: x > 1,
-            readiness_timeout=self.get_nodes_reboot_timeout(pods_to_wait),
-            namespace=self.namespace
+    def wait_for_pods_running(self, pods_to_wait: int, total_pods: int | callable):
+        super().wait_for_pods_running(
+            pods_to_wait=pods_to_wait,
+            total_pods=lambda x: x > 1
         )
 
 

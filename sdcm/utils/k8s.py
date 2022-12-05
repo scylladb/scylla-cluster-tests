@@ -408,17 +408,19 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             raise ValueError(f'Unknown auth-type {auth_type}')
 
     @staticmethod
-    def wait_for_pods_readiness(kluster, total_pods: Union[int, Callable], readiness_timeout: float, namespace: str,
-                                sleep: int = 10):
-        @timeout_decor(message=f"Wait for {total_pods} pod(s) from {namespace} namespace to become ready...",
-                       timeout=readiness_timeout * 60,
-                       sleep_time=sleep)
-        def wait_cluster_is_ready():
+    def wait_for_pods_with_condition(kluster, condition: str, total_pods: Union[int, Callable], timeout: float, namespace: str,
+                                     sleep_between_retries: int = 10):
+        assert isinstance(total_pods, (int, float)) or callable(total_pods), "total_pods should be number or callable"
+
+        @timeout_decor(message=f"Wait for {total_pods} pod(s) from {namespace} namespace {condition} to be true...",
+                       timeout=timeout * 60,
+                       sleep_time=sleep_between_retries)
+        def wait_for_condition():
             # To make it more informative in worst case scenario made it repeat 5 times, by readiness_timeout // 5
             result = kluster.kubectl(
-                f"wait --timeout={readiness_timeout // 5}m --all --for=condition=Ready pod",
+                f"wait --timeout={timeout // 5}m --all --for={condition} pod",
                 namespace=namespace,
-                timeout=readiness_timeout * 60 // 5 + 10)
+                timeout=timeout * 60 // 5 + 10)
             count = result.stdout.count('condition met')
             if isinstance(total_pods, (int, float)):
                 if total_pods != count:
@@ -426,8 +428,28 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             elif callable(total_pods):
                 if not total_pods(count):
                     raise RuntimeError('Not all pods reported')
+            else:
+                raise ValueError(f"total_pods should be number or callable and not {type(total_pods)}")
 
-        wait_cluster_is_ready()
+        wait_for_condition()
+
+    @staticmethod
+    def wait_for_pods_readiness(kluster, total_pods: Union[int, Callable], readiness_timeout: float, namespace: str,
+                                sleep_between_retries: int = 10):
+        KubernetesOps.wait_for_pods_with_condition(kluster, condition='condition=Ready',
+                                                   total_pods=total_pods,
+                                                   timeout=readiness_timeout,
+                                                   namespace=namespace,
+                                                   sleep_between_retries=sleep_between_retries)
+
+    @staticmethod
+    def wait_for_pods_running(kluster, total_pods: Union[int, Callable], timeout: float, namespace: str,
+                              sleep_between_retries: int = 10):
+        KubernetesOps.wait_for_pods_with_condition(kluster, condition="jsonpath='{.status.phase}'=Running",
+                                                   total_pods=total_pods,
+                                                   timeout=timeout,
+                                                   namespace=namespace,
+                                                   sleep_between_retries=sleep_between_retries)
 
     @classmethod
     def patch_kube_config(cls, static_token_path, kube_config_path: str = None) -> None:

@@ -3669,7 +3669,7 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             verify_node_setup(start_time)
 
         if isinstance(cl_inst, BaseScyllaCluster):
-            cl_inst.wait_for_nodes_up_and_normal(nodes=node_list, verification_node=node_list[0])
+            cl_inst.wait_for_nodes_up_and_normal(nodes=node_list, verification_node=node_list[0], timeout=timeout)
 
         time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug('TestConfig duration -> %s s', int(time_elapsed))
