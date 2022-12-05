@@ -17,8 +17,7 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
         test_cmd = "run-test"
     }
 
-    sh """
-    #!/bin/bash
+    sh """#!/bin/bash
     set -xe
     env
 

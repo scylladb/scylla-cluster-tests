@@ -6,8 +6,7 @@ def call(Map params, RunWrapper currentBuild){
     def cloud_provider = getCloudProviderFromBackend(params.backend)
     def test_status = currentBuild.currentResult
 
-    sh """
-    #!/bin/bash
+    sh """#!/bin/bash
 
     set -xe
     env

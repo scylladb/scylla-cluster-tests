@@ -9,8 +9,7 @@ def call(Map params, String region){
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
 
-    sh """
-    #!/bin/bash
+    sh """#!/bin/bash
 
     set -xe
     env

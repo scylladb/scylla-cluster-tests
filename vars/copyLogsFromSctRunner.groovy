@@ -3,9 +3,7 @@
 def call(String sct_latest_dir) {
     def sct_runner_ip =  sh(returnStdout: true, script:'cat sct_runner_ip||echo ""').trim()
 
-    sh """
-        #!/bin/bash
-
+    sh """#!/bin/bash
         set -xe
 
         eval \$(ssh-agent)

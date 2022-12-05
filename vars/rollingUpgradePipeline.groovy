@@ -168,8 +168,7 @@ def call(Map pipelineParams) {
                                                         dir('scylla-cluster-tests') {
                                                             def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                             def cloud_provider = getCloudProviderFromBackend(params.backend)
-                                                            sh """
-                                                            #!/bin/bash
+                                                            sh """#!/bin/bash
                                                             set -xe
                                                             env
 
