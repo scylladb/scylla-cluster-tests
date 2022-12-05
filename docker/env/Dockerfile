@@ -19,7 +19,7 @@ RUN mkdir /build && \
     pip3 install -r requirements.txt --root=/build --prefix=./ --ignore-installed --no-warn-script-location
 
 FROM python:$PYTHON_IMAGE_TAG
-ARG KUBECTL_VERSION=1.22.2
+ARG KUBECTL_VERSION=1.23.14
 ENV PYTHONWARNINGS=ignore:unclosed \
     PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
