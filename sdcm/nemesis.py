@@ -2508,7 +2508,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             #  │ --dc 'AWS_US_EAST_1' -L AWS_US_EAST_1:s3:scylla-cloud-backup-9952-10120-4q4w4d --retention 14
             #  --rate-limit AWS_US_EAST_1:100 --snapshot-parallel '<nil>' --upload-parallel '<nil>'
             #  │ 06 Jun 21 18:10:05 UTC (+1d)  │ NEW
-            location = auto_backup_task.arguments.split('-L')[1].split()[0]
+            location = auto_backup_task.get_task_info_dict()["location"]
         else:
             if not self.cluster.params.get('backup_bucket_location'):
                 raise UnsupportedNemesis('backup bucket location configuration is not defined!')

@@ -91,6 +91,37 @@ class ManagerTask:
             cmd += ' --{}={}'.format(key, value)
         return cmd
 
+    def get_task_info_dict(self):
+        # Output example:
+        # Name:      healthcheck/cql
+        #             Cron:     @every 15s
+        #             Tz:       UTC
+        #
+        #             Properties:
+        #             - mode: cql
+        #
+        #             ╭──────────────────────────────────────┬────────────────────────┬──────────┬────────╮
+        #             │ ID                                   │ Start time             │ Duration │ Status │
+        #             ├──────────────────────────────────────┼────────────────────────┼──────────┼────────┤
+        #             │ 13814000-1dd2-11b2-a009-02c33d089f9b │ 07 Jan 23 23:08:59 UTC │ 0s       │ DONE   │
+        #             ╰──────────────────────────────────────┴────────────────────────┴──────────┴────────╯
+        info_dict = {}
+        cmd = "info {} -c {}".format(self.id, self.cluster_id)
+        res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
+        info_lines = [line[0] for line in res if len(line) == 1]
+        for line in info_lines:
+            if ":" in line:
+                name, value = [string.strip() for string in line.split(":", maxsplit=1)]
+                if name.startswith("-"):
+                    name = name[2:]
+                info_dict[name] = value
+        history_table_lines = [line for line in res if len(line) > 1]
+        # The info command returns some unnecessary values: task_name, cron, retry
+        # The number of the extra info is not set, so I just search the for the lines that its length is larger than
+        # 1, which are the history table (See above)
+        info_dict["history"] = history_table_lines
+        return info_dict
+
     @property
     def history(self):
         """
@@ -134,16 +165,9 @@ class ManagerTask:
         # │ 3e32bcc3-c5c1-11ec-85ad-02f351adfaf7 │ 27 Apr 22 00:30:30 UTC │ 15s      │ DONE   │
         # ╰──────────────────────────────────────┴────────────────────────┴──────────┴────────╯
         if self.sctool.is_v3_cli:
-            cmd = "info {} -c {}".format(self.id, self.cluster_id)
-        else:
-            cmd = "task history {} -c {}".format(self.id, self.cluster_id)
+            return self.get_task_info_dict()["history"]
+        cmd = "task history {} -c {}".format(self.id, self.cluster_id)
         res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
-        if self.sctool.is_v3_cli:
-            history_table = [line for line in res if len(line) > 1]
-            # The info command returns some unnecessary values: task_name, cron, retry
-            # The number of the extra info is not set, so I just search the for the lines that its length is larger than
-            # 1, which are the history table (See above)
-            return history_table
         return res  # or can be specified like: self.get_property(parsed_table=res, column_name='status')
 
     @property
