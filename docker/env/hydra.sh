@@ -12,7 +12,7 @@ SCT_DIR=$(dirname "${SCT_DIR}")
 VERSION=v$(cat "${DOCKER_ENV_DIR}/version")
 HOST_NAME=SCT-CONTAINER
 RUN_BY_USER=$(python3 "${SCT_DIR}/sdcm/utils/get_username.py")
-USER_ID=$(id -u "${USER}")
+USER_ID=$(id -u "${USER}"):$(id -g "${USER}")
 HOME_DIR=${HOME}
 
 CREATE_RUNNER_INSTANCE=""
@@ -355,7 +355,7 @@ if [[ -n "$RUNNER_IP" ]]; then
 
     SCT_DIR="/home/ubuntu/scylla-cluster-tests"
     HOST_NAME="ip-${RUNNER_IP//./-}"
-    USER_ID=1000
+    USER_ID=1000:1000
     RUNNER_CMD="ssh -o StrictHostKeyChecking=no ubuntu@${RUNNER_IP}"
     DOCKER_HOST="-H ssh://ubuntu@${RUNNER_IP}"
 fi
