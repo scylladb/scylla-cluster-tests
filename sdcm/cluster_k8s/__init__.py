@@ -1920,7 +1920,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         return True
 
 
-class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-method
+class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-method,too-many-public-methods
     def restart(self):
         pass
 
@@ -1953,9 +1953,17 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
         """
         return self.parent_cluster.remote_cassandra_rackdc_properties()
 
+    @property
+    def verify_up_timeout(self):
+        if self.parent_cluster.params.get('k8s_scylla_disk_class') in ['gp2', 'gp3']:
+            return super().verify_up_timeout * 2
+        else:
+            return super().verify_up_timeout
+
     @cluster.log_run_info
     def start_scylla_server(self, verify_up=True, verify_down=False,
-                            timeout=500, verify_up_timeout=300):
+                            timeout=500, verify_up_timeout=None):
+        verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_down:
             self.wait_db_down(timeout=timeout)
         self.remoter.run('sh -c "supervisorctl start scylla || supervisorctl start scylla-server"',
