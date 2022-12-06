@@ -14,6 +14,7 @@ import base64
 import os
 import logging
 import time
+import pprint
 from textwrap import dedent
 from typing import List, Dict, Literal, ParamSpec, TypeVar
 from functools import cached_property
@@ -46,6 +47,9 @@ LOGGER = logging.getLogger(__name__)
 
 P = ParamSpec("P")  # pylint: disable=invalid-name
 R = TypeVar("R")  # pylint: disable=invalid-name
+
+# we didn't add configuration for all the rest 'io1', 'io2', 'gp2', 'sc1', 'st1'
+SUPPORTED_EBS_STORAGE_CLASSES = ['gp3', ]
 
 
 # pylint: disable=too-many-instance-attributes
@@ -215,10 +219,11 @@ class EksTokenUpdateThread(TokenUpdateThread):
 
 
 # pylint: disable=too-many-instance-attributes
-class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
+class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=too-many-public-methods
     POOL_LABEL_NAME = 'eks.amazonaws.com/nodegroup'
     IS_NODE_TUNING_SUPPORTED = True
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/eks/scylla-node-prepare.yaml")
+    STORAGE_CLASS_FILE = sct_abs_path("sdcm/k8s_configs/eks/storageclass.yaml")
     pools: Dict[str, EksNodePool]
     short_cluster_name: str
 
@@ -255,6 +260,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
             ('k8s-app', 'aws-node'),
             ('app', 'static-local-volume-provisioner'),
             ('k8s-app', 'kube-proxy'),
+            ('app.kubernetes.io/name', 'aws-ebs-csi-driver'),
         ]
         if self.tenants_number > 1:
             allowed_labels_on_scylla_node.append(('app', 'scylla'))
@@ -305,6 +311,11 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
             addonName='vpc-cni',
             addonVersion=self.vpc_cni_version
         )
+        # TODO: think if we need to pin version, or select base on k8s version
+        self.eks_client.create_addon(
+            clusterName=self.short_cluster_name,
+            addonName='aws-ebs-csi-driver',
+        )
         if wait_till_functional:
             wait_for(lambda: self.cluster_status == 'ACTIVE', step=60, throw_exc=True, timeout=1200,
                      text=f'Waiting till EKS cluster {self.short_cluster_name} become operational')
@@ -334,6 +345,42 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         self.create_eks_cluster()
         LOGGER.info("Patch kubectl config")
         self.patch_kubectl_config()
+        LOGGER.info("Create storage class")
+        self.create_ebs_storge_class()
+
+    def create_ebs_storge_class(self):
+        if self.params.get('k8s_scylla_disk_class') in SUPPORTED_EBS_STORAGE_CLASSES:
+            tags_specification = "\n".join(
+                [f'  tagSpecification_{i}: "{k}={v}"' for i, (k, v) in enumerate(self.tags.items(), start=1)])
+            self.apply_file(self.STORAGE_CLASS_FILE, environ=dict(EXTRA_TAG_SPEC=tags_specification))
+
+    @property
+    def ebs_csi_driver_info(self) -> dict:
+        addon_info = self.eks_client.describe_addon(
+            clusterName=self.short_cluster_name,
+            addonName='aws-ebs-csi-driver',
+        )
+        LOGGER.debug(pprint.pformat(addon_info))
+        return addon_info['addon']
+
+    @property
+    def ebs_csi_driver_status(self) -> str:
+        return self.ebs_csi_driver_info['status']
+
+    def configure_ebs_csi_driver(self):
+        tags = ",".join([f"{key}={value}" for key, value in self.tags.items()])
+
+        wait_for(lambda: self.ebs_csi_driver_status == 'ACTIVE', step=60, throw_exc=True, timeout=600,
+                 text='Waiting till aws-ebs-csi-driver become operational')
+        LOCALRUNNER.run(
+            f'eksctl utils associate-iam-oidc-provider --region={self.region_name} --cluster={self.short_cluster_name} --approve')
+        LOCALRUNNER.run(f'eksctl create iamserviceaccount --name ebs-csi-controller-sa --namespace kube-system '
+                        f'--cluster {self.short_cluster_name} '
+                        f'--attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy '
+                        f'--approve --role-name EKS_EBS-{self.short_cluster_name} --region {self.region_name} '
+                        f'--tags {tags} --override-existing-serviceaccounts')
+
+        self.kubectl("rollout restart deployment ebs-csi-controller", namespace="kube-system")
 
     def tune_network(self):
         """Tune networking on all nodes of an EKS cluster to reduce number of reserved IPs.

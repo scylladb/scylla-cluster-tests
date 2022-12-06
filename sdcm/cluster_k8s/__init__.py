@@ -143,11 +143,11 @@ OPERATOR_CONTAINERS_RESOURCES = {
 }
 
 # Other common resources which get deployed on each scylla node such as 'kube-proxy'
-# EKS: between 100m-200m CPU
+# EKS: between 130m-260m CPU
 # GKE: between 200m-300m CPU and 250Mi RAM
 # Above numbers are "explicit" reservations. So, reserve a bit more for other common pods.
 COMMON_CONTAINERS_RESOURCES = {
-    'cpu': 0.51,
+    'cpu': 0.5131,
     'memory': 0.51,
 }
 

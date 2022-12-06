@@ -16,7 +16,8 @@ repos:
                 tests/.*|
                 data_dir/scylla\.yaml|
                 sdcm/k8s_configs/minio/templates/.*|
-                sdcm/k8s_configs/provisioner/templates/.*
+                sdcm/k8s_configs/provisioner/templates/.*|
+                sdcm/k8s_configs/eks/storageclass.yaml
             )$
     -   id: check-added-large-files
     -   id: check-json
