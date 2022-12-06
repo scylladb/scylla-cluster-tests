@@ -2366,7 +2366,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def restart_service(self, service_name: str, timeout=500, ignore_status=False):
         self._service_cmd(service_name=service_name, cmd='restart', timeout=timeout, ignore_status=ignore_status)
 
-    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=500, verify_up_timeout=300):
+    @property
+    def verify_up_timeout(self):
+        return 300
+
+    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=500, verify_up_timeout=None):
+        verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_down:
             self.wait_db_down(timeout=timeout)
         self.start_service(service_name='scylla-server', timeout=timeout)
