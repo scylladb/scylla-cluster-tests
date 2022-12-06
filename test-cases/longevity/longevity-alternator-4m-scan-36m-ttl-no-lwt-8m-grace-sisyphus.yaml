@@ -1,0 +1,52 @@
+test_duration: 3000
+# ( The prepare_write_cmd is for the later read-stress and in order to trigger post_prepare_cql_cmds )
+prepare_write_cmd:
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 5 -p recordcount=600301
+    -p fieldcount=2 -p fieldlength=8
+    -p insertstart=0 -p insertcount=600300  -p table=usertable_no_lwt -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=2160
+
+stress_cmd:
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 13 -p recordcount=8589934401
+    -p fieldcount=2 -p fieldlength=8
+    -p insertstart=0 -p insertcount=12006000  -p table=usertable_no_lwt -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=2160
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 10 -p recordcount=8589934401
+    -p fieldcount=2 -p fieldlength=8
+    -p insertstart=12006000 -p insertcount=12006000 -p table=usertable_no_lwt -p dynamodb.ttlKey=ttl -p dynamodb.ttlDuration=2160
+
+
+round_robin: true
+
+dynamodb_primarykey_type: HASH_AND_RANGE
+
+n_loaders: 2
+instance_type_db: 'i3.large'
+n_monitor_nodes: 1
+n_db_nodes: 4
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '033'
+nemesis_interval: 5
+nemesis_during_prepare: true
+
+user_prefix: '4m-scan-36m-ttl-8m-grace-sisyphus'
+
+alternator_port: 8080
+alternator_use_dns_routing: true
+
+alternator_enforce_authorization: true
+alternator_access_key_id: 'alternator'
+alternator_secret_access_key: 'password'
+
+# Set Alternator TTL parameters
+# ---------------------------------------------
+# Enable TTL feature in Scylla.
+# Set 'alternator_ttl_period_in_seconds' to 4 minutes for the TTL scan interval.
+# YCSB TTL value is 36 minutes.
+# Set 'gc_grace_seconds' for 8 minutes.
+append_scylla_yaml: |
+  alternator_ttl_period_in_seconds: 240
+
+post_prepare_cql_cmds: "ALTER TABLE alternator_usertable_no_lwt.usertable_no_lwt with gc_grace_seconds = 480;"
