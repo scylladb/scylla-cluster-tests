@@ -1,10 +1,71 @@
 import time
 
 from longevity_test import LongevityTest
+from sdcm.cluster import BaseNode
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
 
 
 class AlternatorTtlLongevityTest(LongevityTest):
+
+    keyspace = f"alternator_{NO_LWT_TABLE_NAME}"
+    full_table_name = f'{keyspace}.{NO_LWT_TABLE_NAME}'
+
+    def _count_sstables_and_partitions(self, node: BaseNode) -> int:
+        estimated_num_of_partitions = node.get_cfstats(self.full_table_name)['Number of partitions (estimate)']
+        num_of_sstables = node.get_cfstats(self.full_table_name)['SSTable count']
+        self.log.info('Table stats results are: %s sstables, %s estimated partitions',
+                      num_of_sstables, estimated_num_of_partitions)
+
+        self.log.info('Run a table scan to count number of existing items')
+        with self.db_cluster.cql_connection_patient(node=node, connect_timeout=600) as session:
+            result = session.execute(f"SELECT count(*) FROM {self.full_table_name} using timeout 10m")
+        partitions_num_result = result.current_rows[0].count
+        self.log.info('Number of partitions found: %s', partitions_num_result)
+        return partitions_num_result
+
+    def count_sstables_and_partitions_after_major_compaction(self, run_repair: bool = True):
+        if run_repair:
+            self.log.info('Run a repair on nodes..')
+            for node in self.db_cluster.nodes:
+                node.run_nodetool(sub_cmd="repair -pr")
+
+        node: BaseNode = self.db_cluster.nodes[0]
+        self.log.info('force offstrategy on %s before running running a major compaction on node %s', self.keyspace,
+                      node.name)
+        node.remoter.run(
+            "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
+            f" http://127.0.0.1:10000/storage_service/keyspace_offstrategy_compaction/{self.keyspace}")
+        self.log.info('Run a major compaction on node %s', node.name)
+        node.run_nodetool("compact")
+        self.wait_no_compactions_running()
+        self._count_sstables_and_partitions(node=node)
+
+    def test_count_sstables_after_major_compaction(self):
+        """
+        This test run the original test_custom_time first.
+        Waits a duration of TTL + scan + gc_grace_seconds.
+        Assume TTL=36 minutes, scan=8 minutes, gc_grace_seconds=4 minutes: Total sums to: 48 minutes.
+        Run a repair on nodes.
+        Select a node and run a major compaction.
+        Wait for node's compactions to finish.
+        count and print number of sstables, partitions and sizes.
+        """
+
+        # Run the stress_cmd and wait for complete.
+        self.test_custom_time()
+        # Wait for all data to be expired.
+        # Should wait a total of 48 minutes.
+        # splitting to 30 minutes wait before stopping nemesis.
+        # Then an additional 18 minutes wait to complete a total of 48 minutes.
+        self.log.info('Wait TTL + scan interval + gc_grace_seconds')
+        wait_for_expired_items = 30 * 60
+        time.sleep(wait_for_expired_items)
+        self.stop_nemesis(self.db_cluster)
+        wait_for_expired_items = 18 * 60
+        time.sleep(wait_for_expired_items)
+
+        # Run a repair + a major compaction and count results.
+        self.count_sstables_and_partitions_after_major_compaction()
 
     def test_custom_time_repeat_stress_cmd(self):
         """
@@ -26,6 +87,8 @@ class AlternatorTtlLongevityTest(LongevityTest):
 
             for stress in stress_queue:
                 self.verify_stress_thread(cs_thread_pool=stress)
+
+        self.count_sstables_and_partitions_after_major_compaction()
 
     def test_disable_enable_ttl_scan(self):
         """
@@ -74,6 +137,8 @@ class AlternatorTtlLongevityTest(LongevityTest):
         for stress in stress_queue:
             self.verify_stress_thread(cs_thread_pool=stress)
 
+        self.count_sstables_and_partitions_after_major_compaction()
+
     def test_multiple_ttl(self):
         """
         This test run the original test_custom_time first.
@@ -104,8 +169,5 @@ class AlternatorTtlLongevityTest(LongevityTest):
         self.wait_no_compactions_running()
 
         self.log.info('Run a table scan to count number of existing items and compare to expected')
-        keyspace = f"alternator_{NO_LWT_TABLE_NAME}"
-        with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], connect_timeout=600) as session:
-            result = session.execute(f"SELECT count(*) FROM {keyspace}.{NO_LWT_TABLE_NAME} using timeout 10m")
-            assert result.current_rows[
-                0].count == insert_count, f"Result: {result.current_rows[0].count}, Expected: {insert_count}"
+        current_partitions_num = self._count_sstables_and_partitions(node=self.db_cluster.nodes[0])
+        assert current_partitions_num == insert_count, f"Result: {current_partitions_num}, Expected: {insert_count}"
