@@ -1845,7 +1845,10 @@ class SCTConfiguration(dict):
                     and self.get("k8s_tenants_num") > 1
                     and opt.get("k8s_multitenancy_supported")
                     and isinstance(self.get(opt['name']), list)):
-                raise ValueError("failed to validate {}".format(opt['name'])) from ex
+                if not (opt['name'] == "nemesis_selector"
+                        and isinstance(self.get('nemesis_class_name'), str)
+                        and len(self.get("nemesis_class_name").split(" ")) > 1):
+                    raise ValueError("failed to validate {}".format(opt['name'])) from ex
             for list_element in self.get(opt['name']):
                 try:
                     opt['type'](list_element)
