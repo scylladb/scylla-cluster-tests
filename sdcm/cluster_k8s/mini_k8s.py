@@ -94,7 +94,7 @@ class MinimalK8SNodePool(CloudK8sNodePool):
 class MinimalK8SOps:
     @classmethod
     def setup_prerequisites(cls, node: cluster.BaseNode) -> None:
-        if node.distro.is_ubuntu or node.distro.is_debian:
+        if node.distro.is_debian_like:
             cls.setup_prerequisites_ubuntu(node)
         else:
             raise ValueError(f"{node.distro} is not supported")
