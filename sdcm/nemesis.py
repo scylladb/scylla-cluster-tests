@@ -983,13 +983,20 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 'Non-system keyspace and table are not found. CorruptThenRepair nemesis can\'t be run')
 
         tables = []
+        errors = []
         with self.cluster.cql_connection_patient(self.target_node) as session:
             for table in ks_cfs:
-                has_data = self.cluster.is_table_has_data(session=session, table_name=table)
+                has_data, error = self.cluster.is_table_has_data(session=session, table_name=table)
                 if has_data:
                     tables.append(table)
+                if error:
+                    errors.append(error)
                 if len(tables) > 20:
                     break
+
+        if not tables and errors:
+            raise ValueError(
+                f'A non-empty user table is not found. Nemesis can\'t run. Got errors of: {errors}')
 
         # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
