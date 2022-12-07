@@ -100,7 +100,7 @@ from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version, get_
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PATTERNS, InfoEvent
+from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PATTERNS, InfoEvent, SoftTimeoutEvent
 from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, ScyllaHelpErrorEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
@@ -143,6 +143,7 @@ MINUTE_IN_SEC: int = 60
 HOUR_IN_SEC: int = 60 * MINUTE_IN_SEC
 MAX_TIME_WAIT_FOR_NEW_NODE_UP: int = HOUR_IN_SEC * 8
 MAX_TIME_WAIT_FOR_ALL_NODES_UP: int = MAX_TIME_WAIT_FOR_NEW_NODE_UP + HOUR_IN_SEC
+MAX_TIME_WAIT_FOR_DECOMMISSION: int = HOUR_IN_SEC * 6
 
 LOGGER = logging.getLogger(__name__)
 
@@ -4540,8 +4541,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.terminate_node(node)  # pylint: disable=no-member
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
-    def decommission(self, node):
-        node.run_nodetool("decommission")
+    def decommission(self, node: BaseNode, timeout: int | float = None, soft_timeout: int | float = None):
+        with SoftTimeoutEvent(soft_timeout=soft_timeout, operation="decommission"):
+            node.run_nodetool("decommission", timeout=timeout)
         self.verify_decommission(node)
 
     @property

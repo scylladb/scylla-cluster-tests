@@ -25,7 +25,7 @@ from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.utils.decorators import timeout
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import CoreDumpEvent, TestFrameworkEvent
+from sdcm.sct_events.system import CoreDumpEvent, TestFrameworkEvent, SoftTimeoutEvent
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
@@ -456,3 +456,29 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                               options="", publish_event=False)
         event.begin_event()
         self.assertFalse(publish.called, "Publish function was called unexpectedly")
+
+    @staticmethod
+    @mock.patch('sdcm.sct_events.base.SctEvent.publish')
+    def test_soft_timeout(publish):
+        with SoftTimeoutEvent(soft_timeout=0.1, operation="long-one") as event:
+            time.sleep(1)
+
+        assert publish.called
+        assert event.trace
+
+        event_data = str(event)
+        assert "operation 'long-one' took" in event_data
+        assert "soft_timeout=0:00:00.100" in event_data
+
+    @staticmethod
+    @mock.patch('sdcm.sct_events.base.SctEvent.publish')
+    def test_soft_timeout_no_timeout(publish):
+        with SoftTimeoutEvent(soft_timeout=None, operation="long-one") as event:
+            time.sleep(1)
+
+        assert not publish.called
+        assert not event.trace
+
+        event_data = str(event)
+        assert "operation 'long-one' took" not in event_data
+        assert "soft_timeout=0:00:00.100" not in event_data

@@ -12,7 +12,9 @@
 # Copyright (c) 2020 ScyllaDB
 
 import re
+import sys
 import time
+import datetime
 from typing import Any, Optional, Sequence, Type, List, Tuple
 from traceback import format_stack
 
@@ -83,6 +85,50 @@ class TestFrameworkEvent(InformationalEvent):  # pylint: disable=too-many-instan
             fmt += "\nTraceback (most recent call last):\n{0.trace}"
 
         return fmt
+
+
+class SoftTimeoutEvent(TestFrameworkEvent):
+    """
+    To be used as a context manager to raise an error event if `operation` took more the `soft_timeout`
+
+    Example:
+        >>> with SoftTimeoutEvent(soft_timeout=0.1, operation="long-one") as event:
+        ...    time.sleep(1) # do that long operation that takes more then `soft_timeout`
+
+        would raise event like, with a traceback where it happened:
+
+        SoftTimeoutEvent Severity.ERROR) period_type=one-time event_id=2cf14ba9-b2a0-402d-bc4f-ac102e9e51ff,
+        source=SoftTimeout message=operation 'long-one' took 0:00:01.000, soft_timeout=0:00:00.100
+        Traceback (most recent call last):
+        ...
+          File "/home/fruch/projects/scylla-cluster-tests/unit_tests/test_events.py", line 462, in test_soft_timeout
+            with SoftTimeoutEvent(soft_timeout=0.1, operation="long-one") as event:
+
+    """
+
+    def __init__(self, operation: str, soft_timeout: int | float):
+        super().__init__(source='SoftTimeout')
+        self.operation = operation
+        self.soft_timeout = soft_timeout
+        self.start_time = None
+
+    def __enter__(self):
+        if self.soft_timeout:
+            self.start_time = time.time()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.start_time and self.soft_timeout:
+            duration = (time.time() - self.start_time)
+            if self.soft_timeout < duration:
+                self.trace = "".join(format_stack(sys._getframe().f_back))
+                self.message = (f"operation '{self.operation}' took "
+                                f"{str(datetime.timedelta(seconds=duration))[:-3]}, "
+                                f"soft_timeout={str(datetime.timedelta(seconds=self.soft_timeout))[:-3]}")
+                self.severity = Severity.ERROR
+                self.publish_or_dump()
+        else:
+            self.dont_publish()
 
 
 class ElasticsearchEvent(InformationalEvent):

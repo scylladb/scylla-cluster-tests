@@ -92,6 +92,7 @@ ScyllaOperatorLogEvent.WRONG_SCHEDULED_PODS: WARNING
 StartupTestEvent: NORMAL
 TestTimeoutEvent: CRITICAL
 TestFrameworkEvent: CRITICAL
+SoftTimeoutEvent: ERROR
 ElasticsearchEvent: ERROR
 SpotTerminationEvent: CRITICAL
 ScyllaRepoEvent: WARNING
