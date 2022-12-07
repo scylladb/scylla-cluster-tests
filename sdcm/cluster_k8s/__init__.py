@@ -79,6 +79,7 @@ from sdcm.utils.k8s import (
     KubernetesOps,
     KUBECTL_TIMEOUT,
     HelmValues,
+    ScyllaPodsIPChangeTrackerThread,
     TokenUpdateThread,
 )
 from sdcm.utils.decorators import log_run_info, retrying
@@ -287,7 +288,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     _scylla_operator_log_monitor_thread: Optional[ScyllaOperatorLogMonitoring] = None
     _token_update_thread: Optional[TokenUpdateThread] = None
+    scylla_pods_ip_change_tracker_thread: Optional[ScyllaPodsIPChangeTrackerThread] = None
     pools: Dict[str, CloudK8sNodePool]
+    scylla_pods_ip_mapping = {}
 
     def __init__(self, params: dict, user_prefix: str = '', region_name: str = None, cluster_uuid: str = None):
         self.test_config = TestConfig()
@@ -1472,6 +1475,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.start_token_update_thread()
         KubernetesOps.patch_kube_config(self.kubectl_token_path)
         wait_for(self.check_if_token_is_valid, timeout=120, throw_exc=True)
+        self.start_scylla_pods_ip_change_tracker_thread()
 
     def check_if_token_is_valid(self) -> bool:
         with open(self.kubectl_token_path, mode='rb') as token_file:
@@ -1485,6 +1489,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         # Wait till GcloudTokenUpdateThread get tokens and dump them to gcloud_token_path
         wait_for(os.path.exists, timeout=30, step=5, text="Wait for gcloud token", throw_exc=True,
                  path=self.kubectl_token_path)
+
+    def start_scylla_pods_ip_change_tracker_thread(self):
+        self.scylla_pods_ip_change_tracker_thread = ScyllaPodsIPChangeTrackerThread(
+            self, self.scylla_pods_ip_mapping)
+        self.scylla_pods_ip_change_tracker_thread.start()
 
     def _add_pool(self, pool: CloudK8sNodePool) -> None:
         if pool.name not in self.pools:
@@ -1750,6 +1759,13 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     @property
     def cql_ip_address(self):
         return self.ip_address
+
+    @property
+    def private_ip_address(self) -> Optional[str]:
+        if ip := self.parent_cluster.k8s_cluster.scylla_pods_ip_mapping.get(
+                self.parent_cluster.namespace, {}).get(self.name, {}).get('current_ip'):
+            return ip
+        return super().private_ip_address
 
     def _refresh_instance_state(self):
         public_ips = []
@@ -2320,6 +2336,25 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                          params=params,
                          node_pool=node_pool,
                          add_nodes=add_nodes)
+        # NOTE: register callbacks for the Scylla pods IP change events
+        if self.k8s_cluster.scylla_pods_ip_change_tracker_thread:
+            self.k8s_cluster.scylla_pods_ip_change_tracker_thread.register_callbacks(
+                callbacks=self.refresh_scylla_pod_ip_address,
+                namespace=self.namespace,
+                pod_name='__each__',
+                add_pod_name_as_kwarg=True)
+
+    def refresh_scylla_pod_ip_address(self, pod_name):
+        """Designed to be used as a callback for the pod IP change tracker."""
+        for node in self.nodes:
+            if node.name != pod_name:
+                continue
+            node.refresh_ip_address()
+            break
+        else:
+            LOGGER.warning(
+                "Could not find a node with the '%s' name in '%s' namespace",
+                pod_name, self.namespace)
 
     def get_scylla_args(self) -> str:
         # NOTE: scylla args get appended in K8S differently than in the VM case.
