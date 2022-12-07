@@ -679,6 +679,33 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         val = conf.get(None)
         assert val is None
 
+    def test_23_1_include_nemesis_selector_one_list(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/minimal_test_case.yaml", \
+                                             "internal_test_data/nemesis_selector_list.yaml"]'''
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertListEqual(conf["nemesis_selector"], ["config_changes", "topology_changes"],
+                             msg=f"Wrong value {conf['nemesis_selector']}")
+
+    def test_23_2_nemesis_include_selector_list_of_list_config_file(self):
+
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_REGION_NAME'] = 'eu-west-1'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/minimal_test_case.yaml", \
+                                             "internal_test_data/nemesis_selector_list_of_list.yaml"]'''
+        os.environ['SCT_NEMESIS_CLASS_NAME'] = "NemesisClass1 NemesisClass2"
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertListEqual(conf["nemesis_selector"],
+                             [["config_changes", "topology_changes"], ["topology_changes"], ["disruptive"]],
+                             msg=f"Wrong value {conf['nemesis_selector']}")
+
 
 if __name__ == "__main__":
     unittest.main()
