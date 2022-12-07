@@ -2626,7 +2626,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
             self.nodes.remove(node)
         node.destroy()
 
-    def decommission(self, node):
+    def decommission(self, node: BaseScyllaPodContainer, timeout: int | float = None, soft_timeout: int | float = None):
         rack = node.rack
         rack_nodes = self.get_rack_nodes(rack)
         assert rack_nodes[-1] == node, "Can withdraw the last node only"
@@ -2637,10 +2637,13 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         # node deletion using "terminate_node" command.
         scylla_shards = node.scylla_shards
 
+        # NOTE: on k8s we treat soft_timeout as the "hard" timeout,
+        # at least until we'll have case with bigger data sets in it
+        timeout = timeout or soft_timeout or (node.pod_terminate_timeout * 60)
         self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members - 1)
-        self.k8s_cluster.kubectl(f"wait --timeout={node.pod_terminate_timeout}m --for=delete pod {node.name}",
+        self.k8s_cluster.kubectl(f"wait --timeout={timeout}s --for=delete pod {node.name}",
                                  namespace=self.namespace,
-                                 timeout=node.pod_terminate_timeout * 60 + 10)
+                                 timeout=timeout + 10)
         self.terminate_node(node, scylla_shards=scylla_shards)
         if current_members == 1:
             self._delete_k8s_rack(rack)

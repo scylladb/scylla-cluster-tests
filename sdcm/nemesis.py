@@ -50,6 +50,7 @@ from sdcm.cluster import (
     DB_LOG_PATTERN_RESHARDING_START,
     DB_LOG_PATTERN_RESHARDING_FINISH,
     MAX_TIME_WAIT_FOR_NEW_NODE_UP,
+    MAX_TIME_WAIT_FOR_DECOMMISSION,
     NodeSetupFailed,
     NodeSetupTimeout,
     NodeStayInClusterAfterDecommission,
@@ -1160,7 +1161,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes() and disruption_name is None:
             self.set_target_node(allow_only_last_node_in_rack=True)
         target_is_seed = self.target_node.is_seed
-        self.cluster.decommission(self.target_node)
+        self.cluster.decommission(self.target_node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
         new_node = None
         if add_node:
             # When adding node after decommission the node is declared as up only after it completed bootstrapping,
@@ -1369,7 +1370,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         node_terminate_method = getattr(node, node_terminate_method_name)
         node_terminate_method()
         self.log.info('Decommission %s', node)
-        self.cluster.decommission(node)
+        self.cluster.decommission(node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
         new_node = self.add_new_node(rack=node.rack)
         self.unset_current_running_nemesis(new_node)
 
@@ -3369,7 +3370,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @latency_calculator_decorator(legend="Decommission node: remove node from cluster")
     def decommission_node(self, node):
-        self.cluster.decommission(node)
+        self.cluster.decommission(node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
 
     def decommission_nodes(self, add_nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue,
                            dc_idx: Optional[int] = None):
@@ -3721,7 +3722,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
                 datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
                 self._write_read_data_to_multi_dc_keyspace(datacenters)
-            self.cluster.decommission(new_node)
+            self.cluster.decommission(new_node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
             node_added = False
             datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
             assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
@@ -3730,7 +3731,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with self.cluster.cql_connection_patient(node) as session:
                 session.execute('DROP KEYSPACE IF EXISTS keyspace_new_dc')
             if node_added:
-                self.cluster.decommission(new_node)
+                self.cluster.decommission(new_node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
 
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
