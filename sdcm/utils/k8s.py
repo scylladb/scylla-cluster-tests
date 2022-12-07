@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=too-many-arguments
+# pylint: disable=too-many-arguments,too-many-lines
 import abc
 import json
 import os
@@ -23,7 +23,7 @@ import threading
 import multiprocessing
 import contextlib
 from tempfile import NamedTemporaryFile
-from typing import Optional, Union, Callable, List
+from typing import Iterator, Optional, Union, Callable, List
 from functools import cached_property, partialmethod
 from pathlib import Path
 
@@ -31,6 +31,11 @@ import kubernetes as k8s
 import yaml
 from paramiko.config import invoke
 from urllib3.util.retry import Retry
+from urllib3.exceptions import (
+    IncompleteRead,
+    ProtocolError,
+    ReadTimeoutError,
+)
 
 from sdcm import sct_abs_path
 from sdcm.remote import LOCALRUNNER
@@ -629,6 +634,259 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
     def stop(self, timeout=None):
         self._termination_event.set()
         self.join(timeout)
+
+
+class ScyllaPodsIPChangeTrackerThread(threading.Thread):
+    """It tracks changes of Scylla pods IP addresses in whole K8S cluster and updates mapping.
+
+    When a new IP is detected ...
+    - the mapping gets updated
+    - 'info' log message gets created
+    - 'info' event gets created.
+    - the monitoring node related to a Scylla pod gets reconfigured.
+
+    'mapper_dict' has following structure:
+    {
+        'scylla': {
+            'sct-cluster-dc-1-kind-0': {
+                'current_ip': '10.0.0.4',
+                'old_ips': ['10.0.0.2', '10.0.0.3'],
+            },
+            ...
+        },
+        'scylla-manager': {
+            'scylla-manager-manager-dc-manager-rack-0': {
+                'current_ip': '10.0.2.2',
+                'old_ips': [],
+            },
+            ...
+        },
+        ...
+    }
+    """
+
+    SCYLLA_PODS_SELECTOR = "app.kubernetes.io/name=scylla"
+    SCYLLA_PODS_EXPECTED_LABEL_KEYS = ("scylla/datacenter", "scylla/rack")
+    READ_REQUEST_TIMEOUT = 10800  # 3h
+
+    def __init__(self, k8s_kluster, mapper_dict):
+        self._termination_event = threading.Event()
+        super().__init__(daemon=True, name=self.__class__.name)
+        self.k8s_kluster = k8s_kluster
+        self.mapper_dict = mapper_dict
+        self.watcher = None
+        self._k8s_core_v1_api = KubernetesOps.core_v1_api(self.k8s_kluster.get_api_client())
+
+    @retrying(n=3600, sleep_time=1, allowed_exceptions=(ConnectionError, ))
+    def _open_stream(self, cache={}) -> None:  # pylint: disable=dangerous-default-value
+        try:
+            now = time.time()
+            if cache.get("last_call_at", 0) + 5 > now:
+                # NOTE: sleep for some time if it is called too often
+                time.sleep(5)
+                now = time.time()
+            cache["last_call_at"] = now
+
+            self.watcher = self._k8s_core_v1_api.list_endpoints_for_all_namespaces(
+                label_selector=self.SCYLLA_PODS_SELECTOR,
+                watch=True,
+                async_req=False,
+                _request_timeout=self.READ_REQUEST_TIMEOUT,
+                _preload_content=False)
+        except k8s.client.rest.ApiException as exc:
+            LOGGER.warning("'_open_stream()': failed to open stream:\n%s", exc)
+            # NOTE: following is workaround for the error 401 which may happen due to
+            #       some config data corruption during the forced socket connection failure
+            self._k8s_core_v1_api = KubernetesOps.core_v1_api(self.k8s_kluster.get_api_client())
+            raise ConnectionError(str(exc)) from None
+
+    @retrying(n=3600, sleep_time=1,  allowed_exceptions=(
+        ProtocolError, IncompleteRead, ReadTimeoutError, TimeoutError, ValueError))
+    def _read_stream(self) -> Iterator[str]:
+        while not self._termination_event.wait(0.01):
+            if not self.watcher or self.watcher.closed:
+                self._open_stream()
+            line = self.watcher.readline()
+            yield line.decode("utf-8") if isinstance(line, bytes) else line
+
+    # NOTE: we want it to run and retry always.
+    #       If it crashes then whole test run will become a mess.
+    @retrying(n=987654, sleep_time=10, allowed_exceptions=(Exception, ))
+    def run(self) -> None:
+        while not self._termination_event.wait(0.01):
+            try:
+                for line in self._read_stream():
+                    self._process_line(line)
+            except Exception:  # pylint: disable=broad-except
+                if not self._termination_event.wait(0.01):
+                    raise
+                LOGGER.info("Scylla pods IP change tracker thread has been stopped")
+
+    def stop(self, timeout=None) -> None:
+        LOGGER.warning("Stopping Scylla pods IP change tracker thread")
+        self._termination_event.set()
+        if hasattr(self.watcher, 'close') and not self.watcher.closed:
+            self.watcher.close()
+        self.join(timeout)
+
+    def _process_line(self, line: str) -> None:  # pylint: disable=too-many-branches,inconsistent-return-statements
+        # NOTE: line is expected to have following structure:
+        # {"type": "ADDED",
+        #  "object": {
+        #      "kind": "Endpoints",
+        #      "apiVersion": "v1",
+        #      "metadata": {
+        #          "name":"sct-cluster-dc-1-kind-0",
+        #          "namespace": "scylla",
+        #          ...
+        #      },
+        #      "subsets": [{
+        #          "addresses": [
+        #              {"ip": "10.244.218.195", ... },
+        #              ...
+        #          ],
+        #          "ports": [...]
+        #      }]
+        #  }
+        # }
+        data = {}
+        try:
+            LOGGER.debug("Processing following line: %s", line)
+            data = yaml.safe_load(line) or {}
+            metadata = data.get('object', {}).get('metadata', {})
+            namespace = metadata.get('namespace')
+            if not namespace:
+                raise KeyError("Cannot find 'namespace' in the line: %s" % line)
+            if namespace not in self.mapper_dict:
+                self.mapper_dict[namespace] = {}
+            # NOTE: following condition allows to skip processing of all the
+            #       load-balancer/headless endpoints that do not refer to any Scylla pod.
+            labels = metadata.get('labels', {})
+            if not all((key in labels.keys() for key in self.SCYLLA_PODS_EXPECTED_LABEL_KEYS)):
+                return None
+
+            if name := metadata.get('name'):
+                if name not in self.mapper_dict[namespace]:
+                    self.mapper_dict[namespace][name] = {}
+                if 'current_ip' not in self.mapper_dict[namespace][name]:
+                    self.mapper_dict[namespace][name]['current_ip'] = None
+                if 'old_ips' not in self.mapper_dict[namespace][name]:
+                    self.mapper_dict[namespace][name]['old_ips'] = []
+            for subset in data.get('object', {}).get('subsets', []):
+                for address in subset.get('addresses', []):
+                    current_ip_address = address['ip']
+                    if current_ip_address == self.mapper_dict[namespace][name]['current_ip']:
+                        continue
+                    old_ip_candidate = self.mapper_dict[namespace][name]['current_ip']
+                    self.mapper_dict[namespace][name]['current_ip'] = current_ip_address
+                    if not old_ip_candidate:
+                        break
+                    self.mapper_dict[namespace][name]['old_ips'].append(old_ip_candidate)
+                    LOGGER.info(
+                        "'%s/%s' node has changed it's pod IP address from '%s' to '%s'. "
+                        "All old IPs: %s",
+                        namespace, name, old_ip_candidate, current_ip_address,
+                        ', '.join(self.mapper_dict[namespace][name]['old_ips']))
+                    self._call_callbacks(namespace, name)
+                    break
+                else:
+                    break
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.warning(
+                "Failed to parse following line: %s\nerr: %s", line, exc)
+
+    def _call_callbacks(self, namespace: str, pod_name: str) -> None:
+        # TODO: run callbacks in parallel on per-namespace basis and serially inside a
+        #       single namespace.
+
+        def process_callback(callback, namespace, pod_name=None, add_pod_name_as_kwarg=False):
+            suffix = f"(namespace={namespace}, pod_name={pod_name})"
+            func = callback[0]
+            args = callback[1]
+            kwargs = {} | callback[2]
+            if add_pod_name_as_kwarg:
+                kwargs['pod_name'] = pod_name
+            LOGGER.debug("Calling '%s' callback %s", func.__name__, suffix)
+            try:
+                func(*args, **kwargs)
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.warning("Callback call failed %s: %s", suffix, str(exc))
+
+        data = self.mapper_dict.get(namespace, {})
+        for dict_key in (pod_name, '__each__'):
+            callbacks = data.get(dict_key, {}).get('callbacks', [])
+            if dict_key == '__each__':
+                # NOTE: when 'add_pod_name_as_kwarg' is True it means
+                #       we run a pod-specific function
+                #       and it also means we should run it before namespace-specific ones.
+                callbacks = sorted(callbacks, key=lambda c: c[-1], reverse=True)
+            for callback in callbacks:
+                process_callback(
+                    callback=callback[:-1], namespace=namespace, pod_name=pod_name,
+                    add_pod_name_as_kwarg=callback[-1])
+
+    def register_callbacks(self, callbacks: Union[Callable, list[Callable]],
+                           namespace: str, pod_name: str = '__each__',
+                           add_pod_name_as_kwarg: bool = False) -> None:
+        """Register callbacks to be called after a Scylla pod IP change.
+
+        Callbacks may be of the following types:
+        - called after a specific Scylla pod IP change
+        - called after any Scylla pod IP change in a specific namespace
+        - called after any Scylla pod IP change in a specific namespace
+          getting 'pod_name=%pod_name%' kwarg.
+          Useful for the objects which will be created later in the future.
+
+        Examples of usages:
+
+        # Per-pod
+        - register_callbacks(func1,
+                             namespace=namespace, pod_name='pod-name-1')
+        - register_callbacks([[func2, args, kwargs]],
+                             namespace=namespace, pod_name='pod-name-2')
+        - register_callbacks([func3, [func3, args2, kwargs2]],
+                             namespace=namespace, pod_name='pod-name-3')
+
+        # Per-pod but with automatic addition of a pod name as a kwarg where the key is 'pod_name'
+        - register_callbacks(func,
+                             namespace=namespace,
+                             add_pod_name_as_kwarg=True)
+
+        # Per-namespace
+        - register_callbacks([[func, args, kwargs], [func2, args, kwargs]],
+                             namespace=namespace)
+
+        Per-pod callbacks get run first, then per-namespace ones.
+        """
+        if not callbacks:
+            LOGGER.warning(
+                "No callbacks are provided. Nothing to register. "
+                "namespace='%s', pod_name='%s'",
+                namespace, pod_name)
+            return
+        elif callable(callbacks):
+            callbacks = [callbacks]
+
+        if namespace not in self.mapper_dict:
+            self.mapper_dict[namespace] = {}
+        if not pod_name:
+            pod_name = '__each__'
+        if pod_name not in self.mapper_dict[namespace]:
+            self.mapper_dict[namespace][pod_name] = {'callbacks': []}
+
+        for callback in callbacks:
+            if callable(callback):
+                callback = [callback, [], {}]
+            if (isinstance(callback, (tuple, list))
+                    and len(callback) == 3
+                    and callable(callback[0])
+                    and isinstance(callback[1], (tuple, list))
+                    and isinstance(callback[2], dict)):
+                self.mapper_dict[namespace][pod_name]['callbacks'].append(
+                    (callback[0], callback[1], callback[2], add_pod_name_as_kwarg))
+            else:
+                LOGGER.warning(
+                    "Unexpected type (%s) of the callback: %s. Skipping", type(callback), callback)
 
 
 def convert_cpu_units_to_k8s_value(cpu: Union[float, int]) -> str:

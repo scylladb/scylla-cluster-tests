@@ -1503,6 +1503,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     add_nodes=False,
                     monitor_id=self.test_config.test_id() + (f"-{i + 1}" if i else ""),
                 ))
+                # NOTE: add callback for the monitroing reconfiguration when
+                #       Scylla pods of the appropriate Scylla cluster get new IP addresses
+                self.k8s_cluster.scylla_pods_ip_change_tracker_thread.register_callbacks(
+                    callbacks=self.monitors_multitenant[i].reconfigure_scylla_monitoring,
+                    namespace=self.db_clusters_multitenant[i].namespace)
             self.monitors = self.monitors_multitenant[0]
             self._add_and_wait_for_cluster_nodes_in_parallel(self.monitors_multitenant)
         else:
@@ -1657,6 +1662,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     add_nodes=False,
                     monitor_id=self.test_config.test_id() + (f"-{i + 1}" if i else ""),
                     **common_params))
+                # NOTE: add callback for the monitroing reconfiguration when
+                #       Scylla pods of the appropriate Scylla cluster get new IP addresses
+                self.k8s_cluster.scylla_pods_ip_change_tracker_thread.register_callbacks(
+                    callbacks=self.monitors_multitenant[i].reconfigure_scylla_monitoring,
+                    namespace=self.db_clusters_multitenant[i].namespace)
             self.monitors = self.monitors_multitenant[0]
             self._add_and_wait_for_cluster_nodes_in_parallel(self.monitors_multitenant)
         else:
