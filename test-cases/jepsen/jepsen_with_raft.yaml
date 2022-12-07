@@ -1,0 +1,25 @@
+test_duration: 720
+cluster_backend: 'gce'
+gce_image_username: 'sct'
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-10'
+gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-10'
+gce_instance_type_db: 'n1-standard-4'
+gce_instance_type_loader: 'n1-highmem-8'
+gce_root_disk_type_db: 'pd-ssd'
+root_disk_size_db: 50
+gce_n_local_ssd_disk_db: 1
+n_db_nodes: 5
+n_loaders: 1
+n_monitor_nodes: 1
+nemesis_class_name: 'NoOpMonkey'
+scylla_linux_distro: 'debian-buster'
+user_prefix: 'jepsen'
+use_legacy_cluster_init: true
+jepsen_scylla_repo: 'https://github.com/scylladb/jepsen.git'
+jepsen_test_count: 5
+jepsen_test_run_policy: any
+bare_loaders: true
+
+append_scylla_yaml: |
+  experimental_features:
+    - raft
