@@ -384,7 +384,6 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
 
     def destroy(self):
         EksClusterCleanupMixin.destroy(self)
-        self.stop_token_update_thread()
 
     def get_ec2_instance_by_id(self, instance_id):
         return boto3.resource('ec2', region_name=self.region_name).Instance(id=instance_id)

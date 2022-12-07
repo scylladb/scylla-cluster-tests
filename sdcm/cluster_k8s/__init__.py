@@ -1354,22 +1354,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                                 f"cp {res}:{src_path} {dst_path} -c {container_name}",
                                 namespace=namespace, ignore_status=True)
 
-    @log_run_info
-    def stop_k8s_task_threads(self, timeout=10):
-        LOGGER.info("Stop k8s task threads")
-        if self._scylla_manager_journal_thread:
-            self._scylla_manager_journal_thread.stop(timeout)
-        if self._cert_manager_journal_thread:
-            self._cert_manager_journal_thread.stop(timeout)
-        if self._scylla_operator_log_monitor_thread:
-            self._scylla_operator_log_monitor_thread.stop()
-        if self._scylla_operator_journal_thread:
-            self._scylla_operator_journal_thread.stop(timeout)
-        if self._scylla_operator_scheduling_thread:
-            self._scylla_operator_scheduling_thread.stop(timeout)
-        for thread in self._scylla_cluster_events_threads.values():
-            thread.stop(timeout)
-
     @property
     def minio_pod(self) -> Resource:
         for pod in KubernetesOps.list_pods(self, namespace=MINIO_NAMESPACE):
@@ -1501,10 +1485,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         # Wait till GcloudTokenUpdateThread get tokens and dump them to gcloud_token_path
         wait_for(os.path.exists, timeout=30, step=5, text="Wait for gcloud token", throw_exc=True,
                  path=self.kubectl_token_path)
-
-    def stop_token_update_thread(self):
-        if self._token_update_thread and self._token_update_thread.is_alive():
-            self._token_update_thread.stop()
 
     def _add_pool(self, pool: CloudK8sNodePool) -> None:
         if pool.name not in self.pools:
