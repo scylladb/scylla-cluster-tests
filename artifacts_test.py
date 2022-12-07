@@ -231,22 +231,6 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             expected_write_back_cache_param = None
         self.assertEqual(self.write_back_cache, expected_write_back_cache_param)
 
-    def verify_docker_locale_settings(self) -> None:
-        run = self.node.remoter.run
-        expected_locale_settings = {
-            "LC_ALL": "en_US.UTF-8",
-            "LANG": "en_US.UTF-8",
-            "LANGUAGE": "en_US:en",
-        }
-
-        locale_settings_raw = run("locale").stdout.split(sep="\n")
-        locale_settings = [setting.split(sep="=") for setting in locale_settings_raw if setting]
-        locale_settings = {setting[0]: setting[1].strip("\"") for setting in locale_settings if len(setting) == 2}
-
-        for setting_key, expected_value in expected_locale_settings.items():
-            configured_value = locale_settings.get(setting_key)
-            self.assertEqual(configured_value, expected_value)
-
     def verify_docker_latest_match_release(self) -> None:
         for product in typing.get_args(ScyllaProduct):
             latest_version = get_latest_scylla_release(product=product)
@@ -336,10 +320,6 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         if not self.node.is_nonroot_install:
             with self.subTest("check cqlsh installation"):
                 self.check_cqlsh()
-
-        if backend == "docker":
-            with self.subTest("check locale settings in the docker image"):
-                self.verify_docker_locale_settings()
 
         # We don't install any time sync service in docker, so the test is unnecessary:
         # https://github.com/scylladb/scylla/tree/master/dist/docker/etc/supervisord.conf.d
