@@ -220,6 +220,12 @@ class SctEvent:
         if self.severity.value < 3:
             return
 
+        # Issue https://github.com/scylladb/scylla-cluster-tests/issues/5544
+        # Print out event content for understanding which event does not initialize self.subcontext
+        if self.subcontext is None:
+            self.subcontext = []
+            LOGGER.error("'self.subcontext' was not initialized. Event: %s", self)
+
         # Add nemesis info if event happened during nemesis
         if self.base != "DisruptionEvent":
             running_disruption_events = ContinuousEventsRegistry().find_running_disruption_events()
