@@ -1315,6 +1315,7 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
         ('repair-based-operation', "SCT RBO Tests"),
         ('scale', 'SCT Scale Tests'),
         ('operator', 'SCT Operator Tests'),
+        ('raft', 'SCT Raft Experimental'),
     ]:
         server.create_directory(name=group_name, display_name=group_desc)
 
@@ -1328,6 +1329,9 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
                 server.create_pipeline_job(jenkins_file, group_name)
         if group_name == 'operator':
             for jenkins_file in glob.glob(f'{base_path}/operator/functional/*aws*.jenkinsfile'):
+                server.create_pipeline_job(jenkins_file, group_name)
+        if group_name == 'raft':
+            for jenkins_file in glob.glob(f'{base_path}/raft/*'):
                 server.create_pipeline_job(jenkins_file, group_name)
 
     server.create_directory(
