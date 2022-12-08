@@ -603,11 +603,16 @@ class KubernetesPodRunner(KubernetesCmdRunner):
             for i, _ in enumerate(obj['spec']['containers']):
                 if 'volumeMounts' not in obj['spec']['containers'][i]:
                     obj['spec']['containers'][i]['volumeMounts'] = []
-                obj['spec']['containers'][i]['volumeMounts'].append({
-                    'name': cm_name,
-                    'mountPath': dst,
-                    'subPath': filename,
-                })
+                mount_list = obj['spec']['containers'][i]['volumeMounts']
+                existing_mount = [mount for mount in mount_list if mount['mountPath'] == dst]
+                if existing_mount:
+                    existing_mount[0]['name'] = cm_name
+                else:
+                    mount_list.append({
+                        'name': cm_name,
+                        'mountPath': dst,
+                        'subPath': filename,
+                    })
 
         # Add new modifier function to the list of pod template's modifiers
         self.template_modifiers.append(add_file_mount)
