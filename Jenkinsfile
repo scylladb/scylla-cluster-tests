@@ -24,6 +24,11 @@ def createRunConfiguration(String backend) {
     } else if (backend == 'docker') {
         configuration.test_config = "test-cases/PR-provision-test-docker.yaml"
     } else if (backend == 'k8s-local-kind-aws') {
+        if (params.scylla_version.endsWith('latest')) {
+            configuration.scylla_version = 'latest'
+            configuration.k8s_scylla_operator_helm_repo = 'https://storage.googleapis.com/scylla-operator-charts/latest'
+            configuration.k8s_scylla_operator_chart_version = 'latest'
+        }
         configuration.test_config = "test-cases/scylla-operator/functional.yaml"
         configuration.test_name = "functional_tests/scylla_operator"
         configuration.functional_tests = true
