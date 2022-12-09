@@ -504,6 +504,8 @@ class KubernetesPodRunner(KubernetesCmdRunner):
             self=self, hostname=f"pod/{pod_name_template}")
         self._pod_counter = -1
         self._connections = []
+        self._mounted_files_mapping = {}
+        self._mounted_files_lock = threading.Lock()
 
     def stop(self):
         for connection in self._connections:
@@ -569,45 +571,61 @@ class KubernetesPodRunner(KubernetesCmdRunner):
                 dst='/tmp/c-s_lwt_basic.yaml',
             )
         """
-        # Generate name for the configMap
-        cm_name = f"cm--{self.pod_name_template}--{generate_random_string(5).lower()}"
-        filename = dst.split('/')[-1]
+        with self._mounted_files_lock:
+            # Check whether the 'src' file is already mounted to the 'dst' or not
+            if existing_src := self._mounted_files_mapping.get(dst):
+                if existing_src == src:
+                    # Duplicated attempt to add the same file at the same dst path, so, just return
+                    return None
+                # Different src file, but the same 'dst' means we do something really wrong
+                raise ValueError(
+                    "Cannot mount '%s' src file to the '%s' dst. "
+                    "It is already used by another src file -> '%s'." % (src, dst, existing_src))
 
-        # Create configMap from the 'src' file
-        self.kluster.kubectl(
-            f"create configmap {cm_name} --from-file={src}",
-            namespace=self.namespace)
+            # Generate name for the configMap
+            cm_name = f"cm--{self.pod_name_template}--{generate_random_string(5).lower()}"
+            filename = dst.split('/')[-1]
 
-        # Create modifier function for the pod template
-        #
-        # kind: Pod
-        # spec:
-        #   containers:
-        #     - volumeMounts:
-        #       - name: {cm_name}
-        #         mountPath: {dst}
-        #         subPath: {filename}
-        #   volumes:
-        #     - name: {cm_name}
-        #       configMap:
-        #         name: {cm_name}
-        def add_file_mount(obj):
-            if obj['kind'] != 'Pod':
-                return
-            if 'volumes' not in obj['spec']:
-                obj['spec']['volumes'] = []
-            obj['spec']['volumes'].append({
-                'name': cm_name,
-                'configMap': {'name': cm_name},
-            })
-            for i, _ in enumerate(obj['spec']['containers']):
-                if 'volumeMounts' not in obj['spec']['containers'][i]:
-                    obj['spec']['containers'][i]['volumeMounts'] = []
-                obj['spec']['containers'][i]['volumeMounts'].append({
+            # Create configMap from the 'src' file
+            self.kluster.kubectl(
+                f"create configmap {cm_name} --from-file={src}",
+                namespace=self.namespace)
+
+            # Create modifier function for the pod template
+            #
+            # kind: Pod
+            # spec:
+            #   containers:
+            #     - volumeMounts:
+            #       - name: {cm_name}
+            #         mountPath: {dst}
+            #         subPath: {filename}
+            #   volumes:
+            #     - name: {cm_name}
+            #       configMap:
+            #         name: {cm_name}
+            def add_file_mount(obj):
+                if obj['kind'] != 'Pod':
+                    return
+                if 'volumes' not in obj['spec']:
+                    obj['spec']['volumes'] = []
+                obj['spec']['volumes'].append({
                     'name': cm_name,
-                    'mountPath': dst,
-                    'subPath': filename,
+                    'configMap': {'name': cm_name},
                 })
+                for i, _ in enumerate(obj['spec']['containers']):
+                    if 'volumeMounts' not in obj['spec']['containers'][i]:
+                        obj['spec']['containers'][i]['volumeMounts'] = []
+                    obj['spec']['containers'][i]['volumeMounts'].append({
+                        'name': cm_name,
+                        'mountPath': dst,
+                        'subPath': filename,
+                    })
 
-        # Add new modifier function to the list of pod template's modifiers
-        self.template_modifiers.append(add_file_mount)
+            # Add new modifier function to the list of pod template's modifiers
+            self.template_modifiers.append(add_file_mount)
+
+            # Update the mount mapping
+            self._mounted_files_mapping[dst] = src
+
+            return None
