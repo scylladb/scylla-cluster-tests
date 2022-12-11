@@ -141,7 +141,7 @@ from typing import NamedTuple, Optional
 from sdcm.sct_events import Severity
 from sdcm.test_config import TestConfig
 
-from sdcm.utils.common import get_profile_content
+from sdcm.utils.user_profile import get_profile_content
 from sdcm.sct_events.health import DataValidatorEvent
 
 
