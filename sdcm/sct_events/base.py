@@ -302,6 +302,8 @@ class SctEvent:
         if subcontext := getattr(self, "subcontext"):
             attrs["subcontext"] = [self.attribute_with_value_for_json(attributes_list=event.subcontext_fields,
                                                                       event=event) for event in subcontext]
+        else:
+            attrs["subcontext"] = []
         return attrs
 
     def __str__(self):
