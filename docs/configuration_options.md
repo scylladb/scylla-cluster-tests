@@ -25,7 +25,7 @@
 | **<a href="#user-content-scylla_version" name="scylla_version">scylla_version</a>**  | Version of scylla to install, ex. '2.3.1'<br>Automatically lookup AMIs and repo links for formal versions.<br>WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla' | N/A | SCT_SCYLLA_VERSION
 | **<a href="#user-content-user_data_format_version" name="user_data_format_version">user_data_format_version</a>**  | Format version of the user-data to use for scylla images,<br>default to what tagged on the image used | N/A | SCT_USER_DATA_FORMAT_VERSION
 | **<a href="#user-content-oracle_user_data_format_version" name="oracle_user_data_format_version">oracle_user_data_format_version</a>**  | Format version of the user-data to use for scylla images,<br>default to what tagged on the image used | N/A | SCT_ORACLE_USER_DATA_FORMAT_VERSION
-| **<a href="#user-content-oracle_scylla_version" name="oracle_scylla_version">oracle_scylla_version</a>**  | Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'<br>Automatically lookup AMIs for formal versions.<br>WARNING: can't be used together with 'ami_id_db_oracle' | 4.4.7 | SCT_ORACLE_SCYLLA_VERSION
+| **<a href="#user-content-oracle_scylla_version" name="oracle_scylla_version">oracle_scylla_version</a>**  | Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'<br>Automatically lookup AMIs for formal versions.<br>WARNING: can't be used together with 'ami_id_db_oracle' | 4.6.9 | SCT_ORACLE_SCYLLA_VERSION
 | **<a href="#user-content-scylla_linux_distro" name="scylla_linux_distro">scylla_linux_distro</a>**  | The distro name and family name to use [centos/ubuntu-xenial/debian-jessie] | ubuntu-focal | SCT_SCYLLA_LINUX_DISTRO
 | **<a href="#user-content-scylla_linux_distro_loader" name="scylla_linux_distro_loader">scylla_linux_distro_loader</a>**  | The distro name and family name to use [centos/ubuntu-xenial/debian-jessie] | centos | SCT_SCYLLA_LINUX_DISTRO_LOADER
 | **<a href="#user-content-scylla_repo_m" name="scylla_repo_m">scylla_repo_m</a>**  | Url to the repo of scylla version to install scylla from for managment tests | N/A | SCT_SCYLLA_REPO_M
@@ -58,7 +58,7 @@
 | **<a href="#user-content-target_scylla_mgmt_server_address" name="target_scylla_mgmt_server_address">target_scylla_mgmt_server_address</a>**  | Url to the repo of scylla manager version used to upgrade the manager server | N/A | SCT_TARGET_SCYLLA_MGMT_SERVER_ADDRESS
 | **<a href="#user-content-target_scylla_mgmt_agent_address" name="target_scylla_mgmt_agent_address">target_scylla_mgmt_agent_address</a>**  | Url to the repo of scylla manager version used to upgrade the manager agents | N/A | SCT_TARGET_SCYLLA_MGMT_AGENT_ADDRESS
 | **<a href="#user-content-update_db_packages" name="update_db_packages">update_db_packages</a>**  | A local directory of rpms to install a custom version on top of<br>the scylla installed (or from repo or from ami) | N/A | SCT_UPDATE_DB_PACKAGES
-| **<a href="#user-content-monitor_branch" name="monitor_branch">monitor_branch</a>**  | The port of scylla management | branch-4.0 | SCT_MONITOR_BRANCH
+| **<a href="#user-content-monitor_branch" name="monitor_branch">monitor_branch</a>**  | The port of scylla management | branch-4.1 | SCT_MONITOR_BRANCH
 | **<a href="#user-content-db_type" name="db_type">db_type</a>**  | Db type to install into db nodes, scylla/cassandra | scylla | SCT_DB_TYPE
 | **<a href="#user-content-user_prefix" name="user_prefix">user_prefix</a>**  | the prefix of the name of the cloud instances, defaults to username | N/A | SCT_USER_PREFIX
 | **<a href="#user-content-ami_id_db_scylla_desc" name="ami_id_db_scylla_desc">ami_id_db_scylla_desc</a>**  | version name to report stats to Elasticsearch and tagged on cloud instances | N/A | SCT_AMI_ID_DB_SCYLLA_DESC
@@ -89,6 +89,7 @@
 | **<a href="#user-content-authenticator_password" name="authenticator_password">authenticator_password</a>**  | the password if PasswordAuthenticator is used | N/A | SCT_AUTHENTICATOR_PASSWORD
 | **<a href="#user-content-authorizer" name="authorizer">authorizer</a>**  | which authorizer scylla will use AllowAllAuthorizer/CassandraAuthorizer | N/A | SCT_AUTHORIZER
 | **<a href="#user-content-system_auth_rf" name="system_auth_rf">system_auth_rf</a>**  | Replication factor will be set to system_auth | 3 | SCT_SYSTEM_AUTH_RF
+| **<a href="#user-content-service_level_shares" name="service_level_shares">service_level_shares</a>**  | List if service level shares - how many server levels to create and test. Uses in SLA test.list of int, like: [100, 200] | [1000] | SCT_SERVICE_LEVEL_SHARES
 | **<a href="#user-content-alternator_port" name="alternator_port">alternator_port</a>**  | Port to configure for alternator in scylla.yaml | N/A | SCT_ALTERNATOR_PORT
 | **<a href="#user-content-dynamodb_primarykey_type" name="dynamodb_primarykey_type">dynamodb_primarykey_type</a>**  | Type of dynamodb table to create with range key or not, can be:<br>HASH,HASH_AND_RANGE | HASH | SCT_DYNAMODB_PRIMARYKEY_TYPE
 | **<a href="#user-content-alternator_write_isolation" name="alternator_write_isolation">alternator_write_isolation</a>**  | Set the write isolation for the alternator table, see https://github.com/scylladb/scylla/blob/master/docs/alternator/alternator.md#write-isolation-policies for more details | N/A | SCT_ALTERNATOR_WRITE_ISOLATION
@@ -119,6 +120,7 @@
 | **<a href="#user-content-instance_type_monitor" name="instance_type_monitor">instance_type_monitor</a>**  | AWS image type of the monitor node | N/A | SCT_INSTANCE_TYPE_MONITOR
 | **<a href="#user-content-instance_type_db" name="instance_type_db">instance_type_db</a>**  | AWS image type of the db node | N/A | SCT_INSTANCE_TYPE_DB
 | **<a href="#user-content-instance_type_db_oracle" name="instance_type_db_oracle">instance_type_db_oracle</a>**  | AWS image type of the oracle node | N/A | SCT_INSTANCE_TYPE_DB_ORACLE
+| **<a href="#user-content-instance_type_runner" name="instance_type_runner">instance_type_runner</a>**  | instance type of the sct-runner node | N/A | SCT_INSTANCE_TYPE_RUNNER
 | **<a href="#user-content-region_name" name="region_name">region_name</a>**  | AWS regions to use | N/A | SCT_REGION_NAME
 | **<a href="#user-content-security_group_ids" name="security_group_ids">security_group_ids</a>**  | AWS security groups ids to use | N/A | SCT_SECURITY_GROUP_IDS
 | **<a href="#user-content-subnet_id" name="subnet_id">subnet_id</a>**  | AWS subnet ids to use | N/A | SCT_SUBNET_ID
@@ -130,6 +132,7 @@
 | **<a href="#user-content-root_disk_size_db" name="root_disk_size_db">root_disk_size_db</a>**  |  | N/A | SCT_ROOT_DISK_SIZE_DB
 | **<a href="#user-content-root_disk_size_monitor" name="root_disk_size_monitor">root_disk_size_monitor</a>**  |  | N/A | SCT_ROOT_DISK_SIZE_MONITOR
 | **<a href="#user-content-root_disk_size_loader" name="root_disk_size_loader">root_disk_size_loader</a>**  |  | N/A | SCT_ROOT_DISK_SIZE_LOADER
+| **<a href="#user-content-root_disk_size_runner" name="root_disk_size_runner">root_disk_size_runner</a>**  | root disk size in Gb for sct-runner | N/A | SCT_ROOT_DISK_SIZE_RUNNER
 | **<a href="#user-content-ami_db_scylla_user" name="ami_db_scylla_user">ami_db_scylla_user</a>**  |  | N/A | SCT_AMI_DB_SCYLLA_USER
 | **<a href="#user-content-ami_monitor_user" name="ami_monitor_user">ami_monitor_user</a>**  |  | N/A | SCT_AMI_MONITOR_USER
 | **<a href="#user-content-ami_loader_user" name="ami_loader_user">ami_loader_user</a>**  |  | N/A | SCT_AMI_LOADER_USER
@@ -141,7 +144,7 @@
 | **<a href="#user-content-backup_bucket_location" name="backup_bucket_location">backup_bucket_location</a>**  | the bucket name to be used for backup (e.g., 'manager-backup-tests') | N/A | SCT_BACKUP_BUCKET_LOCATION
 | **<a href="#user-content-backup_bucket_region" name="backup_bucket_region">backup_bucket_region</a>**  | the AWS region of a bucket to be used for backup (e.g., 'eu-west-1') | N/A | SCT_BACKUP_BUCKET_REGION
 | **<a href="#user-content-tag_ami_with_result" name="tag_ami_with_result">tag_ami_with_result</a>**  | If True, would tag the ami with the test final result | N/A | SCT_TAG_AMI_WITH_RESULT
-| **<a href="#user-content-aws_use_prepared_loaders" name="aws_use_prepared_loaders">aws_use_prepared_loaders</a>**  | If True, we use prepared VMs for loader (instead of using docker images) | N/A | SCT_AWS_USE_PREPARED_LOADERS
+| **<a href="#user-content-use_prepared_loaders" name="use_prepared_loaders">use_prepared_loaders</a>**  | If True, we use prepared VMs for loader (instead of using docker images) | N/A | SCT_USE_PREPARED_LOADERS
 | **<a href="#user-content-gce_project" name="gce_project">gce_project</a>**  | gcp project name to use | N/A | SCT_GCE_PROJECT
 | **<a href="#user-content-gce_datacenter" name="gce_datacenter">gce_datacenter</a>**  | Supported: us-east1 - means that the zone will be selected automatically or you can mention the zone explicitly, for example: us-east1-b | N/A | SCT_GCE_DATACENTER
 | **<a href="#user-content-gce_network" name="gce_network">gce_network</a>**  |  | N/A | SCT_GCE_NETWORK
@@ -323,5 +326,13 @@
 | **<a href="#user-content-nemesis_multiply_factor" name="nemesis_multiply_factor">nemesis_multiply_factor</a>**  | Multiply the list of nemesis to execute by the specified factor | 6 | SCT_NEMESIS_MULTIPLY_FACTOR
 | **<a href="#user-content-raid_level" name="raid_level">raid_level</a>**  | Number of of raid level: 0 - RAID0, 5 - RAID5 | N/A | SCT_RAID_LEVEL
 | **<a href="#user-content-bare_loaders" name="bare_loaders">bare_loaders</a>**  | Don't install anything but collectd to the loaders during cluster setup | N/A | SCT_BARE_LOADERS
-| **<a href="#user-content-stress_image" name="stress_image">stress_image</a>**  | Dict of the images to use for the stress tools | {'ndbench': 'scylladb/hydra-loaders:ndbench-jdk8-20210720', 'ycsb': 'scylladb/hydra-loaders:ycsb-jdk8-20211104', 'nosqlbench': 'scylladb/hydra-loaders:nosqlbench-4.15.49', 'cassandra-stress': '', 'scylla-bench': 'scylladb/hydra-loaders:scylla-bench-v0.1.8', 'gemini': 'scylladb/hydra-loaders:gemini-1.7.6', 'alternator-dns': 'scylladb/hydra-loaders:alternator-dns-0.1', 'cdc-stresser': 'scylladb/hydra-loaders:cdc-stresser-20210630', 'kcl': 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'} | SCT_STRESS_IMAGE
+| **<a href="#user-content-stress_image" name="stress_image">stress_image</a>**  | Dict of the images to use for the stress tools | {'ndbench': 'scylladb/hydra-loaders:ndbench-jdk8-20210720', 'ycsb': 'scylladb/hydra-loaders:ycsb-jdk8-20220918', 'nosqlbench': 'scylladb/hydra-loaders:nosqlbench-4.15.49', 'cassandra-stress': '', 'scylla-bench': 'scylladb/hydra-loaders:scylla-bench-v0.1.14', 'gemini': 'scylladb/hydra-loaders:gemini-1.7.7', 'alternator-dns': 'scylladb/hydra-loaders:alternator-dns-0.1', 'cdc-stresser': 'scylladb/hydra-loaders:cdc-stresser-20210630', 'kcl': 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC', 'harry': 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816'} | SCT_STRESS_IMAGE
 | **<a href="#user-content-enable_argus" name="enable_argus">enable_argus</a>**  | Control reporting to argus | True | SCT_ENABLE_ARGUS
+| **<a href="#user-content-cs_populating_distribution" name="cs_populating_distribution">cs_populating_distribution</a>**  | set c-s parameter '-pop' with gauss/uniform distribution for<br>performance gradual throughtput grow tests | N/A | SCT_CS_POPULATING_DISTRIBUTION
+| **<a href="#user-content-num_loaders_step" name="num_loaders_step">num_loaders_step</a>**  | Number of loaders which should be added per step | N/A | SCT_NUM_LOADERS_STEP
+| **<a href="#user-content-stress_threads_start_num" name="stress_threads_start_num">stress_threads_start_num</a>**  | Number of threads for c-s command | N/A | SCT_STRESS_THREADS_START_NUM
+| **<a href="#user-content-num_threads_step" name="num_threads_step">num_threads_step</a>**  | Number of threads which should be added on per step | N/A | SCT_NUM_THREADS_STEP
+| **<a href="#user-content-stress_step_duration" name="stress_step_duration">stress_step_duration</a>**  | Duration of time for stress round | N/A | SCT_STRESS_STEP_DURATION
+| **<a href="#user-content-max_deviation" name="max_deviation">max_deviation</a>**  | Max relative difference between best and current throughput,<br>if current throughput larger then best on max_rel_diff, it become new best one | N/A | SCT_MAX_DEVIATION
+| **<a href="#user-content-n_stress_process" name="n_stress_process">n_stress_process</a>**  | Number of stress processes per loader | N/A | SCT_N_STRESS_PROCESS
+| **<a href="#user-content-stress_process_step" name="stress_process_step">stress_process_step</a>**  | add/remove num of process on each round | N/A | SCT_STRESS_PROCESS_STEP
