@@ -22,6 +22,8 @@ pytestmark = [
 
 
 def test_01_cassandra_stress(request, docker_scylla, params):
+    params['cs_debug'] = True
+
     loader_set = LocalLoaderSetDummy()
 
     cmd = (

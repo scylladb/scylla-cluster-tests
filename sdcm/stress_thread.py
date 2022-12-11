@@ -188,7 +188,9 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                                                                           f' --entrypoint /bin/bash')
 
         stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx)
-
+        if self.params.get('cs_debug'):
+            cmd_runner.send_files(get_data_dir_path('logback-tools-debug.xml'),
+                                  '/etc/scylla/cassandra/logback-tools.xml', delete_dst=True)
         if self.profile:
             with open(self.profile, encoding="utf-8") as profile_file:
                 LOGGER.info('Profile content:\n%s', profile_file.read())

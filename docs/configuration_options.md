@@ -249,6 +249,7 @@
 | **<a href="#user-content-stress_cmd_no_mv_profile" name="stress_cmd_no_mv_profile">stress_cmd_no_mv_profile</a>**  |  | N/A | SCT_STRESS_CMD_NO_MV_PROFILE
 | **<a href="#user-content-cs_user_profiles" name="cs_user_profiles">cs_user_profiles</a>**  |  | N/A | SCT_CS_USER_PROFILES
 | **<a href="#user-content-cs_duration" name="cs_duration">cs_duration</a>**  |  | 50m | SCT_CS_DURATION
+| **<a href="#user-content-cs_debug" name="cs_debug">cs_debug</a>**  | enable debug for cassandra-stress | N/A | SCT_CS_DEBUG
 | **<a href="#user-content-stress_cmd_mv" name="stress_cmd_mv">stress_cmd_mv</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CMD_MV
 | **<a href="#user-content-prepare_stress_cmd" name="prepare_stress_cmd">prepare_stress_cmd</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_PREPARE_STRESS_CMD
 | **<a href="#user-content-skip_download" name="skip_download">skip_download</a>**  |  | N/A | SCT_SKIP_DOWNLOAD
