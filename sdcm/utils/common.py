@@ -63,7 +63,6 @@ import libcloud.storage.types
 from libcloud.compute.base import Node as GCENode, NodeImage as GCEImage
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
-import yaml
 from packaging.version import Version
 from prettytable import PrettyTable
 
@@ -122,24 +121,28 @@ def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent
     assert _remote_get_hash(remoter, dst) == hash_expected
 
 
-def get_profile_content(stress_cmd):
-    """
-    Looking profile yaml in data_dir or the path as is to get the user profile
-    and loading it's yaml
+def get_first_view_with_name_like(view_name_substr: str, session) -> tuple:
+    query = f"select keyspace_name, view_name, base_table_name from system_schema.views " \
+            f"where view_name like '%_{view_name_substr}' ALLOW FILTERING"
+    LOGGER.debug("Run query: %s", query)
+    result = session.execute(query)
+    if not result:
+        return None, None, None
 
-    :return: (profile_filename, dict with yaml)
-    """
+    return result.one().keyspace_name, result.one().view_name, result.one().base_table_name
 
-    cs_profile = re.search(r'profile=(.*\.yaml)', stress_cmd).group(1)
-    sct_cs_profile = os.path.join(os.path.dirname(__file__), '../../', 'data_dir', os.path.basename(cs_profile))
-    if os.path.exists(sct_cs_profile):
-        cs_profile = sct_cs_profile
-    elif not os.path.exists(cs_profile):
-        raise FileNotFoundError('User profile file {} not found'.format(cs_profile))
 
-    with open(cs_profile, encoding="utf-8") as yaml_stream:
-        profile = yaml.safe_load(yaml_stream)
-    return cs_profile, profile
+def get_entity_columns(keyspace_name: str, entity_name: str, session) -> list:
+    query = f"select column_name, kind, type from system_schema.columns where keyspace_name = '{keyspace_name}' " \
+            f"and table_name='{entity_name}'"
+    LOGGER.debug("Run query: %s", query)
+    result = session.execute(query)
+    view_details = []
+
+    for row in result:
+        view_details.append({"column_name": row.column_name, "kind": row.kind, "type": row.type})
+
+    return view_details
 
 
 def generate_random_string(length):
@@ -2960,3 +2963,47 @@ duration_pattern = re.compile(r'(?P<hours>[\d]*)h|(?P<minutes>[\d]*)m|(?P<second
 def time_period_str_to_seconds(time_str: str) -> int:
     """Transforms duration string into seconds int. e.g. 1h -> 3600, 1h22m->4920 or 10m->600"""
     return sum([int(g[0] or 0) * 3600 + int(g[1] or 0) * 60 + int(g[2] or 0) for g in duration_pattern.findall(time_str)])
+
+
+def get_keyspace_partition_ranges(node, keyspace: str):
+    result = node.run_nodetool("describering", keyspace)
+    if not result.stdout:
+        return None
+
+    ranges_as_list = re.findall(r'^\s*TokenRange\((.*)\)\s*$', result.stdout, re.MULTILINE)
+    if not ranges_as_list:
+        raise ValueError(f"No TokenRange() found in describering: {result.stdout}")
+
+    return [describering_parsing(one_range) for one_range in ranges_as_list]
+
+
+def keyspace_min_max_tokens(node, keyspace: str):
+    ranges = get_keyspace_partition_ranges(node, keyspace)
+    if not ranges:
+        return None, None
+
+    min_token = min([token['start_token'] for token in ranges])
+    max_token = max([token['end_token'] for token in ranges])
+    return min_token, max_token
+
+
+def describering_parsing(describering_output):
+    def _list2dic(attr_list, heads_to_dict):
+        res = {}
+        for ind, attr in enumerate(heads_to_dict):
+            res[attr] = attr_list[ind].strip()
+        return res
+
+    found_attributes = re.findall(r'^\s*start_token:(-?\d+), end_token:(-?\d+), endpoints:\[([\d\., ]+)\], '
+                                  r'rpc_endpoints:\[([\d\., ]+)\], endpoint_details:\[(.*)\]\s*$',
+                                  describering_output, re.MULTILINE)
+    heads = ['start_token', 'end_token', 'endpoints', 'rpc_endpoints']
+    result = {}
+    assert found_attributes, "Wrong format of token range: " + describering_output
+    for index, attribute in enumerate(heads):
+        attr_value = found_attributes[0][index].strip()
+        result[attribute] = int(attr_value) if "token" in attribute else attr_value
+        result["details"] = [_list2dic(attr_list, ['host', 'datacenter', 'rack']) for attr_list in
+                             re.findall(r'EndpointDetails\(host:([\d\.,]+), datacenter:([^,]+), rack:([^\)]+)\),?',
+                                        found_attributes[0][4])]
+    return result

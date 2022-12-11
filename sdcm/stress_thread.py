@@ -26,7 +26,8 @@ from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.cluster import BaseLoaderSet  # , BaseNode
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
-from sdcm.utils.common import FileFollowerThread, get_profile_content, get_data_dir_path, time_period_str_to_seconds
+from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds
+from sdcm.utils.user_profile import get_profile_content
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
 from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
 from sdcm.utils.docker_remote import RemoteDocker

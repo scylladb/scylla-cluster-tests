@@ -35,6 +35,7 @@ from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import InstanceStatusEvent
+from sdcm.utils.common import get_keyspace_partition_ranges, keyspace_min_max_tokens
 from sdcm.utils.distro import Distro
 
 from unit_tests.dummy_remote import DummyRemote
@@ -636,3 +637,29 @@ def test_get_any_ks_cf_list(docker_scylla, params):
 
     table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=True, filter_out_mv=True)
     assert set(table_names) == {'mview.users'}
+
+
+class TestNodetool(unittest.TestCase):
+    def test_describering_parsing(self):  # pylint: disable=no-self-use
+        """ Test "nodetool describering" output parsing """
+        resp = "\n".join(["Schema Version:00703362-03ed-3b41-afcb-ed34c1d1586c TokenRange:",
+                          "TokenRange(start_token:-9193109213506951143, end_token:9202125676696964746, "
+                          "endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], "
+                          "endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])",
+                          "TokenRange(start_token:9154793403047166459, end_token:9156354786201613199, "
+                          "endpoints:[127.0.49.3], rpc_endpoints:[127.0.49.3], "
+                          "endpoint_details:[EndpointDetails(host:127.0.49.3, datacenter:datacenter1, rack:rack1)])",
+                          ]
+                         )
+        node = NodetoolDummyNode(resp=resp)
+        ranges = get_keyspace_partition_ranges(node=node, keyspace="")
+        assert ranges == [{'start_token': -9193109213506951143,
+                           'details': [{'host': '127.0.49.3', 'datacenter': 'datacenter1', 'rack': 'rack1'}],
+                           'end_token': 9202125676696964746, 'endpoints': '127.0.49.3', 'rpc_endpoints': '127.0.49.3'},
+                          {'start_token': 9154793403047166459,
+                           'details': [{'host': '127.0.49.3', 'datacenter': 'datacenter1', 'rack': 'rack1'}],
+                           'end_token': 9156354786201613199, 'endpoints': '127.0.49.3', 'rpc_endpoints': '127.0.49.3'}]
+
+        min_token, max_token = keyspace_min_max_tokens(node=node, keyspace="")
+        assert min_token == -9193109213506951143
+        assert max_token == 9202125676696964746
