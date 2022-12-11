@@ -588,7 +588,7 @@ class KubernetesPodRunner(KubernetesCmdRunner):
 
             # Create configMap from the 'src' file
             self.kluster.kubectl(
-                f"create configmap {cm_name} --from-file={src}",
+                f"create configmap {cm_name} --from-file={filename}={src}",
                 namespace=self.namespace)
 
             # Create modifier function for the pod template
