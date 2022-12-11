@@ -171,7 +171,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 cmd_runner_name = loader.remoter.pod_name
             else:
                 cmd_runner_name = loader.ip_address
-        elif self.params.get("cluster_backend") == "aws" and self.params.get("aws_use_prepared_loaders"):
+        elif self.params.get("use_prepared_loaders"):
             cmd_runner = loader.remoter
             cmd_runner_name = loader.ip_address
         else:
