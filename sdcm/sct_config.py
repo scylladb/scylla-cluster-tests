@@ -1050,6 +1050,8 @@ class SCTConfiguration(dict):
              help=""),
         dict(name="cs_duration", env="SCT_CS_DURATION", type=str,
              help=""),
+        dict(name="cs_debug", env="SCT_CS_DEBUG", type=boolean,
+             help="enable debug for cassandra-stress"),
 
         dict(name="stress_cmd_mv", env="SCT_STRESS_CMD_MV", type=str_or_list,
              help="""cassandra-stress commands.
