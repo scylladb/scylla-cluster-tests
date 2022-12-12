@@ -104,6 +104,7 @@ class TestAddNewDc(LongevityTest):
         self.log.info("Verifying if querying new node with RF=0 returns no data and does not crash the node. #8354")
         with self.db_cluster.cql_connection_exclusive(new_node) as session:
             statement = SimpleStatement(
-                "select * from keyspace1.standard1 limit 1;", consistency_level=ConsistencyLevel.LOCAL_QUORUM)
+                "select * from keyspace1.standard1 limit 1;", consistency_level=ConsistencyLevel.LOCAL_QUORUM,
+                fetch_size=10)
             data = session.execute(statement).one()
             assert not data, f"no data should be returned when querying with CL=LOCAL_QUORUM and RF=0. {data}"
