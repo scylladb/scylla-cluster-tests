@@ -36,6 +36,7 @@ from threading import Lock
 from types import MethodType  # pylint: disable=no-name-in-module
 
 from cassandra import ConsistencyLevel
+from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.db.db_types import NemesisStatus, NemesisRunInfo, NodeDescription
@@ -1967,7 +1968,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # Get the max cl value in the partition.
                 cmd = f"select ck from {ks_cf} where pk={partition_key} order by ck desc limit 1"
                 try:
-                    result = session.execute(cmd, timeout=300)
+                    result = session.execute(SimpleStatement(cmd, fetch_size=1), timeout=300)
                 except Exception as exc:  # pylint: disable=broad-except
                     self.log.error(str(exc))
                     continue
