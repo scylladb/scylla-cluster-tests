@@ -1254,18 +1254,22 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         self.sct_set = []
         self.pt_report_set = []
         self.cluster_log_collectors = {
-            SSTablesCollector: self.db_cluster,
             ScyllaLogCollector: self.db_cluster,
-            MonitorLogCollector: self.monitor_set,
-            SirenManagerLogCollector: self.siren_manager_set,
-            LoaderLogCollector: self.loader_set,
             SCTLogCollector: self.sct_set,
-            JepsenLogCollector: self.loader_set,
-            ParallelTimelinesReportCollector: self.pt_report_set
+            MonitorLogCollector: self.monitor_set,
+            LoaderLogCollector: self.loader_set,
         }
         if self.backend.startswith("k8s"):
-            self.cluster_log_collectors[KubernetesLogCollector] = self.kubernetes_set
-            self.cluster_log_collectors[KubernetesAPIServerLogCollector] = self.kubernetes_set
+            self.cluster_log_collectors |= {
+                KubernetesLogCollector: self.kubernetes_set,
+                KubernetesAPIServerLogCollector: self.kubernetes_set,
+            }
+        self.cluster_log_collectors |= {
+            SirenManagerLogCollector: self.siren_manager_set,
+            SSTablesCollector: self.db_cluster,
+            JepsenLogCollector: self.loader_set,
+            ParallelTimelinesReportCollector: self.pt_report_set,
+        }
 
     @property
     def test_id(self):
