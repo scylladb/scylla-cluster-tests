@@ -253,7 +253,9 @@ def call(Map pipelineParams) {
                                             echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_GCE_IMAGE_DB | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_AZURE_IMAGE_DB"
                                             exit 1
                                         fi
-
+                                        if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
+                                            export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                        fi
                                         export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                         export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
                                         export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
