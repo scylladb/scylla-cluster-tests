@@ -71,8 +71,9 @@ def check_nulls_in_peers(gossip_info, peers_details, current_node) -> HealthEven
 
         # By Asias request: https://github.com/scylladb/scylla/issues/6397#issuecomment-666893877
         LOGGER.debug("Print all columns from system.peers for peer %s", node)
-        current_node.run_cqlsh(f"select * from system.peers where peer = '{node.ip_address}'", split=True, verbose=True)
-
+        with current_node.parent_cluster.cql_connection_patient_exclusive(current_node) as session:
+            result = session.execute(f"select * from system.peers where peer = '{node.ip_address}'")
+            LOGGER.debug(result.one()._asdict())
         if node in gossip_info and gossip_info[node]['status'] not in current_node.GOSSIP_STATUSES_FILTER_OUT:
             yield ClusterHealthValidatorEvent.NodePeersNulls(
                 severity=Severity.ERROR,
@@ -167,7 +168,7 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
             )
             continue
 
-        if node_info['schema'] != peers_details[node]['schema_version']:
+        if node_info['schema'] != str(peers_details[node]['schema_version']):
             LOGGER.debug(debug_message)
             yield ClusterHealthValidatorEvent.NodeSchemaVersion(
                 severity=Severity.ERROR,
@@ -205,7 +206,7 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
         )
 
     # Validate that same schema on all nodes in the SYSTEM.PEERS
-    schema_version_on_all_nodes = [values['schema_version'] for node, values in peers_details.items()
+    schema_version_on_all_nodes = [str(values['schema_version']) for node, values in peers_details.items()
                                    if node in gossip_info and gossip_info[node]['status'] not in
                                    current_node.GOSSIP_STATUSES_FILTER_OUT]
 
@@ -252,7 +253,7 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
         for current_node, data in gossip_info.items():
             if not (data['status'] == "NORMAL" and current_node in peers_info):
                 continue
-            if data["schema"] != peers_info[current_node]['schema_version']:
+            if data["schema"] != str(peers_info[current_node]['schema_version']):
                 current_err = (f"{message_pref} Schema version is not same in "
                                f"the gossip and peers for {current_node}")
                 LOGGER.warning(current_err)
