@@ -13,6 +13,8 @@
 
 
 import unittest
+from unittest.mock import MagicMock
+from uuid import UUID
 
 from sdcm.sct_events import Severity
 from sdcm.utils.health_checker import (
@@ -31,6 +33,7 @@ class Node:
         self.ip_address = ip_address
         self.name = name
         self.running_nemesis = None
+        self.parent_cluster = MagicMock()
 
     @staticmethod
     def print_node_running_nemesis(_):
@@ -93,19 +96,19 @@ NODES_STATUS = {
 PEERS_INFO = {
     node2: {
         'data_center': 'datacenter1',
-        'host_id': 'b231fe54-8093-4d5c-9a35-b5e34dc81500',
+        'host_id': UUID('b231fe54-8093-4d5c-9a35-b5e34dc81500'),
         'rack': 'rack1',
         'release_version': '3.0.8',
         'rpc_address': '127.0.0.2',
-        'schema_version': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
+        'schema_version': UUID('cbe15453-33f3-3387-aaf1-4120548f41e8'),
     },
     node3: {
         'data_center': 'datacenter1',
-        'host_id': 'e11cb4ea-a129-48aa-a9e9-7815dcd2828c',
+        'host_id': UUID('e11cb4ea-a129-48aa-a9e9-7815dcd2828c'),
         'rack': 'rack1',
         'release_version': '3.0.8',
         'rpc_address': '127.0.0.3',
-        'schema_version': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
+        'schema_version': UUID('cbe15453-33f3-3387-aaf1-4120548f41e8'),
     },
 }
 

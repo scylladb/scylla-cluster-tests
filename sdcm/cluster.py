@@ -2671,27 +2671,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             'peer', 'data_center', 'host_id', 'rack', 'release_version',
             'rpc_address', 'schema_version', 'supported_features',
         )
-        columns_len = len(columns)
-        cql_result = self.run_cqlsh(
-            f"select {', '.join(columns)} from system.peers", split=True, verbose=False)
-        # peer | data_center | host_id | rack | release_version | rpc_address | schema_version | supported_features
-        # ------+-------------+---------+------+-----------------+-------------+----------------+--------------------
-
         peers_details = {}
+        with self.parent_cluster.cql_connection_patient_exclusive(self) as session:
+            result = session.execute(f"select {', '.join(columns)} from system.peers")
+            cql_results = result.all()
         err = ''
-        for line in cql_result:
-            if '|' not in line or all(column in line for column in columns):
-                # NOTE: skip non-rows and header lines
-                continue
-            line_splitted = line.split('|')
-            if len(line_splitted) != columns_len:
-                current_err = f"Failed to parse the cqlsh command output line: \n{line}\n"
-                LOGGER.warning(current_err)
-                err += current_err
-                continue
-            peer = line_splitted[0].strip()
+        for row in cql_results:
+            peer = row.peer
             try:
-                ipaddress.ip_address(peer)
+                ipaddress.ip_address(row.peer)
             except ValueError as exc:
                 current_err = f"Peer '{peer}' is not an IP address, err: {exc}\n"
                 LOGGER.warning(current_err)
@@ -2699,15 +2687,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 continue
 
             if node := self.parent_cluster.find_node_by_ip(peer):
-                peers_details[node] = {
-                    'data_center': line_splitted[1].strip(),
-                    'host_id': line_splitted[2].strip(),
-                    'rack': line_splitted[3].strip(),
-                    'release_version': line_splitted[4].strip(),
-                    'rpc_address': line_splitted[5].strip(),
-                    'schema_version': line_splitted[6].strip(),
-                    'supported_features': line_splitted[7].strip(),
-                }
+                peers_details[node] = row._asdict()
             else:
                 current_err = f"'get_peers_info' failed to find a node by IP: {peer}\n"
                 LOGGER.error(current_err)
@@ -2715,8 +2695,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         if not (peers_details or err):
             LOGGER.error(
-                "No data, no errors. Check the output from the cqlsh for the correctness:\n%s",
-                cql_result)
+                "No data, no errors. Check the output from the cql command for the correctness:\n%s",
+                cql_results)
         return peers_details
 
     @retrying(n=5, sleep_time=10, raise_on_exceeded=False)
