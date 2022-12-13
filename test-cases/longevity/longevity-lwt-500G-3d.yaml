@@ -6,13 +6,13 @@ prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml n=
                     "cassandra-stress user profile=/tmp/lwt_builtin_functions.yaml n=33333333 ops'(insert_query=1)' cl=QUORUM -mode native cql3 -rate threads=50 -pop seq=33333334..66666666",
                     "cassandra-stress user profile=/tmp/lwt_builtin_functions.yaml n=33333333 ops'(insert_query=1)' cl=QUORUM -mode native cql3 -rate threads=50 -pop seq=66666667..100000000",
                    ]
-stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1,lwt_deletes=1)' cl=QUORUM duration=3600m -mode native cql3 -rate threads=10" ,
-             "cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1,lwt_deletes=1)' cl=QUORUM duration=3600m -mode native cql3 -rate threads=10",
-             "cassandra-stress user profile=/tmp/lwt_builtin_functions.yaml ops'(lwt_update_by_pk=1,lwt_update_by_ck=1)' cl=QUORUM duration=3600m -mode native cql3 -rate threads=10 -pop seq=1..33333333",
-             "cassandra-stress user profile=/tmp/lwt_builtin_functions.yaml ops'(lwt_update_by_pk=1,lwt_update_by_ck=1)' cl=QUORUM duration=3600m -mode native cql3 -rate threads=10 -pop seq=33333334..66666666",
-             "cassandra-stress user profile=/tmp/lwt_builtin_functions.yaml ops'(lwt_update_by_pk=1,lwt_update_by_ck=1)' cl=QUORUM duration=3600m -mode native cql3 -rate threads=10 -pop seq=66666667..100000000"
+stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1,lwt_deletes=1)' cl=QUORUM duration=3420m -mode native cql3 -rate threads=10" ,
+             "cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1,lwt_deletes=1)' cl=QUORUM duration=3420m -mode native cql3 -rate threads=10",
+             "cassandra-stress user profile=/tmp/lwt_builtin_functions.yaml ops'(lwt_update_by_pk=1,lwt_update_by_ck=1)' cl=QUORUM duration=3420m -mode native cql3 -rate threads=10 -pop seq=1..33333333",
+             "cassandra-stress user profile=/tmp/lwt_builtin_functions.yaml ops'(lwt_update_by_pk=1,lwt_update_by_ck=1)' cl=QUORUM duration=3420m -mode native cql3 -rate threads=10 -pop seq=33333334..66666666",
+             "cassandra-stress user profile=/tmp/lwt_builtin_functions.yaml ops'(lwt_update_by_pk=1,lwt_update_by_ck=1)' cl=QUORUM duration=3420m -mode native cql3 -rate threads=10 -pop seq=66666667..100000000"
             ]
-stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml ops'(select=1)' cl=SERIAL duration=3600m -mode native cql3 -rate threads=10" ]
+stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml ops'(select=1)' cl=SERIAL duration=3420m -mode native cql3 -rate threads=10" ]
 
 n_db_nodes: 4
 n_loaders: 3
