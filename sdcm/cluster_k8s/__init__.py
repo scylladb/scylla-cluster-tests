@@ -84,6 +84,7 @@ from sdcm.utils.k8s import (
 )
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.decorators import timeout as timeout_wrapper
+from sdcm.utils.k8s.chaos_mesh import ChaosMesh
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
     KubectlClusterEventsLogger, ScyllaManagerLogger, KubernetesWrongSchedulingLogger
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
@@ -319,6 +320,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             ('scylla-operator.scylladb.com/node-config-job-type', 'Containers'),
         ]
         self._scylla_cluster_events_threads = {}
+        self.chaos_mesh = ChaosMesh(self)
 
     # NOTE: Following class attr(s) are defined for consumers of this class
     #       such as 'sdcm.utils.remote_logger.ScyllaOperatorLogger'.

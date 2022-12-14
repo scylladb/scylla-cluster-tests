@@ -738,6 +738,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.init_resources()
 
+        if self.k8s_cluster and self.params.get("k8s_use_chaos_mesh"):
+            self.k8s_cluster.chaos_mesh.initialize()
+
         if self.db_cluster and not self.db_clusters_multitenant:
             self.db_clusters_multitenant = [self.db_cluster]
         for db_cluster in self.db_clusters_multitenant:
