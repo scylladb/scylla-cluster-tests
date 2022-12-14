@@ -1417,7 +1417,9 @@ class SCTConfiguration(dict):
         dict(name="stress_process_step", env="SCT_STRESS_PROCESS_STEP", type=int,
              help="""add/remove num of process on each round"""),
         dict(name="use_hdr_cs_histogram", env="SCT_USE_HDR_CS_HISTOGRAM", type=boolean,
-             help="""Enable hdr histogram logging for cs""")
+             help="""Enable hdr histogram logging for cs"""),
+        dict(name="k8s_use_chaos_mesh", env="SCT_K8S_USE_CHAOS_MESH", type=boolean,
+             help="""enables chaos-mesh for k8s testing""")
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

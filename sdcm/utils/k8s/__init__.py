@@ -557,7 +557,9 @@ class HelmContainerMixin:
                                  use_devel: bool = False,
                                  debug: bool = True,
                                  values: 'HelmValues' = None,
-                                 namespace: Optional[str] = None) -> str:
+                                 namespace: Optional[str] = None,
+                                 atomic: bool = False,
+                                 timeout: Optional[str] = None) -> str:
         command = [operation_type, target_chart_name, source_chart_name]
         prepend_command = []
         if version:
@@ -566,7 +568,15 @@ class HelmContainerMixin:
             command.extend(("--devel",))
         if debug:
             command.extend(("--debug",))
-
+        if atomic:
+            # if set, the installation process deletes the installation on failure
+            # or upgrade process rolls back changes made in case of failed upgrade
+            # waits for operation completion - so should specify timeout.
+            command.extend(("--atomic",))
+            if timeout is None:
+                LOGGER.warning("No timeout provided for atomic operation, default of '5m' is used.")
+            else:
+                command.extend(("--timeout", timeout))
         return self.helm(
             kluster,
             *command,
