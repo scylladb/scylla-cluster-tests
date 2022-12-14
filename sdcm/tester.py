@@ -40,7 +40,7 @@ from cassandra import ConsistencyLevel
 from argus.db.db_types import TestStatus, PackageVersion
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
-    BaseScyllaCluster, BaseNode, MAX_TIME_WAIT_FOR_ALL_NODES_UP
+    BaseScyllaCluster, BaseNode
 from sdcm.argus_test_run import ArgusTestRun
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
 from sdcm.cluster_gce import ScyllaGCECluster
@@ -1674,9 +1674,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
                           round_robin=False, stats_aggregate_cmds=True, keyspace_name=None,
                           stop_test_on_failure=True):
-        # We want to prevent situation when stress command starts on not ready cluster (no all nodes are UP).
-        # It may cause to stress failure and as result the test will be stopped and failed
-        self.db_cluster.wait_for_nodes_up_and_normal(iterations=0, timeout=MAX_TIME_WAIT_FOR_ALL_NODES_UP)
 
         params = dict(stress_cmd=stress_cmd, duration=duration, stress_num=stress_num, keyspace_num=keyspace_num,
                       keyspace_name=keyspace_name, profile=profile, prefix=prefix, round_robin=round_robin,
