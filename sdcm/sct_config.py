@@ -694,7 +694,7 @@ class SCTConfiguration(dict):
         dict(name="gce_project", env="SCT_GCE_PROJECT", type=str,
              help="gcp project name to use"),
 
-        dict(name="gce_datacenter", env="SCT_GCE_DATACENTER", type=str_or_list,
+        dict(name="gce_datacenter", env="SCT_GCE_DATACENTER", type=str_or_list_or_eval,
              help="Supported: us-east1 - means that the zone will be selected automatically or "
                   "you can mention the zone explicitly, for example: us-east1-b"),
 
