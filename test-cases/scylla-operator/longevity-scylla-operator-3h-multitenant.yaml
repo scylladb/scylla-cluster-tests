@@ -30,4 +30,6 @@ nemesis_seed: ['385', '543']
 space_node_threshold: [64424, 64423]
 
 user_prefix: 'longevity-scylla-operator-3h-multitenant'
-cluster_health_check: false
+cluster_health_check: true
+
+k8s_enable_tls: true
