@@ -4,7 +4,7 @@ FROM ${SOURCE_IMAGE}
 
 ENV USER scylla-test
 
-# Install sudo, collectd and other tools, disable autostart of scylla-server and scylla-housekeeping services,
+# Install sudo and other tools, disable autostart of scylla-server and scylla-housekeeping services,
 # remove the login banner and add a new user.
 #
 # Password for the user is `test' and encrypted using openssl command:
@@ -15,16 +15,9 @@ ENV USER scylla-test
 RUN yum -y install \
         iproute \
         sudo \
-        collectd \
         syslog-ng \
         rsync && \
     yum clean all && \
-    echo $'[program:collectd]\n\
-command=/usr/sbin/collectd\n\
-stdout_logfile=/dev/stdout\n\
-stdout_logfile_maxbytes=0\n\
-stderr_logfile=/dev/stderr\n\
-stderr_logfile_maxbytes=0' > /etc/supervisord.conf.d/collectd.conf && \
     echo $'[program:scylla-manager]\n\
 command=/usr/bin/scylla-manager --developer-mode\n\
 stdout_logfile=/dev/stdout\n\

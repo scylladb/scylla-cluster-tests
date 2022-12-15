@@ -1387,7 +1387,7 @@ class SCTConfiguration(dict):
              help="Number of of raid level: 0 - RAID0, 5 - RAID5"),
 
         dict(name="bare_loaders", env="SCT_BARE_LOADERS", type=boolean,
-             help="Don't install anything but collectd to the loaders during cluster setup"),
+             help="Don't install anything but node_exporter to the loaders during cluster setup"),
         dict(name="stress_image", env="SCT_STRESS_IMAGE", type=dict_or_str,
              help="Dict of the images to use for the stress tools"),
 
