@@ -23,7 +23,6 @@ gce_instance_type_db: 'n1-highmem-16'
 gce_n_local_ssd_disk_db: 8
 gce_instance_type_loader: 'e2-standard-16'
 
-backup_bucket_location: 'manager-backup-tests-us-east1'
 nemesis_class_name: 'MgmtBackup'
 nemesis_interval: 30
 nemesis_filter_seeds: false
