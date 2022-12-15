@@ -905,7 +905,6 @@ class CassandraAWSCluster(ScyllaAWSCluster):
 
         node.wait_apt_not_running()
         node.remoter.run('sudo apt-get update')
-        node.remoter.run('sudo apt-get install -y collectd collectd-utils')
         node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
 
     @cluster.wait_for_init_wrap

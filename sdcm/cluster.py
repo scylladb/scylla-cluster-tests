@@ -55,7 +55,7 @@ from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from argus.db.cloud_types import ResourceState, CloudInstanceDetails, CloudResource
 from argus.db.db_types import NemesisStatus
 from sdcm.argus_test_run import ArgusTestRun
-from sdcm.collectd import ScyllaCollectdSetup
+from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.db_log_reader import DbLogReader
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
@@ -4649,8 +4649,8 @@ class BaseLoaderSet():
             self.kill_stress_thread()
             return
 
-        collectd_setup = ScyllaCollectdSetup()
-        collectd_setup.install(node)
+        node_exporter_setup = NodeExporterSetup()
+        node_exporter_setup.install(node)
 
         if self.params.get("bare_loaders"):
             self.log.info("Don't install anything because bare loaders requested")
@@ -5157,7 +5157,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             with open(local_template_tmp, encoding="utf-8") as output_file:
                 templ_yaml = yaml.safe_load(output_file)
                 self.log.debug("Configs %s" % templ_yaml)
-            loader_targets_list = ["[%s]:9103" % getattr(node, self.DB_NODES_IP_ADDRESS)
+            loader_targets_list = ["[%s]:9100" % getattr(node, self.DB_NODES_IP_ADDRESS)
                                    for node in self.targets["loaders"].nodes]
 
             # remove those jobs if exists, for support of 'reuse_cluster: true'

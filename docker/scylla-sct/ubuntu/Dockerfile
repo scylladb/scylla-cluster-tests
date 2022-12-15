@@ -4,7 +4,7 @@ FROM ${SOURCE_IMAGE}
 
 ENV USER scylla-test
 SHELL ["/bin/bash", "-c"]
-# Install sudo, collectd and other tools, disable autostart of scylla-server and scylla-housekeeping services,
+# Install sudo and other tools, disable autostart of scylla-server and scylla-housekeeping services,
 # remove the login banner and add a new user.
 #
 # Password for the user is `test' and encrypted using openssl command:
