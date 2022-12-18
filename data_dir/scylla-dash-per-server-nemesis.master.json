@@ -801,14 +801,14 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_write_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "B"
           },
           {
-            "expr": "collectd_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -872,14 +872,14 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_write_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "B"
           },
           {
-            "expr": "collectd_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -965,14 +965,14 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_read_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_read_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "C"
           },
           {
-            "expr": "collectd_cassandra_stress_counter_read_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_counter_read_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1036,14 +1036,14 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_read_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_read_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "C"
           },
           {
-            "expr": "collectd_cassandra_stress_counter_read_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_counter_read_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1129,7 +1129,7 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_mixed_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_mixed_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1193,7 +1193,7 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_mixed_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_mixed_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1279,7 +1279,7 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_user_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_user_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1345,7 +1345,7 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_user_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_cassandra_stress_user_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1455,14 +1455,14 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "B"
           },
           {
-            "expr": "collectd_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1526,14 +1526,14 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "B"
           },
           {
-            "expr": "collectd_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1619,14 +1619,14 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "C"
           },
           {
-            "expr": "collectd_cassandra_stress_counter_read_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_counter_read_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1690,14 +1690,14 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "C"
           },
           {
-            "expr": "collectd_cassandra_stress_counter_read_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_counter_read_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1783,7 +1783,7 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_mixed_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_mixed_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1849,7 +1849,7 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_mixed_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_mixed_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1935,7 +1935,7 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_user_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_user_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -1999,7 +1999,7 @@
         "pluginVersion": "8.5.2",
         "targets": [
           {
-            "expr": "collectd_cassandra_stress_user_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_cassandra_stress_user_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -2080,7 +2080,7 @@
         "steppedLine": false,
         "targets": [
           {
-            "expr": "avg(collectd_ycsb_read_gauge{type=\"p90\"}) by (instance)",
+            "expr": "avg(sct_ycsb_read_gauge{type=\"p90\"}) by (instance)",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -2088,7 +2088,7 @@
             "refId": "G"
           },
           {
-            "expr": "avg(collectd_ycsb_update_gauge{type=\"p90\"}) by (instance)",
+            "expr": "avg(sct_ycsb_update_gauge{type=\"p90\"}) by (instance)",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -2096,7 +2096,7 @@
             "refId": "H"
           },
           {
-            "expr": "avg(collectd_ycsb_insert_gauge{type=\"p90\"}) by (instance)",
+            "expr": "avg(sct_ycsb_insert_gauge{type=\"p90\"}) by (instance)",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -2104,14 +2104,14 @@
             "refId": "I"
           },
           {
-            "expr": "collectd_scylla_bench_stress_write_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_scylla_bench_stress_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "J"
           },
           {
-            "expr": "collectd_scylla_bench_stress_read_gauge{type=\"lat_perc_95\"}",
+            "expr": "sct_scylla_bench_stress_read_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -2197,7 +2197,7 @@
         "steppedLine": false,
         "targets": [
           {
-            "expr": "avg(collectd_ycsb_read_gauge{type=\"p99\"}) by (instance)",
+            "expr": "avg(sct_ycsb_read_gauge{type=\"p99\"}) by (instance)",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -2205,7 +2205,7 @@
             "refId": "G"
           },
           {
-            "expr": "avg(collectd_ycsb_update_gauge{type=\"p99\"}) by (instance)",
+            "expr": "avg(sct_ycsb_update_gauge{type=\"p99\"}) by (instance)",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -2213,7 +2213,7 @@
             "refId": "H"
           },
           {
-            "expr": "avg(collectd_ycsb_insert_gauge{type=\"p99\"}) by (instance)",
+            "expr": "avg(sct_ycsb_insert_gauge{type=\"p99\"}) by (instance)",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -2221,14 +2221,14 @@
             "refId": "I"
           },
           {
-            "expr": "collectd_scylla_bench_stress_write_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_scylla_bench_stress_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "J"
           },
           {
-            "expr": "collectd_scylla_bench_stress_read_gauge{type=\"lat_perc_99\"}",
+            "expr": "sct_scylla_bench_stress_read_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
@@ -6449,35 +6449,35 @@
         "steppedLine": false,
         "targets": [
           {
-            "expr": "rate(collectd_ycsb_read_failed_gauge{type=\"count\"}[1m])",
+            "expr": "rate(sct_ycsb_read_failed_gauge{type=\"count\"}[1m])",
             "format": "time_series",
             "hide": false,
             "intervalFactor": 1,
             "refId": "A"
           },
           {
-            "expr": "rate(collectd_ycsb_insert_failed_gauge{type=\"count\"}[1m])",
+            "expr": "rate(sct_ycsb_insert_failed_gauge{type=\"count\"}[1m])",
             "format": "time_series",
             "hide": false,
             "intervalFactor": 1,
             "refId": "B"
           },
           {
-            "expr": "rate(collectd_ycsb_verify_gauge{type=\"ERROR\"}[1m])",
+            "expr": "rate(sct_ycsb_verify_gauge{type=\"ERROR\"}[1m])",
             "format": "time_series",
             "hide": false,
             "intervalFactor": 1,
             "refId": "C"
           },
           {
-            "expr": "rate(collectd_ycsb_update_failed_gauge{type=\"count\"}[1m])",
+            "expr": "rate(sct_ycsb_update_failed_gauge{type=\"count\"}[1m])",
             "format": "time_series",
             "hide": false,
             "intervalFactor": 1,
             "refId": "D"
           },
           {
-            "expr": "rate(collectd_ycsb_verify_gauge{type=\"UNEXPECTED_STATE\"}[1m])",
+            "expr": "rate(sct_ycsb_verify_gauge{type=\"UNEXPECTED_STATE\"}[1m])",
             "format": "time_series",
             "hide": false,
             "intervalFactor": 1,
@@ -7456,14 +7456,14 @@
         "steppedLine": false,
         "targets": [
           {
-              "expr": "collectd_cassandra_stress_read_gauge{type=\"ops\"}",
+              "expr": "sct_cassandra_stress_read_gauge{type=\"ops\"}",
               "format": "time_series",
               "interval": "15s",
               "intervalFactor": 1,
               "refId": "C"
             },
             {
-              "expr": "collectd_cassandra_stress_write_gauge{type=\"ops\"}",
+              "expr": "sct_cassandra_stress_write_gauge{type=\"ops\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "refId": "A"

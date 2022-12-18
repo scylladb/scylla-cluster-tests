@@ -139,7 +139,7 @@ class CassandraStressExporter(StressExporter):
                          cpu_idx)
 
     def create_metrix_gauge(self):
-        gauge_name = f'collectd_cassandra_stress_{self.stress_operation}_gauge'
+        gauge_name = f'sct_cassandra_stress_{self.stress_operation}_gauge'
         if gauge_name not in self.METRICS_GAUGES:
             self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
                 gauge_name,
@@ -206,7 +206,7 @@ class CassandraStressHDRExporter(StressExporter):
 class ScyllaBenchStressExporter(StressExporter):
 
     def create_metrix_gauge(self) -> str:
-        gauge_name = f'collectd_scylla_bench_stress_{self.stress_operation}_gauge'
+        gauge_name = f'sct_scylla_bench_stress_{self.stress_operation}_gauge'
         if gauge_name not in self.METRICS_GAUGES:
             self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
                 gauge_name,
@@ -255,7 +255,7 @@ class CassandraHarryStressExporter(StressExporter):
                          loader_idx, cpu_idx)
 
     def create_metrix_gauge(self) -> str:
-        gauge_name = f'collectd_cassandra_harry_stress_{self.stress_operation}_gauge'
+        gauge_name = f'sct_cassandra_harry_stress_{self.stress_operation}_gauge'
         if gauge_name not in self.METRICS_GAUGES:
             self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
                 gauge_name,

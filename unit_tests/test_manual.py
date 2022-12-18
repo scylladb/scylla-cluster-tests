@@ -121,7 +121,7 @@ class TestCassandraStressExporter(unittest.TestCase):
 
         time.sleep(2)
         output = requests.get("http://{}/metrics".format(self.prom_address)).text
-        assert 'collectd_cassandra_stress_write_gauge{cassandra_stress_write="0",cpu_idx="0",instance="127.0.0.1",loader_idx="1",type="ops"} 70178.0' in output
+        assert 'sct_cassandra_stress_write_gauge{cassandra_stress_write="0",cpu_idx="0",instance="127.0.0.1",loader_idx="1",type="ops"} 70178.0' in output
 
         time.sleep(1)
         cs_exporter.stop()

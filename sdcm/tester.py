@@ -3096,7 +3096,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         example: wait 5 mins for cassandra stress to start writing:
 
-            self.metric_has_data(metric_query='collectd_cassandra_stress_write_gauge{type="ops"}', n=5)
+            self.metric_has_data(metric_query='sct_cassandra_stress_write_gauge{type="ops"}', n=5)
 
         :param metric_query:
         :param n: number of loop to try

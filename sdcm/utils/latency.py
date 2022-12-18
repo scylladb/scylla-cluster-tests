@@ -33,7 +33,7 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
         metric = f'c-s {precision}' if precision == 'max' else f'c-s P{precision}'
         if not precision == 'max':
             precision = f'perc_{precision}'
-        query = f'collectd_cassandra_stress_{load_type}_gauge{{type="lat_{precision}"}}'
+        query = f'sct_cassandra_stress_{load_type}_gauge{{type="lat_{precision}"}}'
         query_res = prometheus.query(query, start, end)
         latency_values_lst = []
         max_latency_values_lst = []
