@@ -5209,7 +5209,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
             # Alert for 99% cassandra stress write spikes
               - alert: CassandraStressWriteTooSlow
-                expr: collectd_cassandra_stress_write_gauge{type="lat_perc_99"} > 1000
+                expr: sct_cassandra_stress_write_gauge{type="lat_perc_99"} > 1000
                 for: 1s
                 labels:
                   severity: "1"
@@ -5220,7 +5220,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
             # Alert for YCSB error spikes
               - alert: YCSBTooManyErrors
-                expr: sum(rate(collectd_ycsb_read_failed_gauge{type="count"}[1m])) > 5 OR sum(rate(collectd_ycsb_update_failed_gauge{type="count"}[1m])) > 5  OR sum(rate(collectd_ycsb_insert_failed_gauge{type="count"}[1m])) > 5
+                expr: sum(rate(sct_ycsb_read_failed_gauge{type="count"}[1m])) > 5 OR sum(rate(sct_ycsb_update_failed_gauge{type="count"}[1m])) > 5  OR sum(rate(sct_ycsb_insert_failed_gauge{type="count"}[1m])) > 5
                 for: 1s
                 labels:
                   severity: "4"
@@ -5231,7 +5231,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
             # Alert for YCSB validation error spikes
               - alert: YCSBTooManyVerifyErrors
-                expr: sum(rate(collectd_ycsb_verify_gauge{type="ERROR"}[1m])) > 5 OR sum(rate(collectd_ycsb_verify_gauge{type="UNEXPECTED_STATE"}[1m])) > 5
+                expr: sum(rate(sct_ycsb_verify_gauge{type="ERROR"}[1m])) > 5 OR sum(rate(sct_ycsb_verify_gauge{type="UNEXPECTED_STATE"}[1m])) > 5
                 for: 1s
                 labels:
                   severity: "4"

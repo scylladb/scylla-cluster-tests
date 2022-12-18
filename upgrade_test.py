@@ -531,7 +531,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         # Let to write_stress_during_entire_test complete the schema changes
         self.metric_has_data(
-            metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}', n=10)
+            metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}', n=10)
 
         # Prepare keyspace and tables for truncate test
         if self.truncate_entries_flag:
@@ -567,7 +567,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         prepare_write_cs_thread_pool = self.run_stress_thread(stress_cmd=prepare_write_stress)
         InfoEvent(message='Sleeping for 60s to let cassandra-stress start before the upgrade...').publish()
         self.metric_has_data(
-            metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
+            metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
 
         # start gemini write workload
         if self.version_cdc_support():

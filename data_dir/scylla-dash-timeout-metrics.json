@@ -172,7 +172,7 @@
                         },
                         "targets": [
                             {
-                                "expr": "count(up)-count(collectd_processes_ps_code{processes=\"scylla\"}>0)",
+                                "expr": "count(up)-count(sct_processes_ps_code{processes=\"scylla\"}>0)",
                                 "intervalFactor": 1,
                                 "refId": "A",
                                 "step": 20
@@ -248,7 +248,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(irate(collectd_transport_total_requests{type=\"requests_served\"}[30s]))",
+                                "expr": "sum(irate(sct_transport_total_requests{type=\"requests_served\"}[30s]))",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 4
@@ -350,7 +350,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "avg(collectd_reactor_gauge{type=\"load\"}) by (instance)",
+                                "expr": "avg(sct_reactor_gauge{type=\"load\"}) by (instance)",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
                                 "refId": "A",
@@ -426,7 +426,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(irate(collectd_transport_total_requests{type=\"requests_served\"}[30s])) by (instance)",
+                                "expr": "sum(irate(sct_transport_total_requests{type=\"requests_served\"}[30s])) by (instance)",
                                 "intervalFactor": 2,
                                 "metric": "",
                                 "refId": "A",
@@ -497,14 +497,14 @@
                         "strokeWidth": 1,
                         "targets": [
                             {
-                                "expr": "sum(collectd_df_complex{df=\"var-lib-scylla\", type=\"free\"})/1000000000",
+                                "expr": "sum(sct_df_complex{df=\"var-lib-scylla\", type=\"free\"})/1000000000",
                                 "intervalFactor": 2,
                                 "metric": "",
                                 "refId": "A",
                                 "step": 1200
                             },
                             {
-                                "expr": "sum(collectd_df_complex{df=\"var-lib-scylla\", type=\"used\"})/1000000000",
+                                "expr": "sum(sct_df_complex{df=\"var-lib-scylla\", type=\"used\"})/1000000000",
                                 "intervalFactor": 2,
                                 "refId": "B",
                                 "step": 1200
@@ -597,7 +597,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(collectd_storage_proxy_queue_length{type=\"foreground writes\"}) by (instance)",
+                                "expr": "sum(sct_storage_proxy_queue_length{type=\"foreground writes\"}) by (instance)",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 10
@@ -671,7 +671,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(collectd_storage_proxy_queue_length{type=\"reads\"}) by (instance)",
+                                "expr": "sum(sct_storage_proxy_queue_length{type=\"reads\"}) by (instance)",
                                 "intervalFactor": 2,
                                 "metric": "",
                                 "refId": "A",
@@ -746,7 +746,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(irate(collectd_storage_proxy_total_operations{type=\"write timeouts\"}[30s])) by (instance)",
+                                "expr": "sum(irate(sct_storage_proxy_total_operations{type=\"write timeouts\"}[30s])) by (instance)",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 10
@@ -820,7 +820,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(irate(collectd_storage_proxy_total_operations{type=\"write unavailable\"}[30s])) by (instance)",
+                                "expr": "sum(irate(sct_storage_proxy_total_operations{type=\"write unavailable\"}[30s])) by (instance)",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 10
@@ -902,7 +902,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(collectd_storage_proxy_queue_length{type=\"background writes\"}) by (instance)",
+                                "expr": "sum(sct_storage_proxy_queue_length{type=\"background writes\"}) by (instance)",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 10
@@ -976,7 +976,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(collectd_storage_proxy_queue_length{type=\"background reads\"}) by (instance)",
+                                "expr": "sum(sct_storage_proxy_queue_length{type=\"background reads\"}) by (instance)",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 10
@@ -1050,7 +1050,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(irate(collectd_storage_proxy_total_operations{type=\"read timeouts\"}[30s])) by (instance)",
+                                "expr": "sum(irate(sct_storage_proxy_total_operations{type=\"read timeouts\"}[30s])) by (instance)",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 10
@@ -1124,7 +1124,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(irate(collectd_storage_proxy_total_operations{type=\"read unavailable\"}[30s])) by (instance)",
+                                "expr": "sum(irate(sct_storage_proxy_total_operations{type=\"read unavailable\"}[30s])) by (instance)",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 10
@@ -1242,7 +1242,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "irate(collectd_disk_ops_1{disk=\"md0\"}[30s])",
+                                "expr": "irate(sct_disk_ops_1{disk=\"md0\"}[30s])",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
                                 "metric": "",
@@ -1318,7 +1318,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "irate(collectd_disk_ops_0{disk=\"md0\"}[30s])",
+                                "expr": "irate(sct_disk_ops_0{disk=\"md0\"}[30s])",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 10
@@ -1392,7 +1392,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(irate(collectd_cache_total_operations{type=\"hits\"}[30s])) by (instance)",
+                                "expr": "sum(irate(sct_cache_total_operations{type=\"hits\"}[30s])) by (instance)",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 10
@@ -1466,7 +1466,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(irate(collectd_cache_total_operations{type=\"misses\"}[30s])) by (instance)",
+                                "expr": "sum(irate(sct_cache_total_operations{type=\"misses\"}[30s])) by (instance)",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 10
@@ -1548,7 +1548,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "irate(collectd_disk_octets_1{disk=\"md0\"}[30s])",
+                                "expr": "irate(sct_disk_octets_1{disk=\"md0\"}[30s])",
                                 "intervalFactor": 2,
                                 "metric": "",
                                 "refId": "A",
@@ -1623,7 +1623,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "irate(collectd_disk_octets_0{disk=\"md0\"}[30s])",
+                                "expr": "irate(sct_disk_octets_0{disk=\"md0\"}[30s])",
                                 "intervalFactor": 2,
                                 "refId": "A",
                                 "step": 10
@@ -1727,7 +1727,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "irate(collectd_interface_if_packets_0{interface=\"eth0\"}[30s])",
+                                "expr": "irate(sct_interface_if_packets_0{interface=\"eth0\"}[30s])",
                                 "intervalFactor": 2,
                                 "metric": "",
                                 "refId": "A",
@@ -1802,7 +1802,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "irate(collectd_interface_if_packets_1{interface=\"eth0\"}[30s])",
+                                "expr": "irate(sct_interface_if_packets_1{interface=\"eth0\"}[30s])",
                                 "intervalFactor": 2,
                                 "metric": "",
                                 "refId": "A",
@@ -1885,7 +1885,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "irate(collectd_interface_if_octets_0{interface=\"eth0\"}[30s])",
+                                "expr": "irate(sct_interface_if_octets_0{interface=\"eth0\"}[30s])",
                                 "intervalFactor": 2,
                                 "metric": "",
                                 "refId": "A",
@@ -1960,7 +1960,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "irate(collectd_interface_if_octets_1{interface=\"eth0\"}[30s])",
+                                "expr": "irate(sct_interface_if_octets_1{interface=\"eth0\"}[30s])",
                                 "intervalFactor": 2,
                                 "metric": "",
                                 "refId": "A",
@@ -2065,7 +2065,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "sum(collectd_compaction_manager_objects) by (instance)",
+                                "expr": "sum(sct_compaction_manager_objects) by (instance)",
                                 "intervalFactor": 2,
                                 "metric": "",
                                 "refId": "A",
@@ -2170,10 +2170,10 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "max(irate(collectd_commitlog_total_operations{type=\"flush_limit_exceeded\"}[30s])) by (instance)",
+                                "expr": "max(irate(sct_commitlog_total_operations{type=\"flush_limit_exceeded\"}[30s])) by (instance)",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
-                                "metric": "collectd_commitlog_queue_length",
+                                "metric": "sct_commitlog_queue_length",
                                 "refId": "A",
                                 "step": 4
                             }
@@ -2248,10 +2248,10 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "max(irate(collectd_commitlog_total_operations{type=\"write_limit_exceeded\"}[30s]))",
+                                "expr": "max(irate(sct_commitlog_total_operations{type=\"write_limit_exceeded\"}[30s]))",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
-                                "metric": "collectd_commitlog_queue_length",
+                                "metric": "sct_commitlog_queue_length",
                                 "refId": "A",
                                 "step": 4
                             }
@@ -2326,18 +2326,18 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "max(collectd_commitlog_delay{type=\"write_limit_exceeded\"}*1000000)",
+                                "expr": "max(sct_commitlog_delay{type=\"write_limit_exceeded\"}*1000000)",
                                 "intervalFactor": 2,
                                 "legendFormat": "value",
-                                "metric": "collectd_commitlog_queue_length",
+                                "metric": "sct_commitlog_queue_length",
                                 "refId": "A",
                                 "step": 4
                             },
                             {
-                                "expr": "max(collectd_commitlog_delay{type=\"write_limit_exceeded_max\"}*1000000)",
+                                "expr": "max(sct_commitlog_delay{type=\"write_limit_exceeded_max\"}*1000000)",
                                 "intervalFactor": 2,
                                 "legendFormat": "max",
-                                "metric": "collectd_commitlog_queue_length",
+                                "metric": "sct_commitlog_queue_length",
                                 "refId": "B",
                                 "step": 4
                             }
@@ -2412,9 +2412,9 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "max(collectd_commitlog_queue_length{type=\"pending_allocations\"})",
+                                "expr": "max(sct_commitlog_queue_length{type=\"pending_allocations\"})",
                                 "intervalFactor": 2,
-                                "metric": "collectd_commitlog_queue_length",
+                                "metric": "sct_commitlog_queue_length",
                                 "refId": "A",
                                 "step": 4
                             }
@@ -2489,18 +2489,18 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "max(collectd_memory_bytes{type=\"dirty\"}) by (instance)",
+                                "expr": "max(sct_memory_bytes{type=\"dirty\"}) by (instance)",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
-                                "metric": "collectd_memory_bytes",
+                                "metric": "sct_memory_bytes",
                                 "refId": "A",
                                 "step": 4
                             },
                             {
-                                "expr": "max(collectd_memory{type=\"total_memory\"}/2)",
+                                "expr": "max(sct_memory{type=\"total_memory\"}/2)",
                                 "intervalFactor": 2,
                                 "legendFormat": "virtual dirty memory",
-                                "metric": "collectd_memory_bytes",
+                                "metric": "sct_memory_bytes",
                                 "refId": "C",
                                 "step": 4
                             }
@@ -2575,18 +2575,18 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "max(collectd_commitlog_delay{type=\"pending_allocations\"}*1000000)",
+                                "expr": "max(sct_commitlog_delay{type=\"pending_allocations\"}*1000000)",
                                 "intervalFactor": 2,
                                 "legendFormat": "value",
-                                "metric": "collectd_commitlog_queue_length",
+                                "metric": "sct_commitlog_queue_length",
                                 "refId": "A",
                                 "step": 4
                             },
                             {
-                                "expr": "max(collectd_commitlog_delay{type=\"pending_allocations_max\"}*1000000)",
+                                "expr": "max(sct_commitlog_delay{type=\"pending_allocations_max\"}*1000000)",
                                 "intervalFactor": 2,
                                 "legendFormat": "max",
-                                "metric": "collectd_commitlog_queue_length",
+                                "metric": "sct_commitlog_queue_length",
                                 "refId": "B",
                                 "step": 4
                             }
@@ -2661,7 +2661,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "max(irate(collectd_storage_proxy_total_operations{type=\"write timeouts\"}[30s])) by (instance)",
+                                "expr": "max(irate(sct_storage_proxy_total_operations{type=\"write timeouts\"}[30s])) by (instance)",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
                                 "refId": "A",
@@ -2736,10 +2736,10 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "max(collectd_memtables_queue_length{type=\"pending_flushes\"}) by (instance)",
+                                "expr": "max(sct_memtables_queue_length{type=\"pending_flushes\"}) by (instance)",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
-                                "metric": "collectd_cpu",
+                                "metric": "sct_cpu",
                                 "refId": "A",
                                 "step": 4
                             }
@@ -2820,7 +2820,7 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "collectd_database_delay{type=\"requests_blocked_memory\"}*1000000",
+                                "expr": "sct_database_delay{type=\"requests_blocked_memory\"}*1000000",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
                                 "metric": "database_delay",
@@ -2828,7 +2828,7 @@
                                 "step": 4
                             },
                             {
-                                "expr": "collectd_database_delay{type=\"requests_blocked_memory_max\"}*1000000",
+                                "expr": "sct_database_delay{type=\"requests_blocked_memory_max\"}*1000000",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
                                 "metric": "",
@@ -2906,10 +2906,10 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "max(collectd_database_queue_length{type=\"requests_blocked_memory\"}) by (instance)",
+                                "expr": "max(sct_database_queue_length{type=\"requests_blocked_memory\"}) by (instance)",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
-                                "metric": "collectd_commitlog_queue_length",
+                                "metric": "sct_commitlog_queue_length",
                                 "refId": "A",
                                 "step": 4
                             }
@@ -2984,10 +2984,10 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "irate(collectd_jhiccup_gauge[30s])",
+                                "expr": "irate(sct_jhiccup_gauge[30s])",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
-                                "metric": "collectd_jhiccup_gauge",
+                                "metric": "sct_jhiccup_gauge",
                                 "refId": "A",
                                 "step": 4
                             }
@@ -3062,11 +3062,11 @@
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "max(collectd_cpu_percent{type=\"wait\"}) by (instance)",
+                                "expr": "max(sct_cpu_percent{type=\"wait\"}) by (instance)",
                                 "interval": "",
                                 "intervalFactor": 2,
                                 "legendFormat": "",
-                                "metric": "collectd_cpu_percent",
+                                "metric": "sct_cpu_percent",
                                 "refId": "A",
                                 "step": 4
                             }

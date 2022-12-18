@@ -76,7 +76,7 @@ class NdBenchStatsPublisher(FileFollowerThread):
 
     @staticmethod
     def gauge_name(operation):
-        return 'collectd_ndbench_%s_gauge' % operation.replace('-', '_')
+        return 'sct_ndbench_%s_gauge' % operation.replace('-', '_')
 
     def set_metric(self, operation, name, value):
         metric = self.METRICS[self.gauge_name(operation)]

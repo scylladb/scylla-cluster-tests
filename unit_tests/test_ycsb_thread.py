@@ -98,9 +98,9 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
     @timeout(timeout=60)
     def check_metrics():
         output = requests.get("http://{}/metrics".format(prom_address)).text
-        regex = re.compile(r"^collectd_ycsb_read_gauge.*?([0-9\.]*?)$", re.MULTILINE)
-        assert "collectd_ycsb_read_gauge" in output
-        assert "collectd_ycsb_update_gauge" in output
+        regex = re.compile(r"^sct_ycsb_read_gauge.*?([0-9\.]*?)$", re.MULTILINE)
+        assert "sct_ycsb_read_gauge" in output
+        assert "sct_ycsb_update_gauge" in output
 
         matches = regex.findall(output)
         assert all(float(i) > 0 for i in matches), output
@@ -157,9 +157,9 @@ def test_02_dynamodb_api_dataintegrity(
     @timeout(timeout=120)
     def check_metrics():
         output = requests.get("http://{}/metrics".format(prom_address)).text
-        regex = re.compile(r"^collectd_ycsb_verify_gauge.*?([0-9\.]*?)$", re.MULTILINE)
+        regex = re.compile(r"^sct_ycsb_verify_gauge.*?([0-9\.]*?)$", re.MULTILINE)
 
-        assert "collectd_ycsb_verify_gauge" in output
+        assert "sct_ycsb_verify_gauge" in output
         assert 'type="UNEXPECTED_STATE"' in output
         assert 'type="ERROR"' in output
         matches = regex.findall(output)
@@ -200,9 +200,9 @@ def test_03_cql(request, docker_scylla, prom_address, params):
     @timeout(timeout=60)
     def check_metrics():
         output = requests.get("http://{}/metrics".format(prom_address)).text
-        regex = re.compile(r"^collectd_ycsb_read_gauge.*?([0-9\.]*?)$", re.MULTILINE)
-        assert "collectd_ycsb_read_gauge" in output
-        assert "collectd_ycsb_update_gauge" in output
+        regex = re.compile(r"^sct_ycsb_read_gauge.*?([0-9\.]*?)$", re.MULTILINE)
+        assert "sct_ycsb_read_gauge" in output
+        assert "sct_ycsb_update_gauge" in output
 
         matches = regex.findall(output)
         assert all(float(i) > 0 for i in matches), output
