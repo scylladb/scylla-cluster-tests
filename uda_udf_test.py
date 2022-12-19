@@ -1,6 +1,7 @@
 from typing import NamedTuple, Callable
 
 from sdcm.cluster import BaseNode
+from sdcm.send_email import LongevityEmailReporter
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.tester import ClusterTester
 from sdcm.utils.udf import UDFS
@@ -20,6 +21,11 @@ class UDAUDFTest(ClusterTester):
     """
     KEYSPACE_NAME = "ks"
     CF_NAME = "uda_udf"
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.email_reporter = LongevityEmailReporter(email_recipients=self.params.get('email_recipients'),
+                                                     logdir=self.logdir)
 
     def test_uda_and_udf(self) -> None:
         self.log.info("Starting UDA/UDF test...")
@@ -63,6 +69,12 @@ class UDAUDFTest(ClusterTester):
         pre_thread = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
         self.verify_stress_thread(cs_thread_pool=pre_thread)
         self.log.info("Database pre write completed")
+
+    def get_email_data(self):
+        self.log.info("Prepare data for email")
+        email_data = self._get_common_email_data()
+
+        return email_data
 
     def _verify_udf_functions(self):
         row_query = UDVerification(name="row_query",
