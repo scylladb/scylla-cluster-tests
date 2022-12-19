@@ -41,6 +41,12 @@
 - disrupt_disable_enable_ldap_authorization:
   - disruptive = True
   - limited = True
+- disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node:
+  - disruptive = True
+  - kubernetes = True
+- disrupt_drain_kubernetes_node_then_replace_scylla_node:
+  - disruptive = True
+  - kubernetes = True
 - disrupt_grow_shrink_cluster:
   - disruptive = True
   - kubernetes = True
@@ -165,7 +171,7 @@
   - disruptive = True
 - disrupt_repair_streaming_err:
   - disruptive = True
-- disrupt_replace_node_kubernetes:
+- disrupt_replace_scylla_node_on_kubernetes:
   - disruptive = True
   - kubernetes = True
   - free_tier_set = True
@@ -244,10 +250,10 @@
   - disruptive = True
   - kubernetes = False
   - topology_changes = True
-- disrupt_terminate_and_replace_node_kubernetes:
+- disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
   - disruptive = True
   - kubernetes = True
-- disrupt_terminate_decommission_add_node_kubernetes:
+- disrupt_terminate_kubernetes_host_then_replace_scylla_node:
   - disruptive = True
   - kubernetes = True
 - disrupt_toggle_cdc_feature_properties_on_table:

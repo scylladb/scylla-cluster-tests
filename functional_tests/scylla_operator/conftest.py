@@ -89,17 +89,6 @@ def change_test_dir(request):
 
 
 @pytest.fixture(autouse=True)
-def skip_if_node_termination_method_not_supported(request, db_cluster: ScyllaPodCluster) -> None:
-    marker = request.node.get_closest_marker('requires_node_termination_support')
-    if marker and marker.args:
-        supported_methods = getattr(db_cluster, 'node_terminate_methods', [])
-        for terminate_method in marker.args:
-            if terminate_method not in supported_methods:
-                pytest.skip(f'cluster {type(db_cluster).__name__} does not support {terminate_method} '
-                            'node termination method')
-
-
-@pytest.fixture(autouse=True)
 def skip_if_scylla_manager_required_and_absent(request, tester: ScyllaOperatorFunctionalClusterTester) -> None:
     if request.node.get_closest_marker('requires_mgmt') and not tester.params.get('use_mgmt'):
         pytest.skip('test requires scylla manager to exist')

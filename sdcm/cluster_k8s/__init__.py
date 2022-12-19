@@ -2338,7 +2338,6 @@ class PodCluster(cluster.BaseCluster):
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disable=too-many-public-methods
     node_setup_requires_scylla_restart = False
-    node_terminate_methods: List[str] = None
 
     def __init__(self,
                  k8s_cluster: KubernetesCluster,
