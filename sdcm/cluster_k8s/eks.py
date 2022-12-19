@@ -626,13 +626,6 @@ class EksScyllaPodContainer(BaseScyllaPodContainer):
 
 
 class EksScyllaPodCluster(ScyllaPodCluster):
-    node_terminate_methods = [
-        'drain_k8s_node',
-        # NOTE: uncomment below when following scylla-operator bug is fixed:
-        #       https://github.com/scylladb/scylla-operator/issues/643
-        # 'terminate_k8s_host',
-        # 'terminate_k8s_node',
-    ]
     k8s_cluster: 'EksCluster'
     PodContainerClass = EksScyllaPodContainer
     nodes: List[EksScyllaPodContainer]

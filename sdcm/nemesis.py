@@ -56,7 +56,7 @@ from sdcm.cluster import (
     NodeSetupTimeout,
     NodeStayInClusterAfterDecommission,
 )
-from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
+from sdcm.cluster_k8s import PodCluster
 from sdcm.cluster_k8s.mini_k8s import LocalKindCluster
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
@@ -112,8 +112,10 @@ LOGGER = logging.getLogger(__name__)
 NEMESIS_LOCK = Lock()
 NEMESIS_RUN_INFO = {}
 EXCLUSIVE_NEMESIS_NAMES = (
-    "disrupt_terminate_and_replace_node_kubernetes",
-    "disrupt_terminate_decommission_add_node_kubernetes",
+    "disrupt_drain_kubernetes_node_then_replace_scylla_node",
+    "disrupt_terminate_kubernetes_host_then_replace_scylla_node",
+    "disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node",
+    "disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node",
 )
 
 
@@ -1175,12 +1177,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
 
-    def _get_kubernetes_node_break_methods(self):
-        if isinstance(self.cluster, ScyllaPodCluster) and self.cluster.node_terminate_methods:
-            return self.cluster.node_terminate_methods
-        raise UnsupportedNemesis(f"Backend {self.cluster.params.get('cluster_backend')} "
-                                 f"does not support node termination")
-
     @decorate_with_context(ignore_ycsb_connection_refused)
     def _terminate_cluster_node(self, node):
         self.cluster.terminate_node(node)
@@ -1368,26 +1364,51 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         assert final_target_pod_stats
         assert final_target_pod_stats.get("restart_count") == origin_target_pod_stats.get("restart_count")
 
-    def disrupt_terminate_and_replace_node_kubernetes(self):  # pylint: disable=invalid-name
-        for node_terminate_method_name in self._get_kubernetes_node_break_methods():
-            self.set_target_node()
-            InfoEvent(f'OperatorNodeTerminateAndReplace ({node_terminate_method_name}) {self.target_node}').publish()
-            if not self._is_it_on_kubernetes():
-                raise UnsupportedNemesis('OperatorNodeTerminateAndReplace is supported only on kubernetes')
+    def disrupt_drain_kubernetes_node_then_replace_scylla_node(self):
+        self._disrupt_kubernetes_then_replace_scylla_node('drain_k8s_node')
 
-            self._disrupt_terminate_and_replace_node_kubernetes(self.target_node, node_terminate_method_name)
+    def disrupt_terminate_kubernetes_host_then_replace_scylla_node(self):
+        if not self.cluster.params.get('k8s_enable_tls'):
+            raise UnsupportedNemesis("https://github.com/scylladb/scylla-operator/issues/1124")
+        self._disrupt_kubernetes_then_replace_scylla_node('terminate_k8s_host')  # pylint: disable=unreachable
 
-    def disrupt_terminate_decommission_add_node_kubernetes(self):  # pylint: disable=invalid-name
+    def _disrupt_kubernetes_then_replace_scylla_node(self, disruption_method):
         if not self._is_it_on_kubernetes():
-            raise UnsupportedNemesis('OperatorNodeTerminateDecommissionAdd is supported only on kubernetes')
-        for node_terminate_method_name in self._get_kubernetes_node_break_methods():
-            self.set_target_node(rack=random.choice(list(self.cluster.racks)),
-                                 allow_only_last_node_in_rack=True)
-            InfoEvent(
-                f'OperatorNodeTerminateDecommissionAdd ({node_terminate_method_name}) {self.target_node}').publish()
-            self._disrupt_terminate_decommission_add_node_kubernetes(self.target_node, node_terminate_method_name)
+            raise UnsupportedNemesis('Supported only on kubernetes')
+        self.set_target_node()
+        node = self.target_node
+        InfoEvent(f'Running {disruption_method} on K8S node that hosts {node} scylla pod').publish()
+        old_uid = node.k8s_pod_uid
+        self.log.info('TerminateNode %s (uid=%s)', node, old_uid)
+        getattr(node, disruption_method)()
+        node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
+        old_uid = node.k8s_pod_uid
+        self.log.info('Mark %s (uid=%s) to be replaced', node, old_uid)
+        node.wait_for_svc()
+        node.mark_to_be_replaced()
+        self._kubernetes_wait_till_node_up_after_been_recreated(node, old_uid=old_uid)
 
-    def disrupt_replace_node_kubernetes(self):
+    def disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node(self):
+        self._disrupt_kubernetes_then_decommission_and_add_scylla_node('drain_k8s_node')
+
+    def disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node(self):
+        self._disrupt_kubernetes_then_decommission_and_add_scylla_node('terminate_k8s_host')
+
+    def _disrupt_kubernetes_then_decommission_and_add_scylla_node(self, disruption_method):
+        if not self._is_it_on_kubernetes():
+            raise UnsupportedNemesis('Supported only on kubernetes')
+        self.set_target_node(
+            rack=random.choice(list(self.cluster.racks)), allow_only_last_node_in_rack=True)
+        node = self.target_node
+        InfoEvent(f'Running {disruption_method} on K8S node that hosts {self.target_node}').publish()
+        self.log.info('Terminate %s', node)
+        getattr(node, disruption_method)()
+        self.log.info('Decommission %s', node)
+        self.cluster.decommission(node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
+        new_node = self.add_new_node(rack=node.rack)
+        self.unset_current_running_nemesis(new_node)
+
+    def disrupt_replace_scylla_node_on_kubernetes(self):
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('OperatorNodeReplace is supported only on kubernetes')
         old_uid = self.target_node.k8s_pod_uid
@@ -1396,27 +1417,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_for_svc()
         self.target_node.mark_to_be_replaced()
         self._kubernetes_wait_till_node_up_after_been_recreated(self.target_node, old_uid=old_uid)
-
-    def _disrupt_terminate_decommission_add_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
-        self.log.info('Terminate %s', node)
-        node_terminate_method = getattr(node, node_terminate_method_name)
-        node_terminate_method()
-        self.log.info('Decommission %s', node)
-        self.cluster.decommission(node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
-        new_node = self.add_new_node(rack=node.rack)
-        self.unset_current_running_nemesis(new_node)
-
-    def _disrupt_terminate_and_replace_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
-        old_uid = node.k8s_pod_uid
-        self.log.info('TerminateNode %s (uid=%s)', node, old_uid)
-        node_terminate_method = getattr(node, node_terminate_method_name)
-        node_terminate_method()
-        node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
-        old_uid = node.k8s_pod_uid
-        self.log.info('Mark %s (uid=%s) to be replaced', node, old_uid)
-        node.wait_for_svc()
-        node.mark_to_be_replaced()
-        self._kubernetes_wait_till_node_up_after_been_recreated(node, old_uid=old_uid)
 
     def _kubernetes_wait_till_node_up_after_been_recreated(self, node, old_uid=None):
         node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
@@ -1433,7 +1433,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis(
-                'Use "disrupt_terminate_and_replace_node_kubernetes" instead this one for K8S')
+                'Use "disrupt_terminate_kubernetes_host_then_replace_scylla_node" '
+                'instead this one for K8S')
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         old_node_ip = self.target_node.ip_address
         is_old_node_seed = self.target_node.is_seed
@@ -4702,20 +4703,66 @@ class NodeTerminateAndReplace(Nemesis):
         self.disrupt_terminate_and_replace_node()
 
 
-class OperatorNodeTerminateAndReplace(Nemesis):
+class DrainKubernetesNodeThenReplaceScyllaNode(Nemesis):
     disruptive = True
     kubernetes = True
 
     def disrupt(self):
-        self.disrupt_terminate_and_replace_node_kubernetes()
+        self.disrupt_drain_kubernetes_node_then_replace_scylla_node()
 
 
-class OperatorNodeTerminateDecommissionAdd(Nemesis):
+class TerminateKubernetesHostThenReplaceScyllaNode(Nemesis):
     disruptive = True
     kubernetes = True
 
     def disrupt(self):
-        self.disrupt_terminate_decommission_add_node_kubernetes()
+        self.disrupt_terminate_kubernetes_host_then_replace_scylla_node()
+
+
+class DisruptKubernetesNodeThenReplaceScyllaNode(Nemesis):
+    disruptive = True
+    kubernetes = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disrupt_methods_list = [
+            'disrupt_drain_kubernetes_node_then_replace_scylla_node',
+            'disrupt_terminate_kubernetes_host_then_replace_scylla_node',
+        ]
+
+    def disrupt(self):
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
+
+
+class DrainKubernetesNodeThenDecommissionAndAddScyllaNode(Nemesis):
+    disruptive = True
+    kubernetes = True
+
+    def disrupt(self):
+        self.disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node()
+
+
+class TerminateKubernetesHostThenDecommissionAndAddScyllaNode(Nemesis):
+    disruptive = True
+    kubernetes = True
+
+    def disrupt(self):
+        self.disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node()
+
+
+class DisruptKubernetesNodeThenDecommissionAndAddScyllaNode(Nemesis):
+    disruptive = True
+    kubernetes = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disrupt_methods_list = [
+            'disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node',
+            'disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node',
+        ]
+
+    def disrupt(self):
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
 class OperatorNodeReplace(Nemesis):
@@ -4724,7 +4771,7 @@ class OperatorNodeReplace(Nemesis):
     free_tier_set = True
 
     def disrupt(self):
-        self.disrupt_replace_node_kubernetes()
+        self.disrupt_replace_scylla_node_on_kubernetes()
 
 
 class OperatorNodetoolFlushAndReshard(Nemesis):
@@ -4960,9 +5007,11 @@ class ScyllaOperatorBasicOperationsMonkey(Nemesis):
             'disrupt_grow_shrink_cluster',
             'disrupt_grow_shrink_new_rack',
             'disrupt_stop_start_scylla_server',
-            'disrupt_terminate_and_replace_node_kubernetes',
-            'disrupt_terminate_decommission_add_node_kubernetes',
-            'disrupt_replace_node_kubernetes',
+            'disrupt_drain_kubernetes_node_then_replace_scylla_node',
+            'disrupt_terminate_kubernetes_host_then_replace_scylla_node',
+            'disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node',
+            'disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node',
+            'disrupt_replace_scylla_node_on_kubernetes',
             'disrupt_mgmt_repair_cli',
             'disrupt_mgmt_backup_specific_keyspaces',
             'disrupt_mgmt_backup',
@@ -5053,6 +5102,8 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    AllMonkey, MdcChaosMonkey,
                    DisruptiveMonkey, NonDisruptiveMonkey, GeminiNonDisruptiveChaosMonkey,
                    GeminiChaosMonkey, NetworkMonkey, SisyphusMonkey,
+                   DisruptKubernetesNodeThenReplaceScyllaNode,
+                   DisruptKubernetesNodeThenDecommissionAndAddScyllaNode,
                    CategoricalMonkey]
 
 

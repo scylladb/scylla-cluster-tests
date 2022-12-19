@@ -14,7 +14,7 @@ import abc
 import getpass
 import logging
 import os
-from typing import Tuple, Optional, List, Callable
+from typing import Tuple, Optional, Callable
 from textwrap import dedent
 from functools import cached_property
 import yaml
@@ -670,6 +670,9 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
     def node_type(self) -> 'str':
         return 'db'
 
+    def terminate_k8s_node(self):
+        raise NotImplementedError("Not supported on local K8S backends")
+
     def terminate_k8s_host(self):
         raise NotImplementedError("Not supported on local K8S backends")
 
@@ -689,14 +692,6 @@ class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
     """Represents scylla cluster hosted on locally running minimal k8s clusters such as k3d, minikube or kind"""
     k8s_cluster: MinimalClusterBase
     PodContainerClass = LocalMinimalScyllaPodContainer
-
-    @cached_property
-    def node_terminate_methods(self) -> List[str]:
-        if isinstance(self.k8s_cluster, LocalKindCluster):
-            # NOTE: local K8S installation supports only 'drain_k8s_node' method.
-            #       'terminate_k8s_host' and 'terminate_k8s_node' are not applicable to it.
-            return ['drain_k8s_node']
-        return []
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=20, sleep_time=60, timeout=0):  # pylint: disable=too-many-arguments
         @retrying(n=iterations, sleep_time=sleep_time,

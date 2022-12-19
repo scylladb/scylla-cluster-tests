@@ -209,11 +209,10 @@ def test_mgmt_backup(db_cluster, manager_version):
     assert TaskStatus.DONE == status
 
 
-@pytest.mark.requires_node_termination_support('drain_k8s_node')
-def test_drain_and_replace_node_kubernetes(db_cluster):
+def test_drain_kubernetes_node_then_replace_scylla_node(db_cluster):
     target_node = random.choice(db_cluster.non_seed_nodes)
     old_uid = target_node.k8s_pod_uid
-    log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
+    log.info("Drain K8S node that hosts '%s' scylla node (uid=%s)", target_node, old_uid)
     target_node.drain_k8s_node()
     target_node.mark_to_be_replaced()
     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
@@ -221,11 +220,10 @@ def test_drain_and_replace_node_kubernetes(db_cluster):
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
-@pytest.mark.requires_node_termination_support('drain_k8s_node')
-def test_drain_wait_and_replace_node_kubernetes(db_cluster):
+def test_drain_kubernetes_node_then_wait_and_replace_scylla_node(db_cluster):
     target_node = random.choice(db_cluster.non_seed_nodes)
     old_uid = target_node.k8s_pod_uid
-    log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
+    log.info("Drain K8S node that hosts '%s' scylla node (uid=%s)", target_node, old_uid)
     target_node.drain_k8s_node()
     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
     old_uid = target_node.k8s_pod_uid
@@ -236,11 +234,10 @@ def test_drain_wait_and_replace_node_kubernetes(db_cluster):
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
-@pytest.mark.requires_node_termination_support('drain_k8s_node')
-@pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-operator/issues/982")
-def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
+def test_drain_kubernetes_node_then_decommission_and_add_scylla_node(db_cluster):
     target_rack = random.choice([*db_cluster.racks])
     target_node = db_cluster.get_rack_nodes(target_rack)[-1]
+    log.info("Drain K8S node that hosts '%s' scylla node not waiting for pod absence", target_node)
     target_node.drain_k8s_node()
     db_cluster.decommission(target_node)
     db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)
