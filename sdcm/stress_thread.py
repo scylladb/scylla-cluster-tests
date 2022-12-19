@@ -26,7 +26,7 @@ from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.cluster import BaseLoaderSet  # , BaseNode
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
-from sdcm.utils.common import FileFollowerThread, get_profile_content, get_data_dir_path
+from sdcm.utils.common import FileFollowerThread, get_profile_content, get_data_dir_path, time_period_str_to_seconds
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
 from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
 from sdcm.utils.docker_remote import RemoteDocker
@@ -359,14 +359,8 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         return cs_summary, errors
 
 
-duration_pattern = re.compile(r'(?P<hours>[\d]*)h|(?P<minutes>[\d]*)m|(?P<seconds>[\d]*)s')
 stress_cmd_get_duration_pattern = re.compile(r' [-]{0,2}duration[\s=]+([\d]+[hms]+)')
 stress_cmd_get_warmup_pattern = re.compile(r' [-]{0,2}warmup[\s=]+([\d]+[hms]+)')
-
-
-def time_period_str_to_seconds(time_str: str) -> int:
-    """Transforms duration string into seconds int. e.g. 1h -> 3600, 1h22m->4920 or 10m->600"""
-    return sum([int(g[0] or 0) * 3600 + int(g[1] or 0) * 60 + int(g[2] or 0) for g in duration_pattern.findall(time_str)])
 
 
 def get_timeout_from_stress_cmd(stress_cmd: str) -> int | None:

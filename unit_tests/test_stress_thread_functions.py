@@ -13,7 +13,8 @@
 
 import pytest
 
-from sdcm.stress_thread import time_period_str_to_seconds, get_timeout_from_stress_cmd
+from sdcm.stress_thread import get_timeout_from_stress_cmd
+from sdcm.utils.common import time_period_str_to_seconds
 
 
 @pytest.mark.parametrize("duration,seconds", (

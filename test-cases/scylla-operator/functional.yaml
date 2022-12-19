@@ -30,3 +30,5 @@ k8s_functional_test_dataset: MULTI_COLUMNS_DATA
 
 # enable by default
 k8s_enable_tls: true
+
+k8s_use_chaos_mesh: true

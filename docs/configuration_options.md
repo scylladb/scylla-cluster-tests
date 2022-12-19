@@ -337,3 +337,5 @@
 | **<a href="#user-content-max_deviation" name="max_deviation">max_deviation</a>**  | Max relative difference between best and current throughput,<br>if current throughput larger then best on max_rel_diff, it become new best one | N/A | SCT_MAX_DEVIATION
 | **<a href="#user-content-n_stress_process" name="n_stress_process">n_stress_process</a>**  | Number of stress processes per loader | N/A | SCT_N_STRESS_PROCESS
 | **<a href="#user-content-stress_process_step" name="stress_process_step">stress_process_step</a>**  | add/remove num of process on each round | N/A | SCT_STRESS_PROCESS_STEP
+| **<a href="#user-content-use_hdr_cs_histogram" name="use_hdr_cs_histogram">use_hdr_cs_histogram</a>**  | Enable hdr histogram logging for cs | N/A | SCT_USE_HDR_CS_HISTOGRAM
+| **<a href="#user-content-k8s_use_chaos_mesh" name="k8s_use_chaos_mesh">k8s_use_chaos_mesh</a>**  | enables chaos-mesh for k8s testing | N/A | SCT_K8S_USE_CHAOS_MESH
