@@ -36,6 +36,7 @@ from sdcm.utils.k8s import (
     convert_cpu_value_from_k8s_to_units,
     HelmValues,
 )
+from sdcm.utils.k8s.chaos_mesh import PodFailureExperiment
 
 from functional_tests.scylla_operator.libs.helpers import (
     get_scylla_sysctl_value,
@@ -860,3 +861,13 @@ def test_cloud_bundle_connectivity_cqlsh(db_cluster: ScyllaPodCluster):
 
     assert not res.stderr
     assert '(1 rows)' in res.stdout
+
+
+def test_can_recover_from_fatal_pod_termination(db_cluster):
+    target_node = db_cluster.nodes[-1]
+    experiment = PodFailureExperiment(pod=target_node, duration="60s")
+    experiment.start()
+    db_cluster.k8s_cluster.kubectl(
+        f"wait --timeout=1m --for=condition=Ready=false pod {target_node.name} -n {db_cluster.namespace}")
+    experiment.wait_until_finished()
+    db_cluster.wait_for_nodes_up_and_normal(nodes=[target_node], verification_node=target_node)

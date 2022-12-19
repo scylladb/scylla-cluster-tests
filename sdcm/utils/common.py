@@ -2808,3 +2808,11 @@ class RemoteTemporaryFolder:
     def __exit__(self, exit_type, value, _traceback):
         # remove the temporary folder as `sudo` to cover the case when the folder owner was changed during test
         self.node.remoter.sudo(f'rm -rf {self.folder_name}')
+
+
+duration_pattern = re.compile(r'(?P<hours>[\d]*)h|(?P<minutes>[\d]*)m|(?P<seconds>[\d]*)s')
+
+
+def time_period_str_to_seconds(time_str: str) -> int:
+    """Transforms duration string into seconds int. e.g. 1h -> 3600, 1h22m->4920 or 10m->600"""
+    return sum([int(g[0] or 0) * 3600 + int(g[1] or 0) * 60 + int(g[2] or 0) for g in duration_pattern.findall(time_str)])
