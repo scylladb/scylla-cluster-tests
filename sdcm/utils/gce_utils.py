@@ -43,7 +43,8 @@ SUPPORTED_REGIONS = {
     'us-west1': 'abc'}
 
 
-SUPPORTED_PROJECTS = {'gcp', 'gcp-sct-project-1'} | {os.environ.get('SCT_GCE_PROJECT', 'gcp-sct-project-1')}
+SUPPORTED_PROJECTS = {'gcp', 'gcp-sct-project-1',
+                      'gcp-local-ssd-latency'} | {os.environ.get('SCT_GCE_PROJECT', 'gcp-sct-project-1')}
 
 
 def append_zone(region: str) -> str:
