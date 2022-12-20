@@ -2748,7 +2748,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                       auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout,
                       connect_timeout=connect_timeout, ssl_params=ssl_params)
 
-        if self.parent_cluster.connection_bundle_file:
+        if self.parent_cluster.connection_bundle_file and (
+                packaging.version.LegacyVersion(self.scylla_version) >= packaging.version.LegacyVersion('5.2.0~dev')):
+
             connection_bundle_file = self.parent_cluster.connection_bundle_file
             target_connection_bundle_file = str(Path('/tmp/') / connection_bundle_file.name)
             self.remoter.send_files(str(connection_bundle_file), target_connection_bundle_file)
