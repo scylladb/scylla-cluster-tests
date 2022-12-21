@@ -443,19 +443,35 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         subclasses_list = self._get_subclasses(**flags)
         return subclasses_list
 
-    def get_list_of_disrupt_methods(self, subclasses_list):
-        disrupt_methods_list = []
+    def get_list_of_disrupt_methods(self, subclasses_list, export_properties=False):
+        disrupt_methods_objects_list = []
+        disrupt_methods_names_list = []
+        nemesis_classes = []
+        all_methods_with_properties = []
         for subclass in subclasses_list:
+            properties_list = []
+            per_method_properties = {}
             method_name = re.search(
                 r'self\.(?P<method_name>disrupt_[0-9A-Za-z_]+?)\(.*\)', inspect.getsource(subclass), flags=re.MULTILINE)
+            for attribute in subclass.__dict__.keys():
+                if attribute[:2] != '__':
+                    value = getattr(subclass, attribute)
+                    if not callable(value):
+                        properties_list.append(f"{attribute} = {value}")
             if method_name:
-                disrupt_methods_list.append(method_name.group('method_name'))
-        self.log.debug("list of matching disrupions: {}".format(disrupt_methods_list))
-        for _ in disrupt_methods_list:
-            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
-                               attr[0] in disrupt_methods_list and
-                               callable(attr[1])]
-        return disrupt_methods
+                method_name_str = method_name.group('method_name')
+                disrupt_methods_names_list.append(method_name_str)
+                nemesis_classes.append(subclass.__name__)
+                if export_properties:
+                    per_method_properties[method_name_str] = properties_list
+                    all_methods_with_properties.append(per_method_properties)
+                    all_methods_with_properties = sorted(all_methods_with_properties, key=lambda d: list(d.keys()))
+        nemesis_classes.sort()
+        self.log.debug("list of matching disrupions: {}".format(disrupt_methods_names_list))
+        for _ in disrupt_methods_names_list:
+            disrupt_methods_objects_list = [attr[1] for attr in inspect.getmembers(self) if
+                                            attr[0] in disrupt_methods_names_list and callable(attr[1])]
+        return disrupt_methods_objects_list, all_methods_with_properties, nemesis_classes
 
     @classmethod
     def _get_subclasses(cls, **flags) -> List[Type['Nemesis']]:
@@ -1648,7 +1664,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             subclasses = self.get_list_of_subclasses_by_property_name(
                 list_of_properties_to_include=nemesis_selector)
             if subclasses:
-                disruptions = self.get_list_of_disrupt_methods(subclasses_list=subclasses)
+                disruptions, _, _ = self.get_list_of_disrupt_methods(subclasses_list=subclasses)
             else:
                 disruptions = []
         else:
