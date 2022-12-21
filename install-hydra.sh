@@ -2,7 +2,7 @@
 HYDRA_LINK_PATH=/usr/local/bin/hydra
 if ! docker --version ; then
     echo "Docker not installed!!!"
-    curl -fsSL get.docker.com -o get-docker.sh
+    curl -fsSL get.docker.com --retry 5 --retry-max-time 300  -o get-docker.sh
     sh get-docker.sh
     # Docker post install, adds ability to run Docker as current user
     groupadd docker || true
