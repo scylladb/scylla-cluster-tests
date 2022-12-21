@@ -24,7 +24,6 @@ ami_loader_user: 'ubuntu'
 scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/debian/scylla-4.6-buster.list'
 # centos7 is used for monitor
 ami_monitor_user: 'ubuntu'
-aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
 
 ami_id_db_scylla: ''
 ami_id_db_oracle: ''
