@@ -1659,21 +1659,21 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return
         if self.is_rhel_like():
             repo_path = '/etc/yum.repos.d/scylla.repo'
-            self.remoter.sudo('curl -o %s -L %s' % (repo_path, scylla_repo))
+            self.remoter.sudo('curl --retry 5 --retry-max-time 300 -o %s -L %s' % (repo_path, scylla_repo))
             self.remoter.sudo('chown root:root %s' % repo_path)
             self.remoter.sudo('chmod 644 %s' % repo_path)
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
         elif self.distro.is_sles:
             repo_path = '/etc/zypp/repos.d/scylla.repo'
-            self.remoter.sudo('curl -o %s -L %s' % (repo_path, scylla_repo))
+            self.remoter.sudo('curl --retry 5 --retry-max-time 300 -o %s -L %s' % (repo_path, scylla_repo))
             self.remoter.sudo('chown root:root %s' % repo_path)
             self.remoter.sudo('chmod 644 %s' % repo_path)
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
         else:
             repo_path = '/etc/apt/sources.list.d/scylla.list'
-            self.remoter.sudo('curl -o %s -L %s' % (repo_path, scylla_repo))
+            self.remoter.sudo('curl --retry 5 --retry-max-time 300 -o %s -L %s' % (repo_path, scylla_repo))
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=False)
             self.remoter.sudo("mkdir -p /etc/apt/keyrings")
