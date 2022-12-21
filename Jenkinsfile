@@ -67,7 +67,7 @@ def runRestoreMonitoringStack(){
 pipeline {
     agent {
         label {
-            label "sct-builders"
+            label "aws-sct-builders-eu-west-1-v2-CI"
         }
     }
     parameters {
