@@ -121,6 +121,14 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def calculate_spot_duration_for_test(self):
         return floor(self.test_config.TEST_DURATION / 60) * 60 + 60
 
+    @property
+    def instance_profile_name(self) -> str | None:
+        if self.node_type == "scylla-db":
+            return self.params.get('aws_instance_profile_name_db')
+        if self.node_type == "loader":
+            return self.params.get('aws_instance_profile_name_loader')
+        return None
+
     def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0):  # pylint: disable=too-many-arguments
         ami_id = self._ec2_ami_id[dc_idx]
         self.log.debug(f"Creating {count} on-demand instances using AMI id '{ami_id}'... ")
@@ -132,7 +140,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                       BlockDeviceMappings=self._ec2_block_device_mappings,
                       NetworkInterfaces=interfaces,
                       InstanceType=self._ec2_instance_type)
-        instance_profile = self.params.get('aws_instance_profile_name')
+        instance_profile = self.instance_profile_name
         if instance_profile:
             params['IamInstanceProfile'] = {'Name': instance_profile}
         instances = self._ec2_services[dc_idx].create_instances(**params)
@@ -152,7 +160,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            user_data=ec2_user_data,
                            count=count,
                            block_device_mappings=self._ec2_block_device_mappings,
-                           aws_instance_profile=self.params.get('aws_instance_profile_name'))
+                           aws_instance_profile=self.instance_profile_name)
         if self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
             # duration value must be a multiple of 60
             spot_params.update({'duration': self.calculate_spot_duration_for_test()})

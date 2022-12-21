@@ -20,4 +20,4 @@ ip_ssh_connections: 'private'
 
 manager_prometheus_port: 10091
 
-aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
+aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
