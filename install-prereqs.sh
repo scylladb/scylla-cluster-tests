@@ -47,7 +47,7 @@ install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
 # Install docker
 
-curl -fsSL get.docker.com -o get-docker.sh
+curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
 sh get-docker.sh
 groupadd docker || true
 usermod -aG docker $USER || true
