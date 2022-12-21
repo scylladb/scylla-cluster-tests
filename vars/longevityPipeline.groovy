@@ -24,7 +24,7 @@ def call(Map pipelineParams) {
                name: 'backend')
 
             string(defaultValue: "${pipelineParams.get('aws_region', 'eu-west-1')}",
-               description: 'Supported: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region)',
+               description: 'Supported: us-east-1 | eu-west-1 | eu-west-2 | eu-north-1 | eu-central-1 | us-west-2 | random (randomly select region)',
                name: 'aws_region')
             string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
                description: 'Availability zone',

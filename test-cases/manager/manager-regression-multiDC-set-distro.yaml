@@ -22,3 +22,6 @@ use_mgmt: true
 mgmt_port: 10090
 
 aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
+
+ami_monitor_user: 'centos'
+ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
