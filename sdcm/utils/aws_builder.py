@@ -16,22 +16,93 @@ from functools import cached_property
 
 import jenkins
 import click
+import boto3
+import botocore
+import requests
 from mypy_boto3_ec2 import EC2ServiceResource
 
 from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.common import all_aws_regions
 from sdcm.sct_runner import AwsSctRunner
 from sdcm.utils.sct_cmd_helpers import CloudRegion, add_file_logger
 from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
 
+ASG_CONFIG_FORMAT = """
+import com.amazonaws.services.ec2.model.InstanceType
+import hudson.plugins.sshslaves.SSHConnector
+import hudson.plugins.sshslaves.verifiers.NonVerifyingKeyVerificationStrategy
+import hudson.model.*
+import com.amazon.jenkins.ec2fleet.EC2FleetCloud
+import jenkins.model.Jenkins
+
+// just modify this config other code just logic
+config = [
+    name: "{name}",
+    region: "{region_name}",
+    fleetId: "{asg_id}",
+    idleMinutes: 10,
+    minSize: {min_size},
+    maxSize: {max_size},
+    numExecutors: 4,
+    labels: "{jenkins_labels}",
+]
+
+// find detailed information about parameters on plugin config page or
+// https://github.com/jenkinsci/ec2-fleet-plugin/blob/master/src/main/java/com/amazon/jenkins/ec2fleet/EC2FleetCloud.java
+EC2FleetCloud ec2FleetCloud = new EC2FleetCloud(
+  config.name, // fleetCloudName
+  "", // OldId
+  "jenkins2 aws account", // awsCredentialsId
+  "", // credentialsId
+  config.region,
+  "", // endpoint
+  config.fleetId,
+  config.labels,  // labels
+  "/tmp/jenkins/", // fs root
+  new SSHConnector(22,
+                   "user-jenkins_scylla-qa-ec2.pem", "", "", "", "", null, 0, 0,
+                   new NonVerifyingKeyVerificationStrategy()),
+  false, // privateIpUsed
+  true, // alwaysReconnect
+  config.idleMinutes, // if need to allow downscale set > 0 in min
+  config.minSize, // minSize
+  config.maxSize, // maxSize
+  0,  // minSpareSize
+  config.numExecutors, // numExecutors
+  false, // addNodeOnlyIfRunning
+  true, // restrictUsage allow execute only jobs with proper label
+  "10", // maxTotalUses
+  true, // disableTaskResubmit,
+  600, // initOnlineTimeoutSec,
+  60, // initOnlineCheckIntervalSec,
+  false, // scaleExecutorsByWeight,
+  60, // cloudStatusIntervalSec,
+  true, // noDelayProvision
+)
+
+// get Jenkins instance
+Jenkins jenkins = Jenkins.get()
+
+// clear old configuration
+jenkins.clouds.removeAll {{ it.name == config.name }}
+
+// add cloud configuration to Jenkins
+jenkins.clouds.add(ec2FleetCloud)
+
+// save current Jenkins state to disk
+jenkins.save()
+"""
+
 
 class AwsBuilder:
+    NUM_CPUS = 2
+
     def __init__(self, region: AwsRegion, number=1):
         self.region = region
         self.number = number
-        self.jenkins = jenkins.Jenkins(**KeyStore().get_json("jenkins.json"))
+        self.jenkins_info = KeyStore().get_json("jenkins.json")
+        self.jenkins = jenkins.Jenkins(**self.jenkins_info)
         self.runner = AwsSctRunner(region_name=self.region.region_name,
                                    availability_zone=self.region.availability_zones[0][-1])
 
@@ -42,7 +113,7 @@ class AwsBuilder:
 
     @cached_property
     def jenkins_labels(self):
-        return f"aws-sct-builders-{self.region.region_name}-v2"
+        return f"aws-sct-builders-{self.region.region_name}-v2-asg"
 
     @cached_property
     def instance(self) -> EC2ServiceResource.Instance:
@@ -137,18 +208,144 @@ class AwsBuilder:
         self.region.client.associate_address(AllocationId=self.elastic_ip.allocation_id,
                                              InstanceId=self.instance.instance_id)
 
-    def configure(self):
+    def configure_one_builder(self):
         self.region.create_sct_ssh_security_group()
         self.create_elastic_ip()
         self.associate_elastic_ip()
         self.add_to_jenkins()
 
+    def create_launch_template(self):
+        click.secho(f"{self.region.region_name}: create_launch_template")
+        runner = AwsSctRunner(region_name=self.region.region_name, availability_zone='a')
+        if not runner.image:
+            runner.create_image()
+        try:
+            self.region.client.create_launch_template(
+                LaunchTemplateName="aws-sct-builders",
+                LaunchTemplateData={
+                    'ImageId': runner.image.id,
+                    'KeyName': self.region.SCT_KEY_PAIR_NAME,
+                    'SecurityGroupIds': [self.region.sct_ssh_security_group.id],
+                },
+                TagSpecifications=[
+                    {
+                        'ResourceType': 'launch-template',
+                        'Tags': [
+                            {
+                                'Key': 'RunByUser',
+                                'Value': 'QA'
+                            },
+                        ]
+                    },
+                ],
+            )
+        except botocore.exceptions.ClientError as error:
+            LOGGER.debug(error.response)
+            if not error.response['Error']['Code'] == 'InvalidLaunchTemplateName.AlreadyExistsException':
+                raise
+
+    def create_auto_scaling_group(self):
+        click.secho(f"{self.region.region_name}: create_auto_scaling_group")
+        try:
+            asg_client = boto3.client('autoscaling', region_name=self.region.region_name)
+            subnet_ids = [self.region.sct_subnet(region_az=az).subnet_id for az in self.region.availability_zones]
+            asg_client.create_auto_scaling_group(AutoScalingGroupName=self.name, MinSize=0, MaxSize=200,
+                                                 AvailabilityZones=self.region.availability_zones,
+                                                 VPCZoneIdentifier=",".join(subnet_ids),
+                                                 MixedInstancesPolicy={
+                                                     "LaunchTemplate": {
+                                                         "LaunchTemplateSpecification": {
+                                                             "LaunchTemplateName": "aws-sct-builders",
+                                                             "Version": "$Latest"
+                                                         },
+                                                         "Overrides": [
+                                                             {
+                                                                 "InstanceRequirements": {
+                                                                     "VCpuCount": {
+                                                                         "Min": self.NUM_CPUS,
+                                                                         "Max": self.NUM_CPUS
+                                                                     },
+                                                                     "MemoryMiB": {
+                                                                         "Min": 4096,
+                                                                         "Max": 8192
+                                                                     },
+                                                                 }
+                                                             }
+                                                         ]
+                                                     },
+                                                     "InstancesDistribution": {
+                                                         "OnDemandAllocationStrategy": "lowest-price",
+                                                         "OnDemandBaseCapacity": 0,
+                                                         "OnDemandPercentageAboveBaseCapacity": 100,
+                                                         "SpotAllocationStrategy": "price-capacity-optimized"
+                                                     },
+                                                 },
+                                                 Tags=[
+                                                     {
+                                                         "Key": "Name",
+                                                         "Value": "sct-jenkins-builder-asg",
+                                                         "PropagateAtLaunch": True
+                                                     },
+                                                     {
+                                                         "Key": "NodeType",
+                                                         "Value": "builder",
+                                                         "PropagateAtLaunch": True
+                                                     },
+                                                     {
+                                                         "Key": "keep",
+                                                         "Value": "alive",
+                                                         "PropagateAtLaunch": True
+                                                     },
+                                                     {
+                                                         "Key": "keep_action",
+                                                         "Value": "terminate",
+                                                         "PropagateAtLaunch": True
+                                                     }]
+                                                 )
+
+        except botocore.exceptions.ClientError as error:
+            LOGGER.debug(error.response)
+            if not error.response['Error']['Code'] == 'AlreadyExists':
+                raise
+
+    def add_scaling_group_to_jenkins(self):
+        click.secho(f"{self.region.region_name}: add_scaling_group_to_jenkins")
+        res = requests.post(url=f"{self.jenkins_info['url']}/scriptText",
+                            auth=(self.jenkins_info['username'], self.jenkins_info['password']),
+                            params=dict(script=ASG_CONFIG_FORMAT.format(name=self.name,
+                                                                        region_name=self.region.region_name,
+                                                                        min_size=0,
+                                                                        max_size=100,
+                                                                        asg_id=self.name,
+                                                                        jenkins_labels=self.jenkins_labels)))
+        res.raise_for_status()
+        LOGGER.debug(res.text)
+        assert not res.text
+
+    def configure_auto_scaling_group(self):
+        self.create_launch_template()
+        self.create_auto_scaling_group()
+        self.add_scaling_group_to_jenkins()
+
     @classmethod
     def configure_in_all_region(cls, regions=None):
-        regions = regions or all_aws_regions(cached=True)
+        regions = regions or ['eu-west-1', 'eu-west-2', 'eu-north-1', 'eu-central-1', 'us-east-1', 'us-west-2']
         for region_name in regions:
             region = cls(AwsRegion(region_name))
-            region.configure()
+            region.configure_auto_scaling_group()
+
+
+class AwsCiBuilder(AwsBuilder):
+    NUM_CPUS = 4
+
+    @cached_property
+    def name(self):
+        # example: aws-eu-central-1-qa-builder-v2-1
+        return f"aws-{self.region.region_name}-qa-builder-v2-{self.number}-CI"
+
+    @cached_property
+    def jenkins_labels(self):
+        return f"aws-sct-builders-{self.region.region_name}-v2-CI"
 
 
 configure_jenkins_builders: click.Command
@@ -159,6 +356,9 @@ configure_jenkins_builders: click.Command
               default=[], help="Cloud regions", multiple=True)
 def configure_jenkins_builders(regions):
     add_file_logger()
+    logging.basicConfig(level=logging.INFO)
+
+    AwsCiBuilder(AwsRegion('eu-west-1')).configure_auto_scaling_group()
     AwsBuilder.configure_in_all_region(regions=regions)
 
 

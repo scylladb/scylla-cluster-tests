@@ -35,19 +35,13 @@ store_perf_results: false
 regions_data:
   us-east-1: # US East (N. Virginia)
     ami_id_loader: 'ami-00c1a16b5136fbb7c' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
   us-west-2: # US West (Oregon)
     ami_id_loader: 'ami-04d2eb44d523b3ccb' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-01ed306a12b7d1c96' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
   eu-west-1: # Europe (Ireland)
     ami_id_loader: 'ami-042cf1bc21e30ce60' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
   eu-west-2: # Europe (London)
     ami_id_loader: 'ami-0370fbb289d8310d2' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-0eab3a90fc693af19' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
   eu-north-1: # Europe (Stockholm)
     ami_id_loader: 'ami-0226185e7d7951b6a' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-5ee66f20' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
   eu-central-1: # Europe (Frankfurt)
     ami_id_loader: 'ami-0bc7811c417b0eb09' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-04cf43aca3e6f3de3' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01

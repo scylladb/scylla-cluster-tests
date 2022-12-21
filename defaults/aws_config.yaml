@@ -9,23 +9,23 @@ instance_type_monitor: 't3.large'
 # manual on creating loader AMI's: see docs/new_loader_ami.md
 regions_data:
   us-east-1: # US East (N. Virginia)
-    ami_id_loader: 'ami-00c1a16b5136fbb7c' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+    ami_id_loader: 'ami-00c1a16b5136fbb7c' # Loader dedicated AMI scylla-qa-loader-ami-v19
+    ami_id_monitor: 'ami-06878d265978313ca' # ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20221206 Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2022-12-06
   us-west-2: # US West (Oregon)
-    ami_id_loader: 'ami-04d2eb44d523b3ccb' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-01ed306a12b7d1c96' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
-  eu-west-1: # Europe (Ireland)
-    ami_id_loader: 'ami-042cf1bc21e30ce60' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+    ami_id_loader: 'ami-09808043b7fcdb244' # Loader dedicated AMI scylla-qa-loader-ami-v19
+    ami_id_monitor: 'ami-03f8756d29f0b5f21' # ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20221206 Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2022-12-06
+  eu-west-1: # EU (Ireland)
+    ami_id_loader: 'ami-042cf1bc21e30ce60' # Loader dedicated AMI scylla-qa-loader-ami-v19
+    ami_id_monitor: 'ami-026e72e4e468afa7b' # ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20221206 Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2022-12-06
   eu-west-2: # Europe (London)
-    ami_id_loader: 'ami-0370fbb289d8310d2' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-0eab3a90fc693af19' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+    ami_id_loader: 'ami-0370fbb289d8310d2' # Loader dedicated AMI scylla-qa-loader-ami-v19
+    ami_id_monitor: 'ami-01b8d743224353ffe' # ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20221206 Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2022-12-06
   eu-north-1: # Europe (Stockholm)
-    ami_id_loader: 'ami-0226185e7d7951b6a' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-5ee66f20' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
-  eu-central-1: # Europe (Frankfurt)
-    ami_id_loader: 'ami-0bc7811c417b0eb09' # Loader dedicated AMI v19
-    ami_id_monitor: 'ami-04cf43aca3e6f3de3' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+    ami_id_loader: 'ami-0226185e7d7951b6a' # Loader dedicated AMI scylla-qa-loader-ami-v19
+    ami_id_monitor: 'ami-03df6dea56f8aa618' # ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20221206 Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2022-12-06
+  eu-central-1: # EU (Frankfurt)
+    ami_id_loader: 'ami-0bc7811c417b0eb09' # Loader dedicated AMI scylla-qa-loader-ami-v19
+    ami_id_monitor: 'ami-0039da1f3917fa8e3' # ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20221206 Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2022-12-06
 
 availability_zone: 'a'
 root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
@@ -35,8 +35,8 @@ loader_swap_size: 10240  #10GB SWAP space
 ami_db_scylla_user: 'scyllaadm'
 # used prepared centos7 AMI for loader
 ami_loader_user: 'centos'
-# centos7 is used for monitor
-ami_monitor_user: 'centos'
+# ubuntu is used for monitor
+ami_monitor_user: 'ubuntu'
 aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
 
 ami_id_db_scylla: ''
