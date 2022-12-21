@@ -639,8 +639,11 @@ class SCTConfiguration(dict):
         dict(name="extra_network_interface", env="SCT_EXTRA_NETWORK_INTERFACE", type=boolean,
              help="if true, create extra network interface on each node"),
 
-        dict(name="aws_instance_profile_name", env="SCT_AWS_INSTANCE_PROFILE_NAME", type=str,
-             help="This is the name of the instance profile to set on all instances"),
+        dict(name="aws_instance_profile_name_db", env="SCT_AWS_INSTANCE_PROFILE_NAME_DB", type=str,
+             help="This is the name of the instance profile to set on all db instances"),
+
+        dict(name="aws_instance_profile_name_loader", env="SCT_AWS_INSTANCE_PROFILE_NAME_LOADER", type=str,
+             help="This is the name of the instance profile to set on all loader instances"),
 
         dict(name="backup_bucket_backend", env="SCT_BACKUP_BUCKET_BACKEND", type=str,
              help="the backend to be used for backup (e.g., 's3', 'gcs' or 'azure')"),
