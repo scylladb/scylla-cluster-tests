@@ -25,6 +25,8 @@ stress_cmd: ["scylla-bench -workload=sequential -mode=write -replication-factor=
              "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=25 -clustering-row-count=5555 -partition-offset=76   -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=540m -validate-data"
             ]
 
+post_prepare_cql_cmds: "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELECT * FROM scylla_bench.test where pk is not null and ck is not null PRIMARY KEY(pk, ck) with comment = 'TEST VIEW'"
+
 #stress_read_cmd: [
 #                  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=1000 -clustering-row-count=200000 -clustering-row-size=uniform:10..10240 -partition-offset=1001 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -iterations=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s",
 #                  "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=250 -clustering-row-count=100000 -clustering-row-size=uniform:3072..5120 -concurrency=10 -connection-count=10 -rows-per-request=10 -consistency-level=quorum -iterations=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -validate-data",
