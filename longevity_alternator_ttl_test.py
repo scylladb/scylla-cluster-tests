@@ -11,8 +11,9 @@ class AlternatorTtlLongevityTest(LongevityTest):
     full_table_name = f'{keyspace}.{NO_LWT_TABLE_NAME}'
 
     def _count_sstables_and_partitions(self, node: BaseNode) -> int:
-        estimated_num_of_partitions = node.get_cfstats(self.full_table_name)['Number of partitions (estimate)']
-        num_of_sstables = node.get_cfstats(self.full_table_name)['SSTable count']
+        cfstats = node.get_cfstats(self.full_table_name)
+        estimated_num_of_partitions = cfstats['Number of partitions (estimate)']
+        num_of_sstables = cfstats['SSTable count']
         self.log.info('Table stats results are: %s sstables, %s estimated partitions',
                       num_of_sstables, estimated_num_of_partitions)
 
@@ -38,7 +39,7 @@ class AlternatorTtlLongevityTest(LongevityTest):
         self.log.info('Run a major compaction on node %s', node.name)
         node.run_nodetool("compact")
         self.wait_no_compactions_running()
-        self._count_sstables_and_partitions(node=node)
+        return self._count_sstables_and_partitions(node=node)
 
     def test_count_sstables_after_major_compaction(self):
         """

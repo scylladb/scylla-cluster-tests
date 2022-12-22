@@ -6,8 +6,8 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
-    test_name: 'longevity_alternator_ttl_test.AlternatorTtlLongevityTest.test_multiple_ttl',
-    test_config: 'test-cases/longevity/longevity-alternator-4m-scan-multiple-ttl-8m-grace.yaml',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: 'test-cases/features/alternator-ttl/longevity-alternator-1h-scan-12h-ttl-no-lwt-2h-grace-4loaders-sisyphus.yaml',
 
     email_recipients: 'qa@scylladb.com'
 )

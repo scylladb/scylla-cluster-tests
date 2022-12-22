@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-alternator-ttl-lwt.yaml',
+    test_config: 'test-cases/features/alternator-ttl/longevity-alternator-4m-scan-multiple-ttl-8m-grace.yaml',
 
     email_recipients: 'qa@scylladb.com'
 )
