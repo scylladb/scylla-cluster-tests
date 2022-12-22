@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_alternator_ttl_test.AlternatorTtlLongevityTest.test_disable_enable_ttl_scan',
-    test_config: 'test-cases/longevity/longevity-alternator-disable-enable-ttl.yaml',
+    test_config: 'test-cases/features/alternator-ttl/longevity-alternator-disable-enable-ttl.yaml',
 
     email_recipients: 'qa@scylladb.com'
 )
