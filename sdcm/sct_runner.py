@@ -119,7 +119,7 @@ class SctRunnerInfo:  # pylint: disable=too-many-instance-attributes
 
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
-    VERSION = "1.5"  # Version of the Image
+    VERSION = "1.6"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -420,7 +420,7 @@ class SctRunner(ABC):
 class AwsSctRunner(SctRunner):
     """Provision and configure the SCT Runner on AWS."""
     CLOUD_PROVIDER = "aws"
-    BASE_IMAGE = "ami-0c4a211d2b7c38400"  # ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-20210907
+    BASE_IMAGE = "ami-07c2ae35d31367b3e"  # Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2022-12-01
     SOURCE_IMAGE_REGION = "eu-west-2"  # where the source Runner image will be created and copied to other regions
     IMAGE_BUILDER_INSTANCE_TYPE = "t2.small"
     REGULAR_TEST_INSTANCE_TYPE = "t3.large"  # 2 vcpus, 8G, 36 CPU credits/hour
@@ -645,7 +645,7 @@ class GceSctRunner(SctRunner):
     """Provision and configure the SCT runner on GCE."""
 
     CLOUD_PROVIDER = "gce"
-    BASE_IMAGE = "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts"
+    BASE_IMAGE = "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"
     SOURCE_IMAGE_REGION = "us-east1"  # where the source Runner image will be created and copied to other regions
     IMAGE_BUILDER_INSTANCE_TYPE = "e2-standard-2"
     REGULAR_TEST_INSTANCE_TYPE = "e2-standard-2"  # 2 vcpus, 8G
@@ -840,8 +840,8 @@ class AzureSctRunner(SctRunner):
     GALLERY_IMAGE_VERSION = f"{SctRunner.VERSION}.0"  # Azure requires to have it in `X.Y.Z' format
     BASE_IMAGE = {
         "publisher": "canonical",
-        "offer": "0001-com-ubuntu-server-focal",
-        "sku": "20_04-lts-gen2",
+        "offer": "0001-com-ubuntu-server-jammy",
+        "sku": "22_04-lts-gen2",
         "version": "latest",
     }
     SOURCE_IMAGE_REGION = AzureRegion.SCT_GALLERY_REGION
