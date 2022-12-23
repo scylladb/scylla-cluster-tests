@@ -94,7 +94,13 @@ class SSHLoggerBase(NodeLoggerBase):
 
     @raise_event_on_failure
     def _journal_thread(self):
-        self._remoter = RemoteCmdRunnerBase.create_remoter(**self._remoter_params)
+        # NOTE: K8S and docker backends use separate non-SSH remoters
+        #       where each new call is separate process.
+        #       So, reuse the remoter class we already have defined in the node.
+        if self.node.is_docker():
+            self._remoter = self.node.remoter
+        else:
+            self._remoter = RemoteCmdRunnerBase.create_remoter(**self._remoter_params)
         read_from_timestamp = None
         while not self._termination_event.is_set():
             self._wait_ssh_up(verbose=False)
