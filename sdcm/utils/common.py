@@ -943,7 +943,7 @@ def list_load_balancers_aws(tags_dict=None, region_name=None, group_as_region=Fa
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(load_balancers.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100).run(get_load_balancers, ignore_exceptions=False)
+    ParallelObject(aws_regions, timeout=100).run(get_load_balancers, ignore_exceptions=True)
 
     if not group_as_region:
         load_balancers = list(itertools.chain(*list(load_balancers.values())))  # flatten the list of lists
