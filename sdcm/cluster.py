@@ -4715,7 +4715,7 @@ class BaseLoaderSet():
         if node.is_rhel_like():
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.remoter.sudo('yum install -y java-1.8.0-openjdk-devel', verbose=True, ignore_status=True)
-            node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-amd64/jre/bin/java* /etc/alternatives/java",
+            node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-*/jre/bin/java /etc/alternatives/java",
                               verbose=True, ignore_status=True)
         else:
             node.remoter.run('sudo apt-get update')
