@@ -309,7 +309,7 @@ class PrometheusDBStats:
         else:
             return res
 
-    def get_scylla_scheduler_runtime_ms(self, start_time, end_time, node_ip):
+    def get_scylla_scheduler_runtime_ms(self, start_time, end_time, node_ip, irate_sample_sec='30s'):
         """
         Get Scylla CPU scheduler runtime from PrometheusDB
 
@@ -318,8 +318,8 @@ class PrometheusDBStats:
         if not self._check_start_end_time(start_time, end_time):
             return {}
         # the query is taken from the Grafana Dashborad definition
-        query = 'avg(irate(scylla_scheduler_runtime_ms{group=~"sl:.*", instance="%s"}  [30s] )) ' \
-            'by (group, instance)' % node_ip
+        query = 'avg(irate(scylla_scheduler_runtime_ms{group=~"sl:.*", instance="%s"}  [%s] )) ' \
+            'by (group, instance)' % (node_ip, irate_sample_sec)
         results = self.query(query=query, start=start_time, end=end_time)
         res = defaultdict(dict)
         for item in results:
