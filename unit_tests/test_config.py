@@ -705,6 +705,17 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         self.assertEqual(conf.get('stress_read_cmd'), ['cassandra_stress', ['cassandra_stress', 'cassandra_stress']])
 
+    @staticmethod
+    def test_22_get_none():
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_CONFIG_FILES'] = "internal_test_data/minimal_test_case.yaml"
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-1234'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        val = conf.get(None)
+        assert val is None
+
 
 if __name__ == "__main__":
     unittest.main()
