@@ -124,3 +124,5 @@ WorkloadPrioritisationEvent.RatioValidationEvent: ERROR
 WorkloadPrioritisationEvent.SlaTestResult: ERROR
 WorkloadPrioritisationEvent.EmptyPrometheusData: ERROR
 ScyllaSysconfigSetupEvent: NORMAL
+TestStepEvent: ERROR
+CpuNotHighEnoughEvent: ERROR

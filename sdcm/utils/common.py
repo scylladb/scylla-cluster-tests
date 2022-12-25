@@ -68,6 +68,8 @@ from packaging.version import Version
 from prettytable import PrettyTable
 
 from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import CpuNotHighEnoughEvent
 from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
@@ -2807,6 +2809,20 @@ def get_table_clustering_order(ks_cf: str, ck_name: str, session) -> str:
     clustering_order = cql_result.current_rows[0].clustering_order
     LOGGER.info('Retrieved a clustering-order of: %s for table %s', clustering_order, ks_cf)
     return clustering_order
+
+
+def validate_if_scylla_load_high_enough(start_time, wait_cpu_utilization, prometheus_stats,
+                                        event_severity=Severity.ERROR):
+    end_time = int(time.time())
+    scylla_load = prometheus_stats.get_scylla_reactor_utilization(start_time=start_time, end_time=end_time)
+
+    if scylla_load < wait_cpu_utilization:
+        CpuNotHighEnoughEvent(message=f"Load {scylla_load} isn't high enough(expected at least {wait_cpu_utilization})."
+                                      " The test results may be not correct.",
+                              severity=event_severity).publish()
+        return False
+
+    return True
 
 
 class RemoteTemporaryFolder:
