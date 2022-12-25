@@ -293,7 +293,7 @@ class PrometheusDBStats:
             query = "sum(irate(scylla_transport_requests_served{}[30s]))%20%2B%20sum(irate(scylla_thrift_served{}[30s]))"
         return self._get_query_values(query, start_time, end_time, scrap_metrics_step=scrap_metrics_step)
 
-    def get_scylla_reactor_utilization(self, start_time, end_time, scrap_metrics_step=None):
+    def get_scylla_reactor_utilization(self, start_time, end_time, scrap_metrics_step=None, instance=None):
         """
         Get Scylla CPU (avg) from PrometheusDB
 
@@ -301,7 +301,9 @@ class PrometheusDBStats:
         """
         if not self._check_start_end_time(start_time, end_time):
             return []
-        query = "avg(scylla_reactor_utilization{})"
+
+        instance_filter = f'instance="{instance}"' if instance else ""
+        query = "avg(scylla_reactor_utilization{%s})" % instance_filter
         res = self._get_query_values(query, start_time, end_time, scrap_metrics_step=scrap_metrics_step)
         if res:
             res = [float(value[1]) for value in res]
@@ -340,7 +342,11 @@ class PrometheusDBStats:
         results = self.query(query=query, start=start_time, end=end_time)
         res = {}
         for item in results:
-            res[item['metric']['group']] = {int(i[1]) for i in item['values']}
+            try:
+                res[item['metric']['group']] = {int(i[1]) for i in item['values']}
+            except Exception as error:  # pylint: disable=broad-except
+                # average value may be returned not integer. Ignore it
+                LOGGER.error("Failed to analyze results of query: %s\nResults: %s\nError: %s", query, results, error)
         return res
 
     def get_scylla_storage_proxy_replica_cross_shard_ops(self, start_time, end_time):

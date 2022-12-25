@@ -2812,9 +2812,10 @@ def get_table_clustering_order(ks_cf: str, ck_name: str, session) -> str:
 
 
 def validate_if_scylla_load_high_enough(start_time, wait_cpu_utilization, prometheus_stats,
-                                        event_severity=Severity.ERROR):
+                                        event_severity=Severity.ERROR, instance=None):
     end_time = int(time.time())
-    scylla_load = prometheus_stats.get_scylla_reactor_utilization(start_time=start_time, end_time=end_time)
+    scylla_load = prometheus_stats.get_scylla_reactor_utilization(start_time=start_time, end_time=end_time,
+                                                                  instance=instance)
 
     if scylla_load < wait_cpu_utilization:
         CpuNotHighEnoughEvent(message=f"Load {scylla_load} isn't high enough(expected at least {wait_cpu_utilization})."
