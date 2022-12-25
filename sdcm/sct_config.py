@@ -1800,12 +1800,12 @@ class SCTConfiguration(dict):
 
         return environment_vars
 
-    def get(self, key: str):
+    def get(self, key: str | None):
         """
         get the value of test configuration parameter by the name
         """
 
-        if '.' in key:
+        if key and '.' in key:
             if ret_val := self._dotted_get(key):
                 return ret_val
         ret_val = super().get(key)
