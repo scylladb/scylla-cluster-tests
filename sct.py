@@ -84,10 +84,10 @@ from sdcm.utils.get_username import get_username
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
+from sdcm.cluster_k8s import mini_k8s
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
 from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
-
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
@@ -876,7 +876,27 @@ cli.add_command(investigate)
 @click.option("-t", "--test", required=False, default="",
               help="Run specific test file from unit-tests directory")
 def unit_tests(test):
-    sys.exit(pytest.main(['-v', '-p', 'no:warnings', 'unit_tests/{}'.format(test)]))
+    sys.exit(pytest.main(['-v', '-p', 'no:warnings', '-m', 'not integration', 'unit_tests/{}'.format(test)]))
+
+
+@cli.command('integration-tests', help="Run all the SCT internal integration-tests")
+@click.option("-t", "--test", required=False, default="",
+              help="Run specific test file from unit-tests directory")
+def integration_tests(test):
+    get_test_config().logdir()
+    add_file_logger()
+
+    # setup prerequisites for the integration test is identical
+    # to the kind local functional tests
+    # TODO: to refactor setup_prerequisites out of LocalKindCluster
+    local_cluster = mini_k8s.LocalKindCluster(
+        software_version="",
+        user_prefix="",
+        params={},
+    )
+    local_cluster.setup_prerequisites()
+
+    sys.exit(pytest.main(['-v', '-p', 'no:warnings', '-m', 'integration', 'unit_tests/{}'.format(test)]))
 
 
 @cli.command('pre-commit', help="Run pre-commit checkers")

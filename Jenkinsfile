@@ -3,7 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'docker']
+def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure']
+def sct_runner_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure']
 
 def runSctProvisionTest(String backend){
     if (currentBuild.result != null) {
@@ -166,6 +167,46 @@ pipeline {
                 }
             }
         }
+        stage("integration tests") {
+            when {
+                expression {
+                    return pullRequestContainsLabels("test-integration") && currentBuild.result == null
+                }
+            }
+            options {
+                timeout(time: 40, unit: 'MINUTES')
+            }
+            steps {
+                script {
+                    def curr_params = createRunConfiguration('docker')
+                    def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name)
+                    try {
+                        withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
+                            dir('scylla-cluster-tests') {
+                                checkout scm
+
+                                wrap([$class: 'BuildUser']) {
+                                    echo "calling createSctRunner"
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        createSctRunner(curr_params, 50 , builder.region)
+                                    }
+                                }
+                                sh """#!/bin/bash
+                                    set -xe
+                                    echo "start integration-tests ..."
+                                    RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                    ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} integration-tests
+                                    echo "end  integration-tests ..."
+                                """
+                            }
+                            pullRequestSetResult('success', 'jenkins/integration-tests', 'All integration tests are passed')
+                        }
+                    } catch(Exception ex) {
+                        pullRequestSetResult('failure', 'jenkins/integration-tests', 'Some integration tests failed')
+                    }
+                }
+            }
+        }
         stage("provision test") {
             when {
                 expression {
@@ -180,26 +221,47 @@ pipeline {
                         def region = 'eu-west-1'
                         if (pullRequestContainsLabels("test-provision,test-provision-${backend}")) {
                             sctParallelTests["provision test on ${backend}"] = {
-                                def builder = getJenkinsLabels("${backend}", "${region}")
-                                node(builder.label) {
+                                def curr_params = createRunConfiguration(backend)
+                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name)
+                                withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                                     script {
                                         def result = null
+
+                                        dir('scylla-cluster-tests') {
+                                            checkout scm
+                                        }
+                                        if (sct_runner_backends.contains(backend)){
+                                            try {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        echo "calling createSctRunner"
+                                                        createSctRunner(curr_params, 90 , builder.region)
+                                                    }
+                                                }
+                                            } catch(Exception err) {
+                                                echo "${err}"
+                                                result = 'FAILURE'
+                                                pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
+                                            }
+                                        }
                                         try {
                                             wrap([$class: 'BuildUser']) {
+                                                env.BUILD_USER_ID=env.CHANGE_AUTHOR
                                                 dir('scylla-cluster-tests') {
-                                                    runSctProvisionTest(backend)
+                                                    runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
                                                     result = 'SUCCESS'
                                                     pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
                                                 }
                                             }
                                         } catch(Exception err) {
+                                            echo "${err}"
                                             result = 'FAILURE'
                                             pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
                                                 dir('scylla-cluster-tests') {
-                                                    runCollectLogs(backend)
+                                                    runCollectLogs(curr_params, builder.region)
                                                 }
                                             }
                                         } catch(Exception err) {
@@ -208,8 +270,22 @@ pipeline {
                                         try {
                                             wrap([$class: 'BuildUser']) {
                                                 dir('scylla-cluster-tests') {
-                                                    runCleanupResource(backend)
+                                                    runCleanupResource(curr_params, builder.region)
                                                 }
+                                            }
+                                        } catch(Exception err) {
+                                            echo "${err}"
+                                        }
+                                        if (!(backend in ['k8s-local-kind-aws', 'k8s-eks'])) {
+                                            try {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        runRestoreMonitoringStack()
+                                                    }
+                                                }
+                                            } catch(Exception err) {
+                                                echo "${err}"
+                                                currentBuild.result = 'FAILURE'
                                             }
                                         } catch(Exception err) {
                                             echo "${err}"
@@ -223,6 +299,10 @@ pipeline {
                                         } catch(Exception err) {
                                             echo "${err}"
                                             currentBuild.result = 'FAILURE'
+                                        }
+                                        if (result == 'FAILURE'){
+                                            currentBuild.result = 'FAILURE'
+                                            sh "exit 1"
                                         }
                                         if (result == 'FAILURE'){
                                             currentBuild.result = 'FAILURE'
