@@ -58,6 +58,7 @@ class ServiceLevelAttributes:
         self.query_string = "".join(attr_strings)
 
 
+# pylint: disable=too-many-instance-attributes
 class ServiceLevel:
     # The class provide interface to manage SERVICE LEVEL
     # pylint: disable=too-many-arguments
@@ -70,6 +71,7 @@ class ServiceLevel:
         self._name = f"'{name}'"
         self.verbose = True
         self._created = False
+        self._scheduler_group_name = f"sl:{name}"
         self._sl_attributes = ServiceLevelAttributes(
             shares=shares,
             timeout=timeout,
@@ -81,6 +83,10 @@ class ServiceLevel:
         row_dict = row._asdict()
         row_dict["name"] = row_dict.pop("service_level")
         return ServiceLevel(session=session, **row_dict)
+
+    @property
+    def scheduler_group_name(self) -> str:
+        return self._scheduler_group_name
 
     @property
     def name(self) -> str:
@@ -205,6 +211,7 @@ class UserRoleBase:
         self._attached_service_level = None
         self._attached_service_level_name = ''
         self._attached_service_level_shares = None
+        self._attached_scheduler_group_name = ''
 
     @property
     def name(self):
@@ -217,6 +224,13 @@ class UserRoleBase:
     @property
     def attached_service_level(self):
         return self._attached_service_level
+
+    def reset_service_level(self):
+        # For case if service level was dropped or detached
+        self._attached_service_level = None
+        self._attached_service_level_name = ''
+        self._attached_service_level_shares = None
+        self._attached_scheduler_group_name = ''
 
     @property
     def attached_service_level_name(self):
@@ -236,6 +250,9 @@ class UserRoleBase:
         self.session.execute(query)
         LOGGER.debug('Service level %s has been attached to %s role', service_level.name, self.name)
         self._attached_service_level = service_level
+        self._attached_service_level_name = service_level.name
+        self._attached_service_level_shares = service_level.shares
+        self._attached_scheduler_group_name = service_level.scheduler_group_name
 
     def detach_service_level(self):
         """
@@ -246,7 +263,7 @@ class UserRoleBase:
             LOGGER.debug('Detach service level query: %s', query)
         self.session.execute(query)
         LOGGER.debug('The service level has been detached from %s role', self.name)
-        self._attached_service_level = None
+        self.reset_service_level()
 
     def grant_me_to(self, grant_to):
         role_be_granted = self.name
@@ -322,6 +339,33 @@ class Role(UserRoleBase):
         LOGGER.debug('Role %s has been created', self.name)
         return self
 
+    def role_full_info_dict(self) -> dict:
+        return {'service_level': self.attached_service_level,
+                'service_level_shares': self._attached_service_level_shares,
+                'service_level_name': self._attached_service_level_name,
+                'sl_group': self._attached_scheduler_group_name}
+
+    def validate_role_service_level_attributes_against_db(self):
+        service_level = self.list_user_role_attached_service_levels()
+        LOGGER.debug("List of service levels for role %s: %s", self.name, service_level)
+        if not service_level and self.attached_service_level:
+            ValueError(f"No Service Level attached to the role '{self.name}'. But it is expected that Service Level "
+                       f"'{self._attached_service_level_name}' is attached to this role. Validate if it is test or "
+                       "Scylla issue")
+        elif not self.attached_service_level and service_level:
+            ValueError(f"Found attached Service Level '{service_level[0].service_level}' to the role '{self.name}'. "
+                       "But it is expected that no attached Service Level. Validate if it is test or Scylla issue")
+
+        if service_level[0].service_level == self._attached_service_level_name:
+            db_service_level = self.attached_service_level.list_service_level()
+            if db_service_level.shares != self._attached_service_level_shares:
+                ValueError(f"Found attached Service Level '{service_level[0].service_level}' to the role '{self.name}' "
+                           f"with {db_service_level.shares} shares. Expected {self._attached_service_level_shares} "
+                           f"shares. Validate if it is test or Scylla issue")
+        else:
+            ValueError(f"Found attached Service Level '{service_level[0].service_level}' to the role '{self.name}'. "
+                       "But it is expected that no attached Service Level. Validate if it is test or Scylla issue")
+
 
 class User(UserRoleBase):
     # The class provide interface to manage USERS
@@ -347,7 +391,7 @@ class User(UserRoleBase):
         return self
 
 
-def create_sla_auth(session, shares: int, index: int) -> Role:
+def create_sla_auth(session, shares: int, index: str) -> Role:
     role = Role(session=session, name=STRESS_ROLE_NAME_TEMPLATE % (shares or '', index),
                 password=STRESS_ROLE_PASSWORD_TEMPLATE % shares or '', login=True).create()
     role.attach_service_level(ServiceLevel(session=session, name=SERVICE_LEVEL_NAME_TEMPLATE % (shares or '', index),

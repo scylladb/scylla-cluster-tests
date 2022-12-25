@@ -79,6 +79,7 @@ from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors
 from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent
+from sdcm.sla.sla_tests import SlaTests
 from sdcm.utils import cdc
 from sdcm.utils.common import (get_db_tables, generate_random_string,
                                update_certificates, reach_enospc_on_node, clean_enospc_on_node,
@@ -164,6 +165,11 @@ class CdcStreamsWasNotUpdated(Exception):
           - Generation {}: streams description table already updated
           - CDC description table successfully updated with generation
         were not found in logs
+    """
+
+
+class NemesisSubTestFailure(Exception):
+    """ raised if nemesis got error from sub test
     """
 
 
@@ -424,6 +430,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             limited: Optional[bool] = None,
             topology_changes: Optional[bool] = None,
             free_tier_set: Optional[bool] = None,
+            sla: Optional[bool] = None
     ) -> List[str]:
         subclasses_list = self._get_subclasses(
             disruptive=disruptive,
@@ -433,6 +440,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             limited=limited,
             topology_changes=topology_changes,
             free_tier_set=free_tier_set,
+            sla=sla,
         )
         disrupt_methods_list = []
         for subclass in subclasses_list:
@@ -3775,6 +3783,121 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if node_added:
                 self.cluster.decommission(new_node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
 
+    def get_test_data_set_size(self):
+        write_cmds = self.tester.params.get("prepare_write_cmd") or []
+        if not isinstance(write_cmds, list):
+            write_cmds = [write_cmds]
+
+        stress_cmd = [cmd for cmd in write_cmds if " n=" in cmd]
+        self.log.debug("Stress command to get test dataset size: %s", stress_cmd)
+        return self.tester.get_data_set_size(stress_cmd[0]) if stress_cmd else None
+
+    def disrupt_sla_increase_shares_during_load(self):
+        if not self.cluster.nodes[0].is_enterprise:
+            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+
+        # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
+        # inserted in any case
+        dataset_size = self.get_test_data_set_size() or 50000000
+        self.log.debug("Dataset size for nemesis: %s", dataset_size)
+
+        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
+        sla_tests = SlaTests()
+        error_events = sla_tests.test_increase_shares_during_load(tester=self.tester, prometheus_stats=prometheus_stats,
+                                                                  num_of_partitions=dataset_size)
+        self.format_error_for_sla_test_and_raise(error_events=error_events)
+
+    def disrupt_sla_decrease_shares_during_load(self):
+        if not self.cluster.nodes[0].is_enterprise:
+            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+
+        # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
+        # inserted in any case
+        dataset_size = self.get_test_data_set_size() or 50000000
+        self.log.debug("Dataset size for nemesis: %s", dataset_size)
+
+        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
+        sla_tests = SlaTests()
+        error_events = sla_tests.test_decrease_shares_during_load(tester=self.tester, prometheus_stats=prometheus_stats,
+                                                                  num_of_partitions=dataset_size)
+        self.format_error_for_sla_test_and_raise(error_events=error_events)
+
+    def disrupt_replace_service_level_using_detach_during_load(self):
+        if not self.cluster.nodes[0].is_enterprise:
+            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+
+        # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
+        # inserted in any case
+        dataset_size = self.get_test_data_set_size() or 50000000
+        self.log.debug("Dataset size for nemesis: %s", dataset_size)
+
+        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
+        sla_tests = SlaTests()
+        error_events = sla_tests.test_replace_service_level_using_detach_during_load(tester=self.tester,
+                                                                                     prometheus_stats=prometheus_stats,
+                                                                                     num_of_partitions=dataset_size)
+        self.format_error_for_sla_test_and_raise(error_events=error_events)
+
+    def disrupt_replace_service_level_using_drop_during_load(self):
+        if not self.cluster.nodes[0].is_enterprise:
+            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+
+        # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
+        # inserted in any case
+        dataset_size = self.get_test_data_set_size() or 50000000
+        self.log.debug("Dataset size for nemesis: %s", dataset_size)
+
+        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
+        sla_tests = SlaTests()
+        error_events = sla_tests.test_replace_service_level_using_drop_during_load(tester=self.tester,
+                                                                                   prometheus_stats=prometheus_stats,
+                                                                                   num_of_partitions=dataset_size)
+
+        self.format_error_for_sla_test_and_raise(error_events=error_events)
+
+    def disrupt_increase_shares_by_attach_another_sl_during_load(self):
+        if not self.cluster.nodes[0].is_enterprise:
+            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+
+        # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
+        # inserted in any case
+        dataset_size = self.get_test_data_set_size() or 50000000
+        self.log.debug("Dataset size for nemesis: %s", dataset_size)
+
+        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
+        sla_tests = SlaTests()
+        error_events = sla_tests.test_increase_shares_by_attach_another_sl_during_load(
+            tester=self.tester,
+            prometheus_stats=prometheus_stats,
+            num_of_partitions=dataset_size)
+
+        self.format_error_for_sla_test_and_raise(error_events=error_events)
+
+    def disrupt_seven_sl_with_max_shares_during_load(self):
+        if not self.cluster.nodes[0].is_enterprise:
+            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+
+        # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
+        # inserted in any case
+        dataset_size = self.get_test_data_set_size() or 50000000
+        self.log.debug("Dataset size for nemesis: %s", dataset_size)
+
+        prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
+        sla_tests = SlaTests()
+        error_events = sla_tests.test_seven_sl_with_max_shares_during_load(
+            tester=self.tester,
+            prometheus_stats=prometheus_stats,
+            num_of_partitions=dataset_size)
+
+        self.format_error_for_sla_test_and_raise(error_events=error_events)
+
+    @staticmethod
+    def format_error_for_sla_test_and_raise(error_events):
+        if any(error_events):
+            raise NemesisSubTestFailure("\n".join(f"Step: {error.step}. Error:\n - {error}"
+                                                  for error in error_events if error)
+                                        )
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
     """
@@ -4990,3 +5113,64 @@ class FreeTierSetMonkey(SisyphusMonkey):
         super(SisyphusMonkey, self).__init__(*args, **kwargs)  # pylint: disable=bad-super-call
         self.build_list_of_disruptions_to_execute(nemesis_selector=['free_tier_set'])
         self.shuffle_list_of_disruptions()
+
+
+class SlaIncreaseSharesDuringLoad(Nemesis):
+    disruptive = False
+    sla = True
+
+    def disrupt(self):
+        self.disrupt_sla_increase_shares_during_load()
+
+
+class SlaDecreaseSharesDuringLoad(Nemesis):
+    disruptive = False
+    sla = True
+
+    def disrupt(self):
+        self.disrupt_sla_decrease_shares_during_load()
+
+
+class SlaReplaceUsingDetachDuringLoad(Nemesis):
+    disruptive = False
+    sla = True
+
+    def disrupt(self):
+        self.disrupt_replace_service_level_using_detach_during_load()
+
+
+class SlaReplaceUsingDropDuringLoad(Nemesis):
+    disruptive = False
+    sla = True
+
+    def disrupt(self):
+        self.disrupt_replace_service_level_using_drop_during_load()
+
+
+class SlaIncreaseSharesByAttachAnotherSlDuringLoad(Nemesis):
+    disruptive = False
+    sla = True
+
+    def disrupt(self):
+        self.disrupt_increase_shares_by_attach_another_sl_during_load()
+
+
+class SlaSevenSlWithMaxSharesDuringLoad(Nemesis):
+    disruptive = False
+    sla = True
+
+    def disrupt(self):
+        self.disrupt_seven_sl_with_max_shares_during_load()
+
+
+class SlaNemeses(Nemesis):
+    disruptive = False
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.build_list_of_disruptions_to_execute()
+        self.disrupt_methods_list = self.get_list_of_methods_by_flags(sla=True)
+        self.shuffle_list_of_disruptions()
+
+    def disrupt(self):
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
