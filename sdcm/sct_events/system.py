@@ -20,6 +20,7 @@ from traceback import format_stack
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import SctEvent, SystemEvent, InformationalEvent, LogEvent, LogEventProtocol
+from sdcm.sct_events.continuous_event import ContinuousEvent
 
 
 class StartupTestEvent(SystemEvent):
@@ -165,6 +166,38 @@ class ScyllaRepoEvent(InformationalEvent):
     @property
     def msgfmt(self) -> str:
         return super().msgfmt + ": url={0.url} error={0.error}"
+
+
+class CpuNotHighEnoughEvent(InformationalEvent):
+    def __init__(self, message: str, severity=Severity.ERROR):
+        super().__init__(severity=severity)
+
+        self.message = message
+
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": message={0.message}"
+
+
+class TestStepEvent(ContinuousEvent):
+
+    def __init__(self,
+                 step,
+                 severity=Severity.NORMAL,
+                 publish_event=True):  # pylint: disable=redefined-builtin,too-many-arguments
+        self.step = step
+        self.duration = None
+        self.full_traceback = ""
+        super().__init__(severity=severity, publish_event=publish_event)
+
+    @property
+    def msgfmt(self) -> str:
+        fmt = super().msgfmt + ": step={0.step} "
+        if self.errors:
+            fmt += " errors={0.errors_formatted}"
+        if self.full_traceback:
+            fmt += "\n{0.full_traceback}"
+        return fmt
 
 
 class InfoEvent(SctEvent):
