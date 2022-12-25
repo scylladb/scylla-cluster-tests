@@ -527,3 +527,43 @@ class SlaTests(Steps):
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
                 return error_events  # pylint: disable=lost-exception
+
+    # pylint: disable=too-many-locals
+    def test_seven_sls_with_different_shares_during_load(self, tester, prometheus_stats, num_of_partitions):
+        error_events = []
+        stress_queue = []
+        auth_entity_name_index = str(uuid.uuid1()).split("-", maxsplit=1)[0]
+        role_shares = [1000, 100, 200, 300, 500, 700, 800]
+        stress_duration = 20
+        read_cmds = []
+        read_roles = []
+
+        with tester.db_cluster.cql_connection_patient(node=tester.db_cluster.nodes[0],
+                                                      user=DEFAULT_USER,
+                                                      password=DEFAULT_USER_PASSWORD) as session:
+            roles = []
+            for shares in role_shares:
+                roles.append(create_sla_auth(session=session, shares=shares, index=auth_entity_name_index))
+                read_cmds.append(self.define_read_cassandra_stress_command(role=roles[-1],
+                                                                           load_type=self.MIXED_LOAD,
+                                                                           c_s_workload_type=self.WORKLOAD_THROUGHPUT,
+                                                                           threads=50,
+                                                                           stress_duration_min=stress_duration,
+                                                                           num_of_partitions=num_of_partitions,
+                                                                           max_rows_for_read=num_of_partitions))
+
+                read_roles.append({"role": roles[-1], 'service_level': roles[-1].attached_service_level})
+
+            try:
+                error_events.append(
+                    self.run_stress_and_validate_scheduler_runtime_during_load(tester=tester,
+                                                                               read_cmds=read_cmds,
+                                                                               prometheus_stats=prometheus_stats,
+                                                                               read_roles=read_roles,
+                                                                               stress_queue=stress_queue))
+
+            finally:
+                for stress in stress_queue:
+                    tester.verify_stress_thread(cs_thread_pool=stress)
+                self.clean_auth(entities_list_of_dict=read_roles)
+                return error_events  # pylint: disable=lost-exception

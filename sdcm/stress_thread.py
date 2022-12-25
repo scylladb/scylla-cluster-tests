@@ -137,7 +137,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             node_ip_list = [n.cql_ip_address for n in self.node_list]
             stress_cmd += " -node {}".format(",".join(node_ip_list))
         if 'skip-unsupported-columns' in self._get_available_suboptions(cmd_runner, '-errors'):
-            stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns'])
+            stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns', 'retries=50'])
         return stress_cmd
 
     @staticmethod
