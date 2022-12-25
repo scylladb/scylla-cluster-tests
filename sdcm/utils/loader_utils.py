@@ -112,6 +112,16 @@ class LoaderUtilsMixin:
 
         return stress_queue
 
+    def run_stress_and_verify_threads(self, params=None):
+        stress_queue = []
+
+        self._run_all_stress_cmds(stress_queue, params=params)
+
+        for queue in stress_queue:
+            self.verify_stress_thread(cs_thread_pool=queue)
+
+        return stress_queue
+
     @staticmethod
     def _get_keyspace_name(ks_number, keyspace_pref='keyspace'):
         return '{}{}'.format(keyspace_pref, ks_number)
