@@ -41,7 +41,6 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_reso
                                clean_resources_according_post_behavior, clean_sct_runners,
                                search_test_id_in_latest, get_testrun_dir, format_timestamp, list_clusters_gke)
 from sdcm.utils.jepsen import JepsenResults
-from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                      kill_running_monitoring_stack_services)
 from sdcm.cluster import Setup
