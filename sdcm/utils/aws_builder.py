@@ -336,7 +336,7 @@ class AwsBuilder:
 
 
 class AwsCiBuilder(AwsBuilder):
-    NUM_CPUS = 4
+    NUM_CPUS = 2
 
     @cached_property
     def name(self):

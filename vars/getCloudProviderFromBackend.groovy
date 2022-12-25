@@ -7,7 +7,8 @@ def call(String backend) {
         'k8s-local-kind-gce': 'gce',
         'aws-siren': 'aws',
         'gce-siren': 'gce',
-        'azure': 'azure'
+        'azure': 'azure',
+        'docker': 'aws'
         ]
     if (!backend) {
         return backend

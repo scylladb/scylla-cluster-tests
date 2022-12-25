@@ -96,10 +96,10 @@ from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesRe
 from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
 from sdcm.utils.context_managers import environment
+from sdcm.cluster_k8s import mini_k8s
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
 from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
-
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
@@ -1009,6 +1009,19 @@ def unit_tests(test):
 @click.option("-t", "--test", required=False, default="",
               help="Run specific test file from unit-tests directory")
 def integration_tests(test):
+    get_test_config().logdir()
+    add_file_logger()
+
+    # setup prerequisites for the integration test is identical
+    # to the kind local functional tests
+    # TODO: to refactor setup_prerequisites out of LocalKindCluster
+    local_cluster = mini_k8s.LocalKindCluster(
+        software_version="",
+        user_prefix="",
+        params={},
+    )
+    local_cluster.setup_prerequisites()
+
     sys.exit(pytest.main(['-v', '-p', 'no:warnings', '-m', 'integration', 'unit_tests/{}'.format(test)]))
 
 
