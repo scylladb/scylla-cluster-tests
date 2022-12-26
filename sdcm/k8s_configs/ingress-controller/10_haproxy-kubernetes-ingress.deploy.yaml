@@ -6,7 +6,7 @@ metadata:
   name: haproxy-kubernetes-ingress
   namespace: haproxy-controller
 spec:
-  replicas: 1
+  replicas: 2
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -40,8 +40,11 @@ spec:
             - NET_BIND_SERVICE
         resources:
           requests:
-            cpu: 100m
-            memory: 50M
+            cpu: ${POD_CPU_REQUEST}
+            memory: ${POD_MEMORY_REQUEST}
+          limits:
+            cpu: ${POD_CPU_LIMIT}
+            memory: ${POD_MEMORY_LIMIT}
         livenessProbe:
           httpGet:
             path: /healthz

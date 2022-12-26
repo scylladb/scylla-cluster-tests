@@ -905,6 +905,9 @@ class SCTConfiguration(dict):
         dict(name="k8s_use_chaos_mesh", env="SCT_K8S_USE_CHAOS_MESH", type=boolean,
              help="""enables chaos-mesh for k8s testing"""),
 
+        dict(name="k8s_n_auxiliary_nodes", env="SCT_K8S_N_AUXILIARY_NODES", type=int,
+             help="Number of nodes in auxiliary pool"),
+
         # docker config options
         dict(name="mgmt_docker_image", env="SCT_MGMT_DOCKER_IMAGE", type=str,
              help="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' "),

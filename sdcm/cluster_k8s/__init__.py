@@ -1025,10 +1025,34 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         if not self.params.get('reuse_cluster'):
             pool_name = pool_name or self.AUXILIARY_POOL_NAME
             comma_separated_tags = ", ".join([f'{k}={v}' for k, v in self.tags.items()])
+
+            if self.params.get("cluster_backend") == "k8s-eks":
+                cpu_limit = 2
+                memory_limit = 4
+                cpu_request = 1
+                memory_request = 2
+
+                cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
+                memory_limit = convert_memory_units_to_k8s_value(memory_limit)
+                cpu_request = convert_cpu_units_to_k8s_value(cpu_request)
+                memory_request = convert_memory_units_to_k8s_value(memory_request)
+            else:
+                cpu_limit = '100m'
+                memory_limit = '50M'
+                cpu_request = '100m'
+                memory_request = '50M'
+
+            environ = {
+                "POD_CPU_LIMIT": cpu_limit,
+                "POD_MEMORY_LIMIT": memory_limit,
+                "POD_CPU_REQUEST": cpu_request,
+                "POD_MEMORY_REQUEST": memory_request,
+                "TAGS": comma_separated_tags,
+            }
             self.apply_file(
                 INGRESS_CONTROLLER_CONFIG_PATH,
                 modifiers=get_pool_affinity_modifiers(self.POOL_LABEL_NAME, pool_name),
-                environ=dict(TAGS=comma_separated_tags))
+                environ=environ)
         self.kubectl_wait("--all --for=condition=Ready pod",
                           namespace=INGRESS_CONTROLLER_NAMESPACE, timeout=306)
 

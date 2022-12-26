@@ -210,6 +210,7 @@
 | **<a href="#user-content-k8s_enable_tls" name="k8s_enable_tls">k8s_enable_tls</a>**  | Defines whether the we enable the operator serverless options | N/A | SCT_K8S_ENABLE_TLS
 | **<a href="#user-content-k8s_connection_bundle_file" name="k8s_connection_bundle_file">k8s_connection_bundle_file</a>**  | Serverless configuration bundle file | N/A | SCT_K8S_CONNECTION_BUNDLE_FILE
 | **<a href="#user-content-k8s_use_chaos_mesh" name="k8s_use_chaos_mesh">k8s_use_chaos_mesh</a>**  | enables chaos-mesh for k8s testing | N/A | SCT_K8S_USE_CHAOS_MESH
+| **<a href="#user-content-k8s_n_auxiliary_nodes" name="k8s_n_auxiliary_nodes">k8s_n_auxiliary_nodes</a>**  | Number of of nodes in auxiliary pool | N/A | SCT_K8S_N_AUXILIARY_NODES
 | **<a href="#user-content-mgmt_docker_image" name="mgmt_docker_image">mgmt_docker_image</a>**  | Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' | N/A | SCT_MGMT_DOCKER_IMAGE
 | **<a href="#user-content-docker_image" name="docker_image">docker_image</a>**  | Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version | N/A | SCT_DOCKER_IMAGE
 | **<a href="#user-content-db_nodes_private_ip" name="db_nodes_private_ip">db_nodes_private_ip</a>**  |  | N/A | SCT_DB_NODES_PRIVATE_IP
