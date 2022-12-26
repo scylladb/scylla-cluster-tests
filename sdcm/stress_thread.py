@@ -178,10 +178,11 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             if match := re.search(r"\s-log ([^-]*)-?", stress_cmd):
                 cs_log_option = match.group(1)
                 if "hdrfile" not in cs_log_option:
-                    stress_cmd.replace("-log", f"-log hdrfile={hdr_log_name}")
+                    stress_cmd = stress_cmd.replace("-log", f"-log hdrfile={hdr_log_name}")
                 else:
                     if replacing_hdr_file := re.search(r"hdrfile=(.*?)\s", cs_log_option):
-                        stress_cmd.replace(f"hdrfile={replacing_hdr_file.group(1)}", f"hdrfile={hdr_log_name}")
+                        stress_cmd = stress_cmd.replace(
+                            f"hdrfile={replacing_hdr_file.group(1)}", f"hdrfile={hdr_log_name}")
         else:
             stress_cmd += f" -log hdrfile={hdr_log_name} interval=10s"
 
@@ -265,6 +266,9 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
         if self.params.get("use_hdr_cs_histogram"):
             stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)
+            hdr_logger_context = CSHDRFileLogger(node=loader, target_log_file=remote_hdr_file_name)
+        else:
+            hdr_logger_context = contextlib.nullcontext()
 
         LOGGER.info('Stress command:\n%s', stress_cmd)
 
@@ -288,12 +292,12 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 CassandraStressEventsPublisher(node=loader, cs_log_filename=log_file_name) as publisher, \
                 CassandraStressEvent(node=loader, stress_cmd=self.stress_cmd,
                                      log_file_name=log_file_name) as cs_stress_event, \
-                CSHDRFileLogger(node=loader, target_log_file=remote_hdr_file_name), \
                 CassandraStressHDRExporter(instance_name=cmd_runner_name,
                                            metrics=nemesis_metrics_obj(),
                                            stress_operation=stress_cmd_opt,
                                            stress_log_filename=local_hdr_file_name,
-                                           loader_idx=loader_idx, cpu_idx=cpu_idx):
+                                           loader_idx=loader_idx, cpu_idx=cpu_idx), \
+                hdr_logger_context:
             publisher.event_id = cs_stress_event.event_id
             try:
                 result = cmd_runner.run(cmd=node_cmd, timeout=self.timeout, log_file=log_file_name, retry=0)
