@@ -3,3 +3,8 @@ kind: ConfigMap
 metadata:
   name: haproxy-kubernetes-ingress
   namespace: haproxy-controller
+data:
+  load-balance: "roundrobin"
+  maxconn: "70000"
+  src-ip-header: "True-Client-IP"
+  http-keep-alive: "true"

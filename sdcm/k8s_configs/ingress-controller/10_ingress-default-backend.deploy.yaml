@@ -6,7 +6,7 @@ metadata:
   name: haproxy-kubernetes-ingress-default-backend
   namespace: haproxy-controller
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: ingress-default-backend
@@ -22,5 +22,8 @@ spec:
         - containerPort: 8080
         resources:
           requests:
-            cpu: "100m"
-            memory: "50Mi"
+            cpu: 10m
+            memory: 20Mi
+          limits:
+            cpu: 100m
+            memory: 50Mi

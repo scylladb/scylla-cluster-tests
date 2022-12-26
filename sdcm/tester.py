@@ -1395,7 +1395,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             services=services,
             user_prefix=self.params.get("user_prefix"),
             gce_instance_type='n1-standard-2',
-            n_nodes=2,
+            n_nodes=self.params.get('k8s_n_auxiliary_nodes'),
             params=self.params,
             gce_datacenter=gce_datacenter,
         )
@@ -1560,7 +1560,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.deploy_node_pool(
             eks.EksNodePool(
                 name=self.k8s_cluster.AUXILIARY_POOL_NAME,
-                num_nodes=2,
+                num_nodes=self.params.get('k8s_n_auxiliary_nodes'),
                 instance_type="t3.large",
                 # It should have at least 3 vCPU to be able to hold all the pods
                 disk_size=40,
