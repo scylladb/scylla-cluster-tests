@@ -3834,6 +3834,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                 skip_reason = str(exp)
                 log_info.update({'subtype': 'skipped', 'skip_reason': skip_reason})
                 nemesis_event.skip(skip_reason=skip_reason)
+                raise
             except Exception as details:  # pylint: disable=broad-except
                 nemesis_event.add_error([str(details)])
                 nemesis_event.full_traceback = traceback.format_exc()
@@ -3848,38 +3849,40 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                 else:
                     NEMESIS_RUN_INFO.pop(nemesis_run_info_key)
 
-        end_time = time.time()
-        time_elapsed = int(end_time - start_time)
-        log_info.update({
-            'end': int(end_time),
-            'duration': time_elapsed,
-        })
-        args[0].duration_list.append(time_elapsed)
-        args[0].operation_log.append(copy.deepcopy(log_info))
-        args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
+                end_time = time.time()
+                time_elapsed = int(end_time - start_time)
+                log_info.update({
+                    'end': int(end_time),
+                    'duration': time_elapsed,
+                })
+                args[0].duration_list.append(time_elapsed)
+                args[0].operation_log.append(copy.deepcopy(log_info))
+                args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
 
-        if class_name.find('Chaos') < 0:
-            args[0].metrics_srv.event_stop(class_name)
-        disrupt = args[0].get_disrupt_name()
-        del log_info['operation']
+                if class_name.find('Chaos') < 0:
+                    args[0].metrics_srv.event_stop(class_name)
+                disrupt = args[0].get_disrupt_name()
+                del log_info['operation']
 
-        try:  # So that the nemesis thread won't stop due to elasticsearch failure
-            args[0].update_stats(disrupt, status, log_info)
-        except ElasticSearchConnectionTimeout as err:
-            args[0].log.warning(f"Connection timed out when attempting to update elasticsearch statistics:\n"
-                                f"{err}")
-        except Exception as err:  # pylint: disable=broad-except
-            args[0].log.warning(f"Unexpected error when attempting to update elasticsearch statistics:\n"
-                                f"{err}")
-        args[0].log.info(f"log_info: {log_info}")
-        nemesis_event.duration = time_elapsed
+                try:  # So that the nemesis thread won't stop due to elasticsearch failure
+                    args[0].update_stats(disrupt, status, log_info)
+                except ElasticSearchConnectionTimeout as err:
+                    args[0].log.warning(f"Connection timed out when attempting to update elasticsearch statistics:\n"
+                                        f"{err}")
+                except Exception as err:  # pylint: disable=broad-except
+                    args[0].log.warning(f"Unexpected error when attempting to update elasticsearch statistics:\n"
+                                        f"{err}")
+                args[0].log.info(f"log_info: {log_info}")
+                nemesis_event.duration = time_elapsed
+
+                if nemesis_info:
+                    argus_finalize_nemesis_info(nemesis=args[0], nemesis_info=nemesis_info, nemesis_event=nemesis_event)
+
         args[0].cluster.check_cluster_health()
         num_nodes_after = len(args[0].cluster.nodes)
         if num_nodes_before != num_nodes_after:
             args[0].log.error('num nodes before %s and nodes after %s does not match' %
                               (num_nodes_before, num_nodes_after))
-        if nemesis_info:
-            argus_finalize_nemesis_info(nemesis=args[0], nemesis_info=nemesis_info, nemesis_event=nemesis_event)
         # TODO: Temporary print. Will be removed later
         data_validation_prints(args=args)
         return result
