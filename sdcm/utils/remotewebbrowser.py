@@ -99,7 +99,7 @@ class RemoteBrowser:
         return Remote(command_executor=f"http://{host}:{port}/wd/hub", options=ChromeOptions())
 
     def open(self, url, resolution="1920px*1280px"):
-        LOGGER.info("Set resoltion %s", resolution)
+        LOGGER.info("Set resolution %s", resolution)
         self.browser.set_window_size(*resolution.replace("px", "").split("*", 1))
         LOGGER.info("Get url %s", url)
         self.browser.get(url)
