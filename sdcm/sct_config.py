@@ -946,6 +946,8 @@ class SCTConfiguration(dict):
              help=""),
         dict(name="run_full_partition_scan", env="SCT_run_full_partition_scan", type=str,
              help="Runs a background thread that issues reversed-queries on a table random partition by an interval"),
+        dict(name="run_tombstone_gc_verification", env="SCT_RUN_TOMBSTONE_GC_VERIFICATION", type=str,
+             help="Runs a background thread that verifies Tombstones GC on a table by an interval"),
         dict(name="keyspace_num", env="SCT_KEYSPACE_NUM", type=int,
              help=""),
         dict(name="round_robin", env="SCT_ROUND_ROBIN",

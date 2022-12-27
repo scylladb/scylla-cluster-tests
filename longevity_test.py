@@ -33,6 +33,13 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     default_params = {'timeout': 650000}
 
+    def _get_tombstone_gc_verification_params(self) -> dict:
+        params = {}
+        if tombstone_params := self.params.get('run_tombstone_gc_verification'):
+            params = json.loads(tombstone_params)
+            self.log.info('Tombstone GC verification params are: %s', params)
+        return params
+
     def _get_scan_operation_params(self, scan_operation: str) -> dict:
         params = {}
         if scan_operation_params := self.params.get(scan_operation):
@@ -75,6 +82,9 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         if full_partition_scan_params := self._get_scan_operation_params(scan_operation='run_full_partition_scan'):
             self.run_full_partition_scan_thread(**full_partition_scan_params)
+
+        if tombstone_gc_verification_params := self._get_tombstone_gc_verification_params():
+            self.run_tombstone_gc_verification_thread(**tombstone_gc_verification_params)
 
         self.run_prepare_write_cmd()
 

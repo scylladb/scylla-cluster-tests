@@ -60,6 +60,7 @@ from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.sct_events.event_handler import stop_events_handler
 from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.cassandra_harry_thread import CassandraHarryThread
+from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_network_configuration, get_ec2_services, \
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
@@ -2064,6 +2065,29 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             termination_event=self.db_cluster.nemesis_termination_event,
             user=sla_role_name,
             password=sla_role_password,
+        ).start()
+
+    def run_tombstone_gc_verification_thread(self, duration=None, interval=600, propagation_delay_in_seconds=3600, **kwargs):
+        """Run a thread of tombstones gc verification.
+
+        1. Search for repair history.
+        2. Go over node sstables, created after last repair.
+        3. Run an sstable dump to get sstables data.
+        4. Go over the output, searching for tombstones.
+        5. If a tombstone creation time (+propagation-delay) is earlier than last repair then ==>
+            raise a tombstone-gc-verification error.
+
+        Keyword Arguments:
+            interval {number} -- interval between requests in seconds (default: {600})
+            duration {int} -- duration of running thread in min (default: {None})
+        """
+        TombstoneGcVerificationThread(
+            db_cluster=self.db_cluster,
+            termination_event=self.db_cluster.nemesis_termination_event,
+            duration=self.get_duration(duration),
+            interval=interval,
+            propagation_delay_in_seconds=propagation_delay_in_seconds,
+            **kwargs
         ).start()
 
     def run_full_partition_scan_thread(self, duration=None, interval=1, **kwargs):
