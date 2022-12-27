@@ -3463,36 +3463,36 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             fetcher = PageFetcher(execute_result).request_all()
             current_rows = fetcher.all_data()
 
-            # for row in cql_session.execute(cmd).current_rows:
             for row in current_rows:
-                is_valid_table = True
                 table_name = f"{getattr(row, column_names[0])}.{getattr(row, column_names[1])}"
 
                 if filter_out_system and getattr(row, column_names[0]).startswith(("system", "alternator_usertable")):
-                    is_valid_table = False
-                elif is_column_type and (filter_out_table_with_counter and "counter" in row.type):
-                    is_valid_table = False
-                elif filter_out_cdc_log_tables and getattr(row, column_names[1]).endswith(cdc.options.CDC_LOGTABLE_SUFFIX):
-                    is_valid_table = False
-                elif is_column_type and filter_empty_tables:
-                    current_rows = 0
-                    # Scylls issue https://github.com/scylladb/scylla/issues/7186
-                    # Problem to read from system_schema.dropped_columns, column "dropped_time":
-                    # cassandra.DriverException: Failed decoding result column "dropped_time" of type timestamp:
-                    # date value out of range
-                    if table_name == 'system_schema.dropped_columns':
-                        continue
+                    continue
 
+                if is_column_type and (filter_out_table_with_counter and "counter" in row.type):
+                    continue
+
+                if filter_out_cdc_log_tables and getattr(row, column_names[1]).endswith(cdc.options.CDC_LOGTABLE_SUFFIX):
+                    continue
+
+                if table_name in ["system_schema.dropped_columns", "system.truncated"]:
+                    # skipping those cause of some scylla issues on system tables
+                    # https://github.com/scylladb/scylladb/issues/7186
+                    # https://github.com/scylladb/scylladb/issues/12239
+                    continue
+
+                if is_column_type and filter_empty_tables:
+                    has_data = False
                     try:
-                        current_rows = cql_session.execute(f"SELECT * FROM {table_name} LIMIT 1").current_rows
+                        stmt = SimpleStatement(f"SELECT * FROM {table_name}", fetch_size=10)
+                        has_data = bool(cql_session.execute(stmt).one())
                     except Exception as exc:  # pylint: disable=broad-except
                         self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
 
-                    if not current_rows:
-                        is_valid_table = False
+                    if not has_data:
+                        continue
 
-                if is_valid_table:
-                    result.add(table_name)
+                result.add(table_name)
             return result
 
         with self.cql_connection_patient(db_node) as session:
