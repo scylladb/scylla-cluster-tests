@@ -436,6 +436,8 @@ class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=abs
     def __init__(self, params):  # pylint: disable=super-init-not-called
         self.nodes = params
         self.name = 'dummy_cluster'
+        self.added_password_suffix = False
+        self.log = logging.getLogger(self.name)
 
 
 class TestNodetoolStatus(unittest.TestCase):
@@ -568,3 +570,46 @@ def test_base_node_cpuset(grep_results, expected_core_number):
 
     assert isinstance(cpuset_value, int)
     assert cpuset_value == expected_core_number
+
+
+@pytest.mark.integration
+def test_get_any_ks_cf_list(docker_scylla, params):
+
+    cluster = DummyScyllaCluster([docker_scylla])
+    cluster.params = params
+
+    with cluster.cql_connection_patient(docker_scylla) as session:
+        session.execute("CREATE KEYSPACE mview WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}")
+        session.execute(
+            "CREATE TABLE mview.users (username text, first_name text, last_name text, password text, email text, "
+            "last_access timeuuid, PRIMARY KEY(username))")
+        session.execute(
+            "CREATE MATERIALIZED VIEW mview.users_by_first_name AS SELECT * FROM mview.users WHERE first_name "
+            "IS NOT NULL and username IS NOT NULL PRIMARY KEY (first_name, username)")
+        session.execute(
+            "CREATE MATERIALIZED VIEW mview.users_by_last_name AS SELECT * FROM mview.users WHERE last_name "
+            "IS NOT NULL and username IS NOT NULL PRIMARY KEY (last_name, username)")
+        session.execute(
+            "INSERT INTO mview.users (username, first_name, last_name, password) VALUES "
+            "('fruch', 'Israel', 'Fruchter', '1111')")
+
+    table_names = cluster.get_any_ks_cf_list(docker_scylla, filter_empty_tables=True)
+    assert set(table_names) == {'system.runtime_info', 'system_distributed.cdc_generation_timestamps',
+                                'system.config', 'system.local', 'system.token_ring', 'system.clients',
+                                'system_schema.tables', 'system_schema.columns', 'system.compaction_history',
+                                'system.cdc_local', 'system.versions', 'system_distributed_everywhere.cdc_generation_descriptions_v2',
+                                'system.scylla_local', 'system.cluster_status', 'system.protocol_servers',
+                                'system_distributed.cdc_streams_descriptions_v2', 'system_schema.keyspaces',
+                                'system.size_estimates', 'system_schema.scylla_tables', 'system_auth.roles',
+                                'system.scylla_table_schema_history', 'system_schema.views',
+                                'system_distributed.view_build_status', 'system.built_views',
+                                'mview.users_by_first_name', 'mview.users_by_last_name', 'mview.users'}
+
+    table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=False, filter_out_mv=True)
+    assert set(table_names) == {'mview.users'}
+
+    table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=False)
+    assert set(table_names) == {'mview.users_by_first_name', 'mview.users_by_last_name', 'mview.users'}
+
+    table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=True, filter_out_mv=True)
+    assert set(table_names) == {'mview.users'}
