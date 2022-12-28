@@ -22,7 +22,12 @@ import path
 
 import pytest
 import yaml
-from cassandra.cluster import Cluster  # pylint: disable=no-name-in-module
+from cassandra.cluster import (  # pylint: disable=no-name-in-module
+    Cluster,
+    ExecutionProfile,
+    EXEC_PROFILE_DEFAULT,
+)
+from cassandra.policies import WhiteListRoundRobinPolicy
 
 from sdcm.cluster_k8s import (
     ScyllaPodCluster,
@@ -776,8 +781,10 @@ def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path)
         log.debug(file)
         log.debug(file.read_text())
 
-    db_cluster.nodes[0].refresh_ip_address()
-    cluster = Cluster(contact_points=[db_cluster.nodes[0].cql_ip_address], port=db_cluster.nodes[0].CQL_SSL_PORT)
+    execution_profile = ExecutionProfile(load_balancing_policy=WhiteListRoundRobinPolicy([
+                                         db_cluster.nodes[0].cql_ip_address]))
+    cluster = Cluster(contact_points=[db_cluster.nodes[0].cql_ip_address], port=db_cluster.nodes[0].CQL_SSL_PORT,
+                      execution_profiles={EXEC_PROFILE_DEFAULT: execution_profile})
     ssl_context = ssl.SSLContext(protocol=ssl.PROTOCOL_SSLv23)
     ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED  # pylint: disable=no-member
 
