@@ -94,8 +94,14 @@ def restore_monitoring_stack(test_id, date_time=None):  # pylint: disable=too-ma
         if not containers_ports:
             return False
 
+        # To support multi-tenant cluster
+        dashboard_file = get_nemesis_dashboard_file_for_cluster(base_dir=monitoring_stack_base_dir,
+                                                                archive=monitoring_arch,
+                                                                file_name_for_search="scylla-dash-per-server-nemesis")
+        LOGGER.info("Nemesis dashboard file for the cluster %s is '%s'", monitoring_cluster, dashboard_file)
         status = restore_grafana_dashboards_and_annotations(monitoring_stack_dir,
-                                                            grafana_docker_port=containers_ports["grafana_docker_port"])
+                                                            grafana_docker_port=containers_ports["grafana_docker_port"],
+                                                            sct_dashboard_file=dashboard_file)
         if not status:
             return False
 
@@ -171,6 +177,29 @@ def create_monitoring_data_dir(base_dir, archive, tenant_dir=""):
         LOGGER.error("Error during extracting prometheus snapshot. Switch to next archive")
         return False
     return get_monitoring_data_dir(monitoring_data_base_dir)
+
+
+def get_nemesis_dashboard_file_for_cluster(base_dir, archive, file_name_for_search):
+    # To support multi-tenant cluster
+    # We have dashboard file for every tenant. After untar the archive all files will be in the same folder and we need
+    # to recognize correct dashboard file for every tenant.
+    # Here we get the correct file name
+    cmd = f'tar -tf {archive} | grep "{file_name_for_search}"'
+
+    result = LocalCmdRunner().run(cmd, timeout=COMMAND_TIMEOUT, ignore_status=True)
+    if result.exited > 0:
+        LOGGER.error("Error during extracting monitoring stack")
+        return None
+
+    dashboard_file = result.stdout.strip()
+    if not dashboard_file:
+        return None
+
+    dashboard_file = Path(base_dir) / dashboard_file
+    if not dashboard_file.exists():
+        return None
+
+    return dashboard_file
 
 
 def create_monitoring_stack_dir(base_dir, archive):
@@ -278,10 +307,11 @@ def get_monitoring_stack_scylla_version(monitoring_stack_dir):
         return 'branch-3.0', 'master'
 
 
-def restore_grafana_dashboards_and_annotations(monitoring_dockers_dir, grafana_docker_port):
+def restore_grafana_dashboards_and_annotations(monitoring_dockers_dir, grafana_docker_port, sct_dashboard_file):
     status = []
     try:
-        status.append(restore_sct_dashboards(monitoring_dockers_dir, grafana_docker_port=grafana_docker_port))
+        status.append(restore_sct_dashboards(grafana_docker_port=grafana_docker_port,
+                                             sct_dashboard_file=sct_dashboard_file))
         status.append(restore_annotations_data(monitoring_dockers_dir, grafana_docker_port=grafana_docker_port))
     except Exception as details:  # pylint: disable=broad-except
         LOGGER.error("Error during uploading sct monitoring data %s", details)
@@ -299,17 +329,13 @@ def run_monitoring_stack_containers(monitoring_stack_dir, monitoring_data_dir, s
 
 
 @retrying(n=3, sleep_time=20, message='Uploading sct dashboard')
-def restore_sct_dashboards(monitoring_dockers_dir, grafana_docker_port):
-    sct_dashboard_file_name = "*scylla-dash-per-server-nemesis.*.json"
-    sct_dashboard_files = list((Path(monitoring_dockers_dir) / 'sct_monitoring_addons').glob(sct_dashboard_file_name))
-
-    if not sct_dashboard_files or not os.path.exists(sct_dashboard_files[0]):
-        LOGGER.warning('There is no dashboard %s. defaults to master dashboard', sct_dashboard_file_name)
+def restore_sct_dashboards(grafana_docker_port, sct_dashboard_file):
+    if not sct_dashboard_file:
+        LOGGER.warning('There is no dashboard %s. defaults to master dashboard', sct_dashboard_file)
         sct_dashboard_file_name = "scylla-dash-per-server-nemesis.master.json"
-        sct_dashboard_files = [Path(__file__).parent.parent.parent / 'data_dir' / sct_dashboard_file_name]
+        sct_dashboard_file = [Path(__file__).parent.parent.parent / 'data_dir' / sct_dashboard_file_name]
 
     dashboard_url = f'http://localhost:{grafana_docker_port}/api/dashboards/db'
-    sct_dashboard_file = sct_dashboard_files[0]
     with open(sct_dashboard_file, encoding="utf-8") as f:  # pylint: disable=invalid-name
         dashboard_config = json.load(f)
         # NOTE: remove value from the 'dashboard.id' field to avoid following error:
