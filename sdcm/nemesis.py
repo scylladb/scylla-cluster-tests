@@ -91,8 +91,9 @@ from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
-    convert_cpu_value_from_k8s_to_units,
+    convert_cpu_value_from_k8s_to_units, convert_memory_value_from_k8s_to_units,
 )
+from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
@@ -409,6 +410,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _is_it_on_kubernetes(self) -> bool:
         return isinstance(getattr(self.tester, "db_cluster", None), PodCluster)
+
+    def _is_chaos_mesh_initialized(self) -> bool:
+        return self.tester.k8s_cluster.chaos_mesh.initialized
 
     # pylint: disable=too-many-arguments,unused-argument
     def get_list_of_methods_by_flags(
@@ -3527,12 +3531,38 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.disrupt_grow_shrink_cluster()
         InfoEvent(message="Finished grow_shrink disruption").publish()
 
+    def _k8s_disrupt_memory_stress(self):
+        """Uses chaos-mesh experiment based on https://github.com/chaos-mesh/memStress"""
+        if not self._is_chaos_mesh_initialized:
+            raise UnsupportedNemesis(
+                "Chaos Mesh is not installed. Set 'k8s_use_chaos_mesh' config option to 'true'")
+        memory_limit = self.tester.k8s_cluster.calculated_memory_limit
+        # If a container's memory usage increases too quickly the OOM killer is invoked
+        # so reduce ramp to ~2GB/s: time_to_reach = memory (in GB) /2
+        time_to_reach_secs = int(convert_memory_value_from_k8s_to_units(memory_limit)/2)
+        duration = 100 + time_to_reach_secs
+        self.log.info('Try to allocate 90% available memory')
+        experiment = MemoryStressExperiment(pod=self.target_node, duration=f"{duration}s",
+                                            workers=1, size="90%", time_to_reach=f"{time_to_reach_secs}s")
+        experiment.start()
+        experiment.wait_until_finished()
+
+        self.log.info('Try to allocate 100% total memory')
+        experiment = MemoryStressExperiment(pod=self.target_node, duration=f"{duration}s",
+                                            workers=1, size="100%", time_to_reach=f"{time_to_reach_secs}s")
+        experiment.start()
+        experiment.wait_until_finished()
+
     def disrupt_memory_stress(self):
         """
         Try to run stress-ng to preempt allocated memory of scylla process,
         we don't monitor swap usage in /proc/$scylla_pid/status, just make sure
         no coredump, serious db error occur during the heavy load of memory.
+
         """
+        if self._is_it_on_kubernetes():
+            self._k8s_disrupt_memory_stress()
+            return
         if self.target_node.distro.is_rhel_like:
             self.target_node.install_epel()
             self.target_node.remoter.sudo('yum install -y stress-ng')
