@@ -51,8 +51,8 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
     NAMESPACE = "chaos-mesh"
     VERSION = "2.5.0"
     HELM_SETTINGS = {
-        'dashboard.create': True,
-        'dnsServer.create': True
+        'dashboard': {"create": False},
+        'dnsServer': {"create": True}
     }
 
     def __init__(self, k8s_cluster: "KubernetesCluster"):
@@ -71,6 +71,8 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
             self._k8s_cluster.POOL_LABEL_NAME, self._k8s_cluster.AUXILIARY_POOL_NAME)
         scylla_node_pool_affinity = get_helm_pool_affinity_values(
             self._k8s_cluster.POOL_LABEL_NAME, self._k8s_cluster.SCYLLA_POOL_NAME)
+        chaos_daemon_settings = scylla_node_pool_affinity | {
+            "runtime": "containerd", "socketPath": "/run/containerd/containerd.sock"}
         self._k8s_cluster.helm_install(
             target_chart_name="chaos-mesh",
             source_chart_name="chaos-mesh/chaos-mesh",
@@ -78,7 +80,7 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
             use_devel=False,
             namespace=self.NAMESPACE,
             values=HelmValues(self.HELM_SETTINGS | {
-                "chaosDaemon": scylla_node_pool_affinity,
+                "chaosDaemon": chaos_daemon_settings,
                 "controllerManager": aux_node_pool_affinity,
                 "dnsServer": aux_node_pool_affinity
             }),
