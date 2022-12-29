@@ -239,6 +239,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner = cleanup_context = RemoteDocker(loader, self.docker_image_name,
                                                         command_line="-c 'tail -f /dev/null'",
                                                         extra_docker_opts=f'{cpu_options} '
+                                                                          '--network=host '
                                                                           f'--label shell_marker={self.shell_marker}'
                                                                           f' --entrypoint /bin/bash'
                                                                           f' -v $HOME/{remote_hdr_file_name}:/{remote_hdr_file_name}')
