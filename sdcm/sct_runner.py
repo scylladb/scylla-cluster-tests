@@ -388,6 +388,7 @@ class SctRunner(ABC):
             "keep": str(ceil(test_duration / 60) + 6),  # keep SCT Runner for 6h more than test_duration
             "keep_action": "terminate",
             "UserName": self.LOGIN_USER,
+            "bastion": "true",
         }
         if restore_monitor and restored_test_id:
             tags.update({"RestoredTestId": restored_test_id})

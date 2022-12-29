@@ -33,7 +33,7 @@ def get_tags(instance: dict) -> dict:
 
 def find_bastion_for_instance(instance: dict) -> dict:
     region = get_region(instance)
-    tags = {'RunByUser': 'QA', 'bastion': 'true'}
+    tags = {'bastion': 'true'}
     bastions = list_instances_aws(tags, running=True, region_name=region)
     assert bastions, f"No bastion found for region: {region}"
     return bastions[0]
