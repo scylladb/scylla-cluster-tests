@@ -50,6 +50,10 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
 
         watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
+        # in `@retrying` retry==0 means retrying `sys.maxsize * 2 + 1`, we never want that
+        if retry == 0:
+            retry = 1
+
         @retrying(n=retry)
         def _run():
 
