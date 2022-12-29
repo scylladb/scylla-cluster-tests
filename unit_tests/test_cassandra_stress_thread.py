@@ -55,8 +55,8 @@ def test_02_cassandra_stress_user_profile(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy()
 
     cmd = (
-        "cassandra-stress user profile=/tmp/c-s_profile_2si_2queries.yaml ops'(insert=10,si_p_read1=1,si_p_read2=1)' "
-        "cl=ONE duration=1m -mode cql3 native -rate threads=10"
+        "cassandra-stress user profile=/tmp/cassandra-stress-custom.yaml ops'(insert=1,simple1=1)' "
+        "cl=ONE duration=1m -mode cql3 native -rate threads=1"
     )
 
     cs_thread = CassandraStressThread(
