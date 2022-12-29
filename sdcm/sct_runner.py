@@ -1139,7 +1139,7 @@ def clean_sct_runners(test_status: str,
         # trying to lookup on AWS instance from GCP/Azure
         if sct_runner_info.cloud_provider == "aws":
             ssh_run_cmd_result = ssh_run_cmd(command=cmd, test_id=sct_runner_info.test_id,
-                                             node_name=sct_runner_name)
+                                             node_name=sct_runner_name, force_use_public_ip=True)
 
             timeout_flag = bool(ssh_run_cmd_result.stdout) if ssh_run_cmd_result else False
 
