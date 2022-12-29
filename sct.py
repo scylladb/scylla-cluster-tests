@@ -1043,6 +1043,12 @@ def run_test(argv, backend, config, logdir):
                   failfast=False, buffer=False, catchbreak=True, testLoader=SctLoader())
 
 
+@cli.command('export-nemesis', help="Run SCT test using unittest")
+def export_nemesis():
+    sys.exit(pytest.main(['-s', '-v', '-p', 'no:warnings',
+             'unit_tests/test_nemesis_sisyphus.py::test_list_all_available_nemesis', '--generate-nemesis-file']))
+
+
 @cli.command('run-pytest', help="Run tests using pytest")
 @click.argument('target')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
