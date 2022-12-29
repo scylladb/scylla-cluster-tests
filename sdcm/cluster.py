@@ -3510,8 +3510,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         Checking if a result page with any data is received.
         """
         try:
-            result = session.execute(SimpleStatement(f"SELECT * FROM {table_name}", fetch_size=10))
-            return bool(len(result.one())), None
+            result = session.execute(SimpleStatement(f"SELECT * FROM {table_name} USING TIMEOUT 300s", fetch_size=10),
+                                     timeout=300)
+            return bool(result.one()), None
 
         except Exception as exc:  # pylint: disable=broad-except
             self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')

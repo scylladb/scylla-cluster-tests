@@ -30,7 +30,7 @@ class ScanOperationThread:
     # pylint: disable=too-many-arguments,unused-argument
     def __init__(self, db_cluster: [BaseScyllaCluster, BaseCluster], duration: int, interval: int,
                  termination_event: threading.Event, ks_cf: str,
-                 scan_event: [FullScanEvent, FullPartitionScanReversedOrderEvent], page_size: int = 10000, **kwargs):
+                 scan_event: [FullScanEvent, FullPartitionScanReversedOrderEvent], page_size: int = 1000, **kwargs):
         self.ks_cf = ks_cf
         self.db_cluster = db_cluster
         self.page_size = page_size
@@ -135,7 +135,7 @@ class ScanOperationThread:
         end_time = time.time() + self.duration
         while time.time() < end_time and not self.termination_event.is_set():
             self.db_node = random.choice(self.db_cluster.nodes)
-            self.read_pages = random.choice([100, 1000, 0])
+            self.read_pages = random.choice([100, 1000, 10000, 0])
             self.run_scan_operation()
             self.log.debug('Executed %s number: %s', self.scan_event.__name__, self.scans_counter)
             time.sleep(self.interval)
