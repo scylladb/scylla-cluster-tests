@@ -52,7 +52,7 @@ class ResourceGroupProvider:
             resource_group_name=self._name,
             parameters={
                 "location": self._region,
-                "tags": {"creation_time": datetime.now().isoformat(sep=" ", timespec="seconds"), "_az": self._az}
+                "tags": {"creation_time": datetime.utcnow().isoformat(sep=" ", timespec="seconds"), "_az": self._az}
             },
         )
         LOGGER.info("Provisioned resource group %s in the %s region", resource_group.name, resource_group.location)

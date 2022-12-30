@@ -13,7 +13,7 @@
 
 import logging
 import string
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
@@ -188,7 +188,8 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         tags = v_m.tags.copy()
         ssh_user = tags.pop("ssh_user", "")
         ssh_key = tags.pop("ssh_key", "")
-        creation_time = datetime.fromisoformat(tags.pop("creation_time")) if 'creation_time' in tags else None
+        creation_time = datetime.fromisoformat(tags.pop("creation_time")).replace(
+            tzinfo=timezone.utc) if 'creation_time' in tags else None
         image = str(v_m.storage_profile.image_reference)
         pricing_model = self._get_pricing_model(v_m)
 

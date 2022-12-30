@@ -1,5 +1,7 @@
 from logging import getLogger
 from libcloud.compute.drivers.gce import GCEAddress
+
+from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.cloud_monitor.common import NA
 from sdcm.utils.cloud_monitor.resources import CloudResources
 from sdcm.utils.common import list_elastic_ips_aws, aws_tags_to_dict, list_static_ips_gce
@@ -53,6 +55,18 @@ class GceStaticIP(StaticIP):  # pylint: disable=too-few-public-methods
         )
 
 
+class AzureStaticIP(StaticIP):  # pylint: disable=too-few-public-methods
+    def __init__(self, static_ip, resource_group):
+        super().__init__(
+            cloud="azure",
+            name=static_ip["name"],
+            address=static_ip["properties"]["ipAddress"],
+            region=static_ip["location"],
+            used_by=resource_group,
+            owner=NA  # currently unsupported
+        )
+
+
 class StaticIPs(CloudResources):
     """Allocated static IPs"""
 
@@ -84,6 +98,15 @@ class StaticIPs(CloudResources):
                 eip.owner = cloud_instances_by_name[eip.used_by].owner
         self.all.extend(self["gce"])
 
+    def get_azure_static_ips(self):
+        # all azure ip's are external resources and we pay for it
+        query_bits = ["Resources", "where type =~ 'Microsoft.Network/publicIPAddresses'",
+                      "project id, resourceGroup, name, location, properties"]
+        res = AzureService().resource_graph_query(query=' | '.join(query_bits))
+        self["azure"] = [AzureStaticIP(ip, ip["resourceGroup"]) for ip in res if "ipAddress" in ip["properties"]]
+        self.all.extend(self["azure"])
+
     def get_all(self):
         self.get_aws_elastic_ips()
         self.get_gce_static_ips()
+        self.get_azure_static_ips()

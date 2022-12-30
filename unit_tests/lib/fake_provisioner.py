@@ -45,7 +45,7 @@ class FakeProvisioner(Provisioner):
                          private_ip_address='10.10.10.10', tags=definition.tags,
                          pricing_model=pricing_model,
                          image=definition.image_id,
-                         creation_time=datetime.datetime.now(),
+                         creation_time=datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc),
                          _provisioner=self)
         self._instances[definition.name] = v_m
         return v_m

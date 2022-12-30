@@ -1,12 +1,16 @@
 import os
 
 from logging import getLogger
-from datetime import datetime
+from datetime import datetime, timezone
+
 from boto3 import client as boto3_client
+from azure.mgmt.compute.models import VirtualMachine
+
+from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.cloud_monitor.common import InstanceLifecycle, NA
 from sdcm.utils.cloud_monitor.resources import CloudInstance, CloudResources
 from sdcm.utils.common import aws_tags_to_dict, gce_meta_to_dict, list_instances_aws, list_instances_gce
-from sdcm.utils.pricing import AWSPricing, GCEPricing
+from sdcm.utils.pricing import AWSPricing, GCEPricing, AzurePricing
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
 
 LOGGER = getLogger(__name__)
@@ -96,6 +100,32 @@ class GCEInstance(CloudInstance):
         return ""
 
 
+class AzureInstance(CloudInstance):
+    pricing = AzurePricing()
+
+    def __init__(self, instance: VirtualMachine, resource_group: str):
+        tags = instance.tags or {}
+        super().__init__(
+            cloud="azure",
+            name=instance.name,
+            instance_id=resource_group,
+            region_az=instance.location,
+            state="running",
+            lifecycle=InstanceLifecycle.SPOT if instance.priority == "Spot" else InstanceLifecycle.ON_DEMAND,
+            instance_type=instance.hardware_profile.vm_size,
+            owner=tags.get("RunByUser", NA),
+            # azure is not providing vm creation time - for machines that don't have creation_time, set default in the past
+            create_time=datetime.fromisoformat(
+                tags.get("creation_time", "2022-12-20T12:00:00")).replace(tzinfo=timezone.utc),
+            keep=tags.get("keep", ""),
+            project=resource_group
+        )
+
+    @property
+    def region(self):
+        return self.region_az
+
+
 class CloudInstances(CloudResources):
 
     def get_aws_instances(self):
@@ -111,7 +141,18 @@ class CloudInstances(CloudResources):
             self["gce"] += [GCEInstance(instance) for instance in gce_instances]
         self.all.extend(self["gce"])
 
+    def get_azure_instances(self):
+        query_bits = ["Resources", "where type =~ 'Microsoft.Compute/virtualMachines'",
+                      "project id, resourceGroup, name"]
+        res = AzureService().resource_graph_query(query=' | '.join(query_bits))
+        get_virtual_machine = AzureService().compute.virtual_machines.get
+        instances = [(get_virtual_machine(resource_group_name=vm["resourceGroup"],
+                      vm_name=vm["name"]), vm["resourceGroup"]) for vm in res]
+        self["azure"] = [AzureInstance(instance, resource_group) for instance, resource_group in instances]
+        self.all.extend(self["azure"])
+
     def get_all(self):
         LOGGER.info("Getting all cloud instances...")
         self.get_aws_instances()
         self.get_gce_instances()
+        self.get_azure_instances()
