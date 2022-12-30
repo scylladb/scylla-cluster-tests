@@ -1,7 +1,7 @@
 from datetime import datetime
 from math import ceil
 
-CLOUD_PROVIDERS = ("aws", "gce")
+CLOUD_PROVIDERS = ("aws", "gce", "azure")
 
 
 class CloudInstance:  # pylint: disable=too-few-public-methods,too-many-instance-attributes

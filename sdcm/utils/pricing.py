@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 from logging import getLogger
 import boto3
+import requests
 from mypy_boto3_pricing import PricingClient
 from sdcm.utils.cloud_monitor.common import InstanceLifecycle
 
@@ -253,3 +254,35 @@ class GCEPricing:  # pylint: disable=too-few-public-methods
         else:
             # calculate disk price
             return 0
+
+
+class AzurePricing:  # pylint: disable=too-few-public-methods
+
+    def get_instance_price(self, region, instance_type, state, lifecycle):
+        if state == "running":
+            prices = self._get_sku_prices(instance_type, region)
+            if not prices:
+                return 0
+            try:
+                if lifecycle == InstanceLifecycle.ON_DEMAND:
+                    return [price["retailPrice"] for price in prices
+                            if "Spot" not in price["meterName"] and "Low" not in price["meterName"]][0]
+                else:
+                    return [price["retailPrice"] for price in prices if "Spot" in price["meterName"]][0]
+            except KeyError:
+                LOGGER.warning("Failed to get price from prices: %s", prices)
+                return 0
+        else:
+            # TODO: calculate IP price
+            return 0
+
+    @staticmethod
+    @lru_cache(maxsize=None)
+    def _get_sku_prices(instance_type: str, region):
+        resp = requests.get(
+            f"https://prices.azure.com/api/retail/prices?$filter=serviceName eq 'Virtual Machines' "
+            f"and armSkuName eq '{instance_type}' and armRegionName eq '{region}' and priceType eq 'consumption'")
+        if not resp.ok:
+            LOGGER.warning("Failed to fetch prices for %s in location: %s", instance_type, region)
+            return []
+        return [item for item in resp.json()["Items"] if "Windows" not in item["productName"]]

@@ -64,7 +64,7 @@ class VirtualMachineProvider:
                 "location": self._region,
                 "zones": [self._az] if self._az else [],
                 "tags": definition.tags | {"ssh_user": definition.user_name, "ssh_key": definition.ssh_key.name,
-                                           "creation_time": datetime.now().isoformat(sep=" ", timespec="seconds")},
+                                           "creation_time": datetime.utcnow().isoformat(sep=" ", timespec="seconds")},
                 "hardware_profile": {
                     "vm_size": definition.type,
                 },
