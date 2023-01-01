@@ -23,7 +23,6 @@ from mypy_boto3_ec2 import EC2ServiceResource
 
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.sct_runner import AwsSctRunner
-from sdcm.utils.sct_cmd_helpers import CloudRegion, add_file_logger
 from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
@@ -346,21 +345,3 @@ class AwsCiBuilder(AwsBuilder):
     @cached_property
     def jenkins_labels(self):
         return f"aws-sct-builders-{self.region.region_name}-v2-CI"
-
-
-configure_jenkins_builders: click.Command
-
-
-@click.command("configure-jenkins-builders", help="Configure all required jenkins builders for SCT")
-@click.option("-r", "--regions", type=CloudRegion(cloud_provider='aws'),
-              default=[], help="Cloud regions", multiple=True)
-def configure_jenkins_builders(regions):
-    add_file_logger()
-    logging.basicConfig(level=logging.INFO)
-
-    AwsCiBuilder(AwsRegion('eu-west-1')).configure_auto_scaling_group()
-    AwsBuilder.configure_in_all_region(regions=regions)
-
-
-if __name__ == '__main__':
-    configure_jenkins_builders()  # pylint: disable=no-value-for-parameter

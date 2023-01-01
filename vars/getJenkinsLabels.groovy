@@ -16,7 +16,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
     }
 
     def gcp_project = params.gce_project?.trim() ?: 'gcp-sct-project-1'
-    gcp_project = gcp_project == 'gcp' ? 'gce-sct' : gcp_project
+    gcp_project = gcp_project == 'gcp' ? 'gcp-skilled-adapter-452' : gcp_project
 
     def jenkins_labels = ['aws-eu-west-1': 'aws-sct-builders-eu-west-1-v2-asg',
                           'aws-eu-west-2': 'aws-sct-builders-eu-west-2-v2-asg',
@@ -24,9 +24,9 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'aws-eu-central-1': 'aws-sct-builders-eu-central-1-v2-asg',
                           'aws-us-east-1' : 'aws-sct-builders-us-east-1-v2-asg',
                           'aws-us-west-2' : 'aws-sct-builders-us-west-2-v2-asg',
-                          'gce-us-east1': "${gcp_project}-builders-us-east1",
-                          'gce-us-west1': "${gcp_project}-builders-us-west1",
-                          'gce': "${gcp_project}-builders",
+                          'gce-us-east1': "${gcp_project}-builders-us-east1-template",
+                          'gce-us-west1': "${gcp_project}-builders-us-west1-template",
+                          'gce': "${gcp_project}-builders-us-east1-template",
                           'aws': 'aws-sct-builders-eu-west-1-v2-asg',
                           'azure-eastus': 'azure-sct-builders']
 
