@@ -1464,6 +1464,7 @@ class ScyllaCQLSession:
 
     def __enter__(self):
         execute_orig = self.session.execute
+        execute_async_orig = self.session.execute_async
 
         def execute_verbose(*args, **kwargs):
             if args:
@@ -1473,8 +1474,17 @@ class ScyllaCQLSession:
             LOGGER.debug("Executing CQL '%s' ...", query)
             return execute_orig(*args, **kwargs)
 
+        def execute_async_verbose(*args, **kwargs):
+            if args:
+                query = args[0]
+            else:
+                query = kwargs.get("query")
+            LOGGER.debug("Executing CQL '%s' ...", query)
+            return execute_async_orig(*args, **kwargs)
+
         if self.verbose:
             self.session.execute = execute_verbose
+            self.session.execute_async = execute_async_verbose
         return self.session
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -2271,9 +2281,10 @@ class PageFetcher:
 
     def handle_error(self, exc):
         self.error = exc
+        LOGGER.error(self.error)
         raise exc
 
-    def request_one(self):
+    def request_one(self, timeout=10):
         """
         Requests the next page if there is one.
 
@@ -2282,11 +2293,11 @@ class PageFetcher:
         if self.future.has_more_pages:
             self.future.start_fetching_next_page()
             self.requested_pages += 1
-            self.wait()
+            self.wait(seconds=timeout)
 
         return self
 
-    def request_all(self):
+    def request_all(self, timeout=10):
         """
         Requests any remaining pages.
 
@@ -2295,7 +2306,7 @@ class PageFetcher:
         while self.future.has_more_pages:
             self.future.start_fetching_next_page()
             self.requested_pages += 1
-            self.wait()
+            self.wait(seconds=timeout)
 
         return self
 

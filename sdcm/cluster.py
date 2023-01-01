@@ -3367,7 +3367,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             session.default_fetch_size = 1000
             session.default_consistency_level = ConsistencyLevel.ONE
             execute_result = session.execute_async(cmd)
-            fetcher = PageFetcher(execute_result).request_all()
+            fetcher = PageFetcher(execute_result).request_all(timeout=120)
             current_rows = fetcher.all_data()
 
             # for row in cql_session.execute(cmd).current_rows:
