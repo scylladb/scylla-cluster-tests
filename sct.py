@@ -84,11 +84,12 @@ from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_se
                                kill_running_monitoring_stack_services)
 from sdcm.utils.log import setup_stdout_logger
 from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder
 from sdcm.utils.gce_region import GceRegion
+from sdcm.utils.gce_builder import GceBuilder
 from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.get_username import get_username
 from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
-from sdcm.utils.aws_builder import configure_jenkins_builders
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
@@ -1607,7 +1608,23 @@ def create_es_index(name: str, doc_type: str, mapping_file: str) -> None:
     create_index(index_name=name, doc_type=doc_type, mappings=mapping_data)
 
 
-cli.add_command(configure_jenkins_builders)
+@cli.command("configure-jenkins-builders", help="Configure all required jenkins builders for SCT")
+@cloud_provider_option
+@click.option("-r", "--regions", type=CloudRegion(), default=[], help="Cloud regions", multiple=True)
+def configure_jenkins_builders(cloud_provider, regions):
+    add_file_logger()
+    logging.basicConfig(level=logging.INFO)
+
+    match cloud_provider:
+        case 'aws':
+            AwsCiBuilder(AwsRegion('eu-west-1')).configure_auto_scaling_group()
+            AwsBuilder.configure_in_all_region(regions=regions)
+        case 'gce':
+            GceBuilder.configure_in_all_region(regions=regions)
+        case 'azure':
+            raise NotImplementedError("configure_jenkins_builders doesn't support Azure yet")
+
+
 cli.add_command(sct_ssh.ssh)
 cli.add_command(sct_ssh.tunnel)
 cli.add_command(sct_ssh.copy_cmd)
