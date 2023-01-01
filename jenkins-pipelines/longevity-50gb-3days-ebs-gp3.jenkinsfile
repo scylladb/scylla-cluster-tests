@@ -7,7 +7,5 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-50GB-3days-authorization-and-tls-ssl.yaml","configurations/ebs/ebs-gp3-2v-4tb-16k-iops.yaml",
-                     "configurations/ebs/longevity-50GB-3days-authorization-and-tls-ssl-stress.yaml"]'''
-
+    test_config: '''["test-cases/longevity/longevity-50GB-3days-authorization-and-tls-ssl.yaml","configurations/ebs/ebs-gp3-2v-4tb-16k-iops.yaml", "configurations/ebs/longevity-50GB-3days-authorization-and-tls-ssl-stress.yaml"]'''
 )
