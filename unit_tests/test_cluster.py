@@ -605,6 +605,29 @@ def test_get_any_ks_cf_list(docker_scylla, params):
                                 'system_distributed.view_build_status', 'system.built_views',
                                 'mview.users_by_first_name', 'mview.users_by_last_name', 'mview.users'}
 
+    table_names = cluster.get_any_ks_cf_list(docker_scylla, filter_empty_tables=False)
+    assert set(table_names) == {'system.runtime_info', 'system_distributed.cdc_generation_timestamps',
+                                'system.config', 'system.local', 'system.token_ring', 'system.clients',
+                                'system_schema.tables', 'system_schema.columns', 'system.compaction_history',
+                                'system.cdc_local', 'system.versions', 'system_distributed_everywhere.cdc_generation_descriptions_v2',
+                                'system.scylla_local', 'system.cluster_status', 'system.protocol_servers',
+                                'system_distributed.cdc_streams_descriptions_v2', 'system_schema.keyspaces',
+                                'system.size_estimates', 'system_schema.scylla_tables', 'system_auth.roles',
+                                'system.scylla_table_schema_history', 'system_schema.views',
+                                'system_distributed.view_build_status', 'system.built_views',
+                                'mview.users_by_first_name', 'mview.users_by_last_name', 'mview.users',
+                                'system.IndexInfo', 'system.batchlog', 'system.compactions_in_progress',
+                                'system.hints', 'system.large_cells', 'system.large_partitions', 'system.large_rows',
+                                'system.paxos', 'system.peer_events', 'system.peers', 'system.range_xfers', 'system.repair_history',
+                                'system.scylla_views_builds_in_progress', 'system.snapshots', 'system.sstable_activity',
+                                'system.truncated', 'system.views_builds_in_progress', 'system_auth.role_attributes',
+                                'system_auth.role_members', 'system_distributed.service_levels', 'system_schema.aggregates',
+                                'system_schema.computed_columns', 'system_schema.dropped_columns', 'system_schema.functions',
+                                'system_schema.indexes', 'system_schema.scylla_aggregates', 'system_schema.scylla_keyspaces',
+                                'system_schema.triggers', 'system_schema.types', 'system_schema.view_virtual_columns',
+                                'system_traces.events', 'system_traces.node_slow_log', 'system_traces.node_slow_log_time_idx',
+                                'system_traces.sessions', 'system_traces.sessions_time_idx'}
+
     table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=False, filter_out_mv=True)
     assert set(table_names) == {'mview.users'}
 

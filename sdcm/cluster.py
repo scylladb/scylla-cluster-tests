@@ -3475,13 +3475,13 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 if filter_out_cdc_log_tables and getattr(row, column_names[1]).endswith(cdc.options.CDC_LOGTABLE_SUFFIX):
                     continue
 
-                if table_name in ["system_schema.dropped_columns", "system.truncated"]:
-                    # skipping those cause of some scylla issues on system tables
-                    # https://github.com/scylladb/scylladb/issues/7186
-                    # https://github.com/scylladb/scylladb/issues/12239
-                    continue
-
                 if is_column_type and filter_empty_tables:
+                    if table_name in ["system_schema.dropped_columns", "system.truncated"]:
+                        # skipping those cause of some scylla issues on system tables
+                        # https://github.com/scylladb/scylladb/issues/7186
+                        # https://github.com/scylladb/scylladb/issues/12239
+                        continue
+
                     has_data = False
                     try:
                         stmt = SimpleStatement(f"SELECT * FROM {table_name}", fetch_size=10)
