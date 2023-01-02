@@ -97,9 +97,9 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
-    wait.wait_for(func=db_up, step=1, text='Waiting for DB services to be up', timeout=30, throw_exc=True)
+    wait.wait_for(func=db_up, step=1, text='Waiting for DB services to be up', timeout=120, throw_exc=True)
     wait.wait_for(func=db_alternator_up, step=1, text='Waiting for DB services to be up alternator)',
-                  timeout=30, throw_exc=True)
+                  timeout=120, throw_exc=True)
 
     yield scylla
     scylla.kill()
