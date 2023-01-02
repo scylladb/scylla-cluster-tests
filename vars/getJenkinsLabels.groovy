@@ -27,7 +27,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'gce-us-east1': "${gcp_project}-builders-us-east1",
                           'gce-us-west1': "${gcp_project}-builders-us-west1",
                           'gce': "${gcp_project}-builders",
-                          'docker': 'sct-builders',
+                          'aws': 'aws-sct-builders-eu-west-1-v2-asg',
                           'azure-eastus': 'azure-sct-builders']
 
     def cloud_provider = getCloudProviderFromBackend(backend)
