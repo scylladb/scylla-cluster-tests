@@ -105,6 +105,9 @@ class AzureInstance(CloudInstance):
 
     def __init__(self, instance: VirtualMachine, resource_group: str):
         tags = instance.tags or {}
+        creation_time = tags.get("creation_time", None)
+        if creation_time:
+            creation_time = datetime.fromisoformat(creation_time).replace(tzinfo=timezone.utc)
         super().__init__(
             cloud="azure",
             name=instance.name,
@@ -114,9 +117,7 @@ class AzureInstance(CloudInstance):
             lifecycle=InstanceLifecycle.SPOT if instance.priority == "Spot" else InstanceLifecycle.ON_DEMAND,
             instance_type=instance.hardware_profile.vm_size,
             owner=tags.get("RunByUser", NA),
-            # azure is not providing vm creation time - for machines that don't have creation_time, set default in the past
-            create_time=datetime.fromisoformat(
-                tags.get("creation_time", "2022-12-20T12:00:00")).replace(tzinfo=timezone.utc),
+            create_time=creation_time,
             keep=tags.get("keep", ""),
             project=resource_group
         )

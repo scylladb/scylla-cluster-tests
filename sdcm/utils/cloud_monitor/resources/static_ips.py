@@ -99,7 +99,7 @@ class StaticIPs(CloudResources):
         self.all.extend(self["gce"])
 
     def get_azure_static_ips(self):
-        # all azure ip's are external resources and we pay for it
+        # all azure public ip's are external resources and we pay for it
         query_bits = ["Resources", "where type =~ 'Microsoft.Network/publicIPAddresses'",
                       "project id, resourceGroup, name, location, properties"]
         res = AzureService().resource_graph_query(query=' | '.join(query_bits))

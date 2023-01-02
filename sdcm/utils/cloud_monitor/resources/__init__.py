@@ -27,7 +27,7 @@ class CloudInstance:  # pylint: disable=too-few-public-methods,too-many-instance
         raise NotImplementedError
 
     def hours_running(self):
-        if self.state == "running":
+        if self.state == "running" and self.create_time:
             dt_since_created = datetime.now(self.create_time.tzinfo) - self.create_time
             return ceil(dt_since_created.total_seconds() / 3600)
         return 0

@@ -152,19 +152,22 @@ class InstancesTimeDistributionReport(BaseReport, metaclass=abc.ABCMeta):
     def __init__(self, cloud_instances: CloudInstances, user=None):
         super().__init__(cloud_instances, static_ips=None, html_template="per_qa_user.html")
         self.user = user
-        self.report = {7: defaultdict(list), 5: defaultdict(list), 3: defaultdict(list)}
+        self.report = {"unknown": defaultdict(list), "7": defaultdict(
+            list), "5": defaultdict(list), "3": defaultdict(list)}
         self.qa_users = KeyStore().get_qa_users()
 
     def to_html(self):
         for instance in self.cloud_instances.all:
             if self._is_user_be_skipped(instance) or self._is_instance_be_skipped(instance):
                 continue
-            if self._is_older_than_3days(instance.create_time):
-                self.report[3][instance.owner].append(instance)
+            if not instance.create_time:
+                self.report["unknown"][instance.owner].append(instance)
+            elif self._is_older_than_3days(instance.create_time):
+                self.report["3"][instance.owner].append(instance)
             elif self._is_older_than_5days(instance.create_time):
-                self.report[5][instance.owner].append(instance)
+                self.report["5"][instance.owner].append(instance)
             elif self._is_older_than_7days(instance.create_time):
-                self.report[7][instance.owner].append(instance)
+                self.report["7"][instance.owner].append(instance)
             else:
                 continue
         if self.user:
