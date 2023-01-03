@@ -250,7 +250,7 @@ class GkeCluster(KubernetesCluster):
                        f" --network {self.gce_network}"
                        f" --num-nodes {self.n_nodes}"
                        f" --machine-type {self.gce_instance_type}"
-                       f" --image-type UBUNTU"
+                       f" --image-type ubuntu_containerd"
                        f" --disk-type {self.gce_disk_type}"
                        f" --disk-size {self.gce_disk_size}"
                        f" --logging=SYSTEM,WORKLOAD --monitoring=SYSTEM"
