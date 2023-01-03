@@ -1686,7 +1686,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
     def _init_remoter(self, ssh_login_info):
         self.remoter = KubernetesCmdRunner(kluster=self.parent_cluster.k8s_cluster,
-                                           pod=self.name,
+                                           pod_name=self.name,
                                            container=self.parent_cluster.container,
                                            namespace=self.parent_cluster.namespace)
 

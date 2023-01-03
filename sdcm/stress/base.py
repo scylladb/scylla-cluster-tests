@@ -99,8 +99,7 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         return results, errors
 
     def kill(self):
-        if self.loaders and self.loaders[0].is_kubernetes() and self.params.get(
-                'k8s_loader_run_type') != 'static':
+        if self.loaders and self.loaders[0].is_kubernetes():
             for loader in self.loaders:
                 loader.remoter.stop()
         else:

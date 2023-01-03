@@ -221,10 +221,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
         if "k8s" in self.params.get("cluster_backend"):
             cmd_runner = loader.remoter
-            if self.params.get("k8s_loader_run_type") == 'dynamic':
-                cmd_runner_name = loader.remoter.pod_name
-            else:
-                cmd_runner_name = loader.ip_address
+            cmd_runner_name = loader.remoter.pod_name
         elif self.params.get("use_prepared_loaders"):
             cmd_runner = loader.remoter
             cmd_runner_name = loader.ip_address
