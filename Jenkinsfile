@@ -28,6 +28,7 @@ def createRunConfiguration(String backend) {
             configuration.scylla_version = 'latest'
             configuration.k8s_scylla_operator_helm_repo = 'https://storage.googleapis.com/scylla-operator-charts/latest'
             configuration.k8s_scylla_operator_chart_version = 'latest'
+            configuration.k8s_enable_tls = 'true'
         }
         configuration.test_config = "test-cases/scylla-operator/functional.yaml"
         configuration.test_name = "functional_tests/scylla_operator"

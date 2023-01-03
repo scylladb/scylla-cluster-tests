@@ -71,6 +71,9 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     if [[ -n "${pipelineParams.k8s_log_api_calls ? pipelineParams.k8s_log_api_calls : ''}" ]] ; then
         export SCT_K8S_LOG_API_CALLS=${pipelineParams.k8s_log_api_calls}
     fi
+    if [[ -n "${params.k8s_enable_tls ? params.k8s_enable_tls : ''}" ]] ; then
+        export SCT_K8S_ENABLE_TLS=${params.k8s_enable_tls}
+    fi
 
     if [[ -n "${params.docker_image ? params.docker_image : ''}" ]] ; then
         export SCT_DOCKER_IMAGE=${params.docker_image}

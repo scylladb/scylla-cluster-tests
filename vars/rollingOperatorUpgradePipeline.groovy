@@ -46,6 +46,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_upgrade_docker_image', '')}",
                    description: 'Example: scylladb/scylla-operator:latest or scylladb/scylla-operator:1.3.0',
                    name: 'k8s_scylla_operator_upgrade_docker_image')
+            string(defaultValue: "${pipelineParams.get('k8s_enable_tls', '')}",
+                   description: 'if true, enable operator tls, and install haproxy ingress controller',
+                   name: 'k8s_enable_tls')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
                    description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot_duration',
                    name: 'provision_type')
