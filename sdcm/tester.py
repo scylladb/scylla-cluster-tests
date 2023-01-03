@@ -37,6 +37,7 @@ from invoke.exceptions import UnexpectedExit, Failure
 
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
+from cassandra.cluster import Session  # pylint: disable=no-name-in-module
 
 from argus.db.db_types import TestStatus, PackageVersion
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
@@ -2191,9 +2192,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             session.execute(query)
         time.sleep(0.2)
 
-    def truncate_cf(self, ks_name, table_name, session):
+    def truncate_cf(self, ks_name: str, table_name: str, session: Session, truncate_timeout_sec: int | None = None):
         try:
-            session.execute('TRUNCATE TABLE {0}.{1}'.format(ks_name, table_name))
+            timeout = f" USING TIMEOUT {truncate_timeout_sec}s" if truncate_timeout_sec else ""
+            session.execute('TRUNCATE TABLE {0}.{1}{2}'.format(ks_name, table_name, timeout))
         except Exception as ex:  # pylint: disable=broad-except
             self.log.debug('Failed to truncate base table {0}.{1}. Error: {2}'.format(ks_name, table_name, str(ex)))
 
