@@ -28,7 +28,4 @@ k8s_scylla_operator_docker_image: ''
 k8s_deploy_monitoring: false
 k8s_functional_test_dataset: MULTI_COLUMNS_DATA
 
-# enable by default
-k8s_enable_tls: true
-
 k8s_use_chaos_mesh: true

@@ -70,6 +70,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_docker_image', '')}",
                    description: 'Scylla Operator docker image',
                    name: 'k8s_scylla_operator_docker_image')
+            string(defaultValue: "${pipelineParams.get('k8s_enable_tls', '')}",
+                   description: 'if true, enable operator tls, and install haproxy ingress controller',
+                   name: 'k8s_enable_tls')
         }
         options {
             timestamps()
@@ -230,6 +233,9 @@ def call(Map pipelineParams) {
                                                         fi
                                                         if [[ -n "${pipelineParams.k8s_scylla_utils_docker_image ? pipelineParams.k8s_scylla_utils_docker_image : ''}" ]] ; then
                                                             export SCT_K8S_SCYLLA_UTILS_DOCKER_IMAGE=${pipelineParams.k8s_scylla_utils_docker_image}
+                                                        fi
+                                                        if [[ -n "${params.k8s_enable_tls ? params.k8s_enable_tls : ''}" ]] ; then
+                                                            export SCT_K8S_ENABLE_TLS=${params.k8s_enable_tls}
                                                         fi
 
                                                         echo "start test ......."

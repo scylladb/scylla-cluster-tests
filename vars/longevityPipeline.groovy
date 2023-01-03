@@ -124,6 +124,10 @@ def call(Map pipelineParams) {
                    description: 'Scylla docker image repo',
                    name: 'docker_image')
 
+            string(defaultValue: "${pipelineParams.get('k8s_enable_tls', '')}",
+                   description: 'if true, enable operator tls, and install haproxy ingress controller',
+                   name: 'k8s_enable_tls')
+
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                description: 'Gce project to use',
                name: 'gce_project')

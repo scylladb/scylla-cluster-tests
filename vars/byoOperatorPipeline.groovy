@@ -32,6 +32,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '2.0.2',
                    description: '',
                    name: 'scylla_mgmt_agent_version')
+            string(defaultValue: "${pipelineParams.get('k8s_enable_tls', '')}",
+                   description: 'if true, enable operator tls, and install haproxy ingress controller',
+                   name: 'k8s_enable_tls')
             string(defaultValue: "${pipelineParams.get('test_name', 'longevity_test.LongevityTest.test_custom_time')}",
                    description: '',
                    name: 'test_name')
@@ -96,6 +99,9 @@ def call(Map pipelineParams) {
 
                             if [[ -n "${params.k8s_scylla_operator_helm_repo ? params.k8s_scylla_operator_helm_repo : ''}" ]] ; then
                                 export SCT_K8S_SCYLLA_OPERATOR_HELM_REPO=${params.k8s_scylla_operator_helm_repo}
+                            fi
+                            if [[ -n "${params.k8s_scylla_operator_docker_image ? params.k8s_scylla_operator_docker_image : ''}" ]] ; then
+                                export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
                             fi
 
                             if [[ -n "${params.k8s_scylla_operator_chart_version}" ]]; then
