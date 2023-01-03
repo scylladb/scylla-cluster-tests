@@ -160,7 +160,11 @@ k8s_log_api_calls: false
 k8s_deploy_monitoring: false
 k8s_minio_storage_size: '10Gi'
 k8s_n_scylla_pods_per_cluster: 3
-k8s_loader_run_type: 'static'
+
+# NOTE: use dynamic while 'static' one is not compatible with K8S v1.24+ versions
+#       it must stop using docker.
+k8s_loader_run_type: 'dynamic'
+
 k8s_tenants_num: 1
 
 # NOTE: 'k8s_enable_performance_tuning' is alpha feature in operator-1.6 , so it is disabled by default
