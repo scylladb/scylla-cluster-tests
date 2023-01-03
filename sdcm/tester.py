@@ -1535,10 +1535,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         monitor_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
                         'device_mappings': None}
-        db_info = {'n_nodes': None, 'type': None, 'disk_size': None, 'disk_type': None, 'n_local_ssd': None,
-                   'device_mappings': None}
 
-        init_db_info_from_params(db_info, params=self.params, regions=regions)
         init_monitoring_info_from_params(monitor_info, params=self.params, regions=regions)
 
         self.k8s_cluster = eks.EksCluster(eks_cluster_version=self.params.get("eks_cluster_version"),
