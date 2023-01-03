@@ -4801,8 +4801,7 @@ class BaseLoaderSet():
         return next(self._loader_cycle)
 
     def kill_stress_thread(self):
-        if self.nodes and self.nodes[0].is_kubernetes() and self.params.get(
-                'k8s_loader_run_type') != 'static':
+        if self.nodes and self.nodes[0].is_kubernetes():
             for node in self.nodes:
                 node.remoter.stop()
         else:

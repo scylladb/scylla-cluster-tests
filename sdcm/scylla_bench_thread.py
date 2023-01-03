@@ -158,8 +158,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
     def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=too-many-locals
         cmd_runner = None
-        if "k8s" in self.params.get("cluster_backend") and self.params.get(
-                "k8s_loader_run_type") == 'dynamic':
+        if "k8s" in self.params.get("cluster_backend"):
             cmd_runner = loader.remoter
             cmd_runner_name = loader.remoter.pod_name
             cleanup_context = contextlib.nullcontext()

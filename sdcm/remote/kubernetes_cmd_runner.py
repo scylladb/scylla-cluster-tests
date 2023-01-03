@@ -79,7 +79,7 @@ class KubernetesRunner(Runner):
             try:
                 self.process = k8s.stream.stream(
                     self._k8s_core_v1_api.connect_get_namespaced_pod_exec,
-                    name=self.context.config.k8s_pod,
+                    name=self.context.config.k8s_pod_name,
                     container=self.context.config.k8s_container,
                     namespace=self.context.config.k8s_namespace,
                     command=[shell, "-c", command],
@@ -120,18 +120,19 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
     exception_retryable = (ConnectionError, MaxRetryError, ThreadException)
     default_run_retry = 8
 
-    def __init__(self, kluster, pod: str, container: Optional[str] = None, namespace: str = "default") -> None:
+    def __init__(self, kluster, pod_name: str, container: Optional[str] = None,
+                 namespace: str = "default") -> None:
         self.kluster = kluster
-        self.pod = pod
+        self.pod_name = pod_name
         self.container = container
         self.namespace = namespace
 
-        super().__init__(hostname=f"{pod}/{container}")
+        super().__init__(hostname=f"{pod_name}/{container}")
 
     def get_init_arguments(self) -> dict:
         return {
             "kluster": self.kluster,
-            "pod": self.pod,
+            "pod_name": self.pod_name,
             "container": self.container,
             "namespace": self.namespace,
         }
@@ -145,7 +146,7 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
 
     def _create_connection(self):
         return KubernetesRunner(Context(Config(overrides={"k8s_kluster": self.kluster,
-                                                          "k8s_pod": self.pod,
+                                                          "k8s_pod_name": self.pod_name,
                                                           "k8s_container": self.container,
                                                           "k8s_namespace": self.namespace, })))
 
@@ -171,14 +172,14 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
     # pylint: disable=too-many-arguments,unused-argument
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
     def receive_files(self, src, dst, delete_dst=False, preserve_perm=True, preserve_symlinks=False, timeout=300):
-        KubernetesOps.copy_file(self.kluster, f"{self.namespace}/{self.pod}:{src}", dst,
+        KubernetesOps.copy_file(self.kluster, f"{self.namespace}/{self.pod_name}:{src}", dst,
                                 container=self.container, timeout=timeout)
         return True
 
     # pylint: disable=too-many-arguments,unused-argument
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
     def send_files(self, src, dst, delete_dst=False, preserve_symlinks=False, verbose=False):
-        KubernetesOps.copy_file(self.kluster, src, f"{self.namespace}/{self.pod}:{dst}",
+        KubernetesOps.copy_file(self.kluster, src, f"{self.namespace}/{self.pod_name}:{dst}",
                                 container=self.container, timeout=300)
         return True
 
