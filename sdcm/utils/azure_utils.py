@@ -28,6 +28,7 @@ from azure.mgmt.resourcegraph import ResourceGraphClient
 from azure.mgmt.resourcegraph.models import QueryRequestOptions, QueryRequest
 
 from sdcm.keystore import KeyStore
+from sdcm.utils.decorators import retrying
 from sdcm.utils.metaclasses import Singleton
 
 if TYPE_CHECKING:
@@ -167,6 +168,7 @@ class AzureService(metaclass=Singleton):
 
     # Azure Resource Graph is a service with extremely powerful query language for the resource exploration.
     # See https://docs.microsoft.com/en-us/azure/governance/resource-graph/overview for more details.
+    @retrying(n=3)
     def resource_graph_query(self, query: str) -> Iterator:
         LOGGER.debug("query=%r", query)
         request = QueryRequest(
