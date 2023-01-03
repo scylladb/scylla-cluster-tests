@@ -38,6 +38,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 import packaging.version
+from packaging.version import LegacyVersion
 
 import yaml
 import requests
@@ -2737,6 +2738,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         return f' ({node.running_nemesis} nemesis target node)' if node.running_nemesis else ' (not target node)'
 
+    @property
+    def is_cqlsh_support_cloud_bundle(self):
+        return bool(self.parent_cluster.connection_bundle_file) and (
+            (
+                not self.is_enterprise and LegacyVersion(
+                    self.scylla_version) >= LegacyVersion('5.2.0~dev'))
+            or
+            (
+                self.is_enterprise and LegacyVersion(
+                    self.scylla_version) >= LegacyVersion('2022.3.0~dev')
+            )
+        )
+
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
         """cqlsh [options] [host [port]]"""
         credentials = self.parent_cluster.get_db_auth()
@@ -2748,9 +2762,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                       auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout,
                       connect_timeout=connect_timeout, ssl_params=ssl_params)
 
-        if self.parent_cluster.connection_bundle_file and (
-                packaging.version.LegacyVersion(self.scylla_version) >= packaging.version.LegacyVersion('5.2.0~dev')):
-
+        if self.is_cqlsh_support_cloud_bundle:
             connection_bundle_file = self.parent_cluster.connection_bundle_file
             target_connection_bundle_file = str(Path('/tmp/') / connection_bundle_file.name)
             self.remoter.send_files(str(connection_bundle_file), target_connection_bundle_file)
