@@ -1532,7 +1532,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # Executing rolling refresh one by one
             shards_num = self.cluster.nodes[0].scylla_shards
             for node in self.cluster.nodes:
-                SstableLoadUtils.upload_sstables(node, test_data=test_data[0])
+                SstableLoadUtils.upload_sstables(node, test_data=test_data[0],
+                                                 is_cloud_cluster=self.cluster.params.get("db_type") == 'cloud_scylla')
                 system_log_follower = SstableLoadUtils.run_refresh(node, test_data=test_data[0])
                 # NOTE: resharding happens only if we have more than 1 core.
                 #       We may have 1 core in a K8S multitenant setup.

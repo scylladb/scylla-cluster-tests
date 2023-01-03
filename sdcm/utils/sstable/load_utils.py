@@ -1,13 +1,18 @@
+import os.path
 import random
 import re
 from collections import namedtuple
 from typing import Any, List, Iterable
 
 from sdcm.keystore import KeyStore
+from sdcm.remote import LocalCmdRunner
 from sdcm.utils.common import remote_get_file, LOGGER, RemoteTemporaryFolder
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.sstable.load_inventory import (TestDataInventory, BIG_SSTABLE_COLUMN_1_DATA, COLUMN_1_DATA,
                                                MULTI_NODE_DATA, BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA)
+
+
+LOCAL_CMD_RUNNER = LocalCmdRunner()
 
 
 class SstableLoadUtils:
@@ -52,13 +57,23 @@ class SstableLoadUtils:
 
     @staticmethod
     def upload_sstables(node, test_data: TestDataInventory, keyspace_name: str = 'keyspace1',
-                        create_schema: bool = False, **kwargs):
+                        create_schema: bool = False, is_cloud_cluster=False, **kwargs):
         key_store = KeyStore()
         creds = key_store.get_scylladb_upload_credentials()
         # Download the sstable files from S3
-        remote_get_file(node.remoter, test_data.sstable_url, test_data.sstable_file,
-                        hash_expected=test_data.sstable_md5, retries=2,
-                        user_agent=creds['user_agent'])
+        if is_cloud_cluster:
+            local_temp_path = '/tmp/' + os.path.basename(test_data.sstable_file)
+            try:
+                remote_get_file(LOCAL_CMD_RUNNER, test_data.sstable_url, local_temp_path,
+                                hash_expected=test_data.sstable_md5, retries=2,
+                                user_agent=creds['user_agent'])
+                node.remoter.send_files(local_temp_path, test_data.sstable_file)
+            finally:
+                LOCAL_CMD_RUNNER.run(f"rm -f {local_temp_path}", ignore_status=True)
+        else:
+            remote_get_file(node.remoter, test_data.sstable_url, test_data.sstable_file,
+                            hash_expected=test_data.sstable_md5, retries=2,
+                            user_agent=creds['user_agent'])
 
         if create_schema:
             with RemoteTemporaryFolder(node=node) as tmp_folder:
