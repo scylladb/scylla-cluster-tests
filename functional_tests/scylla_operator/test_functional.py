@@ -509,6 +509,9 @@ def test_readiness_probe_exists_in_mgmt_pods(db_cluster: ScyllaPodCluster):
     assert not pods, f"readinessProbe is not found in the following pods: {pods}"
 
 
+# Since we moved in EKS to k8s version 1.24, the default EBS based storage isn't working
+# should be resolved in https://github.com/scylladb/qa-tasks/issues/952
+@pytest.mark.requires_backend(['k8s-local-kind-aws', 'k8s-local-kind-gce', 'k8s-gke', 'k8s-local-kind'])
 def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     """
     https://github.com/scylladb/scylla-operator/issues/501
