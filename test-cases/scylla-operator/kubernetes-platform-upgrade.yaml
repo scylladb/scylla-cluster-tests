@@ -1,5 +1,8 @@
 test_duration: 360
 
+# NOTE: default 80Gb is not enough. We run out of space on the step of gathering logs.
+root_disk_size_runner: 120
+
 prepare_write_cmd: [
     "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000",
     "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..20000000",
