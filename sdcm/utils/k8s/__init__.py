@@ -573,10 +573,9 @@ class HelmContainerMixin:
             # or upgrade process rolls back changes made in case of failed upgrade
             # waits for operation completion - so should specify timeout.
             command.extend(("--atomic",))
-            if timeout is None:
-                LOGGER.warning("No timeout provided for atomic operation, default of '5m' is used.")
-            else:
-                command.extend(("--timeout", timeout))
+        if timeout is not None:
+            # timeout in Go duration format
+            command.extend(("--timeout", timeout))
         return self.helm(
             kluster,
             *command,

@@ -902,6 +902,9 @@ class SCTConfiguration(dict):
         dict(name="k8s_connection_bundle_file", env="SCT_K8S_CONNECTION_BUNDLE_FILE", type=_file,
              help="Serverless configuration bundle file", k8s_multitenancy_supported=True),
 
+        dict(name="k8s_use_chaos_mesh", env="SCT_K8S_USE_CHAOS_MESH", type=boolean,
+             help="""enables chaos-mesh for k8s testing"""),
+
         # docker config options
         dict(name="mgmt_docker_image", env="SCT_MGMT_DOCKER_IMAGE", type=str,
              help="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' "),
@@ -1418,8 +1421,6 @@ class SCTConfiguration(dict):
              help="""add/remove num of process on each round"""),
         dict(name="use_hdr_cs_histogram", env="SCT_USE_HDR_CS_HISTOGRAM", type=boolean,
              help="""Enable hdr histogram logging for cs"""),
-        dict(name="k8s_use_chaos_mesh", env="SCT_K8S_USE_CHAOS_MESH", type=boolean,
-             help="""enables chaos-mesh for k8s testing""")
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
