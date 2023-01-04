@@ -1702,7 +1702,7 @@ class SCTConfiguration(dict):
 
         # 7) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version')
-        if new_scylla_version:
+        if new_scylla_version and not 'k8s' in cluster_backend:
             if not self.get('ami_id_db_scylla') and cluster_backend == 'aws':  # pylint: disable=no-else-raise
                 raise ValueError("'new_version' isn't supported for AWS AMIs")
 
