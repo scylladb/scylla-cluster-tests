@@ -3,8 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'azure']
-def sct_runner_backends = ['aws', 'gce', 'k8s-local-kind-aws', 'azure']
+def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure']
+def sct_runner_backends = ['aws', 'gce', 'k8s-local-kind-aws', 'k8s-eks', 'azure']
 
 def createRunConfiguration(String backend) {
 
@@ -23,7 +23,7 @@ def createRunConfiguration(String backend) {
         configuration.availability_zone = ''
     } else if (backend == 'docker') {
         configuration.test_config = "test-cases/PR-provision-test-docker.yaml"
-    } else if (backend == 'k8s-local-kind-aws') {
+    } else if (backend in ['k8s-local-kind-aws', 'k8s-eks']) {
         if (params.scylla_version.endsWith('latest')) {
             configuration.scylla_version = 'latest'
             configuration.k8s_scylla_operator_helm_repo = 'https://storage.googleapis.com/scylla-operator-charts/latest'
@@ -170,7 +170,7 @@ pipeline {
         stage("provision test") {
             when {
                 expression {
-                    return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker,test-provision-k8s-local-kind-aws,test-provision-azure") && currentBuild.result == null
+                    return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker,test-provision-k8s-local-kind-aws,test-provision-k8s-eks,test-provision-azure") && currentBuild.result == null
                 }
             }
             options {
@@ -239,7 +239,7 @@ pipeline {
                                             } catch(Exception err) {
                                                 echo "${err}"
                                             }
-                                            if (backend != 'k8s-local-kind-aws') {
+                                            if (!(backend in ['k8s-local-kind-aws', 'k8s-eks'])) {
                                                 try {
                                                     wrap([$class: 'BuildUser']) {
                                                         dir('scylla-cluster-tests') {
