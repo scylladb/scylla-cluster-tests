@@ -233,9 +233,13 @@ spec:
             kubectl config set-context scylla --cluster=scylla --user=qa@scylladb.com
             kubectl config use-context scylla
 
+            # TODO: only for debugging, remove later
+            DEVICES=`curl -s http://169.254.169.254/latest/meta-data/block-device-mapping`
+
+            EPHEMERAL_DEV_NAME=`curl -s http://169.254.169.254/latest/meta-data/block-device-mapping/ephemeral0`
             # Create directories for each Scylla cluster on each K8S node which will host PVs
             while true; do
-              if [[ -z $(mount | grep -e "/dev/md0" -e "/dev/nvme") ]]; then
+              if [[ -z $(mount | grep -e "/dev/md0" -e "/dev/$EPHEMERAL_DEV_NAME") ]]; then
                 sleep 5;
                 continue
               fi
