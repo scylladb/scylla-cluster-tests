@@ -2911,7 +2911,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         1. Terminate node
         2. Run full repair
-        3. Nodetool removenode
+        3. Nodetool removenode, if removenode rejected, because removing node is UN in gossiper,
+           repeat operation in 5 second
         4. Add new node
         5. Run nodetool cleanup (on each node) for each keyspace
         """
@@ -2947,12 +2948,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # terminate node
             self._terminate_cluster_node(node_to_remove)
 
+        @retrying(n=3, sleep_time=5, message="Removing node from cluster...")
         def remove_node():
+            removenode_reject_msg = r"Rejected removenode operation.*the node being removed is alive"
             # nodetool removenode 'host_id'
             rnd_node = random.choice([n for n in self.cluster.nodes if n is not self.target_node])
             self.log.info("Running removenode command on {}, Removing node with the following host_id: {}"
                           .format(rnd_node.ip_address, host_id))
             res = rnd_node.run_nodetool("removenode {}".format(host_id), ignore_status=True, verbose=True)
+            if res.failed and re.match(removenode_reject_msg, res.stdout + res.stderr):
+                raise Exception(f"Removenode was rejected {res.stdout}\n{res.stderr}")
+
             return res.exit_status
 
         # full cluster repair
