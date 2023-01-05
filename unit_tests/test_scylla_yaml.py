@@ -270,6 +270,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'key_cache_save_period': None,
                 'key_cache_size_in_mb': None,
                 'kmip_hosts': None,
+                'kms_hosts': None,
                 'large_memory_allocation_warning_threshold': None,
                 'ldap_attr_role': None,
                 'ldap_bind_dn': None,
