@@ -394,6 +394,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'system_info_encryption': None,
                 'kmip_hosts': None,
                 'stream_io_throughput_mb_per_sec': 0,
+                'kms_hosts': None,
             }
         )
 

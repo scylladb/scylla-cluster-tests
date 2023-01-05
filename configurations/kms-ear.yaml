@@ -1,0 +1,11 @@
+
+# scylla_encryption_options: "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'kms_host': 'kms_test'}"
+
+# config kms_hosts for AWS KMS service account
+append_scylla_yaml: |
+  kms_hosts:
+      kms_test:
+          aws_region: 'us-east-1'
+          master_key: 'alias/kms_encryption_test'
+#          aws_access_key_id: <your aws account id/name>
+#          aws_secret_access_key: <aws access key>
