@@ -127,9 +127,9 @@ botocore-stubs==1.29.45 \
     --hash=sha256:85ce8718cd49dd24ada03009e0405b2332d63a27edbda18c60589cdc894eb067 \
     --hash=sha256:a4c7e4be956795213030480520f403ed78f2b2bc3c672f56fc00d7ceec701f41
     # via boto3-stubs
-cachetools==5.2.0 \
-    --hash=sha256:6a94c6402995a99c3970cc7e4884bb60b4a8639938157eeed436098bf9831757 \
-    --hash=sha256:f9f17d2aec496a9aa6b76f53e3b614c965223c061982d434d160f930c698a9db
+cachetools==5.2.1 \
+    --hash=sha256:5991bc0e08a1319bb618d3195ca5b6bc76646a49c21d55962977197b301cc1fe \
+    --hash=sha256:8462eebf3a6c15d25430a8c27c56ac61340b2ecf60c9ce57afc2b97e450e47da
     # via google-auth
 certifi==2022.12.7 \
     --hash=sha256:35824b4c3a97115964b408844d64aa14db1cc518f6562e8d7261699d1350a9e3 \
@@ -528,9 +528,9 @@ jmespath==0.10.0 \
     # via
     #   boto3
     #   botocore
-kubernetes==18.20.0 \
-    --hash=sha256:0c72d00e7883375bd39ae99758425f5e6cb86388417cf7cc84305c211b2192cf \
-    --hash=sha256:ff31ec17437293e7d4e1459f1228c42d27c7724dfb56b4868aba7a901a5b72c9
+kubernetes==24.2.0 \
+    --hash=sha256:9900f12ae92007533247167d14cdee949cd8c7721f88b4a7da5f5351da3834cd \
+    --hash=sha256:da19d58865cf903a8c7b9c3691a2e6315d583a98f0659964656dfdf645bf7e49
     # via -r ../../requirements.in
 lazy-object-proxy==1.9.0 \
     --hash=sha256:09763491ce220c0299688940f8dc2c5d05fd1f45af1e42e636b2e8b2303e4382 \
