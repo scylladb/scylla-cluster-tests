@@ -28,6 +28,7 @@ from urllib3.exceptions import (
 )
 
 from sdcm.cluster import TestConfig
+from sdcm import sct_abs_path
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.common import (
     deprecation,
@@ -40,6 +41,10 @@ from .base import RetryableNetworkException
 from .remote_base import RemoteCmdRunnerBase, StreamWatcher
 
 LOGGER = logging.getLogger(__name__)
+
+
+def is_scylla_bench_command(command):
+    return all((str_part in command for str_part in ("scylla-bench", " -workload=", " -mode=")))
 
 
 class KubernetesRunner(Runner):
@@ -120,14 +125,43 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
     exception_retryable = (ConnectionError, MaxRetryError, ThreadException)
     default_run_retry = 8
 
-    def __init__(self, kluster, pod_name: str, container: Optional[str] = None,
+    def __init__(self, kluster, pod_image: str,  # pylint: disable=too-many-arguments
+                 pod_name: str, container: Optional[str] = None,
                  namespace: str = "default") -> None:
         self.kluster = kluster
+        self.pod_image = pod_image
         self.pod_name = pod_name
         self.container = container
         self.namespace = namespace
 
         super().__init__(hostname=f"{pod_name}/{container}")
+
+        # NOTE: create also the dynamic loader runner for fast utility calls of other loader types
+        self.dynamic_remoter = KubernetesPodRunner(
+            kluster=self.kluster,
+            template_path=sct_abs_path("sdcm/k8s_configs/loaders/pod.yaml"),
+            template_modifiers=list(self.kluster.calculated_loader_affinity_modifiers),
+            pod_name_template=f"{self.pod_name}-dynamic-pod",
+            namespace=self.namespace,
+            environ={
+                "K8S_NAMESPACE": self.namespace,
+                "K8S_LOADER_CLUSTER_NAME": self.pod_name.rsplit("-", 1)[0],
+                "K8S_LOADER_NAME": self.pod_name,
+                # TODO: place some values for below env vars when those become required
+                #       in the dynamic loader config.
+                # "POD_CPU_LIMIT": "foo",
+                # "POD_MEMORY_LIMIT": "bar",
+            },
+        )
+
+    def run(self, cmd, **kwargs):  # pylint: disable=arguments-differ
+        if is_scylla_bench_command(cmd) and hasattr(self, "dynamic_remoter") and hasattr(
+                self, "pod_image") and "scylla-bench" not in self.pod_image:
+            LOGGER.info(
+                "Running following 'scylla-bench' command in a separate dynamic loader pod: %s",
+                cmd)
+            return self.dynamic_remoter.run(cmd, **kwargs)
+        return super().run(cmd, **kwargs)
 
     def get_init_arguments(self) -> dict:
         return {
@@ -308,7 +342,7 @@ class KubernetesPodWatcher(KubernetesRunner):
 
     def _get_docker_image(self, command) -> str:
         params = self.context.config.k8s_kluster.params
-        if all((str_part in command for str_part in ("scylla-bench", " -workload=", " -mode="))):
+        if is_scylla_bench_command(command):
             return params.get('stress_image.scylla-bench')
         return f"{params.get('docker_image')}:{params.get('scylla_version')}"
 

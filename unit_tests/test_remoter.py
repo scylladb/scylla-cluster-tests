@@ -94,6 +94,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         else:
             remoter = KubernetesCmdRunner(
                 FakeKluster('http://127.0.0.1:8001'),
+                pod_image="fake-pod-image",
                 pod_name='sct-cluster-dc-1-kind-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
@@ -115,6 +116,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         else:
             remoter = KubernetesCmdRunner(
                 FakeKluster('http://127.0.0.1:8001'),
+                pod_image="fake-pod-image",
                 pod_name='sct-cluster-dc-1-kind-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
@@ -217,6 +219,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         else:
             remoter = KubernetesCmdRunner(
                 FakeKluster('http://127.0.0.1:8001'),
+                pod_image="fake-pod-image",
                 pod_name='sct-cluster-dc-1-kind-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
@@ -283,6 +286,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         else:
             remoter = KubernetesCmdRunner(
                 FakeKluster('http://127.0.0.1:8001'),
+                pod_image="fake-pod-image",
                 pod_name='sct-cluster-dc-1-kind-0', container="scylla", namespace="scylla")
 
         libssh2_thread_results = []
