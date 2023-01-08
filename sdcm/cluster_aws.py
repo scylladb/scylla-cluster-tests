@@ -143,9 +143,16 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         instance_profile = self.instance_profile_name
         if instance_profile:
             params['IamInstanceProfile'] = {'Name': instance_profile}
+        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx])
+        subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
+        region_name_with_az = subnet_info['AvailabilityZone']
+        LOGGER.debug('Sending an On-Demand request with params: %s', params)
+        LOGGER.debug('Using EC2 service with DC-index: %s, (associated with region: %s)',
+                     dc_idx, self.region_names[dc_idx])
+        LOGGER.debug("Using Availability Zone of: %s", region_name_with_az)
+
         instances = self._ec2_services[dc_idx].create_instances(**params)
 
-        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx])
         ec2.add_tags(instances, {'Name': 'on_demand'})
 
         self.log.debug("Created instances: %s." % instances)
