@@ -14,7 +14,6 @@
 #pylint: disable=too-many-lines
 from __future__ import annotations
 
-import os
 import logging
 import string
 import tempfile
@@ -52,6 +51,8 @@ from sdcm.utils.gce_utils import get_gce_service, SUPPORTED_PROJECTS
 from sdcm.utils.azure_utils import AzureService, list_instances_azure
 from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
 from sdcm.utils.get_username import get_username
+from sdcm.utils.context_managers import environment
+
 
 if TYPE_CHECKING:
     # pylint: disable=ungrouped-imports
@@ -795,8 +796,8 @@ class GceSctRunner(SctRunner):
         sct_runners = []
         instances = []
         for project in SUPPORTED_PROJECTS:
-            os.environ['SCT_GCE_PROJECT'] = project
-            instances += list_instances_gce(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True)
+            with environment(SCT_GCE_PROJECT=project):
+                instances += list_instances_gce(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True)
         for instance in instances:
             tags = gce_meta_to_dict(instance.extra["metadata"])
             region = instance.extra["zone"].name

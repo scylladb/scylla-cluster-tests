@@ -94,6 +94,7 @@ from sdcm.send_email import get_running_instances_for_email_report, read_email_d
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
 from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
+from sdcm.utils.context_managers import environment
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
 from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
@@ -430,26 +431,26 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         click.secho("Nothing found for selected filters in GKE!", fg="yellow")
 
     for project in SUPPORTED_PROJECTS:
-        os.environ['SCT_GCE_PROJECT'] = project
-        click.secho(f"Checking GCE ({project})...", fg='green')
-        gce_instances = list_instances_gce(tags_dict=params, running=get_all_running, verbose=verbose)
-        if gce_instances:
-            gce_table = PrettyTable(table_header)
-            gce_table.align = "l"
-            gce_table.sortby = 'LaunchTime'
-            for instance in gce_instances:
-                tags = gce_meta_to_dict(instance.extra['metadata'])
-                public_ips = ", ".join(instance.public_ips) if None not in instance.public_ips else "N/A"
-                gce_table.add_row([instance.name,
-                                   instance.extra["zone"].name,
-                                   public_ips if get_all_running else instance.state,
-                                   tags.get('TestId', 'N/A') if tags else "N/A",
-                                   tags.get('RunByUser', 'N/A') if tags else "N/A",
-                                   instance.extra['creationTimestamp'],
-                                   ])
-            click.echo(gce_table.get_string(title="Resources used on GCE"))
-        else:
-            click.secho("Nothing found for selected filters in GCE!", fg="yellow")
+        with environment(SCT_GCE_PROJECT=project):
+            click.secho(f"Checking GCE ({project})...", fg='green')
+            gce_instances = list_instances_gce(tags_dict=params, running=get_all_running, verbose=verbose)
+            if gce_instances:
+                gce_table = PrettyTable(table_header)
+                gce_table.align = "l"
+                gce_table.sortby = 'LaunchTime'
+                for instance in gce_instances:
+                    tags = gce_meta_to_dict(instance.extra['metadata'])
+                    public_ips = ", ".join(instance.public_ips) if None not in instance.public_ips else "N/A"
+                    gce_table.add_row([instance.name,
+                                       instance.extra["zone"].name,
+                                       public_ips if get_all_running else instance.state,
+                                       tags.get('TestId', 'N/A') if tags else "N/A",
+                                       tags.get('RunByUser', 'N/A') if tags else "N/A",
+                                       instance.extra['creationTimestamp'],
+                                       ])
+                click.echo(gce_table.get_string(title="Resources used on GCE"))
+            else:
+                click.secho("Nothing found for selected filters in GCE!", fg="yellow")
 
     click.secho("Checking EKS...", fg='green')
     eks_clusters = list_clusters_eks(tags_dict=params, verbose=verbose)
