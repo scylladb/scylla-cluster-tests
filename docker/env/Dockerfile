@@ -20,6 +20,7 @@ RUN mkdir /build && \
 
 FROM python:$PYTHON_IMAGE_TAG
 ARG KUBECTL_VERSION=1.23.14
+ARG EKSCTL_VERSION=0.124.0
 ENV PYTHONWARNINGS=ignore:unclosed \
     PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
@@ -46,4 +47,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     rm -rf /var/lib/apt/lists/*
 RUN curl -fsSLo /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v$KUBECTL_VERSION/bin/linux/amd64/kubectl && \
     chmod +x /usr/local/bin/kubectl
+RUN curl --silent --location  "https://github.com/weaveworks/eksctl/releases/download/v$EKSCTL_VERSION/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp && \
+    mv /tmp/eksctl /usr/local/bin
 COPY --from=python_packages /build /usr/local
