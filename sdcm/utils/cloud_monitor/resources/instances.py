@@ -1,5 +1,3 @@
-import os
-
 from logging import getLogger
 from datetime import datetime, timezone
 
@@ -12,6 +10,7 @@ from sdcm.utils.cloud_monitor.resources import CloudInstance, CloudResources
 from sdcm.utils.common import aws_tags_to_dict, gce_meta_to_dict, list_instances_aws, list_instances_gce
 from sdcm.utils.pricing import AWSPricing, GCEPricing, AzurePricing
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
+from sdcm.utils.context_managers import environment
 
 LOGGER = getLogger(__name__)
 
@@ -137,9 +136,9 @@ class CloudInstances(CloudResources):
     def get_gce_instances(self):
         self["gce"] = []
         for project in SUPPORTED_PROJECTS:
-            os.environ['SCT_GCE_PROJECT'] = project
-            gce_instances = list_instances_gce(verbose=True)
-            self["gce"] += [GCEInstance(instance) for instance in gce_instances]
+            with environment(SCT_GCE_PROJECT=project):
+                gce_instances = list_instances_gce(verbose=True)
+                self["gce"] += [GCEInstance(instance) for instance in gce_instances]
         self.all.extend(self["gce"])
 
     def get_azure_instances(self):
