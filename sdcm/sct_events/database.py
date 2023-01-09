@@ -395,6 +395,13 @@ class ScyllaSysconfigSetupEvent(ScyllaDatabaseContinuousEvent):
         super().__init__(node=node, severity=severity, publish_event=True)
 
 
+class ScyllaYamlUpdateEvent(InformationalEvent):
+    def __init__(self, node_name: str, message: Optional[str] = None, diff: dict | None = None,
+                 severity=Severity.NORMAL, **__):
+        super().__init__(severity=severity)
+        self.message = message or f"Updating scylla.yaml contents on node: {node_name}. Diff: {diff}"
+
+
 SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
     ScyllaServerStatusEvent,
     BootstrapEvent,

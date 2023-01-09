@@ -58,6 +58,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
     rpc_interface: str = "eth1"
     rpc_interface_prefer_ipv6: bool = False
     seed_provider: List[SeedProvider] = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider')]
+    consistent_cluster_management: bool = False
     compaction_throughput_mb_per_sec: int = 0
     compaction_large_partition_warning_threshold_mb: int = 1000
     compaction_large_row_warning_threshold_mb: int = 10

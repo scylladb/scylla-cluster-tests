@@ -159,6 +159,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         new_scylla_repo = self.params.get('new_scylla_repo')
         new_version = self.params.get('new_version')
         upgrade_node_packages = self.params.get('upgrade_node_packages')
+        scylla_yaml_updates = {
+            "consistent_cluster_management": True
+        }
+
+        if self.params.get('test_sst3'):
+            scylla_yaml_updates.update({"enable_sstables_mc_format": True})
 
         InfoEvent(message='Upgrading a Node').publish()
         node.upgrade_system()
@@ -236,14 +242,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     node.remoter.run(
                         r'sudo apt-get dist-upgrade {} -y '
                         r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg))
-        if self.params.get('test_sst3'):
-            node.remoter.run("echo 'enable_sstables_mc_format: true' |sudo tee --append /etc/scylla/scylla.yaml")
-        if self.params.get('test_upgrade_from_installed_3_1_0'):
-            node.remoter.run("echo 'enable_3_1_0_compatibility_mode: true' |sudo tee --append /etc/scylla/scylla.yaml")
         check_reload_systemd_config(node)
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
         node.run_scylla_sysconfig_setup()
+        self._update_scylla_yaml_on_node(node_to_update=node, updates=scylla_yaml_updates)
         node.start_scylla_server(verify_up_timeout=500)
         self.db_cluster.get_db_nodes_cpu_mode()
         result = node.remoter.run('scylla --version')
@@ -500,6 +503,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             random.shuffle(dc_nodes[dc])
 
         return [x for x in chain.from_iterable(zip_longest(*dc_nodes.values())) if x]
+
+    @staticmethod
+    def _update_scylla_yaml_on_node(node_to_update: BaseNode, updates: dict):
+        with node_to_update.remote_scylla_yaml() as scylla_yaml:
+            scylla_yaml.update(updates)
 
     def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
         """

@@ -104,7 +104,7 @@ from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PATTERNS, InfoEvent, SoftTimeoutEvent
 from sdcm.sct_events.grafana import set_grafana_url
-from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, ScyllaHelpErrorEvent
+from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, ScyllaHelpErrorEvent, ScyllaYamlUpdateEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
@@ -1541,7 +1541,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             yield new_scylla_yaml
             diff = old_scylla_yaml.diff(new_scylla_yaml)
             if not diff:
-                LOGGER.debug("%s: scylla.yaml hasn't been changed", self)
+                ScyllaYamlUpdateEvent(node_name=self.name,
+                                      message=f"ScyllaYaml has not been changed on node: {self.name}")
                 return
             scylla_yaml.clear()
             scylla_yaml.update(
@@ -1552,7 +1553,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     explicit=['partitioner', 'commitlog_sync', 'commitlog_sync_period_in_ms', 'endpoint_snitch']
                 )
             )
-            LOGGER.debug("%s: scylla.yaml will be updated to:\n%s", self, scylla_yaml)
+            ScyllaYamlUpdateEvent(node_name=self.name, message=f"ScyllaYaml has been changed on node: {self.name}. "
+                                                               f"Diff: {diff}")
 
     def remote_manager_yaml(self):
         return self._remote_yaml(path=SCYLLA_MANAGER_YAML_PATH)

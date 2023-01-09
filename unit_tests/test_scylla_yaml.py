@@ -189,6 +189,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'memtable_total_space_in_mb': 0,
                 'concurrent_reads': 32,
                 'concurrent_writes': 32,
+                'consistent_cluster_management': False,
                 'concurrent_counter_writes': 32,
                 'incremental_backups': False,
                 'snapshot_before_compaction': False,
