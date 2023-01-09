@@ -553,7 +553,7 @@ class ManagerCluster(ScyllaManagerBase):
         # even though it's deprecated in 3.0
         # TODO: remove start-date and interval once 2.6 is no longer supported
         if cron is not None:
-            cmd += " --cron {} ".format(" ".join(cron))
+            cmd += " --cron '{}' ".format(" ".join(cron))
         if upload_parallel_list is not None:
             upload_parallel_string = ','.join(upload_parallel_list)
             cmd += " --upload-parallel {} ".format(upload_parallel_string)
@@ -597,7 +597,7 @@ class ManagerCluster(ScyllaManagerBase):
         # deprecated in 3.0
         # TODO: remove start-date once 2.6 is no longer supported
         if cron is not None:
-            cmd += " --cron {} ".format(" ".join(cron))
+            cmd += " --cron '{}' ".format(" ".join(cron))
 
         res = self.sctool.run(cmd=cmd, parse_table_res=False)
         if not res:
