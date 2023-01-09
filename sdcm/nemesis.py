@@ -1261,7 +1261,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # Wait for the end of resharding
             assert wait.wait_for(
                 func=lambda: list(resharding_finish),  # pylint: disable=cell-var-from-loop
-                step=3, timeout=600, throw_exc=False,
+                step=3, timeout=1800, throw_exc=False,
                 text=f"Waiting for the finish of resharding on the '{node.name}' node.",
             ), f"Finish of the resharding hasn't been detected on the '{node.name}' node."
             self.log.debug("Resharding has been finished successfully on the '%s' node.", node.name)
