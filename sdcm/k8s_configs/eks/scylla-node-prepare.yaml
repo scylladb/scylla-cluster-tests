@@ -235,7 +235,8 @@ spec:
 
             # Create directories for each Scylla cluster on each K8S node which will host PVs
             while true; do
-              if [[ -z $(mount | grep -e "/dev/md0" -e "/dev/nvme") ]]; then
+              DEVICE_PATH=$(mount | grep "raid-disks/disk0 " | awk '{print $1;}')
+              if [[ -z $DEVICE_PATH ]]; then
                 sleep 5;
                 continue
               fi
@@ -244,7 +245,7 @@ spec:
                   mkdir "/mnt/hostfs/mnt/raid-disks/disk0/${i}"
                 fi
                 ( mount | grep "/mnt/hostfs/mnt/raid-disks/disk0/${i} " 2>/dev/null 1>&2 ) || \
-                mount --bind "/mnt/hostfs/mnt/raid-disks/disk0/${i}"{,}
+                mount -t xfs $DEVICE_PATH "/mnt/hostfs/mnt/raid-disks/disk0/${i}"
               done
               sleep 10
             done
