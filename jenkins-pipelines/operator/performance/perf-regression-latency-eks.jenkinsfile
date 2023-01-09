@@ -7,7 +7,7 @@ perfRegressionParallelPipeline(
     backend: "k8s-eks",
     region: 'us-east-1',
     test_name: "performance_regression_test.PerformanceRegressionTest",
-    test_config: "test-cases/performance/perf-regression-latency-500gb-30min.yaml",
+    test_config: '''["test-cases/performance/perf-regression-latency-500gb-30min.yaml","configurations/operator/perf-regression-latency.yaml"]''',
     sub_tests: ["test_latency"],
     email_recipients: 'qa@scylladb.com,scylla-operator@scylladb.com',
     k8s_enable_performance_tuning: true,
