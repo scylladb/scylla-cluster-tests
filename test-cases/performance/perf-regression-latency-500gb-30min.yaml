@@ -8,6 +8,9 @@ stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema '
 stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=10000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..500000000,250000000,25000000)' "
 stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=9000/s'  -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..500000000,250000000,25000000)' "
 
+# NOTE: following is needed for the K8S case
+k8s_loader_run_type: 'static'
+
 n_db_nodes: 3
 n_loaders: 4
 n_monitor_nodes: 1
