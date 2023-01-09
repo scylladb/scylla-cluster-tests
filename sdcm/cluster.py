@@ -3469,9 +3469,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             else:
                 raise ValueError(f"The following value '{entity_type}' not supported")
 
-            session.default_fetch_size = 1000
-            session.default_consistency_level = ConsistencyLevel.ONE
-            execute_result = session.execute_async(cmd)
+            cql_session.default_fetch_size = 1000
+            cql_session.default_consistency_level = ConsistencyLevel.ONE
+            execute_result = cql_session.execute_async(cmd)
             fetcher = PageFetcher(execute_result).request_all(timeout=120)
             current_rows = fetcher.all_data()
 
