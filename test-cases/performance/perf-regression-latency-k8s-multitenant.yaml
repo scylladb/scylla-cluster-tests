@@ -10,6 +10,8 @@
 test_duration: 480
 user_prefix: 'k8s-perf-regression-latency'
 
+k8s_loader_run_type: 'static'
+
 # NOTE: we disable second type of monitoring - K8S based one. It is redundant while we use standalone ones.
 k8s_deploy_monitoring: false
 
