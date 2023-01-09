@@ -11,6 +11,7 @@ DataValidatorEvent.UpdatedRowsValidator: CRITICAL
 DataValidatorEvent.DeletedRowsValidator: ERROR
 ScyllaHelpErrorEvent.duplicate: WARNING
 ScyllaHelpErrorEvent.filtered: WARNING
+ScyllaYamlUpdateEvent: NORMAL
 FullScanEvent: ERROR
 FullPartitionScanReversedOrderEvent: ERROR
 FullPartitionScanEvent: ERROR
