@@ -219,7 +219,7 @@ class KubernetesPodWatcher(KubernetesRunner):
     """
 
     READ_REQUEST_TIMEOUT = 30
-    POD_COUNTER_TO_LIVE = 300
+    POD_COUNTER_TO_LIVE = 600
     STREAM_CONNECTION_TTL = 7200
 
     def __init__(self, context: Context) -> None:
