@@ -1,0 +1,4 @@
+# NOTE: main configuration adds '--blocked-reactor-notify-ms' arg
+#       which gets set by the scylla-operator itself. So, redefine this config option
+#       by removing the duplication of the scylla arg which will make Scylla fail.
+append_scylla_args: ''
