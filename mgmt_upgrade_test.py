@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from sdcm.tester import ClusterTester
 from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
 from sdcm.mgmt.cli import RepairTask
-from sdcm.mgmt.common import get_manager_repo_from_defaults
+from sdcm.mgmt.common import get_manager_repo_from_defaults, create_cron_list_from_timedelta
 from mgmt_cli_test import BackupFunctionsMixIn
 
 
@@ -84,11 +84,11 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
 
         with self.subTest("Creating reoccurring backup and repair tasks"):
 
-            repair_task = mgr_cluster.create_repair_task(interval="1d")
+            repair_task = mgr_cluster.create_repair_task(cron=create_cron_list_from_timedelta(minutes=2))
             repair_task_current_details = wait_until_task_finishes_return_details(repair_task)
 
-            backup_task = mgr_cluster.create_backup_task(interval="1d", location_list=self.locations,
-                                                         keyspace_list=["keyspace1"])
+            backup_task = mgr_cluster.create_backup_task(cron=create_cron_list_from_timedelta(minutes=2),
+                                                         location_list=self.locations, keyspace_list=["keyspace1"])
             backup_task_current_details = wait_until_task_finishes_return_details(backup_task)
             backup_task_snapshot = backup_task.get_snapshot_tag()
             pre_upgrade_backup_task_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
@@ -109,7 +109,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             self.generate_load_and_wait_for_results(keyspace_name_to_replace="keyspace2")
             legacy_args = "--force" if manager_tool.sctool.client_version.startswith("2.1") else None
             pausable_backup_task = mgr_cluster.create_backup_task(
-                interval="1d",
+                cron=create_cron_list_from_timedelta(minutes=1),
                 location_list=self.locations,
                 keyspace_list=["keyspace2"],
                 legacy_args=legacy_args,

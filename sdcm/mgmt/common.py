@@ -51,6 +51,12 @@ def duration_to_timedelta(duration_string):
     return datetime.timedelta(seconds=total_seconds)
 
 
+def create_cron_list_from_timedelta(minutes=0, hours=0):
+    destined_time = datetime.datetime.now() + datetime.timedelta(hours=hours, minutes=minutes)
+    cron_list = [str(destined_time.minute), str(destined_time.hour), "*", "*", "*"]
+    return cron_list
+
+
 def get_manager_repo_from_defaults(manager_version_name, distro):
     with open("defaults/manager_versions.yaml", encoding="utf-8") as mgmt_config:
         manager_repos_by_version_dict = yaml.safe_load(mgmt_config)["manager_repos_by_version"]
