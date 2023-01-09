@@ -7,7 +7,5 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-100gb-4h.yaml","configurations/ebs/ebs-gp3-2v-4tb-16k-iops.yaml",
-                     "configurations/ebs/longevity-100gb-4h-stress.yaml"]'''
-
+    test_config: '''["test-cases/longevity/longevity-100gb-4h.yaml","configurations/ebs/ebs-gp3-2v-4tb-16k-iops.yaml", "configurations/ebs/longevity-100gb-4h-stress.yaml"]'''
 )
