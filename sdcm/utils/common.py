@@ -546,8 +546,10 @@ def clean_cloud_resources(tags_dict, dry_run=False):
     clean_elastic_ips_aws(tags_dict, dry_run=dry_run)
     clean_test_security_groups(tags_dict, dry_run=dry_run)
     clean_load_balancers_aws(tags_dict, dry_run=dry_run)
-    clean_clusters_gke(tags_dict, dry_run=dry_run)
-    clean_orphaned_gke_disks(dry_run=dry_run)
+    for project in SUPPORTED_PROJECTS:
+        os.environ['SCT_GCE_PROJECT'] = project
+        clean_clusters_gke(tags_dict, dry_run=dry_run)
+        clean_orphaned_gke_disks(dry_run=dry_run)
     clean_clusters_eks(tags_dict, dry_run=dry_run)
     for project in SUPPORTED_PROJECTS:
         os.environ['SCT_GCE_PROJECT'] = project
