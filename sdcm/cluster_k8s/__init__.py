@@ -2820,9 +2820,12 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
         # TODO: detect the stress type and apply appropriate docker image
         #       `scylla-bench` stress commands will fail when c-s gets switched
         #       to the docker approach.
-        docker_image = self.params.get('docker_image')
-        scylla_version = self.params.get('scylla_version')
-        return f"{docker_image}:{scylla_version}"
+        if loader_image := self.params.get('stress_image.cassandra-stress'):
+            return loader_image
+        else:
+            docker_image = self.params.get('docker_image')
+            scylla_version = self.params.get('scylla_version')
+            return f"{docker_image}:{scylla_version}"
 
     def add_nodes(self,
                   count: int,
