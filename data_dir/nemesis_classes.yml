@@ -49,6 +49,12 @@
 - ResetLocalSchemaMonkey
 - RollingRestartConfigChangeInternodeCompression
 - ScyllaKillMonkey
+- SlaDecreaseSharesDuringLoad
+- SlaIncreaseSharesByAttachAnotherSlDuringLoad
+- SlaIncreaseSharesDuringLoad
+- SlaReplaceUsingDetachDuringLoad
+- SlaReplaceUsingDropDuringLoad
+- SlaSevenSlWithMaxSharesDuringLoad
 - SnapshotOperations
 - SoftRebootNodeMonkey
 - SslHotReloadingNemesis

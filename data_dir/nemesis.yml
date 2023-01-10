@@ -55,6 +55,9 @@
   - free_tier_set = True
 - disrupt_hot_reloading_internode_certificate:
   - disruptive = False
+- disrupt_increase_shares_by_attach_another_sl_during_load:
+  - disruptive = False
+  - sla = True
 - disrupt_kill_scylla:
   - disruptive = True
   - kubernetes = True
@@ -166,6 +169,12 @@
   - disruptive = True
   - kubernetes = True
   - free_tier_set = True
+- disrupt_replace_service_level_using_detach_during_load:
+  - disruptive = False
+  - sla = True
+- disrupt_replace_service_level_using_drop_during_load:
+  - disruptive = False
+  - sla = True
 - disrupt_resetlocalschema:
   - disruptive = False
   - free_tier_set = True
@@ -191,10 +200,19 @@
   - disruptive = True
   - networking = False
   - run_with_gemini = False
+- disrupt_seven_sl_with_max_shares_during_load:
+  - disruptive = False
+  - sla = True
 - disrupt_show_toppartitions:
   - disruptive = False
   - kubernetes = True
   - limited = True
+- disrupt_sla_decrease_shares_during_load:
+  - disruptive = False
+  - sla = True
+- disrupt_sla_increase_shares_during_load:
+  - disruptive = False
+  - sla = True
 - disrupt_snapshot_operations:
   - disruptive = False
   - kubernetes = True
