@@ -54,6 +54,3 @@ mgmt_docker_image: 'scylladb/scylla-manager:3.0.0'
 
 backup_bucket_backend: 's3'
 backup_bucket_location: 'minio-bucket'
-
-# since we can't install minio in since k8s v1.23 (not without ebs-csi-driver setup)
-use_mgmt: false
