@@ -1058,6 +1058,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         upgrade_version, scylla_pool = self.k8s_cluster.upgrade_kubernetes_platform(
             pod_objects=self.db_cluster.nodes,
             use_additional_scylla_nodepool=True)
+        # NOTE: refresh IP addresses of the Scylla nodes because they get changed in current case
+        for db_node in self.db_cluster.nodes:
+            db_node.refresh_ip_address()
+        self.monitors.reconfigure_scylla_monitoring()
 
         InfoEvent(message="Step4 - Validate K8S versions after the upgrade").publish()
         data_plane_versions = self.k8s_cluster.kubectl(

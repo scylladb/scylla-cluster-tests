@@ -779,6 +779,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                            line="Can't find a column family with UUID", node=self.target_node):
             self.target_node.restart()
 
+        # pods can change their ip address during the process,
+        # so we update the monitor at this point
+        if self._is_it_on_kubernetes():
+            self.refresh_nodes_ip_and_reconfigure_monitor(nodes=[self.target_node])
+
         self.log.info('Waiting scylla services to start after node restart')
         self.target_node.wait_db_up(timeout=28800)  # 8 hours
         self.log.info('Waiting JMX services to start after node restart')
@@ -870,6 +875,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_rolling_restart_cluster(self, random_order=False):
         self.cluster.restart_scylla(random_order=random_order)
+
+        if self._is_it_on_kubernetes():
+            self.refresh_nodes_ip_and_reconfigure_monitor()
 
     def disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back(self):
         """
@@ -1253,41 +1261,47 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # Wait for the start of the resharding.
         # In K8S it starts from the last node of a rack and then goes to previous ones.
         # One resharding with 100Gb+ may take about 3-4 minutes. So, set 5 minutes timeout per node.
-        for node, liveness_probe_failures, resharding_start, resharding_finish in nodes_data:
-            assert wait.wait_for(
-                func=lambda: list(resharding_start),  # pylint: disable=cell-var-from-loop
-                step=1, timeout=300, throw_exc=False,
-                text=f"Waiting for the start of resharding on the '{node.name}' node.",
-            ), f"Start of resharding hasn't been detected on the '{node.name}' node."
-            resharding_started = time.time()
-            self.log.debug("Resharding has been started on the '%s' node.", node.name)
+        try:
+            for node, liveness_probe_failures, resharding_start, resharding_finish in nodes_data:
+                assert wait.wait_for(
+                    func=lambda: list(resharding_start),  # pylint: disable=cell-var-from-loop
+                    step=1, timeout=300, throw_exc=False,
+                    text=f"Waiting for the start of resharding on the '{node.name}' node.",
+                ), f"Start of resharding hasn't been detected on the '{node.name}' node."
+                resharding_started = time.time()
+                self.log.debug("Resharding has been started on the '%s' node.", node.name)
 
-            # Wait for the end of resharding
-            assert wait.wait_for(
-                func=lambda: list(resharding_finish),  # pylint: disable=cell-var-from-loop
-                step=3, timeout=1800, throw_exc=False,
-                text=f"Waiting for the finish of resharding on the '{node.name}' node.",
-            ), f"Finish of the resharding hasn't been detected on the '{node.name}' node."
-            self.log.debug("Resharding has been finished successfully on the '%s' node.", node.name)
+                # Wait for the end of resharding
+                assert wait.wait_for(
+                    func=lambda: list(resharding_finish),  # pylint: disable=cell-var-from-loop
+                    step=3, timeout=1800, throw_exc=False,
+                    text=f"Waiting for the finish of resharding on the '{node.name}' node.",
+                ), f"Finish of the resharding hasn't been detected on the '{node.name}' node."
+                self.log.debug("Resharding has been finished successfully on the '%s' node.", node.name)
 
-            # Calculate the time spent for resharding. We need to have it be bigger than 2minutes
-            # because it is the timeout of the liveness probe for Scylla pods.
-            resharding_time = time.time() - resharding_started
-            if resharding_time < 120:
-                self.log.warning(
-                    "Resharding was too fast - '%s's (<120s) on the '%s' node. "
-                    "So, nemesis didn't cover the case.",
-                    resharding_time, node.name)
-            else:
-                self.log.info(
-                    "Resharding took '%s's on the '%s' node. It is enough to cover the case.",
-                    resharding_time, node.name)
+                # Calculate the time spent for resharding. We need to have it be bigger than 2minutes
+                # because it is the timeout of the liveness probe for Scylla pods.
+                resharding_time = time.time() - resharding_started
+                if resharding_time < 120:
+                    self.log.warning(
+                        "Resharding was too fast - '%s's (<120s) on the '%s' node. "
+                        "So, nemesis didn't cover the case.",
+                        resharding_time, node.name)
+                else:
+                    self.log.info(
+                        "Resharding took '%s's on the '%s' node. It is enough to cover the case.",
+                        resharding_time, node.name)
 
-            # Check that liveness probe didn't report any errors
-            # https://github.com/scylladb/scylla-operator/issues/894
-            liveness_probe_failures = list(liveness_probe_failures)
-            assert not liveness_probe_failures, (
-                f"There are liveness probe failures: {liveness_probe_failures}")
+                # Check that liveness probe didn't report any errors
+                # https://github.com/scylladb/scylla-operator/issues/894
+                liveness_probe_failures = list(liveness_probe_failures)
+                assert not liveness_probe_failures, (
+                    f"There are liveness probe failures: {liveness_probe_failures}")
+        finally:
+            # NOTE: refresh scylla pods IP addresses because it may get changed here
+            for node in nodes_data:
+                node[0].refresh_ip_address()
+            self.monitoring_set.reconfigure_scylla_monitoring()
 
         self.log.info("Resharding has successfully ended on whole Scylla cluster.")
 
@@ -1411,6 +1425,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
         self.log.info('Wait till %s is ready', node)
         node.wait_for_pod_readiness()
+        self.log.info(f'{node} is ready, updating ip address and monitoring')
+        self.refresh_nodes_ip_and_reconfigure_monitor(nodes=[node])
 
     def disrupt_terminate_and_replace_node(self):  # pylint: disable=invalid-name
 
@@ -1576,6 +1592,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 finally:
                     clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
 
+        if self._is_it_on_kubernetes():
+            self.refresh_nodes_ip_and_reconfigure_monitor(nodes=nodes)
+
     def disrupt_remove_service_level_while_load(self):
         if not getattr(self.tester, "roles", None):
             raise UnsupportedNemesis('This nemesis is supported for SLA test only')
@@ -1598,11 +1617,27 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                      removed_shares, random.randint(0, 10)),
                                  shares=removed_shares).create())
 
+    def refresh_nodes_ip_and_reconfigure_monitor(self, nodes: list = None):
+        # relevant for kubernetes
+        # pods can change their ip address during the process,
+        # so we update the monitor at this point and get updated IPs
+        if not nodes:
+            nodes = self.cluster.nodes
+
+        for node in nodes:
+            node.refresh_ip_address()
+
+        self.monitoring_set.reconfigure_scylla_monitoring()
+
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
         # TODO: This nemesis has to be rewritten to just stop/start scylla server
         self.log.info('StopStart %s', self.target_node)
         self.target_node.restart()
+        # pods can change their ip address during the process,
+        # so we update the monitor at this point
+        if self._is_it_on_kubernetes():
+            self.refresh_nodes_ip_and_reconfigure_monitor(nodes=[self.target_node])
 
     def call_random_disrupt_method(self, disrupt_methods=None, predefined_sequence=False):
         # pylint: disable=too-many-branches
@@ -3180,6 +3215,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         target_node.reboot(hard=hard, verify_ssh=verify_ssh)
         if self.tester.params.get('print_kernel_callstack'):
             save_kallsyms_map(node=target_node)
+        # pods can change their ip address during the process,
+        # so we update the monitor at this point
+        if self._is_it_on_kubernetes():
+            self.refresh_nodes_ip_and_reconfigure_monitor(nodes=[target_node])
 
     def disrupt_network_start_stop_interface(self):  # pylint: disable=invalid-name
         if not self.cluster.extra_network_interface:
