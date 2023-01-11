@@ -14,7 +14,8 @@
 import logging
 import unittest.mock
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
+from random import randint
 
 from argus.db.db_types import TestStatus
 from argus.db.testrun import TestRunWithHeartbeat, TestRunInfo, TestDetails, TestResources, TestLogs, TestResults, \
@@ -235,9 +236,12 @@ class ArgusTestRun:
         config_files = sct_config.get("config_files")
         started_by = get_username()
 
+        # start time is a part of primary key and getting same start time will cause an overwrite
+        safe_start_time = datetime.utcnow().replace(microsecond=0) + timedelta(seconds=(randint(10, 60)))
+
         details = TestDetails(scm_revision_id=get_git_commit_id(), started_by=started_by, build_job_url=job_url,   # pylint: disable=no-value-for-parameter
                               yaml_test_duration=sct_config.get("test_duration"),
-                              start_time=datetime.utcnow().replace(microsecond=0),
+                              start_time=safe_start_time,
                               config_files=config_files, packages=[])
 
         LOGGER.info("Preparing Resource Setup...")
