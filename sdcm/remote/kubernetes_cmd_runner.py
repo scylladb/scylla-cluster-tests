@@ -262,6 +262,9 @@ class KubernetesPodWatcher(KubernetesRunner):
         self.pod_counter_to_live = self.POD_COUNTER_TO_LIVE
         self.stream_connection_start_time = time.time()
 
+    def should_use_pty(self, pty: bool, fallback: bool) -> bool:
+        return True
+
     @retrying(n=20, sleep_time=3, allowed_exceptions=(ConnectionError, ))
     def _open_stream(self) -> None:
         try:
