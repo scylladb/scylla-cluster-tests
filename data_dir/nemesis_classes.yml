@@ -57,6 +57,7 @@
 - RemoveServiceLevelMonkey
 - RepairStreamingErrMonkey
 - ResetLocalSchemaMonkey
+- RestartThenRepairNodeMonkey
 - RollingRestartConfigChangeInternodeCompression
 - ScyllaKillMonkey
 - SlaDecreaseSharesDuringLoad
