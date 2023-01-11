@@ -342,8 +342,9 @@ class KubernetesPodWatcher(KubernetesRunner):
                 reread_bytes = 0
                 while self.current_read_bytes_num > reread_bytes:
                     time.sleep(0.01)
-                    self.process.read(self.read_chunk_size)
-                    reread_bytes += self.read_chunk_size
+                    read_chunk_size = min(self.read_chunk_size, self.current_read_bytes_num - reread_bytes)
+                    self.process.read(read_chunk_size)
+                    reread_bytes += read_chunk_size
                 LOGGER.debug(
                     "'runner._start()' method for the '%s' pod: "
                     "Successfully re-read '%s' num of bytes.",
@@ -430,7 +431,7 @@ class KubernetesPodWatcher(KubernetesRunner):
         # NOTE: 'pod logs reader driver' provides only combined output (stdout + stderr)
         with self._ws_lock:
             result = self._read_from_stream(num_bytes)
-            self.current_read_bytes_num += num_bytes
+            self.current_read_bytes_num += len(result)
             return result
 
     def read_proc_stderr(self, num_bytes: int) -> str:
