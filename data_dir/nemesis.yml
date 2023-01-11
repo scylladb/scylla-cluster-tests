@@ -263,6 +263,9 @@
   - disruptive = False
   - config_changes = True
   - free_tier_set = True
+- disrupt_restart_then_repair_node:
+  - disruptive = True
+  - kubernetes = True
 - disrupt_restart_with_resharding:
   - disruptive = True
   - kubernetes = True
