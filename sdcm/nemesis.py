@@ -1556,6 +1556,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # Moreover, it will cause host system's /var hosting disk go out of free space too
             # which may cause unpredictable failures.
             raise UnsupportedNemesis('disrupt_nodetool_enospc is not supported on local K8S clusters')
+        if self.cluster.params.get('cluster_backend') == 'k8s-gke':
+            raise UnsupportedNemesis(
+                'disrupt_nodetool_enospc is skipped due to this: '
+                'https://github.com/scylladb/scylla-cluster-tests/issues/5671')
 
         if all_nodes:
             nodes = self.cluster.nodes
