@@ -27,7 +27,7 @@ import time
 import traceback
 import json
 
-from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union
+from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial
 
 from collections import defaultdict, Counter, namedtuple
@@ -3193,7 +3193,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self._wait_all_nodes_un()
 
     def _call_disrupt_func_after_expression_logged(self,
-                                                   expression: str,
+                                                   log_follower: Iterable[str],
                                                    disrupt_func: Callable,
                                                    disrupt_func_kwargs: dict = None,
                                                    sleep: int = 1,
@@ -3206,7 +3206,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         arguments after a <delay>.
         """
         start_time = time.time()
-        target_node_logs = self.target_node.follow_system_log(patterns=[expression])
 
         with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
                             line="This node was decommissioned and will not rejoin",
@@ -3221,7 +3220,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                            line="got error in row level repair",
                            node=self.target_node):
             while time.time() - start_time < timeout:
-                if list(target_node_logs):
+                if list(log_follower):
                     time.sleep(delay)
                     disrupt_func(**disrupt_func_kwargs)
                     break
@@ -3263,9 +3262,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.run_nodetool, sub_cmd="decommission", warning_event_on_exception=(Exception,), retry=0,
         )
 
+        log_follower = self.target_node.follow_system_log(patterns=["DECOMMISSIONING: unbootstrap starts"])
+
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
-            expression="DECOMMISSIONING: unbootstrap starts",
+            log_follower=log_follower,
             disrupt_func=self.reboot_node,
             disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
             delay=0
@@ -3287,10 +3288,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         trigger = partial(
             self.target_node.run_nodetool, sub_cmd="repair", warning_event_on_exception=(Exception,), retry=0,
         )
+        log_follower = self.target_node.follow_system_log(patterns=["Repair 1 out of"])
 
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
-            expression="Repair 1 out of",
+            log_follower=log_follower,
             disrupt_func=self.reboot_node,
             disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
             delay=1
@@ -3310,11 +3312,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         trigger = partial(
             self.target_node.run_nodetool, sub_cmd="rebuild", warning_event_on_exception=(Exception,), retry=0,
         )
+        log_follower = self.target_node.follow_system_log(patterns=["Rebuild starts"])
         timeout = 1800 if self._is_it_on_kubernetes() else 400
 
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
-            expression="Rebuild starts",
+            log_follower=log_follower,
             disrupt_func=self.reboot_node,
             disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
             timeout=timeout,
@@ -3327,7 +3330,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_decommission_streaming_err(self):
         """
         Stop decommission in middle to trigger some streaming fails, then rebuild the data on the node.
-        If the node is decommission unexpectedly, need to re-add a new node to cluster.
+        If the node is decommissioned unexpectedly, need to re-add a new node to cluster.
         """
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis(
