@@ -253,7 +253,7 @@ class KubernetesPodWatcher(KubernetesRunner):
     """
 
     READ_REQUEST_TIMEOUT = 30
-    POD_COUNTER_TO_LIVE = 600
+    POD_COUNTER_TO_LIVE = 20
     STREAM_CONNECTION_TTL = 7200
 
     def __init__(self, context: Context) -> None:
@@ -294,10 +294,20 @@ class KubernetesPodWatcher(KubernetesRunner):
         pod_name = self.context.config.k8s_pod_name
         with self._ws_lock:
             if self.process.closed:
-                LOGGER.debug(
-                    "'_read_from_stream' called for the %s pod having closed socket. Recreating it.",
-                    pod_name)
-                self._start()
+                self.pod_counter_to_live -= 1
+                if self.pod_counter_to_live < 1:
+                    LOGGER.warning(
+                        "'_read_from_stream': stopping '%s' pod because stream to it "
+                        "cannot be established having alive pod.",
+                        self.context.config.k8s_pod_name)
+                    self._stop_pod()
+                    time.sleep(10)
+                    return ''
+                else:
+                    LOGGER.debug(
+                        "'_read_from_stream' called for the %s pod having closed socket. Recreating it.",
+                        pod_name)
+                    self._start()
             elif self.STREAM_CONNECTION_TTL < time.time() - self.stream_connection_start_time:
                 LOGGER.debug(
                     "'_read_from_stream': Recreate '%s' pod log stream connection to avoid freezes. "
@@ -307,6 +317,9 @@ class KubernetesPodWatcher(KubernetesRunner):
                 self._start()
 
             result = self.process.read(num_bytes)
+            if len(result) == num_bytes:
+                # reset pod liveness counter when received full num of bytes
+                self.pod_counter_to_live = self.POD_COUNTER_TO_LIVE
             if isinstance(result, bytes):
                 return result.decode("utf-8")
             return result
@@ -435,16 +448,7 @@ class KubernetesPodWatcher(KubernetesRunner):
     def process_is_finished(self) -> bool:
         if not self.process.closed:
             return False
-        pod_failed_or_completed = self._is_pod_failed_or_completed()
-        if not pod_failed_or_completed:
-            self.pod_counter_to_live -= 1
-        if self.pod_counter_to_live < 1:
-            LOGGER.warning(
-                "'process_is_finished': stopping '%s' pod because stream to it "
-                "cannot be established having alive pod.",
-                self.context.config.k8s_pod_name)
-            self._stop_pod()
-        return pod_failed_or_completed
+        return self._is_pod_failed_or_completed()
 
     def _stop_pod(self) -> None:
         # NOTE: stop pod execution if pod is running, ignore error if it is not running
