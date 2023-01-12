@@ -23,7 +23,7 @@ import re
 from functools import wraps, cache
 from typing import List
 
-from argus.db.db_types import PackageVersion
+from argus.client.sct.types import Package
 
 from sdcm import wait
 from sdcm.cluster import BaseNode
@@ -1157,14 +1157,13 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         try:
             ver = re.search(r"(?P<version>[\w.~]+)-0\.?(?P<date>[0-9]{8,8})\.(?P<commit_id>\w+)", new_version)
             if ver:
-                package = PackageVersion(name="scylla-server-upgraded", date=ver.group("date"),
-                                         version=ver.group("version"),
-                                         revision_id=ver.group("commit_id"),
-                                         build_id=node.get_scylla_build_id() or "#NO_BUILDID")
-                self.argus_test_run.run_info.details.packages.append(package)
-                self.argus_test_run.run_info.details.scylla_version = ver.group("version")
+                package = Package(name="scylla-server-upgraded", date=ver.group("date"),
+                                  version=ver.group("version"),
+                                  revision_id=ver.group("commit_id"),
+                                  build_id=node.get_scylla_build_id() or "#NO_BUILDID")
                 self.log.info("Saving upgraded Scylla version...")
-                self.argus_test_run.save()
+                self.test_config.argus_client().update_scylla_version(version=ver.group("version"))
+                self.test_config.argus_client().submit_packages([package])
             else:
                 self.log.warning("Couldn't extract version from %s", new_version)
         except Exception as exc:  # pylint: disable=broad-except
