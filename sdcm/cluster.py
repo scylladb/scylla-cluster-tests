@@ -49,9 +49,7 @@ from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-modu
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
 
-from argus.db.cloud_types import ResourceState, CloudInstanceDetails, CloudResource
-from argus.db.db_types import NemesisStatus
-from sdcm.argus_test_run import ArgusTestRun
+from argus.backend.util.enums import ResourceState
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.db_log_reader import DbLogReader
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
@@ -222,7 +220,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.logdir = os.path.join(base_logdir, self.name) if base_logdir else None
         self.dc_idx = dc_idx
 
-        self.argus_resource: CloudResource | None = None
         self._containers = {}
         self.is_seed = False
 
@@ -294,43 +291,39 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             except Exception:  # pylint: disable=broad-except
                 LOGGER.error("Encountered an unhadled exception while changing 'perf_event_paranoid' value",
                              exc_info=True)
-        self._init_argus_resource()
+        self._add_node_to_argus()
 
-    def _init_argus_resource(self):
+    def _add_node_to_argus(self):
         try:
-            run = ArgusTestRun.get()
+            client = self.test_config.argus_client()
             shards = -1 if "db-node" in self.instance_name else self.cpu_cores
-            instance_details = CloudInstanceDetails(public_ip=self.public_ip_address, region=self.region,
-                                                    provider=self.parent_cluster.cluster_backend,
-                                                    private_ip=self.ip_address, creation_time=int(time.time()),
-                                                    shards_amount=shards)
-            resource = CloudResource(name=self.name, state=ResourceState.RUNNING,
-                                     instance_info=instance_details, resource_type=self.node_type)
-            self.argus_resource = resource
-            run.run_info.resources.attach_resource(resource)
-            run.save()
+            client.create_resource(
+                name=self.name,
+                resource_type=self.node_type,
+                public_ip=self.public_ip_address,
+                private_ip=self.ip_address,
+                region=self.region,
+                provider=self.parent_cluster.cluster_backend,
+                shards_amount=shards,
+                state=ResourceState.RUNNING,
+            )
         except Exception:  # pylint: disable=broad-except
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
 
-    def argus_resource_set_shards(self) -> CloudResource | None:
+    def update_shards_in_argus(self):
         try:
-            if not self.argus_resource:
-                return None
+            client = self.test_config.argus_client()
             shards = self.scylla_shards if "db-node" in self.instance_name else self.cpu_cores
             shards = int(shards) if shards else 0
-            self.argus_resource.instance_info.shards_amount = shards
-            return self.argus_resource
+            client.update_shards_for_resource(name=self.name, new_shards=shards)
         except Exception:  # pylint: disable=broad-except
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
-            return None
 
-    def _destroy_argus_resource(self):
+    def _terminate_node_in_argus(self):
         try:
-            run = ArgusTestRun.get()
-            if self.argus_resource in run.run_info.resources.allocated_resources:
-                reason = self.running_nemesis if self.running_nemesis else "GracefulShutdown"
-                run.run_info.resources.detach_resource(self.argus_resource, reason=reason)
-                run.save()
+            client = self.test_config.argus_client()
+            reason = self.running_nemesis if self.running_nemesis else "GracefulShutdown"
+            client.terminate_resource(name=self.name, reason=reason)
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error saving resource state to Argus", exc_info=True)
 
@@ -1171,7 +1164,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def destroy(self):
         self.stop_task_threads()
         ContainerManager.destroy_all_containers(self)
-        self._destroy_argus_resource()
+        self._terminate_node_in_argus()
         LOGGER.info("%s destroyed", self)
 
     def wait_ssh_up(self, verbose=True, timeout=500):
@@ -3499,8 +3492,7 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             except Exception as ex:  # pylint: disable=broad-except
                 exception_details = (str(ex), traceback.format_exc())
             try:
-                _node.argus_resource_set_shards()
-                ArgusTestRun.get().save()
+                _node.update_shards_in_argus()
             except Exception:  # pylint: disable=broad-except
                 LOGGER.warning("Failure settings shards for node %s in Argus.", _node)
                 LOGGER.debug("Exception details:\n", exc_info=True)
@@ -4115,25 +4107,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             if nemesis_thread.is_alive():
                 stack_trace = traceback.format_stack(current_thread_frames[nemesis_thread.ident])
                 threads_tracebacks.append("\n".join(stack_trace))
-        self.argus_terminate_remaining_nemeses(stack_trace="\n".join(threads_tracebacks))
-
-    def argus_terminate_remaining_nemeses(self, stack_trace="") -> None:
-        try:
-            run = ArgusTestRun.get()
-            running_nemeses = []
-            for nemesis in run.run_info.results.nemesis_data:
-                if nemesis.nemesis_status == NemesisStatus.RUNNING:
-                    running_nemeses.append(nemesis)
-
-            self.log.info("Attempting to terminate %s running nemeses in Argus", len(running_nemeses))
-            for nemesis in running_nemeses:
-                self.log.debug("Marking nemesis \"%s\" as terminated in argus...", nemesis.name)
-                nemesis.complete(f"Nemesis termination at the end of the test\n{stack_trace}")
-                nemesis.nemesis_status = NemesisStatus.TERMINATED
-            if running_nemeses:
-                run.save()
-        except Exception:  # pylint: disable=broad-except
-            self.log.warning("Error recording nemesis termination information in Argus", exc_info=True)
 
     def scylla_configure_non_root_installation(self, node, devname, verbose, timeout):
         node.stop_scylla_server(verify_down=False)
