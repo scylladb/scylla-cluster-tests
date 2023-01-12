@@ -39,10 +39,9 @@ from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
-from argus.db.db_types import NemesisStatus, NemesisRunInfo, NodeDescription
+from argus.backend.util.enums import NemesisStatus
 
 from sdcm import wait
-from sdcm.argus_test_run import ArgusTestRun
 from sdcm.cluster import (
     BaseCluster,
     BaseNode,
@@ -4023,36 +4022,38 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
     :return: Wrapped method.
     """
 
-    def argus_create_nemesis_info(nemesis: Nemesis, class_name: str,
-                                  method_name: str, start_time: int | float) -> NemesisRunInfo | None:
+    def argus_create_nemesis_info(nemesis: Nemesis, class_name: str, method_name: str, start_time: int | float) -> bool:
         try:
-            run = ArgusTestRun.get()
-            node_desc = NodeDescription(ip=nemesis.target_node.public_ip_address,
-                                        name=nemesis.target_node.name, shards=nemesis.target_node.scylla_shards)
-            nemesis_info = NemesisRunInfo(class_name=class_name, name=method_name,
-                                          duration=0, start_time=int(start_time), target_node=node_desc,
-                                          status=NemesisStatus.RUNNING)
-            run.run_info.results.add_nemesis(nemesis_info)
-            run.save()
-            return nemesis_info
+            argus_client = nemesis.target_node.test_config.argus_client()
+            argus_client.submit_nemesis(
+                name=method_name,
+                class_name=class_name,
+                start_time=int(start_time),
+                target_name=nemesis.target_node.name,
+                target_ip=nemesis.target_node.public_ip_address,
+                target_shards=nemesis.target_node.scylla_shards,
+            )
+            return True
         except Exception:  # pylint: disable=broad-except
-            nemesis.log.error("Error saving nemesis_info to Argus", exc_info=True)
-        return None
+            nemesis.log.error("Error creating nemesis information in Argus", exc_info=True)
+        return False
 
-    def argus_finalize_nemesis_info(nemesis: Nemesis, nemesis_info: NemesisRunInfo, nemesis_event: DisruptionEvent):
+    def argus_finalize_nemesis_info(nemesis: Nemesis, method_name: str, start_time: int, nemesis_event: DisruptionEvent):
+        if not isinstance(start_time, int):
+            start_time = int(start_time)
         try:
-            run = ArgusTestRun.get()
+            argus_client = nemesis.target_node.test_config.argus_client()
             if nemesis_event.severity == Severity.ERROR:
-                nemesis_info.complete(nemesis_event.full_traceback)
+                argus_client.finalize_nemesis(name=method_name, start_time=start_time,
+                                              status=NemesisStatus.FAILED, message=nemesis_event.full_traceback)
             elif nemesis_event.is_skipped:
-                nemesis_info.complete(nemesis_event.skip_reason)
-                nemesis_info.status = NemesisStatus.SKIPPED
+                argus_client.finalize_nemesis(name=method_name, start_time=start_time,
+                                              status=NemesisStatus.SKIPPED, message=nemesis_event.skip_reason)
             else:
-                nemesis_info.complete()
-            nemesis_info.duration = nemesis_info.end_time - nemesis_info.start_time
-            run.save()
+                argus_client.finalize_nemesis(name=method_name, start_time=start_time,
+                                              status=NemesisStatus.SUCCEEDED, message="")
         except Exception:  # pylint: disable=broad-except
-            nemesis.log.error("Error saving nemesis_info to Argus", exc_info=True)
+            nemesis.log.error("Error finalizing nemesis information in Argus", exc_info=True)
 
     def data_validation_prints(args):
         try:
@@ -4163,7 +4164,8 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                 nemesis_event.duration = time_elapsed
 
                 if nemesis_info:
-                    argus_finalize_nemesis_info(nemesis=args[0], nemesis_info=nemesis_info, nemesis_event=nemesis_event)
+                    argus_finalize_nemesis_info(nemesis=args[0], method_name=method_name, start_time=int(
+                        start_time), nemesis_event=nemesis_event)
 
         args[0].cluster.check_cluster_health()
         num_nodes_after = len(args[0].cluster.nodes)
