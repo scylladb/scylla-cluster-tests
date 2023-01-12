@@ -26,6 +26,7 @@ SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 
 
 class KeyStore:
+    # pylint: disable=too-many-public-methods
     def __init__(self):
         self.s3: S3ServiceResource = boto3.resource("s3")
 
@@ -96,6 +97,9 @@ class KeyStore:
 
     def get_argusdb_credentials(self):
         return self.get_json("argusdb_config.json")
+
+    def get_argus_rest_credentials(self):
+        return self.get_json("argus_rest_credentials.json")
 
 
 def pub_key_from_private_key_file(key_file):

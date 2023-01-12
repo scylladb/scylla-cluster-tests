@@ -194,3 +194,4 @@ scylla_apt_keys:
 raid_level: 0
 
 bare_loaders: false
+enable_argus: true
