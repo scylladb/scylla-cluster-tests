@@ -4,11 +4,17 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict
+from unittest.mock import MagicMock
 
 import requests
+from argus.client.sct.client import ArgusSCTClient
+
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.utils.argus import get_argus_client
 from sdcm.utils.net import get_my_ip
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
@@ -46,6 +52,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     _latency_results_file_name = 'latency_results.json'
     _latency_results_file_path = None
     _tester_obj = None
+    _argus_client: ArgusSCTClient | MagicMock = MagicMock()
 
     backup_azure_blob_credentials = {}
 
@@ -278,3 +285,20 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     def set_rsyslog_imjournal_rate_limit(cls, interval: int, burst: int) -> None:
         cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL = interval
         cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST = burst
+
+    @classmethod
+    def argus_client(cls) -> ArgusSCTClient | MagicMock:
+        return cls._argus_client
+
+    @classmethod
+    def init_argus_client(cls, params: dict):
+        if params.get("enable_argus"):
+            LOGGER.info("Initializing Argus connection...")
+            cls._argus_client = get_argus_client(run_id=cls.test_id())
+            return
+        TestFrameworkEvent(
+            source=cls.__name__,
+            source_method='init_argus_client',
+            message="Argus is disabled by configuration",
+            severity=Severity.WARNING,
+        ).publish_or_dump()

@@ -33,7 +33,7 @@ python-jenkins==1.7.0
 # ssh2-python==0.22.0
 # fix segmentation fault with ssh2-python
 https://github.com/enaydanov/ssh2-python/archive/fix_segmentation_plus_3_10.zip  # based on 0.26.0
-argus-alm==0.8.0
+argus-alm==0.10.2
 parameterized==0.8.1
 pylint==2.11.1  # Needed for pre-commit hooks
 autopep8==1.5.7  # Needed for pre-commit hooks
