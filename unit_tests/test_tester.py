@@ -17,8 +17,6 @@ import logging
 import tempfile
 import time
 import unittest.mock
-from functools import cached_property
-from unittest.mock import MagicMock
 from time import sleep
 
 from sdcm.sct_events import Severity
@@ -67,9 +65,8 @@ class ClusterTesterForTests(ClusterTester):
         )
         super().__init__(*args)
 
-    @cached_property
-    def argus_test_run(self):
-        return MagicMock()
+    def init_argus_run(self):
+        pass
 
     def _init_params(self):
         self.log = logging.getLogger(self.__class__.__name__)
