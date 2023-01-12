@@ -4130,10 +4130,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 self.log.debug("Marking nemesis \"%s\" as terminated in argus...", nemesis.name)
                 nemesis.complete(f"Nemesis termination at the end of the test\n{stack_trace}")
                 nemesis.nemesis_status = NemesisStatus.TERMINATED
-            run.save()
+            if running_nemeses:
+                run.save()
         except Exception:  # pylint: disable=broad-except
-            self.log.warning("Error recording nemesis termination information in Argus")
-            self.log.debug(exc_info=True)
+            self.log.warning("Error recording nemesis termination information in Argus", exc_info=True)
 
     def scylla_configure_non_root_installation(self, node, devname, verbose, timeout):
         node.stop_scylla_server(verify_down=False)
