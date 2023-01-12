@@ -70,6 +70,7 @@ from sdcm.utils.common import (
     list_elastic_ips_aws,
     list_test_security_groups,
     list_load_balancers_aws,
+    list_cloudformation_stacks_aws,
     list_instances_aws,
     list_instances_gce,
     list_logs_by_test_id,
@@ -401,7 +402,6 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
             test_id = tags.get("TestId", "N/A")
             run_by_user = tags.get("RunByUser", "N/A")
             _, _, _, region, _, name = elb['ResourceARN'].split(':')
-            print(elb)
             aws_table.add_row([
                 name,
                 region,
@@ -411,6 +411,27 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         click.echo(aws_table.get_string(title="ELBs used on AWS"))
     else:
         click.secho("No load balancers found for selected filters in AWS!", fg="yellow")
+
+    click.secho("Checking AWS Cloudformation Stacks ...", fg='green')
+    cfn_stacks = list_cloudformation_stacks_aws(tags_dict=params, verbose=verbose)
+    if cfn_stacks:
+        aws_table = PrettyTable(["Name", "Region", "TestId", "RunByUser"])
+        aws_table.align = "l"
+        aws_table.sortby = 'Name'
+        for stack in cfn_stacks:
+            tags = aws_tags_to_dict(stack.get('Tags'))
+            test_id = tags.get("TestId", "N/A")
+            run_by_user = tags.get("RunByUser", "N/A")
+            _, _, _, region, _, name = stack['ResourceARN'].split(':')
+            aws_table.add_row([
+                name,
+                region,
+                test_id,
+                run_by_user,
+            ])
+        click.echo(aws_table.get_string(title="Cloudformation Stacks used on AWS"))
+    else:
+        click.secho("No Cloudformation stacks found for selected filters in AWS!", fg="yellow")
 
     click.secho("Checking GKE...", fg='green')
     gke_clusters = list_clusters_gke(tags_dict=params, verbose=verbose)
