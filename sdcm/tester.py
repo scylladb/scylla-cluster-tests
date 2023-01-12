@@ -23,7 +23,7 @@ import traceback
 import unittest
 import unittest.mock
 from typing import NamedTuple, Optional, Union, List, Dict, Any
-from uuid import uuid4, UUID
+from uuid import uuid4
 from functools import wraps, cached_property, cache
 import threading
 import signal
@@ -36,11 +36,13 @@ from invoke.exceptions import UnexpectedExit, Failure
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
 
-from argus.db.db_types import TestStatus, PackageVersion
+from argus.client.sct.client import ArgusSCTClient
+from argus.client.base import ArgusClientError
+from argus.client.sct.types import Package, EventsInfo, LogLink
+from argus.backend.util.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
     BaseScyllaCluster, BaseNode
-from sdcm.argus_test_run import ArgusTestRun
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
@@ -59,11 +61,13 @@ from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.cassandra_harry_thread import CassandraHarryThread
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_network_configuration, get_ec2_services, \
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
+from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
     rows_to_list, make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
+from sdcm.utils.git import get_git_commit_id
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
@@ -78,6 +82,7 @@ from sdcm.sct_events.events_analyzer import stop_events_analyzer
 from sdcm.stress_thread import CassandraStressThread, get_timeout_from_stress_cmd
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
+from sdcm.utils.net import get_my_ip, get_sct_runner_ip
 from sdcm.utils.threads_and_processes_alive import gather_live_processes_and_dump_to_file, \
     gather_live_threads_and_dump_to_file
 from sdcm.ycsb_thread import YcsbStressThread
@@ -317,7 +322,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.email_reporter = build_reporter(self.__class__.__name__,
                                              self.params.get('email_recipients'),
                                              self.logdir)
-        self.log.info("Initialized Argus TestRun with test id %s", self.argus_test_run.id)
+
+        self.init_argus_run()
+        self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
         self._move_kubectl_config()
         self.localhost = self._init_localhost()
         self.test_config.set_rsyslog_imjournal_rate_limit(
@@ -372,26 +379,53 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
 
-    @cached_property
-    def argus_test_run(self):
+    def init_argus_run(self):
         try:
-            argus_test_run = ArgusTestRun.from_sct_config(test_id=UUID(self.test_id),
-                                                          sct_config=self.params)
-            argus_test_run.save()
-            return argus_test_run
-        except Exception as exc:  # pylint: disable=broad-except
-            self.log.warning("Unable to set up Argus connection: %s", exc.args[0])
-            self.log.debug("Error details: ", exc_info=True)
-            return unittest.mock.MagicMock()
+            self.test_config.init_argus_client(self.params)
+            self.test_config.argus_client().submit_sct_run(
+                job_name=get_job_name(),
+                job_url=get_job_url(),
+                started_by=get_username(),
+                commit_id=get_git_commit_id(),
+                runner_public_ip=get_sct_runner_ip(),
+                runner_private_ip=get_my_ip(),
+                sct_config=self.params,
+            )
+            self.log.info("Initialized Argus TestRun with test id %s", self.test_config.argus_client().run_id)
+        except ArgusClientError:
+            self.log.error("Failed to submit data to Argus", exc_info=True)
+
+    def start_argus_heartbeat_thread(self) -> threading.Event:
+        def send_argus_heartbeat(client: ArgusSCTClient, stop_signal: threading.Event):
+            if isinstance(client, unittest.mock.MagicMock):
+                return
+            fail_count = 0
+            while not stop_signal.is_set():
+                if fail_count > 5:
+                    break
+                try:
+                    client.sct_heartbeat()
+                except Exception:  # pylint: disable=broad-except
+                    self.log.warning("Failed to submit heartbeat to argus, Try #%s", fail_count + 1)
+                    fail_count += 1
+                time.sleep(30.0)
+
+        thread_stop_signal = threading.Event()
+        thread = threading.Thread(name="argus-heartbeat",
+                                  target=send_argus_heartbeat,
+                                  kwargs={"connection": self.test_config.argus_client(), "stop_signal": thread_stop_signal})
+        thread.daemon = True
+        thread.start()
+
+        return thread_stop_signal
 
     def argus_update_status(self, status: TestStatus):
         try:
-            self.argus_test_run.run_info.results.status = status
-            self.argus_test_run.save()
+            self.test_config.argus_client().set_sct_run_status(new_status=status)
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error saving test status to Argus", exc_info=True)
 
-    def generate_scylla_server_package(self) -> PackageVersion:
+    def generate_scylla_server_package(self) -> Package:
         """
             Used for offline tests for tracking scylla versions in Argus.
         """
@@ -401,7 +435,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             r'(?P<version>(?P<main>[\w.~]+)-(0.)?(?P<date>[0-9]{8,8}).(?P<commit>\w+).) with build-id (?P<build_id>[\dabcdef]+)')
         version_dict = expr.match(scylla_version).groupdict()
 
-        return PackageVersion(
+        return Package(
             name="scylla-server",
             version=version_dict.get("main", "#NO_VERSION").replace("~", "."),
             revision_id=version_dict.get("commit", "#NO_COMMIT"),
@@ -412,22 +446,44 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def argus_collect_packages(self):
         try:
             self.log.info("Collecting packages for Argus...")
+            packages_to_submit = []
             versions = self.get_scylla_versions()
             kernel_version = self.db_cluster.nodes[0].kernel_version
-            kernel_package = PackageVersion(name="kernel", date="", version=kernel_version, revision_id="", build_id="")
-            self.argus_test_run.run_info.details.packages.append(kernel_package)
+            kernel_package = Package(name="kernel", date="", version=kernel_version, revision_id="", build_id="")
+            packages_to_submit.append(kernel_package)
             for package_name, package_info in versions.items():
-                package = PackageVersion(name=package_name, date=package_info.get("date", "#NO_DATE"),
-                                         version=package_info.get("version", "#NO_VERSION"),
-                                         revision_id=package_info.get("commit_id", "#NO_COMMIT"),
-                                         build_id=package_info.get("build_id", "#NO_BUILDID"))
-                self.argus_test_run.run_info.details.packages.append(package)
-            self.log.info("Saving collected packages...")
+                package = Package(name=package_name, date=package_info.get("date", "#NO_DATE"),
+                                  version=package_info.get("version", "#NO_VERSION"),
+                                  revision_id=package_info.get("commit_id", "#NO_COMMIT"),
+                                  build_id=package_info.get("build_id", "#NO_BUILDID"))
+                packages_to_submit.append(package)
             if len(versions) == 0:
-                self.argus_test_run.run_info.details.packages.append(self.generate_scylla_server_package())
-            self.argus_test_run.save()
+                packages_to_submit.append(self.generate_scylla_server_package())
+
+            packages_to_submit.extend(self.generate_operator_packages())
+
+            self.log.info("Saving collected packages...")
+            self.test_config.argus_client().submit_packages(packages_to_submit)
         except Exception:  # pylint: disable=broad-except
             self.log.error("Unable to collect package versions for Argus - skipping...", exc_info=True)
+
+    def generate_operator_packages(self) -> list[Package]:
+        operator_packages = []
+        if self.k8s_cluster:
+            operator_helm_chart_version = self.k8s_cluster._scylla_operator_chart_version  # pylint: disable=protected-access
+            operator_packages.append(Package(name="operator-chart", date="",
+                                             version=operator_helm_chart_version,
+                                             revision_id="", build_id=""))
+            operator_image_version = self.k8s_cluster.get_operator_image()
+            operator_packages.append(Package(name="operator-image", date="",
+                                             version=operator_image_version,
+                                             revision_id="", build_id=""))
+
+            operator_helm_repo = self.params.get('k8s_scylla_operator_helm_repo')
+            operator_packages.append(Package(name="operator-helm-repo", date="",
+                                             version=operator_helm_repo,
+                                             revision_id="", build_id=""))
+        return operator_packages
 
     def argus_get_scylla_version(self):
         try:
@@ -435,8 +491,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             version_regex = re.compile(r'(([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)')
             version_str = self.db_cluster.nodes[0].get_scylla_binary_version()
             if version_str and (match := version_regex.match(version_str)):
-                self.argus_test_run.run_info.details.scylla_version = match.group(2)
-                self.argus_test_run.save()
+                version = match.group(2)
+                self.test_config.argus_client().update_scylla_version(version=version)
                 return
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error getting scylla version for argus", exc_info=True)
@@ -454,23 +510,26 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "SUCCESS": TestStatus.PASSED,
                 "FAILED": TestStatus.FAILED
             }
-            self.argus_test_run.run_info.details.set_test_end_time()
+            self.test_config.argus_client().finalize_sct_run()
             self.argus_update_status(stat_map.get(self.get_test_status(), TestStatus.FAILED))
-            last_events = get_events_grouped_by_category(limit=100, _registry=self.events_processes_registry)
+            last_events_limit = 100
+            last_events = get_events_grouped_by_category(
+                limit=last_events_limit, _registry=self.events_processes_registry)
+            events_sorted = []
             for severity, messages in last_events.items():
-                for message in messages:
-                    self.argus_test_run.run_info.results.max_stored_events = 100
-                    self.argus_test_run.run_info.results.add_event(severity, message)
-            self.argus_test_run.save()
-            ArgusTestRun.destroy()
+                event_category = EventsInfo(severity=severity, total_events=len(messages), messages=messages)
+                events_sorted.append(event_category)
+            self.test_config.argus_client().submit_events(events_sorted)
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error committing test events to Argus", exc_info=True)
 
     def argus_collect_logs(self, log_links: dict[str, list[str] | str]):
         try:
+            logs_to_save = []
             for name, link in log_links.items():
-                self.argus_test_run.run_info.logs.add_log(name, link)
-            self.argus_test_run.save()
+                link = LogLink(log_name=name, log_link=link)
+                logs_to_save.append(link)
+            self.test_config.argus_client().submit_sct_logs(logs_to_save)
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error saving logs to Argus", exc_info=True)
 
@@ -2477,6 +2536,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.finalize_teardown()
         self.argus_finalize_test_run()
+        self.argus_heartbeat_stop_signal.set()
 
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
         self._check_alive_routines_and_report_them()
@@ -3052,10 +3112,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def argus_collect_screenshots(self, email_data: dict) -> None:
         screenshot_links = email_data.get("grafana_screenshots", [])
-        for link in screenshot_links:
-            self.argus_test_run.run_info.results.add_screenshot(link)
-
-        self.argus_test_run.save()
+        self.test_config.argus_client().submit_screenshots(screenshot_links)
 
     @silence()
     def send_email(self):
