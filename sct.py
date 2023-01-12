@@ -41,6 +41,7 @@ from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners
+from sdcm.utils.argus import get_argus_client
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.azure_region import AzureRegion, region_name_to_location
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
@@ -286,15 +287,6 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
 
     if dry_run:
         click.echo("Make a dry-run")
-
-    try:
-        from sdcm.argus_test_run import ArgusTestRun  # pylint: disable=import-outside-toplevel
-        # Will return MagicMock if there are more than 1 test_id
-        argus_run = ArgusTestRun.get(UUID(test_id[0])) if len(test_id) == 1 else ArgusTestRun.get()
-        LOGGER.info("Loaded Argus Run: %s", argus_run.id)
-    except Exception:  # pylint: disable=broad-except
-        LOGGER.warning("Unable to acquire test run for id %s, clean-resources will not be tracked in argus", test_id)
-        LOGGER.debug("Error details: ", exc_info=True)
 
     for param in params:
         clean_func(param, dry_run=dry_run)
@@ -1026,15 +1018,16 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
 
 def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
+    # pylint: disable=import-outside-toplevel
     try:
-        from sdcm.argus_test_run import ArgusTestRun  # pylint: disable=import-outside-toplevel
-        test_run = ArgusTestRun.get(test_id=test_id)
+        from argus.client.sct.types import LogLink
+        argus_client = get_argus_client(run_id=test_id)
+        log_links = []
         for _, s3_links in logs.items():
             for link in s3_links:
                 file_name = link.split("/")[-1]
-                test_run.run_info.logs.add_log(file_name, link)
-        test_run.save()
-        ArgusTestRun.destroy()
+                log_links.append(LogLink(log_name=file_name, log_link=link))
+        argus_client.submit_sct_logs(log_links)
     except Exception:  # pylint: disable=broad-except
         LOGGER.error("Error saving logs to argus", exc_info=True)
 

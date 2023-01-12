@@ -65,6 +65,7 @@ import yaml
 from packaging.version import Version
 
 from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.utils.argus import get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
@@ -710,11 +711,10 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
 
 def clean_instances_aws(tags_dict, dry_run=False):
     """Remove all instances with specific tags in AWS."""
-    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-locals,import-outside-toplevel
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
-    from sdcm.argus_test_run import ArgusTestRun  # pylint: disable=import-outside-toplevel
-    argus_run = ArgusTestRun.get()
+    argus_client = get_argus_client(run_id=tags_dict["TestId"])
 
     for region, instance_list in aws_instances.items():
         if not instance_list:
@@ -726,18 +726,13 @@ def clean_instances_aws(tags_dict, dry_run=False):
             name = tags.get("Name", "N/A")
             node_type = tags.get("NodeType")
             instance_id = instance['InstanceId']
-            argus_resources = [r for r in argus_run.run_info.resources.allocated_resources if r.name == name]
-            argus_resource = argus_resources[0] if len(argus_resources) > 0 else None
             if node_type and node_type == "sct-runner":
                 LOGGER.info("Skipping Sct Runner instance '%s'", instance_id)
                 continue
             LOGGER.info("Going to delete '{instance_id}' [name={name}] ".format(instance_id=instance_id, name=name))
             if not dry_run:
-                if argus_resource:
-                    argus_run.run_info.resources.detach_resource(argus_resource,
-                                                                 reason="clean-resources: Graceful Termination")
-                    argus_run.save()
                 response = client.terminate_instances(InstanceIds=[instance_id])
+                terminate_resource_in_argus(client=argus_client, resource_name=name)
                 LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
 
 
@@ -1021,7 +1016,7 @@ def filter_k8s_clusters_by_tags(tags_dict: dict,
                               instances=clusters)
 
 
-def clean_instances_gce(tags_dict, dry_run=False):
+def clean_instances_gce(tags_dict: dict, dry_run=False):
     """
     Remove all instances with specific tags GCE
 
@@ -1035,23 +1030,19 @@ def clean_instances_gce(tags_dict, dry_run=False):
         LOGGER.info("There are no instances to remove in GCE")
         return
 
-    def delete_instance(instance):
+    def delete_instance(instance_with_tags: tuple[GCENode, dict]):
+        instance, tags_dict = instance_with_tags
         LOGGER.info("Going to delete: %s", instance.name)
+        argus_client = get_argus_client(run_id=tags_dict["TestId"])
 
-        from sdcm.argus_test_run import ArgusTestRun  # pylint: disable=import-outside-toplevel
-        argus_run = ArgusTestRun.get()
-        argus_resources = [r for r in argus_run.run_info.resources.allocated_resources if r.name == instance.name]
-        argus_resource = argus_resources[0] if len(argus_resources) > 0 else None
         if not dry_run:
             # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.base.Node.destroy
-            if argus_resource:
-                argus_run.run_info.resources.detach_resource(argus_resource,
-                                                             reason="clean-resources: Graceful Termination")
-                argus_run.save()
             res = instance.destroy()
+            terminate_resource_in_argus(client=argus_client, resource_name=instance.name)
             LOGGER.info("%s deleted=%s", instance.name, res)
 
-    ParallelObject(gce_instances_to_clean, timeout=60).run(delete_instance, ignore_exceptions=True)
+    ParallelObject(map(lambda i: (i, tags_dict), gce_instances_to_clean),
+                   timeout=60).run(delete_instance, ignore_exceptions=True)
 
 
 def clean_instances_azure(tags_dict, dry_run=False):
@@ -1062,6 +1053,7 @@ def clean_instances_azure(tags_dict, dry_run=False):
     :return: None
     """
     assert tags_dict, "Running clean instances without tags would remove all SCT related resources in all regions"
+    argus_client = get_argus_client(run_id=tags_dict["TestId"])
     provisioners = AzureProvisioner.discover_regions(tags_dict.get("TestId", ""))
     for provisioner in provisioners:
         all_instances = provisioner.list_instances()
@@ -1071,6 +1063,8 @@ def clean_instances_azure(tags_dict, dry_run=False):
                         provisioner.test_id, provisioner.region)
             if not dry_run:
                 provisioner.cleanup(wait=False)
+                for instance in instances_to_clean:
+                    terminate_resource_in_argus(client=argus_client, resource_name=instance.name)
         else:
             LOGGER.info("test id %s from %s - instances to clean: %s",
                         provisioner.test_id, provisioner.region, [inst.name for inst in instances_to_clean])
