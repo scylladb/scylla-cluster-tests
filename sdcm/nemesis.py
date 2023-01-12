@@ -45,7 +45,6 @@ from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectio
 from argus.backend.util.enums import NemesisStatus
 
 from sdcm import wait
-from sdcm.audit import Audit, AuditConfiguration, AuditStore
 from sdcm.cluster import (
     BaseCluster,
     BaseNode,
@@ -5149,47 +5148,9 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     args[0].operation_log.append(copy.deepcopy(log_info))
                     args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
 
-                    if class_name.find('Chaos') < 0:
-                        args[0].metrics_srv.event_stop(class_name)
-                    disrupt = args[0].get_disrupt_name()
-                    del log_info['operation']
-
-                    try:  # So that the nemesis thread won't stop due to elasticsearch failure
-                        args[0].update_stats(disrupt, status, log_info)
-                    except ElasticSearchConnectionTimeout as err:
-                        args[0].log.warning(f"Connection timed out when attempting to update elasticsearch statistics:\n"
-                                            f"{err}")
-                    except Exception as err:  # pylint: disable=broad-except
-                        args[0].log.warning(f"Unexpected error when attempting to update elasticsearch statistics:\n"
-                                            f"{err}")
-                    args[0].log.info(f"log_info: {log_info}")
-                    nemesis_event.duration = time_elapsed
-
-                    if nemesis_info:
-                        argus_finalize_nemesis_info(nemesis=args[0], method_name=method_name, start_time=int(
-                            start_time), nemesis_event=nemesis_event)
-
-            args[0].cluster.check_cluster_health()
-            num_nodes_after = len(args[0].cluster.nodes)
-            if num_nodes_before != num_nodes_after:
-                args[0].log.error('num nodes before %s and nodes after %s does not match' %
-                                  (num_nodes_before, num_nodes_after))
-            # TODO: Temporary print. Will be removed later
-            data_validation_prints(args=args)
-        finally:
-            if is_exclusive:
-                # NOTE: sleep the nemesis interval here because the next one is already
-                #       ready to start right after the lock gets released.
-                if args[0].tester.params.get('k8s_tenants_num') > 1:
-                    args[0].log.debug(
-                        "Exclusive nemesis: Sleep for '%s' seconds",
-                        args[0].interval)
-                    time.sleep(args[0].interval)
-                NEMESIS_LOCK.release()
-            else:
-                # NOTE: the key may be absent if a nemesis which waits for a lock release
-                #       gets killed/aborted. So, use safe 'pop' call with the default 'None' value.
-                NEMESIS_RUN_INFO.pop(nemesis_run_info_key, None)
+                if nemesis_info:
+                    argus_finalize_nemesis_info(nemesis=args[0], method_name=method_name, start_time=int(
+                        start_time), nemesis_event=nemesis_event)
 
         return result
 

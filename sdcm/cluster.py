@@ -55,8 +55,9 @@ from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-modu
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+
 from argus.backend.util.enums import ResourceState
-from sdcm.node_exporter_setup import NodeExporterSetup, SyslogNgExporterSetup
+from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.db_log_reader import DbLogReader
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
@@ -388,7 +389,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def _add_node_to_argus(self):
         try:
             client = self.test_config.argus_client()
-            shards = -1 if "db" in self.node_type else self.cpu_cores
+            shards = -1 if "db-node" in self.instance_name else self.cpu_cores
             client.create_resource(
                 name=self.name,
                 resource_type=self.node_type,
@@ -405,7 +406,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def update_shards_in_argus(self):
         try:
             client = self.test_config.argus_client()
-            shards = self.scylla_shards if "db" in self.node_type else self.cpu_cores
+            shards = self.scylla_shards if "db-node" in self.instance_name else self.cpu_cores
             shards = int(shards) if shards else 0
             client.update_shards_for_resource(name=self.name, new_shards=shards)
         except Exception:  # pylint: disable=broad-except
@@ -4472,39 +4473,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             if nemesis_thread.is_alive():
                 stack_trace = traceback.format_stack(current_thread_frames[nemesis_thread.ident])
                 threads_tracebacks.append("\n".join(stack_trace))
-
-    def start_kms_key_rotation_thread(self) -> None:
-        if self.params.get("cluster_backend") != 'aws':
-            return None
-        kms_key_rotation_interval = self.params.get("kms_key_rotation_interval") or 60
-        kms_key_alias_name = ""
-        append_scylla_yaml = yaml.safe_load(self.params.get("append_scylla_yaml") or "") or {}
-        for kms_host_name, kms_host_data in append_scylla_yaml.get("kms_hosts", {}).items():
-            if "auto" in kms_host_name:
-                kms_key_alias_name = kms_host_data["master_key"]
-                break
-        if not kms_key_alias_name:
-            self.log.debug("Automatic KMS key is not configured. Skip creation of it's rotation thread.")
-            return None
-
-        @raise_event_on_failure
-        def _rotate_kms_key(kms_key_alias_name, kms_key_rotation_interval, db_cluster):
-            while True:
-                time.sleep(kms_key_rotation_interval * 60)
-                try:
-                    aws_kms.rotate_kms_key(kms_key_alias_name=kms_key_alias_name)
-                except Exception:  # pylint: disable=broad-except
-                    AwsKmsEvent(
-                        message=f"Failed to rotate AWS KMS key for the '{kms_key_alias_name}' alias",
-                        traceback=traceback.format_exc()).publish()
-                if SkipPerIssues("https://github.com/scylladb/scylla-enterprise/issues/3896", self.params):
-                    self.log.warning("KMS encryption check is skipped due to the 'scylla-enterprise/issues/3896'")
-                    continue
-                try:
-                    nemesis_class = self.nemesis[0] if self.nemesis else getattr(
-                        import_module('sdcm.nemesis'), "Nemesis")
-                    with nemesis_class.run_nemesis(node_list=db_cluster.nodes, nemesis_label="KMS encryption check") as target_node:
-                        self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
 
                         ks_cf_list = db_cluster.get_non_system_ks_cf_list(
                             db_node=target_node, filter_out_table_with_counter=True, filter_out_mv=True,

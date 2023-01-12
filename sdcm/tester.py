@@ -25,7 +25,7 @@ import unittest
 import unittest.mock
 from typing import NamedTuple, Optional, Union, List, Dict, Any
 from uuid import uuid4
-from functools import wraps, cache
+from functools import wraps, cached_property, cache
 import threading
 import signal
 import json
@@ -45,7 +45,7 @@ from argus.client.sct.types import Package, EventsInfo, LogLink
 from argus.backend.util.enums import TestStatus
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cluster import BaseCluster, NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
-    BaseScyllaCluster, BaseNode, MINUTE_IN_SEC
+    BaseScyllaCluster, BaseNode
 from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
@@ -73,14 +73,13 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_services, \
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
 from sdcm.utils.ci_tools import get_job_name, get_job_url
-from sdcm.utils.common import format_timestamp, wait_ami_available, update_certificates, \
-    download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, rows_to_list, \
-    make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, change_default_password
-from sdcm.utils.cql_utils import cql_quote_if_needed
-from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
+from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
+    download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
+    rows_to_list, make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, \
+    change_default_password
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
-from sdcm.utils.git import get_git_commit_id, get_git_status_info
+from sdcm.utils.git import get_git_commit_id
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
     LdapConfigurationError, LdapServerType
 from sdcm.utils.log import configure_logging, handle_exception
@@ -98,8 +97,6 @@ from sdcm.stress_thread import CassandraStressThread, get_timeout_from_stress_cm
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
 from sdcm.utils.net import get_my_ip, get_sct_runner_ip
-from sdcm.utils.operations_thread import ThreadParams
-from sdcm.utils.replication_strategy_utils import LocalReplicationStrategy, NetworkTopologyReplicationStrategy
 from sdcm.utils.threads_and_processes_alive import gather_live_processes_and_dump_to_file, \
     gather_live_threads_and_dump_to_file
 from sdcm.utils.version_utils import (
@@ -367,7 +364,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.init_argus_run()
         self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
-        PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
+        self._move_kubectl_config()
         self.localhost = self._init_localhost()
 
         if self.params.get("logs_transport") == 'syslog-ng':
@@ -388,38 +385,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
 
-    def _init_test_duration(self):
-        self._stress_duration: int = self.params.get('stress_duration')
-        self._prepare_stress_duration: int = self.params.get('prepare_stress_duration')
-        if self._stress_duration:
-            self._duration = int(self._prepare_stress_duration) + int(self._stress_duration) + \
-                self.test_config.TEST_WARMUP_TEARDOWN
-
-            self.log.info("SCT Test duration: %s; Stress duration: %s; Prepare duration: %s",
-                          self._duration, self._stress_duration, self._prepare_stress_duration)
-        else:
-            self._duration = self.params.get("test_duration")
-
     def init_argus_run(self):
         try:
             self.test_config.init_argus_client(self.params)
-            git_status = get_git_status_info()
             self.test_config.argus_client().submit_sct_run(
                 job_name=get_job_name(),
                 job_url=get_job_url(),
                 started_by=get_username(),
-                commit_id=git_status.get('branch.oid', get_git_commit_id()),
-                origin_url=git_status.get('upstream.url'),
-                branch_name=git_status.get('branch.upstream'),
+                commit_id=get_git_commit_id(),
+                runner_public_ip=get_sct_runner_ip(),
+                runner_private_ip=get_my_ip(),
                 sct_config=self.params,
             )
-            self.log.info("Submitted Argus TestRun with test id %s", self.test_config.argus_client().run_id)
-            self.test_config.argus_client().set_sct_runner(
-                public_ip=get_sct_runner_ip(),
-                private_ip=get_my_ip(),
-                region="undefined_region",
-                backend=self.params.get("cluster_backend"))
-            self.log.info("sct_runner info in Argus TestRun is updated")
+            self.log.info("Initialized Argus TestRun with test id %s", self.test_config.argus_client().run_id)
         except ArgusClientError:
             self.log.error("Failed to submit data to Argus", exc_info=True)
 
@@ -497,12 +475,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def generate_operator_packages(self) -> list[Package]:
         operator_packages = []
-        if self.k8s_clusters:
-            operator_helm_chart_version = self.k8s_clusters[0].scylla_operator_chart_version
+        if self.k8s_cluster:
+            operator_helm_chart_version = self.k8s_cluster._scylla_operator_chart_version  # pylint: disable=protected-access
             operator_packages.append(Package(name="operator-chart", date="",
                                              version=operator_helm_chart_version,
                                              revision_id="", build_id=""))
-            operator_image_version = self.k8s_clusters[0].get_operator_image()
+            operator_image_version = self.k8s_cluster.get_operator_image()
             operator_packages.append(Package(name="operator-image", date="",
                                              version=operator_image_version,
                                              revision_id="", build_id=""))
@@ -544,10 +522,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             last_events = get_events_grouped_by_category(
                 limit=last_events_limit, _registry=self.events_processes_registry)
             events_sorted = []
-            events_summary = get_logger_event_summary()
             for severity, messages in last_events.items():
-                event_category = EventsInfo(
-                    severity=severity, total_events=events_summary.get(severity, 0), messages=messages)
+                event_category = EventsInfo(severity=severity, total_events=len(messages), messages=messages)
                 events_sorted.append(event_category)
             self.test_config.argus_client().submit_events(events_sorted)
         except Exception:  # pylint: disable=broad-except

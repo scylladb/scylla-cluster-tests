@@ -106,54 +106,6 @@ class KeyStore:  # pylint: disable=too-many-public-methods
     def get_argus_rest_credentials(self):
         return self.get_json("argus_rest_credentials.json")
 
-    def get_baremetal_config(self, config_name: str):
-        return self.get_json(f"{config_name}.json")
-
-    @staticmethod
-    def calculate_s3_etag(file: BinaryIO, chunk_size=8 * 1024 * 1024):
-        """Calculates the S3 custom e-tag (a specially formatted MD5 hash)"""
-        md5s = []
-
-        while True:
-            data = file.read(chunk_size)
-            if not data:
-                break
-            md5s.append(hashlib.md5(data))
-
-        if len(md5s) == 1:
-            return '"{}"'.format(md5s[0].hexdigest())
-
-        digests = b''.join(m.digest() for m in md5s)
-        digests_md5 = hashlib.md5(digests)
-        return '"{}-{}"'.format(digests_md5.hexdigest(), len(md5s))
-
-    def get_obj_if_needed(self, key, local_path, permissions):
-        """Downloads an object at key to file path, checking to see if an existing file matches the current hash"""
-        tag = self.get_object_etag(key)
-        path = os.path.join(local_path, key)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        dl_flag = True
-        try:
-            with open(path, 'rb') as file_obj:
-                if tag == self.calculate_s3_etag(file_obj):
-                    dl_flag = False
-        except FileNotFoundError:
-            pass
-
-        if dl_flag:
-            self.download_file(filename=key, dest_filename=path)
-            os.chmod(path=path, mode=permissions)
-
-    def sync(self, keys, local_path, permissions=0o777):
-        """Syncs the local and remote S3 copies"""
-        with ThreadPoolExecutor(max_workers=len(keys)) as executor:
-            args = [(key, local_path, permissions) for key in keys]
-            list(executor.map(lambda p: self.get_obj_if_needed(*p), args))
-
-    def get_object_etag(self, key):
-        obj = self.s3_client.head_object(Bucket=KEYSTORE_S3_BUCKET, Key=key)
-        return obj.get('ETag')
-
 
 def pub_key_from_private_key_file(key_file):
     try:

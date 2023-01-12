@@ -26,8 +26,6 @@ from typing import List
 import contextlib
 
 from argus.client.sct.types import Package
-from cassandra import ConsistencyLevel
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from sdcm import wait
 from sdcm.cluster import BaseNode

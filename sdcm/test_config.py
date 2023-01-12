@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, Dict
 from unittest.mock import MagicMock
 
+import requests
 from argus.client.sct.client import ArgusSCTClient
 
 
@@ -13,7 +14,7 @@ from sdcm.keystore import KeyStore
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.utils.argus import ArgusError, get_argus_client
+from sdcm.utils.argus import get_argus_client
 from sdcm.utils.net import get_my_ip
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
@@ -254,18 +255,20 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         cls.TEST_DURATION = duration
 
     @classmethod
+    def set_rsyslog_imjournal_rate_limit(cls, interval: int, burst: int) -> None:
+        cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL = interval
+        cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST = burst
+
+    @classmethod
     def argus_client(cls) -> ArgusSCTClient | MagicMock:
         return cls._argus_client
 
     @classmethod
-    def init_argus_client(cls, params: dict, test_id: str | None = None):
+    def init_argus_client(cls, params: dict):
         if params.get("enable_argus"):
             LOGGER.info("Initializing Argus connection...")
-            try:
-                cls._argus_client = get_argus_client(run_id=cls.test_id() if not test_id else test_id)
-                return
-            except ArgusError as exc:
-                LOGGER.warning("Failed to initialize argus client: %s", exc.message)
+            cls._argus_client = get_argus_client(run_id=cls.test_id())
+            return
         TestFrameworkEvent(
             source=cls.__name__,
             source_method='init_argus_client',

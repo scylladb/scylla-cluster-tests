@@ -68,8 +68,8 @@ from prettytable import PrettyTable
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent
+from sdcm.utils.argus import get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType, get_scylla_images_ec2_resource
-
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
@@ -860,18 +860,8 @@ def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
     """Remove all instances with specific tags in AWS."""
     # pylint: disable=too-many-locals,import-outside-toplevel
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
-    if regions:
-        aws_instances = {}
-        for region in regions:
-            aws_instances |= list_instances_aws(
-                tags_dict=tags_dict, region_name=region, group_as_region=True)
-    else:
-        aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
-    try:
-        argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
-    except ArgusError as exc:
-        LOGGER.warning("Unable to initialize Argus: %s", exc.message)
-        argus_client = MagicMock()
+    aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
+    argus_client = get_argus_client(run_id=tags_dict["TestId"])
 
     for region, instance_list in aws_instances.items():
         if not instance_list:
@@ -1522,26 +1512,19 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
         LOGGER.info("There are no GCE instances to remove in the %s project", os.environ.get("SCT_GCE_PROJECT"))
         return
 
-    def delete_instance(instance_with_tags: tuple[GceInstance, dict]):
+    def delete_instance(instance_with_tags: tuple[GCENode, dict]):
         instance, tags_dict = instance_with_tags
-        LOGGER.info("Going to delete: %s (%s project)", instance.name, os.environ.get("SCT_GCE_PROJECT"))
-        try:
-            argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
-        except ArgusError as exc:
-            LOGGER.warning("Unable to initialize Argus: %s", exc.message)
-            argus_client = MagicMock()
+        LOGGER.info("Going to delete: %s", instance.name)
+        argus_client = get_argus_client(run_id=tags_dict["TestId"])
 
         if not dry_run:
-            instances_client, info = get_gce_compute_instances_client()
-            res = instances_client.delete(instance=instance.name,
-                                          project=info['project_id'],
-                                          zone=instance.zone.split('/')[-1])
-            res.done()
+            # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.base.Node.destroy
+            res = instance.destroy()
             terminate_resource_in_argus(client=argus_client, resource_name=instance.name)
             LOGGER.info("%s deleted=%s", instance.name, res)
 
     ParallelObject(map(lambda i: (i, tags_dict), gce_instances_to_clean),
-                   timeout=60).run(delete_instance, ignore_exceptions=False)
+                   timeout=60).run(delete_instance, ignore_exceptions=True)
 
 
 def clean_instances_azure(tags_dict: dict, regions=None, dry_run=False):
@@ -1552,12 +1535,8 @@ def clean_instances_azure(tags_dict: dict, regions=None, dry_run=False):
     :return: None
     """
     assert tags_dict, "Running clean instances without tags would remove all SCT related resources in all regions"
-    try:
-        argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
-    except ArgusError as exc:
-        LOGGER.warning("Unable to initialize Argus: %s", exc.message)
-        argus_client = MagicMock()
-    provisioners = AzureProvisioner.discover_regions(tags_dict.get("TestId", ""), regions=regions)
+    argus_client = get_argus_client(run_id=tags_dict["TestId"])
+    provisioners = AzureProvisioner.discover_regions(tags_dict.get("TestId", ""))
     for provisioner in provisioners:
         all_instances = provisioner.list_instances()
         instances_to_clean = []

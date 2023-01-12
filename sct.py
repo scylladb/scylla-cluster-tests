@@ -51,9 +51,7 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners, \
-    update_sct_runner_tags, list_sct_runners
-from sdcm.utils.ci_tools import get_job_name, get_job_url
-from sdcm.utils.git import get_git_commit_id, get_git_status_info
+    update_sct_runner_tags
 from sdcm.utils.argus import get_argus_client
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
@@ -1235,6 +1233,7 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
     # pylint: disable=import-outside-toplevel
     try:
+        from argus.client.sct.types import LogLink
         argus_client = get_argus_client(run_id=test_id)
         log_links = []
         for _, s3_links in logs.items():
