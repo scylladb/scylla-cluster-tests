@@ -3,3 +3,8 @@ nemesis_selector: ['kubernetes']
 
 n_db_nodes: 5
 k8s_n_scylla_pods_per_cluster: 4
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '256'
+nemesis_multiply_factor: 3
+nemesis_interval: 15
