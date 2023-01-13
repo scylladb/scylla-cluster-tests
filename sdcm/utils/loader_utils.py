@@ -29,19 +29,6 @@ SERVICE_LEVEL_NAME_TEMPLATE = 'sl%s_%s'
 class LoaderUtilsMixin:
     """This mixin can be added to any class that inherits the 'ClusterTester' one"""
 
-    def _parse_stress_cmd(self, stress_cmd, params):
-        # Due to an issue with scylla & cassandra-stress - we need to create the counter table manually
-        if 'counter_' in stress_cmd:
-            self._create_counter_table()
-
-        if 'compression' in stress_cmd:
-            if 'keyspace_name' not in params:
-                compression_prefix = re.search('compression=(.*)Compressor', stress_cmd).group(1)
-                keyspace_name = "keyspace_{}".format(compression_prefix.lower())
-                params.update({'keyspace_name': keyspace_name})
-
-        return params
-
     def _create_counter_table(self):
         """
         workaround for the issue https://github.com/scylladb/scylla-tools-java/issues/32
@@ -87,8 +74,18 @@ class LoaderUtilsMixin:
             stress_cmds *= stress_multiplier
 
         for stress_cmd in stress_cmds:
-            params.update({'stress_cmd': stress_cmd})
-            self._parse_stress_cmd(stress_cmd, params)
+            stress_params = dict(params)
+            stress_params.update({'stress_cmd': stress_cmd})
+
+            # Due to an issue with scylla & cassandra-stress - we need to create the counter table manually
+            if 'counter_' in stress_cmd:
+                self._create_counter_table()
+
+            if 'compression' in stress_cmd:
+                if 'keyspace_name' not in stress_params:
+                    compression_prefix = re.search('compression=(.*)Compressor', stress_cmd).group(1)
+                    keyspace_name = "keyspace_{}".format(compression_prefix.lower())
+                    stress_params.update({'keyspace_name': keyspace_name})
 
             # Run all stress commands
             self.log.debug('stress cmd: {}'.format(stress_cmd))
@@ -96,19 +93,10 @@ class LoaderUtilsMixin:
                 stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd,
                                                            stats_aggregate_cmds=False,
                                                            round_robin=self.params.get('round_robin')))
-            elif stress_cmd.startswith('cassandra-harry'):
-                stress_queue.append(self.run_stress_thread(**params))
             else:
-                stress_queue.append(self.run_stress_thread(**params))
+                stress_queue.append(self.run_stress_thread(**stress_params))
 
             time.sleep(10)
-
-            # Remove "user profile" param for the next command
-            if 'profile' in params:
-                del params['profile']
-
-            if 'keyspace_name' in params:
-                del params['keyspace_name']
 
         return stress_queue
 
