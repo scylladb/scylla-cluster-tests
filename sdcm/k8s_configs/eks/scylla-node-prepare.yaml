@@ -245,7 +245,7 @@ spec:
                   mkdir "/mnt/hostfs/mnt/raid-disks/disk0/${i}"
                 fi
                 ( mount | grep "/mnt/hostfs/mnt/raid-disks/disk0/${i} " 2>/dev/null 1>&2 ) || \
-                mount -t xfs $DEVICE_PATH "/mnt/hostfs/mnt/raid-disks/disk0/${i}"
+                mount --bind "/mnt/hostfs/mnt/raid-disks/disk0/${i}"{,}
               done
               sleep 10
             done
