@@ -2004,6 +2004,8 @@ class SCTConfiguration(dict):
                             if len(option) < 2:
                                 continue
                             profile_path = option[1]
+                            if 'scylla-qa-internal' in profile_path:
+                                continue
                             if not profile_path.startswith('/tmp'):
                                 raise ValueError(f"Stress command parameter '{param_name}' contains wrong path "
                                                  f"'{profile_path}' to profile, it should be formed in following "

@@ -119,7 +119,10 @@ def get_profile_content(stress_cmd):
     """
 
     cs_profile = re.search(r'profile=(.*\.yaml)', stress_cmd).group(1)
-    sct_cs_profile = os.path.join(os.path.dirname(__file__), '../../', 'data_dir', os.path.basename(cs_profile))
+    if "scylla-qa-internal" in cs_profile:
+        sct_cs_profile = os.path.join(os.path.dirname(__file__), '../../', cs_profile)
+    else:
+        sct_cs_profile = os.path.join(os.path.dirname(__file__), '../../', 'data_dir', os.path.basename(cs_profile))
     if os.path.exists(sct_cs_profile):
         cs_profile = sct_cs_profile
     elif not os.path.exists(cs_profile):
@@ -128,3 +131,9 @@ def get_profile_content(stress_cmd):
     with open(cs_profile, encoding="utf-8") as yaml_stream:
         profile = yaml.safe_load(yaml_stream)
     return cs_profile, profile
+
+
+def replace_scylla_qa_internal_path(stress_cmd: str, loader_path: str):
+    stress_cmd = re.sub(r"profile=scylla-qa-internal\/\S*",
+                        f" profile={loader_path} ", stress_cmd)
+    return stress_cmd
