@@ -27,7 +27,7 @@ from sdcm.cluster import BaseLoaderSet
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
-from sdcm.utils.user_profile import get_profile_content
+from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
 from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
@@ -266,9 +266,14 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner.send_files(get_data_dir_path('logback-tools-debug.xml'),
                                   '/etc/scylla/cassandra/logback-tools.xml', delete_dst=True)
         if self.profile:
+            loader_profile_path = os.path.join('/tmp', os.path.basename(self.profile))
             with open(self.profile, encoding="utf-8") as profile_file:
                 LOGGER.info('Profile content:\n%s', profile_file.read())
-            cmd_runner.send_files(self.profile, os.path.join('/tmp', os.path.basename(self.profile)), delete_dst=True)
+            cmd_runner.send_files(self.profile, loader_profile_path, delete_dst=True)
+            if 'scylla-qa-internal' in self.profile:
+                LOGGER.info("Replace profile path %s in c-s command with actual %s",
+                            self.profile, loader_profile_path)
+                stress_cmd = replace_scylla_qa_internal_path(stress_cmd, loader_profile_path)
 
         if self.client_encrypt:
             ssl_conf_dir = Path(get_data_dir_path('ssl_conf', 'client'))

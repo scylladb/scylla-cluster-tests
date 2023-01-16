@@ -419,10 +419,11 @@ class User(UserRoleBase):
         return self
 
 
-def create_sla_auth(session, shares: int, index: str, superuser: bool = True) -> Role:
+def create_sla_auth(session, shares: int, index: str, superuser: bool = True, attach_service_level: bool = True) -> Role:
     role = Role(session=session, name=STRESS_ROLE_NAME_TEMPLATE % (shares or '', index),
                 password=STRESS_ROLE_PASSWORD_TEMPLATE % shares or '', login=True, superuser=superuser).create()
-    role.attach_service_level(ServiceLevel(session=session, name=SERVICE_LEVEL_NAME_TEMPLATE % (shares or '', index),
-                                           shares=shares).create())
+    if attach_service_level:
+        role.attach_service_level(ServiceLevel(session=session, name=SERVICE_LEVEL_NAME_TEMPLATE % (shares or '', index),
+                                               shares=shares).create())
 
     return role

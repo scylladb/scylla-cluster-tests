@@ -1,0 +1,32 @@
+test_duration: 360
+
+service_level_shares: [1000]
+
+prepare_write_cmd:  ["cassandra-stress user profile=scylla-qa-internal/profile-d/profile-top.yaml no-warmup 'ops(insert=1)' n=35104000 -mode cql3 native <sla credentials 0> -rate threads=96"]
+
+stress_cmd: ["cassandra-stress user profile=scylla-qa-internal/profile-d/profile-cache.yaml     'ops(readq=1)'  cl=LOCAL_QUORUM no-warmup duration=4h -mode cql3 native <sla credentials 0> -rate fixed=615/s threads=32   ",
+             "cassandra-stress user profile=scylla-qa-internal/profile-d/profile-cold-read.yaml 'ops(readq=1)'  cl=LOCAL_QUORUM no-warmup duration=4h -mode cql3 native <sla credentials 0> -rate fixed=7329/s threads=96  ",
+             "cassandra-stress user profile=scylla-qa-internal/profile-d/profile-write.yaml     'ops(insert=1)' cl=LOCAL_QUORUM no-warmup duration=4h -mode cql3 native <sla credentials 0> -rate fixed=41880/s threads=32 "]
+
+n_db_nodes: 3
+n_loaders: 3
+n_monitor_nodes: 1
+availability_zone: 'a,b,c'
+
+
+
+round_robin: true
+
+instance_type_db: 'i3en.6xlarge'
+instance_type_loader: 'c5.4xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '018'
+nemesis_interval: 15
+
+user_prefix: 'longevity-user-profile-d'
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
