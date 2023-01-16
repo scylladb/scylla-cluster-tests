@@ -311,7 +311,13 @@ class KubectlClusterEventsLogger(CommandClusterLoggerBase):
 
     @property
     def _logger_cmd(self) -> str:
-        cmd = self._cluster.kubectl_cmd("get events -w", namespace=self.namespace)
+        cmd = (
+            "get events -w -o custom-columns="
+            "FirstSeen:.firstTimestamp,LastSeen:.lastTimestamp,"
+            "Count:.count,From:.source.component,Type:.type,"
+            "Reason:.reason,Message:.message"
+        )
+        cmd = self._cluster.kubectl_cmd(cmd, namespace=self.namespace)
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
