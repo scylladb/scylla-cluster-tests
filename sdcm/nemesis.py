@@ -4739,6 +4739,24 @@ class DisruptKubernetesNodeThenDecommissionAndAddScyllaNode(Nemesis):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
+class K8sSetMonkey(Nemesis):
+    disruptive = True
+    kubernetes = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disrupt_methods_list = [
+            'disrupt_drain_kubernetes_node_then_replace_scylla_node',
+            'disrupt_terminate_kubernetes_host_then_replace_scylla_node',
+            'disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node',
+            'disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node',
+        ]
+
+    def disrupt(self):
+        self.call_random_disrupt_method(
+            disrupt_methods=self.disrupt_methods_list, predefined_sequence=True)
+
+
 class OperatorNodeReplace(Nemesis):
     disruptive = True
     kubernetes = True
