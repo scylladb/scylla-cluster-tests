@@ -55,6 +55,7 @@ from sdcm.cluster import (
     NodeSetupFailed,
     NodeSetupTimeout,
     NodeStayInClusterAfterDecommission,
+    HOUR_IN_SEC,
 )
 from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
 from sdcm.cluster_k8s.mini_k8s import LocalKindCluster
@@ -78,7 +79,7 @@ from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors
                                                  ignore_ycsb_connection_refused, decorate_with_context)
 from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
-from sdcm.sct_events.system import InfoEvent
+from sdcm.sct_events.system import InfoEvent, SoftTimeoutEvent
 from sdcm.sla.sla_tests import SlaTests
 from sdcm.utils import cdc
 from sdcm.utils.common import (get_db_tables, generate_random_string,
@@ -1159,7 +1160,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise LdapNotRunning("LDAP server was supposed to be running, but it is not")
 
     @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
-    def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=0):
+    def _add_and_init_new_cluster_node(self, old_node_ip=None, soft_timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP,
+                                       hard_timeout=None, rack=0):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         # TODO: make it work on K8S when we have decommissioned (by nodetool) nodes.
         #       Now it will fail because pod which hosts decommissioned Scylla member is reported
@@ -1171,8 +1173,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
         new_node.replacement_node_ip = old_node_ip
+        hard_timeout = hard_timeout or soft_timeout + HOUR_IN_SEC * 3  # The hard-timeout default is extra 3 hours
         try:
-            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, check_node_health=False)
+            with SoftTimeoutEvent(soft_timeout=soft_timeout, operation="Init a new cluster node"):
+                self.cluster.wait_for_init(node_list=[new_node], timeout=hard_timeout, check_node_health=False)
             self.cluster.clean_replacement_node_ip(new_node)
         except (NodeSetupFailed, NodeSetupTimeout):
             self.log.warning("TestConfig of the '%s' failed, removing it from list of nodes" % new_node)
@@ -1240,7 +1244,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @latency_calculator_decorator(legend="Replace a node in cluster with new one")
     def replace_node(self, old_node_ip, rack=0):
-        return self._add_and_init_new_cluster_node(old_node_ip, rack=rack)
+        return self._add_and_init_new_cluster_node(old_node_ip,
+                                                   soft_timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP + HOUR_IN_SEC, rack=rack)
 
     def _verify_resharding_on_k8s(self, cpus):
         nodes_data = []
