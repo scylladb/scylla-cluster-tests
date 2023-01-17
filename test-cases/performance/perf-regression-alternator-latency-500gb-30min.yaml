@@ -51,8 +51,6 @@ append_scylla_args: '--blocked-reactor-notify-ms 50'
 backtrace_decoding: false
 print_kernel_callstack: true
 
-logs_transport: "ssh"
-
 store_perf_results: true
 send_email: true
 email_recipients: ['scylla-perf-results@scylladb.com', 'alternator@scylladb.com']
