@@ -219,7 +219,6 @@ def test_drain_and_replace_node_kubernetes(db_cluster):
     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
     target_node.wait_for_pod_readiness()
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-    target_node.refresh_ip_address()
 
 
 @pytest.mark.requires_node_termination_support('drain_k8s_node')
@@ -235,7 +234,6 @@ def test_drain_wait_and_replace_node_kubernetes(db_cluster):
     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
     target_node.wait_for_pod_readiness()
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-    target_node.refresh_ip_address()
 
 
 @pytest.mark.requires_node_termination_support('drain_k8s_node')

@@ -1583,12 +1583,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             LOGGER.info("Wait for the '%s' pod to be ready", pod_object.name)
             pod_object.wait_for_pod_readiness(
                 pod_readiness_timeout_minutes=pod_readiness_timeout_minutes)
-            LOGGER.info("The '%s' pod is ready, refresh IP addresses", pod_object.name)
-            pod_object.refresh_ip_address()
-            # NOTE: update monitoring after each pod update
-            #       to minimize the loss of monitoring data
-            if monitors := self.test_config.tester_obj().monitors:
-                monitors.reconfigure_scylla_monitoring()
 
     @contextlib.contextmanager
     def scylla_config_map(self, namespace: str = SCYLLA_NAMESPACE) -> dict:
@@ -1892,7 +1886,6 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
             timeout=self.pod_terminate_timeout * 60 + 10)
 
         self.wait_for_pod_readiness()
-        self.refresh_ip_address()
 
     def soft_reboot(self):
         # Kubernetes brings pods back to live right after it is deleted
@@ -1902,7 +1895,6 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
             timeout=self.pod_terminate_timeout * 60 + 10)
 
         self.wait_for_pod_readiness()
-        self.refresh_ip_address()
 
     # On kubernetes there is no stop/start, closest analog of node restart would be soft_restart
     restart = soft_reboot
