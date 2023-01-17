@@ -676,7 +676,9 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
 
     SCYLLA_PODS_SELECTOR = "app.kubernetes.io/name=scylla"
     SCYLLA_PODS_EXPECTED_LABEL_KEYS = ("scylla/datacenter", "scylla/rack")
-    READ_REQUEST_TIMEOUT = 10800  # 3h
+    # NOTE: Knowing that in common case a Scylla pod gets up in 3-4 minutes,
+    #       make the timeout be about it.
+    READ_REQUEST_TIMEOUT = 180
 
     def __init__(self, k8s_kluster, mapper_dict):
         self._termination_event = threading.Event()
