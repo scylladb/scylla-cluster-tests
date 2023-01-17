@@ -114,9 +114,9 @@ def configure_sshd_script():
         echo "*    hard    nproc    unlimited" > /etc/security/limits.d/20-nproc.conf || true
     fi
 
-    sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
-    sed -i 's/#MaxStartups \(.*\)$/MaxStartups 60/' /etc/ssh/sshd_config
-    sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config
+    sed -i "s/#MaxSessions \(.*\)$/MaxSessions 1000/" /etc/ssh/sshd_config
+    sed -i "s/#MaxStartups \(.*\)$/MaxStartups 60/" /etc/ssh/sshd_config
+    sed -i "s/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/" /etc/ssh/sshd_config
     SSH_VERSION=$(ssh -V 2>&1 | tr -d "[:alpha:][:blank:][:punct:]" | cut -c-2)
     echo $SSH_VERSION
     if [ ${SSH_VERSION} -gt 88 ]; then
