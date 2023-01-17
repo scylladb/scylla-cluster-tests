@@ -1186,8 +1186,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.cluster.terminate_node(node)
         self.monitoring_set.reconfigure_scylla_monitoring()
 
-    def disrupt_nodetool_decommission(self, add_node=True, disruption_name=None):
-        if self._is_it_on_kubernetes() and disruption_name is None:
+    def _nodetool_decommission(self, add_node=True):
+        if self._is_it_on_kubernetes():
             self.set_target_node(allow_only_last_node_in_rack=True)
         target_is_seed = self.target_node.is_seed
         self.cluster.decommission(self.target_node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
@@ -1211,6 +1211,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.unset_current_running_nemesis(new_node)
         return new_node
 
+    def disrupt_nodetool_decommission(self, add_node=True):
+        return self._nodetool_decommission(add_node=add_node)
+
     def disrupt_nodetool_seed_decommission(self, add_node=True):
         if len(self.cluster.seed_nodes) < 2:
             raise UnsupportedNemesis("To running seed decommission the cluster must contains at least 2 seed nodes")
@@ -1220,7 +1223,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.set_seed_flag(False)
         self.cluster.update_seed_provider()
 
-        new_seed_node = self.disrupt_nodetool_decommission(add_node=add_node, disruption_name="SeedDecommission")
+        new_seed_node = self._nodetool_decommission(add_node=add_node)
         if new_seed_node and not new_seed_node.is_seed:
             new_seed_node.set_seed_flag(True)
             self.cluster.update_seed_provider()
