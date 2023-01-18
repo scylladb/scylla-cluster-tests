@@ -2567,7 +2567,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         :return: Remoter result object
         """
         cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
-
+        if sub_cmd == 'flush' and self.parent_cluster.params.get("data_volume_disk_type") == 'gp3':
+            timeout = timeout * 10 if timeout else 3000
         with NodetoolEvent(nodetool_command=sub_cmd,
                            node=self.name,
                            options=options,
