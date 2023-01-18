@@ -491,6 +491,11 @@ class BackupTask(ManagerTask):
                            "manager can only delete snapshots of finished tasks".format(self.id, str(self.status)))
 
 
+class RestoreTask(ManagerTask):
+    def __init__(self, task_id, cluster_id, manager_node):
+        ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
+
+
 class ManagerCluster(ScyllaManagerBase):
 
     def __init__(self, manager_node, cluster_id=None, client_encrypt=False):
@@ -515,6 +520,23 @@ class ManagerCluster(ScyllaManagerBase):
 
     def set_cluster_id(self, value: str):
         self.id = value
+
+    def create_restore_task(self,  only_data=True, location_list=None, snapshot_tag=None):
+        cmd = f"restore -c {self.id}"
+        if only_data:
+            cmd += " --restore-tables"
+        else:
+            cmd += " --restore-schema"
+        if location_list is not None:
+            locations_names = ','.join(location_list)
+            cmd += " --location {} ".format(locations_names)
+        if snapshot_tag is not None:
+            cmd += f" --snapshot-tag {snapshot_tag}"
+
+        res = self.sctool.run(cmd=cmd, parse_table_res=False)
+        task_id = res.stdout.strip()
+        LOGGER.debug("Created task id is: {}".format(task_id))
+        return RestoreTask(task_id=task_id, cluster_id=self.id, manager_node=self.manager_node)
 
     def create_backup_task(self, dc_list=None,  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
                            dry_run=None, interval=None, keyspace_list=None, cron=None,
