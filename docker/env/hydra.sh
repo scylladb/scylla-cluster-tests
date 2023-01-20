@@ -258,6 +258,7 @@ function run_in_docker () {
         -v /etc/sudoers:/etc/sudoers:ro \
         -v /etc/sudoers.d/:/etc/sudoers.d:ro \
         -v /etc/shadow:/etc/shadow:ro \
+        -v /dev:/dev:rw \
         ${DOCKER_GROUP_ARGS[@]} \
         ${DOCKER_ADD_HOST_ARGS[@]} \
         ${docker_common_args[@]} \

@@ -276,6 +276,9 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
             allowed_labels_on_scylla_node.extend(self.perf_pods_labels)
         if self.params.get('k8s_use_chaos_mesh'):
             allowed_labels_on_scylla_node.append(('app.kubernetes.io/component', 'chaos-daemon'))
+        if self.params.get("k8s_local_volume_provisioner_type") != 'static':
+            allowed_labels_on_scylla_node.append(('app', 'node-pkg-installer'))
+            allowed_labels_on_scylla_node.append(('app.kubernetes.io/name', 'local-csi-driver'))
         return allowed_labels_on_scylla_node
 
     def create_eks_cluster(self, wait_till_functional=True):

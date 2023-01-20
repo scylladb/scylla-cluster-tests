@@ -19,7 +19,12 @@ k8s_scylla_datacenter: 'dc-1'
 k8s_scylla_rack: 'kind'
 k8s_scylla_cluster_name: 'sct-cluster'
 k8s_scylla_disk_gi: 10
-k8s_scylla_disk_class: 'local-raid-disks'
+# NOTE: use any of the following pairs:
+#   'k8s_scylla_disk_class=local-raid-disks'   and 'k8s_local_volume_provisioner_type=static'
+#   'k8s_scylla_disk_class=scylladb-local-xfs' and 'k8s_local_volume_provisioner_type=dynamic'
+k8s_scylla_disk_class: 'scylladb-local-xfs'
+k8s_local_volume_provisioner_type: 'dynamic'
+
 k8s_minio_storage_size: '20Gi'
 k8s_enable_performance_tuning: false
 k8s_use_chaos_mesh: true
