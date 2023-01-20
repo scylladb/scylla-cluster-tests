@@ -2843,9 +2843,6 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
             node.config_client_encrypt()
 
     def _get_docker_image(self):
-        # TODO: detect the stress type and apply appropriate docker image
-        #       `scylla-bench` stress commands will fail when c-s gets switched
-        #       to the docker approach.
         if loader_image := self.params.get('stress_image.cassandra-stress'):
             return loader_image
         else:
