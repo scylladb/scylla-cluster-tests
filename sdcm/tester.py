@@ -2044,7 +2044,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                          'errors': stats['errors']})
         return stats
 
-    def run_fullscan_thread(self, fullscan_params: dict, thread_name: str):
+    @staticmethod
+    def run_fullscan_thread(fullscan_params: FullScanParams, thread_name: str):
         """Run thread of cql command select *
 
         Calculate test duration and timeout interval between
@@ -2053,25 +2054,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         random choosen from current configuration'
 
         Keyword Arguments:
-            fullscan_params: dict with params relevant for starting
+            fullscan_params: FullScanParams object with params relevant for starting
             the ScanOperationThread
         """
-        sla_role_name, sla_role_password = None, None
-        if fullscan_role := getattr(self, "fullscan_role", None):
-            sla_role_name = fullscan_role.name
-            sla_role_password = fullscan_role.password
-
         ScanOperationThread(
             thread_name=thread_name,
-            fullscan_params=(
-                FullScanParams(
-                    db_cluster=self.db_cluster,
-                    fullscan_user=sla_role_name,
-                    fullscan_user_password=sla_role_password,
-                    duration=self.get_duration(fullscan_params.get("duration")),
-                    **fullscan_params
-                )
-            )
+            fullscan_params=fullscan_params
+
         ).start()
 
     def run_tombstone_gc_verification_thread(self, duration=None, interval=600, propagation_delay_in_seconds=3600, **kwargs):

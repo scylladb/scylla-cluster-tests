@@ -948,7 +948,7 @@ class SCTConfiguration(dict):
         # LongevityTest
         dict(name="stress_multiplier", env="SCT_STRESS_MULTIPLIER", type=int,
              help=""),
-      dict(name="run_fullscan", env="SCT_RUN_FULLSCAN", type=list,
+        dict(name="run_fullscan", env="SCT_RUN_FULLSCAN", type=list,
              help=""),
         dict(name="run_full_partition_scan", env="SCT_run_full_partition_scan", type=str,
              help="Runs a background thread that issues reversed-queries on a table random partition by an interval"),
@@ -1808,7 +1808,7 @@ class SCTConfiguration(dict):
 
         return environment_vars
 
-    def get(self, key: str | None):
+    def get(self, key: str | None, default=None):
         """
         get the value of test configuration parameter by the name
         """
@@ -1816,7 +1816,7 @@ class SCTConfiguration(dict):
         if key and '.' in key:
             if ret_val := self._dotted_get(key):
                 return ret_val
-        ret_val = super().get(key)
+        ret_val = super().get(key, default)
 
         if key in self.multi_region_params and isinstance(ret_val, list):
             ret_val = ' '.join(ret_val)

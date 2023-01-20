@@ -24,6 +24,7 @@ from cassandra import AlreadyExists, InvalidRequest
 
 from sdcm.tester import ClusterTester
 from sdcm.utils import loader_utils
+from sdcm.scan_operation_thread import FullScanParams
 
 
 class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
@@ -40,10 +41,26 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.log.info('Tombstone GC verification params are: %s', params)
         return params
 
-    def _get_scan_operation_params(self) -> list[dict]:
-        params = self.params.get("run_fullscan") if self.params.get("run_fullscan") else {}
+    def _get_scan_operation_params(self) -> list[FullScanParams]:
+        params = self.params.get("run_fullscan", {})
         self.log.info('Scan operation params are: %s', params)
-        return [json.loads(item) for item in params]
+
+        sla_role_name, sla_role_password = None, None
+        if fullscan_role := getattr(self, "fullscan_role", None):
+            sla_role_name = fullscan_role.name
+            sla_role_password = fullscan_role.password
+        scan_operation_params_list = []
+        for item in params:
+            item_dict = json.loads(item)
+            scan_operation_params_list.append(FullScanParams(
+                db_cluster=self.db_cluster,
+                termination_event=self.db_cluster.nemesis_termination_event,
+                fullscan_user=sla_role_name,
+                fullscan_user_password=sla_role_password,
+                duration=self.get_duration(item_dict.get("duration")),
+                **item_dict
+            ))
+        return scan_operation_params_list
 
     def run_pre_create_schema(self):
         pre_create_schema = self.params.get('pre_create_schema')
