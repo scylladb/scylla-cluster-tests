@@ -64,3 +64,9 @@ append_scylla_args: '--abort-on-lsa-bad-alloc 1 --abort-on-internal-error 1 --ab
 docker_image: ''
 backup_bucket_backend: 's3'
 backup_bucket_location: 'minio-bucket'
+
+# NOTE: Define a separate image for the 'cassandra stress' that supports 'serverless' feature.
+#       It will allow to test 'serverless' feature against any stable Scylla release
+#       with old 'cassandra-stress' binary.
+stress_image:
+  cassandra-stress: 'scylladb/scylla-nightly:5.2.0-rc0-0.20230119.34ab98e1be2e'
