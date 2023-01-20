@@ -35,6 +35,7 @@ from sdcm.cluster_k8s import (
     ScyllaPodCluster,
     COMMON_CONTAINERS_RESOURCES,
     INGRESS_CONTROLLER_CONFIG_PATH,
+    K8S_LOCAL_VOLUME_PROVISIONER_VERSION,
     LOCAL_MINIO_DIR,
     LOCAL_PROVISIONER_FILE,
     OPERATOR_CONTAINERS_RESOURCES,
@@ -127,6 +128,11 @@ class MinimalK8SOps:
             sysctl --system
             """)
         node.remoter.sudo(f'bash -cxe "{script}"')
+
+        # NOTE: if running in Hydra then it must have '/dev' mount from host as 'rw'
+        for i in range(7, 41):
+            cmd = f"if ! [ -e /dev/loop{i} ]; then mknod -m 660 /dev/loop{i} b 7 {i}; fi"
+            node.remoter.sudo(f'bash -cxe "{cmd}"')
 
     @classmethod
     def setup_docker(cls, node: cluster.BaseNode, target_user: str = None) -> None:
@@ -327,6 +333,10 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         return ""
 
     @cached_property
+    def dynamic_local_volume_provisioner_image(self):
+        return f"scylladb/k8s-local-volume-provisioner:{K8S_LOCAL_VOLUME_PROVISIONER_VERSION}"
+
+    @cached_property
     def cert_manager_images(self):
         base_repo, tag = "quay.io/jetstack", f"v{self.params.get('k8s_cert_manager_version')}"
         return [
@@ -442,6 +452,8 @@ class LocalKindCluster(LocalMinimalClusterBase):
         ]
         if self.params.get('k8s_use_chaos_mesh'):
             allowed_labels_on_scylla_node.append(('app.kubernetes.io/component', 'chaos-daemon'))
+        if self.params.get("k8s_local_volume_provisioner_type") != 'static':
+            allowed_labels_on_scylla_node.append(('app.kubernetes.io/name', 'local-csi-driver'))
         return allowed_labels_on_scylla_node
 
     @property
@@ -570,8 +582,11 @@ class LocalKindCluster(LocalMinimalClusterBase):
         })
 
         images_to_cache.extend(self.cert_manager_images)
-        if provisioner_image := self.static_local_volume_provisioner_image:
-            images_to_cache.append(provisioner_image)
+        if self.params.get("k8s_local_volume_provisioner_type") != 'static':
+            images_to_cache.append(self.dynamic_local_volume_provisioner_image)
+        else:
+            if provisioner_image := self.static_local_volume_provisioner_image:
+                images_to_cache.append(provisioner_image)
         if self.scylla_image:
             scylla_image_repo, scylla_image_tag = self.scylla_image.split(":")
             if not version_utils.SEMVER_REGEX.match(scylla_image_tag):

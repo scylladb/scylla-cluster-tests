@@ -5,6 +5,22 @@ metadata:
   labels:
     app: scylla-node-config
 spec:
+  localDiskSetup:
+    filesystems:
+      - type: xfs
+        device: /dev/md/nvmes
+    mounts:
+      - device: /dev/md/nvmes
+        mountPoint: /mnt/persistent-volumes
+        unsupportedOptions:
+        - prjquota
+    raids:
+      - type: RAID0
+        name: nvmes
+        RAID0:
+          devices:
+            modelRegex: "Amazon EC2 NVMe Instance Storage"
+            nameRegex: "/dev/nvme\\d+n\\d+$"
   placement:
     nodeSelector: {}
     # NOTE: 'affinity' will be updated in the code

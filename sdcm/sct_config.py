@@ -823,6 +823,13 @@ class SCTConfiguration(dict):
         dict(name="k8s_deploy_monitoring", env="SCT_K8S_DEPLOY_MONITORING", type=boolean,
              help=""),
 
+        dict(name="k8s_local_volume_provisioner_type", env="SCT_K8S_LOCAL_VOLUME_PROVISIONER_TYPE",
+             type=str, choices=("static", "dynamic"),
+             help="Defines the type of the K8S local volume provisioner to be deployed. "
+                  "It may be either 'static' or 'dynamic'. Details about 'dynamic': "
+                  "'dynamic': https://github.com/scylladb/k8s-local-volume-provisioner; "
+                  "'static': sdcm/k8s_configs/static-local-volume-provisioner.yaml"),
+
         dict(name="k8s_scylla_operator_docker_image",
              env="SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE", type=str,
              help="Docker image to be used for installation of scylla operator."),

@@ -156,6 +156,49 @@ spec:
           hostPath:
             path: /lib/systemd
 ---
+# NOTE: 'node-pkg-installer' is taken from here:
+# https://github.com/scylladb/scylla-operator/commit/fa09b328c9c6aabded912a98f2a7aadad74d07e4
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-pkg-installer
+  labels:
+    app: node-pkg-installer
+spec:
+  selector:
+    matchLabels:
+      app: node-pkg-installer
+  template:
+    metadata:
+      labels:
+        app: node-pkg-installer
+    spec:
+      containers:
+      # NOTE: image is built on Feb 1, 2023 -> scylla-operator:1.9.0-alpha.1
+      - image: "scylladb/scylla-operator@sha256:10e3e7dddc2de1bbd473710223a4be5e8c5ef5dc9bb1a61d81fdc398d9dcd74c"
+        imagePullPolicy: "Always"
+        name: node-pkg-installer
+        command:
+        - "/usr/sbin/chroot"
+        - "/host"
+        - "/usr/bin/bash"
+        - "-euExo"
+        - "pipefail"
+        - "-c"
+        args:
+        - |
+          yum install -y util-linux xfsprogs mdadm && \
+          sleep infinity
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /host
+          name: hostfs
+      volumes:
+      - name: hostfs
+        hostPath:
+          path: /
+---
 # Daemonset that will configure disks and networking interfaces on node.
 apiVersion: apps/v1
 kind: DaemonSet

@@ -124,6 +124,7 @@ MINIO_NAMESPACE = "minio"
 SCYLLA_CONFIG_NAME = "scylla-config"
 SCYLLA_AGENT_CONFIG_NAME = "scylla-agent-config"
 
+K8S_LOCAL_VOLUME_PROVISIONER_VERSION = "0.1.0-rc.0"  # without 'v' prefix
 # NOTE: these values are taken from the default values of the "scylla-manager" helm chart.
 #       Needs to be defined separately to be able to reuse for image caching running on local K8S
 SCYLLA_VERSION_IN_SCYLLA_MANAGER = "4.3.0"
@@ -982,6 +983,71 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                        for affinity_modifier in current_pool.affinity_modifiers],
             envsubst=False)
 
+    def install_dynamic_local_volume_provisioner(
+            self, node_pools: list[CloudK8sNodePool] | CloudK8sNodePool) -> None:
+        if self.params.get('reuse_cluster'):
+            return
+        if not isinstance(node_pools, list):
+            node_pools = [node_pools]
+
+        LOGGER.info("Install dynamic local volume provisioner")
+        config_modifiers = [affinity_modifier
+                            for current_pool in node_pools
+                            for affinity_modifier in current_pool.affinity_modifiers]
+
+        def image_modifier(obj):
+            if obj["kind"] != "DaemonSet":
+                return
+            for container_data in obj["spec"]["template"]["spec"]["containers"]:
+                if "scylladb/k8s-local-volume-provisioner" in container_data["image"]:
+                    container_data["image"] = (
+                        f"{container_data['image'].split(':')[0]}:{K8S_LOCAL_VOLUME_PROVISIONER_VERSION}")
+
+        def example_disk_modifier(obj):
+            if obj["kind"] != "DaemonSet":
+                return
+            # NOTE: add a bit more storage to cover XFS filesystem overhead.
+            disk_size_kb = int(self.params.get("k8s_scylla_disk_gi") * 1.012 * 1024**2)
+            for container_data in obj["spec"]["template"]["spec"]["containers"]:
+                if "disk-setup" not in container_data["name"]:
+                    continue
+                for i, cmd in enumerate(container_data["command"]):
+                    if 'seek=' not in cmd:
+                        continue
+                    # TODO: stop using this modifier when the code in the source repo allows
+                    #       to set custom disk size.
+                    # NOTE: set the disk size that satisfies our configured values for storage
+                    container_data["command"][i] = re.sub(
+                        r"seek=\d+", f"seek={disk_size_kb}", container_data["command"][i])
+
+        with TemporaryDirectory() as tmp_dir_name:
+            repo_dst_dir = os.path.join(tmp_dir_name, 'dynamic-local-volume-provisioner')
+
+            download_from_github(
+                repo='scylladb/k8s-local-volume-provisioner',
+                tag=f'tags/v{K8S_LOCAL_VOLUME_PROVISIONER_VERSION}',
+                dst_dir=repo_dst_dir)
+
+            self.apply_file(sct_abs_path(f"{repo_dst_dir}/example/storageclass_xfs.yaml"))
+
+            # NOTE: apply example disk setup formatted to the XFS only on local K8S setups
+            if "k8s-local" in self.params.get("cluster_backend"):
+                path_to_disk_setup_config = sct_abs_path(f"{repo_dst_dir}/example/disk-setup")
+                self.apply_file(
+                    path_to_disk_setup_config,
+                    modifiers=config_modifiers + [example_disk_modifier] + [image_modifier],
+                    envsubst=False)
+                self.kubectl("rollout status daemonset.apps/xfs-disk-setup",
+                             namespace="xfs-disk-setup")
+
+            path_to_csi_driver_config = sct_abs_path(f"{repo_dst_dir}/deploy/kubernetes")
+            self.apply_file(
+                path_to_csi_driver_config,
+                modifiers=config_modifiers + [image_modifier],
+                envsubst=False)
+            self.kubectl("rollout status daemonset.apps/local-csi-driver",
+                         namespace="local-csi-driver")
+
     @log_run_info
     def prepare_k8s_scylla_nodes(
             self, node_pools: list[CloudK8sNodePool] | CloudK8sNodePool) -> None:
@@ -1010,39 +1076,54 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                     container_data["args"][i] = container_data["args"][i].replace(
                         replacement_substr, scylla_machine_image_args)
 
-        self.apply_file(
-            self.NODE_PREPARE_FILE,
-            modifiers=[affinity_modifier
-                       for current_pool in node_pools
-                       for affinity_modifier in current_pool.affinity_modifiers
-                       ] + [scylla_machine_image_args_modifier],
-            envsubst=False)
-        self.install_static_local_volume_provisioner(node_pools=node_pools)
+        def node_config_remove_local_disk_setup(obj):
+            if obj["kind"] != "NodeConfig":
+                return
+            obj["spec"].pop("localDiskSetup", None)
+
+        def node_setup_for_dynamic_local_volume_provisioner_modifier(obj):
+            if obj["kind"] != "DaemonSet":
+                return
+            for container_data in obj["spec"]["template"]["spec"]["containers"]:
+                if container_data["name"] in ("pv-setup", "node-setup"):
+                    # NOTE: disable custom node- and pv- setups using dynamic volume provisioner
+                    container_data["command"] = ["/bin/bash", "-c", "--"]
+                    container_data["args"] = ["while true; do sleep 3600; done"]
+
+        modifiers = [affinity_modifier
+                     for current_pool in node_pools
+                     for affinity_modifier in current_pool.affinity_modifiers
+                     ] + [scylla_machine_image_args_modifier]
+        if self.params.get("k8s_local_volume_provisioner_type") != 'static':
+            modifiers.append(node_setup_for_dynamic_local_volume_provisioner_modifier)
+        self.apply_file(self.NODE_PREPARE_FILE, modifiers=modifiers, envsubst=False)
 
         # Tune performance of the Scylla nodes
-        if not self.is_performance_tuning_enabled:
-            return
-        LOGGER.info("Tune K8S nodes dedicated for Scylla")
-        self.kubectl_wait(
-            "--for condition=established crd/scyllaoperatorconfigs.scylla.scylladb.com")
-        self.kubectl_wait("--for condition=established crd/nodeconfigs.scylla.scylladb.com")
+        if self.is_performance_tuning_enabled:
+            LOGGER.info("Tune K8S nodes dedicated for Scylla")
+            self.kubectl_wait(
+                "--for condition=established crd/scyllaoperatorconfigs.scylla.scylladb.com")
+            self.kubectl_wait("--for condition=established crd/nodeconfigs.scylla.scylladb.com")
 
-        if scylla_utils_docker_image := self.params.get('k8s_scylla_utils_docker_image'):
-            self.kubectl(
-                "patch scyllaoperatorconfigs.scylla.scylladb.com cluster --type merge "
-                "-p '{\"spec\":{\"scyllaUtilsImage\":\"%s\"}}'" % scylla_utils_docker_image,
-                ignore_status=False)
+            if scylla_utils_docker_image := self.params.get('k8s_scylla_utils_docker_image'):
+                self.kubectl(
+                    "patch scyllaoperatorconfigs.scylla.scylladb.com cluster --type merge "
+                    "-p '{\"spec\":{\"scyllaUtilsImage\":\"%s\"}}'" % scylla_utils_docker_image,
+                    ignore_status=False)
 
-        self.apply_file(
-            "sdcm/k8s_configs/node-config-crd.yaml",
-            modifiers=[affinity_modifier
-                       for current_pool in node_pools
-                       for affinity_modifier in current_pool.affinity_modifiers],
-            envsubst=False)
-        # NOTE: no need to wait explicitly for the new objects readiness.
-        #       Scylla pods will get in sync automatically.
-        #       Just sleep for some time to avoid races.
-        time.sleep(5)
+            modifiers = [affinity_modifier
+                         for current_pool in node_pools
+                         for affinity_modifier in current_pool.affinity_modifiers]
+            if self.params.get("k8s_local_volume_provisioner_type") == 'static':
+                modifiers.append(node_config_remove_local_disk_setup)
+            self.apply_file(
+                "sdcm/k8s_configs/node-config-crd.yaml", modifiers=modifiers, envsubst=False)
+            time.sleep(30)
+
+        if self.params.get("k8s_local_volume_provisioner_type") == 'static':
+            self.install_static_local_volume_provisioner(node_pools=node_pools)
+        else:
+            self.install_dynamic_local_volume_provisioner(node_pools=node_pools)
 
     @log_run_info
     def deploy_ingress_controller(self, pool_name: str = None):
@@ -2146,23 +2227,29 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
     def fstrim_scylla_disks(self):
         # NOTE: to be able to run 'fstrim' command in a pod, it must have direct device mount and
         # appropriate priviledges.
-        # Both requirements are satisfied by 'static-local-volume-provisioner' pods
-        # which provide disks for scylla pods.
-        # So, we run this command not on 'scylla' pods but on 'static-local-volume-provisioner'
+        # Both requirements are satisfied by 'static-local-volume-provisioner' and
+        # 'local-csi-driver' pods which provide disks for scylla pods.
+        # So, we run this command not on 'scylla' pods but on those
         # ones on each K8S node dedicated for scylla pods.
-        podname_path_list = self.parent_cluster.k8s_cluster.kubectl(
-            "get pod -l app=static-local-volume-provisioner "
-            f"--field-selector spec.nodeName={self.node_name} "
-            "-o jsonpath='{range .items[*]}{.metadata.name} {.spec.volumes[?(@.name==\""
-            f"{self.parent_cluster.params.get('k8s_scylla_disk_class')}"
-            "\")].hostPath.path}{\"\\n\"}'",
-            namespace="default").stdout.strip().split("\n")
-        if len(podname_path_list) == 0:
-            self.log.warning(f"Could not find scylla disks path on '{self.node_name}'")
-        podname, path = podname_path_list[0].split()
+
+        if self.parent_cluster.params.get("k8s_local_volume_provisioner_type") == 'static':
+            pods_selector = "app=static-local-volume-provisioner"
+            scylla_disk_path = "/mnt/raid-disks/disk0/"
+            namespace = "default"
+        else:
+            pods_selector = "app.kubernetes.io/instance=local-csi-driver"
+            scylla_disk_path = "/mnt/persistent-volumes"
+            namespace = "local-csi-driver"
+        podnames = self.parent_cluster.k8s_cluster.kubectl(
+            f"get pod -l {pods_selector} --field-selector spec.nodeName={self.node_name} "
+            "-o jsonpath='{range .items[*]}{.metadata.name}'",
+            namespace=namespace).stdout.strip().split("\n")
+        assert podnames, (
+            f"Failed to find pods using '{pods_selector}' selector on '{self.node_name}' node "
+            f"in '{namespace}' namespace. Didn't run the 'fstrim' command")
         self.parent_cluster.k8s_cluster.kubectl(
-            f"exec -ti {podname} -- sh -c 'fstrim -v {path}'",
-            namespace="default")
+            f"exec -ti {podnames[0]} -- sh -c 'fstrim -v {scylla_disk_path}'",
+            namespace=namespace)
 
 
 class LoaderPodContainer(BasePodContainer):
