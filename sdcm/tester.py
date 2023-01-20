@@ -1566,9 +1566,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.deploy_node_pool(
             eks.EksNodePool(
                 name=self.k8s_cluster.AUXILIARY_POOL_NAME,
+                # NOTE: It should have at least 5 vCPU to be able to hold all the pods
                 num_nodes=self.params.get('k8s_n_auxiliary_nodes'),
                 instance_type="t3.large",
-                # It should have at least 3 vCPU to be able to hold all the pods
                 disk_size=40,
                 role_arn=self.k8s_cluster.nodegroup_role_arn,
                 k8s_cluster=self.k8s_cluster),

@@ -43,7 +43,7 @@ n_monitor_nodes: 1
 n_loaders: 1
 n_db_nodes: 4
 k8s_n_scylla_pods_per_cluster: 3
-k8s_n_auxiliary_nodes: 2
+k8s_n_auxiliary_nodes: 3
 
 # TODO: add '--abort-on-seastar-bad-alloc' arg to the 'append_scylla_args' option when
 #       following operator bug gets fixed: https://github.com/scylladb/scylla-operator/issues/991
