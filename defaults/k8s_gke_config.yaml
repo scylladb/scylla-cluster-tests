@@ -27,6 +27,7 @@ k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-c
 k8s_scylla_operator_chart_version: 'latest'
 k8s_cert_manager_version: '1.8.0'
 k8s_deploy_monitoring: false
+k8s_enable_performance_tuning: false
 
 # NOTE: GKE requires 'k8s_scylla_utils_docker_image' be defined to enterprise Scylla version 2021+
 #       to have more performant configuration of disks.

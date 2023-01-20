@@ -21,9 +21,9 @@ scylla_mgmt_agent_version: '3.0.0'
 k8s_cert_manager_version: '1.8.0'
 
 k8s_deploy_monitoring: false
+k8s_enable_performance_tuning: true
 
 k8s_loader_cluster_name: 'sct-loaders'
-
 k8s_scylla_cluster_name: 'sct-cluster'
 k8s_scylla_datacenter: 'us-east1-b'
 k8s_scylla_disk_gi: 500
