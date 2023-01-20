@@ -361,6 +361,8 @@ class KubernetesPodWatcher(KubernetesRunner):
         params = self.context.config.k8s_kluster.params
         if is_scylla_bench_command(command):
             return params.get('stress_image.scylla-bench')
+        if loader_image := params.get('stress_image.cassandra-stress'):
+            return loader_image
         return f"{params.get('docker_image')}:{params.get('scylla_version')}"
 
     def _get_pod_status(self) -> dict:
