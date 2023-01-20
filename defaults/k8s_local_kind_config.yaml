@@ -21,6 +21,7 @@ k8s_scylla_cluster_name: 'sct-cluster'
 k8s_scylla_disk_gi: 5
 k8s_scylla_disk_class: 'local-raid-disks'
 k8s_minio_storage_size: '20Gi'
+k8s_enable_performance_tuning: false
 
 # NOTE: if we do not specify 'k8s_n_loader_pods_per_cluster' then value of the 'n_loaders' is used
 n_loaders: 1
