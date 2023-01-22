@@ -1031,7 +1031,7 @@ class SCTConfiguration(dict):
 
         dict(name="new_version", env="SCT_NEW_VERSION", type=str,
              help="Assign new upgrade version, use it to upgrade to specific minor release. eg: 3.0.1"),
-        dict(name="target_upgrade_version", env="SCT_TAGRET_UPGRADE_VERSION", type=str,
+        dict(name="target_upgrade_version", env="SCT_TARGET_UPGRADE_VERSION", type=str,
              help="Assign target upgrade version, use for decide if the truncate entries test should be run. "
                   "This test should be performed in case the target upgrade version >= 3.1"),
         dict(name="upgrade_node_packages", env="SCT_UPGRADE_NODE_PACKAGES", type=str,
