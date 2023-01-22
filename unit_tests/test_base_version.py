@@ -27,53 +27,60 @@ def general_test(scylla_repo='', linux_distro=''):
 
 
 class TestBaseVersion(unittest.TestCase):
-    url_base = 'http://downloads.scylladb.com/'
+    download_url_base = 'http://downloads.scylladb.com'
+    url_base = f'{download_url_base}/unstable/scylla'
 
     def test_master(self):
-        scylla_repo = self.url_base + 'unstable/scylla/master/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
+        scylla_repo = self.url_base + '/master/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
         self.assertEqual(version_list, ['5.2'])
 
     def test_4_5_with_centos8(self):
-        scylla_repo = self.url_base + 'unstable/scylla/branch-4.5/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
+        scylla_repo = self.url_base + '/branch-4.5/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos-8'
         version_list = general_test(scylla_repo, linux_distro)
         self.assertEqual(version_list, ['4.4', '4.5'])
 
-    def test_4_1_with_centos8(self):
-        scylla_repo = self.url_base + 'unstable/scylla/branch-4.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
-        linux_distro = 'centos-8'
-        version_list = general_test(scylla_repo, linux_distro)
-        self.assertEqual(version_list, ['4.1'])
-
     def test_4_5(self):
-        scylla_repo = self.url_base + 'unstable/scylla/4.5/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
+        scylla_repo = self.url_base + '/4.5/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
         self.assertEqual(version_list, ['4.4', '4.5'])
 
+    def test_5_0(self):
+        scylla_repo = self.url_base + '/branch-5.0/rpm/centos/2023-01-21T02:51:18Z/scylla.repo'
+        linux_distro = 'centos-8'
+        version_list = general_test(scylla_repo, linux_distro)
+        self.assertEqual(version_list, ['4.6', '5.0'])
+
+    def test_5_1(self):
+        scylla_repo = self.url_base + '/branch-5.1/deb/unified/2023-01-21T02:35:18Z/scylladb-5.1/scylla.list'
+        linux_distro = 'ubuntu-focal'
+        version_list = general_test(scylla_repo, linux_distro)
+        self.assertEqual(version_list, ['5.0', '5.1'])
+
     def test_enterprise(self):
-        scylla_repo = self.url_base + 'unstable/scylla-enterprise/enterprise/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
+        scylla_repo = self.url_base + '-enterprise/enterprise/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
         self.assertEqual(version_list, ['2022.2'])
 
     def test_2021_1(self):
-        scylla_repo = self.url_base + 'unstable/scylla-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
+        scylla_repo = self.url_base + '-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
         self.assertEqual(version_list, ['4.3', '2020.1', '2021.1'])
 
     def test_2021_1_with_centos8(self):
-        scylla_repo = self.url_base + 'unstable/scylla-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
+        scylla_repo = self.url_base + '-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos-8'
         version_list = general_test(scylla_repo, linux_distro)
         self.assertEqual(version_list, ['4.3', '2021.1'])
 
     def test_2022_1_with_centos8(self):
         scylla_repo = self.url_base + \
-            'unstable/scylla-enterprise/enterprise-2022.1/deb/unified/2022-06-03T00:22:55Z/scylladb-2022.1/scylla.list'
+            '-enterprise/enterprise-2022.1/deb/unified/2022-06-03T00:22:55Z/scylladb-2022.1/scylla.list'
         linux_distro = 'centos-8'
         version_list = general_test(scylla_repo, linux_distro)
         self.assertEqual(['5.0', '2021.1', '2022.1'], version_list)
