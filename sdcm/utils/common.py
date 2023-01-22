@@ -1466,7 +1466,7 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
     get the mapping from version prefixes to rpm .repo or deb .list files locations
 
     :param dist_type: which distro to look up centos/ubuntu/debian
-    :param dist_version: famaily name of the distro version
+    :param dist_version: family name of the distro version
 
     :return: a mapping of versions prefixes to repos
     :rtype: dict
