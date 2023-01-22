@@ -1331,8 +1331,12 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
             filename = os.path.basename(repo_file['Key'])
 
             # only if path look like 'deb/debian/scylla-3.0-jessie.list', we deem it formal one
-            if filename.startswith('scylla-') and filename.endswith('-{}.list'.format(dist_version)):
-                version_prefix = filename.replace('-{}.list'.format(dist_version), '').split('-')[-1]
+            repo_regex = re.compile(r'\d+\.\d\.list')
+            if filename.startswith('scylla-') and (
+                    filename.endswith('-{}.list'.format(dist_version)) or
+                    repo_regex.search(filename)):
+                version_prefix = \
+                    filename.replace('-{}.list'.format(dist_version), '').replace('.list', '').split('-')[-1]
                 _S3_SCYLLA_REPOS_CACHE[(
                     dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(
                     bucket=bucket,
