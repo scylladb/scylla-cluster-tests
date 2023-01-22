@@ -517,7 +517,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         well, upgrade all nodes to new version in the end.
         """
         # In case the target version >= 3.1 we need to perform test for truncate entries
-        target_upgrade_version = self.params.get('target_upgrade_version')
+        target_upgrade_version = self.params.get('target_upgrade_version').replace('~', '-')
         self.truncate_entries_flag = False
         if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1') and \
                 not is_enterprise(target_upgrade_version):
