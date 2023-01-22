@@ -1036,17 +1036,22 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 memory_limit = convert_memory_units_to_k8s_value(memory_limit)
                 cpu_request = convert_cpu_units_to_k8s_value(cpu_request)
                 memory_request = convert_memory_units_to_k8s_value(memory_request)
+                haproxy_maxconn = 70000
             else:
-                cpu_limit = '100m'
-                memory_limit = '50M'
+                # TODO: measure these values in performance testing and update if needed.
+                cpu_limit = '400m'
+                memory_limit = '200M'
                 cpu_request = '100m'
                 memory_request = '50M'
+                # that's the default, and trigger haproxy auto calculation of it.
+                haproxy_maxconn = 0
 
             environ = {
                 "POD_CPU_LIMIT": cpu_limit,
                 "POD_MEMORY_LIMIT": memory_limit,
                 "POD_CPU_REQUEST": cpu_request,
                 "POD_MEMORY_REQUEST": memory_request,
+                "HAPROXY_MAXCONN": haproxy_maxconn,
                 "TAGS": comma_separated_tags,
             }
             self.apply_file(
