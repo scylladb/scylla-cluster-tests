@@ -1,0 +1,27 @@
+test_duration: 1440
+
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=550100150 -schema 'replication(factor=3)' -mode cql3 native connectionsPerHost=64 -rate threads=500 throttle=45000/s -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..550100150",
+                    "cassandra-stress write cl=QUORUM n=550100150 -schema 'replication(factor=3)' -mode cql3 native connectionsPerHost=64 -rate threads=500 throttle=45000/s -col 'size=FIXED(200) n=FIXED(5)' -pop seq=550100151..1100200300",
+                    ]
+stress_read_cmd: ["cassandra-stress read cl=QUORUM n=550100150 -schema 'replication(factor=3)' -mode cql3 native connectionsPerHost=64 -rate threads=500 throttle=45000/s -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..550100150",
+                  "cassandra-stress read cl=QUORUM n=550100150 -schema 'replication(factor=3)' -mode cql3 native connectionsPerHost=64 -rate threads=500 throttle=45000/s -col 'size=FIXED(200) n=FIXED(5)' -pop seq=550100151..1100200300",
+                  ]
+round_robin: true
+data_volume_disk_size: 1500
+
+instance_type_db: 'i3.2xlarge'
+instance_type_loader: 'c5.large'
+
+region_name: 'us-east-1 us-west-2'
+n_db_nodes: '2 1'
+n_loaders: 2
+n_monitor_nodes: 1
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"
+
+user_prefix: manager-regression
+space_node_threshold: 6442
+
+aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
