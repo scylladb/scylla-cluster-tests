@@ -102,6 +102,23 @@ class AwsVpcPeering:
             if 'InvalidPermission.Duplicate' not in str(ex):
                 raise
 
+    @staticmethod
+    def open_security_group_to_local(origin_region):
+        try:
+            origin_region.sct_security_group.authorize_ingress(
+                IpPermissions=[
+                    {
+                        "IpProtocol": "-1",
+                        "IpRanges": [{'CidrIp': str(origin_region.vpc_ipv4_cidr),
+                                      'Description': f'Local for {origin_region.region_name}'}],
+                        "Ipv6Ranges": [{'CidrIpv6': str(origin_region.vpc_ipv6_cidr),
+                                        'Description': f'Loca; for {origin_region.region_name}'}]
+                    },
+                ])
+        except ClientError as ex:
+            if 'InvalidPermission.Duplicate' not in str(ex):
+                raise
+
     def configure(self):
         regions_pair: list[tuple[AwsRegion, AwsRegion]] = list(itertools.combinations(self.regions, 2))
         for origin_region, target_region in regions_pair:
@@ -118,3 +135,4 @@ class AwsVpcPeering:
             LOG.info("Configuring security groups")
             self.open_security_group(origin_region, target_region)
             self.open_security_group(origin_region=target_region, target_region=origin_region)
+            self.open_security_group_to_local(origin_region)
