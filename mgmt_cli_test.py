@@ -39,6 +39,7 @@ from sdcm.tester import ClusterTester
 from sdcm.cluster import TestConfig
 from sdcm.nemesis import MgmtRepair
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
+from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -237,53 +238,6 @@ class BackupFunctionsMixIn:
     def _get_keyspace_name(ks_number, keyspace_pref='keyspace'):
         return '{}{}'.format(keyspace_pref, ks_number)
 
-    def _run_all_stress_cmds(self, stress_queue, params):
-        stress_cmds = params['stress_cmd']
-        if not isinstance(stress_cmds, list):
-            stress_cmds = [stress_cmds]
-        # In some cases we want the same stress_cmd to run several times (can be used with round_robin or not).
-        stress_multiplier = self.params.get('stress_multiplier')
-        if stress_multiplier > 1:
-            stress_cmds *= stress_multiplier
-
-        for stress_cmd in stress_cmds:
-            params.update({'stress_cmd': stress_cmd})
-            self._parse_stress_cmd(stress_cmd, params)
-
-            # Run all stress commands
-            self.log.debug('stress cmd: {}'.format(stress_cmd))
-            if stress_cmd.startswith('scylla-bench'):
-                stress_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd,
-                                                                 stats_aggregate_cmds=False,
-                                                                 round_robin=self.params.get('round_robin')))
-            else:
-                stress_queue.append(self.run_stress_thread(**params))
-
-    def run_prepare_write_cmd(self):
-        # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
-        # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
-        keyspace_num = self.params.get('keyspace_num')
-        write_queue = []
-
-        # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
-        # the loaders (round_robin).
-        if keyspace_num > 1 and self.params.get('round_robin'):
-            self.log.debug("Using round_robin for multiple Keyspaces...")
-            for i in range(1, keyspace_num + 1):
-                keyspace_name = self._get_keyspace_name(i)
-                self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                               'keyspace_name': keyspace_name,
-                                                               'round_robin': True})
-        # Not using round_robin and all keyspaces will run on all loaders
-        else:
-            self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                           'keyspace_num': keyspace_num,
-                                                           'round_robin': self.params.get('round_robin')})
-
-        for stress in write_queue:
-            self.verify_stress_thread(cs_thread_pool=stress)
-
     def generate_background_read_load(self):
         self.log.info('Starting c-s read')
         stress_cmd = self.params.get('stress_read_cmd')
@@ -318,7 +272,7 @@ class FilesNotCorrupted(Exception):
 
 
 # pylint: disable=too-many-public-methods
-class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
+class MgmtCliTest(BackupFunctionsMixIn, LoaderUtilsMixin, ClusterTester):
     """
     Test Scylla Manager operations on Scylla cluster.
     """
