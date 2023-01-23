@@ -182,9 +182,16 @@ class BackupFunctionsMixIn:
         self.restore_backup(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
                             keyspace_and_table_list=keyspace_and_table_list)
 
+    def restore_backup_using_restore_task(self, mgr_cluster, backup_task, timeout):
+        snapshot_tag = backup_task.get_snapshot_tag()
+        restore_task = mgr_cluster.create_restore_task(only_data=True, location_list=self.locations,
+                                                       snapshot_tag=snapshot_tag)
+        restore_task.wait_and_get_final_status(step=30, timeout=timeout)
+        assert restore_task.status == TaskStatus.DONE, f"Restoration of {snapshot_tag} has failed!"
+
     # pylint: disable=too-many-arguments
     def verify_backup_success(self, mgr_cluster, backup_task, keyspace_name='keyspace1', tables_names=None,
-                              truncate=True):
+                              truncate=True, restore_type="raw_restore"):
         if tables_names is None:
             tables_names = ['standard1']
         per_keyspace_tables_dict = {keyspace_name: tables_names}
@@ -192,8 +199,11 @@ class BackupFunctionsMixIn:
             for table_name in tables_names:
                 self.log.info(f'running truncate on {keyspace_name}.{table_name}')
                 self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {keyspace_name}.{table_name}')
-        self.restore_backup_from_backup_task(mgr_cluster=mgr_cluster, backup_task=backup_task,
-                                             keyspace_and_table_list=per_keyspace_tables_dict)
+        if restore_type == "raw_restore":
+            self.restore_backup_from_backup_task(mgr_cluster=mgr_cluster, backup_task=backup_task,
+                                                 keyspace_and_table_list=per_keyspace_tables_dict)
+        elif restore_type == "restore_task":
+            self.restore_backup_using_restore_task(mgr_cluster=mgr_cluster, backup_task=backup_task, timeout=14000)
 
     def _generate_load(self, keyspace_name_to_replace=None):
         self.log.info('Starting c-s write workload')
@@ -477,6 +487,11 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         return email_data
 
+    def test_backup_and_restore_with_task(self):
+        self.run_prepare_write_cmd()
+        with self.subTest('Basic Backup Test'):
+            self.test_basic_backup(restore_type="restore_task")
+
     def test_backup_feature(self):
         self.generate_load_and_wait_for_results()
         with self.subTest('Backup Multiple KS\' and Tables'):
@@ -506,7 +521,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                     # self.populate_data_parallel()
         return table_name
 
-    def test_basic_backup(self):
+    def test_basic_backup(self, restore_type="raw_restore"):
         self.log.info('starting test_basic_backup')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
@@ -516,7 +531,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
-        self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
+        self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, restore_type=restore_type)
 
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_basic_backup')
