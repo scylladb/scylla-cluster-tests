@@ -441,10 +441,33 @@ class MgmtCliTest(BackupFunctionsMixIn, LoaderUtilsMixin, ClusterTester):
 
         return email_data
 
+    def run_read_stress(self):
+        stress_queue = []
+        stress_cmd = self.params.get('stress_read_cmd')
+        keyspace_num = self.params.get('keyspace_num')
+        if stress_cmd:
+            # Stress: Same as in prepare_write - allow the load to be spread across all loaders when using multi ks
+            if keyspace_num > 1 and self.params.get('round_robin'):
+                self.log.debug("Using round_robin for multiple Keyspaces...")
+                for i in range(1, keyspace_num + 1):
+                    keyspace_name = self._get_keyspace_name(i)
+                    params = {'keyspace_name': keyspace_name, 'round_robin': True, 'stress_cmd': stress_cmd}
+
+                    self._run_all_stress_cmds(stress_queue, params)
+
+            # The old method when we run all stress_cmds for all keyspace on the same loader, or in round-robin if defined in test yaml
+            else:
+                params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd,
+                          'round_robin': self.params.get('round_robin')}
+                self._run_all_stress_cmds(stress_queue, params)
+        for stress in stress_queue:
+            self.verify_stress_thread(cs_thread_pool=stress)
+
     def test_backup_and_restore_with_task(self):
         self.run_prepare_write_cmd()
         with self.subTest('Basic Backup Test'):
             self.test_basic_backup(restore_type="restore_task")
+        self.run_read_stress()
 
     def test_backup_feature(self):
         self.generate_load_and_wait_for_results()
