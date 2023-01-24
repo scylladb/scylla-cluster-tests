@@ -50,7 +50,6 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_utils import get_gce_service
 from sdcm.utils.azure_utils import AzureService, list_instances_azure
 from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
-from sdcm.utils.get_username import get_username
 from sdcm.test_config import TestConfig
 
 if TYPE_CHECKING:
@@ -369,7 +368,7 @@ class SctRunner(ABC):
     def _get_base_image(self, image: Optional[Any] = None) -> Any:
         ...
 
-    def create_instance(self, test_id: str, test_duration: int,  # pylint: disable=too-many-arguments
+    def create_instance(self, test_id: str, test_name: str, test_duration: int,  # pylint: disable=too-many-arguments
                         instance_type: str = "",  root_disk_size_gb: int = 0,
                         restore_monitor: bool = False, restored_test_id: str = "") -> Any:
         LOGGER.info("Creating SCT Runner instance...")
@@ -383,6 +382,7 @@ class SctRunner(ABC):
         tags = TestConfig.common_tags()
         tags.update({
             "TestId": test_id,
+            "TestName": test_name,
             "NodeType": self.NODE_TYPE,
             "keep": str(ceil(test_duration / 60) + 6),  # keep SCT Runner for 6h more than test_duration
             "keep_action": "terminate",
