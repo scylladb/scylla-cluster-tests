@@ -51,6 +51,7 @@ from sdcm.utils.gce_utils import get_gce_service
 from sdcm.utils.azure_utils import AzureService, list_instances_azure
 from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
 from sdcm.utils.get_username import get_username
+from sdcm.test_config import TestConfig
 
 if TYPE_CHECKING:
     # pylint: disable=ungrouped-imports
@@ -379,14 +380,14 @@ class SctRunner(ABC):
                          self.region_name, self.CLOUD_PROVIDER, self.region_name)
             return None
 
-        tags = {
+        tags = TestConfig.common_tags()
+        tags.update({
             "TestId": test_id,
             "NodeType": self.NODE_TYPE,
-            "RunByUser": get_username(),
             "keep": str(ceil(test_duration / 60) + 6),  # keep SCT Runner for 6h more than test_duration
             "keep_action": "terminate",
             "UserName": self.LOGIN_USER,
-        }
+        })
         if restore_monitor and restored_test_id:
             tags.update({"RestoredTestId": restored_test_id})
 
