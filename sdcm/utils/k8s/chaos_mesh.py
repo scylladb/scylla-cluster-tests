@@ -19,6 +19,7 @@ from enum import Enum
 from json import JSONDecodeError
 from tempfile import NamedTemporaryFile
 import time
+from typing import Literal
 
 import yaml
 from botocore.utils import deep_merge
@@ -263,3 +264,71 @@ class MemoryStressExperiment(ChaosMeshExperiment):
         })
         if time_to_reach:
             self._experiment["spec"]["stressors"]["memory"]["options"] = ["-time", time_to_reach]
+
+
+class DiskError(Enum):
+    """
+    Common disk error numbers, for more see:
+    https://raw.githubusercontent.com/torvalds/linux/master/include/uapi/asm-generic/errno-base.h
+    """
+    OPERATION_NOT_PERMITTED = 1
+    NO_SUCH_FILE_OR_DIRECTORY = 2
+    IO_ERROR = 5
+    NO_DEVICE_OR_ADDRESS = 6
+    OUT_OF_MEMORY = 12
+    DEVICE_OR_RESOURCE_BUSY = 16
+    FILE_EXISTS = 17
+    NOT_A_DIRECTORY = 20
+    INVALID_ARGUMENT = 22
+    TOO_MANY_OPEN_FILES = 24
+    NO_SPACE_LEFT_ON_DEVICE = 28
+
+
+# for more disk methods refer to https://docs.rs/fuser/0.7.0/fuser/trait.Filesystem.html
+DiskMethod = Literal[
+    "lookup", "forget", "getattr", "setattr", "readlink", "mknod", "mkdir", "unlink", "rmdir", "symlink", "rename",
+    "link", "open", "read", "write", "flush", "release", "fsync", "opendir", "readdir", "releasedir", "fsyncdir",
+    "statfs", "setxattr",
+    "getxattr", "listxattr", "removexatr", "access", "create", "getlk", "setlk", "bmap"
+]
+
+
+class IOFaultChaosExperiment(ChaosMeshExperiment):
+    """
+    This experiment uses IOChaos: https://chaos-mesh.org/docs/simulate-io-chaos-on-kubernetes/
+    To simulate disk fault.
+    """
+    CHAOS_KIND = "IOChaos"
+
+    # pylint: disable=too-many-arguments
+    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, error: DiskError, error_probability: int,
+                 methods: list[DiskMethod], volume_path: str, path: str | None = None):
+        """Induces disk fault (programatically) using IOChaos: https://chaos-mesh.org/docs/simulate-io-chaos-on-kubernetes/
+
+            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+            :param str duration: how long fault will be applied. str type in k8s notation. E.g. 10s, 5m
+            :param DiskError error: disk returned error number
+            :param int error_probability: Probability of failure per operation, in %
+            :param list[DiskMethod] methods: Type of the file system call that requires injecting fault
+            :param str volume_path: The mount point of volume in the target container. Must be the root directory of the mount.
+            :param str path: The valid range of fault injections, either a wildcard or a single file. By Default all files.
+             E.g. /var/lib/scylla/*/
+        """
+        # timeout based on duration + 30 seconds margin
+        timeout = time_period_str_to_seconds(duration) + 30
+        super().__init__(
+            pod=pod, name=f"io-fault-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
+        deep_merge(self._experiment, {
+            "spec": {
+                "action": "fault",
+                "containerNames": ["scylla"],
+                "duration": duration,
+                "volumePath": volume_path,
+                "errno": error.value,
+                "percent": error_probability
+            }
+        })
+        if path:
+            self._experiment["spec"]["path"] = path
+        if methods:
+            self._experiment["spec"]["methods"] = methods

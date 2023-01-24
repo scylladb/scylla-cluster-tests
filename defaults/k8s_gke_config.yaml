@@ -38,6 +38,7 @@ k8s_scylla_rack: 'us-east1'
 k8s_scylla_cluster_name: 'sct-cluster'
 k8s_scylla_disk_gi: 500
 k8s_scylla_disk_class: 'local-raid-disks'
+k8s_use_chaos_mesh: true
 
 k8s_minio_storage_size: '60Gi'
 k8s_loader_cluster_name: 'sct-loaders'
