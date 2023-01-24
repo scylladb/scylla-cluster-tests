@@ -57,7 +57,6 @@ from sdcm.cluster import (
     NodeStayInClusterAfterDecommission,
 )
 from sdcm.cluster_k8s import PodCluster
-from sdcm.cluster_k8s.mini_k8s import LocalKindCluster
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
@@ -95,7 +94,7 @@ from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units, convert_memory_value_from_k8s_to_units,
 )
-from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment
+from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperiment, DiskError
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
@@ -1528,17 +1527,26 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             result = self.target_node.run_cqlsh(query_verify)
             assert '(1 rows)' in result.stdout, f'The key {key} is not loaded by `nodetool refresh`'
 
-    def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
-        if isinstance(self.cluster, LocalKindCluster):
-            # Kind cluster has shared file system, it is shared not only among cluster nodes, but
-            # also among kubernetes services which make kubernetes inoperational once enospc is reached.
-            # Moreover, it will cause host system's /var hosting disk go out of free space too
-            # which may cause unpredictable failures.
-            raise UnsupportedNemesis('disrupt_nodetool_enospc is not supported on local K8S clusters')
-        if self.cluster.params.get('cluster_backend') == 'k8s-gke':
+    def _k8s_fake_enospc_error(self, node):
+        """Fakes ENOSPC error for scylla container (for /var/lib/scylla dir) using chaos-mesh without filling up disk."""
+        if not self._is_chaos_mesh_initialized():
             raise UnsupportedNemesis(
-                'disrupt_nodetool_enospc is skipped due to this: '
-                'https://github.com/scylladb/scylla-cluster-tests/issues/5671')
+                "Chaos Mesh is not installed. Set 'k8s_use_chaos_mesh' config option to 'true'")
+        no_space_errors_in_log = node.follow_system_log(patterns=['No space left on device'])
+        try:
+            experiment = IOFaultChaosExperiment(node, duration="300s", error=DiskError.NO_SPACE_LEFT_ON_DEVICE, error_probability=100,
+                                                methods=["write", "flush"],
+                                                volume_path="/var/lib/scylla")
+            experiment.start()
+            experiment.wait_until_finished()
+            # wait some time before restarting to prevent supervisorctl error.
+            time.sleep(30)
+        finally:
+            no_space_errors = list(no_space_errors_in_log)
+            node.restart_scylla_server(verify_up_after=True)
+            assert no_space_errors, "There are no 'No space left on device' errors in db log during enospc disruption."
+
+    def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
 
         if all_nodes:
             nodes = self.cluster.nodes
@@ -1548,16 +1556,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         for node in nodes:
             with ignore_no_space_errors(node=node):
+                if self._is_it_on_kubernetes():
+                    self._k8s_fake_enospc_error(node)
+                else:
+                    result = node.remoter.run('cat /proc/mounts')
+                    if '/var/lib/scylla' not in result.stdout:
+                        self.log.error("Scylla doesn't use an individual storage, skip enospc test")
+                        continue
 
-                result = node.remoter.run('cat /proc/mounts')
-                if '/var/lib/scylla' not in result.stdout:
-                    self.log.error("Scylla doesn't use an individual storage, skip enospc test")
-                    continue
-
-                try:
-                    reach_enospc_on_node(target_node=node)
-                finally:
-                    clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
+                    try:
+                        reach_enospc_on_node(target_node=node)
+                    finally:
+                        clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
 
     def disrupt_remove_service_level_while_load(self):
         if not getattr(self.tester, "roles", None):

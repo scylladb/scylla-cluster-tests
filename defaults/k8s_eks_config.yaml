@@ -34,6 +34,7 @@ k8s_scylla_disk_class: 'local-raid-disks'
 k8s_scylla_operator_docker_image: ''
 k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'
 k8s_scylla_operator_chart_version: 'latest'
+k8s_use_chaos_mesh: true
 
 k8s_scylla_rack: 'us-east1'
 k8s_minio_storage_size: '60Gi'
