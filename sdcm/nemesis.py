@@ -3259,7 +3259,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return new_node
 
         trigger = partial(
-            self.target_node.run_nodetool, sub_cmd="decommission", warning_event_on_exception=(Exception,), retry=0,
+            self.target_node.run_nodetool, sub_cmd="decommission", timeout=180, warning_event_on_exception=(Exception,),
+            retry=0,
         )
 
         log_follower = self.target_node.follow_system_log(patterns=["DECOMMISSIONING: unbootstrap starts"])
@@ -3271,11 +3272,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
             delay=0
         )
+
         ParallelObject(objects=[trigger, watcher], timeout=1200).call_objects()
         if new_node := decommission_post_action():
-            new_node.run_nodetool("rebuild")
+            new_node.run_nodetool("rebuild", timeout=300, retry=3)
         else:
-            self.target_node.run_nodetool("rebuild")
+            self.target_node.run_nodetool(sub_cmd="rebuild", timeout=300, retry=3)
 
     def start_and_interrupt_repair_streaming(self):
         """
