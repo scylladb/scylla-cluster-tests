@@ -1,0 +1,12 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: '{{ backend }}',
+    region: '{{ region }}',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: 'test-cases/nemesis/{{ nemesis_longevity_config }}'
+
+)
