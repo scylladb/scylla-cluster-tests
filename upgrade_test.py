@@ -22,7 +22,6 @@ import time
 import re
 from functools import wraps, cache
 from typing import List
-from pkg_resources import parse_version
 
 from argus.db.db_types import PackageVersion
 
@@ -36,6 +35,7 @@ from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused, \
     ignore_abort_requested_errors, decorate_with_context
 from sdcm.utils import loader_utils
+from sdcm.utils.version_utils import parse_scylla_version
 from test_lib.sla import create_sla_auth
 
 
@@ -46,7 +46,7 @@ def truncate_entries(func):
         node = args[0]
         if self.truncate_entries_flag:
             base_version = self.params.get('scylla_version')
-            system_truncated = bool(parse_version(base_version) >= parse_version('3.1')
+            system_truncated = bool(parse_scylla_version(base_version) >= parse_scylla_version('3.1')
                                     and not is_enterprise(base_version))
             with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
                 self.cql_truncate_simple_tables(session=session, rows=self.insert_rows)
@@ -56,7 +56,7 @@ def truncate_entries(func):
 
         result = node.remoter.run('scylla --version')
         new_version = result.stdout
-        if new_version and parse_version(new_version) >= parse_version('3.1'):
+        if new_version and parse_scylla_version(new_version) >= parse_scylla_version('3.1'):
             # re-new connection
             with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
                 self.validate_truncated_entries_for_table(session=session, system_truncated=True)
@@ -519,7 +519,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # In case the target version >= 3.1 we need to perform test for truncate entries
         target_upgrade_version = self.params.get('target_upgrade_version').replace('~', '-')
         self.truncate_entries_flag = False
-        if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1') and \
+        if target_upgrade_version and parse_scylla_version(target_upgrade_version) >= parse_scylla_version('3.1') and \
                 not is_enterprise(target_upgrade_version):
             self.truncate_entries_flag = True
 
@@ -889,7 +889,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.truncate_entries_flag = False  # not perform truncate entries test
         InfoEvent(message='Step1 - Populate DB with many types of tables and data').publish()
         target_upgrade_version = self.params.get('new_version')
-        if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1') and \
+        if target_upgrade_version and parse_scylla_version(target_upgrade_version) >= parse_scylla_version('3.1') and \
                 not is_enterprise(target_upgrade_version):
             self.truncate_entries_flag = True
         self.prepare_keyspaces_and_tables()

@@ -21,6 +21,7 @@ from collections import namedtuple
 from urllib.parse import urlparse
 from functools import lru_cache, wraps
 from itertools import count
+from pkg_resources import parse_version
 
 import yaml
 import boto3
@@ -115,6 +116,11 @@ FILE_REGEX_DICT = {
 # The variable "type" indices the type of URL (Debian or Yum)
 # The variable "urls" contains all urls using the Scylla pattern
 RepositoryDetails = namedtuple("RepositoryDetails", ["type", "urls"])
+
+
+def parse_scylla_version(version_to_parse: str) -> version.Version:
+    version_format = re.compile(r'(\d+\.\d)|(\.\d+)')
+    return parse_version(version_format.search(version_to_parse)[0])
 
 
 @lru_cache(maxsize=1024)
