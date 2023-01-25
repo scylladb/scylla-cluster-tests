@@ -78,6 +78,7 @@ from sdcm.utils.common import (
     list_parallel_timelines_report_urls,
     search_test_id_in_latest
 )
+from sdcm.utils.nemesis import NemesisJobGenerator
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login
@@ -1324,6 +1325,16 @@ def create_operator_test_release_jobs(branch, username, password, sct_branch, sc
 
     path = "/".join([str(server.base_sct_dir), "jenkins-pipelines/operator"])
     walk_dirs(path)
+
+
+@cli.command("create-nemesis-pipelines")
+@click.option("--base-job", default=None, type=str)
+@click.option("--backend", default="aws", type=str)
+def create_nemesis_pipelines(base_job: str, backend: str):
+    gen = NemesisJobGenerator(base_job=base_job, backend=backend)
+
+    gen.create_test_cases_from_template()
+    gen.create_job_files_from_template()
 
 
 @cli.command('create-test-release-jobs', help="Create pipeline jobs for a new branch")
