@@ -3555,7 +3555,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _k8s_disrupt_memory_stress(self):
         """Uses chaos-mesh experiment based on https://github.com/chaos-mesh/memStress"""
-        if not self._is_chaos_mesh_initialized:
+        if not self._is_chaos_mesh_initialized():
             raise UnsupportedNemesis(
                 "Chaos Mesh is not installed. Set 'k8s_use_chaos_mesh' config option to 'true'")
         memory_limit = self.cluster.k8s_cluster.calculated_memory_limit
