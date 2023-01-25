@@ -57,7 +57,7 @@ use_cloud_manager: false
 cloud_prom_bearer_token: ''
 
 backtrace_decoding: true
-print_kernel_callstack: false
+print_kernel_callstack: true
 
 update_db_packages: ''
 
