@@ -1696,8 +1696,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.sudo(f"curl -o {repo_path} -L {scylla_repo}")
 
         # Prevent issue https://github.com/scylladb/scylla/issues/9683
-        if self.distro.is_oel8:
-            self.remoter.sudo(f"chmod 644 {repo_path}")
+        self.remoter.sudo(f"chmod 644 {repo_path}")
 
         if self.distro.is_debian_like:
             self.remoter.sudo("mkdir -p /etc/apt/keyrings")
