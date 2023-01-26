@@ -23,6 +23,7 @@ import time
 import yaml
 from botocore.utils import deep_merge
 
+from sdcm import sct_abs_path
 from sdcm.utils.common import time_period_str_to_seconds
 from sdcm.utils.k8s import HelmValues, get_helm_pool_affinity_values
 
@@ -56,6 +57,7 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
         'dashboard': {"create": False},
         'dnsServer': {"create": True}
     }
+    ADDITIONAL_CONFIGS = sct_abs_path("sdcm/k8s_configs/chaos-mesh/gke-auth-workaround.yaml")
 
     def __init__(self, k8s_cluster: "sdcm.cluster_k8s.KubernetesCluster"):
         self._k8s_cluster = k8s_cluster
@@ -96,6 +98,10 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
         )
         LOGGER.info("chaos-mesh installed successfully on %s k8s cluster.", self._k8s_cluster.k8s_scylla_cluster_name)
         self.initialized = True
+
+        # NOTE: following is needed to pass through the GKE's admission controller
+        if self.ADDITIONAL_CONFIGS:
+            self._k8s_cluster.apply_file(self.ADDITIONAL_CONFIGS)
 
 
 class ExperimentStatus(Enum):
