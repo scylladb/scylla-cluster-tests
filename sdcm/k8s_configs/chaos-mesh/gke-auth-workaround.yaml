@@ -1,0 +1,33 @@
+# NOTE: on GKE it is not enough just to install the 'chaos-mesh' helm chart
+#       Following workaround is needed to be applied:
+#       https://chaos-mesh.org/docs/faqs/#q-the-default-administrator-google-cloud-user-account-is-forbidden-to-create-chaos-experiments-how-to-fix-it
+
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: role-cluster-manager-pdmas
+rules:
+  - apiGroups: ['']
+    resources: ['pods', 'namespaces']
+    verbs: ['get', 'watch', 'list']
+  - apiGroups:
+      - chaos-mesh.org
+    resources: ['*']
+    verbs: ['get', 'list', 'watch', 'create', 'delete', 'patch', 'update']
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: cluster-manager-binding
+  namespace: chaos-mesh
+subjects:
+  - kind: Group
+    name: system:serviceaccounts
+    apiGroup: rbac.authorization.k8s.io
+  - kind: Group
+    name: system:authenticated
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: role-cluster-manager-pdmas
+  apiGroup: rbac.authorization.k8s.io
