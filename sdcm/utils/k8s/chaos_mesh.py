@@ -81,7 +81,9 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
             "get nodes -o jsonpath='{.items[0].status.nodeInfo.containerRuntimeVersion}'").stdout
         runtime_settings = {
             "runtime": "containerd", "socketPath": "/run/containerd/containerd.sock"} if runtime.startswith("containerd") else {}
-        chaos_daemon_settings = scylla_node_pool_affinity | runtime_settings
+        tolerations = {'tolerations': [{'key': 'role', 'operator': 'Equal',
+                                        'value': 'scylla-clusters', 'effect': 'NoSchedule'}]}
+        chaos_daemon_settings = scylla_node_pool_affinity | runtime_settings | tolerations
         self._k8s_cluster.helm_install(
             target_chart_name="chaos-mesh",
             source_chart_name="chaos-mesh/chaos-mesh",
