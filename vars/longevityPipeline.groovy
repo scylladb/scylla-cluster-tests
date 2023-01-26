@@ -99,6 +99,9 @@ def call(Map pipelineParams) {
                    description: 'Name of the test to run',
                    name: 'test_name')
 
+            string(defaultValue: '', description: 'run gemini job with specific gemini seed number',
+                   name: "gemini_seed")
+
             string(defaultValue: "${pipelineParams.get('pytest_addopts', '')}",
                    description: (
                         '"pytest_addopts" is used by "run_pytest" hydra command. \n' +
@@ -175,7 +178,7 @@ def call(Map pipelineParams) {
             stage('Get test duration') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
-                        timeout(time: 2, unit: 'MINUTES') {
+                        timeout(time: 20, unit: 'MINUTES') {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {

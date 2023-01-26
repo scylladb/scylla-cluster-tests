@@ -108,7 +108,7 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
         export SCT_ORACLE_SCYLLA_VERSION="${params.oracle_scylla_version}"
     fi
 
-    if [[ -n "${params.gemini_seed ? params.genini_seed : ''}" ]] ; then
+    if [[ -n "${params.gemini_seed ? params.gemini_seed : ''}" ]] ; then
         export SCT_GEMINI_SEED="${params.gemini_seed}"
     fi
 
