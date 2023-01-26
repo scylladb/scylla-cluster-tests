@@ -17,7 +17,7 @@ pre_create_keyspace: [
     "CREATE MATERIALIZED VIEW mview.users_by_last_name AS SELECT * FROM mview.users WHERE last_name IS NOT NULL and username IS NOT NULL PRIMARY KEY (last_name, username);"
 ]
 
-run_fullscan: ['{"mode": "random", "ks_cf": "random", "interval": 240}']
+run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 240}']
 round_robin: true
 
 n_db_nodes: 5

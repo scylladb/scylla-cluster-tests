@@ -6,12 +6,13 @@ import re
 import tempfile
 import threading
 import time
+import traceback
 from abc import abstractmethod
 from dataclasses import dataclass, field, fields
 from string import Template
 from typing import Optional, Type, NamedTuple, Literal
 
-from cassandra import ConsistencyLevel
+from cassandra import ConsistencyLevel, OperationTimedOut
 from cassandra.cluster import ResponseFuture, ResultSet  # pylint: disable=no-name-in-module
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from prettytable import PrettyTable
@@ -24,16 +25,19 @@ from sdcm.sct_events.database import FullScanEvent, FullPartitionScanReversedOrd
     FullScanAggregateEvent
 from sdcm.utils.common import get_table_clustering_order, get_partition_keys
 
-ERROR_SUBSTRINGS = ("timed out", "unpack requires", "timeout")
-TIMEOUT_VALUES = [2, 4, 8, 30, 120, 300]
+ERROR_SUBSTRINGS = ("timed out", "unpack requires", "timeout", 'Host has been marked down or removed')
+FULL_SCAN_TIMEOUT_VALUES = [2, 4, 8, 30, 120, 300]
+AGGREGATION_TIMEOUT_VALUES = [15, 30, 60, 120, 240, 480, 920, 1800]
 BYPASS_CACHE_VALUES = [" BYPASS CACHE", ""]
 LOCAL_CMD_RUNNER = LocalCmdRunner()
 
 
 # pylint: disable=too-many-instance-attributes
+
+
 @dataclass
 class FullScanParams:
-    mode: Literal['random', 'table', 'partition', 'aggregate']
+    mode: Literal['random', 'table', 'partition', 'aggregate', 'table_and_aggregate']
     termination_event: threading.Event
     db_cluster: [BaseScyllaCluster, BaseCluster] = None
     ks_cf: str = "random"
@@ -48,6 +52,7 @@ class FullScanParams:
     validate_data: bool = False
     include_data_column: bool = None
     rows_count: int = 5000
+    aggregate_operation_limit: int = 60*30  # 30 min by default can be degree job by job
 
 
 @dataclass
@@ -131,34 +136,58 @@ class ScanOperationThread:
         self._thread = threading.Thread(daemon=True, name=f"{self.__class__.__name__}_{thread_name}", target=self.run)
         self.termination_event = fullscan_params.termination_event
 
+        # create different scan operations objects
+        scan_operation_params = {
+            'generator': self.generator,
+            'fullscan_params': self.fullscan_params,
+            'fullscan_stats': self.fullscan_stats}
+
+        full_scan_operation = FullScanOperation(**scan_operation_params)
+        full_partition_scan_operation = FullPartitionScanOperation(**scan_operation_params)
+        full_scan_aggregates_operation = FullScanAggregatesOperation(**scan_operation_params)
+
+        # create mapping for different scan operations objects,
+        # please see usage in get_next_scan_operation()
         self.scan_operation_instance_map = {
+            "table_and_aggregate": lambda: self.generator.choice(
+                [full_scan_operation, full_scan_aggregates_operation]),
             "random": lambda: self.generator.choice(
-                [FullScanOperation, FullPartitionScanOperation, FullScanAggregatesOperation]),
-            "table": lambda: FullScanOperation,
-            "partition": lambda: FullPartitionScanOperation,
-            "aggregate": lambda: FullScanAggregatesOperation
+                [full_scan_operation, full_scan_aggregates_operation, full_partition_scan_operation]),
+            "table": lambda: full_scan_operation,
+            "partition": lambda: full_partition_scan_operation,
+            "aggregate": lambda: full_scan_aggregates_operation
         }
 
+    def get_next_scan_operation(self):
+        '''
+        Returns scan operation object depends on 'mode' - Literal['random', 'table', 'partition', 'aggregate']
+        Returns: FullscanOperationBase
+        '''
+        return self.scan_operation_instance_map[self.fullscan_params.mode]()
+
     def _run_next_scan_operation(self):
+        self.fullscan_stats.read_pages = self.generator.choice([100, 1000, 0])
         try:
-            scan_op = self.scan_operation_instance_map[self.fullscan_params.mode]()(
-                self.generator, fullscan_params=self.fullscan_params, fullscan_stats=self.fullscan_stats)
-            self.log.info("Going to run fullscan operation %s", scan_op.__class__.__name__)
+            scan_op = self.get_next_scan_operation()
+            self.log.debug("Going to run fullscan operation %s", scan_op.__class__.__name__)
             scan_op.run_scan_operation()
 
             self.log.debug("Fullscan operations queue depleted.")
 
         except Exception as exc:  # pylint: disable=broad-except
-            self.log.warning("Encountered exception while performing a fullscan operation:\n%s", exc)
+            self.log.error(traceback.format_exc())
+            self.log.error("Encountered exception while performing a fullscan operation:\n%s", exc)
+
+        self.log.debug("Fullscan stats:\n%s", self.fullscan_stats.get_stats_pretty_table())
 
     def run(self):
         end_time = time.time() + self.fullscan_params.duration
         self._wait_until_user_table_exists()
-
         while time.time() < end_time and not self.termination_event.is_set():
-            self.fullscan_stats.read_pages = self.generator.choice([100, 1000, 0])
             self._run_next_scan_operation()
             time.sleep(self.fullscan_params.interval)
+        # summary for Jenkins. may not log because nobody wait the thread.
+        # Fullscan stats logs with debug level in each loop
         self.log.info("Fullscan stats:\n%s", self.fullscan_stats.get_stats_pretty_table())
 
     def start(self):
@@ -195,6 +224,7 @@ class FullscanOperationBase:
         self.termination_event = self.fullscan_params.termination_event
         self.generator = generator
         self.db_node = self._get_random_node()
+        self.current_operation_stat = None
 
     def _get_random_node(self) -> BaseNode:
         return self.generator.choice(self.fullscan_params.db_cluster.nodes)
@@ -203,8 +233,12 @@ class FullscanOperationBase:
     def randomly_form_cql_statement(self) -> str:
         ...
 
-    def execute_query(self, session, cmd: str) -> ResultSet:
-        self.log.info('Will run command %s', cmd)
+    def execute_query(
+            self, session, cmd: str,
+            event: Type[FullScanEvent | FullPartitionScanEvent
+                        | FullPartitionScanReversedOrderEvent]) -> ResultSet:
+        # pylint: disable=unused-argument
+        self.log.debug('Will run command %s', cmd)
         return session.execute(SimpleStatement(
             cmd,
             fetch_size=self.fullscan_params.page_size,
@@ -215,13 +249,12 @@ class FullscanOperationBase:
                        scan_event: Type[FullScanEvent | FullPartitionScanEvent
                                         | FullPartitionScanReversedOrderEvent] = None) -> FullScanOperationStat:
         scan_event = scan_event or self.scan_event
-
-        with scan_event(node=self.db_node.name, ks_cf=self.fullscan_params.ks_cf, message="",
+        cmd = cmd or self.randomly_form_cql_statement()
+        with scan_event(node=self.db_node.name, ks_cf=self.fullscan_params.ks_cf, message=f"Will run command {cmd}",
                         user=self.fullscan_params.fullscan_user,
                         password=self.fullscan_params.fullscan_user_password) as scan_op_event:
-            cmd = cmd or self.randomly_form_cql_statement()
 
-            op_stat = FullScanOperationStat(
+            self.current_operation_stat = FullScanOperationStat(
                 op_type=scan_op_event.__class__.__name__,
                 nemesis_at_start=self.db_node.running_nemesis,
                 cmd=cmd
@@ -232,21 +265,18 @@ class FullscanOperationBase:
                     connect_timeout=300,
                     user=self.fullscan_params.fullscan_user,
                     password=self.fullscan_params.fullscan_user_password) as session:
-                if self.termination_event.is_set():
-                    op_stat.exceptions.append(FullscanException("Aborted running a fullcan operation due to test "
-                                                                "termination event."))
-                    op_stat.success = False
-                    op_stat.nemesis_at_end = self.db_node.running_nemesis
-                    return op_stat
-
                 try:
+                    scan_op_event.message = ''
                     start_time = time.time()
-                    result = self.execute_query(session=session, cmd=cmd)
-                    self.fetch_result_pages(result=result, read_pages=self.fullscan_stats.read_pages)
-                    scan_op_event.message = f"{type(self).__name__} operation ended successfully"
+                    result = self.execute_query(session=session, cmd=cmd, event=scan_op_event)
+                    if result:
+                        self.fetch_result_pages(result=result, read_pages=self.fullscan_stats.read_pages)
+                    if not scan_op_event.message:
+                        scan_op_event.message = f"{type(self).__name__} operation ended successfully"
                 except Exception as exc:  # pylint: disable=broad-except
-                    op_stat.exceptions.append(exc.__class__.__name__)
-                    msg = str(exc)
+                    self.log.error(traceback.format_exc())
+                    msg = repr(exc)
+                    self.current_operation_stat.exceptions.append(repr(exc))
                     msg = f"{msg} while running " \
                           f"Nemesis: {self.db_node.running_nemesis}" if self.db_node.running_nemesis else msg
                     scan_op_event.message = msg
@@ -259,11 +289,12 @@ class FullscanOperationBase:
                     duration = time.time() - start_time
                     self.fullscan_stats.time_elapsed += duration
                     self.fullscan_stats.scans_counter += 1
-                    op_stat.nemesis_at_end = self.db_node.running_nemesis
-                    op_stat.duration = duration
-                    op_stat.success = not bool(op_stat.exceptions)  # success is True if there were no exceptions
-                    self.update_stats(op_stat)
-                    return op_stat  # pylint: disable=lost-exception
+                    self.current_operation_stat.nemesis_at_end = self.db_node.running_nemesis
+                    self.current_operation_stat.duration = duration
+                    # success is True if there were no exceptions
+                    self.current_operation_stat.success = not bool(self.current_operation_stat.exceptions)
+                    self.update_stats(self.current_operation_stat)
+                    return self.current_operation_stat  # pylint: disable=lost-exception
 
     def update_stats(self, new_stat):
         self.fullscan_stats.stats.append(new_stat)
@@ -272,10 +303,9 @@ class FullscanOperationBase:
         return self.run_scan_event(cmd=cmd or self.randomly_form_cql_statement(), scan_event=self.scan_event)
 
     def fetch_result_pages(self, result, read_pages):
-        self.log.debug('Will fetch up to %s result pages..', read_pages)
+        self.log.info('Will fetch up to %s result pages..', read_pages)
         pages = 0
         while result.has_more_pages and pages <= read_pages:
-            result.fetch_next_page()
             if read_pages > 0:
                 pages += 1
 
@@ -286,7 +316,7 @@ class FullScanOperation(FullscanOperationBase):
 
     def randomly_form_cql_statement(self) -> str:
         base_query = FullScanAggregateCommands.SELECT_ALL.base_query
-        timeout = self.generator.choice(TIMEOUT_VALUES)
+        timeout = self.generator.choice(FULL_SCAN_TIMEOUT_VALUES)
         bypass_cache = self.generator.choice(BYPASS_CACHE_VALUES)
         cmd = base_query.substitute(ks_cf=self.fullscan_params.ks_cf,
                                     timeout=f" USING TIMEOUT {timeout}s" if timeout else "",
@@ -335,6 +365,7 @@ class FullPartitionScanOperation(FullscanOperationBase):
                 return get_table_clustering_order(ks_cf=self.fullscan_params.ks_cf,
                                                   ck_name=self.fullscan_params.ck_name, session=session)
         except Exception as error:  # pylint: disable=broad-except
+            self.log.error(traceback.format_exc())
             self.log.error('Failed getting table %s clustering order through node %s : %s',
                            self.fullscan_params.ks_cf, node.name,
                            error)
@@ -433,8 +464,11 @@ class FullPartitionScanOperation(FullscanOperationBase):
             raise handler.error
         self.log.debug('Fetched a total of %s pages', handler.current_read_pages)
 
-    def execute_query(self, session, cmd: str) -> ResponseFuture:
-        self.log.info('Will run command "%s"', cmd)
+    def execute_query(
+            self, session, cmd: str,
+            event: Type[FullScanEvent | FullPartitionScanEvent
+                        | FullPartitionScanReversedOrderEvent]) -> ResponseFuture:
+        self.log.debug('Will run command "%s"', cmd)
         session.default_fetch_size = self.fullscan_params.page_size
         session.default_consistency_level = ConsistencyLevel.ONE
         return session.execute_async(cmd)
@@ -528,43 +562,68 @@ class FullPartitionScanOperation(FullscanOperationBase):
 class FullScanAggregatesOperation(FullscanOperationBase):
     def __init__(self, generator, **kwargs):
         super().__init__(generator, scan_event=FullScanAggregateEvent, **kwargs)
+        self.timeout = None
 
     def randomly_form_cql_statement(self) -> str:
-        timeout = self.generator.choice(TIMEOUT_VALUES)
+        self.timeout = self.generator.choice(AGGREGATION_TIMEOUT_VALUES)
         bypass_cache = self.generator.choice(BYPASS_CACHE_VALUES)
         cmd = FullScanAggregateCommands.AGG_COUNT_ALL.base_query.substitute(
             ks_cf=self.fullscan_params.ks_cf,
-            timeout=f" USING TIMEOUT {timeout}s" if timeout else "",
+            timeout=f" USING TIMEOUT {self.timeout}s" if self.timeout else "",
             bypass_cache=bypass_cache
         )
         return cmd
 
-    def execute_query(self, session, cmd: str) -> ResultSet:
-        cmd_result = session.execute(query=cmd, trace=True)
+    def execute_query(self, session, cmd: str,
+                      event: Type[FullScanEvent | FullPartitionScanEvent
+                                  | FullPartitionScanReversedOrderEvent]) -> ResultSet | None:
+        self.log.debug('Will run command %s', cmd)
+        try:
+            cmd_result = session.execute(query=cmd, trace=True)
+        except OperationTimedOut as exc:
+            self.current_operation_stat.exceptions.append(repr(exc))
+            event.message = f"{type(self).__name__} operation failed: {repr(exc)}," \
+                            f" aggregate_operation_limit={self.fullscan_params.aggregate_operation_limit}"
+            if self.fullscan_params.aggregate_operation_limit < self.timeout:
+                event.severity = Severity.ERROR
+            else:
+                event.severity = Severity.WARNING
 
-        if self._validate_fullscan_result(cmd_result):
-            self.scan_event.message = f"{type(self).__name__} operation ended successfully"
+            return None
+
+        message, severity = self._validate_fullscan_result(cmd_result)
+        if not severity:
+            event.message = f"{type(self).__name__} operation ended successfully: {message}"
+            return cmd_result
         else:
-            self.scan_event.severity = Severity.WARNING
-            self.scan_event.message = f"{type(self).__name__} operation failed."
-
-        return cmd_result
-
-    def _validate_fullscan_result(self, cmd_result: ResultSet):
+            event.severity = severity
+            event.message = f"{type(self).__name__} operation failed: {message}"
+            return None
+    def _validate_fullscan_result(
+            self, cmd_result: ResultSet):
         regex_found = False
         dispatch_forward_statement_regex_pattern = re.compile(r"Dispatching forward_request to \d* endpoints")
         result = cmd_result.all()
 
         if not result:
-            self.log.warning("Fullscan failed - got empty result.")
-            return False
+            message = f"Fullscan failed - got empty result: {result}"
+            self.log.warning(message)
+            return message, Severity.WARNING
+
+        if int(result[0].count) <= 0:
+            return f"Fullscan failed - count is not bigger than 0: {result}", Severity.WARNING
 
         for trace_event in cmd_result.get_query_trace().events:
             if dispatch_forward_statement_regex_pattern.search(str(trace_event)):
                 regex_found = True
+                break
         self.log.debug("Fullscan aggregation result: %s", result[0])
 
-        return int(result[0].count) > 0 and regex_found
+        if not regex_found:
+            return "Fullscan failed - 'Dispatching forward_request' message was not found in query trace events", \
+                Severity.WARNING
+
+        return f'result {result[0]}', None
 
 
 class PagedResultHandler:
