@@ -56,7 +56,10 @@ from sdcm.cluster import (
     NodeSetupTimeout,
     NodeStayInClusterAfterDecommission,
 )
-from sdcm.cluster_k8s import PodCluster
+from sdcm.cluster_k8s import (
+    KubernetesOps,
+    PodCluster,
+)
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
@@ -1356,14 +1359,32 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         node = self.target_node
         InfoEvent(f'Running {disruption_method} on K8S node that hosts {node} scylla pod').publish()
         old_uid = node.k8s_pod_uid
-        self.log.info('TerminateNode %s (uid=%s)', node, old_uid)
+
+        neighbour_scylla_pods = self._get_neighbour_scylla_pods(scylla_pod=node)
+
+        self.log.info(
+            "Running '%s' method on the '%s' K8S node that hosts '%s' target pod (uid=%s)"
+            "and '%s' neighbour pods.",
+            disruption_method, node.pod_spec.node_name, node, old_uid,
+            [f"{neighbour_scylla_pod.metadata.namespace}/{neighbour_scylla_pod.metadata.name}"
+             for neighbour_scylla_pod in neighbour_scylla_pods])
         getattr(node, disruption_method)()
         node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
         old_uid = node.k8s_pod_uid
+
         self.log.info('Mark %s (uid=%s) to be replaced', node, old_uid)
         node.wait_for_svc()
         node.mark_to_be_replaced()
         self._kubernetes_wait_till_node_up_after_been_recreated(node, old_uid=old_uid)
+
+        # NOTE: wait for all other neighbour pods become ready
+        for neighbour_scylla_pod in neighbour_scylla_pods:
+            KubernetesOps.wait_for_pod_readiness(
+                kluster=self.cluster.k8s_cluster,
+                pod_name=neighbour_scylla_pod.metadata.name,
+                namespace=neighbour_scylla_pod.metadata.namespace,
+                # TODO: calculate timeout based on the data size and load
+                pod_readiness_timeout_minutes=30)
 
     def disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node(self):
         self._disrupt_kubernetes_then_decommission_and_add_scylla_node('drain_k8s_node')
@@ -1377,13 +1398,42 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.set_target_node(
             rack=random.choice(list(self.cluster.racks)), allow_only_last_node_in_rack=True)
         node = self.target_node
+
+        neighbour_scylla_pods = self._get_neighbour_scylla_pods(scylla_pod=node)
         InfoEvent(f'Running {disruption_method} on K8S node that hosts {self.target_node}').publish()
-        self.log.info('Terminate %s', node)
+        self.log.info(
+            "Running '%s' method on the '%s' K8S node that hosts '%s' target pod "
+            "and '%s' neighbour pods.",
+            disruption_method, node.pod_spec.node_name, node,
+            [f"{neighbour_scylla_pod.metadata.namespace}/{neighbour_scylla_pod.metadata.name}"
+             for neighbour_scylla_pod in neighbour_scylla_pods])
         getattr(node, disruption_method)()
+
         self.log.info('Decommission %s', node)
         self.cluster.decommission(node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
+
         new_node = self.add_new_node(rack=node.rack)
         self.unset_current_running_nemesis(new_node)
+
+        # NOTE: wait for all other neighbour pods become ready
+        for neighbour_scylla_pod in neighbour_scylla_pods:
+            KubernetesOps.wait_for_pod_readiness(
+                kluster=self.cluster.k8s_cluster,
+                pod_name=neighbour_scylla_pod.metadata.name,
+                namespace=neighbour_scylla_pod.metadata.namespace,
+                # TODO: calculate timeout based on the data size and load
+                pod_readiness_timeout_minutes=30)
+
+    def _get_neighbour_scylla_pods(self, scylla_pod):
+        if self.tester.params.get('k8s_tenants_num') < 2:
+            return []
+        matched_pods = KubernetesOps.list_pods(
+            self.cluster.k8s_cluster, namespace=None,
+            field_selector=f"spec.nodeName={scylla_pod.pod_spec.node_name}",
+            label_selector="app.kubernetes.io/name=scylla")
+        return [matched_pod
+                for matched_pod in matched_pods
+                if scylla_pod.name != matched_pod.metadata.name]
 
     def disrupt_replace_scylla_node_on_kubernetes(self):
         if not self._is_it_on_kubernetes():
