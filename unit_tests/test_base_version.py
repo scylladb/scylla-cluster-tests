@@ -64,7 +64,7 @@ class TestBaseVersion(unittest.TestCase):
         scylla_repo = self.url_base + '-enterprise/enterprise/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
-        self.assertEqual(version_list, ['2022.2'])
+        self.assertEqual(version_list, ['2023.1'])
 
     def test_2021_1(self):
         scylla_repo = self.url_base + '-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
@@ -84,6 +84,12 @@ class TestBaseVersion(unittest.TestCase):
         linux_distro = 'centos-8'
         version_list = general_test(scylla_repo, linux_distro)
         self.assertEqual(['5.0', '2021.1', '2022.1'], version_list)
+
+    def test_2022_2(self):
+        scylla_repo = self.url_base + '-enterprise/enterprise-2022.2/rpm/centos/2022-10-09T10:39:11Z/scylla.repo'
+        linux_distro = 'centos'
+        version_list = general_test(scylla_repo, linux_distro)
+        self.assertEqual(version_list, ['5.1', '2022.1', '2022.2'])
 
 
 if __name__ == "__main__":
