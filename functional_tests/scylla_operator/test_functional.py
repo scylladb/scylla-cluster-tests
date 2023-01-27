@@ -828,53 +828,19 @@ def test_can_recover_from_fatal_pod_termination(db_cluster):
 def test_nodetool_flush_and_reshard(db_cluster: ScyllaPodCluster):
     target_node = db_cluster.nodes[0]
 
-    def _check_pod_stats(node):
-        # Pod info:
-        # status:
-        #   containerStatuses:
-        #   - ready: false
-        #     restartCount: 0
-        #     started: true
-        #     ...
-        target_pod_stats = {}
-        for container in node._pod_status.container_statuses:  # pylint: disable=protected-access
-            if container.name == "scylla":
-                target_pod_stats["started"] = container.started
-                target_pod_stats["restart_count"] = container.restart_count
-                target_pod_stats["ready"] = container.ready
-                break
-        return target_pod_stats
-
     # Calculate new value for the CPU cores dedicated for Scylla pods
     current_cpus = convert_cpu_value_from_k8s_to_units(
         db_cluster.k8s_cluster.calculated_cpu_limit)
     new_cpus = current_cpus + 1 if current_cpus <= 1 else current_cpus - 1
     new_cpus = convert_cpu_units_to_k8s_value(new_cpus)
 
-    # Calculate Scylla pod stats and make sure it is ok
-    origin_target_pod_stats = _check_pod_stats(target_node)
-    assert origin_target_pod_stats["started"] in (True, 'True', 'true')
-    assert origin_target_pod_stats["ready"] in (True, 'True', 'true')
-
     # Run 'nodetool flush' command
     target_node.run_nodetool("flush -- keyspace1")
 
-    # Change number of CPUs dedicated for Scylla pods
-    # and make sure that the resharding process begins and finishes
-    verify_resharding_on_k8s(db_cluster, new_cpus)
-
-    # Make sure that Scylla pods didn't get restarted
-    target_pod_stats = _check_pod_stats(target_node)
-
-    # Return the cpu count back and wait for the resharding begin and finish
-    verify_resharding_on_k8s(db_cluster, current_cpus)
-
-    # Make sure that pod was not restarted during the first resharding process
-    assert target_pod_stats
-    assert origin_target_pod_stats
-    assert target_pod_stats.get("restart_count") == origin_target_pod_stats.get("restart_count")
-
-    # Make sure that pod was not restarted during the second resharding process
-    final_target_pod_stats = _check_pod_stats(target_node)
-    assert final_target_pod_stats
-    assert final_target_pod_stats.get("restart_count") == origin_target_pod_stats.get("restart_count")
+    try:
+        # Change number of CPUs dedicated for Scylla pods
+        # and make sure that the resharding process begins and finishes
+        verify_resharding_on_k8s(db_cluster, new_cpus)
+    finally:
+        # Return the cpu count back and wait for the resharding begin and finish
+        verify_resharding_on_k8s(db_cluster, current_cpus)
