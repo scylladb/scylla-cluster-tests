@@ -456,6 +456,25 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                                                    namespace=namespace,
                                                    sleep_between_retries=sleep_between_retries)
 
+    @staticmethod
+    def wait_for_pod_readiness(kluster, pod_name: str, namespace: str,
+                               pod_readiness_timeout_minutes: int):
+        timeout = pod_readiness_timeout_minutes or 5
+
+        def _wait_for_pod_readiness():
+            result = kluster.kubectl(
+                f"wait --timeout={timeout // 3}m --for=condition=Ready pod {pod_name}",
+                namespace=namespace,
+                timeout=timeout // 3 * 60 + 10)
+            if result.stdout.count('condition met') != 1:
+                raise RuntimeError(f"'{pod_name}' pod is not ready")
+            return True
+
+        wait_for(_wait_for_pod_readiness,
+                 text=f"Wait for {pod_name} pod to be ready...",
+                 timeout=timeout * 60,
+                 throw_exc=True)
+
     @classmethod
     def patch_kube_config(cls, static_token_path, kube_config_path: str = None) -> None:
         # It assumes that config is already created by gcloud

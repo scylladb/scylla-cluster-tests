@@ -1755,6 +1755,12 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         return pods[0] if pods else None
 
     @property
+    def pod_spec(self):
+        if pod := self._pod:
+            return pod.spec
+        return {}
+
+    @property
     def _pod_status(self):
         if pod := self._pod:
             return pod.status
@@ -1858,20 +1864,11 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
     def wait_for_pod_readiness(self, pod_readiness_timeout_minutes: int = None):
         timeout = pod_readiness_timeout_minutes or self.pod_readiness_timeout
-
-        def _wait_for_pod_readiness():
-            result = self.parent_cluster.k8s_cluster.kubectl(
-                f"wait --timeout={timeout // 3}m --for=condition=Ready pod {self.name}",
-                namespace=self.parent_cluster.namespace,
-                timeout=timeout // 3 * 60 + 10)
-            if result.stdout.count('condition met') != 1:
-                raise RuntimeError(f"'{self.name}' pod is not ready")
-            return True
-
-        wait_for(_wait_for_pod_readiness,
-                 text=f"Wait for {self.name} pod to be ready...",
-                 timeout=timeout * 60,
-                 throw_exc=True)
+        KubernetesOps.wait_for_pod_readiness(
+            kluster=self.parent_cluster.k8s_cluster,
+            pod_name=self.name,
+            namespace=self.parent_cluster.namespace,
+            pod_readiness_timeout_minutes=timeout)
 
     @property
     def image(self) -> str:
