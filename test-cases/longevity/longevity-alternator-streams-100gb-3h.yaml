@@ -5,14 +5,14 @@ prepare_write_cmd:
     hydra-kcl -t usertable_streams -k 1000000 --timeout 32400 --threads 15
 
   - >-
-    bin/ycsb load dynamodb -P workloads/workloadc -threads 7 -p recordcount=7812500
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 5 -p recordcount=7812500
     -p fieldcount=1 -p fieldlength=128 -p dataintegrity=true
     -p insertstart=0 -p insertcount=3906250 -p table=usertable_streams
 
-#  - >-
-#    bin/ycsb load dynamodb -P workloads/workloadc -threads 10 -p recordcount=7812500
-#    -p fieldcount=1 -p fieldlength=128 -p dataintegrity=true
-#    -p insertstart=3906250 -p insertcount=3906250 -p table=usertable_streams
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 5 -p recordcount=7812500
+    -p fieldcount=1 -p fieldlength=128 -p dataintegrity=true
+    -p insertstart=3906250 -p insertcount=3906250 -p table=usertable_streams
 
   - >-
     table_compare interval=120 ; timeout=11000 ; src_table="alternator_usertable_streams".usertable_streams ; dst_table="alternator_usertable_streams-dest"."usertable_streams-dest"
@@ -25,24 +25,24 @@ stress_cmd:
     -p insertstart=0 -p insertcount=7812500
     -p dataintegrity=true -p table=usertable_streams
 
-#  - >-
-#    bin/ycsb run dynamodb -P workloads/workloadc -threads 80
-#    -p readproportion=1.0 -p updateproportion=0.0 -p recordcount=7812500
-#    -p fieldcount=1 -p fieldlength=128 -p operationcount=7812500
-#    -p insertstart=3906250 -p insertcount=7812500
-#    -p dataintegrity=true -p table=usertable_streams-dest
+  - >-
+    bin/ycsb run dynamodb -P workloads/workloadc -threads 80
+    -p readproportion=1.0 -p updateproportion=0.0 -p recordcount=7812500
+    -p fieldcount=1 -p fieldlength=128 -p operationcount=7812500
+    -p insertstart=0 -p insertcount=7812500
+    -p dataintegrity=true -p table=usertable_streams-dest
 
 round_robin: true
 
-n_loaders: 2  # 3
+n_loaders: 3  # 2 / 3
 n_db_nodes: 6
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.4xlarge'
 instance_type_loader: 'c5.4xlarge'
 
-nemesis_class_name: 'NoOpMonkey'
-nemesis_interval: 5
+nemesis_class_name: 'DecommissionMonkey'
+nemesis_interval: 60
 
 user_prefix: 'alternator-streams-3h'
 space_node_threshold: 64424

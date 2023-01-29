@@ -1,5 +1,5 @@
 user_prefix: 'alternator-streams-nemesis'
-nemesis_class_name: 'NoOpMonkey'
-# TODO: should be: 'DecommissionMonkey'
-nemesis_interval: 240
+nemesis_class_name: 'DecommissionMonkey'
+# TODO: should be: 'DecommissionMonkey' / NoOpMonkey
+nemesis_interval: 60
 nemesis_during_prepare: true

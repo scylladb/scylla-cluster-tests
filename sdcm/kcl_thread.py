@@ -56,8 +56,9 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
         # scylladb/hydra-loaders:kcl-jdk8-20210310-ShardSyncStrategyType-PERIODIC
         # scylladb/hydra-loaders:kcl-jdk8-20210215
         # scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC
+        # yarongilor/alternator:kcl-jdk8-20211026
         # TODO: i have no permissions to upload the docker image to scylla QA repository. should be fixed by maintainers
-        docker = cleanup_context = RemoteDocker(loader, "yarongilor/alternator:kcl-jdk8-20211026",
+        docker = cleanup_context = RemoteDocker(loader, "yarongilor/alternator:kcl-jdk8-20230129",
                                                 extra_docker_opts=f'--label shell_marker={self.shell_marker}')
         stream_args = self.build_stress_cmd()
 
