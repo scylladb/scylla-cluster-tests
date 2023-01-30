@@ -719,6 +719,16 @@ class TestStatsMixin(Stats):
         self._stats['results'].update(prometheus_stats)
         return prometheus_stats
 
+    def update_hdrhistograms(self, histogram_name, histogram_data):
+        if "histograms" not in self._stats['results']:
+            self._stats['results']['histograms'] = {}
+        if histogram_name not in self._stats['results']['histograms']:
+            self._stats['results']['histograms'][histogram_name] = [histogram_data]
+        else:
+            self._stats['results']['histograms'][histogram_name].extend(histogram_data)
+
+        self.update(dict(results=self._stats['results']))
+
     def update_stress_results(self, results, calculate_stats=True):
         if 'stats' not in self._stats['results']:
             self._stats['results']['stats'] = results

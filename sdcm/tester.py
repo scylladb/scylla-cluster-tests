@@ -113,7 +113,8 @@ from sdcm.utils.gce_utils import get_gce_services
 from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
-from sdcm.utils.csrangehistogram import CSRangeHistogramBuilder, CSRangeHistogramSummary
+from sdcm.utils.csrangehistogram import CSRangeHistogramBuilder, CSRangeHistogramSummary, CSHistogramTagTypes
+
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
@@ -3554,19 +3555,28 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 return True
         return False
 
-    def get_cs_range_histogram(self, stress_operation: str, start_time: float, end_time: float) -> dict[str, Any]:
+    def get_cs_range_histogram(self, stress_operation: str,
+                               start_time: float, end_time: float,
+                               tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> dict[str, Any]:
+        if not self.params["use_hdr_cs_histogram"]:
+            return {}
         self.log.info("Build HDR histogram with start time: %s, end time: %s; for operation: %s",
                       start_time, end_time, stress_operation)
         range_histogram = CSRangeHistogramBuilder.build_histogram_from_dir(base_path=self.loaders.logdir,
                                                                            start_time=start_time,
                                                                            end_time=end_time)
-        return CSRangeHistogramSummary(range_histogram).get_summary_for_operation(stress_operation)[0]
+        return CSRangeHistogramSummary(range_histogram, tag_type).get_summary_for_operation(stress_operation)[0]
 
-    def get_cs_range_histogram_by_interval(self, stress_operation, start_time, end_time, time_interval=600) -> list[dict[str, Any]]:
+    def get_cs_range_histogram_by_interval(
+            self, stress_operation: str,
+            start_time: float, end_time: float, time_interval: int = 600,
+            tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> list[dict[str, Any]]:
+        if not self.params["use_hdr_cs_histogram"]:
+            return []
         self.log.info("Build HDR histogram with start time: %s, end time: %s, time interval: %s for operation: %s",
                       start_time, end_time, time_interval, stress_operation)
         range_histograms = CSRangeHistogramBuilder.build_histograms_range_with_interval(path=self.loaders.logdir,
                                                                                         start_time=start_time,
                                                                                         end_time=end_time,
                                                                                         interval=time_interval)
-        return CSRangeHistogramSummary(range_histograms).get_summary_for_operation(stress_operation)
+        return CSRangeHistogramSummary(range_histograms, tag_type).get_summary_for_operation(stress_operation)
