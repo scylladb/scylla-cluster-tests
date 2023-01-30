@@ -17,6 +17,8 @@
 import os
 import time
 
+from enum import Enum
+
 import yaml
 
 from sdcm.tester import ClusterTester, teardown_on_exception
@@ -25,8 +27,20 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent
 from sdcm.utils.decorators import log_run_info
+from sdcm.utils.csrangehistogram import CSHistogramTagTypes
 
 KB = 1024
+
+
+class PerformanceTestWorkload(Enum):
+    WRITE = "write"
+    READ = "read"
+    MIXED = "mixed"
+
+
+class PerformanceTestType(Enum):
+    THROUGHPUT = "throughput"
+    LATENCY = "latency"
 
 
 class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-public-methods
@@ -253,6 +267,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis(interval=interval)
         results = self.get_stress_results(queue=stress_queue)
+
+        self.build_histogram(PerformanceTestWorkload.READ, PerformanceTestType.LATENCY)
         self.update_test_details()
         self.display_results(results, test_name='test_latency' if not nemesis else 'test_latency_with_nemesis')
         self.check_regression()
@@ -267,6 +283,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         results = self.get_stress_results(queue=stress_queue)
+        self.build_histogram(PerformanceTestWorkload.WRITE, PerformanceTestType.LATENCY)
         self.update_test_details()
         self.display_results(results, test_name='test_latency')
         self.check_regression()
@@ -281,6 +298,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         results = self.get_stress_results(queue=stress_queue)
+        self.build_histogram(PerformanceTestWorkload.MIXED, PerformanceTestType.LATENCY)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_latency')
         self.check_regression()
@@ -482,6 +500,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                                               stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
+        self.build_histogram(PerformanceTestWorkload.WRITE, PerformanceTestType.THROUGHPUT)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_write')
         self.check_regression()
@@ -509,6 +528,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
+        self.build_histogram(PerformanceTestWorkload.READ, PerformanceTestType.THROUGHPUT)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_read')
         self.check_regression()
@@ -535,6 +555,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
+        self.build_histogram(PerformanceTestWorkload.MIXED, PerformanceTestType.THROUGHPUT)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_mixed')
         self.check_regression()
@@ -723,3 +744,29 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.display_results(results, test_name='test_timeseries_read_bench')
         self.check_regression()
         self.kill_stress_thread()
+
+    def build_histogram(self, workload: PerformanceTestWorkload, test_type: PerformanceTestType):
+        if not self.params["use_hdr_cs_histogram"]:
+            return
+
+        start_time = self.start_time
+        end_time = time.time()
+
+        if test_type == PerformanceTestType.THROUGHPUT:
+            tag_type = CSHistogramTagTypes.THROUGHPUT
+        else:
+            tag_type = CSHistogramTagTypes.LATENCY
+        histogram_total_data = self.get_cs_range_histogram(stress_operation=workload.value,
+                                                           start_time=start_time,
+                                                           end_time=end_time,
+                                                           tag_type=tag_type)
+        self.update_hdrhistograms(histogram_name="test_histogram",
+                                  histogram_data=histogram_total_data)
+
+        histogram_data_by_interval = self.get_cs_range_histogram_by_interval(stress_operation=workload.value,
+                                                                             start_time=start_time,
+                                                                             end_time=end_time,
+                                                                             tag_type=tag_type)
+
+        self.update_hdrhistograms(histogram_name='test_histogram_by_interval',
+                                  histogram_data=histogram_data_by_interval)

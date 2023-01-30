@@ -27,6 +27,16 @@ class CSHistogramTags(Enum):
     READ = "READ-rt"
 
 
+class CSHistogramThroughputTags(Enum):
+    WRITE = "WRITE-st"
+    READ = "READ-st"
+
+
+class CSHistogramTagTypes(Enum):
+    LATENCY = 0
+    THROUGHPUT = 1
+
+
 @dataclass
 class HistorgramSummaryBase:
     start_time: str
@@ -238,20 +248,26 @@ class CSRangeHistogramSummary:
     data
     """
 
-    CS_OPERATION_TAG_MAPPING = {
-        "write": {CSHistogramTags.WRITE: "WRITE"},
-        "read": {CSHistogramTags.READ: "READ"},
-        "mixed": {
-            CSHistogramTags.WRITE: "WRITE",
-            CSHistogramTags.READ: "READ"
-        }
-    }
-
-    def __init__(self, histograms: CSRangeHistogram | list[CSRangeHistogram]):
+    def __init__(self, histograms: CSRangeHistogram | list[CSRangeHistogram],
+                 tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY):
         if not isinstance(histograms, list):
             histograms = [histograms]
 
         self._range_histograms = histograms
+
+        if tag_type == CSHistogramTagTypes.THROUGHPUT:
+            self.cs_histogram_type_tags = CSHistogramThroughputTags
+        else:
+            self.cs_histogram_type_tags = CSHistogramTags
+
+        self.cs_operation_tag_mapping = {
+            "write": {self.cs_histogram_type_tags.WRITE: "WRITE"},
+            "read": {self.cs_histogram_type_tags.READ: "READ"},
+            "mixed": {
+                self.cs_histogram_type_tags.WRITE: "WRITE",
+                self.cs_histogram_type_tags.READ: "READ"
+            }
+        }
 
     @staticmethod
     def convert_raw_histogram(histogram: CSHistogram,
@@ -273,12 +289,12 @@ class CSRangeHistogramSummary:
 
     def _parse_range_histogram_for_workload(self, workload: str) -> list[dict[str, Any]]:
         converted_histograms = []
-        if workload not in self.CS_OPERATION_TAG_MAPPING:
+        if workload not in self.cs_operation_tag_mapping:
             return converted_histograms
 
         for hst in self._range_histograms:
             summary = {}
-            for tag, operation in self.CS_OPERATION_TAG_MAPPING[workload].items():
+            for tag, operation in self.cs_operation_tag_mapping[workload].items():
                 if tag.value in hst.histograms.keys():
                     parsed_summary = self.convert_raw_histogram(hst.histograms[tag.value], hst.start_time, hst.end_time)
                     summary.update({operation: asdict(parsed_summary)})
