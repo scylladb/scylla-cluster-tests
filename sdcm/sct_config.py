@@ -1440,6 +1440,8 @@ class SCTConfiguration(dict):
                        after hw perf tests detect node with hw results not in margin with average
                     If stop_on_hw_perf_failure is False, then sct performance test will be run
                        even after hw perf tests detect node with hw results not in margin with average"""),
+        dict(name="custom_es_index", env="SCT_CUSTOM_ES_INDEX", type=str,
+             help="""Use custom ES index for storing test results"""),
 
     ]
 
