@@ -619,7 +619,7 @@ class TestStatsMixin(Stats):
         test_details['job_url'] = get_job_url()
         test_details['start_host'] = platform.node()
         test_details['test_duration'] = self.params.get(key='test_duration')
-        test_details['start_time'] = time.time()
+        test_details['start_time'] = int(time.time())
         test_details['grafana_snapshots'] = []
         test_details['grafana_screenshots'] = []
         test_details['grafana_annotations'] = []

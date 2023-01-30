@@ -217,3 +217,5 @@ service_level_shares: [1000]
 use_hdr_cs_histogram: false
 
 stop_on_hw_perf_failure: false
+
+custom_es_index: ''

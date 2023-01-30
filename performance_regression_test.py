@@ -50,6 +50,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
     @teardown_on_exception
     @log_run_info
     def setUp(self):
+        if es_index := self.params.get("custom_es_index"):
+            self._test_index = es_index
+
         super().setUp()
         if self.params.get("run_db_node_benchmarks"):
             self.log.info("Validate node benchmarks results")
