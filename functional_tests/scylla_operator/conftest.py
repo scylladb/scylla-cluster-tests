@@ -151,17 +151,18 @@ def _bring_cluster_back_to_original_state(
                 recover_config_map.update(config_map)
                 restart = True
 
-        # NOTE: ignore 'forceRedeploymentReason' field always to avoid redundant restarts
-        original_scylla_cluster_spec.pop("forceRedeploymentReason", None)
-        current_cluster_spec.pop("forceRedeploymentReason", None)
-        if original_scylla_cluster_spec != current_cluster_spec:
+        # Exclude some fields from diff, since they are not important for us
+        cluster_spec_diff = DeepDiff(original_scylla_cluster_spec,
+                                     current_cluster_spec,
+                                     ignore_order=True,
+                                     exclude_paths=["forceRedeploymentReason", "repairs", "backups"])
+        if cluster_spec_diff:
             # If cluster spec we currently have is not equal to what we want replace it.
             # It will cause scylla pods rollout restart on the operator level.
             # WARNING: if number of nodes differs than we will have incorrect data
             #          in "db_cluster.nodes". For the moment all changes to node number must
             #          go though 'add_nodes' and 'decommision' methods only.
-            LOGGER.info("Rollout original cluster state due spec change: %s",
-                        DeepDiff(original_scylla_cluster_spec, current_cluster_spec))
+            LOGGER.info("Rollout original cluster state due spec change: %s", cluster_spec_diff)
             db_cluster.replace_scylla_cluster_value('/spec', original_scylla_cluster_spec)
             # sleep for 3 minutes to make sure we wait for this rollout to finish (in case some other was running),
             # no impact on test time as anyway rollout takes more than 3 minutes
