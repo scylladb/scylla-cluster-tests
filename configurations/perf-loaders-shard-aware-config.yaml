@@ -1,15 +1,3 @@
 # manual on creating loader AMI's: see docs/new_loader_ami.md
 use_prepared_loaders: true
-regions_data:
-  us-east-1: # US East (N. Virginia)
-    ami_id_loader: 'ami-00c1a16b5136fbb7c' # Loader dedicated AMI v19
-  us-west-2: # US West (Oregon)
-    ami_id_loader: 'ami-04d2eb44d523b3ccb' # Loader dedicated AMI v19
-  eu-west-1: # Europe (Ireland)
-    ami_id_loader: 'ami-042cf1bc21e30ce60' # Loader dedicated AMI v19
-  eu-west-2: # Europe (London)
-    ami_id_loader: 'ami-0370fbb289d8310d2' # Loader dedicated AMI v19
-  eu-north-1: # Europe (Stockholm)
-    ami_id_loader: 'ami-0226185e7d7951b6a' # Loader dedicated AMI v19
-  eu-central-1: # Europe (Frankfurt)
-    ami_id_loader: 'ami-0bc7811c417b0eb09' # Loader dedicated AMI v19
+ami_id_loader: 'scylla-qa-loader-ami-v19'

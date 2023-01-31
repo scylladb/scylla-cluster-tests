@@ -40,6 +40,7 @@ from sdcm.utils.common import (
     get_branched_gce_images,
     get_scylla_ami_versions,
     get_scylla_gce_images_versions,
+    convert_name_to_ami_if_needed,
 )
 from sdcm.utils.version_utils import (
     get_branch_version,
@@ -1550,6 +1551,8 @@ class SCTConfiguration(dict):
         'stress_cmd_lwt_dc', 'stress_cmd_lwt_ue', 'stress_cmd_lwt_uc', 'stress_cmd_lwt_ine',
         'stress_cmd_lwt_d', 'stress_cmd_lwt_u', 'stress_cmd_lwt_i'
     ]
+    ami_id_params = ['ami_id_db_scylla', 'ami_id_loader', 'ami_id_monitor', 'ami_id_db_cassandra', 'ami_id_db_oracle']
+    aws_supported_regions = ['eu-west-1', 'eu-west-2', 'us-west-2', 'us-east-1', 'eu-north-1', 'eu-central-1']
 
     def __init__(self):
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
@@ -1589,15 +1592,20 @@ class SCTConfiguration(dict):
         region_names = self.region_names
 
         if cluster_backend in ['aws', 'aws-siren', 'k8s-eks']:
-            for region in region_names:
-                if region not in regions_data:
-                    raise ValueError(f"{region} isn't supported, use: {list(regions_data.keys())}")
+            if regions_data:
+                for region in region_names:
+                    if region not in regions_data:
+                        raise ValueError(f"{region} isn't supported, use: {list(regions_data.keys())}")
 
-                for key, value in regions_data.get(region, {}).items():
-                    if key not in self.keys():
-                        self[key] = value
-                    elif len(self[key].split()) < len(region_names):
-                        self[key] += " {}".format(value)
+                    for key, value in regions_data.get(region, {}).items():
+                        if key not in self.keys():
+                            self[key] = value
+                        elif len(self[key].split()) < len(region_names):
+                            self[key] += " {}".format(value)
+            else:
+                for region in region_names:
+                    if region not in self.aws_supported_regions:
+                        raise ValueError(f"{region} isn't supported, use: {self.aws_supported_regions}")
 
         # 3) overwrite with environment variables
         anyconfig.merge(self, env)
@@ -1606,17 +1614,10 @@ class SCTConfiguration(dict):
         add_severity_limit_rules(self.get("max_events_severities"))
         print_critical_events()
 
-        # 5) assume multi dc by n_db_nodes set size
-        if 'aws' in cluster_backend:
-            num_of_regions = len(region_names)
-            num_of_db_nodes_sets = len(str(self.get('n_db_nodes')).split(' '))
-            if num_of_db_nodes_sets > num_of_regions:
-                for region in list(regions_data.keys())[:num_of_db_nodes_sets]:
-                    for key, value in regions_data[region].items():
-                        if key not in self.keys():
-                            self[key] = value
-                        else:
-                            self[key] += " {}".format(value)
+        # 5) overwrite AMIs
+        for key in self.ami_id_params:
+            if param := self.get(key):
+                self[key] = convert_name_to_ami_if_needed(param, self.region_names)
 
         # 6) handle scylla_version if exists
         scylla_linux_distro = self.get('scylla_linux_distro')

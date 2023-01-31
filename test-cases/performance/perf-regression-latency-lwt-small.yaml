@@ -49,13 +49,7 @@ instance_type_db: 'i3.xlarge'
 
 user_prefix: 'perf-regression-latency-lwt-small'
 ami_id_db_scylla_desc: 'VERSION_DESC'
-regions_data:
-  us-east-1:
-    ami_id_loader: 'ami-0b94f0e897d884b1b'
-  eu-west-1:
-    ami_id_loader: 'ami-0ea704a8c9ec08e57'
-  us-west-2:
-    ami_id_loader: 'ami-063a97bde47353690'
+ami_id_loader: 'scylla-qa-loader-ami-lwt-v5'
 
 append_scylla_args: '--blocked-reactor-notify-ms 400 --memory 4G --experimental 1 --experimental-features=lwt'
 
