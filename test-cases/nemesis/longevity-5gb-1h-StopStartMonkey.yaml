@@ -1,0 +1,31 @@
+test_duration: 90
+
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=5048570 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
+
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=60m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=60m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
+             ]
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+seeds_num: 3
+
+instance_type_db: 'i4i.large'
+gce_instance_type_db: 'n1-highmem-2'
+gce_instance_type_loader: 'e2-standard-2'
+azure_instance_type_db: 'Standard_L8s_v3'
+instance_type_loader: 'c5.large'
+azure_instance_type_loader: 'Standard_F2s_v2'
+
+nemesis_class_name: 'StopStartMonkey'
+nemesis_interval: 3
+nemesis_filter_seeds: false
+nemesis_during_prepare: true
+
+gce_n_local_ssd_disk_db: 1
+
+user_prefix: 'longevity-5gb-1h-StopStartMonkey'
+
+server_encrypt: true
+client_encrypt: true
