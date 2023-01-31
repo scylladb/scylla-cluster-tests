@@ -16,7 +16,7 @@ round_robin: true
 
 instance_type_db: 'i3.4xlarge'
 
-run_fullscan: '{"ks_cf": "keyspace1.standard1", "interval": 5}' # 'ks.cf|random, interval(min)'
+run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 5}']
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '032'
 nemesis_interval: 5

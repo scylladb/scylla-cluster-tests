@@ -16,6 +16,7 @@ FullScanEvent: ERROR
 FullPartitionScanReversedOrderEvent: ERROR
 FullPartitionScanEvent: ERROR
 TombstoneGcVerificationEvent: ERROR
+FullScanAggregateEvent: ERROR
 DatabaseLogEvent.WARNING: WARNING
 DatabaseLogEvent.NO_SPACE_ERROR: ERROR
 DatabaseLogEvent.UNKNOWN_VERB: WARNING

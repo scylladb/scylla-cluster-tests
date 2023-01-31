@@ -45,7 +45,7 @@ class TombstoneGcVerificationThread:
         self.password = kwargs.get("password", None)
         self._thread = threading.Thread(daemon=True, name=self.__class__.__name__, target=self.run)
 
-    def wait_until_user_table_exists(self, db_node, table_name: str = 'random', timeout_min: int = 20):
+    def _wait_until_user_table_exists(self, db_node, table_name: str = 'random', timeout_min: int = 20):
         text = f'Waiting until {table_name} user table exists'
         if table_name.lower() == 'random':
             wait.wait_for(func=lambda: len(self.db_cluster.get_non_system_ks_cf_list(db_node)) > 0, step=60,
@@ -144,9 +144,9 @@ class TombstoneGcVerificationThread:
         for sstable in sstables:
             self.verify_post_repair_sstable_tombstones(table_repair_date=table_repair_date, sstable=sstable)
 
-    def run_tombstone_gc_verification(self):
+    def _run_tombstone_gc_verification(self):
         db_node = self.db_node
-        self.wait_until_user_table_exists(db_node=db_node, table_name=self.ks_cf)
+        self._wait_until_user_table_exists(db_node=db_node, table_name=self.ks_cf)
         with TombstoneGcVerificationEvent(node=db_node.name, ks_cf=self.ks_cf, message="") as tombstone_event:
             if self.termination_event.is_set():
                 return
@@ -168,7 +168,7 @@ class TombstoneGcVerificationThread:
         end_time = time.time() + self.duration
         while time.time() < end_time and not self.termination_event.is_set():
             self.db_node = random.choice(self.db_cluster.nodes)
-            self.run_tombstone_gc_verification()
+            self._run_tombstone_gc_verification()
             self.log.debug('Executed %s', TombstoneGcVerificationEvent.__name__)
             time.sleep(self.interval)
 
