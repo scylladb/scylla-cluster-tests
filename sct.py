@@ -108,7 +108,6 @@ SCT_RUNNER_HOST = get_sct_runner_ip()
 
 LOGGER = setup_stdout_logger()
 
-
 click_completion.init()
 
 
@@ -580,10 +579,12 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
               help="architecture of the AMI (default: x86_64)")
 def list_images(cloud_provider: str, branch: str, version: str, region: str, arch: AwsArchType):
     add_file_logger()
-    branch_fields = ["Backend", "Name", "ImageId", "CreationDate", "BuildId", "Arch", "ScyllaVersion"]
-    #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
     version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
-
+    version_fields_with_tag_name = version_fields + ["NameTag"]
+    #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
+    branch_specific_fields = ["BuildId", "Arch", "ScyllaVersion"]
+    branch_fields = version_fields + branch_specific_fields
+    branch_fields_with_tag_name = version_fields_with_tag_name + branch_specific_fields
     if version and branch:
         click.echo("Use --version or --branch, not both.")
         return
@@ -595,7 +596,7 @@ def list_images(cloud_provider: str, branch: str, version: str, region: str, arc
             case "aws":
                 rows = get_ami_images_versioned(region_name=region, arch=arch, version=version)
                 click.echo(
-                    create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                    create_pretty_table(rows=rows, field_names=version_fields_with_tag_name).get_string(
                         title=f"AWS Machine Images by Version in region {region}")
                 )
             case "gce":
@@ -620,7 +621,7 @@ def list_images(cloud_provider: str, branch: str, version: str, region: str, arc
                 region = region or "eu-west-1"
                 ami_images = get_ami_images(branch=branch, region=region, arch=arch)
                 click.echo(
-                    create_pretty_table(rows=ami_images, field_names=branch_fields).get_string(
+                    create_pretty_table(rows=ami_images, field_names=branch_fields_with_tag_name).get_string(
                         title=f"AMI Machine Images for {branch} in region {region}"
                     )
                 )

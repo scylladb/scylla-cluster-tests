@@ -1796,14 +1796,57 @@ def get_ami_images(branch: str, region: str, arch: AwsArchType) -> list:
 
     for ami in amis:
         tags = {i['Key']: i['Value'] for i in ami.tags}
-        rows.append(["AWS", ami.name, ami.image_id, ami.creation_date, tags.get(
+        rows.append(["AWS", ami.name, ami.image_id, ami.creation_date, tags.get("Name"), tags.get(
             'build-id', tags.get("build_id"))[:6], tags.get('arch'), tags.get('ScyllaVersion')])
 
     return rows
 
 
+def get_ec2_image_name_tag(ami: EC2Image) -> str:
+    if ami.tags:
+        for tag in ami.tags:
+            if tag["Key"] == "Name":
+                return tag["Value"]
+    return ""
+
+
+def convert_name_to_ami_if_needed(ami_id_param: str, region_names: list[str],) -> str:
+    """
+    convert image name in ami_id param to ami_ids
+    Firstly trying to find name in 'tag:Name' - for ScyllaDB images case
+    then in 'name' - for ScyllaDB images case for public images like Ubuntu
+
+    usage example:
+    convert_name_to_ami_if_needed('scylla-5.1.4-x86_64-2023-01-22T17-58-39Z' ,
+                                  ['eu-west-1', 'eu-west-2', 'us-west-2', 'us-east-1', 'eu-north-1', 'eu-central-1'])
+    returns: 'ami-042cf1bc21e30ce60 ami-0370fbb289d8310d2 ami-09808043b7fcdb244
+              ami-00c1a16b5136fbb7c ami-0226185e7d7951b6a ami-0bc7811c417b0eb09'
+
+     convert_name_to_ami_if_needed('ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20221206' ,
+                                   'eu-west-1', 'eu-west-2', 'us-west-2', 'us-east-1', 'eu-north-1', 'eu-central-1'])
+    returns: 'ami-026e72e4e468afa7b ami-01b8d743224353ffe ami-03f8756d29f0b5f21
+              ami-06878d265978313ca ami-03df6dea56f8aa618 ami-0039da1f3917fa8e3'
+    """
+    param_values = ami_id_param.split()
+    if len(param_values) == 1 and not param_values[0].startswith("ami-"):
+        ami_list: list[str] = []
+        for region_name in region_names:
+            ec2_resource = boto3.resource('ec2', region_name=region_name)
+            for tag_name in ("tag:Name", "name"):
+                if images := sorted(
+                        ec2_resource.images.filter(Filters=[{'Name': tag_name, 'Values': [param_values[0]]}]),
+                        key=lambda x: x.creation_date, reverse=True):
+                    ami_list.append(images[0].image_id)
+                    break
+            else:
+                raise ValueError(
+                    f"Can't convert name '{ami_id_param}' to AMI_id, no image found in region {region_name}")
+        return " ".join(ami_list)
+    return ami_id_param
+
+
 def get_ami_images_versioned(region_name: str, arch: AwsArchType, version: str) -> list[list[str]]:
-    return [["AWS", ami.name, ami.image_id, ami.creation_date]
+    return [["AWS", ami.name, ami.image_id, ami.creation_date, get_ec2_image_name_tag(ami)]
             for ami in get_scylla_ami_versions(region_name=region_name, arch=arch, version=version)]
 
 

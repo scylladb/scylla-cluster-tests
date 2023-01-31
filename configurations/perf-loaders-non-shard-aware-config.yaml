@@ -1,16 +1,14 @@
 # manual on creating loader AMI's: see docs/new_loader_ami.md
 # AMIs from branch-perf-v8 with non-shardware driver
 use_prepared_loaders: true
+ami_id_loader: 'scylla-qa-loader-ami-v9'
 regions_data:
     us-east-1:
       security_group_ids: 'sg-c5e1f7a0'
       subnet_id: 'subnet-ec4a72c4'
-      ami_id_loader: 'ami-01784b575d450e3b2' # Loader dedicated AMI v9 with golang 1.13
     eu-west-1:
       security_group_ids: 'sg-059a7f66a947d4b5c'
       subnet_id: 'subnet-088fddaf520e4c7a8'
-      ami_id_loader: 'ami-0396fc0c3458abca9' # Loader dedicated AMI v9 with golang 1.13
     us-west-2:
       security_group_ids: 'sg-81703ae4'
       subnet_id: 'subnet-5207ee37'
-      ami_id_loader: 'ami-0d2703a09ffa20a1e' # Loader dedicated AMI v9 with golang 1.13
