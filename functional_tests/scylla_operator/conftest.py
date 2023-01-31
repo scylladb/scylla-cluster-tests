@@ -15,6 +15,7 @@
 
 import logging
 import os
+import time
 import traceback
 import contextlib
 
@@ -162,6 +163,9 @@ def _bring_cluster_back_to_original_state(
             LOGGER.info("Rollout original cluster state due spec change: %s",
                         DeepDiff(original_scylla_cluster_spec, current_cluster_spec))
             db_cluster.replace_scylla_cluster_value('/spec', original_scylla_cluster_spec)
+            # sleep for 3 minutes to make sure we wait for this rollout to finish (in case some other was running),
+            # no impact on test time as anyway rollout takes more than 3 minutes
+            time.sleep(180)
             db_cluster.wait_sts_rollout_restart(len(db_cluster.nodes))
             restart = False
 
