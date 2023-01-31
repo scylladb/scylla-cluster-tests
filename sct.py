@@ -33,7 +33,6 @@ from uuid import UUID
 
 import pytest
 import click
-import click_completion
 import yaml
 from prettytable import PrettyTable
 
@@ -108,8 +107,6 @@ SCT_RUNNER_HOST = get_sct_runner_ip()
 
 LOGGER = setup_stdout_logger()
 
-click_completion.init()
-
 
 def sct_option(name, sct_name, **kwargs):
     sct_opt = SCTConfiguration.get_config_option(sct_name)
@@ -121,7 +118,8 @@ def sct_option(name, sct_name, **kwargs):
 def install_callback(ctx, _, value):
     if not value or ctx.resilient_parsing:
         return value
-    shell, path = click_completion.core.install()
+    shell, path = "bash", Path.home() / '.bash_completion'
+    path.write_text((Path(__file__).parent / 'utils' / '.bash_completion').read_text())
     click.echo('%s completion installed in %s' % (shell, path))
     return sys.exit(0)
 
@@ -1603,4 +1601,4 @@ cli.add_command(sct_ssh.attach_test_sg_cmd)
 cli.add_command(sct_ssh.ssh_cmd)
 
 if __name__ == '__main__':
-    cli()
+    cli.main(prog_name="hydra")
