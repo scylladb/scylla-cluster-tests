@@ -4076,6 +4076,13 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                 status = False
             finally:
                 if is_exclusive:
+                    # NOTE: sleep the nemesis interval here because the next one is already
+                    #       ready to start right after the lock gets released.
+                    if args[0].tester.params.get('k8s_tenants_num') > 1:
+                        args[0].log.debug(
+                            "Exclusive nemesis: Sleep for '%s' seconds",
+                            args[0].interval)
+                        time.sleep(args[0].interval)
                     NEMESIS_LOCK.release()
                 else:
                     NEMESIS_RUN_INFO.pop(nemesis_run_info_key)
