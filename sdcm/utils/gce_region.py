@@ -40,7 +40,7 @@ class GceRegion:
 
         credentials = service_account.Credentials.from_service_account_info(info)
 
-        self.iam = build('iam', 'v1', credentials=credentials)
+        self.iam = build('iam', 'v1', credentials=credentials, cache_discovery=False)
 
         self.network_client = compute_v1.NetworksClient(credentials=credentials)
         self.firewall_client = compute_v1.FirewallsClient(credentials=credentials)
