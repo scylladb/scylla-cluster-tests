@@ -459,6 +459,20 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         return email_data
 
+    def test_backup_and_restore_only_data(self):
+        self.run_prepare_write_cmd()
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=110000)
+        assert backup_task_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        self.db_cluster.nodes[0].run_cqlsh('TRUNCATE keyspace1.standard1')
+        self.restore_data_with_task(mgr_cluster=mgr_cluster, backup_task=backup_task, timeout=110000)
+        self.run_verification_read_stress()
+
     def test_backup_feature(self):
         self.generate_load_and_wait_for_results()
         with self.subTest('Backup Multiple KS\' and Tables'):
