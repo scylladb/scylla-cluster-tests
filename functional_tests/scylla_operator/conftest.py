@@ -21,6 +21,7 @@ import contextlib
 from typing import Optional
 
 import pytest
+from deepdiff import DeepDiff
 from packaging import version
 
 from functional_tests.scylla_operator.libs.auxiliary import ScyllaOperatorFunctionalClusterTester, sct_abs_path
@@ -158,6 +159,8 @@ def _bring_cluster_back_to_original_state(
             # WARNING: if number of nodes differs than we will have incorrect data
             #          in "db_cluster.nodes". For the moment all changes to node number must
             #          go though 'add_nodes' and 'decommision' methods only.
+            LOGGER.info("Rollout original cluster state due spec change: %s",
+                        DeepDiff(original_scylla_cluster_spec, current_cluster_spec))
             db_cluster.replace_scylla_cluster_value('/spec', original_scylla_cluster_spec)
             db_cluster.wait_sts_rollout_restart(len(db_cluster.nodes))
             restart = False
