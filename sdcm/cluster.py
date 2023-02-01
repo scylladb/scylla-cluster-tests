@@ -4057,6 +4057,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                             node_ip = node.ip_address
                 node_info["load"] = node_info["load"].replace(" ", "")
                 status[dc_name][node_ip] = node_info
+                assert node_info["rack"], "Rack is not defined for node {}".format(node_info)
         return status
 
     @staticmethod

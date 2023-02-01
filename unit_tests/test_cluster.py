@@ -501,28 +501,9 @@ class TestNodetoolStatus(unittest.TestCase):
         node = NodetoolDummyNode(resp=resp)
         db_cluster = DummyScyllaCluster([node])
 
-        status = db_cluster.get_nodetool_status()
-
-        assert status == {'eastus': {'10.0.0.4': {'host_id': 'ed6af9a0-8c22-4813-ac9b-6fbeb462b687',
-                                                  'load': '431KB',
-                                                  'owns': '?',
-                                                  'rack': '',
-                                                  'state': 'UN',
-                                                  'tokens': '256'},
-                                     '10.0.0.5': {'host_id': 'caa15869-cfb4-4229-85d7-0f4832986237',
-                                                  'load': '612KB',
-                                                  'owns': '?',
-                                                  'rack': '1',
-                                                  'state': 'UN',
-                                                  'tokens': '256'},
-                                     '10.0.0.6': {'host_id': '3046ded9-ce17-4a3a-ac44-a3ada6916972',
-                                                  'load': '806KB',
-                                                  'owns': '?',
-                                                  'rack': '',
-                                                  'state': 'UN',
-                                                  'tokens': '256'}
-                                     }
-                          }
+        with pytest.raises(AssertionError) as excinfo:
+            db_cluster.get_nodetool_status()
+            assert "Rack is not defined" in str(excinfo.value)
 
 
 @pytest.mark.parametrize("grep_results,expected_core_number", (
