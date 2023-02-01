@@ -14,5 +14,5 @@ managerPipeline(
     post_behavior_loader_nodes: 'destroy',
     post_behavior_monitor_nodes: 'destroy',
 
-    downstream_jobs_to_run: 'centos-upgrade-test, centos-sanity-ipv6-test, sct-feature-test-backup, sct-feature-test-backup-azure, sct-feature-test-backup-gce'
+    downstream_jobs_to_run: '../upgrade-tests/centos-upgrade-test, centos-sanity-ipv6-test, ../feature-tests/sct-feature-test-backup, ../feature-tests/sct-feature-test-backup-azure, ../feature-tests/sct-feature-test-backup-gce'
 )

@@ -13,5 +13,5 @@ managerPipeline(
     post_behavior_loader_nodes: 'destroy',
     post_behavior_monitor_nodes: 'destroy',
 
-    downstream_jobs_to_run: 'ubuntu22-upgrade-test'
+    downstream_jobs_to_run: '../upgrade-tests/ubuntu22-upgrade-test'
 )
