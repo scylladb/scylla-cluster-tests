@@ -36,9 +36,11 @@ from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder
 from unit_tests.lib.fake_remoter import FakeRemoter
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='module')
 def events():
-    mixing = EventsUtilsMixin()
+    class LocalMixing(EventsUtilsMixin):
+        pass
+    mixing = LocalMixing()
     mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
     yield mixing
 
