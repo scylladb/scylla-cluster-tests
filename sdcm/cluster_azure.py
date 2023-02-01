@@ -156,7 +156,7 @@ class AzureNode(cluster.BaseNode):
 class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-attributes
     def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments, too-many-locals
                  provisioners: List[AzureProvisioner], credentials,
-                 cluster_uuid=None, instance_type='Standard_L8s_v2', region_names=None,
+                 cluster_uuid=None, instance_type='Standard_L8s_v3', region_names=None,
                  user_name='root', cluster_prefix='cluster',
                  node_prefix='node', n_nodes=3, params=None, node_type=None):
         self.provisioners: List[AzureProvisioner] = provisioners
@@ -239,7 +239,7 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 
     def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments
                  provisioners: List[AzureProvisioner], credentials,
-                 instance_type='Standard_L8s_v2',
+                 instance_type='Standard_L8s_v3',
                  user_name='ubuntu',
                  user_prefix=None, n_nodes=3, params=None, region_names=None):
         # pylint: disable=too-many-locals
