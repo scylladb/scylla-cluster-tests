@@ -84,7 +84,7 @@
             "type": "datasource",
             "uid": "grafana"
           },
-          "enable": true,
+          "enable": false,
           "hide": false,
           "iconColor": "#eab839",
           "limit": 100,
@@ -124,7 +124,7 @@
             "type": "datasource",
             "uid": "grafana"
           },
-          "enable": false,
+          "enable": true,
           "hide": false,
           "iconColor": "rgba(255, 96, 96, 1)",
           "limit": 100,
