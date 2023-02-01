@@ -29,6 +29,7 @@ def get_distro_name(distro_object):
         Distro.FEDORA35: "centos8",
         Distro.FEDORA36: "centos8",
         Distro.MINT20: "mint20",
+        Distro.MINT21: "mint21",
     }
     distro_name = known_distro_dict.get(distro_object, None)
     assert distro_name, f"Unfamiliar distribution: {distro_object}"
