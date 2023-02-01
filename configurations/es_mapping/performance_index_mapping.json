@@ -1,0 +1,25 @@
+{
+		"properties": {
+				"test_details": {
+					"properties": {
+						"start_time": {
+							"type": "date",
+							"format": "yyyy-MM-dd HH:mm:ss||yyyy/MM/dd HH:mm:ss||epoch_millis||epoch_second||strict_date_optional_time"
+						}
+					}
+				},
+				"versions": {
+					"properties": {
+						"scylla-server":{
+							"properties": {
+								"date": {
+									"type": "date",
+									"format": "yyyyMMdd||yyyy-MM-dd HH:mm:ss||yyyy/MM/dd HH:mm:ss||epoch_millis||epoch_second||strict_date_optional_time"
+								}
+							}
+						}
+					}
+				}
+		}
+
+}
