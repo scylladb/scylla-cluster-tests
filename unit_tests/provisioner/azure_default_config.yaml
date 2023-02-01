@@ -3,9 +3,9 @@ user_prefix: unit-test
 instance_provision: 'spot'
 instance_provision_fallback_on_demand: false
 
-azure_instance_type_db: 'Standard_L8s_v2'
+azure_instance_type_db: 'Standard_L8s_v3'
 azure_instance_type_loader: 'Standard_F4s_v2'
-azure_instance_type_monitor: 'Standard_D2_v5'
+azure_instance_type_monitor: 'Standard_D2_v4'
 # get images urn's by running: `az vm image list --output table --all --offer CentOS --publisher OpenLogic`
 azure_image_loader: 'OpenLogic:CentOS:7_9:latest'
 azure_image_monitor: 'OpenLogic:CentOS:7_9:latest'

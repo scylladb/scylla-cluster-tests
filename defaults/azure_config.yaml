@@ -1,14 +1,14 @@
 # TODO: Go over it and fix detauls
 instance_provision: 'spot'
 spot_max_price: 0.60
-instance_provision_fallback_on_demand: false
+instance_provision_fallback_on_demand: true
 azure_region_name:
   - eastus
 user_credentials_path: '~/.ssh/scylla-qa-ec2'
 
-azure_instance_type_db: 'Standard_L8s_v2'
+azure_instance_type_db: 'Standard_L8s_v3'
 azure_instance_type_loader: 'Standard_F4s_v2'
-azure_instance_type_monitor: 'Standard_D2_v5'
+azure_instance_type_monitor: 'Standard_D2_v4'
 # get images urn's by running: `az vm image list --output table --all --offer CentOS --publisher OpenLogic`
 azure_image_loader: 'Canonical:0001-com-ubuntu-server-focal:20_04-lts-gen2:20.04.202208100'
 azure_image_monitor: 'Canonical:0001-com-ubuntu-server-focal:20_04-lts-gen2:20.04.202208100'
