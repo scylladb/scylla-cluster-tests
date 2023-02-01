@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from cassandra import OperationTimedOut
 from unit_tests.test_cluster import DummyDbCluster, DummyNode
+from unit_tests.lib.events_utils import EventsUtilsMixin
 from sdcm.scan_operation_thread import ScanOperationThread, FullScanParams
 
 
@@ -43,15 +44,23 @@ class DBCluster(DummyDbCluster):  # pylint: disable=abstract-method
         return self.connection_mock
 
 
-def get_event_log_file(events):
-    if (log_file := Path(events.temp_dir, "events_log", "events.log")).exists():
+def get_event_log_file(module_events):  # pylint: disable=redefined-outer-name
+    if (log_file := Path(module_events.temp_dir, "events_log", "events.log")).exists():
         return log_file.read_text(encoding="utf-8").rstrip().split('\n')
     return ""
 
 
+@pytest.fixture(scope='module')
+def module_events():
+    mixing = EventsUtilsMixin()
+    mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+    yield mixing
+    mixing.teardown_events_processes()
+
+
 @pytest.fixture(scope='function', autouse=True)
-def cleanup_event_log_file(events):
-    with open(os.path.join(events.temp_dir, "events_log", "events.log"), 'r+', encoding="utf-8") as file:
+def cleanup_event_log_file(module_events):  # pylint: disable=redefined-outer-name
+    with open(os.path.join(module_events.temp_dir, "events_log", "events.log"), 'r+', encoding="utf-8") as file:
         file.truncate(0)
 
 
@@ -93,16 +102,16 @@ def cluster(node):  # pylint: disable=redefined-outer-name
 
 
 @pytest.mark.parametrize("mode", ['table', 'partition', 'aggregate'])
-def test_scan_positive(mode, events, cluster):  # pylint: disable=redefined-outer-name
+def test_scan_positive(mode, module_events, cluster):  # pylint: disable=redefined-outer-name
     default_params = FullScanParams(
         db_cluster=cluster,
         ks_cf='a.b',
         mode=mode,
         **DEFAULT_PARAMS
     )
-    with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=2):
+    with module_events.wait_for_n_events(module_events.get_events_logger(), count=2, timeout=10):
         ScanOperationThread(default_params)._run_next_scan_operation()  # pylint: disable=protected-access
-    all_events = get_event_log_file(events)
+    all_events = get_event_log_file(module_events)
     assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
     assert "Severity.NORMAL" in all_events[1] and "period_type=end" in all_events[1]
     if mode == "aggregate":
@@ -129,7 +138,7 @@ class ExecuteAsyncOperationTimedOutMockCqlConnectionPatient(MockCqlConnectionPat
                           ['aggregate', 'WARNING', 60*30, 'execute'],
                           ['aggregate', 'ERROR', 0, 'execute'],
                           ['table', 'WARNING', 0, 'execute']])
-def test_scan_negative_operation_timed_out(mode, severity, timeout, execute_mock, events, node):
+def test_scan_negative_operation_timed_out(mode, severity, timeout, execute_mock, module_events, node):
     # pylint: disable=redefined-outer-name
     # pylint: disable=too-many-arguments
     if execute_mock == 'execute_async':
@@ -145,9 +154,9 @@ def test_scan_negative_operation_timed_out(mode, severity, timeout, execute_mock
         aggregate_operation_limit=timeout,
         **DEFAULT_PARAMS
     )
-    with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=2):
+    with module_events.wait_for_n_events(module_events.get_events_logger(), count=2, timeout=10):
         ScanOperationThread(default_params)._run_next_scan_operation()  # pylint: disable=protected-access
-    all_events = get_event_log_file(events)
+    all_events = get_event_log_file(module_events)
     assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
     assert f"Severity.{severity}" in all_events[1] and "period_type=end" in all_events[1]
 
@@ -172,7 +181,7 @@ class ExecuteAsyncExceptionMockCqlConnectionPatient(MockCqlConnectionPatient):
     ['partition', 'execute_async'],
     ['aggregate', 'execute'],
     ['table', 'execute']])
-def test_scan_negative_exception(mode, severity, running_nemesis, execute_mock, events, node):
+def test_scan_negative_exception(mode, severity, running_nemesis, execute_mock, module_events, node):
     # pylint: disable=redefined-outer-name
     # pylint: disable=too-many-arguments
     if running_nemesis:
@@ -191,8 +200,8 @@ def test_scan_negative_exception(mode, severity, running_nemesis, execute_mock, 
         mode=mode,
         ** DEFAULT_PARAMS
     )
-    with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=2):
+    with module_events.wait_for_n_events(module_events.get_events_logger(), count=2, timeout=10):
         ScanOperationThread(default_params)._run_next_scan_operation()  # pylint: disable=protected-access
-    all_events = get_event_log_file(events)
+    all_events = get_event_log_file(module_events)
     assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
     assert f"Severity.{severity}" in all_events[1] and "period_type=end" in all_events[1]
