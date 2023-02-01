@@ -97,9 +97,11 @@ from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
+from sdcm.utils.es_index import create_index, get_mapping
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
 from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
+
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
@@ -1592,6 +1594,18 @@ def generate_parallel_timelines_report(logdir: str | None, test_id: str | None) 
     LOGGER.info("Found the file '%s'", raw_events_log_path)
     pt_report_generator = ParallelTimelinesReportGenerator(events_file=raw_events_log_path)
     pt_report_generator.generate_full_report()
+
+
+@cli.command("create-es-index", help="Create ElasticSearch index with mapping ")
+@click.option("-n", "--name", envvar='SCT_ES_INDEX_NAME', required=True, help="ES index name")
+@click.option("-dt", "--doc-type", envvar='SCT_ES_DOC_TYPE', default="")
+@click.option("-f", "--mapping-file", envvar='SCT_MAPPING_FILEPATH', type=click.Path(exists=True),
+              required=True, help="Full path to es index mapping file")
+def create_es_index(name: str, doc_type: str, mapping_file: str) -> None:
+    add_file_logger()
+
+    mapping_data = get_mapping(mapping_file)
+    create_index(index_name=name, doc_type=doc_type, mappings=mapping_data)
 
 
 cli.add_command(configure_jenkins_builders)
