@@ -2320,7 +2320,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         Copy data from <src_keyspace>.<src_view> to <dest_keyspace>.<dest_table> if copy_data is True
         """
         result = True
-        create_statement = "SELECT * FROM system_schema.table where ks_cf = '%s' " \
+        create_statement = "SELECT * FROM system_schema.table where table_name = '%s' " \
                            "and keyspace_name = '%s'" % (src_table, src_keyspace)
         if not self.create_table_as(node, src_keyspace, src_table, dest_keyspace,
                                     dest_table, create_statement, columns_list):
@@ -2396,7 +2396,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
                 for column in columns_list or result.column_names:
                     column_kind = session.execute("select kind from system_schema.columns where keyspace_name='{ks}' "
-                                                  "and ks_cf='{name}' and column_name='{column}'".format(
+                                                  "and table_name='{name}' and column_name='{column}'".format(
                                                       ks=src_keyspace,
                                                       name=src_table,
                                                       column=column))
@@ -2551,7 +2551,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return table_id[0]
 
     def get_tables_name_of_keyspace(self, session, keyspace_name):
-        query = "SELECT ks_cf FROM system_schema.tables WHERE keyspace_name='{}' ".format(keyspace_name)
+        query = "SELECT table_name FROM system_schema.tables WHERE keyspace_name='{}' ".format(keyspace_name)
         table_id = self.rows_to_list(session.execute(query))
         return table_id[0]
 
