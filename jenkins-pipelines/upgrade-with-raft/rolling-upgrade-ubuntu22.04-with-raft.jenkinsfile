@@ -1,0 +1,16 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+rollingUpgradePipeline(
+    backend: 'gce',
+    base_versions: '',  // auto mode
+    linux_distro: 'ubuntu-jammy',
+    disable_raft: false,
+    use_preinstalled_scylla: true,
+    test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
+    test_config: 'test-cases/upgrades/rolling-upgrade.yaml',
+    workaround_kernel_bug_for_iotune: false,
+    internode_compression: 'all',
+)

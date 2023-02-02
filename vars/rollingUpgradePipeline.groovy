@@ -219,6 +219,9 @@ def call(Map pipelineParams) {
                                                             if [[ ${pipelineParams.gce_image_db} != null ]] ; then
                                                                 export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
                                                             fi
+                                                            if [[ ${pipelineParams.disable_raft} != null ]] ; then
+                                                                export SCT_DISABLE_RAFT=${pipelineParams.disable_raft}
+                                                            fi
                                                             export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
                                                             export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
 
