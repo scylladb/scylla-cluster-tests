@@ -847,6 +847,20 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         For multi-dc upgrades, alternates upgraded nodes between dc's.
         """
+        # In case the target version >= 3.1 we need to perform test for truncate entries
+        target_upgrade_version = self.params.get('target_upgrade_version').replace('~', '-')
+        self.truncate_entries_flag = False
+        if target_upgrade_version and parse_scylla_version(target_upgrade_version) >= parse_scylla_version('3.1') and \
+                not is_enterprise(target_upgrade_version):
+            self.truncate_entries_flag = True
+
+        # Prepare keyspace and tables for truncate test
+        if self.truncate_entries_flag:
+            self.insert_rows = 10
+            self.fill_db_data_for_truncate_test(insert_rows=self.insert_rows)
+            # Let to ks_truncate complete the schema changes
+            time.sleep(120)
+
         self._add_sla_credentials_to_stress_commands(workloads_with_sla=['stress_during_entire_upgrade',
                                                                          'stress_after_cluster_upgrade'])
         step = itertools_count(start=1)
