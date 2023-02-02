@@ -1358,6 +1358,7 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
     for group_name, group_desc in [
         ('longevity', 'SCT Longevity Tests'),
         ('rolling-upgrade', 'SCT Rolling Upgrades'),
+        ('rolling-upgrade-raft-disabled', 'SCT Rolling Upgrades Raft Disabled'),
         ('gemini-', 'SCT Gemini Tests'),
         ('features-', 'SCT Feature Tests'),
         ('artifacts', 'SCT Artifacts Tests'),
@@ -1391,6 +1392,9 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
                 server.create_pipeline_job(jenkins_file, group_name)
         if group_name == 'nemesis':
             for jenkins_file in glob.glob(f'{base_path}/nemesis/*'):
+                server.create_pipeline_job(jenkins_file, group_name)
+        if group_name == 'rolling-upgrade-raft-disabled':
+            for jenkins_file in glob.glob(f'{base_path}/upgrade-with-raft/*'):
                 server.create_pipeline_job(jenkins_file, group_name)
 
     server.create_directory(

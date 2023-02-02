@@ -150,9 +150,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         new_scylla_repo = self.params.get('new_scylla_repo')
         new_version = self.params.get('new_version')
         upgrade_node_packages = self.params.get('upgrade_node_packages')
-        scylla_yaml_updates = {
-            "consistent_cluster_management": True
-        }
+
+        scylla_yaml_updates = {}
+        if not self.params.get('disable_raft'):
+            scylla_yaml_updates.update({"consistent_cluster_management": True})
 
         if self.params.get('test_sst3'):
             scylla_yaml_updates.update({"enable_sstables_mc_format": True})
@@ -237,7 +238,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
         node.run_scylla_sysconfig_setup()
-        self._update_scylla_yaml_on_node(node_to_update=node, updates=scylla_yaml_updates)
+        if scylla_yaml_updates:
+            self._update_scylla_yaml_on_node(node_to_update=node, updates=scylla_yaml_updates)
         node.start_scylla_server(verify_up_timeout=500)
         self.db_cluster.get_db_nodes_cpu_mode()
         result = node.remoter.run('scylla --version')
