@@ -113,15 +113,15 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
 
     def install_benchmark_tools(self):
         try:
-            parallel = ParallelObject(self._benchmark_runners, timeout=300)
-            parallel.run(lambda x: x.install_benchmark_tools(), ignore_exceptions=True)
+            parallel = ParallelObject(self._benchmark_runners, timeout=600)
+            parallel.run(lambda x: x.install_benchmark_tools(), ignore_exceptions=False)
         except TimeoutError as exc:
             LOGGER.warning("Ran into TimeoutError while installing benchmark tools: Exception:\n%s", exc)
 
     def run_benchmarks(self):
         try:
-            parallel = ParallelObject(self._benchmark_runners, timeout=300)
-            parallel.run(lambda x: x.run_benchmarks(), ignore_exceptions=True)
+            parallel = ParallelObject(self._benchmark_runners, timeout=1200)
+            parallel.run(lambda x: x.run_benchmarks(), ignore_exceptions=False)
         except TimeoutError as exc:
             LOGGER.warning("Run into TimeoutError during running benchmarks. Exception:\n%s", exc)
         self._collect_benchmark_output()
