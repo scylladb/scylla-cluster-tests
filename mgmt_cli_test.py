@@ -185,7 +185,7 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
 
     # pylint: disable=too-many-arguments
     def verify_backup_success(self, mgr_cluster, backup_task, keyspace_name='keyspace1', tables_names=None,
-                              truncate=True):
+                              truncate=True, restore_data_with_task=False, timeout=None):
         if tables_names is None:
             tables_names = ['standard1']
         per_keyspace_tables_dict = {keyspace_name: tables_names}
@@ -193,8 +193,11 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
             for table_name in tables_names:
                 self.log.info(f'running truncate on {keyspace_name}.{table_name}')
                 self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {keyspace_name}.{table_name}')
-        self.restore_backup_from_backup_task(mgr_cluster=mgr_cluster, backup_task=backup_task,
-                                             keyspace_and_table_list=per_keyspace_tables_dict)
+        if restore_data_with_task:
+            self.restore_data_with_task(mgr_cluster=mgr_cluster, backup_task=backup_task, timeout=timeout)
+        else:
+            self.restore_backup_from_backup_task(mgr_cluster=mgr_cluster, backup_task=backup_task,
+                                                 keyspace_and_table_list=per_keyspace_tables_dict)
 
     def restore_schema_with_task(self, mgr_cluster, backup_task, timeout):
         snapshot_tag = backup_task.get_snapshot_tag()
