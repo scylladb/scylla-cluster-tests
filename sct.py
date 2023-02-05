@@ -1373,6 +1373,7 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
 
     server.create_directory(
         name='artifacts-offline-install', display_name='SCT Artifacts Offline Install Tests')
+    artifacts_offline_exclude_jobs = r'-web|-ami-|-image'
 
     def jenkinsfile_generator():
         for i in ['ami', 'amazon2', 'docker', 'gce-image']:
@@ -1381,10 +1382,12 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
     for jenkins_file in glob.glob(f'{base_path}/artifacts-*.jenkinsfile'):
         if any(jenkinsfile_generator()):
             continue
-        server.create_pipeline_job(jenkins_file, 'artifacts-offline-install')
+        if not re.search(artifacts_offline_exclude_jobs, jenkins_file):
+            server.create_pipeline_job(jenkins_file, 'artifacts-offline-install')
     for jenkins_file in glob.glob(f'{base_path}/nonroot-offline-install/*.jenkinsfile'):
-        server.create_pipeline_job(jenkins_file, 'artifacts-offline-install',
-                                   job_name=str(Path(jenkins_file).stem) + '-nonroot')
+        if not re.search(artifacts_offline_exclude_jobs, jenkins_file):
+            server.create_pipeline_job(jenkins_file, 'artifacts-offline-install',
+                                       job_name=str(Path(jenkins_file).stem) + '-nonroot')
 
 
 @cli.command('create-test-release-jobs-enterprise', help="Create pipeline jobs for a new branch")
