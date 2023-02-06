@@ -196,6 +196,23 @@ class BackupFunctionsMixIn:
         self.restore_backup_from_backup_task(mgr_cluster=mgr_cluster, backup_task=backup_task,
                                              keyspace_and_table_list=per_keyspace_tables_dict)
 
+    def restore_schema_with_task(self, mgr_cluster, backup_task, timeout):
+        snapshot_tag = backup_task.get_snapshot_tag()
+        restore_task = mgr_cluster.create_restore_task(restore_schema=True, location_list=self.locations,
+                                                       snapshot_tag=snapshot_tag)
+        restore_task.wait_and_get_final_status(step=30, timeout=timeout)
+        assert restore_task.status == TaskStatus.DONE, f"Schema restoration of {snapshot_tag} has failed!"
+        self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
+
+    def restore_data_with_task(self, mgr_cluster, backup_task, timeout):
+        snapshot_tag = backup_task.get_snapshot_tag()
+        restore_task = mgr_cluster.create_restore_task(restore_data=True, location_list=self.locations,
+                                                       snapshot_tag=snapshot_tag)
+        restore_task.wait_and_get_final_status(step=30, timeout=timeout)
+        assert restore_task.status == TaskStatus.DONE, f"Schema restoration of {snapshot_tag} has failed!"
+        for node in self.db_cluster.nodes:
+            node.run_nodetool("repair")  # After data restoration, you should repair every node
+
     def run_verification_read_stress(self):
         stress_queue = []
         stress_cmd = self.params.get('stress_read_cmd')
