@@ -296,6 +296,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         return gce_disk_struct
 
     def _create_instance(self, node_index, dc_idx, spot=False, enable_auto_bootstrap=False):
+        # pylint: disable=too-many-locals
+
         def set_tags_as_labels(_instance):
             self.log.debug(f"Expected tags are {self.tags}")
             # https://cloud.google.com/resource-manager/docs/tags/tags-creating-and-managing#adding_tag_values
@@ -331,7 +333,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 sudo systemctl stop sshguard
             """)
         username = self.params.get("gce_image_username")
-        public_key = pub_key_from_private_key_file(self.params.get("user_credentials_path"))
+        public_key, key_type = pub_key_from_private_key_file(self.params.get("user_credentials_path"))
+
         create_node_params = dict(name=name,
                                   size=self._gce_instance_type,
                                   image=self._gce_image,
@@ -343,7 +346,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                "startup-script": startup_script,
                                                "user-data": self.prepare_user_data(enable_auto_bootstrap),
                                                "block-project-ssh-keys": "true",
-                                               "ssh-keys": f"{username}:ssh-rsa {public_key}", },
+                                               "ssh-keys": f"{username}:{key_type} {public_key}", },
                                   ex_service_accounts=self._service_accounts,
                                   ex_preemptible=spot)
 

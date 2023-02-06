@@ -275,8 +275,8 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
                     key_file: str,
                     comment: str = "test@local") -> None:
         container = cls.get_container(instance, name)
-        pub_key = pub_key_from_private_key_file(key_file)
-        shell_command = f"umask 077 && echo 'ssh-rsa {pub_key} {comment}' >> ~/.ssh/authorized_keys"
+        pub_key, key_type = pub_key_from_private_key_file(key_file)
+        shell_command = f"umask 077 && echo '{key_type} {pub_key} {comment}' >> ~/.ssh/authorized_keys"
         res = container.exec_run(["sh", "-c", shell_command], user=user)
         if res.exit_code:
             raise DockerException(f"{container}: {res.output.decode('utf-8')}")

@@ -103,4 +103,7 @@ class KeyStore:  # pylint: disable=too-many-public-methods
 
 
 def pub_key_from_private_key_file(key_file):
-    return paramiko.rsakey.RSAKey.from_private_key_file(os.path.expanduser(key_file)).get_base64()
+    try:
+        return paramiko.rsakey.RSAKey.from_private_key_file(os.path.expanduser(key_file)).get_base64(), "ssh-rsa"
+    except paramiko.ssh_exception.SSHException:
+        return paramiko.ed25519key.Ed25519Key.from_private_key_file(os.path.expanduser(key_file)).get_base64(), "ssh-ed25519"
