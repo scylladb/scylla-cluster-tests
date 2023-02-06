@@ -1373,15 +1373,9 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
 
     server.create_directory(
         name='artifacts-offline-install', display_name='SCT Artifacts Offline Install Tests')
-    artifacts_offline_exclude_jobs = r'-web|-ami-|-image'
-
-    def jenkinsfile_generator():
-        for i in ['ami', 'amazon2', 'docker', 'gce-image']:
-            yield f'-{i}.jenkinsfile' in jenkins_file
+    artifacts_offline_exclude_jobs = r'-web|-ami|-image|-docker'
 
     for jenkins_file in glob.glob(f'{base_path}/artifacts-*.jenkinsfile'):
-        if any(jenkinsfile_generator()):
-            continue
         if not re.search(artifacts_offline_exclude_jobs, jenkins_file):
             server.create_pipeline_job(jenkins_file, 'artifacts-offline-install')
     for jenkins_file in glob.glob(f'{base_path}/nonroot-offline-install/*.jenkinsfile'):
