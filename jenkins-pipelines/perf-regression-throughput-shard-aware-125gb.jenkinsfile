@@ -9,6 +9,7 @@ perfRegressionParallelPipeline(
     test_name: "performance_regression_test.PerformanceRegressionTest",
     test_config: '''["test-cases/performance/perf-regression-throughput-125gb.yaml","configurations/perf-loaders-shard-aware-config.yaml"]''',
     sub_tests: ["test_write", "test_read", "test_mixed"],
+    test_email_title: "throughput disk-and-cache - shard-aware",
 
     timeout: [time: 600, unit: "MINUTES"]
 )
