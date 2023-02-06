@@ -9,6 +9,7 @@ perfRegressionParallelPipeline(
     test_name: "performance_regression_test.PerformanceRegressionTest",
     test_config: '''["test-cases/performance/perf-regression-latency-125gb.yaml","configurations/perf-loaders-shard-aware-config.yaml"]''',
     sub_tests: ["test_latency"],
+    test_email_title: "disk-and-cache - shard-aware",
 
     timeout: [time: 680, unit: "MINUTES"]
 )

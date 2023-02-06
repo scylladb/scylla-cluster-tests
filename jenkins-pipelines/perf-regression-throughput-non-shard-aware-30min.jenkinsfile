@@ -9,6 +9,7 @@ perfRegressionParallelPipeline(
     test_name: "performance_regression_test.PerformanceRegressionTest",
     test_config: '''["test-cases/performance/perf-regression.100threads.30M-keys.yaml","configurations/perf-loaders-non-shard-aware-config.yaml", "configurations/run_db_node_benchmarks.yaml"]''',
     sub_tests: ["test_write", "test_read", "test_mixed"],
+    test_email_title: "throughput - non-shard-aware",
 
     timeout: [time: 350, unit: "MINUTES"]
 )

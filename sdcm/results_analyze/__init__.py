@@ -727,7 +727,11 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.LongevityTest.test_custom_time
         except IndexError:
             test_name = full_test_name
-        subject = f'Performance Regression Compare Results - {test_name} - {test_version} - {str(test_start_time)}'
+        subject = f'Performance Regression Compare Results - {test_name} - {test_version}'
+        if email_subject_postfix:
+            subject += f' - {email_subject_postfix}'
+        subject += f' - {str(test_start_time)}'
+
         if ycsb:
             if ycsb_engine := ycsb.get('raw_cmd', "").split():
                 if len(ycsb_engine) > 3:
@@ -739,8 +743,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             subject = f'YCSB({ycsb_engine}) Performance Regression - {test_name} - {test_version} - {str(test_start_time)}'
         if ebs:
             subject = f'{subject} (ebs volume type {ebs_type})'
-        if email_subject_postfix:
-            subject = f'{subject} {email_subject_postfix}'
 
         email_data = {'email_body': results,
                       'attachments': (),

@@ -7,5 +7,6 @@ perfRegressionParallelPipeline(
     backend: "aws",
     test_name: "performance_regression_test.PerformanceRegressionTest",
     test_config: '''["test-cases/performance/perf-regression-latency-250gb-with-nemesis.yaml", "configurations/perf-loaders-non-shard-aware-config.yaml", "configurations/run_db_node_benchmarks.yaml"]''',
-    sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"]
+    sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
+    test_email_title: "non-shard-aware"
 )

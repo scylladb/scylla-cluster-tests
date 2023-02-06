@@ -56,6 +56,10 @@ def call(Map pipelineParams) {
                    description: 'Stop test if perf hardware test values exceed the set limits',
                    name: 'stop_on_hw_perf_failure')
 
+            string(defaultValue: "${pipelineParams.get('test_email_title', '')}",
+                   description: 'String added to test email subject',
+                   name: 'test_email_title')
+
             string(defaultValue: "${pipelineParams.get('email_recipients', 'scylla-perf-results@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
@@ -243,6 +247,9 @@ def call(Map pipelineParams) {
                                                         fi
                                                         if [[ -n "${params.k8s_enable_tls ? params.k8s_enable_tls : ''}" ]] ; then
                                                             export SCT_K8S_ENABLE_TLS=${params.k8s_enable_tls}
+                                                        fi
+                                                        if [[ -n "${params.test_email_title ? params.test_email_title : ''}" ]] ; then
+                                                            export SCT_EMAIL_SUBJECT_POSTFIX=${params.test_email_title}
                                                         fi
 
                                                         echo "start test ......."
