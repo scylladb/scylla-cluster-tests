@@ -51,7 +51,7 @@ HistorgramSummary = make_dataclass("HistorgramSummary",
 
 class CSHistogram(HdrHistogram):
     LOWEST = 1
-    HIGHEST = 12 * 3600 * 1000 * 1000
+    HIGHEST = 24 * 3600_000_000_000
     SIGNIFICANT = 3
 
     def __init__(self, *args, **kwargs):
