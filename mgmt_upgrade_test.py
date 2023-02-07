@@ -142,10 +142,12 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
 
         with self.subTest("Restoring an older version backup task with newer version manager"):
             self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
+            self.run_verification_read_stress()
 
         with self.subTest("Restoring an older version backup task with newer version manager, using a restore task"):
             self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task,
                                        restore_data_with_task=True, timeout=600)
+            self.run_verification_read_stress()
 
         with self.subTest("Executing the 'backup list' and 'backup files' commands on a older version backup"
                           " with newer version manager"):
