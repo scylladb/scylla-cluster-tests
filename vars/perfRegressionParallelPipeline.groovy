@@ -249,7 +249,7 @@ def call(Map pipelineParams) {
                                                             export SCT_K8S_ENABLE_TLS=${params.k8s_enable_tls}
                                                         fi
                                                         if [[ -n "${params.test_email_title ? params.test_email_title : ''}" ]] ; then
-                                                            export SCT_EMAIL_SUBJECT_POSTFIX=${params.test_email_title}
+                                                            export SCT_EMAIL_SUBJECT_POSTFIX="${params.test_email_title}"
                                                         fi
 
                                                         echo "start test ......."
