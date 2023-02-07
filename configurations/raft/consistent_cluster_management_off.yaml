@@ -1,0 +1,2 @@
+append_scylla_yaml: |
+  consistent_cluster_management: false
