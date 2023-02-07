@@ -47,7 +47,7 @@ from sdcm.sct_events.group_common_events import ignore_no_space_errors
 from sdcm.keystore import KeyStore
 
 
-class BackupFunctionsMixIn:
+class BackupFunctionsMixIn(LoaderUtilsMixin):
     DESTINATION = Path('/tmp/backup')
 
     backup_azure_blob_service = None
@@ -301,7 +301,7 @@ class FilesNotCorrupted(Exception):
 
 
 # pylint: disable=too-many-public-methods
-class MgmtCliTest(BackupFunctionsMixIn, LoaderUtilsMixin, ClusterTester):
+class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     """
     Test Scylla Manager operations on Scylla cluster.
     """
