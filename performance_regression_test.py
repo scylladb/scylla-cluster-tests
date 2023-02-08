@@ -749,7 +749,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         if not self.params["use_hdr_cs_histogram"]:
             return
 
-        start_time = self.start_time
+        start_time = self.get_test_start_time() or self.start_time
         end_time = time.time()
 
         if test_type == PerformanceTestType.THROUGHPUT:
