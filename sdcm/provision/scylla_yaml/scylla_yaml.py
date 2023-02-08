@@ -243,6 +243,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
     replace_token: str = ""
     replace_address: str = ""
     replace_address_first_boot: str = ""
+    replace_node_first_boot: str = ""
     override_decommission: bool = False
     enable_repair_based_node_ops: bool = True
     ring_delay_ms: int = 30 * 1000

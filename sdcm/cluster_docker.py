@@ -302,7 +302,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
                                         current_node=node,
                                         removed_nodes_list=self.dead_nodes_ip_address_list):
             event.publish()
-        self.clean_replacement_node_ip(node)
+        self.clean_replacement_node_options(node)
 
     @staticmethod
     def check_aio_max_nr(node: DockerNode, recommended_value: int = AIO_MAX_NR_RECOMMENDED_VALUE):

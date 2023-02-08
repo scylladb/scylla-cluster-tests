@@ -1167,8 +1167,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise LdapNotRunning("LDAP server was supposed to be running, but it is not")
 
     @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
-    def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=0):
-        """When old_node_private_ip is not None replacement node procedure is initiated"""
+    def _add_and_init_new_cluster_node(self, old_node_ip=None, host_id=None,
+                                       timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=0):
+        """When old_node_ip or host_id are not None then replacement node procedure is initiated"""
         # TODO: make it work on K8S when we have decommissioned (by nodetool) nodes.
         #       Now it will fail because pod which hosts decommissioned Scylla member is reported
         #       as 'NotReady' and will fail the pod waiter function.
@@ -1178,10 +1179,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
-        new_node.replacement_node_ip = old_node_ip
+        if new_node.is_replacement_by_host_id_supported:
+            new_node.replacement_host_id = host_id
+        else:
+            new_node.replacement_node_ip = old_node_ip
         try:
             self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, check_node_health=False)
-            self.cluster.clean_replacement_node_ip(new_node)
+            self.cluster.clean_replacement_node_options(new_node)
         except (NodeSetupFailed, NodeSetupTimeout):
             self.log.warning("TestConfig of the '%s' failed, removing it from list of nodes" % new_node)
             self.cluster.nodes.remove(new_node)
@@ -1244,8 +1248,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         time.sleep(sleep_time)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
 
     @latency_calculator_decorator(legend="Replace a node in cluster with new one")
-    def replace_node(self, old_node_ip, rack=0):
-        return self._add_and_init_new_cluster_node(old_node_ip, rack=rack)
+    def replace_node(self, old_node_ip, host_id, rack=0):
+        return self._add_and_init_new_cluster_node(old_node_ip, host_id, rack=rack)
 
     def _verify_resharding_on_k8s(self, cpus):
         nodes_data = []
@@ -1464,12 +1468,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 'instead this one for K8S')
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         old_node_ip = self.target_node.ip_address
+        host_id = self.target_node.host_id
         is_old_node_seed = self.target_node.is_seed
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
         self._terminate_and_wait(target_node=self.target_node)
         assert get_node_state(old_node_ip) == "DN", "Removed node state should be DN"
         InfoEvent(message='FinishEvent - target_node was terminated').publish()
-        new_node = self.replace_node(old_node_ip, rack=self.target_node.rack)
+        new_node = self.replace_node(old_node_ip, host_id, rack=self.target_node.rack)
         try:
             if new_node.get_scylla_config_param("enable_repair_based_node_ops") == 'false':
                 InfoEvent(message='StartEvent - Run repair on new node').publish()
