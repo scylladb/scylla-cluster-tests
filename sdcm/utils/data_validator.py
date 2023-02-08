@@ -790,6 +790,11 @@ class LongevityDataValidator:
                 ).publish()
             else:
                 LOGGER.debug('Validation deleted rows finished successfully')
+        elif len(actual_result) == self.rows_before_deletion:
+            DataValidatorEvent.DeletedRowsValidator(
+                severity=Severity.WARNING,
+                message="Rows were not deleted. Maybe need to increase dataset for delete."
+            ).publish()
         else:
             LOGGER.warning('Deleted row were not found. May be issue #6181. '
                            'Actual dataset length: {}, Expected dataset length: {}'.format(len(actual_result),
