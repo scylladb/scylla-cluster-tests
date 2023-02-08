@@ -7,4 +7,4 @@ data:
   load-balance: "roundrobin"
   maxconn: "$HAPROXY_MAXCONN"
   src-ip-header: "True-Client-IP"
-  http-keep-alive: "true"
+  http-connection-mode: "http-keep-alive"
