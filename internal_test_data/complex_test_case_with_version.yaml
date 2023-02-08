@@ -43,7 +43,7 @@ gce_n_local_ssd_disk_monitor: 0
 
 db_type: scylla
 instance_type_db: 'i3.4xlarge'
-scylla_version: '4.5.3'
+scylla_version: '5.1.3'
 
 ami_id_loader: 'ami-07bcb57f57a485721'
 ami_id_monitor: 'ami-07bcb57f57a485721'

@@ -203,7 +203,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     @staticmethod
     def test_12_scylla_version_repo():
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = '4.4.3'
+        os.environ['SCT_SCYLLA_VERSION'] = '5.1.3'
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -455,11 +455,11 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(conf.get('ami_id_db_oracle'), ami_4_6_3)
 
     def test_16_oracle_scylla_version_eu_west_1(self):
-        ami_4_5_2 = "ami-057f1cfd8877782b2"
+        ami_5_1_3 = "ami-053e8113c01b576e4"
 
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_ORACLE_SCYLLA_VERSION'] = "4.5.2"
+        os.environ['SCT_ORACLE_SCYLLA_VERSION'] = "5.1.3"
         os.environ['SCT_REGION_NAME'] = 'eu-west-1'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
         os.environ["SCT_DB_TYPE"] = "mixed_scylla"
@@ -467,7 +467,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
-        self.assertEqual(conf.get('ami_id_db_oracle'), ami_4_5_2)
+        self.assertEqual(conf.get('ami_id_db_oracle'), ami_5_1_3)
 
     def test_16_oracle_scylla_version_wrong_region(self):
         ami_4_5_2_eu_west_1 = "ami-057f1cfd8877782b2"
