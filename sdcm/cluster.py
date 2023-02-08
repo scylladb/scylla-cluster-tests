@@ -267,8 +267,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # enable bootstrap.
         self.enable_auto_bootstrap = True
 
-        # If node is a replacement for a dead node, store dead node private ip here
+        # If a node is a replacement for a dead node, store a dead node's private ip/host id here
         self.replacement_node_ip = None
+        self.replacement_host_id = None
 
         self._kernel_version = None
         self._uuid = None
@@ -408,6 +409,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             scylla_yml.auto_bootstrap = self.enable_auto_bootstrap
         if self.replacement_node_ip:
             scylla_yml.replace_address_first_boot = self.replacement_node_ip
+        if self.replacement_host_id:
+            scylla_yml.replace_node_first_boot = self.replacement_host_id
         if append_scylla_yaml := self.parent_cluster.params.get('append_scylla_yaml'):
             append_scylla_yaml = yaml.safe_load(append_scylla_yaml)
             if any(substr in append_scylla_yaml for substr in (
@@ -2752,6 +2755,17 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             )
         )
 
+    @property
+    def is_replacement_by_host_id_supported(self):
+        # NOTE: compare 'LegacyVersion' returns 'False' for the following comparison:
+        #         LegacyVersion("5.2.0") > LegacyVersion('5.2.0~dev')
+        #       and 'True' for the following:
+        #         LegacyVersion("5.2.0~rc1") > LegacyVersion('5.2.0~dev')
+        #       So, compare to '5.1.999' because any 5.2+ version provides 'True' in this case
+        if self.is_enterprise:
+            return LegacyVersion(self.scylla_version) > LegacyVersion('2022.2.999')
+        return LegacyVersion(self.scylla_version) > LegacyVersion('5.1.999')
+
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
         """cqlsh [options] [host [port]]"""
         credentials = self.parent_cluster.get_db_auth()
@@ -4383,7 +4397,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         nodes_status = node.get_nodes_status()
         check_nodes_status(nodes_status=nodes_status, current_node=node)
 
-        self.clean_replacement_node_ip(node)
+        self.clean_replacement_node_options(node)
 
     def install_scylla_manager(self, node):
         pkgs_url = self.params.get("scylla_mgmt_pkg")
@@ -4431,13 +4445,18 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         pass
 
     @staticmethod
-    def clean_replacement_node_ip(node):
+    def clean_replacement_node_options(node):
+        # NOTE: If this is a replacement node then we need to set back the configuration
+        #       for case when scylla-server process gets restarted.
         if node.replacement_node_ip:
-            # If this is a replacement node, we need to set back configuration in case
-            # when scylla-server process will be restarted
             node.replacement_node_ip = None
             node.remoter.run(
                 f'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" '
+                f'{node.add_install_prefix(SCYLLA_YAML_PATH)}')
+        if node.replacement_host_id:
+            node.replacement_host_id = None
+            node.remoter.run(
+                f'sudo sed -i -e "s/^replace_node_first_boot:/# replace_node_first_boot:/g" '
                 f'{node.add_install_prefix(SCYLLA_YAML_PATH)}')
 
     @staticmethod

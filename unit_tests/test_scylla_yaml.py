@@ -325,6 +325,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'replace_token': '',
                 'replace_address': '',
                 'replace_address_first_boot': '',
+                'replace_node_first_boot': '',
                 'override_decommission': False,
                 'enable_repair_based_node_ops': True,
                 'ring_delay_ms': 30000,
