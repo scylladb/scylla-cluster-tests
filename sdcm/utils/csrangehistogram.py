@@ -119,8 +119,6 @@ class CSRangeHistogramBuilder:
                                                                range_end_time_sec=end_time,
                                                                absolute=absolute_time)
             if not next_hist:
-                if hdr_reader.start_time_sec > start_time:
-                    end_time = int(start_time)
                 break
             tag = next_hist.get_tag()
             if not tag:
@@ -139,7 +137,7 @@ class CSRangeHistogramBuilder:
 
     @staticmethod
     def build_histograms_range_with_interval(path: str,
-                                             start_time=0, end_time=sys.maxsize,
+                                             start_time: int | float, end_time: int | float,
                                              interval=TIME_INTERVAL, absolute_time=True) -> list[CSRangeHistogram]:
         """
             Build set of time range histogrmas (as list) from
@@ -150,7 +148,7 @@ class CSRangeHistogramBuilder:
         """
 
         start_ts = int(start_time)
-        end_ts = int(end_time or sys.maxsize)
+        end_ts = int(end_time)
         summary = []
 
         if end_ts - start_ts < TIME_INTERVAL:
@@ -172,10 +170,8 @@ class CSRangeHistogramBuilder:
         for start_interval in range(start_ts, end_ts, window_step):
             end_interval = end_ts if start_interval + window_step > end_ts else start_interval + window_step
             range_histograms = build_range_histogram(start_time=start_interval, end_time=end_interval)
-            if not range_histograms.histograms and int(range_histograms.start_time) == int(range_histograms.end_time):
-                continue
             if not range_histograms.histograms:
-                break
+                continue
             summary.append(range_histograms)
 
         return summary
@@ -298,5 +294,6 @@ class CSRangeHistogramSummary:
                 if tag.value in hst.histograms.keys():
                     parsed_summary = self.convert_raw_histogram(hst.histograms[tag.value], hst.start_time, hst.end_time)
                     summary.update({operation: asdict(parsed_summary)})
-            converted_histograms.append(summary)
+            if summary:
+                converted_histograms.append(summary)
         return converted_histograms
