@@ -3073,6 +3073,8 @@ class FillDatabaseData(ClusterTester):
 
             # Insert data to the tables
             self.cql_insert_data_to_simple_tables(session, rows=insert_rows)
+        # Let to ks_truncate complete the schema changes
+        self.db_cluster.wait_for_schema_agreement()
 
     def _enable_cdc(self, item, create_table):
         cdc_properties = "cdc = {'enabled': true, 'preimage': true, 'postimage': true, 'ttl': 36000}"

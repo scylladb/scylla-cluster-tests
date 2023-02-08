@@ -545,8 +545,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if self.truncate_entries_flag:
             self.insert_rows = 10
             self.fill_db_data_for_truncate_test(insert_rows=self.insert_rows)
-            # Let to ks_truncate complete the schema changes
-            time.sleep(120)
 
         # generate random order to upgrade
         nodes_num = len(self.db_cluster.nodes)
@@ -858,8 +856,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if self.truncate_entries_flag:
             self.insert_rows = 10
             self.fill_db_data_for_truncate_test(insert_rows=self.insert_rows)
-            # Let to ks_truncate complete the schema changes
-            time.sleep(120)
 
         self._add_sla_credentials_to_stress_commands(workloads_with_sla=['stress_during_entire_upgrade',
                                                                          'stress_after_cluster_upgrade'])
