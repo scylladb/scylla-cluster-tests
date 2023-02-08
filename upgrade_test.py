@@ -29,39 +29,33 @@ from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.stress_thread import CassandraStressThread
-from sdcm.utils.version_utils import is_enterprise, get_node_supported_sstable_versions
+from sdcm.utils.version_utils import get_node_supported_sstable_versions
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused, \
     ignore_abort_requested_errors, decorate_with_context
 from sdcm.utils import loader_utils
-from sdcm.utils.version_utils import parse_scylla_version
 from test_lib.sla import create_sla_auth
+
+
+NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
 
 
 def truncate_entries(func):
     @wraps(func)
     def inner(self, *args, **kwargs):
-        # Perform validation of truncate entries in case the new version is 3.1 or more
         node = args[0]
-        if self.truncate_entries_flag:
-            base_version = self.params.get('scylla_version')
-            system_truncated = bool(parse_scylla_version(base_version) >= parse_scylla_version('3.1')
-                                    and not is_enterprise(base_version))
-            with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
-                self.cql_truncate_simple_tables(session=session, rows=self.insert_rows)
-                self.validate_truncated_entries_for_table(session=session, system_truncated=system_truncated)
+        with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
+            self.cql_truncate_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+            self.validate_truncated_entries_for_table(session=session, system_truncated=True)
 
         func_result = func(self, *args, **kwargs)
 
-        result = node.remoter.run('scylla --version')
-        new_version = result.stdout
-        if new_version and parse_scylla_version(new_version) >= parse_scylla_version('3.1'):
-            # re-new connection
-            with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
-                self.validate_truncated_entries_for_table(session=session, system_truncated=True)
-                self.read_data_from_truncated_tables(session=session)
-                self.cql_insert_data_to_simple_tables(session=session, rows=self.insert_rows)
+        # re-new connection
+        with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
+            self.validate_truncated_entries_for_table(session=session, system_truncated=True)
+            self.read_data_from_truncated_tables(session=session)
+            self.cql_insert_data_to_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
         return func_result
     return inner
 
@@ -118,9 +112,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     # expected format version after upgrade and nodetool upgradesstables called
     # would be recalculated after all the cluster finish upgrade
     expected_sstable_format_version = 'mc'
-
-    insert_rows = None
-    truncate_entries_flag = False
 
     def read_data_from_truncated_tables(self, session):
         session.execute("USE truncate_ks")
@@ -426,7 +417,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         Run a set of different cql queries against various types/tables before
         and after upgrade of every node to check the consistency of data
         """
-        self.truncate_entries_flag = False  # not perform truncate entries test
         InfoEvent(message='Populate DB with many types of tables and data').publish()
         self.fill_db_data()
         InfoEvent(message='Run some Queries to verify data BEFORE UPGRADE').publish()
@@ -516,13 +506,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         we want to use this case to verify the read (cl=ALL) workload works
         well, upgrade all nodes to new version in the end.
         """
-        # In case the target version >= 3.1 we need to perform test for truncate entries
-        target_upgrade_version = self.params.get('target_upgrade_version').replace('~', '-')
-        self.truncate_entries_flag = False
-        if target_upgrade_version and parse_scylla_version(target_upgrade_version) >= parse_scylla_version('3.1') and \
-                not is_enterprise(target_upgrade_version):
-            self.truncate_entries_flag = True
-
         InfoEvent(message='pre-test - prepare test keyspaces and tables').publish()
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
@@ -542,9 +525,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}', n=10)
 
         # Prepare keyspace and tables for truncate test
-        if self.truncate_entries_flag:
-            self.insert_rows = 10
-            self.fill_db_data_for_truncate_test(insert_rows=self.insert_rows)
+        self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
 
         # generate random order to upgrade
         nodes_num = len(self.db_cluster.nodes)
@@ -845,17 +826,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         For multi-dc upgrades, alternates upgraded nodes between dc's.
         """
-        # In case the target version >= 3.1 we need to perform test for truncate entries
-        target_upgrade_version = self.params.get('target_upgrade_version').replace('~', '-')
-        self.truncate_entries_flag = False
-        if target_upgrade_version and parse_scylla_version(target_upgrade_version) >= parse_scylla_version('3.1') and \
-                not is_enterprise(target_upgrade_version):
-            self.truncate_entries_flag = True
-
         # Prepare keyspace and tables for truncate test
-        if self.truncate_entries_flag:
-            self.insert_rows = 10
-            self.fill_db_data_for_truncate_test(insert_rows=self.insert_rows)
+        self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
 
         self._add_sla_credentials_to_stress_commands(workloads_with_sla=['stress_during_entire_upgrade',
                                                                          'stress_after_cluster_upgrade'])
@@ -896,12 +868,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         and after upgrade of every node to check the consistency of data
         """
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
-        self.truncate_entries_flag = False  # not perform truncate entries test
         InfoEvent(message='Step1 - Populate DB with many types of tables and data').publish()
         target_upgrade_version = self.params.get('new_version')
-        if target_upgrade_version and parse_scylla_version(target_upgrade_version) >= parse_scylla_version('3.1') and \
-                not is_enterprise(target_upgrade_version):
-            self.truncate_entries_flag = True
         self.prepare_keyspaces_and_tables()
         InfoEvent(message='Step2 - Populate some data before upgrading cluster').publish()
         self.fill_and_verify_db_data('', pre_fill=True)
