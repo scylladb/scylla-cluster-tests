@@ -3862,6 +3862,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_sla_increase_shares_during_load(self):
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+        if not self.cluster.params.get('authenticator'):
+            raise UnsupportedNemesis("SLA feature can't work without authenticator")
 
         if not getattr(self.tester, "roles", None):
             raise UnsupportedNemesis('This nemesis is supported for SLA test only')
@@ -3880,6 +3882,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_sla_decrease_shares_during_load(self):
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+        if not self.cluster.params.get('authenticator'):
+            raise UnsupportedNemesis("SLA feature can't work without authenticator")
 
         if not getattr(self.tester, "roles", None):
             raise UnsupportedNemesis('This nemesis is supported for SLA test only')
@@ -3898,6 +3902,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_replace_service_level_using_detach_during_load(self):
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+        if not self.cluster.params.get('authenticator'):
+            raise UnsupportedNemesis("SLA feature can't work without authenticator")
 
         if not getattr(self.tester, "roles", None):
             raise UnsupportedNemesis('This nemesis is supported for SLA test only')
@@ -3917,6 +3923,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_replace_service_level_using_drop_during_load(self):
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+        if not self.cluster.params.get('authenticator'):
+            raise UnsupportedNemesis("SLA feature can't work without authenticator")
 
         if not getattr(self.tester, "roles", None):
             raise UnsupportedNemesis('This nemesis is supported for SLA test only')
@@ -3937,6 +3945,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_increase_shares_by_attach_another_sl_during_load(self):
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+        if not self.cluster.params.get('authenticator'):
+            raise UnsupportedNemesis("SLA feature can't work without authenticator")
 
         if not getattr(self.tester, "roles", None):
             raise UnsupportedNemesis('This nemesis is supported for SLA test only')
@@ -3958,6 +3968,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_seven_sl_with_max_shares_during_load(self):
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+        if not self.cluster.params.get('authenticator'):
+            raise UnsupportedNemesis("SLA feature can't work without authenticator")
 
         if not getattr(self.tester, "roles", None):
             raise UnsupportedNemesis('This nemesis is supported for SLA test only')
