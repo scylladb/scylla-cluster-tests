@@ -120,7 +120,9 @@ RepositoryDetails = namedtuple("RepositoryDetails", ["type", "urls"])
 
 def parse_scylla_version(version_to_parse: str) -> version.Version:
     version_format = re.compile(r'(\d+\.\d)|(\.\d+)')
-    return parse_version(version_format.search(version_to_parse)[0])
+    major_version = version_format.search(version_to_parse)
+    assert major_version, f"version_to_parse: '{version_to_parse}' isn't supported scylla version string"
+    return parse_version(major_version[0])
 
 
 @lru_cache(maxsize=1024)

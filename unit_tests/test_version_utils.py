@@ -6,6 +6,7 @@ from unittest import mock
 
 import pytest
 import requests
+import pkg_resources
 
 import sdcm
 from sdcm.utils.version_utils import (
@@ -24,6 +25,7 @@ from sdcm.utils.version_utils import (
     SCYLLA_VERSION_GROUPED_RE,
     get_specific_tag_of_docker_image,
     get_docker_image_by_version,
+    parse_scylla_version,
 )
 
 BASE_S3_DOWNLOAD_URL = 'https://s3.amazonaws.com/downloads.scylladb.com'
@@ -434,3 +436,31 @@ def test_get_docker_image_by_version_fallback_on_errors():
 
         get_mock.side_effect = raise_request_error
         assert get_docker_image_by_version(scylla_version=non_existing_version) == expected_fallback
+
+
+@pytest.mark.parametrize("version_string, expected", (
+    ("5.1", "5.1"),
+    ("5.1.0~rc1", "5.1"),
+    ("5.1.rc1", "5.1"),
+    ("2023.1", "2023.1"),
+    ("2023.1~rc0", "2023.1"),
+    ("2021.1.dev", "2021.1"),
+))
+def test_parse_scylla_version(version_string, expected):
+    version_object = parse_scylla_version(version_string)
+    assert isinstance(version_object, pkg_resources.parse_version)
+    assert str(version_object) == expected
+
+
+@pytest.mark.parametrize("version_string, expected", (
+    pytest.param("2021",
+                 "version_to_parse: '2021' isn't supported scylla version string",
+                 id="2021"),
+    pytest.param("this_is_not_a_version",
+                 "version_to_parse: 'this_is_not_a_version' isn't supported scylla version string",
+                 id="this_is_not_a_version"),
+))
+def test_parse_scylla_version_unsupported(version_string, expected):
+    with pytest.raises(AssertionError) as exp:
+        parse_scylla_version(version_string)
+    assert str(exp.value) == expected
