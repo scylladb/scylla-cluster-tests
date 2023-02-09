@@ -11,7 +11,7 @@ import os
 from threading import Event
 from unittest.mock import MagicMock, patch
 import pytest
-from cassandra import OperationTimedOut
+from cassandra import OperationTimedOut, ReadTimeout
 from unit_tests.test_cluster import DummyDbCluster, DummyNode
 from sdcm.scan_operation_thread import ScanOperationThread, FullScanParams
 
@@ -109,7 +109,6 @@ def test_scan_positive(mode, events, cluster):  # pylint: disable=redefined-oute
         assert "MockCqlConnectionPatient" in all_events[1]
 
 
-########################################################################################################################
 class ExecuteOperationTimedOutMockCqlConnectionPatient(MockCqlConnectionPatient):
     def execute(*args, **kwargs):
         # pylint: disable=unused-argument
@@ -126,8 +125,7 @@ class ExecuteAsyncOperationTimedOutMockCqlConnectionPatient(MockCqlConnectionPat
 
 @pytest.mark.parametrize(("mode", 'severity', 'timeout', 'execute_mock'),
                          [['partition', 'WARNING', 0, 'execute_async'],
-                          ['aggregate', 'WARNING', 60*30, 'execute'],
-                          ['aggregate', 'ERROR', 0, 'execute'],
+                          ['aggregate', 'ERROR', 60*30, 'execute'],
                           ['table', 'WARNING', 0, 'execute']])
 def test_scan_negative_operation_timed_out(mode, severity, timeout, execute_mock, events, node):
     # pylint: disable=redefined-outer-name
@@ -142,7 +140,8 @@ def test_scan_negative_operation_timed_out(mode, severity, timeout, execute_mock
         db_cluster=db_cluster,
         ks_cf='a.b',
         mode=mode,
-        aggregate_operation_limit=timeout,
+        full_scan_aggregates_operation_limit=timeout,
+        full_scan_operation_limit=timeout,
         **DEFAULT_PARAMS
     )
     with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
@@ -152,7 +151,46 @@ def test_scan_negative_operation_timed_out(mode, severity, timeout, execute_mock
     assert f"Severity.{severity}" in all_events[1] and "period_type=end" in all_events[1]
 
 
-########################################################################################################################
+class ExecuteReadTimeoutMockCqlConnectionPatient1(MockCqlConnectionPatient):
+    def execute(*args, **kwargs):
+        # pylint: disable=unused-argument
+        # pylint: disable=no-method-argument
+        raise ReadTimeout("Operation timed out")
+
+
+class ExecuteReadTimeoutMockCqlConnectionPatient2(MockCqlConnectionPatient):
+    def execute(*args, **kwargs):
+        # pylint: disable=unused-argument
+        # pylint: disable=no-method-argument
+        raise ReadTimeout("some another reason")
+
+
+@pytest.mark.parametrize(('execute_mock', "expected_message"),
+                         [[ExecuteReadTimeoutMockCqlConnectionPatient1, "operation failed due to operation timed out"],
+                          [ExecuteReadTimeoutMockCqlConnectionPatient2, "operation failed, ReadTimeout error"]])
+def test_scan_negative_read_timedout(execute_mock, expected_message, events, node):
+    # pylint: disable=redefined-outer-name
+    # pylint: disable=too-many-arguments
+
+    connection = execute_mock()
+    db_cluster = DBCluster(connection, [node], {})
+    node.parent_cluster = db_cluster
+    default_params = FullScanParams(
+        db_cluster=db_cluster,
+        ks_cf='a.b',
+        mode='aggregate',
+        full_scan_aggregates_operation_limit=60*30,
+        full_scan_operation_limit=300,
+        **DEFAULT_PARAMS
+    )
+    with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
+        ScanOperationThread(default_params)._run_next_scan_operation()  # pylint: disable=protected-access
+    all_events = get_event_log_file(events)
+    assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
+    assert "Severity.ERROR" in all_events[1] and "period_type=end" in all_events[1]
+    assert expected_message in all_events[1]
+
+
 class ExecuteExceptionMockCqlConnectionPatient(MockCqlConnectionPatient):
     def execute(*args, **kwargs):
         # pylint: disable=unused-argument
