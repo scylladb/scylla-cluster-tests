@@ -224,7 +224,6 @@ def create_spot_instance_request(
         instance_parameters: RequestSpotLaunchSpecificationTypeDef,
         full_availability_zone: str,
         valid_until: datetime.datetime = None,
-        duration: int = None,
 ) -> List[str]:
     params = {
         'DryRun': False,
@@ -233,8 +232,6 @@ def create_spot_instance_request(
         'LaunchSpecification': instance_parameters,
         'AvailabilityZoneGroup': full_availability_zone,
     }
-    if duration:
-        params['BlockDurationMinutes'] = duration
     if price:
         params['SpotPrice'] = str(price)
     if valid_until:

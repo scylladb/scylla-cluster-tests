@@ -90,8 +90,6 @@ class EC2ClientWrapper():
             params['LaunchSpecification']['BlockDeviceMappings'] = block_device_mappings
         if not duration:
             params.update({'AvailabilityZoneGroup': region_name})
-        else:
-            params.update({'BlockDurationMinutes': int(duration)})
         if key_pair:
             params['LaunchSpecification'].update({'KeyName': key_pair})
         if user_data:

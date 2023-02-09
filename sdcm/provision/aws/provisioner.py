@@ -25,7 +25,7 @@ from sdcm.provision.aws.utils import ec2_services, ec2_clients, find_instance_by
     wait_for_provision_request_done, create_spot_fleet_instance_request, \
     create_spot_instance_request
 from sdcm.provision.aws.constants import SPOT_CNT_LIMIT, SPOT_FLEET_LIMIT, SPOT_REQUEST_TIMEOUT, STATUS_FULFILLED, \
-    SPOT_STATUS_UNEXPECTED_ERROR, FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR, MAX_SPOT_DURATION_TIME
+    SPOT_STATUS_UNEXPECTED_ERROR, FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR
 from sdcm.provision.common.provisioner import TagsType, ProvisionParameters, InstanceProvisionerBase
 
 LOGGER = logging.getLogger(__name__)
@@ -95,22 +95,6 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
     @staticmethod
     def _full_availability_zone_name(provision_parameters: ProvisionParameters) -> str:
         return provision_parameters.region_name + provision_parameters.availability_zone
-
-    @staticmethod
-    def _spot_block_duration(provision_parameters: ProvisionParameters) -> Optional[int]:
-        """
-        A period in minutes AWS will hold spot instance for us.
-        AWS have limit on it, if test is going to be run
-        """
-        if provision_parameters.duration is None:
-            return None
-        if provision_parameters.duration >= MAX_SPOT_DURATION_TIME:
-            LOGGER.info(
-                "Requested stop time more than AWS limit (%s minutes). Spot duration is going to be ignored",
-                MAX_SPOT_DURATION_TIME
-            )
-            return None
-        return int(provision_parameters.duration)
 
     @staticmethod
     def _provision_on_demand_instances(
@@ -279,7 +263,6 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             ),
             full_availability_zone=self._full_availability_zone_name(provision_parameters),
             valid_until=self._spot_valid_until,
-            duration=self._spot_block_duration(provision_parameters),
         )
         instance_ids = wait_for_provision_request_done(
             region_name=provision_parameters.region_name,
