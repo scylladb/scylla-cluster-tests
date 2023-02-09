@@ -45,7 +45,7 @@ class FillDatabaseData(ClusterTester):
 
     """
     NON_FROZEN_SUPPORT_OS_MIN_VERSION = '4.1'  # open source version with non-frozen user_types support
-    NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION = '2020'  # enterprise version with non-frozen user_types support
+    NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION = '2020.1'  # enterprise version with non-frozen user_types support
     NULL_VALUES_SUPPORT_OS_MIN_VERSION = "4.4.rc0"
     NULL_VALUES_SUPPORT_ENTERPRISE_MIN_VERSION = "2021.1.3"
     NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION = "4.4.rc0"
