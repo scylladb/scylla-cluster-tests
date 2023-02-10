@@ -14,7 +14,7 @@
 """
 Handling Scylla-cluster-test configuration loading
 """
-
+import json
 # pylint: disable=too-many-lines
 import os
 import ast
@@ -50,6 +50,7 @@ from sdcm.utils.version_utils import (
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import get_gce_image_tags
+from sdcm.scan_operation_thread import ConfigFullScanParams
 
 
 def _str(value: str) -> str:
@@ -1755,6 +1756,21 @@ class SCTConfiguration(dict):
             if not (authenticator_password and authenticator_user):
                 raise ValueError("For PasswordAuthenticator authenticator authenticator_user and authenticator_password"
                                  " have to be provided")
+
+        # 14 Validate run_fullscan parmeters
+        if run_fullscan_params := self.get("run_fullscan"):
+            if not isinstance(run_fullscan_params, list) or not len(run_fullscan_params) > 0:
+                raise ValueError(f"run_fullscan parameter must be non empty list, but got: {run_fullscan_params}")
+            for param in run_fullscan_params:
+                try:
+                    ConfigFullScanParams(**json.loads(param))
+                except json.decoder.JSONDecodeError as exp:
+                    raise ValueError(
+                        f"each item of run_fullscan list: {run_fullscan_params}, "
+                        f"item {param}, must be JSON but got error: {repr(exp)}") from exp
+                except TypeError as exp:
+                    raise ValueError(
+                        f" Got error: {repr(exp)}, on item '{param}'") from exp
 
     def log_config(self):
         self.log.info(self.dump_config())
