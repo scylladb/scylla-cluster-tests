@@ -25,7 +25,6 @@ from collections.abc import Callable
 from contextlib import ExitStack
 from datetime import datetime
 from functools import cached_property
-from math import floor
 from textwrap import dedent
 from typing import Dict, Optional, ParamSpec, TypeVar
 
@@ -47,7 +46,7 @@ from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
-from sdcm.utils.common import list_instances_aws, MAX_SPOT_DURATION_TIME
+from sdcm.utils.common import list_instances_aws
 from sdcm.utils.decorators import retrying
 from sdcm.wait import exponential_retry
 
@@ -56,7 +55,6 @@ LOGGER = logging.getLogger(__name__)
 INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
 INSTANCE_PROVISION_SPOT_FLEET = 'spot_fleet'
 INSTANCE_PROVISION_SPOT_LOW_PRICE = 'spot_low_price'
-INSTANCE_PROVISION_SPOT_DURATION = 'spot_duration'
 SPOT_CNT_LIMIT = 20
 SPOT_FLEET_LIMIT = 50
 SPOT_TERMINATION_CHECK_OVERHEAD = 15
@@ -118,9 +116,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                   self._ec2_ami_id,
                                                   self._ec2_instance_type)
 
-    def calculate_spot_duration_for_test(self):
-        return floor(self.test_config.TEST_DURATION / 60) * 60 + 60
-
     @property
     def instance_profile_name(self) -> str | None:
         if self.node_type == "scylla-db":
@@ -172,9 +167,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            count=count,
                            block_device_mappings=self._ec2_block_device_mappings,
                            aws_instance_profile=self.instance_profile_name)
-        if self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
-            # duration value must be a multiple of 60
-            spot_params.update({'duration': self.calculate_spot_duration_for_test()})
 
         limit = SPOT_FLEET_LIMIT if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET else SPOT_CNT_LIMIT
         request_cnt = 1
@@ -230,15 +222,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         return instances
 
     def fallback_provision_type(self, count, interfaces, ec2_user_data, dc_idx):
-        # If user requested to use spot instances, first try to get spot_duration instances (according to test_duration)
-        # - if test_duration > 360 or spot_duration failed, try to get spot_low_price
-        # - if instance_provision_fallback_on_demand==true and previous attempts failed then create on_demand instance
-        # else fail the test
         instances = None
 
-        if self.instance_provision.lower() == 'spot' or self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION \
-                or (self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count == 1):
-            instances_provision_fallbacks = [INSTANCE_PROVISION_SPOT_DURATION, INSTANCE_PROVISION_SPOT_LOW_PRICE]
+        if self.instance_provision.lower() == 'spot' or (self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count == 1):
+            instances_provision_fallbacks = [INSTANCE_PROVISION_SPOT_LOW_PRICE]
         else:
             # If self.instance_provision == "spot_low_price"
             instances_provision_fallbacks = [self.instance_provision]
@@ -249,18 +236,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.log.debug(f"Instances provision fallbacks : {instances_provision_fallbacks}")
 
         for instances_provision_type in instances_provision_fallbacks:
-            # If original instance provision type was not spot_duration, we need to check that test duration
-            # not exceeds maximum allowed spot duration (360 min right for now). If it exceeds - it's impossible to
-            # request for spot duration provision type.
-            if instances_provision_type == INSTANCE_PROVISION_SPOT_DURATION and \
-                    self.calculate_spot_duration_for_test() > MAX_SPOT_DURATION_TIME:
-                self.log.info(f"Create {instances_provision_type} instance(s) is not alowed: "
-                              f"Test duration too long for spot_duration instance type. "
-                              f"Max possible test duration time for this instance type is {MAX_SPOT_DURATION_TIME} "
-                              f"minutes"
-                              )
-                continue
-
             try:
                 self.log.info(f"Create {instances_provision_type} instance(s)")
                 if instances_provision_type == INSTANCE_PROVISION_ON_DEMAND:

@@ -61,7 +61,6 @@ class PricingModel(Enum):
     SPOT = 'spot'
     SPOT_FLEET = 'spot_fleet'
     SPOT_LOW_PRICE = 'spot_low_price'
-    SPOT_DURATION = 'spot_duration'
 
     def is_spot(self) -> bool:
         return self is not PricingModel.ON_DEMAND

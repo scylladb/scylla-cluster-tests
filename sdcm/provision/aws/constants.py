@@ -37,6 +37,3 @@ FLEET_LIMIT_EXCEEDED_ERROR = 'spotInstanceCountLimitExceeded'
 
 SPOT_CAPACITY_NOT_AVAILABLE_ERROR = 'capacity-not-available'
 # Spot request event type that is signaling that it won't be processed due to the lack of resources on AWS side
-
-MAX_SPOT_DURATION_TIME = 360
-# AWS limit on spot duration that you can request via API

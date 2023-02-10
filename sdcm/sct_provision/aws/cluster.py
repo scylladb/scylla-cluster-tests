@@ -13,14 +13,13 @@
 
 import abc
 from functools import cached_property
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 from pydantic import BaseModel  # pylint: disable=no-name-in-module
 
 from sdcm import cluster
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
-from sdcm.provision.aws.constants import MAX_SPOT_DURATION_TIME
 from sdcm.provision.common.provision_plan import ProvisionPlan
 from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
 from sdcm.provision.common.provisioner import TagsType
@@ -166,13 +165,6 @@ class ClusterBase(BaseModel):
     @property
     def _test_duration(self) -> int:
         return self.params.get('test_duration')
-
-    @property
-    def _spot_duration(self) -> Optional[int]:
-        duration = self._test_duration // 60 * 60 + 60
-        if duration >= MAX_SPOT_DURATION_TIME:
-            return None
-        return duration
 
     def _az(self, region_id: int) -> str:
         if len(self._azs) == 1:
