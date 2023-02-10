@@ -44,4 +44,4 @@ space_node_threshold: 644245094
 
 run_fullscan:
   - '{"mode": "table", "ks_cf": "scylla_bench.test", "interval": 10}'
-  - '{"mode": "partition", "ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 5000, "validate_data": "true", "include_data_column": "true"}'
+  - '{"mode": "partition", "ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 5000, "validate_data": true, "include_data_column": true}'
