@@ -32,7 +32,6 @@ import sdcm.provision.azure.utils as azure_utils
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import (
-    MAX_SPOT_DURATION_TIME,
     ami_built_by_scylla,
     find_scylla_repo,
     get_ami_tags,
@@ -1746,18 +1745,10 @@ class SCTConfiguration(dict):
             self['user_prefix'] = user_prefix[:35]
 
         # 11) validate that supported instance_provision selected
-        if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet', 'spot_low_price', 'spot_duration']:
+        if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet', 'spot_low_price']:
             raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
 
-        # 12) spot_duration instance can be created for test duration
-        if self.get('instance_provision').lower() == "spot_duration":
-            test_duration = self.get('test_duration')
-            if test_duration:
-                assert test_duration <= MAX_SPOT_DURATION_TIME, \
-                    f'Test duration too long for spot_duration instance type. ' \
-                    f'Max possible test duration time for this instance type is {MAX_SPOT_DURATION_TIME} minutes'
-
-        # 13) validate authenticator parameters
+        # 12) validate authenticator parameters
         if self.get('authenticator') and self.get('authenticator') == "PasswordAuthenticator":
             authenticator_user = self.get("authenticator_user")
             authenticator_password = self.get("authenticator_password")

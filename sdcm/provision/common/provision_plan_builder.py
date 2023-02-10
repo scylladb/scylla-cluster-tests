@@ -27,7 +27,6 @@ LOGGER = logging.getLogger(__name__)
 class ProvisionType(str, Enum):
     ON_DEMAND = 'on_demand'
     SPOT_LOW_PRICE = 'spot_low_price'
-    SPOT_DURATION = 'spot_duration'
     SPOT = 'spot'
 
 
@@ -69,31 +68,6 @@ class ProvisionPlanBuilder(BaseModel):
         )
 
     @property
-    def _provision_request_spot_duration(self) -> Optional[ProvisionParameters]:
-        if self.duration is None:
-            return None
-        return ProvisionParameters(
-            name='Spot(Duration)',
-            spot=True,
-            region_name=self.region_name,
-            availability_zone=self.availability_zone,
-            duration=self.duration
-        )
-
-    @property
-    def _provision_request_spot_duration_low_price(self) -> Optional[ProvisionParameters]:
-        if self.duration is None:
-            return None
-        return ProvisionParameters(
-            name='Spot(Duration, Low Price)',
-            spot=True,
-            region_name=self.region_name,
-            availability_zone=self.availability_zone,
-            price=self.spot_low_price,
-            duration=self.duration
-        )
-
-    @property
     def _provision_steps(self) -> List[ProvisionParameters]:
         if self.initial_provision_type == ProvisionType.ON_DEMAND:
             return [self._provision_request_on_demand]
@@ -101,16 +75,10 @@ class ProvisionPlanBuilder(BaseModel):
         if self.initial_provision_type == ProvisionType.SPOT:
             provision_plan.extend([
                 self._provision_request_spot,
-                self._provision_request_spot_duration
             ])
         elif self.initial_provision_type == ProvisionType.SPOT_LOW_PRICE:
             provision_plan.extend([
                 self._provision_request_spot_low_price,
-                self._provision_request_spot_duration_low_price,
-                self._provision_request_spot,
-            ])
-        elif self.initial_provision_type == ProvisionType.SPOT_DURATION:
-            provision_plan.extend([
                 self._provision_request_spot,
             ])
         if self.fallback_provision_on_demand:

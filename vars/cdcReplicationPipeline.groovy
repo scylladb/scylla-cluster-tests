@@ -105,7 +105,7 @@ def call(Map pipelineParams) {
                    description: "",
                    name: "oracle_scylla_version")
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
-                   description: 'spot_low_price|on_demand|spot_fleet|spot_duration',
+                   description: 'spot_low_price|on_demand|spot_fleet',
                    name: 'provision_type')
 
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
