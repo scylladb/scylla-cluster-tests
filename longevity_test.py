@@ -42,7 +42,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         return params
 
     def _get_scan_operation_params(self) -> list[FullScanParams]:
-        params = self.params.get("run_fullscan", {})
+        params = self.params.get("run_fullscan")
         self.log.info('Scan operation params are: %s', params)
 
         sla_role_name, sla_role_password = None, None
