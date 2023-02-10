@@ -10,20 +10,20 @@ import traceback
 from abc import abstractmethod
 from dataclasses import dataclass, field, fields
 from string import Template
-from typing import Optional, Type, NamedTuple, Literal
-
+from typing import Optional, Type, NamedTuple, Literal, get_type_hints, get_origin, TYPE_CHECKING
 from cassandra import ConsistencyLevel, OperationTimedOut, ReadTimeout
 from cassandra.cluster import ResponseFuture, ResultSet  # pylint: disable=no-name-in-module
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from prettytable import PrettyTable
-
 from sdcm import wait
-from sdcm.cluster import BaseScyllaCluster, BaseCluster, BaseNode
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import FullScanEvent, FullPartitionScanReversedOrderEvent, FullPartitionScanEvent, \
     FullScanAggregateEvent
 from sdcm.utils.common import get_table_clustering_order, get_partition_keys
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseScyllaCluster, BaseCluster, BaseNode
 
 ERROR_SUBSTRINGS = ("timed out", "unpack requires", "timeout", 'Host has been marked down or removed')
 BYPASS_CACHE_VALUES = [" BYPASS CACHE", ""]
@@ -31,17 +31,8 @@ LOCAL_CMD_RUNNER = LocalCmdRunner()
 
 
 # pylint: disable=too-many-instance-attributes
-
-
 @dataclass
-class FullScanParams:
-    db_cluster: [BaseScyllaCluster, BaseCluster]
-    termination_event: threading.Event
-    fullscan_user: str
-    fullscan_user_password: str
-    duration: int
-
-    # parameters that can be provided from run_fullscan option
+class ConfigFullScanParams:
     mode: Literal['random', 'table', 'partition', 'aggregate', 'table_and_aggregate']
     ks_cf: str = "random"
     interval: int = 10
@@ -50,10 +41,35 @@ class FullScanParams:
     ck_name: str = 'ck'
     data_column_name: str = 'v'
     validate_data: bool = False
-    include_data_column: bool = None
+    include_data_column: bool = False
     rows_count: int = 5000
     full_scan_operation_limit: int = 300  # timeout for SELECT * statement, 5 min by default
     full_scan_aggregates_operation_limit: int = 60*30  # timeout for SELECT count(* statement 30 min by default
+
+    def __post_init__(self):
+        types = get_type_hints(ConfigFullScanParams)
+        errors = []
+        for item in fields(ConfigFullScanParams):
+            expected_type = types[item.name]
+            value = getattr(self, item.name)
+            if get_origin(expected_type) is Literal:
+                if not value in expected_type.__args__:
+                    errors.append(
+                        f"field '{item.name}' must be one of '{expected_type.__args__}' but got '{value}'")
+            elif not isinstance(value, expected_type):
+                errors.append(f"field '{item.name}' must be an instance of {expected_type}, but got '{value}'")
+        if errors:
+            errors = '\n\t'.join(errors)
+            raise ValueError(f"Config fullscan params validarion errors:\n\t{errors}")
+
+
+@dataclass
+class FullScanParams(ConfigFullScanParams):
+    db_cluster: [BaseScyllaCluster, BaseCluster] = None
+    termination_event: threading.Event = None
+    fullscan_user: str = None
+    fullscan_user_password: str = None
+    duration: int = None
 
 
 @dataclass

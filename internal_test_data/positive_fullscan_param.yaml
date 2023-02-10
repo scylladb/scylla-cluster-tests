@@ -1,0 +1,2 @@
+run_fullscan: ['{"mode": "aggregate", "ks_cf": "keyspace1.standard1", "interval": 1, "full_scan_aggregates_operation_limit":10}',
+               '{"mode": "table", "validate_data": false}']

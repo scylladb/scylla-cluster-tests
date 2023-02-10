@@ -770,6 +770,26 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
             self.assertTrue(ami_id_loader.startswith("ami-"))
             self.assertTrue(ami_id_monitor.startswith("ami-"))
 
+    @staticmethod
+    def test_26_run_fullscan_params_validtion_positive():
+        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/minimal_test_case.yaml", \
+                                                   "internal_test_data/positive_fullscan_param.yaml"]'''
+        sct_config.SCTConfiguration()
+
+    @staticmethod
+    def test_27_run_fullscan_params_validtion_negative():
+        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/minimal_test_case.yaml", \
+                                                      "internal_test_data/negative_fullscan_param.yaml"]'''
+        try:
+            sct_config.SCTConfiguration()
+        except ValueError as exp:
+            assert str(exp) == "Config fullscan params validarion errors:\n\tfield 'mode' must be one of " \
+                "'('random', 'table', 'partition', 'aggregate', 'table_and_aggregate')' " \
+                "but got 'agggregate'\n\t" \
+                "field 'ks_cf' must be an instance of <class 'str'>, but got '1'\n\t" \
+                "field 'validate_data' must be an instance of <class 'bool'>, but got 'no'\n\t" \
+                "field 'full_scan_aggregates_operation_limit' must be an instance of <class 'int'>, but got 'a'"
+
 
 if __name__ == "__main__":
     unittest.main()
