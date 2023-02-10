@@ -1826,7 +1826,7 @@ class SCTConfiguration(dict):
 
         return environment_vars
 
-    def get(self, key: str | None, default=None):
+    def get(self, key: str | None):
         """
         get the value of test configuration parameter by the name
         """
@@ -1834,7 +1834,7 @@ class SCTConfiguration(dict):
         if key and '.' in key:
             if ret_val := self._dotted_get(key):
                 return ret_val
-        ret_val = super().get(key, default)
+        ret_val = super().get(key)
 
         if key in self.multi_region_params and isinstance(ret_val, list):
             ret_val = ' '.join(ret_val)
