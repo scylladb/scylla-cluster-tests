@@ -3863,6 +3863,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
 
+        if not getattr(self.tester, "roles", None):
+            raise UnsupportedNemesis('This nemesis is supported for SLA test only')
+
         # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
         # inserted in any case
         dataset_size = self.get_test_data_set_size() or 50000000
@@ -3877,6 +3880,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_sla_decrease_shares_during_load(self):
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+
+        if not getattr(self.tester, "roles", None):
+            raise UnsupportedNemesis('This nemesis is supported for SLA test only')
 
         # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
         # inserted in any case
@@ -3893,6 +3899,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
 
+        if not getattr(self.tester, "roles", None):
+            raise UnsupportedNemesis('This nemesis is supported for SLA test only')
+
         # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
         # inserted in any case
         dataset_size = self.get_test_data_set_size() or 50000000
@@ -3908,6 +3917,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_replace_service_level_using_drop_during_load(self):
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+
+        if not getattr(self.tester, "roles", None):
+            raise UnsupportedNemesis('This nemesis is supported for SLA test only')
 
         # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
         # inserted in any case
@@ -3926,6 +3938,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
 
+        if not getattr(self.tester, "roles", None):
+            raise UnsupportedNemesis('This nemesis is supported for SLA test only')
+
         # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
         # inserted in any case
         dataset_size = self.get_test_data_set_size() or 50000000
@@ -3943,6 +3958,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_seven_sl_with_max_shares_during_load(self):
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
+
+        if not getattr(self.tester, "roles", None):
+            raise UnsupportedNemesis('This nemesis is supported for SLA test only')
 
         # Set small amount rows 50000000 when can not recognize a real dataset size, suppose that this amount should be
         # inserted in any case
