@@ -2099,14 +2099,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             interval {number} -- interval between requests in seconds (default: {600})
             duration {int} -- duration of running thread in min (default: {None})
         """
-        TombstoneGcVerificationThread(
-            db_cluster=self.db_cluster,
-            termination_event=self.db_cluster.nemesis_termination_event,
-            duration=self.get_duration(duration),
-            interval=interval,
-            propagation_delay_in_seconds=propagation_delay_in_seconds,
-            **kwargs
-        ).start()
+        TombstoneGcVerificationThread(db_cluster=self.db_cluster, duration=self.get_duration(duration),
+                                      interval=interval, termination_event=self.db_cluster.nemesis_termination_event,
+                                      propagation_delay_in_seconds=propagation_delay_in_seconds, **kwargs).start()
 
     @staticmethod
     def is_keyspace_in_cluster(session, keyspace_name):
