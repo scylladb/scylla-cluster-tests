@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+
 import time
 import logging
 import unittest
@@ -31,6 +32,7 @@ from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.file_logger import get_logger_event_summary
+from sdcm.sct_events.event_counter import EventCounterContextManager
 
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
@@ -482,3 +484,269 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         event_data = str(event)
         assert "operation 'long-one' took" not in event_data
         assert "soft_timeout=0:00:00.100" not in event_data
+
+    def test_count_reactor_stall(self):
+        count_condition_name = "test_method"
+        statistics = {}
+        with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
+            with EventCounterContextManager(DatabaseLogEvent.REACTOR_STALLED,
+                                            name=count_condition_name,
+                                            _registry=self.events_processes_registry) as counter_manager:
+                assert counter_manager._event_type == (  # pylint: disable=protected-access
+                    DatabaseLogEvent.REACTOR_STALLED, )
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13 ms", 111).publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 6 ms", 111).publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for 33 ms", 111).publish()
+                time.sleep(1)
+                statistics = counter_manager.get_stats().copy()
+
+        assert len(statistics.keys()) == 1, "Number of events in statistics is wrong"
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 4
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 2, 10: 1, 20: 1}
+        reason_stat_dir = self.get_events_counter().events_stat_dir / Path(count_condition_name) / \
+            Path("DatabaseLogEvent.REACTOR_STALLED")
+        assert reason_stat_dir.is_dir()
+        for file_event in reason_stat_dir.iterdir():
+            assert file_event.name in ["node1", "node2", "node3", "node4"]
+            with open(file_event, encoding="utf-8") as fp_event:
+                assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+
+    def test_count_reactor_stall_with_obj_instance(self):
+        count_condition_name = "test_method_obj"
+        counter = EventCounterContextManager(DatabaseLogEvent.REACTOR_STALLED,
+                                             name=count_condition_name,
+                                             _registry=self.events_processes_registry)
+
+        assert counter._event_type == (DatabaseLogEvent.REACTOR_STALLED, )  # pylint: disable=protected-access
+        counter.start_event_counter()
+        with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
+            DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13 ms", 111).publish()
+            DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
+            DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 6 ms", 111).publish()
+            DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for 33 ms", 111).publish()
+            time.sleep(1)
+
+        counter.stop_event_counter()
+        statistics = counter.get_stats()
+        assert len(statistics.keys()) == 1, "Number of events in statistics is wrong"
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 4
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 2, 10: 1, 20: 1}
+        reason_stat_dir = self.get_events_counter().events_stat_dir / Path(count_condition_name) / \
+            Path("DatabaseLogEvent.REACTOR_STALLED")
+        assert reason_stat_dir.is_dir()
+        for file_event in reason_stat_dir.iterdir():
+            assert file_event.name in ["node1", "node2", "node3", "node4"]
+            with open(file_event, encoding="utf-8") as fp_event:
+                assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+
+    def test_count_reactor_stall_not_matched_by_regexp(self):
+        count_condition_name = "test_method1"
+        statistics = {}
+        with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
+            with EventCounterContextManager(DatabaseLogEvent.REACTOR_STALLED,
+                                            name=count_condition_name,
+                                            _registry=self.events_processes_registry) as counter_manager:
+                assert counter_manager._event_type == (  # pylint: disable=protected-access
+                    DatabaseLogEvent.REACTOR_STALLED, )
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13ms", 111).publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33ms", 111).publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 6ms", 111).publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for33000ms", 111).publish()
+                time.sleep(1)
+                statistics = counter_manager.get_stats().copy()
+        assert len(statistics.keys()) == 1, "Number of events in statistics is wrong"
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 4
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {0: 4}
+
+    def test_count_several_events(self):
+        count_condition_name = "test_method2"
+        statistics = {}
+        with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
+            with EventCounterContextManager((DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
+                                            name=count_condition_name,
+                                            _registry=self.events_processes_registry) as counter_manager:
+                assert counter_manager._event_type == (  # pylint: disable=protected-access
+                    DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK)
+
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 25 ms", 111).publish()
+                DatabaseLogEvent.KERNEL_CALLSTACK().add_info("node1", "Kernel Stack: some backtraces", 112).publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for 33 ms", 111).publish()
+                time.sleep(1)
+                # assert not counter_manager._counter_device._cm_register, f"{dict(counter_manager._counter_device._cm_register)}"
+                statistics = counter_manager.get_stats().copy()
+
+        assert len(statistics.keys()) == 2, "Number of events in statistics is wrong"
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 3
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 2, 30: 1}
+        assert statistics["DatabaseLogEvent.KERNEL_CALLSTACK"]["counter"] == 1
+        reason_stat_dir = self.get_events_counter().events_stat_dir / Path(count_condition_name)
+        assert reason_stat_dir.is_dir()
+        reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
+        assert reactor_stall_dir.is_dir()
+        for file_event in reactor_stall_dir.iterdir():
+            assert file_event.name in ["node1", "node2", "node3"]
+            with open(file_event, encoding="utf-8") as fp_event:
+                assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+
+    def test_skip_not_required_count_required_events(self):
+        count_condition_name = "test_method3"
+        statistics = {}
+        with self.wait_for_n_events(self.get_events_counter(), count=6, timeout=5):
+            with EventCounterContextManager((DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
+                                            name=count_condition_name,
+                                            _registry=self.events_processes_registry) as counter_manager:
+                assert counter_manager._event_type == (  # pylint: disable=protected-access
+                    DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK)
+
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
+                DatabaseLogEvent.BACKTRACE().add_info(node="node1", line_number=22,
+                                                      line="other back trace that shouldn't be filtered").publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 2501 ms", 111).publish()
+                DatabaseLogEvent.BACKTRACE().add_info(node="node2", line_number=22,
+                                                      line="other back trace that shouldn't be filtered").publish()
+                DatabaseLogEvent.KERNEL_CALLSTACK().add_info("node2", "Kernel Stack: asdfasdf ms asdfjasdlfjas dfs", 112).publish()
+                DatabaseLogEvent.BACKTRACE().add_info(node="node3", line_number=22,
+                                                      line="other back trace that shouldn't be filtered").publish()
+                time.sleep(1)
+                statistics = counter_manager.get_stats().copy()
+
+        assert len(statistics.keys()) == 2, "Number of events in statistics is wrong"
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 2
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 1, 2501: 1}
+        assert statistics["DatabaseLogEvent.KERNEL_CALLSTACK"]["counter"] == 1
+        reason_stat_dir = self.get_events_counter().events_stat_dir / Path(count_condition_name)
+        assert reason_stat_dir.is_dir()
+        reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
+        assert reactor_stall_dir.is_dir()
+        for file_event in reactor_stall_dir.iterdir():
+            assert file_event.name in ["node1", "node2"]
+            with open(file_event, encoding="utf-8") as fp_event:
+                assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+
+    def test_count_with_several_count_managers(self):
+        count_condition_name1 = "test_method4"
+        count_condition_name2 = "test_method5"
+        statistics1 = {}
+        statistics2 = {}
+        with self.wait_for_n_events(self.get_events_counter(), count=6, timeout=5):
+            with EventCounterContextManager((DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
+                                            name=count_condition_name1,
+                                            _registry=self.events_processes_registry) as counter_manager1, \
+                EventCounterContextManager((DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE),
+                                           name=count_condition_name2,
+                                           _registry=self.events_processes_registry) as counter_manager2:
+                assert counter_manager1._event_type == (  # pylint: disable=protected-access
+                    DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK)
+                assert counter_manager2._event_type == (  # pylint: disable=protected-access
+                    DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE)
+
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
+                DatabaseLogEvent.BACKTRACE().add_info(node="node1", line_number=22,
+                                                      line="other back trace that shouldn't be filtered").publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 150 ms", 111).publish()
+                DatabaseLogEvent.BACKTRACE().add_info(node="node2", line_number=22,
+                                                      line="other back trace that shouldn't be filtered").publish()
+                DatabaseLogEvent.KERNEL_CALLSTACK().add_info("node2", "Kernel Stack: asdfasdf ms asdfjasdlfjas dfs", 112).publish()
+                DatabaseLogEvent.BACKTRACE().add_info(node="node3", line_number=22,
+                                                      line="other back trace that shouldn't be filtered").publish()
+                time.sleep(1)
+                statistics1 = counter_manager1.get_stats().copy()
+                statistics2 = counter_manager2.get_stats().copy()
+
+        assert len(statistics1.keys()) == 2, "Number of events in statistics is wrong"
+        assert len(statistics2.keys()) == 2, "Number of events in statistics is wrong"
+        assert statistics1["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 2
+        assert statistics1["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 1, 200: 1}
+        assert statistics1["DatabaseLogEvent.KERNEL_CALLSTACK"]["counter"] == 1
+        assert statistics2["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 2
+        assert statistics2["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 1, 200: 1}
+        assert statistics2["DatabaseLogEvent.BACKTRACE"]["counter"] == 3
+
+        reason_stat_dir = self.get_events_counter().events_stat_dir / Path(count_condition_name1)
+        assert reason_stat_dir.is_dir()
+        reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
+        assert reactor_stall_dir.is_dir()
+
+        for file_event in reactor_stall_dir.iterdir():
+            assert file_event.name in ["node1", "node2"]
+            with open(file_event, encoding="utf-8") as fp_event:
+                assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+
+        reason_stat_dir = self.get_events_counter().events_stat_dir / Path(count_condition_name2)
+        assert reason_stat_dir.is_dir()
+        reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
+        assert reactor_stall_dir.is_dir()
+
+        for file_event in reactor_stall_dir.iterdir():
+            assert file_event.name in ["node1", "node2", "node3"]
+            with open(file_event, encoding="utf-8") as fp_event:
+                assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+
+    def test_count_with_several_nested_count_managers(self):
+        time.sleep(5)
+        count_condition_name1 = "test_method6"
+        count_condition_name2 = "test_method7"
+        statistics1 = {}
+        statistics2 = {}
+        with self.wait_for_n_events(self.get_events_counter(), count=6, timeout=5):
+            with EventCounterContextManager((DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK),
+                                            name=count_condition_name1,
+                                            _registry=self.events_processes_registry) as counter_manager1:
+                assert counter_manager1._event_type == (  # pylint: disable=protected-access
+                    DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.KERNEL_CALLSTACK)
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
+                DatabaseLogEvent.BACKTRACE().add_info(node="node1", line_number=22,
+                                                      line="other back trace that shouldn't be filtered").publish()
+                time.sleep(1)
+                with EventCounterContextManager((DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE),
+                                                name=count_condition_name2,
+                                                _registry=self.events_processes_registry) as counter_manager2:
+                    assert counter_manager2._event_type == (  # pylint: disable=protected-access
+                        DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent.BACKTRACE)
+
+                    DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 499 ms", 111).publish()
+                    DatabaseLogEvent.BACKTRACE().add_info(node="node2", line_number=22,
+                                                          line="other back trace that shouldn't be filtered").publish()
+
+                    DatabaseLogEvent.KERNEL_CALLSTACK().add_info("node2", "Kernel Stack: asdfasdf ms asdfjasdlfjas dfs", 112).publish()
+                    DatabaseLogEvent.BACKTRACE().add_info(node="node3", line_number=22,
+                                                          line="other back trace that shouldn't be filtered").publish()
+                    time.sleep(1)
+                    statistics2 = counter_manager2.get_stats().copy()
+
+                statistics1 = counter_manager1.get_stats().copy()
+
+        assert len(statistics1.keys()) == 2, "Number of events in statistics is wrong"
+        assert len(statistics2.keys()) == 2, "Number of events in statistics is wrong"
+        assert statistics1["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 2
+        assert statistics1["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 1, 1000: 1}
+        assert statistics1["DatabaseLogEvent.KERNEL_CALLSTACK"]["counter"] == 1
+        assert statistics2["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 1
+        assert statistics2["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {1000: 1}
+        assert statistics2["DatabaseLogEvent.BACKTRACE"]["counter"] == 2
+
+        reason_stat_dir = self.get_events_counter().events_stat_dir / Path(count_condition_name1)
+        assert reason_stat_dir.is_dir()
+        reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
+        assert reactor_stall_dir.is_dir()
+
+        for file_event in reactor_stall_dir.iterdir():
+            assert file_event.name in ["node1", "node2"]
+            with open(file_event, encoding="utf-8") as fp_event:
+                lines = fp_event.readlines()
+                LOGGER.info("File %s: content: %s", file_event, lines)
+                assert len(lines) == 1, f"Wrong number of lines {lines}"
+
+        reason_stat_dir = self.get_events_counter().events_stat_dir / Path(count_condition_name2)
+        assert reason_stat_dir.is_dir()
+        reactor_stall_dir = reason_stat_dir / Path("DatabaseLogEvent.REACTOR_STALLED")
+        assert reactor_stall_dir.is_dir()
+
+        for file_event in reactor_stall_dir.iterdir():
+            assert file_event.name == "node2"
+            with open(file_event, encoding="utf-8") as fp_event:
+                lines = fp_event.readlines()
+                LOGGER.info("File %s: content: %s", file_event, lines)
+                assert len(lines) == 1, f"Wrong number of lines {lines}"
