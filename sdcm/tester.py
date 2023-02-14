@@ -38,6 +38,7 @@ from invoke.exceptions import UnexpectedExit, Failure
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
 from cassandra.cluster import Session  # pylint: disable=no-name-in-module
+from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from argus.db.db_types import TestStatus, PackageVersion
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
@@ -853,10 +854,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info("Going to create alternator tables")
             if self.params.get('alternator_enforce_authorization'):
                 with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-                    session.execute("""
+                    session.execute(SimpleStatement("""
                         INSERT INTO system_auth.roles (role, salted_hash) VALUES (%s, %s)
-                    """, (self.params.get('alternator_access_key_id'),
-                          self.params.get('alternator_secret_access_key')))
+                    """, consistency_level=ConsistencyLevel.ALL),
+                                    (self.params.get('alternator_access_key_id'),
+                                     self.params.get('alternator_secret_access_key')))
 
             schema = self.params.get("dynamodb_primarykey_type")
             self.alternator.create_table(node=node, schema=schema)
