@@ -3348,9 +3348,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         ParallelObject(objects=[trigger, watcher], timeout=1200).call_objects()
         if new_node := decommission_post_action():
-            new_node.run_nodetool("rebuild", timeout=300, retry=3)
+            new_node.run_nodetool("rebuild")
         else:
-            self.target_node.run_nodetool(sub_cmd="rebuild", timeout=300, retry=3)
+            self.target_node.run_nodetool(sub_cmd="rebuild")
 
     def start_and_interrupt_repair_streaming(self):
         """
