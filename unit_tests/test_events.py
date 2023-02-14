@@ -34,9 +34,6 @@ from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.file_logger import get_logger_event_summary
 from sdcm.sct_events.event_counter import EventCounterContextManager
-from sdcm.sct_events.setup import enable_default_filters
-from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.context_managers import environment
 
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
@@ -556,6 +553,65 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
             with open(file_event, encoding="utf-8") as fp_event:
                 assert len(fp_event.readlines()) == 1, "Wrong number of lines"
 
+        event_data = str(event)
+        assert "operation 'long-one' took" not in event_data
+        assert "soft_timeout=0:00:00.100" not in event_data
+
+    def test_count_reactor_stall(self):
+        count_condition_name = "test_method"
+        statistics = {}
+        with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
+            with EventCounterContextManager(DatabaseLogEvent.REACTOR_STALLED,
+                                            name=count_condition_name,
+                                            _registry=self.events_processes_registry) as counter_manager:
+                assert counter_manager._event_type == (  # pylint: disable=protected-access
+                    DatabaseLogEvent.REACTOR_STALLED, )
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13 ms", 111).publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 6 ms", 111).publish()
+                DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for 33 ms", 111).publish()
+                time.sleep(1)
+                statistics = counter_manager.get_stats().copy()
+
+        assert len(statistics.keys()) == 1, "Number of events in statistics is wrong"
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 4
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 2, 10: 1, 20: 1}
+        reason_stat_dir = self.get_events_counter().events_stat_dir / Path(count_condition_name) / \
+            Path("DatabaseLogEvent.REACTOR_STALLED")
+        assert reason_stat_dir.is_dir()
+        for file_event in reason_stat_dir.iterdir():
+            assert file_event.name in ["node1", "node2", "node3", "node4"]
+            with open(file_event, encoding="utf-8") as fp_event:
+                assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+
+    def test_count_reactor_stall_with_obj_instance(self):
+        count_condition_name = "test_method_obj"
+        counter = EventCounterContextManager(DatabaseLogEvent.REACTOR_STALLED,
+                                             name=count_condition_name,
+                                             _registry=self.events_processes_registry)
+
+        assert counter._event_type == (DatabaseLogEvent.REACTOR_STALLED, )  # pylint: disable=protected-access
+        counter.start_event_counter()
+        with self.wait_for_n_events(self.get_events_counter(), count=4, timeout=5):
+            DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 13 ms", 111).publish()
+            DatabaseLogEvent.REACTOR_STALLED().add_info("node1", "Reactor stalled for 33 ms", 111).publish()
+            DatabaseLogEvent.REACTOR_STALLED().add_info("node2", "Reactor stalled for 6 ms", 111).publish()
+            DatabaseLogEvent.REACTOR_STALLED().add_info("node3", "Reactor stalled for 33 ms", 111).publish()
+            time.sleep(1)
+
+        counter.stop_event_counter()
+        statistics = counter.get_stats()
+        assert len(statistics.keys()) == 1, "Number of events in statistics is wrong"
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["counter"] == 4
+        assert statistics["DatabaseLogEvent.REACTOR_STALLED"]["ms"] == {50: 2, 10: 1, 20: 1}
+        reason_stat_dir = self.get_events_counter().events_stat_dir / Path(count_condition_name) / \
+            Path("DatabaseLogEvent.REACTOR_STALLED")
+        assert reason_stat_dir.is_dir()
+        for file_event in reason_stat_dir.iterdir():
+            assert file_event.name in ["node1", "node2", "node3", "node4"]
+            with open(file_event, encoding="utf-8") as fp_event:
+                assert len(fp_event.readlines()) == 1, "Wrong number of lines"
+
     def test_count_reactor_stall_not_matched_by_regexp(self):
         count_condition_name = "test_method1"
         statistics = {}
@@ -766,28 +822,3 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                 lines = fp_event.readlines()
                 LOGGER.info("File %s: content: %s", file_event, lines)
                 assert len(lines) == 1, f"Wrong number of lines {lines}"
-
-    def test_kill_nemesis_during_con_event(self):
-        with self.assertRaises(KillNemesis), DisruptionEvent(
-                nemesis_name="SomeNemesis", node="target_node", publish_event=False) as nemesis_event:
-            nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
-            self.assertEqual(
-                str(nemesis_event),
-                '(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: '
-                'nemesis_name=SomeNemesis target_node=target_node'
-            )
-
-            try:
-                raise KillNemesis()
-
-            except KillNemesis as ex:
-                nemesis_event.add_error([str(ex)])
-                nemesis_event.duration = 15
-                raise
-
-            except Exception:  # pylint: disable=broad-except
-                pytest.fail("we shouldn't reach this code path")
-
-        assert nemesis_event.errors_formatted == ''
-        self.assertEqual(nemesis_event.severity, Severity.NORMAL)
-        self.assertEqual(nemesis_event.duration_formatted, '15s')

@@ -33,8 +33,6 @@ from sdcm.sct_events.events_processes import \
     EVENTS_MAIN_DEVICE_ID, EVENTS_FILE_LOGGER_ID, EVENTS_ANALYZER_ID, \
     EVENTS_GRAFANA_ANNOTATOR_ID, EVENTS_GRAFANA_AGGREGATOR_ID, EVENTS_GRAFANA_POSTMAN_ID, \
     EventsProcessesRegistry, create_default_events_process_registry, get_events_process, EVENTS_HANDLER_ID, EVENTS_COUNTER_ID
-from sdcm.utils.issues import SkipPerIssues
-
 
 EVENTS_DEVICE_START_DELAY = 1  # seconds
 EVENTS_SUBSCRIBERS_START_DELAY = 3  # seconds

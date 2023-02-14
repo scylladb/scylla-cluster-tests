@@ -103,37 +103,46 @@ class EventsCounter(BaseEventsProcess[Tuple[str, Any], None], multiprocessing.Pr
     def __init__(self, _registry: EventsProcessesRegistry):
         base_dir: Path = get_events_main_device(_registry=_registry).events_log_base_dir
         self.events_stat_dir = base_dir / Path(EVENT_COUNTER_DIR)
-        self.counters_register = multiprocessing.Manager().dict()
+        self._register = multiprocessing.Manager().dict()
+        self._start_count = multiprocessing.Event()
         super().__init__(_registry=_registry)
 
     def run(self) -> None:
         LOGGER.debug("Counting events is running")
         for event_tuple in self.inbound_events():
-            if not self.counters_register:
+            if not self._start_count.is_set():
                 continue
 
             with verbose_suppress("EventsFileLogger failed to process %s", event_tuple):
                 _, event = event_tuple  # try to unpack event from EventsDevice
 
-                for cm_id, event_stat_data in self.counters_register.items():
+                for cm_id, event_stat_data in self._register.items():
                     if event_stat_data.event_types and event.__class__ in event_stat_data.event_types:
                         handler = EventStatHandleMapper.get(event.__class__.__name__, EventStatHandler)
                         stat = event_stat_data.stats.setdefault(event.__class__.__name__, {})
                         event_stat_data.stats.update({event.__class__.__name__: handler(
                             event, event_stat_data.save_dir).update_stat(stat)})
-                        self.counters_register[cm_id] = event_stat_data
+                        self._register[cm_id] = event_stat_data
+
+    def start_counter(self):
+        if not self._start_count.is_set():
+            self._start_count.set()
+
+    def stop_counter(self):
+        if not self._register:
+            self._start_count.clear()
 
     def add_counter(self, counter_id: str, event_stat_data: EventStatData):
-        self.counters_register[counter_id] = event_stat_data
+        self._register[counter_id] = event_stat_data
 
     def get_counter(self, counter_id: str) -> EventStatData | None:
-        if counter_id in self.counters_register:
-            return self.counters_register[counter_id]
+        if counter_id in self._register:
+            return self._register[counter_id]
         return None
 
     def remove_counter(self, counter_id: str):
-        if counter_id in self.counters_register:
-            del self.counters_register[counter_id]
+        if counter_id in self._register:
+            del self._register[counter_id]
 
 
 start_events_counter = partial(start_events_process, EVENTS_COUNTER_ID, EventsCounter)
@@ -153,18 +162,18 @@ class EventCounterContextManager:
         self._statistics = {}
         self._save_file_path = self._events_stat_dir / Path(name)
 
-    def start_event_counter(self) -> None:
-        LOGGER.debug("Start count events type %s by CounterEvent with id %s",
-                     self._event_type, self._id)
+    def start_event_counter(self):
         event_stat_data = EventStatData(event_types=self._event_type,
                                         save_dir=self._save_file_path,
                                         stats={})
         self._counter_device.add_counter(self._id, event_stat_data)
+        self._counter_device.start_counter()
 
     def stop_event_counter(self):
         if counter_data := self._counter_device.get_counter(self._id):
             self._statistics = counter_data.stats
             self._counter_device.remove_counter(self._id)
+        self._counter_device.stop_counter()
 
     def get_stats(self):
         if counter_data := self._counter_device.get_counter(self._id):
