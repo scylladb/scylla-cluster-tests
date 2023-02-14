@@ -11,28 +11,24 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
     keyspace = 'scylla_bench'
     table = 'test'
     ks_cf = f'{keyspace}.{table}'
-    propagation_delay = 60 * 4  # setting a value shorter than the default, of 4 minutes
+    propagation_delay = 60 * 4  # Setting a value shorter than Scylla's default (1 hour) - to 4 minutes.
     repair_date = None
     db_node = None
 
     def _run_repair_and_major_compaction(self, wait_propagation_delay: bool = False):
-        self.log.info('Run a flush for user-table on nodes')
+        self.log.info('Run a flush for %s on nodes', self.keyspace)
         triggers = [partial(node.run_nodetool, sub_cmd=f"flush -- {self.keyspace}", ) for node in self.db_cluster.nodes]
         ParallelObject(objects=triggers, timeout=1200).call_objects()
-        # for node in self.db_cluster.nodes:
-        #     node.run_nodetool(f"flush -- {self.keyspace}")
 
-        self.log.info('Run a repair for user-table on nodes')
+        self.log.info('Run a repair for %s on nodes', self.ks_cf)
         triggers = [partial(node.run_nodetool, sub_cmd="repair", args=f"-pr {self.keyspace} {self.table}", ) for node
                     in self.db_cluster.nodes]
         ParallelObject(objects=triggers, timeout=1200).call_objects()
-        # for node in self.db_cluster.nodes:
-        #     node.run_nodetool(sub_cmd="repair", args=f"-pr {self.keyspace} {self.table}")
 
         if wait_propagation_delay:
             time.sleep(self.propagation_delay)
         self.repair_date = datetime.datetime.now()
-        self.log.info('Run a major compaction for user-table on node')
+        self.log.info('Run a major compaction for %s on node', self.ks_cf)
         self.db_node.run_nodetool("compact", args=f"{self.keyspace} {self.table}")
         self.wait_no_compactions_running()
 
@@ -81,7 +77,7 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
 
         self.log.info("change gc-grace-seconds back to default of 10 days and tombstone-gc mode to 'repair'")
         with self.db_cluster.cql_connection_patient(node=self.db_node) as session:
-            query = "ALTER TABLE scylla_bench.test with gc_grace_seconds = 36240 " \
+            query = "ALTER TABLE scylla_bench.test with gc_grace_seconds = 864000 " \
                     f"and tombstone_gc = {{'mode': 'repair', 'propagation_delay_in_seconds':'{self.propagation_delay}'}};"
             session.execute(query)
 

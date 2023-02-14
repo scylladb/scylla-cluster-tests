@@ -6,10 +6,6 @@ import random
 from sdcm.cluster import BaseScyllaCluster, BaseCluster, BaseNode
 
 
-class NoSstableFound(Exception):
-    pass
-
-
 class NonDeletedTombstonesFound(Exception):
     pass
 
@@ -17,11 +13,10 @@ class NonDeletedTombstonesFound(Exception):
 class SstableUtils:
 
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, db_node: BaseNode, propagation_delay_in_seconds: int,
-                 ks_cf: str = None, **kwargs):
+    def __init__(self, propagation_delay_in_seconds: int, ks_cf: str = None, **kwargs):
 
-        self.db_node = db_node
-        self.db_cluster: [BaseScyllaCluster, BaseCluster] = self.db_node.parent_cluster
+        self.db_node: BaseNode = kwargs.get("db_node", None)
+        self.db_cluster: [BaseScyllaCluster, BaseCluster] = self.db_node.parent_cluster if self.db_node else None
         self.ks_cf = ks_cf or random.choice(self.db_cluster.get_non_system_ks_cf_list(self.db_cluster.nodes[0]))
         self.keyspace, self.table = self.ks_cf.split('.')
         self.propagation_delay_in_seconds = propagation_delay_in_seconds
@@ -44,7 +39,7 @@ class SstableUtils:
         if from_minutes_ago:
             find_cmd += f" -cmin -{from_minutes_ago}"
         try:
-            sstables_res = self.db_node.remoter.sudo(find_cmd, verbose=True)
+            sstables_res = self.db_node.remoter.sudo(find_cmd, verbose=True, ignore_status=True)
             if sstables_res.stderr:
                 self.log.debug('Failed to get sstables for %s. Error: %s', self.ks_cf, sstables_res.stderr)
             else:
@@ -60,7 +55,7 @@ class SstableUtils:
         try:
             self.db_node.remoter.run(f'sudo sstabledump  {sstable} 1>/tmp/sstabledump.json', verbose=False)
             tombstones_deletion_info = self.db_node.remoter.run(
-                'sudo egrep \'"expired" : true|marked_deleted\' /tmp/sstabledump.json', verbose=False)
+                'sudo egrep \'"expired" : true|marked_deleted\' /tmp/sstabledump.json', verbose=False, ignore_status=True)
             if not tombstones_deletion_info:
                 self.log.debug('Got no tombstones for sstable: %s', sstable)
                 return 0
@@ -85,30 +80,30 @@ class SstableUtils:
                         f"AND table_name = '{self.table}' ALLOW FILTERING;"
                 results = session.execute(query)
                 output = results.all()
-                self.log.debug('SELECT repair_time results: %s', output)  # TODO: REMOVE
+                self.log.debug('SELECT repair_time results: %s', output)
                 if len(output) == 0:
                     self.log.debug('No repair history found for %s.%s', self.keyspace, self.table)
                     return None
                 return str(output[-1].repair_time)
             except Exception as exc:  # pylint: disable=broad-except
-                self.log.warning('Failed to get repair date of %s.%s. Error: %s', self.keyspace, self.table, exc)
+                self.log.error('Failed to get repair date of %s.%s. Error: %s', self.keyspace, self.table, exc)
                 raise
 
     def get_table_repair_date_and_delta_minutes(self) -> (datetime.datetime, int):
 
-        table_repair_date = self.get_table_repair_date()
-        table_repair_date = datetime.datetime.strptime(table_repair_date, '%Y-%m-%d %H:%M:%S')
+        table_repair_date = datetime.datetime.strptime(self.get_table_repair_date(), '%Y-%m-%d %H:%M:%S')
         now = datetime.datetime.now()
         delta_repair_date_minutes = ((now - table_repair_date).seconds - self.propagation_delay_in_seconds) // 60
-        self.log.debug('Found table-repair-date: %s, Ended %s minutes ago (%s)', table_repair_date,
-                       delta_repair_date_minutes, now)
+        self.log.debug('Found table-repair-date: %s, Ended %s minutes ago',
+                       table_repair_date, delta_repair_date_minutes)
         return table_repair_date, delta_repair_date_minutes
 
     def get_compacted_tombstone_deletion_info(self, sstable: str) -> list:
         tombstones_deletion_info = []
         try:
             self.db_node.remoter.run(f'sudo sstabledump  {sstable} 1>/tmp/sstabledump.json', verbose=False)
-            result = self.db_node.remoter.run('sudo grep marked_deleted /tmp/sstabledump.json')
+            result = self.db_node.remoter.run('sudo grep marked_deleted /tmp/sstabledump.json', verbose=False,
+                                              ignore_status=True)
             if result.ok:
                 tombstones_deletion_info = result.stdout.splitlines()
             else:
