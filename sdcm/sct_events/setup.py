@@ -26,10 +26,11 @@ from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.file_logger import start_events_logger
 from sdcm.sct_events.events_device import start_events_main_device
 from sdcm.sct_events.events_analyzer import start_events_analyzer
+from sdcm.sct_events.event_counter import start_events_counter
 from sdcm.sct_events.events_processes import \
     EVENTS_MAIN_DEVICE_ID, EVENTS_FILE_LOGGER_ID, EVENTS_ANALYZER_ID, \
     EVENTS_GRAFANA_ANNOTATOR_ID, EVENTS_GRAFANA_AGGREGATOR_ID, EVENTS_GRAFANA_POSTMAN_ID, \
-    EventsProcessesRegistry, create_default_events_process_registry, get_events_process, EVENTS_HANDLER_ID
+    EventsProcessesRegistry, create_default_events_process_registry, get_events_process, EVENTS_HANDLER_ID, EVENTS_COUNTER_ID
 
 EVENTS_DEVICE_START_DELAY = 1  # seconds
 EVENTS_SUBSCRIBERS_START_DELAY = 3  # seconds
@@ -53,6 +54,7 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
     start_grafana_pipeline(_registry=_registry)
     start_events_analyzer(_registry=_registry)
     start_events_handler(_registry=_registry)
+    start_events_counter(_registry=_registry)
 
     time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
@@ -81,6 +83,7 @@ def stop_events_device(_registry: Optional[EventsProcessesRegistry] = None) -> N
         EVENTS_GRAFANA_ANNOTATOR_ID,
         EVENTS_GRAFANA_AGGREGATOR_ID,
         EVENTS_GRAFANA_POSTMAN_ID,
+        EVENTS_COUNTER_ID,
         EVENTS_HANDLER_ID,
         EVENTS_ANALYZER_ID,
         EVENTS_MAIN_DEVICE_ID,

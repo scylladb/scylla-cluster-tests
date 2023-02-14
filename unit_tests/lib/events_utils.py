@@ -21,6 +21,7 @@ from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, start_events_device
 from sdcm.sct_events.events_device import start_events_main_device, get_events_main_device
 from sdcm.sct_events.file_logger import get_events_logger
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
+from sdcm.sct_events.event_counter import get_events_counter
 
 
 class EventsUtilsMixin:
@@ -73,6 +74,10 @@ class EventsUtilsMixin:
     @classmethod
     def get_events_logger(cls):
         return get_events_logger(_registry=cls.events_processes_registry)
+
+    @classmethod
+    def get_events_counter(cls):
+        return get_events_counter(_registry=cls.events_processes_registry)
 
     @classmethod
     def get_raw_events_log(cls):
