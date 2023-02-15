@@ -125,6 +125,142 @@ def parse_scylla_version(version_to_parse: str) -> version.Version:
     return parse_version(major_version[0])
 
 
+class ComparableScyllaVersion:
+    """Accepts and compares known 'non-semver' and 'semver'-like Scylla versions."""
+
+    def __init__(self, version_string: str):
+        parsed_version = self.parse(version_string)
+        self.v_major = int(parsed_version[0])
+        self.v_minor = int(parsed_version[1])
+        self.v_patch = int(parsed_version[2])
+        self.v_pre_release = parsed_version[3] or ''
+        self.v_build = parsed_version[4] or ''
+
+    @staticmethod
+    def parse(version_string: str):
+        """Parse scylla-binary and scylla-docker-tag versions into a proper semver structure."""
+        # NOTE: remove 'with build-id' part if exists and other possible non-semver parts
+        _scylla_version = (version_string or '').split(" ")[0]
+
+        # NOTE: replace '~' which gets returned by the scylla binary
+        _scylla_version = _scylla_version.replace('~', '-')
+
+        # NOTE: remove docker-specific parts if version is taken from a docker tag
+        _scylla_version = _scylla_version.replace('-aarch64', '')
+        _scylla_version = _scylla_version.replace('-x86_64', '')
+
+        # NOTE: make short scylla version like '5.2' be correct semver string
+        _scylla_version_parts = _scylla_version.split('.')
+        if len(_scylla_version_parts) == 2:
+            _scylla_version = f"{_scylla_version}.0"
+        elif len(_scylla_version_parts) > 2 and re.search(
+                r"\D+", _scylla_version_parts[2].split("-")[0]):
+            _scylla_version = f"{_scylla_version_parts[0]}.{_scylla_version_parts[1]}.0-{_scylla_version_parts[2]}"
+            for part in _scylla_version_parts[3:]:
+                _scylla_version += f".{part}"
+
+        # NOTE: replace '-0' with 'dev-0', '-1' with 'dev-1' and so on
+        #       to match docker and scylla binary version structures correctly.
+        if no_dev_match := re.search(r"(\d+\.\d+\.\d+)(\-\d+)(\.20[0-9]{6}.*)", _scylla_version):
+            _scylla_version = f"{no_dev_match[1]}-dev{no_dev_match[2]}{no_dev_match[3]}"
+
+        # NOTE: replace '.' with '+' symbol between build date and build commit
+        #       to satisfy semver structure
+        if dotted_build_id_match := re.search(r"(.*\.20[0-9]{6})(\.)(\d\w+)", _scylla_version):
+            _scylla_version = f"{dotted_build_id_match[1]}+{dotted_build_id_match[3]}"
+
+        if match := SEMVER_REGEX.match(_scylla_version):
+            return match.groups()
+        raise ValueError(
+            f"Cannot parse provided '{version_string}' scylla_version for the comparison. "
+            f"Transformed scylla_version: {_scylla_version}")
+
+    def __str__(self):
+        result = f"{self.v_major}.{self.v_minor}.{self.v_patch}"
+        if self.v_pre_release:
+            result += f"-{self.v_pre_release}"
+        if self.v_build:
+            result += f"+{self.v_build}"
+        return result
+
+    def _transform_to_comparable(self, other):
+        if isinstance(other, str):
+            return self.__class__(other)
+        elif isinstance(other, self.__class__):
+            return other
+        raise ValueError("Got unexpected type for the comparison: %s" % type(other))
+
+    def as_comparable(self):
+        # NOTE: absence of the 'pre-release' part means we have 'GA' version which is newer than
+        #       any of the 'pre-release' ones.
+        #       So, make empty 'pre-release' prevail over any defined one.
+        return (self.v_major, self.v_minor, self.v_patch, self.v_pre_release or 'xyz')
+
+    def __lt__(self, other):
+        return self.as_comparable() < self._transform_to_comparable(other).as_comparable()
+
+    def __le__(self, other):
+        return self.as_comparable() <= self._transform_to_comparable(other).as_comparable()
+
+    def __eq__(self, other):
+        return self.as_comparable() == self._transform_to_comparable(other).as_comparable()
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __ge__(self, other):
+        return not self.__lt__(other)
+
+    def __gt__(self, other):
+        return not self.__le__(other)
+
+
+class ComparableScyllaOperatorVersion(ComparableScyllaVersion):
+    """Accepts and compares known 'non-semver' and 'semver'-like Scylla Operator versions."""
+
+    def as_comparable(self):
+        v_pre_release = ''
+        if not self.v_pre_release:
+            v_pre_release = 'xyz'
+        else:
+            # 'alpha.0-100-gf796b97'
+            dash_parts = self.v_pre_release.split("-")
+            transformed_dash_parts = []
+            # ['alpha.0', '100', 'gf796b97']
+            for dash_part in dash_parts:
+                dot_parts = dash_part.split('.')
+                transformed_dot_parts = []
+                # ['alpha', '0'] , ['100'] , ['gf796b97']
+                for dot_part in dot_parts:
+                    if re.search(r"\D+", dot_part):
+                        transformed_dot_parts.append(dot_part)
+                    else:
+                        # ['alpha', '0000'] , ['0100'] , ['gf796b97']
+                        transformed_dot_parts.append(dot_part.zfill(4))
+                transformed_dash_parts.append('.'.join(transformed_dot_parts))
+            v_pre_release = '-'.join(transformed_dash_parts)
+        return (self.v_major, self.v_minor, self.v_patch, v_pre_release)
+
+    @staticmethod
+    def parse(version_string: str):
+        """Parse scylla-operator versions into a proper semver structure."""
+        _scylla_operator_version = version_string or ''
+
+        # NOTE: remove redundant prefixes and suffixes if exist
+        for prefix in ('scylla-operator-', 'scylla-manager-', 'scylla-', 'v'):
+            if _scylla_operator_version.startswith(prefix):
+                _scylla_operator_version = _scylla_operator_version[len(prefix):]
+        for suffix in ('-nightly', ):
+            if _scylla_operator_version.endswith(suffix):
+                _scylla_operator_version = _scylla_operator_version[:-len(suffix)]
+
+        if match := SEMVER_REGEX.match(_scylla_operator_version):
+            return match.groups()
+        raise ValueError(
+            f"Cannot parse provided '{version_string}' scylla_operator_version for the comparison. "
+            f"Transformed scylla_operator_version: {_scylla_operator_version}")
+
+
 @lru_cache(maxsize=1024)
 @retrying(n=10, sleep_time=0.1)
 def get_url_content(url, return_url_data=True):
@@ -276,7 +412,7 @@ def is_enterprise(scylla_version):
     :param scylla_version: scylla version string
     :return: True if this version string passed is a scylla enterprise version
     """
-    return version.LegacyVersion(scylla_version) > version.LegacyVersion('2000')
+    return bool(re.search(r"^20[0-9]{2}.*", scylla_version))
 
 
 def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> tuple[bool, str]:
@@ -592,11 +728,14 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
                 scylla_version = "n/a"
             func_version_mapping = self.VERSIONS.get((func.__name__, func.__code__.co_filename), {})
             for (min_v, max_v), mapped_func in func_version_mapping.items():
-                if version.LegacyVersion(min_v) <= version.LegacyVersion(
-                        scylla_version) <= version.LegacyVersion(max_v):
-                    return mapped_func(*args, **kwargs)
-            raise MethodVersionNotFound("Method '{}' with version '{}' is not supported in '{}'!".format(
-                func.__name__, scylla_version, cls_self.__class__.__name__))
+                try:
+                    if ComparableScyllaVersion(min_v) <= ComparableScyllaVersion(scylla_version) <= max_v:
+                        return mapped_func(*args, **kwargs)
+                except ValueError as exc:
+                    LOGGER.warning("Failed to parse '%s' scylla version: %s", scylla_version, exc)
+            raise MethodVersionNotFound(
+                "Method '{}' with version '{}' is not supported in '{}'!".format(
+                    func.__name__, scylla_version, cls_self.__class__.__name__))
         return inner
 
 

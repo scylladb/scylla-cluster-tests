@@ -10,22 +10,24 @@ import pkg_resources
 
 import sdcm
 from sdcm.utils.version_utils import (
-    get_branch_version,
+    assume_version,
     get_all_versions,
+    get_branch_version,
     get_branch_version_for_multiple_repositories,
+    get_docker_image_by_version,
     get_git_tag_from_helm_chart_version,
     get_scylla_urls_from_repository,
+    get_specific_tag_of_docker_image,
     is_enterprise,
+    parse_scylla_version,
+    scylla_versions,
+    ComparableScyllaOperatorVersion,
+    ComparableScyllaVersion,
     MethodVersionNotFound,
     RepositoryDetails,
     ScyllaFileType,
-    scylla_versions,
-    assume_version,
-    VERSION_NOT_FOUND_ERROR,
     SCYLLA_VERSION_GROUPED_RE,
-    get_specific_tag_of_docker_image,
-    get_docker_image_by_version,
-    parse_scylla_version,
+    VERSION_NOT_FOUND_ERROR,
 )
 
 BASE_S3_DOWNLOAD_URL = 'https://s3.amazonaws.com/downloads.scylladb.com'
@@ -213,11 +215,17 @@ class ClassWithVersiondMethods:  # pylint: disable=too-few-public-methods
     def __init__(self, scylla_version, nemesis_like_class):
         params = {"scylla_version": scylla_version}
         if scylla_version.startswith('enterprise:'):
-            node_scylla_version = "2023.dev"
+            node_scylla_version = "2023.1.dev"
         elif scylla_version.startswith('master:') or scylla_version == "":
             node_scylla_version = "4.7.dev"
         else:
-            node_scylla_version = "{}.dev".format(scylla_version.split(":")[0])
+            if ":" in scylla_version:
+                node_scylla_version = scylla_version.split(":")[0]
+                if node_scylla_version.count(".") < 1:
+                    node_scylla_version += ".0"
+                node_scylla_version += ".dev"
+            else:
+                node_scylla_version = scylla_version
         nodes = [type("Node", (object,), {"scylla_version": node_scylla_version})]
         if nemesis_like_class:
             self.cluster = type("Cluster", (object,), {
@@ -464,3 +472,172 @@ def test_parse_scylla_version_unsupported(version_string, expected):
     with pytest.raises(AssertionError) as exp:
         parse_scylla_version(version_string)
     assert str(exp.value) == expected
+
+
+@pytest.mark.parametrize("version_string, expected", (
+    ("5.1", (5, 1, 0, '', '')),
+    ("5.1.0", (5, 1, 0, '', '')),
+    ("5.1.1", (5, 1, 1, '', '')),
+    ("5.1.0-rc1", (5, 1, 0, 'rc1', '')),
+    ("5.1.0~rc1", (5, 1, 0, 'rc1', '')),
+    ("5.1.rc1", (5, 1, 0, 'rc1', '')),
+    ("2022.1.3-0.20220922.539a55e35", (2022, 1, 3, "dev-0.20220922", "539a55e35")),
+    ("2022.1.3-0.20220922.539a55e35 with build-id d1fb2faafd95058a04aad30b675ff7d2b930278d",
+     (2022, 1, 3, "dev-0.20220922", "539a55e35")),
+    ("2022.1.3-dev-0.20220922.539a55e35", (2022, 1, 3, "dev-0.20220922", "539a55e35")),
+    ("5.2.0~rc1-0.20230207.8ff4717fd010", (5, 2, 0, "rc1-0.20230207", "8ff4717fd010")),
+    ("5.2.0-dev-0.20230109.08b3a9c786d9", (5,  2, 0, "dev-0.20230109", "08b3a9c786d9")),
+    ("5.2.0-dev-0.20230109.08b3a9c786d9-x86_64", (5, 2, 0, "dev-0.20230109", "08b3a9c786d9")),
+    ("5.2.0-dev-0.20230109.08b3a9c786d9-aarch64", (5, 2, 0, "dev-0.20230109", "08b3a9c786d9")),
+))
+def test_comparable_scylla_version_init_positive(version_string, expected):
+    comparable_scylla_version = ComparableScyllaVersion(version_string)
+    assert comparable_scylla_version.v_major == expected[0]
+    assert comparable_scylla_version.v_minor == expected[1]
+    assert comparable_scylla_version.v_patch == expected[2]
+    assert comparable_scylla_version.v_pre_release == expected[3]
+    assert comparable_scylla_version.v_build == expected[4]
+
+
+@pytest.mark.parametrize("version_string", (None, "", "5", "2023", "2023.dev"))
+def test_comparable_scylla_versions_init_negative(version_string):
+    try:
+        ComparableScyllaVersion(version_string)
+    except ValueError:
+        pass
+    else:
+        assert False, (
+            f"'ComparableScyllaVersion' must raise a ValueError for the '{version_string}' "
+            "provided input")
+
+
+def _compare_versions(version_string_left, version_string_right,
+                      is_left_greater, is_equal, comparable_class):
+    comparable_version_left = comparable_class(version_string_left)
+    comparable_version_right = comparable_class(version_string_right)
+
+    compare_expected_result_err_msg = (
+        "One of 'is_left_greater' and 'is_equal' must be 'True' and another one must be 'False'")
+    assert is_left_greater or is_equal, compare_expected_result_err_msg
+    assert not (is_left_greater and is_equal)
+    if is_left_greater:
+        assert comparable_version_left > comparable_version_right
+        assert comparable_version_left >= comparable_version_right
+        assert comparable_version_left > version_string_right
+        assert comparable_version_left >= version_string_right
+        assert comparable_version_right < comparable_version_left
+        assert comparable_version_right <= comparable_version_left
+        assert comparable_version_right < version_string_left
+        assert comparable_version_right <= version_string_left
+    else:
+        assert comparable_version_left == comparable_version_right
+        assert comparable_version_left == version_string_right
+        assert comparable_version_left >= comparable_version_right
+        assert comparable_version_left >= version_string_right
+        assert comparable_version_right <= comparable_version_left
+        assert comparable_version_right <= version_string_left
+
+
+@pytest.mark.parametrize(
+    "version_string_left, version_string_right, is_left_greater, is_equal, comparable_class", (
+        ("5.2.2", "5.2.2", False, True, ComparableScyllaVersion),
+        ("5.2.0", "5.1.2", True, False, ComparableScyllaVersion),
+        ("5.2.1", "5.2.0", True, False, ComparableScyllaVersion),
+        ("5.2.10", "5.2.9", True, False, ComparableScyllaVersion),
+        ("5.2.0", "5.2.0~rc1-0.20230207.8ff4717fd010", True, False, ComparableScyllaVersion),
+        ("5.2.0", "5.2.0-dev-0.20230109.08b3a9c786d9", True, False, ComparableScyllaVersion),
+        ("2023.1.0", "2023.1.rc1", True, False, ComparableScyllaVersion),
+        ("5.2.0", "5.1.rc1", True, False, ComparableScyllaVersion),
+        ("5.2.0-dev-0.20230109.8ff4717fd010", "5.2.0-dev-0.20230109.08b3a9c786d9",
+         False, True, ComparableScyllaVersion),
+    ))
+def test_comparable_scylla_versions_compare(version_string_left, version_string_right,
+                                            is_left_greater, is_equal, comparable_class):
+    _compare_versions(
+        version_string_left, version_string_right, is_left_greater, is_equal, comparable_class)
+
+
+@pytest.mark.parametrize("version_string_input, version_string_output", (
+    ("5.2.2", "5.2.2"),
+    ("2023.1.13", "2023.1.13"),
+    ("5.2.0~rc0-0.20230207", "5.2.0-rc0-0.20230207"),
+    ("5.2.0-rc1-0.20230207", "5.2.0-rc1-0.20230207"),
+    ("5.2.0~dev-0.20230207.8ff4717fd010", "5.2.0-dev-0.20230207+8ff4717fd010"),
+))
+def test_comparable_scylla_versions_to_str(version_string_input, version_string_output):
+    assert str(ComparableScyllaVersion(version_string_input)) == version_string_output
+
+
+@pytest.mark.parametrize("version_string, expected", (
+    ("v1.8.0", (1, 8, 0, '', '')),
+    ("1.8.0", (1, 8, 0, '', '')),
+    ("1.8.0-rc.0", (1, 8, 0, 'rc.0', '')),
+    ("1.9.0-alpha.1", (1, 9, 0, 'alpha.1', '')),
+    ("1.9.0-alpha.1-nightly", (1, 9, 0, 'alpha.1', '')),
+    ("1.9.0-alpha.1-2-g3321624", (1, 9, 0, 'alpha.1-2-g3321624', '')),
+    ("1.9.0-alpha.1-2-g3321624-nightly", (1, 9, 0, 'alpha.1-2-g3321624', '')),
+    ("v1.9.0-alpha.1-13-gc6a6e05", (1, 9, 0, 'alpha.1-13-gc6a6e05', '')),
+    ("scylla-operator-1.8.0-beta.1", (1, 8, 0, 'beta.1', '')),
+))
+def test_comparable_scylla_operator_version_init_positive(version_string, expected):
+    comparable_scylla_operator_version = ComparableScyllaOperatorVersion(version_string)
+    assert comparable_scylla_operator_version.v_major == expected[0]
+    assert comparable_scylla_operator_version.v_minor == expected[1]
+    assert comparable_scylla_operator_version.v_patch == expected[2]
+    assert comparable_scylla_operator_version.v_pre_release == expected[3]
+    assert comparable_scylla_operator_version.v_build == expected[4]
+
+
+@pytest.mark.parametrize("version_string", (None, "", "1", "1.alpha"))
+def test_comparable_scylla_operator_versions_init_negative(version_string):
+    try:
+        ComparableScyllaOperatorVersion(version_string)
+    except ValueError:
+        pass
+    else:
+        assert False, (
+            f"'ComparableScyllaOperatorVersion' must raise a ValueError for the '{version_string}' "
+            "provided input")
+
+
+@pytest.mark.parametrize(
+    "version_string_left, version_string_right, is_left_greater, is_equal, comparable_class", (
+        ("v1.7.1", "1.7.0", True, False, ComparableScyllaOperatorVersion),
+        ("1.7.1", "v1.7.0", True, False, ComparableScyllaOperatorVersion),
+        ("1.8.0", "1.8.0-rc.0", True, False, ComparableScyllaOperatorVersion),
+        ("1.8.0", "1.0.0-alpha.1", True, False, ComparableScyllaOperatorVersion),
+        ("scylla-operator-v1.8.0-alpha.0-100-gf796b97", "1.8.0-alpha.0-99-g1234567",
+         True, False, ComparableScyllaOperatorVersion),
+        ("scylla-operator-v1.8.0-alpha.0-10-gf796b97", "1.8.0-alpha.0-9-g1234567",
+         True, False, ComparableScyllaOperatorVersion),
+        ("1.9.0-alpha.1-2-g3321624", "1.9.0-alpha.1-2-g3321624-nightly",
+         False, True, ComparableScyllaOperatorVersion),
+        ("v1.8.0", "1.8.0", False, True, ComparableScyllaOperatorVersion),
+        ("scylla-operator-1.8.0-beta.1", "1.8.0-beta.1",
+         False, True, ComparableScyllaOperatorVersion),
+        ("scylla-manager-v1.8.0-alpha.0-100-gf796b97", "1.8.0-alpha.0-100-gf796b97",
+         False, True, ComparableScyllaOperatorVersion),
+    ))
+def test_comparable_scylla_operator_versions_compare(version_string_left, version_string_right,
+                                                     is_left_greater, is_equal, comparable_class):
+    _compare_versions(
+        version_string_left, version_string_right, is_left_greater, is_equal, comparable_class)
+
+
+@pytest.mark.parametrize("version_string_input, version_string_output", (
+    ("scylla-operator-1.8.0-beta.1", "1.8.0-beta.1"),
+    ("scylla-manager-1.8.0-beta.1", "1.8.0-beta.1"),
+    ("scylla-1.8.0-beta.1", "1.8.0-beta.1"),
+    ("scylla-operator-v1.8.0-alpha.0-100-gf796b97", "1.8.0-alpha.0-100-gf796b97"),
+    ("scylla-manager-v1.8.0-alpha.0-100-gf796b97", "1.8.0-alpha.0-100-gf796b97"),
+    ("scylla-v1.8.0-alpha.0-100-gf796b97", "1.8.0-alpha.0-100-gf796b97"),
+    ("v1.8.1", "1.8.1"),
+    ("1.8.1", "1.8.1"),
+    ("1.8.0-rc.0", "1.8.0-rc.0"),
+    ("1.9.0-alpha.1", "1.9.0-alpha.1"),
+    ("1.9.0-alpha.1-nightly", "1.9.0-alpha.1"),
+    ("1.9.0-alpha.1-2-g3321624", "1.9.0-alpha.1-2-g3321624"),
+    ("1.9.0-alpha.1-2-g3321624-nightly", "1.9.0-alpha.1-2-g3321624"),
+))
+def test_comparable_scylla_operator_versions_to_str(version_string_input, version_string_output):
+    assert str(ComparableScyllaOperatorVersion(version_string_input)) == version_string_output
