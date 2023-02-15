@@ -38,7 +38,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 import packaging.version
-from packaging.version import LegacyVersion
 
 import yaml
 import requests
@@ -98,7 +97,13 @@ from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_g
 from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.test_config import TestConfig
-from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version, get_systemd_version, assume_version
+from sdcm.utils.version_utils import (
+    assume_version,
+    get_gemini_version,
+    get_systemd_version,
+    ComparableScyllaVersion,
+    SCYLLA_VERSION_RE,
+)
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
@@ -2744,27 +2749,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @property
     def is_cqlsh_support_cloud_bundle(self):
-        return bool(self.parent_cluster.connection_bundle_file) and (
-            (
-                not self.is_enterprise and LegacyVersion(
-                    self.scylla_version) >= LegacyVersion('5.2.0~dev'))
-            or
-            (
-                self.is_enterprise and LegacyVersion(
-                    self.scylla_version) >= LegacyVersion('2022.3.0~dev')
-            )
-        )
+        if bool(self.parent_cluster.connection_bundle_file):
+            if self.is_enterprise:
+                return ComparableScyllaVersion(self.scylla_version) >= "2022.3.0~dev"
+            else:
+                return ComparableScyllaVersion(self.scylla_version) >= "5.2.0~dev"
+        return False
 
     @property
     def is_replacement_by_host_id_supported(self):
-        # NOTE: compare 'LegacyVersion' returns 'False' for the following comparison:
-        #         LegacyVersion("5.2.0") > LegacyVersion('5.2.0~dev')
-        #       and 'True' for the following:
-        #         LegacyVersion("5.2.0~rc1") > LegacyVersion('5.2.0~dev')
-        #       So, compare to '5.1.999' because any 5.2+ version provides 'True' in this case
         if self.is_enterprise:
-            return LegacyVersion(self.scylla_version) > LegacyVersion('2022.2.999')
-        return LegacyVersion(self.scylla_version) > LegacyVersion('5.1.999')
+            return ComparableScyllaVersion(self.scylla_version) > '2022.3.0~dev'
+        return ComparableScyllaVersion(self.scylla_version) > '5.2.0~dev'
 
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
         """cqlsh [options] [host [port]]"""

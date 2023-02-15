@@ -38,7 +38,6 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from textwrap import dedent
 from threading import Lock, RLock
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Tuple, Callable
-from packaging import version
 
 import yaml
 import kubernetes as k8s
@@ -88,6 +87,7 @@ from sdcm.utils.k8s.chaos_mesh import ChaosMesh
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
     KubectlClusterEventsLogger, ScyllaManagerLogger, KubernetesWrongSchedulingLogger
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
+from sdcm.utils.version_utils import ComparableScyllaOperatorVersion
 from sdcm.wait import wait_for
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
 
@@ -500,15 +500,18 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         all_versions = yaml.safe_load(self.helm(
             f"search repo {local_chart_path} --devel --versions -o yaml"))
         assert isinstance(all_versions, list), f"Expected list of data, got: {type(all_versions)}"
-        # NOTE: make sure that we do not compare '1.3.0' and 'v1.4.0' versions as well as
-        #       'v1.8.0-alpha.0' and 'v1.8.0-alpha.0-9-g5e138fa'.
-        #       In first case always add 'v' to make versions be of the same type.
-        #       In second one do not pick up versions which are the oldest in the family like 'v1.8.0-alpha.0'
-        #       but considered 'the newest' by version parser.
-        return str(max((
-            version.LegacyVersion(("v" if v["version"][0] != 'v' else "") + v["version"])
-            for v in all_versions if v["version"].count('-') in (0, 3)
-        )))
+        # NOTE: ignore versions like 'v1.8.0-alpha.0' because they refer to the oldest full version
+        #       in each 'minor' family.
+        current_newest_version, current_newest_version_str = None, ''
+        for version_object in all_versions:
+            if version_object["version"].count('-') not in (0, 3):
+                continue
+            if ComparableScyllaOperatorVersion(version_object["version"]) > (
+                    current_newest_version or '0.0.0'):
+                current_newest_version = ComparableScyllaOperatorVersion(version_object["version"])
+                current_newest_version_str = version_object["version"]
+                continue
+        return current_newest_version_str
 
     @cached_property
     def _scylla_operator_chart_version(self):
@@ -669,7 +672,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 affinity_rules["webhookServerAffinity"]["nodeAffinity"] = (
                     affinity_rules["affinity"]["nodeAffinity"])
             values = HelmValues(**affinity_rules)
-            if version.parse(self._scylla_operator_chart_version.split("-")[0]) > version.parse("v1.3.0"):
+            if ComparableScyllaOperatorVersion(
+                    self._scylla_operator_chart_version.split("-")[0]) > "1.3.0":
                 # NOTE: following is supported starting with operator-1.4
                 values.set("logLevel", 4)
 
@@ -699,8 +703,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 namespace=SCYLLA_OPERATOR_NAMESPACE,
                 values=values
             ))
-            if (version.LegacyVersion(self._scylla_operator_chart_version.split("-")[0]) >= version.LegacyVersion("v1.8.0") and
-                    self.params.get('k8s_enable_tls')):
+            if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
+                    self._scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
                 patch_cmd = ('patch deployment scylla-operator --type=json -p=\'[{"op": "add",'
                              '"path": "/spec/template/spec/containers/0/args/-", '
                              '"value": "--feature-gates=AutomaticTLSCertificates=true" }]\' ')
@@ -741,7 +745,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         # Helm doesn't do CRD 'upgrades', only 'creations'.
         # Details:
         #   https://helm.sh/docs/chart_best_practices/custom_resource_definitions/#some-caveats-and-explanations
-        if version.parse(new_chart_version.split("-")[0]) > version.parse("v1.5.0"):
+        if ComparableScyllaOperatorVersion(new_chart_version.split("-")[0]) > "1.5.0":
             LOGGER.info("Upgrade Scylla Operator CRDs: START")
             try:
                 with TemporaryDirectory() as tmpdir:
@@ -761,7 +765,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         # Get existing scylla-operator helm chart values
         values = HelmValues(json.loads(self.helm(
             "get values scylla-operator -o json", namespace=SCYLLA_OPERATOR_NAMESPACE)))
-        if version.parse(new_chart_version.split("-")[0]) > version.parse("v1.3.0"):
+        if ComparableScyllaOperatorVersion(new_chart_version.split("-")[0]) > "1.3.0":
             # NOTE: following is supported starting with operator-1.4
             values.set("logLevel", 4)
 
@@ -841,8 +845,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         dns_domains = []
         expose_options = {}
-        if (version.LegacyVersion(self._scylla_operator_chart_version.split("-")[0]) >= (
-                version.LegacyVersion("v1.8.0")) and self.params.get('k8s_enable_tls')):
+        if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
+                self._scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
             dns_domains = [f"{cluster_name}.sct.scylladb.com"]
             expose_options = {"cql": {"ingress": {
                 "annotations": {
@@ -973,7 +977,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         LOGGER.info("Install DaemonSets required by scylla nodes")
         scylla_machine_image_args = ['--all']
-        if version.LegacyVersion(self._scylla_operator_chart_version) > version.LegacyVersion("v1.5.0"):
+        if ComparableScyllaOperatorVersion(self._scylla_operator_chart_version) > "1.5.0":
             # NOTE: operator versions newer than v1.5.0 have it's own perf tuning,
             #       so, we should not do anything else than disk setup in such a case.
             scylla_machine_image_args = ['--setup-disks']

@@ -23,7 +23,6 @@ from typing import Optional
 
 import pytest
 from deepdiff import DeepDiff
-from packaging import version
 
 from functional_tests.scylla_operator.libs.auxiliary import ScyllaOperatorFunctionalClusterTester, sct_abs_path
 from sdcm.cluster_k8s import ScyllaPodCluster
@@ -225,8 +224,9 @@ def skip_if_not_supported_scylla_version(request: pytest.FixtureRequest,
 def skip_based_on_operator_version(request: pytest.FixtureRequest, tester: ScyllaOperatorFunctionalClusterTester):
     # pylint: disable=protected-access
     if required_operator := request.node.get_closest_marker('required_operator'):
-        if (version.LegacyVersion(tester.k8s_cluster._scylla_operator_chart_version.split("-")[0])
-                < version.LegacyVersion(required_operator.args[0])):
+        current_version = tester.k8s_cluster._scylla_operator_chart_version.split("-")[0]
+        required_version = required_operator.args[0]
+        if version_utils.ComparableScyllaOperatorVersion(current_version) < required_version:
             pytest.skip(f"require operator version: {required_operator.args[0]} , "
                         f"current version: {tester.k8s_cluster._scylla_operator_chart_version}")
 
