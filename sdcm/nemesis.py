@@ -606,9 +606,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         call split() on the output to get keyspace_name and
         cf_name separately.
         """
-        ks_cf = random.choice(self.cluster.get_non_system_ks_cf_list(
-            db_node=self.target_node, filter_empty_tables=filter_empty_tables))
-        return ks_cf.split(".") if ks_cf else None
+        if ks_cf_list := self.cluster.get_non_system_ks_cf_list(
+                db_node=self.target_node, filter_empty_tables=filter_empty_tables):
+            return random.choice(ks_cf_list).split(".")
+        else:
+            return None, None
 
     def _prepare_start_stop_compaction(self) -> StartStopCompactionArgs:
         self.set_target_node()
