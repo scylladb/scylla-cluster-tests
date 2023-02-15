@@ -720,6 +720,10 @@ def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path)
         log.debug(file)
         log.debug(file.read_text())
 
+    # since ip address of this node can change in previous tests,
+    # and we don't have the ip tracker thread in local-kind setup
+    db_cluster.nodes[0].refresh_ip_address()
+
     execution_profile = ExecutionProfile(load_balancing_policy=WhiteListRoundRobinPolicy([
                                          db_cluster.nodes[0].cql_ip_address]))
     cluster = Cluster(contact_points=[db_cluster.nodes[0].cql_ip_address], port=db_cluster.nodes[0].CQL_SSL_PORT,
