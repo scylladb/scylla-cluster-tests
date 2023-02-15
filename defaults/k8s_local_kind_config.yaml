@@ -12,7 +12,7 @@ mgmt_docker_image: 'scylladb/scylla-manager:3.0.0'
 # To test nightly builds define it like this: 'scylladb/scylla-operator:nightly'
 k8s_scylla_operator_docker_image: ''
 k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/stable'
-k8s_scylla_operator_chart_version: 'v1.7.2'
+k8s_scylla_operator_chart_version: 'v1.8.0'
 k8s_cert_manager_version: '1.8.0'
 
 k8s_scylla_datacenter: 'dc-1'
