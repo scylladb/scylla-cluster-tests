@@ -98,10 +98,6 @@ def call(Map pipelineParams) {
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
 
-            string(defaultValue: "${pipelineParams.get('tag_ami_with_result', 'false')}",
-                   description: 'true|false',
-                   name: 'tag_ami_with_result')
-
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
@@ -263,7 +259,6 @@ def call(Map pipelineParams) {
                                         export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                         export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
 
-                                        export SCT_TAG_AMI_WITH_RESULT="${params.tag_ami_with_result}"
                                         export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
 
                                         if [[ ! -z "${params.scylla_mgmt_address}" ]] ; then

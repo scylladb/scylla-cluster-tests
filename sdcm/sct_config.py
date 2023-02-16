@@ -688,8 +688,6 @@ class SCTConfiguration(dict):
         dict(name="backup_bucket_region", env="SCT_BACKUP_BUCKET_REGION", type=str,
              help="the AWS region of a bucket to be used for backup (e.g., 'eu-west-1')"),
 
-        dict(name="tag_ami_with_result", env="SCT_TAG_AMI_WITH_RESULT", type=boolean,
-             help="If True, would tag the ami with the test final result"),
 
         dict(name="use_prepared_loaders", env="SCT_USE_PREPARED_LOADERS", type=boolean,
              help="If True, we use prepared VMs for loader (instead of using docker images)"),

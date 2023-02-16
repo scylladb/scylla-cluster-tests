@@ -1953,17 +1953,6 @@ def get_ami_tags(ami_id, region_name):
         return {}
 
 
-def tag_ami(ami_id, tags_dict, region_name):
-    tags = [{'Key': key, 'Value': value} for key, value in tags_dict.items()]
-
-    ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
-    test_image = ec2_resource.Image(ami_id)
-    tags += test_image.tags
-    test_image.create_tags(Tags=tags)
-
-    LOGGER.info("tagged %s with %s", ami_id, tags)
-
-
 def get_db_tables(session, ks, with_compact_storage=True):
     """
     Return tables from keystore based on their compact storage feature

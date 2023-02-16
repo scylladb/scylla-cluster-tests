@@ -67,7 +67,7 @@ from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_network_configuration, get_ec2_services, \
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
-from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
+from sdcm.utils.common import format_timestamp, wait_ami_available, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
     rows_to_list, make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, \
     change_default_password
@@ -2755,7 +2755,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.clean_resources()
         if self.create_stats:
             self.update_test_with_errors()
-        self.tag_ami_with_result()
         time.sleep(1)  # Sleep is needed to let final event being saved into files
         self.save_email_data()
         self.destroy_localhost()
@@ -3503,17 +3502,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "shard_awareness_driver": self.is_shard_awareness_driver,
                 "restore_monitor_job_base_link": restore_monitor_job_base_link,
                 "relocatable_pkg": get_relocatable_pkg_url(scylla_version)}
-
-    @silence()
-    def tag_ami_with_result(self):
-        if self.params.get('cluster_backend') != 'aws' or not self.params.get('tag_ami_with_result'):
-            return
-        test_result = 'PASSED' if self.get_test_status() == 'SUCCESS' else 'ERROR'
-        job_base_name = os.environ.get('JOB_BASE_NAME', 'UnknownJob')
-        ami_id = self.params.get('ami_id_db_scylla').split()[0]
-        region_name = self.params.region_names[0]
-
-        tag_ami(ami_id=ami_id, region_name=region_name, tags_dict={"JOB:{}".format(job_base_name): test_result})
 
     def get_test_results(self, source, severity=None):
         output = []

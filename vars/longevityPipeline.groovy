@@ -71,10 +71,6 @@ def call(Map pipelineParams) {
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_k8s_cluster')
 
-            string(defaultValue: "${pipelineParams.get('tag_ami_with_result', 'false')}",
-                   description: 'true|false',
-                   name: 'tag_ami_with_result')
-
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')

@@ -21,7 +21,7 @@ from pathlib import Path
 
 from sdcm.cluster import BaseNode
 from sdcm.utils.distro import Distro
-from sdcm.utils.common import tag_ami, convert_metric_to_ms, download_dir_from_cloud
+from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud
 from sdcm.utils.sstable import load_inventory
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 
@@ -29,10 +29,6 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class TestUtils(unittest.TestCase):
-    def test_tag_ami_01(self):  # pylint: disable=no-self-use
-        tag_ami(ami_id='ami-076a213c791dc19cd',
-                tags_dict={'JOB_longevity-multi-keyspaces-60h': 'PASSED'}, region_name='eu-west-1')
-
     def test_scylla_bench_metrics_conversion(self):  # pylint: disable=no-self-use
         metrics = {"4ms": 4.0, "950µs": 0.95, "30ms": 30.0, "8.592961906s": 8592.961905999999,
                    "18.120703ms": 18.120703, "5.963775µs": 0.005963775, "9h0m0.024080491s": 32400024.080491,
