@@ -1022,7 +1022,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     def _destroy_data_and_restart_scylla(self):
-
+        def find_five_files_to_destroy():
+            all_files_to_destroy = []
+            try:
+                for _ in range(5):
+                    for _ in range(3):
+                        file_for_destroy = self._choose_file_for_destroy(tables)
+                        if file_for_destroy not in all_files_to_destroy:
+                            all_files_to_destroy.append(file_for_destroy)
+                            break
+            except NoFilesFoundToDestroy:
+                if not all_files_to_destroy:
+                    raise
+            return all_files_to_destroy
         ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_empty_tables=False)
         if not ks_cfs:
             raise UnsupportedNemesis(
@@ -1048,12 +1060,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
 
         try:
-
             # Remove 5 data files
-            for _ in range(5):
-
-                file_for_destroy = self._choose_file_for_destroy(tables)
-
+            all_files_to_destroy = find_five_files_to_destroy()
+            if len(all_files_to_destroy) < 5:
+                self.log.warning("Expected to find 5 files to destroy, but only found %s", len(all_files_to_destroy))
+            for file_for_destroy in all_files_to_destroy:
                 result = self.target_node.remoter.sudo('rm -f %s' % file_for_destroy)
                 if result.stderr:
                     raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
