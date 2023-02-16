@@ -1353,6 +1353,8 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
                               sct_branch_name=sct_branch, sct_repo=sct_repo)
     base_path = f'{server.base_sct_dir}/jenkins-pipelines'
 
+    enterprise_to_filter_out = r'ldap|ics|-sla|saslauthd'
+
     for group_name, group_desc in [
         ('longevity', 'SCT Longevity Tests'),
         ('rolling-upgrade', 'SCT Rolling Upgrades'),
@@ -1370,7 +1372,8 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
         server.create_directory(name=group_name, display_name=group_desc)
 
         for jenkins_file in glob.glob(f'{base_path}/{group_name}*.jenkinsfile'):
-            server.create_pipeline_job(jenkins_file, group_name)
+            if not re.search(enterprise_to_filter_out, jenkins_file):
+                server.create_pipeline_job(jenkins_file, group_name)
         if group_name == 'load-test':
             for jenkins_file in glob.glob(f'{base_path}/admission_control_overload*'):
                 server.create_pipeline_job(jenkins_file, group_name)
@@ -1420,7 +1423,9 @@ def create_test_release_jobs_enterprise(branch, username, password, sct_branch, 
     for group_name, match, group_desc in [
         ('EncryptionAtRest', 'EaR-*', 'Encryption At Rest'),
         ('ICS', '*ics*', 'ICS'),
-        ('Workload_Prioritization', 'features-sla-*', 'Workload Prioritization')
+        ('Workload_Prioritization', 'features-sla-*', 'Workload Prioritization'),
+        ('LDAP', '*ldap*', 'LDAP authorization and authentication tests'),
+        ('LDAP', '*saslauthd*', 'LDAP authorization and authentication tests')
     ]:
         current_dir = f'SCT_Enterprise_Features/{group_name}'
         server.create_directory(name=current_dir, display_name=group_desc)
