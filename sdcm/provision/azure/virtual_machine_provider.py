@@ -60,11 +60,13 @@ class VirtualMachineProvider:
             LOGGER.info(
                 "Creating '%s' VM in resource group %s...", definition.name, self._resource_group_name)
             LOGGER.info("Instance params: %s", definition)
+            tags = definition.tags | {"ssh_user": definition.user_name, "ssh_key": definition.ssh_key.name,
+                                      "creation_time": datetime.utcnow().isoformat(sep=" ", timespec="seconds")}
+            tags = self._replace_null_value_from_tags_with_empty_string(tags)
             params = {
                 "location": self._region,
                 "zones": [self._az] if self._az else [],
-                "tags": definition.tags | {"ssh_user": definition.user_name, "ssh_key": definition.ssh_key.name,
-                                           "creation_time": datetime.utcnow().isoformat(sep=" ", timespec="seconds")},
+                "tags": tags,
                 "hardware_profile": {
                     "vm_size": definition.type,
                 },
@@ -152,6 +154,7 @@ class VirtualMachineProvider:
         if name not in self._cache:
             raise AttributeError(f"Instance '{name}' does not exist in resource group '{self._resource_group_name}'")
         current_tags = self._cache[name].tags
+        tags = self._replace_null_value_from_tags_with_empty_string(tags)
         current_tags.update(tags)
         self._azure_service.compute.virtual_machines.begin_update(self._resource_group_name, name, parameters={
             "tags": current_tags
@@ -235,3 +238,13 @@ class VirtualMachineProvider:
 
     def clear_cache(self):
         self._cache = {}
+
+    @staticmethod
+    def _replace_null_value_from_tags_with_empty_string(tags: Dict[str, str]) -> Dict[str, str]:
+        """Azure API does not accept 'null' as value for tags, so we replace it with empty string."""
+        for key, value in tags.items():
+            if value == "null":
+                LOGGER.warning("Tag '%s' has value 'null' which is not allowed by Azure API. Replacing with empty string.",
+                               key)
+                tags[key] = ""
+        return tags
