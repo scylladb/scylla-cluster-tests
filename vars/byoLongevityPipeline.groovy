@@ -103,9 +103,6 @@ def call() {
             string(defaultValue: '',
                    description: 'cloud path for RPMs, s3:// or gs://',
                    name: 'update_db_packages')
-            string(defaultValue: "false",
-                   description: 'true|false',
-                   name: 'tag_ami_with_result')
             string(defaultValue: "qa@scylladb.com",
                    description: 'email recipients of email report',
                    name: 'email_recipients')

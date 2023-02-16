@@ -138,10 +138,6 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
         export SCT_UPDATE_DB_PACKAGES="${params.update_db_packages}"
     fi
 
-    if [[ -n "${params.tag_ami_with_result ? params.tag_ami_with_result : ''}" ]] ; then
-        export SCT_TAG_AMI_WITH_RESULT="${params.tag_ami_with_result}"
-    fi
-
     if [[ -n "${params.ip_ssh_connections ? params.ip_ssh_connections : ''}" ]] ; then
         export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
     fi
