@@ -3,7 +3,7 @@
 def call(Map params, Integer test_duration, String region) {
     def cloud_provider = getCloudProviderFromBackend(params.backend)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-    def test_name = groovy.json.JsonOutput.toJson(params.get('test_name', ''))
+    def test_name = groovy.json.JsonOutput.toJson(params.test_name)
 
     // NOTE: EKS jobs have 'availability_zone' be defined as 'a,b'
     //       So, just pick up the first one for the SCT runner in such a case.
