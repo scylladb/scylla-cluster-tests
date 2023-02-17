@@ -33,7 +33,7 @@ from cassandra.protocol import ProtocolException  # pylint: disable=no-name-in-m
 from sdcm.tester import ClusterTester
 from sdcm.utils.decorators import retrying
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
-from sdcm.utils.version_utils import parse_scylla_version
+from sdcm.utils.version_utils import ComparableScyllaVersion
 
 
 LOGGER = logging.getLogger(__name__)
@@ -3143,7 +3143,7 @@ class FillDatabaseData(ClusterTester):
 
     @property
     def parsed_scylla_version(self):
-        return parse_scylla_version(self.db_cluster.nodes[0].scylla_version)
+        return ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version)
 
     @property
     def is_enterprise(self) -> bool:
@@ -3154,14 +3154,14 @@ class FillDatabaseData(ClusterTester):
             version_with_support = self.NULL_VALUES_SUPPORT_ENTERPRISE_MIN_VERSION
         else:
             version_with_support = self.NULL_VALUES_SUPPORT_OS_MIN_VERSION
-        return self.parsed_scylla_version >= parse_scylla_version(version_with_support)
+        return self.parsed_scylla_version >= version_with_support
 
     def version_new_sorting_order_with_secondary_indexes(self):
         if self.is_enterprise:
             version_with_support = self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_ENTERPRISE_MIN_VERSION
         else:
             version_with_support = self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION
-        return self.parsed_scylla_version >= parse_scylla_version(version_with_support)
+        return self.parsed_scylla_version >= version_with_support
 
     def version_non_frozen_udt_support(self):
         """
@@ -3172,14 +3172,14 @@ class FillDatabaseData(ClusterTester):
             version_with_support = self.NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION
         else:
             version_with_support = self.NON_FROZEN_SUPPORT_OS_MIN_VERSION
-        return self.parsed_scylla_version >= parse_scylla_version(version_with_support)
+        return self.parsed_scylla_version >= version_with_support
 
     def version_cdc_support(self):
         if self.is_enterprise:
             version_with_support = self.CDC_SUPPORT_MIN_ENTERPRISE_VERSION
         else:
             version_with_support = self.CDC_SUPPORT_MIN_VERSION
-        return self.parsed_scylla_version >= parse_scylla_version(version_with_support)
+        return self.parsed_scylla_version >= version_with_support
 
     @retrying(n=3, sleep_time=20, allowed_exceptions=ProtocolException)
     def truncate_table(self, session, truncate):  # pylint: disable=no-self-use
