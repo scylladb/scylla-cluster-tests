@@ -110,13 +110,11 @@ def call(Map pipelineParams) {
             }
             stage('Create SCT Runner') {
                 steps {
-                    catchError(stageResult: 'FAILURE') {
-                        script {
-                            wrap([$class: 'BuildUser']) {
-                                dir('scylla-cluster-tests') {
-                                    timeout(time: 5, unit: 'MINUTES') {
-                                        createSctRunner(params, runnerTimeout , builder.region)
-                                    }
+                    script {
+                        wrap([$class: 'BuildUser']) {
+                            dir('scylla-cluster-tests') {
+                                timeout(time: 5, unit: 'MINUTES') {
+                                    createSctRunner(params, runnerTimeout , builder.region)
                                 }
                             }
                         }
