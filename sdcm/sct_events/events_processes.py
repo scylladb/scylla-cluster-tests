@@ -93,8 +93,16 @@ class BaseEventsProcess(Generic[T_inbound_event, T_outbound_event], abc.ABC):
         self.stop_event.set()
 
     def stop(self, timeout: float = None) -> None:
+        events_process_class_name = self.__class__.__name__
+        LOGGER.debug("Stopping events process %s", events_process_class_name)
         self.terminate()
+        LOGGER.debug("Waiting for events process %s to stop", events_process_class_name)
         self.join(timeout)  # pylint: disable=no-member; both threading.Thread and multiprocessing.Process have it
+        if self.is_alive():  # pylint: disable=no-member;
+            LOGGER.error("Events process %s is still alive after timeout", events_process_class_name)
+            assert False, f"Events process {events_process_class_name} is still alive after timeout"
+        else:
+            LOGGER.debug("Events process %s stopped", events_process_class_name)
 
 
 class EventsProcessPipe(BaseEventsProcess[T_inbound_event, T_outbound_event], threading.Thread):

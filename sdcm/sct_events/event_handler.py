@@ -14,12 +14,12 @@
 import logging
 import threading
 from functools import partial
-from typing import Tuple, Any, Optional
+from typing import Tuple, Any
 
 from sdcm.cluster import TestConfig
 from sdcm.sct_events.events_processes import \
-    EVENTS_HANDLER_ID, EventsProcessesRegistry, BaseEventsProcess, \
-    start_events_process, get_events_process, verbose_suppress
+    EVENTS_HANDLER_ID, BaseEventsProcess, \
+    start_events_process, verbose_suppress
 from sdcm.sct_events.handlers.schema_disagreement import SchemaDisagreementHandler
 
 LOGGER = logging.getLogger(__name__)
@@ -58,11 +58,4 @@ class EventsHandler(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
 
 
 start_events_handler = partial(start_events_process, EVENTS_HANDLER_ID, EventsHandler)
-
-
-def stop_events_handler(_registry: Optional[EventsProcessesRegistry] = None) -> None:
-    if handler := get_events_process(EVENTS_HANDLER_ID, _registry=_registry):
-        handler.stop(timeout=60)
-
-
-__all__ = ("start_events_handler", "stop_events_handler", )
+__all__ = ("start_events_handler",)
