@@ -131,14 +131,12 @@ def call() {
             }
             stage('Create SCT Runner') {
                 steps {
-                    catchError(stageResult: 'FAILURE') {
-                        script {
-                            wrap([$class: 'BuildUser']) {
-                                dir('scylla-cluster-tests') {
-                                    println(params)
-                                    println(builder)
-                                    createSctRunner(params, params.timeout.toInteger(), builder.region)
-                                }
+                    script {
+                        wrap([$class: 'BuildUser']) {
+                            dir('scylla-cluster-tests') {
+                                println(params)
+                                println(builder)
+                                createSctRunner(params, params.timeout.toInteger(), builder.region)
                             }
                         }
                     }
