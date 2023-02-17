@@ -60,6 +60,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
                    description: 'Test configuration file',
                    name: 'test_config')
+            string(defaultValue: "${pipelineParams.get('test_name', '')}",
+                   description: 'Name of the test to run',
+                   name: 'test_name')
 
             string(defaultValue: '', description: 'Instance db type', name: 'instance_type_db')
             string(defaultValue: '', description: 'Instance loader type', name: 'instance_type_loader')

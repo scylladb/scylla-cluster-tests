@@ -68,6 +68,10 @@ def call(Map pipelineParams) {
                    description: 'Test configuration file',
                    name: 'test_config')
 
+            string(defaultValue: "${pipelineParams.get('test_name', '')}",
+                   description: 'Name of the test to run',
+                   name: 'test_name')
+
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', 'https://storage.googleapis.com/scylla-operator-charts/latest')}",
                    description: 'Scylla Operator helm repo',
                    name: 'k8s_scylla_operator_helm_repo')
