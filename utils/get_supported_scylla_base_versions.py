@@ -6,7 +6,7 @@ import os
 
 from sdcm.utils.version_utils import is_enterprise, get_all_versions
 from sdcm.utils.common import get_s3_scylla_repos_mapping
-from sdcm.utils.version_utils import parse_scylla_version
+from sdcm.utils.version_utils import ComparableScyllaVersion
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -97,10 +97,9 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
                 else:
                     # Choose the last two releases as upgrade base
                     ent_base_version += ent_release_list[idx-1:][:2]
-            elif version == 'enterprise' or parse_scylla_version(version) > parse_scylla_version(ent_release_list[0]):
+            elif version == 'enterprise' or ComparableScyllaVersion(version) > ent_release_list[0]:
                 ent_base_version.append(ent_release_list[-1])
-            elif re.match(r'\d+.\d+', version) and parse_scylla_version(version) \
-                    >= parse_scylla_version(ent_release_list[0]):
+            elif re.match(r'\d+.\d+', version) and ComparableScyllaVersion(version) >= ent_release_list[0]:
                 oss_base_version.append(oss_release_list[-1])
                 ent_base_version += ent_release_list[-2:]
         elif product == 'scylla':
@@ -113,10 +112,9 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
                 else:
                     # Choose the last two releases as upgrade base
                     oss_base_version += oss_release_list[idx-1:][:2]
-            elif version == 'master' or parse_scylla_version(version) > parse_scylla_version(oss_release_list[0]):
+            elif version == 'master' or ComparableScyllaVersion(version) > oss_release_list[0]:
                 oss_base_version.append(oss_release_list[-1])
-            elif re.match(r'\d+.\d+', version) and parse_scylla_version(version) \
-                    < parse_scylla_version(oss_release_list[0]):
+            elif re.match(r'\d+.\d+', version) and ComparableScyllaVersion(version) < oss_release_list[0]:
                 # If dest version is smaller than the first supported opensource release,
                 # it might be an invalid dest version
                 oss_base_version.append(oss_release_list[-1])
@@ -156,11 +154,11 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
                 continue
             # OSS: the major version is smaller than the start support version
             if self.oss_start_support_version and not is_enterprise(version_prefix) and \
-                    parse_scylla_version(version_prefix) < parse_scylla_version(self.oss_start_support_version):
+                    ComparableScyllaVersion(version_prefix) < self.oss_start_support_version:
                 continue
             # Enterprise: the major version is smaller than the start support version
             if self.ent_start_support_version and is_enterprise(version_prefix) and \
-                    parse_scylla_version(version_prefix) < parse_scylla_version(self.ent_start_support_version):
+                    ComparableScyllaVersion(version_prefix) < self.ent_start_support_version:
                 continue
             supported_versions.append(version_prefix)
         version_list = self.get_supported_scylla_base_versions(supported_versions)
