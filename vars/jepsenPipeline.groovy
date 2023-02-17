@@ -65,6 +65,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
                    description: 'a config file for the test',
                    name: 'test_config')
+            string(defaultValue: "${pipelineParams.get('test_name', '')}",
+                   description: 'Name of the test to run',
+                   name: 'test_name')
         }
         options {
             timestamps()
