@@ -18,6 +18,7 @@ import math
 import pprint
 import logging
 import collections
+import re
 
 from datetime import datetime
 from sortedcontainers import SortedDict
@@ -313,7 +314,10 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         kernel_callstack_events = self.get_kernel_callstack_events()
         kernel_callstack_events_summary = {Severity.DEBUG.name: len(kernel_callstack_events)}
 
-        subject = f'Performance Regression Compare Results (latency during operations) -' \
+        config_files = ' '.join(doc["_source"]["setup_details"]["config_files"])
+        dataset_size = re.search(r'(\d{3}gb)', config_files).group() or 'unknown size'
+
+        subject = f'Performance Regression Compare Results (latency during operations {dataset_size}) -' \
                   f' {test_name} - {test_version} - {str(test_start_time)}'
         # best_results_per_nemesis = self._get_best_per_nemesis_for_each_version(doc, is_gce)
 
