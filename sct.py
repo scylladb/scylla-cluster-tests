@@ -1369,6 +1369,7 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
         ('raft', 'SCT Raft Experimental'),
         ('disabled_raft', 'SCT ConsistentClusterManagement disabled'),
         ('nemesis', 'SCT Individual Nemesis'),
+        ('upgrade-with-raft', 'SCT Rolling Upgrades With Raft Enabled'),
     ]:
         server.create_directory(name=group_name, display_name=group_desc)
 
@@ -1389,6 +1390,9 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
                 server.create_pipeline_job(jenkins_file, group_name)
         if group_name == 'disabled_raft':
             for jenkins_file in glob.glob(f'{base_path}/consistent_cluster_management_disabled/*'):
+                server.create_pipeline_job(jenkins_file, group_name)
+        if group_name == 'upgrade-with-raft':
+            for jenkins_file in glob.glob(f'{base_path}/{group_name}/*.jenkinsfile'):
                 server.create_pipeline_job(jenkins_file, group_name)
         if group_name == 'nemesis':
             for jenkins_file in glob.glob(f'{base_path}/nemesis/*'):
