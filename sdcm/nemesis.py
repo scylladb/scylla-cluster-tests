@@ -2862,6 +2862,41 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_show_toppartitions(self):  # pylint: disable=function-redefined
         return self._disrupt_show_toppartitions(allow_new_api=False)
 
+    def disrupt_add_remove_mv(self):
+        node1, node2 = self.cluster.nodes[:2]
+        self.log.info("Stopping Scylla on node1")
+        node1.stop_scylla()
+        ks_name = 'new_mv_keyspace'
+        base_table_name = 'standard1'
+        view_name = f'{base_table_name}_view'
+        rows_number = 100000
+        try:
+            InfoEvent(message='Write c-s data to a new table').publish()
+            write_cmd = f"cassandra-stress write no-warmup cl=QUORUM n={rows_number} -schema 'keyspace={ks_name} replication(factor=3)' " \
+                        f"-mode cql3 native -rate threads=2 -pop seq=1..{rows_number} -log interval=5"
+            write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, round_robin=True)
+            self.tester.verify_stress_thread(cs_thread_pool=write_thread)
+            InfoEvent(message='Create a materialized-view for the new table').publish()
+            with self.cluster.cql_connection_patient(node=node2) as session:
+                self.tester.create_materialized_view(ks_name, base_table_name, view_name, ['"C0"'], ['key'], session,
+                                                     mv_columns=['"C0"', 'key'])
+            node1.start_scylla()
+            node1.run_nodetool(sub_cmd='repair')
+            InfoEvent(message='Verify data on both base table and its materialized view').publish()
+            with self.cluster.cql_connection_patient(node=node2) as session:
+                result_base_table = session.execute(f"SELECT count(*) FROM {ks_name}.{base_table_name}")
+                result_mv = session.execute(f"SELECT count(*) FROM {ks_name}.{view_name}")
+            table_rows_number = result_base_table.current_rows[0].count
+            mv_rows_number = result_mv.current_rows[0].count
+            assert table_rows_number == mv_rows_number == rows_number, \
+                f"Got a result different than expected ({rows_number}): {table_rows_number} / {mv_rows_number}"
+        finally:
+            self.log.debug('Cleaning up all MV added configuration')
+            with self.cluster.cql_connection_patient(node=node2) as session:
+                session.execute(f'DROP MATERIALIZED VIEW IF EXISTS {ks_name}.{view_name}')
+                session.execute(f""" DROP TABLE IF EXISTS {ks_name}.{base_table_name}""")
+                session.execute(f""" DROP KEYSPACE IF EXISTS {ks_name} """)
+
     def _disrupt_show_toppartitions(self, allow_new_api: bool):
         self.log.debug(
             "Running 'disrupt_show_toppartitions' method using %s API.",
@@ -4194,6 +4229,13 @@ class AddRemoveDcNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_add_remove_dc()
+
+
+class AddRemoveMvNemesis(Nemesis):
+    disruptive = True
+
+    def disrupt(self):
+        self.disrupt_add_remove_mv()
 
 
 class GrowShrinkClusterNemesis(Nemesis):
