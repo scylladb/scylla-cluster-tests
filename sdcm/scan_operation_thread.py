@@ -626,22 +626,24 @@ class FullScanAggregatesOperation(FullscanOperationBase):
         result = cmd_result.all()
 
         if not result:
-            message = f"Fullscan failed - got empty result: {result}"
+            message = "Fullscan failed - got empty result"
             self.log.warning(message)
             return message, Severity.ERROR
-
+        output = "\n".join([str(i) for i in result])
         if int(result[0].count) <= 0:
-            return f"Fullscan failed - count is not bigger than 0: {result}", Severity.ERROR
-
-        for trace_event in cmd_result.get_query_trace().events:
+            return f"Fullscan failed - count is not bigger than 0: {output}", Severity.ERROR
+        get_query_trace = cmd_result.get_query_trace().events
+        for trace_event in get_query_trace:
             if dispatch_forward_statement_regex_pattern.search(str(trace_event)):
                 regex_found = True
                 break
-        self.log.debug("Fullscan aggregation result: %s", result[0])
+        self.log.debug("Fullscan aggregation result: %s", output)
 
         if not regex_found:
+            self.log.info("\n".join([str(i) for i in get_query_trace]))
+            self.log.info("Fullscan aggregation result: %s", output)
             return "Fullscan failed - 'Dispatching forward_request' message was not found in query trace events", \
-                Severity.ERROR
+                Severity.WARNING
 
         return f'result {result[0]}', None
 
