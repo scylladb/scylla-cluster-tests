@@ -117,21 +117,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 validate_partitions = False
 
         stress_cmd = self.params.get('stress_cmd')
-        if stress_cmd:
-            # Stress: Same as in prepare_write - allow the load to be spread across all loaders when using multi ks
-            if keyspace_num > 1 and self.params.get('round_robin'):
-                self.log.debug("Using round_robin for multiple Keyspaces...")
-                for i in range(1, keyspace_num + 1):
-                    keyspace_name = self._get_keyspace_name(i)
-                    params = {'keyspace_name': keyspace_name, 'round_robin': True, 'stress_cmd': stress_cmd}
-
-                    self._run_all_stress_cmds(stress_queue, params)
-
-            # The old method when we run all stress_cmds for all keyspace on the same loader, or in round-robin if defined in test yaml
-            else:
-                params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd,
-                          'round_robin': self.params.get('round_robin')}
-                self._run_all_stress_cmds(stress_queue, params)
+        self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
 
         customer_profiles = self.params.get('cs_user_profiles')
         if customer_profiles:
@@ -144,7 +130,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                     cont = pconf.readlines()
                     user_profile_table_count = self.params.get(  # pylint: disable=invalid-name
                         'user_profile_table_count')
-                    for i in range(user_profile_table_count):
+                    for _ in range(user_profile_table_count):
                         for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
                             stress_cmd = (cmd.format(profile_dst, cs_duration))
                             params = {'stress_cmd': stress_cmd, 'profile': cs_profile}
