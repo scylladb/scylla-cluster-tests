@@ -22,6 +22,7 @@ n_loaders: 3
 n_monitor_nodes: 1
 
 instance_type_db: 'i3en.3xlarge'
+azure_instance_type_db: 'Standard_L32s_v3'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '014'
@@ -29,6 +30,7 @@ instance_type_loader: 'c5n.2xlarge'
 round_robin: true
 nemesis_interval: 30
 nemesis_during_prepare: false
+azure_instance_type_loader: 'Standard_F8s_v2'
 
 user_prefix: 'longevity-large-partitions-4d'
 
