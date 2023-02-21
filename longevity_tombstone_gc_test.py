@@ -1,19 +1,26 @@
 import datetime
+import re
 import time
 from functools import partial
 
 from longevity_twcs_test import TWCSLongevityTest
 from sdcm.utils.common import ParallelObject
-from sdcm.utils.sstable_utils import SstableUtils
+from sdcm.utils.sstable.sstable_utils import SstableUtils
 
 
 class TombstoneGcLongevityTest(TWCSLongevityTest):
     keyspace = 'scylla_bench'
     table = 'test'
     ks_cf = f'{keyspace}.{table}'
-    propagation_delay = 60 * 4  # Setting a value shorter than Scylla's default (1 hour) - to 4 minutes.
     repair_date = None
     db_node = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        post_prepare_cql_cmds = self.params.get('post_prepare_cql_cmds')
+        self.ttl = int(re.search(r'default_time_to_live = (\d+)', post_prepare_cql_cmds).group(1))
+        self.propagation_delay = int(
+            re.search(r"'propagation_delay_in_seconds':'(\d+)", post_prepare_cql_cmds).group(1))
 
     def _run_repair_and_major_compaction(self, wait_propagation_delay: bool = False):
         self.log.info('Run a flush for %s on nodes', self.keyspace)
@@ -34,6 +41,11 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
 
     def test_switch_tombstone_gc_modes(self):
         """
+        Test the 4 modes of tombstones-gc.
+        Verify the expected tombstones' state before switching to the next GC mode.
+
+        #Refs: https://github.com/scylladb/scylla/commit/a8ad385ecd3e2b372db3c354492dbe57d9d91760
+
         test steps:
         -----------
         Based on TWCS TTL 48h longevity configuration with a much shorter TTL (few minutes) and same for gc-grace-seconds.
@@ -51,7 +63,7 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
         Run a major compaction.
         Verify no tombstones.
         """
-        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-locals,too-many-statements
 
         self.create_tables_for_scylla_bench()
         self.db_node = self.db_cluster.nodes[0]
@@ -63,8 +75,7 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
         self._run_all_stress_cmds(stress_queue, params)
 
         self.log.info('Wait a duration of TTL + propagation_delay_in_seconds')
-        wait_for_tombstones = 4 * 60 * 2
-        time.sleep(wait_for_tombstones)
+        time.sleep(self.propagation_delay + self.ttl)
         self.db_node.run_nodetool(f"flush -- {self.keyspace}")
         sstable_utils = SstableUtils(db_node=self.db_node, propagation_delay_in_seconds=self.propagation_delay,
                                      ks_cf=self.ks_cf)

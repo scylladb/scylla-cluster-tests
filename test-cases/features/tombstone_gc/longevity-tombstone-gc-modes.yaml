@@ -13,7 +13,7 @@ user_prefix: 'longevity-tombstone-gc-modes'
 
 # Table settings:
 # gc_grace_seconds: 4 minutes
-# TTL: 5 minutes
+# TTL: 4 minutes
 # TWCS time window size: 4 minutes
 # propagation-delay: 4 minutes
 post_prepare_cql_cmds: "ALTER TABLE scylla_bench.test with gc_grace_seconds = 240 and default_time_to_live = 240 and compaction = {'class':'TimeWindowCompactionStrategy', 'compaction_window_size': 5, 'compaction_window_unit': 'MINUTES'} and tombstone_gc = {'mode': 'disabled', 'propagation_delay_in_seconds':'240'};"
