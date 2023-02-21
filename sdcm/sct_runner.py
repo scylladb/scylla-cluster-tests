@@ -155,8 +155,8 @@ class SctRunner(ABC):
     @staticmethod
     def instance_root_disk_size(test_duration) -> int:
         disk_size = 80  # GB
-        if test_duration and test_duration > 3 * 24 * 60:  # 3 days
-            # add 40G more space for jobs which test_duration is longer than 3 days
+        if test_duration and test_duration > 1.5 * 24 * 60:  # 1.5 days
+            # add 40G more space for jobs which test_duration is longer than 1.5 days
             return disk_size + 40
         return disk_size
 
