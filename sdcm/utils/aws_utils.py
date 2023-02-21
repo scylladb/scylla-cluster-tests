@@ -41,6 +41,10 @@ class EksClusterCleanupMixin:
     def ec2_client(self):
         return boto3.client('ec2', region_name=self.region_name)
 
+    @cached_property
+    def iam_client(self):
+        return boto3.client('iam', region_name=self.region_name)
+
     @property
     def owned_object_tag_name(self):
         return f'kubernetes.io/cluster/{self.short_cluster_name}'
@@ -94,7 +98,8 @@ class EksClusterCleanupMixin:
             # but before retrying of the destroy_nodegroups
             self.destroy_attached_security_groups()
             if not self.cluster_exists:
-                return
+                break
+        self.destroy_oidc_provider()
 
     def check_if_all_network_interfaces_detached(self, sg_id):
         for interface_description in self.ec2_client.describe_network_interfaces(
@@ -175,6 +180,32 @@ class EksClusterCleanupMixin:
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.debug("Failed to delete cluster %s, due to the following error:\n%s",
                          self.short_cluster_name, exc)
+
+    def destroy_oidc_provider(self):
+        try:
+            oidc_providers = self.iam_client.list_open_id_connect_providers()
+            for oidc_provider in oidc_providers["OpenIDConnectProviderList"]:
+                oidc_provider_tags = self.iam_client.list_open_id_connect_provider_tags(
+                    OpenIDConnectProviderArn=oidc_provider["Arn"])["Tags"]
+                for oidc_provider_tag in oidc_provider_tags:
+                    if "cluster-name" not in oidc_provider_tag.get("Key", "key-not-found"):
+                        continue
+                    if oidc_provider_tag.get("Value", "value-not-found") == self.short_cluster_name:
+                        self.iam_client.delete_open_id_connect_provider(
+                            OpenIDConnectProviderArn=oidc_provider["Arn"])
+                        break
+                else:
+                    continue
+                break
+            else:
+                LOGGER.warning(
+                    "Couldn't find any OIDC provider associated with the '%s' EKS cluster",
+                    self.short_cluster_name)
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.warning(
+                "Failed to delete OIDC provider for the '%s' cluster due to "
+                "the following error:\n%s",
+                self.short_cluster_name, exc)
 
 
 def init_monitoring_info_from_params(monitor_info: dict, params: dict, regions: List):
