@@ -1,4 +1,5 @@
 import datetime
+import logging
 import random
 import threading
 import time
@@ -8,26 +9,27 @@ from sdcm.cluster import BaseScyllaCluster, BaseCluster
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import TombstoneGcVerificationEvent
-from sdcm.utils.sstable_utils import SstableUtils
+from sdcm.utils.sstable.sstable_utils import SstableUtils
 
 LOCAL_CMD_RUNNER = LocalCmdRunner()
 ERROR_SUBSTRINGS = ("timed out", "timeout")
 
 
 # pylint: disable=too-many-instance-attributes
-class TombstoneGcVerificationThread(SstableUtils):
+class TombstoneGcVerificationThread:
 
     # pylint: disable=too-many-arguments
 
     def __init__(self, db_cluster: [BaseScyllaCluster, BaseCluster], duration: int, interval: int,
                  termination_event: threading.Event, **kwargs):
 
-        super().__init__(**kwargs)
+        self._sstable_utils = SstableUtils(**kwargs)
         self.duration = duration
         self.interval = interval
         self.termination_event = termination_event
         self._thread = threading.Thread(daemon=True, name=self.__class__.__name__, target=self.run)
         self.db_cluster: [BaseScyllaCluster, BaseCluster] = db_cluster
+        self.log = logging.getLogger(self.__class__.__name__)
 
     def _wait_until_user_table_exists(self, db_node, table_name: str = 'random', timeout_min: int = 20):
         text = f'Waiting until {table_name} user table exists'
@@ -39,16 +41,17 @@ class TombstoneGcVerificationThread(SstableUtils):
                           text=text, timeout=60 * timeout_min, throw_exc=True)
 
     def tombstone_gc_verification(self, max_sstable_num: int = 50):
-        table_repair_date = self.get_table_repair_date()  # Example: 2022-12-28 11:53:53
+        table_repair_date = self._sstable_utils.get_table_repair_date()  # Example: 2022-12-28 11:53:53
         if not table_repair_date:
             return
         table_repair_date = datetime.datetime.strptime(table_repair_date, '%Y-%m-%d %H:%M:%S')
         delta_repair_date_minutes = int(
-            (datetime.datetime.now() - table_repair_date).seconds / 60) - self.propagation_delay_in_seconds
+            (datetime.datetime.now() - table_repair_date).seconds / 60) - self._sstable_utils.propagation_delay_in_seconds
         if delta_repair_date_minutes <= 0:
-            self.log.debug('Table %s repair date is smaller than propagation delay, aborting.', self.ks_cf)
+            self.log.debug('Table %s repair date is smaller than propagation delay, aborting.',
+                           self._sstable_utils.ks_cf)
             return
-        sstables = self.get_sstables(from_minutes_ago=delta_repair_date_minutes)
+        sstables = self._sstable_utils.get_sstables(from_minutes_ago=delta_repair_date_minutes)
         if not sstables:
             self.log.warning('No sstable with a creation time of last %s minutes found, aborting.',
                              delta_repair_date_minutes)
@@ -58,12 +61,13 @@ class TombstoneGcVerificationThread(SstableUtils):
         if max_sstable_num < len(sstables):
             sstables = sstables[:max_sstable_num]
         for sstable in sstables:
-            self.verify_post_repair_sstable_tombstones(table_repair_date=table_repair_date, sstable=sstable)
+            self._sstable_utils.verify_post_repair_sstable_tombstones(
+                table_repair_date=table_repair_date, sstable=sstable)
 
     def _run_tombstone_gc_verification(self):
-        db_node = self.db_node
-        self._wait_until_user_table_exists(db_node=db_node, table_name=self.ks_cf)
-        with TombstoneGcVerificationEvent(node=db_node.name, ks_cf=self.ks_cf, message="") as tombstone_event:
+        db_node = self._sstable_utils.db_node
+        self._wait_until_user_table_exists(db_node=db_node, table_name=self._sstable_utils.ks_cf)
+        with TombstoneGcVerificationEvent(node=db_node.name, ks_cf=self._sstable_utils.ks_cf, message="") as tombstone_event:
             if self.termination_event.is_set():
                 return
 
@@ -83,7 +87,7 @@ class TombstoneGcVerificationThread(SstableUtils):
     def run(self):
         end_time = time.time() + self.duration
         while time.time() < end_time and not self.termination_event.is_set():
-            self.db_node = random.choice(self.db_cluster.nodes)
+            self._sstable_utils.db_node = random.choice(self.db_cluster.nodes)
             self._run_tombstone_gc_verification()
             self.log.debug('Executed %s', TombstoneGcVerificationEvent.__name__)
             time.sleep(self.interval)
