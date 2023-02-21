@@ -29,4 +29,4 @@ space_node_threshold: 64424
 authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
-authorizer: 'ScyllaAuthorizer'
+authorizer: 'CassandraAuthorizer'
