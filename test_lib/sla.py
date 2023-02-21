@@ -25,6 +25,7 @@ def sla_result_to_dict(sla_result):
 
 
 DEFAULT_SERVICE_LEVEL_SHARES = 1000
+MAX_ALLOWED_SERVICE_LEVELS = 8
 
 
 @dataclass
@@ -157,6 +158,7 @@ class ServiceLevel:
         LOGGER.debug('Service level %s has been altered', self.name)
         self.shares = new_shares
 
+    @retrying(n=10, message="Dropping service level")
     def drop(self, if_exists=True):
         query = 'DROP SERVICE_LEVEL{if_exists} {service_level_name}'\
                 .format(service_level_name=self.name,
@@ -225,6 +227,22 @@ class UserRoleBase:
     def attached_service_level(self):
         return self._attached_service_level
 
+    @property
+    def attached_service_level_shares(self):
+        if self.attached_service_level:
+            self._attached_service_level_shares = self.attached_service_level.shares
+        else:
+            self._attached_service_level_shares = None
+        return self._attached_service_level_shares
+
+    @property
+    def attached_scheduler_group_name(self):
+        if self.attached_service_level:
+            self._attached_scheduler_group_name = self.attached_service_level.scheduler_group_name
+        else:
+            self._attached_scheduler_group_name = ''
+        return self._attached_scheduler_group_name
+
     def reset_service_level(self):
         # For case if service level was dropped or detached
         self._attached_service_level = None
@@ -234,7 +252,11 @@ class UserRoleBase:
 
     @property
     def attached_service_level_name(self):
-        return self._attached_service_level.name
+        if self.attached_service_level:
+            self._attached_service_level_name = self.attached_service_level.name
+        else:
+            self._attached_service_level_name = ''
+        return self._attached_service_level_name
 
     # By Eliran:
     # If a cluster is greater than 3 nodes, the information might not have been propagated to the node that
@@ -318,7 +340,7 @@ class Role(UserRoleBase):
         self.login = login
         self.options_dict = options_dict
 
-    def create(self) -> Role:
+    def create(self, if_not_exists=True) -> Role:
         # Example: CREATE ROLE bob WITH PASSWORD = 'password_b'AND LOGIN = true AND SUPERUSER = true;
         # Example: CREATE ROLE carlos WITH OPTIONS = {'custom_option1': 'option1_value', 'custom_option2': 99};
         role_options = {}
@@ -332,7 +354,7 @@ class Role(UserRoleBase):
         if role_options_str:
             role_options_str = ' WITH {}'.format(role_options_str)
 
-        query = f"CREATE ROLE {self.name}{role_options_str}"
+        query = f"CREATE ROLE{' IF NOT EXISTS' if if_not_exists else ''} {self.name}{role_options_str}"
         if self.verbose:
             LOGGER.debug('CREATE role query: %s', query)
         self.session.execute(query)
@@ -341,9 +363,9 @@ class Role(UserRoleBase):
 
     def role_full_info_dict(self) -> dict:
         return {'service_level': self.attached_service_level,
-                'service_level_shares': self._attached_service_level_shares,
-                'service_level_name': self._attached_service_level_name,
-                'sl_group': self._attached_scheduler_group_name}
+                'service_level_shares': self.attached_service_level_shares,
+                'service_level_name': self.attached_service_level_name,
+                'sl_group': self.attached_scheduler_group_name}
 
     def validate_role_service_level_attributes_against_db(self):
         service_level = self.list_user_role_attached_service_levels()
@@ -355,10 +377,16 @@ class Role(UserRoleBase):
         elif not self.attached_service_level and service_level:
             ValueError(f"Found attached Service Level '{service_level[0].service_level}' to the role '{self.name}'. "
                        "But it is expected that no attached Service Level. Validate if it is test or Scylla issue")
+        elif not service_level and not self.attached_service_level:
+            LOGGER.debug("No attached Service level to the role %s", self.name)
+            return
 
-        if service_level[0].service_level == self._attached_service_level_name:
+        LOGGER.debug("Service level from LIST: %s", service_level[0].service_level)
+        LOGGER.debug("Attached Service level name: %s", self.attached_service_level_name)
+        if service_level[0].service_level == self.attached_service_level_name:
             db_service_level = self.attached_service_level.list_service_level()
-            if db_service_level.shares != self._attached_service_level_shares:
+            LOGGER.debug("db_service_level: %s", db_service_level)
+            if db_service_level.shares != self.attached_service_level_shares:
                 ValueError(f"Found attached Service Level '{service_level[0].service_level}' to the role '{self.name}' "
                            f"with {db_service_level.shares} shares. Expected {self._attached_service_level_shares} "
                            f"shares. Validate if it is test or Scylla issue")
@@ -391,9 +419,9 @@ class User(UserRoleBase):
         return self
 
 
-def create_sla_auth(session, shares: int, index: str) -> Role:
+def create_sla_auth(session, shares: int, index: str, superuser: bool = True) -> Role:
     role = Role(session=session, name=STRESS_ROLE_NAME_TEMPLATE % (shares or '', index),
-                password=STRESS_ROLE_PASSWORD_TEMPLATE % shares or '', login=True).create()
+                password=STRESS_ROLE_PASSWORD_TEMPLATE % shares or '', login=True, superuser=superuser).create()
     role.attach_service_level(ServiceLevel(session=session, name=SERVICE_LEVEL_NAME_TEMPLATE % (shares or '', index),
                                            shares=shares).create())
 

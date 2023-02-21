@@ -3,14 +3,36 @@ import time
 import unittest
 from typing import NamedTuple
 
+from sdcm.cluster import BaseNode
+from sdcm.utils.distro import Distro
 from sdcm.utils.loader_utils import (STRESS_ROLE_NAME_TEMPLATE,
                                      STRESS_ROLE_PASSWORD_TEMPLATE,
                                      SERVICE_LEVEL_NAME_TEMPLATE)
 from sdcm.sla.libs.sla_utils import SlaUtils, SchedulerRuntimeUnexpectedValue
 from test_lib.sla import Role, UserRoleBase, ServiceLevel
-from unit_tests.test_cluster import DummyDbCluster, DummyNode
+from unit_tests.test_cluster import DummyDbCluster
 
 logging.basicConfig(level=logging.DEBUG)
+
+
+class DummyNode(BaseNode):  # pylint: disable=abstract-method
+    _system_log = None
+    is_enterprise = False
+    distro = Distro.CENTOS7
+
+    def init(self):
+        super().init()
+        self.remoter.stop()
+
+    def jmx_up(self):
+        return True
+
+    def db_up(self):
+        return True
+
+    @property
+    def private_ip_address(self):
+        return '127.0.0.1'
 
 
 class Row(NamedTuple):
@@ -20,11 +42,14 @@ class Row(NamedTuple):
 
 class FakeUserRoleBase(UserRoleBase):
     def list_user_role_attached_service_levels(self):
-        return [Row(name=self.name, service_level=self.attached_service_level.name)]
+        if self.attached_service_level:
+            return [Row(name=self.name, service_level=self.attached_service_level.name)]
+        else:
+            return []
 
 
 class FakeRole(FakeUserRoleBase, Role):
-    def create(self) -> Role:
+    def create(self, if_not_exists=True) -> Role:
         return self
 
     def attach_service_level(self, service_level: ServiceLevel):
@@ -83,7 +108,7 @@ class TestSlaUtilsTest(unittest.TestCase, SlaUtils):
                                             prometheus_stats=prometheus_stats,
                                             db_cluster=db_cluster,
                                             publish_wp_error_event=False)
-        assert str(error.exception) == str('\n(Node 127.0.0.1) - Role with higher shares got less resources '
+        assert str(error.exception) == str('\n(Node 127.0.0.1) - Service level with higher shares got less resources '
                                            'unexpectedly. CPU%: 100. Runtime per service level group:\n  sl:sl50_abc '
                                            '(shares 50): 479.57\n  sl:sl200_abc (shares 200): 179.57')
 

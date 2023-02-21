@@ -3011,6 +3011,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.fail("Unable to get data set size from cassandra-stress command: %s" % cs_cmd)
             return None
 
+    def get_c_s_column_definition(self, cs_cmd):  # pylint: disable=inconsistent-return-statements
+        """:returns value of -col in stress comand, that is approximation and currently doesn't take in consideration
+            column definitions if they present in the command
+        """
+        try:
+            # Example:  -col 'size=FIXED(200) n=FIXED(5)'
+            if search_res := re.search(r".* -col ('.*') .*", cs_cmd):
+                return search_res.group(1)
+            return None
+        except Exception:  # pylint: disable=broad-except
+            self.fail("Unable to get column definition from cassandra-stress command: %s" % cs_cmd)
+            return None
+
     @retrying(n=60, sleep_time=60, allowed_exceptions=(AssertionError,))
     def wait_data_dir_reaching(self, size, node):
         query = '(sum(node_filesystem_size_bytes{{mountpoint="{0.scylla_dir}", ' \

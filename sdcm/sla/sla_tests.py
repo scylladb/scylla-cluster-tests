@@ -8,7 +8,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestStepEvent
 from sdcm.sla.libs.sla_utils import SlaUtils
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
-from test_lib.sla import create_sla_auth, ServiceLevel
+from test_lib.sla import create_sla_auth, ServiceLevel, Role
 
 LOGGER = logging.getLogger(__name__)
 
@@ -17,6 +17,8 @@ class Steps(SlaUtils):
     # pylint: disable=too-many-arguments
     def run_stress_and_validate_scheduler_runtime_during_load(self, tester, read_cmds, prometheus_stats, read_roles,
                                                               stress_queue, sleep=600):
+        # Wait for server levels will be propagated to all nodes
+        time.sleep(15)
         # pylint: disable=not-context-manager
         with TestStepEvent(step="Run stress command and validate scheduler runtime during load") as wp_event:
             try:
@@ -30,7 +32,9 @@ class Steps(SlaUtils):
                                                 end_time=end_time,
                                                 read_users=read_roles,
                                                 prometheus_stats=prometheus_stats,
-                                                db_cluster=tester.db_cluster)
+                                                db_cluster=tester.db_cluster,
+                                                possible_issue={'less resources': 'scylla-enterprise#2717'}
+                                                )
                 return None
             except Exception as details:  # pylint: disable=broad-except
                 wp_event.add_error([str(details)])
@@ -54,7 +58,8 @@ class Steps(SlaUtils):
                                                 end_time=end_time,
                                                 read_users=read_roles,
                                                 prometheus_stats=prometheus_stats,
-                                                db_cluster=tester.db_cluster)
+                                                db_cluster=tester.db_cluster,
+                                                possible_issue={'less resources': "scylla-enterprise#949"})
                 return None
             except Exception as details:  # pylint: disable=broad-except
                 wp_event.add_error([str(details)])
@@ -96,13 +101,25 @@ class Steps(SlaUtils):
 
     # pylint: disable=too-many-arguments
     def attach_sl_and_validate_scheduler_runtime(self, tester, new_service_level, role_for_attach,
-                                                 read_roles, prometheus_stats, sleep=600):
+                                                 read_roles, prometheus_stats, sleep=600,
+                                                 # restart_scylla parameter is temporary - wWorkaround for issue
+                                                 # https://github.com/scylladb/scylla-enterprise/issues/2572
+                                                 restart_scylla=False):
         # pylint: disable=not-context-manager
         with TestStepEvent(step=f"Attach service level {new_service_level.name} with "
                                 f"{new_service_level.shares} shares to {role_for_attach.name}. "
                                 f"Validate scheduler runtime during load") as wp_event:
             try:
                 role_for_attach.attach_service_level(new_service_level)
+
+                # Workaround for issue https://github.com/scylladb/scylla-enterprise/issues/2572
+                if restart_scylla:
+                    time.sleep(30)
+                    nodes_for_restart = [node for node in tester.db_cluster.nodes if node.jmx_up() and node.db_up()
+                                         and not node.running_nemesis]
+                    tester.db_cluster.restart_binary_protocol(nodes=nodes_for_restart)
+                # End workaround
+
                 start_time = time.time() + 60
                 time.sleep(sleep)
                 end_time = time.time()
@@ -110,7 +127,10 @@ class Steps(SlaUtils):
                                                 end_time=end_time,
                                                 read_users=read_roles,
                                                 prometheus_stats=prometheus_stats,
-                                                db_cluster=tester.db_cluster)
+                                                db_cluster=tester.db_cluster,
+                                                possible_issue={'less resources':
+                                                                'scylla-enterprise#2572 or scylla-enterprise#2717'}
+                                                )
                 return None
             except Exception as details:  # pylint: disable=broad-except
                 wp_event.add_error([str(details)])
@@ -124,42 +144,73 @@ class SlaTests(Steps):
                       'password={password} -rate threads={threads} -pop {pop}'
 
     @staticmethod
+    def unique_subsrtr_for_name():
+        return str(uuid.uuid1()).split("-", maxsplit=1)[0]
+
+    @staticmethod
+    def _create_sla_auth(session, shares: int, index: str, superuser: bool = True) -> Role:
+        role = None
+        try:
+            role = create_sla_auth(session=session, shares=shares, index=index, superuser=superuser)
+            return role
+        except Exception:  # pylint: disable=broad-except
+            if role and role.attached_service_level:
+                role.attached_service_level.drop()
+            if role:
+                role.drop()
+            raise
+
+    @staticmethod
+    def verify_stress_threads(tester, stress_queue):
+        for stress in stress_queue:
+            try:
+                tester.verify_stress_thread(cs_thread_pool=stress)
+            except Exception as error:  # pylint: disable=broad-except
+                LOGGER.error("Stress verifying failed. Error: %s", error)
+
+    @staticmethod
     def refresh_role_in_list(role_to_refresh, read_roles):
         for i, role in enumerate(read_roles):
             if role["role"] == role_to_refresh:
                 read_roles[i]["service_level"] = role_to_refresh.attached_service_level
 
     # pylint: disable=too-many-locals
-    def test_increase_shares_by_attach_another_sl_during_load(self, tester, prometheus_stats, num_of_partitions):
+    def test_increase_shares_by_attach_another_sl_during_load(self, tester, prometheus_stats, num_of_partitions,
+                                                              cassandra_stress_column_definition=None):
         low_share = 20
         high_share = 500
         error_events = []
         stress_queue = []
-        auth_entity_name_index = str(uuid.uuid1()).split("-", maxsplit=1)[0]
+        auth_entity_name_index = self.unique_subsrtr_for_name()
 
         with tester.db_cluster.cql_connection_patient(node=tester.db_cluster.nodes[0],
                                                       user=DEFAULT_USER,
                                                       password=DEFAULT_USER_PASSWORD) as session:
-            role_low = create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
-            role_high = create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            role_low = self._create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
+            role_high = self._create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
 
-            stress_duration = 25
+            # TODO: change stress_duration to 25. Now it is increased because of cluster rolling restart (workaround)
+            stress_duration = 35
             read_cmds = [self.define_read_cassandra_stress_command(role=role_low,
                                                                    load_type=self.CACHE_ONLY_LOAD,
                                                                    c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                    threads=200,
                                                                    stress_duration_min=stress_duration,
-                                                                   num_of_partitions=num_of_partitions),
+                                                                   num_of_partitions=num_of_partitions,
+                                                                   kwargs=kwargs),
                          self.define_read_cassandra_stress_command(role=role_high,
                                                                    load_type=self.CACHE_ONLY_LOAD,
                                                                    c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                    threads=200,
                                                                    stress_duration_min=stress_duration,
-                                                                   num_of_partitions=num_of_partitions)
+                                                                   num_of_partitions=num_of_partitions,
+                                                                   kwargs=kwargs)
                          ]
             read_roles = [{"role": role_low, 'service_level': role_low.attached_service_level},
                           {"role": role_high, 'service_level': role_high.attached_service_level}]
 
+            new_sl = None
             try:
                 error_events.append(
                     self.run_stress_and_validate_scheduler_runtime_during_load(tester=tester, read_cmds=read_cmds,
@@ -177,26 +228,30 @@ class SlaTests(Steps):
                                                                   role_for_attach=role_low,
                                                                   read_roles=read_roles,
                                                                   prometheus_stats=prometheus_stats,
-                                                                  sleep=600))
+                                                                  sleep=600,
+                                                                  restart_scylla=True))
             finally:
-                for stress in stress_queue:
-                    tester.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
+                if new_sl:
+                    new_sl.drop()
                 return error_events  # pylint: disable=lost-exception
 
     # pylint: disable=too-many-locals
-    def test_increase_shares_during_load(self, tester, prometheus_stats, num_of_partitions):
+    def test_increase_shares_during_load(self, tester, prometheus_stats, num_of_partitions,
+                                         cassandra_stress_column_definition=None):
         low_share = 20
         high_share = 500
         error_events = []
         stress_queue = []
-        auth_entity_name_index = str(uuid.uuid1()).split("-", maxsplit=1)[0]
+        auth_entity_name_index = self.unique_subsrtr_for_name()
 
         with tester.db_cluster.cql_connection_patient(node=tester.db_cluster.nodes[0],
                                                       user=DEFAULT_USER,
                                                       password=DEFAULT_USER_PASSWORD) as session:
-            role_low = create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
-            role_high = create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            role_low = self._create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
+            role_high = self._create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
 
             stress_duration = 25
             read_cmds = [self.define_read_cassandra_stress_command(role=role_low,
@@ -204,13 +259,15 @@ class SlaTests(Steps):
                                                                    c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                    threads=200,
                                                                    stress_duration_min=stress_duration,
-                                                                   num_of_partitions=num_of_partitions),
+                                                                   num_of_partitions=num_of_partitions,
+                                                                   kwargs=kwargs),
                          self.define_read_cassandra_stress_command(role=role_high,
                                                                    load_type=self.CACHE_ONLY_LOAD,
                                                                    c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                    threads=200,
                                                                    stress_duration_min=stress_duration,
-                                                                   num_of_partitions=num_of_partitions)
+                                                                   num_of_partitions=num_of_partitions,
+                                                                   kwargs=kwargs)
                          ]
             read_roles = [{"role": role_low, 'service_level': role_low.attached_service_level},
                           {"role": role_high, 'service_level': role_high.attached_service_level}]
@@ -227,24 +284,25 @@ class SlaTests(Steps):
                                                                  new_shares=900, read_roles=read_roles,
                                                                  prometheus_stats=prometheus_stats))
             finally:
-                for stress in stress_queue:
-                    tester.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
                 return error_events  # pylint: disable=lost-exception
 
     # pylint: disable=too-many-locals
-    def test_decrease_shares_during_load(self, tester, prometheus_stats, num_of_partitions):
+    def test_decrease_shares_during_load(self, tester, prometheus_stats, num_of_partitions,
+                                         cassandra_stress_column_definition=None):
         low_share = 800
         high_share = 500
         error_events = []
         stress_queue = []
-        auth_entity_name_index = str(uuid.uuid1()).split("-", maxsplit=1)[0]
+        auth_entity_name_index = self.unique_subsrtr_for_name()
 
         with tester.db_cluster.cql_connection_patient(node=tester.db_cluster.nodes[0],
                                                       user=DEFAULT_USER,
                                                       password=DEFAULT_USER_PASSWORD) as session:
-            role_low = create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
-            role_high = create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            role_low = self._create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
+            role_high = self._create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
 
             stress_duration = 25
             read_cmds = [self.define_read_cassandra_stress_command(role=role_low,
@@ -252,13 +310,15 @@ class SlaTests(Steps):
                                                                    c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                    threads=200,
                                                                    stress_duration_min=stress_duration,
-                                                                   num_of_partitions=num_of_partitions),
+                                                                   num_of_partitions=num_of_partitions,
+                                                                   kwargs=kwargs),
                          self.define_read_cassandra_stress_command(role=role_high,
                                                                    load_type=self.CACHE_ONLY_LOAD,
                                                                    c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                    threads=200,
                                                                    stress_duration_min=stress_duration,
-                                                                   num_of_partitions=num_of_partitions)
+                                                                   num_of_partitions=num_of_partitions,
+                                                                   kwargs=kwargs)
                          ]
             read_roles = [{"role": role_low, 'service_level': role_low.attached_service_level},
                           {"role": role_high, 'service_level': role_high.attached_service_level}]
@@ -276,24 +336,25 @@ class SlaTests(Steps):
                                                                  prometheus_stats=prometheus_stats))
 
             finally:
-                for stress in stress_queue:
-                    tester.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
                 return error_events  # pylint: disable=lost-exception
 
     # pylint: disable=too-many-locals
-    def test_replace_service_level_using_detach_during_load(self, tester, prometheus_stats, num_of_partitions):
+    def test_replace_service_level_using_detach_during_load(self, tester, prometheus_stats, num_of_partitions,
+                                                            cassandra_stress_column_definition=None):
         low_share = 250
         high_share = 500
         error_events = []
         stress_queue = []
-        auth_entity_name_index = str(uuid.uuid1()).split("-", maxsplit=1)[0]
+        auth_entity_name_index = self.unique_subsrtr_for_name()
 
         with tester.db_cluster.cql_connection_patient(node=tester.db_cluster.nodes[0],
                                                       user=DEFAULT_USER,
                                                       password=DEFAULT_USER_PASSWORD) as session:
-            role_low = create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
-            role_high = create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            role_low = self._create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
+            role_high = self._create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
 
             stress_duration = 35
             read_cmds = [self.define_read_cassandra_stress_command(role=role_low,
@@ -301,17 +362,21 @@ class SlaTests(Steps):
                                                                    c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                    threads=200,
                                                                    stress_duration_min=stress_duration,
-                                                                   num_of_partitions=num_of_partitions),
+                                                                   num_of_partitions=num_of_partitions,
+                                                                   kwargs=kwargs),
                          self.define_read_cassandra_stress_command(role=role_high,
                                                                    load_type=self.CACHE_ONLY_LOAD,
                                                                    c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                    threads=200,
                                                                    stress_duration_min=stress_duration,
-                                                                   num_of_partitions=num_of_partitions)
+                                                                   num_of_partitions=num_of_partitions,
+                                                                   kwargs=kwargs)
                          ]
 
             read_roles = [{"role": role_low, 'service_level': role_low.attached_service_level},
                           {"role": role_high, 'service_level': role_high.attached_service_level}]
+
+            new_sl = None
 
             try:
                 error_events.append(
@@ -337,45 +402,54 @@ class SlaTests(Steps):
                                                                   role_for_attach=role_high,
                                                                   read_roles=read_roles,
                                                                   prometheus_stats=prometheus_stats,
-                                                                  sleep=600))
+                                                                  sleep=600,
+                                                                  restart_scylla=True))
 
             finally:
-                for stress in stress_queue:
-                    tester.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
+                if new_sl:
+                    new_sl.drop()
                 return error_events  # pylint: disable=lost-exception
 
     # pylint: disable=too-many-locals
-    def test_replace_service_level_using_drop_during_load(self, tester, prometheus_stats, num_of_partitions):
+    def test_replace_service_level_using_drop_during_load(self, tester, prometheus_stats, num_of_partitions,
+                                                          cassandra_stress_column_definition=None):
         low_share = 250
         high_share = 500
         error_events = []
         stress_queue = []
-        auth_entity_name_index = str(uuid.uuid1()).split("-", maxsplit=1)[0]
+        auth_entity_name_index = self.unique_subsrtr_for_name()
 
         with tester.db_cluster.cql_connection_patient(node=tester.db_cluster.nodes[0],
                                                       user=DEFAULT_USER,
                                                       password=DEFAULT_USER_PASSWORD) as session:
-            role_low = create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
-            role_high = create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            role_low = self._create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
+            role_high = self._create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
 
-            stress_duration = 35
+            # TODO: change stress_duration to 35. Now it is increased because of cluster rolling restart (workaround)
+            stress_duration = 45
             read_cmds = [self.define_read_cassandra_stress_command(role=role_low,
                                                                    load_type=self.CACHE_ONLY_LOAD,
                                                                    c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                    threads=200,
                                                                    stress_duration_min=stress_duration,
-                                                                   num_of_partitions=num_of_partitions),
+                                                                   num_of_partitions=num_of_partitions,
+                                                                   kwargs=kwargs),
                          self.define_read_cassandra_stress_command(role=role_high,
                                                                    load_type=self.CACHE_ONLY_LOAD,
                                                                    c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                    threads=200,
                                                                    stress_duration_min=stress_duration,
-                                                                   num_of_partitions=num_of_partitions)
+                                                                   num_of_partitions=num_of_partitions,
+                                                                   kwargs=kwargs)
                          ]
 
             read_roles = [{"role": role_low, "service_level": role_low.attached_service_level},
                           {"role": role_high, "service_level": role_high.attached_service_level}]
+
+            new_sl = None
 
             try:
                 error_events.append(
@@ -401,19 +475,22 @@ class SlaTests(Steps):
                                                                   role_for_attach=role_low,
                                                                   read_roles=read_roles,
                                                                   prometheus_stats=prometheus_stats,
-                                                                  sleep=600))
+                                                                  sleep=600,
+                                                                  restart_scylla=True))
 
             finally:
-                for stress in stress_queue:
-                    tester.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
+                if new_sl:
+                    new_sl.drop()
                 return error_events  # pylint: disable=lost-exception
 
-    # pylint: disable=too-many-locals
-    def test_seven_sl_with_max_shares_during_load(self, tester, prometheus_stats, num_of_partitions):
+    # pylint: disable=too-many-locals,too-many-arguments
+    def test_maximum_allowed_sls_with_max_shares_during_load(self, tester, prometheus_stats, num_of_partitions,
+                                                             cassandra_stress_column_definition=None,
+                                                             service_levels_amount=7):
         error_events = []
         stress_queue = []
-        auth_entity_name_index = str(uuid.uuid1()).split("-", maxsplit=1)[0]
         every_role_shares = 1000
         stress_duration = 20
         read_cmds = []
@@ -423,16 +500,18 @@ class SlaTests(Steps):
                                                       user=DEFAULT_USER,
                                                       password=DEFAULT_USER_PASSWORD) as session:
             roles = []
-            for _ in range(7):
-                auth_entity_name_index = str(uuid.uuid1()).split("-", maxsplit=1)[0]
-                roles.append(create_sla_auth(session=session, shares=every_role_shares, index=auth_entity_name_index))
+            kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
+            for _ in range(service_levels_amount):
+                roles.append(self._create_sla_auth(session=session, shares=every_role_shares,
+                                                   index=self.unique_subsrtr_for_name()))
                 read_cmds.append(self.define_read_cassandra_stress_command(role=roles[-1],
                                                                            load_type=self.MIXED_LOAD,
                                                                            c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                            threads=50,
                                                                            stress_duration_min=stress_duration,
                                                                            num_of_partitions=num_of_partitions,
-                                                                           max_rows_for_read=num_of_partitions))
+                                                                           max_rows_for_read=num_of_partitions,
+                                                                           kwargs=kwargs))
 
                 read_roles.append({"role": roles[-1], 'service_level': roles[-1].attached_service_level})
 
@@ -445,7 +524,6 @@ class SlaTests(Steps):
                                                                                stress_queue=stress_queue))
 
             finally:
-                for stress in stress_queue:
-                    tester.verify_stress_thread(cs_thread_pool=stress)
+                self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
                 return error_events  # pylint: disable=lost-exception
