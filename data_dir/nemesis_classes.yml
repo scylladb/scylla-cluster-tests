@@ -9,6 +9,7 @@
 - CorruptThenRebuildMonkey
 - CorruptThenRepairMonkey
 - CorruptThenScrubMonkey
+- CreateIndexNemesis
 - DecommissionMonkey
 - DecommissionSeedNode
 - DecommissionStreamingErrMonkey

@@ -8,6 +8,7 @@
   - networking = False
   - kubernetes = True
   - limited = True
+  - schema_changes = True
   - free_tier_set = True
 - disrupt_add_remove_dc:
   - disruptive = False
@@ -17,6 +18,10 @@
   - topology_changes = True
 - disrupt_corrupt_then_scrub:
   - disruptive = False
+- disrupt_create_index:
+  - disruptive = False
+  - schema_changes = True
+  - free_tier_set = True
 - disrupt_decommission_streaming_err:
   - disruptive = True
   - topology_changes = True
@@ -54,6 +59,7 @@
 - disrupt_grow_shrink_new_rack:
   - disruptive = True
   - kubernetes = True
+  - config_changes = True
 - disrupt_hard_reboot_node:
   - disruptive = True
   - kubernetes = True
@@ -61,6 +67,7 @@
   - free_tier_set = True
 - disrupt_hot_reloading_internode_certificate:
   - disruptive = False
+  - config_changes = True
 - disrupt_increase_shares_by_attach_another_sl_during_load:
   - disruptive = False
   - sla = True
@@ -97,6 +104,7 @@
   - disruptive = False
   - kubernetes = True
   - limited = True
+  - schema_changes = True
   - free_tier_set = True
 - disrupt_multiple_hard_reboot_node:
   - disruptive = True
@@ -183,14 +191,17 @@
   - sla = True
 - disrupt_resetlocalschema:
   - disruptive = False
+  - config_changes = True
   - free_tier_set = True
 - disrupt_restart_with_resharding:
   - disruptive = True
   - kubernetes = True
   - topology_changes = True
+  - config_changes = True
 - disrupt_rolling_config_change_internode_compression:
   - disruptive = True
   - full_cluster_restart = True
+  - config_changes = True
 - disrupt_rolling_restart_cluster:
   - disruptive = True
   - kubernetes = True
@@ -198,6 +209,7 @@
 - disrupt_rolling_restart_cluster:
   - disruptive = True
   - kubernetes = True
+  - config_changes = True
   - free_tier_set = True
 - disrupt_run_cdcstressor_tool:
   - disruptive = False
@@ -246,6 +258,7 @@
   - limited = True
 - disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back:
   - disruptive = True
+  - config_changes = True
 - disrupt_terminate_and_replace_node:
   - disruptive = True
   - kubernetes = False
@@ -258,13 +271,17 @@
   - kubernetes = True
 - disrupt_toggle_cdc_feature_properties_on_table:
   - disruptive = False
+  - schema_changes = True
+  - config_changes = True
   - free_tier_set = True
 - disrupt_toggle_table_gc_mode:
   - kubernetes = True
   - disruptive = False
+  - schema_changes = True
   - free_tier_set = True
 - disrupt_toggle_table_ics:
   - kubernetes = True
+  - schema_changes = True
   - free_tier_set = True
 - disrupt_truncate:
   - disruptive = False
