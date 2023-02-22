@@ -85,6 +85,9 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
     return res
 
 
+NON_METRIC_FIELDS = ["screenshots", "hdr", "hdr_summary", "duration"]
+
+
 def calculate_latency(latency_results):
     result_dict = {}
     all_keys = list(latency_results.keys())
@@ -104,7 +107,7 @@ def calculate_latency(latency_results):
         temp_dict = {}
         for cycle in latency_results[key]['cycles']:
             for metric, value in cycle.items():
-                if metric in ["screenshots", "hdr", "hdr_summary"] or 'stdev' in metric or 'threshold' in metric:
+                if metric in NON_METRIC_FIELDS or 'stdev' in metric or 'threshold' in metric:
                     continue
                 if metric not in temp_dict:
                     temp_dict[metric] = []
