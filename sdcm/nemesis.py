@@ -35,7 +35,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from types import MethodType  # pylint: disable=no-name-in-module
 
-from cassandra import ConsistencyLevel
+from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
@@ -88,7 +88,7 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                update_certificates, reach_enospc_on_node, clean_enospc_on_node,
                                parse_nodetool_listsnapshots,
                                update_authenticator, ParallelObject,
-                               ParallelObjectResult)
+                               ParallelObjectResult, sleep_for_percent_of_duration)
 from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
 from sdcm.utils.decorators import timeout as timeout_decor
@@ -99,6 +99,8 @@ from sdcm.utils.k8s import (
 )
 from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperiment, DiskError
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
+from sdcm.utils.nemesis_utils.indexes import get_table_with_biggest_partitions_count, get_random_column_name, create_index, \
+    wait_for_index_to_be_built, verify_query_by_index_works, drop_index
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
@@ -4014,6 +4016,28 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                   for error in error_events if error)
                                         )
 
+    def disrupt_create_index(self):
+        """
+        Create index on a random column (regular or static) of a table with the most number of partitions and wait until it gets build.
+        Then verify it can be used in a query. Finally, drop the index.
+        """
+        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+            ks, cf = get_table_with_biggest_partitions_count(session)
+            column = get_random_column_name(session, ks, cf)
+            try:
+                index_name = create_index(session, ks, cf, column)
+            except InvalidRequest as exc:
+                LOGGER.warning(exc)
+                raise UnsupportedNemesis(  # pylint: disable=raise-missing-from
+                    "Tried to create already existing index. See log for details")
+            try:
+                wait_for_index_to_be_built(self.target_node, ks, index_name, timeout=1200)
+                verify_query_by_index_works(session, ks, cf, column)
+                sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
+                                              min_duration=300, max_duration=2400)
+            finally:
+                drop_index(session, ks, index_name)
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
     """
@@ -5378,3 +5402,13 @@ class SlaNemeses(Nemesis):
 
     def disrupt(self):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
+
+
+class CreateIndexNemesis(Nemesis):
+
+    disruptive = False
+    schema_changes = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_create_index()
