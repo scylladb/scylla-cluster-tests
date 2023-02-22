@@ -271,6 +271,8 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
             # NOTE: add performance tuning related pods only if we expect it to be.
             #       When we have tuning disabled it must not exist.
             allowed_labels_on_scylla_node.extend(self.perf_pods_labels)
+        if self.params.get('k8s_use_chaos_mesh'):
+            allowed_labels_on_scylla_node.append(('app.kubernetes.io/component', 'chaos-daemon'))
         return allowed_labels_on_scylla_node
 
     def create_eks_cluster(self, wait_till_functional=True):
