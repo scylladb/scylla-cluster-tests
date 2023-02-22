@@ -228,6 +228,7 @@ class TestSisyphusMonkeyNemesisFilter:
             "disrupt_toggle_cdc_feature_properties_on_table",
             "disrupt_modify_table",
             "disrupt_toggle_table_gc_mode",
+            "disrupt_create_index",
         ]
 
     @pytest.fixture(autouse=True)

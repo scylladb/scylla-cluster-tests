@@ -2960,3 +2960,11 @@ duration_pattern = re.compile(r'(?P<hours>[\d]*)h|(?P<minutes>[\d]*)m|(?P<second
 def time_period_str_to_seconds(time_str: str) -> int:
     """Transforms duration string into seconds int. e.g. 1h -> 3600, 1h22m->4920 or 10m->600"""
     return sum([int(g[0] or 0) * 3600 + int(g[1] or 0) * 60 + int(g[2] or 0) for g in duration_pattern.findall(time_str)])
+
+
+def sleep_for_percent_of_duration(duration: int, percent: int, min_duration: int, max_duration: int):
+    """Waits the percentage of a duration in seconds, with a minimum and maximum duration (min < duration * percentage < max)"""
+    duration = int(duration * percent / 100)
+    duration = max(min(duration, max_duration), min_duration)
+    LOGGER.debug("Sleeping for %s seconds", duration)
+    time.sleep(duration)
