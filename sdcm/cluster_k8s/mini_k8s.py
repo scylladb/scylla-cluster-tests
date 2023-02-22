@@ -433,13 +433,16 @@ class LocalKindCluster(LocalMinimalClusterBase):
 
     @cached_property
     def allowed_labels_on_scylla_node(self) -> list:
-        return [
+        allowed_labels_on_scylla_node = [
             ('k8s-app', 'kindnet'),
             ('k8s-app', 'kube-proxy'),
             ('k8s-app', 'calico-node'),
             ('app', 'static-local-volume-provisioner'),
             ('scylla/cluster', self.k8s_scylla_cluster_name),
         ]
+        if self.params.get('k8s_use_chaos_mesh'):
+            allowed_labels_on_scylla_node.append(('app.kubernetes.io/component', 'chaos-daemon'))
+        return allowed_labels_on_scylla_node
 
     @property
     def is_k8s_software_installed(self) -> bool:
