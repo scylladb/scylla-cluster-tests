@@ -3098,9 +3098,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Generates random firewall rule to drop/reject packets for inter-node communications, port 7000 and 7001
         """
         name = 'RejectInterNodeNetwork'
+
+        self._install_iptables()
+
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
         wait_time = random.choice([10, 60, 120, 300, 500])
+
         InfoEvent(f'{name} {textual_matching_rule} that belongs to '
                   'inter node communication connections (port=7000 and 7001) will be'
                   f' {textual_pkt_action} for {wait_time}s').publish()
@@ -3128,11 +3132,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Not implemented for the K8S backend.")
         name = 'RejectNodeExporterNetwork'
+
+        self._install_iptables()
+
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
         wait_time = random.choice([10, 60, 120, 300, 500])
+
         InfoEvent(f'{name} {textual_matching_rule} that belongs to '
                   f'node-exporter(port=9100) connections will be {textual_pkt_action} for {wait_time}s').publish()
+
         return self._run_commands_wait_and_cleanup(
             self.target_node,
             name=name,
@@ -3148,11 +3157,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Not implemented for the K8S backend.")
         name = 'RejectThriftNetwork'
+
+        self._install_iptables()
+
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
         wait_time = random.choice([10, 60, 120, 300, 500])
+
         InfoEvent(f'{name} {textual_matching_rule} that belongs to '
                   f'Thrift(port=9160) connections will be {textual_pkt_action} for {wait_time}s').publish()
+
         return self._run_commands_wait_and_cleanup(
             self.target_node,
             name=name,
@@ -3160,6 +3174,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             cleanup_commands=[f'sudo iptables -t filter -D INPUT -p tcp --dport 9160 {matching_rule} -j {pkt_action}'],
             wait_time=wait_time
         )
+
+    def _install_iptables(self) -> None:
+        if self.target_node.distro.is_ubuntu:  # iptables is missing in a minimized Ubuntu installation
+            self.target_node.remoter.sudo("apt install iptables")
 
     @staticmethod
     def _iptables_randomly_get_random_matching_rule():
