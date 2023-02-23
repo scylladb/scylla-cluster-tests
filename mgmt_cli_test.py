@@ -209,7 +209,7 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
         restore_task = mgr_cluster.create_restore_task(restore_data=True, location_list=self.locations,
                                                        snapshot_tag=snapshot_tag)
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
-        assert restore_task.status == TaskStatus.DONE, f"Schema restoration of {snapshot_tag} has failed!"
+        assert restore_task.status == TaskStatus.DONE, f"Data restoration of {snapshot_tag} has failed!"
         for node in self.db_cluster.nodes:
             node.run_nodetool("repair")  # After data restoration, you should repair every node
 
