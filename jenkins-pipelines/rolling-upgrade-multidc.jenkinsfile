@@ -11,6 +11,5 @@ rollingUpgradePipeline(
 
     test_name: 'upgrade_test.UpgradeTest.test_generic_cluster_upgrade',
     test_config: 'test-cases/upgrades/multi-dc-rolling-upgrade.yaml',
-    workaround_kernel_bug_for_iotune: false,
     internode_compression: 'all'
 )

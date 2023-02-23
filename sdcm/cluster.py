@@ -2194,23 +2194,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self.parent_cluster.params.get('unified_package'):
             extra_setup_args += ' --no-verify-package '
 
-        if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune'):
-            self.log.warning(dedent("""
-                Kernel version is {}. Due to known kernel bug in this version using predefined iotune.
-                related issue: https://github.com/scylladb/scylla/issues/5181
-                known kernel bug will cause scylla_io_setup fails in executing iotune.
-                The kernel bug doesn't occur all the time, so we can get some succeed gce instance.
-                the config files are copied from a succeed GCE instance (same instance type, same test
-            """.format(self.kernel_version)))
-            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --no-io-setup {}'
-                             .format(devname, ','.join(disks), extra_setup_args))
-            for conf in ['io.conf', 'io_properties.yaml']:
-                self.remoter.send_files(src=os.path.join('./configurations/', conf),  # pylint: disable=not-callable
-                                        dst='/tmp/')
-                self.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
-        else:
-            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --setup-nic-and-disks {}'
-                             .format(devname, ','.join(disks), extra_setup_args))
+        self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --setup-nic-and-disks {}'
+                         .format(devname, ','.join(disks), extra_setup_args))
 
         result = self.remoter.run('cat /proc/mounts')
         assert ' /var/lib/scylla ' in result.stdout, "RAID setup failed, scylla directory isn't mounted correctly"
@@ -4285,15 +4270,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def scylla_configure_non_root_installation(self, node, devname, verbose, timeout):
         node.stop_scylla_server(verify_down=False)
-        node.remoter.run(f'{INSTALL_DIR}/sbin/scylla_setup --nic {devname} --no-raid-setup --no-io-setup',
+        node.remoter.run(f'{INSTALL_DIR}/sbin/scylla_setup --nic {devname} --no-raid-setup',
                          verbose=True, ignore_status=True)
-        node.remoter.send_files(src='./configurations/io.conf', dst=f'{INSTALL_DIR}/etc/scylla.d/')
-        node.remoter.send_files(src='./configurations/io_properties.yaml', dst=f'{INSTALL_DIR}/etc/scylla.d/')
-        node.remoter.run(
-            fr"sed -ie 's/io-properties-file=/io-properties-file=\/home\/{TEST_USER}\/scylladb/g' {INSTALL_DIR}/etc/scylla.d/io.conf")
-        node.remoter.run(
-            fr"sed -ie 's/mountpoint: .*/mountpoint: \/home\/{TEST_USER}\/scylladb/g' {INSTALL_DIR}/etc/scylla.d/io_properties.yaml")
-
         # simple config
         node.remoter.run(
             f"echo 'cluster_name: \"{self.name}\"' >> {INSTALL_DIR}/etc/scylla/scylla.yaml")  # pylint: disable=no-member
@@ -4307,14 +4285,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         node.start_scylla_server(verify_up=False, verify_up_timeout=timeout)
         node.wait_db_up(verbose=verbose, timeout=timeout)
         node.wait_jmx_up(verbose=verbose, timeout=200)
-
-    def copy_preconfigured_iotune_files(self, node):
-        self.log.info("This AMI need to be tweaked for io.conf and properties")
-        for conf in ['io.conf', 'io_properties.yaml']:
-            node.remoter.send_files(src=os.path.join('./configurations/', conf),
-                                    # pylint: disable=not-callable
-                                    dst='/tmp/')
-            node.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches,too-many-statements
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
@@ -4343,8 +4313,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 self.log.info("Waiting for preinstalled Scylla")
                 self._wait_for_preinstalled_scylla(node)
                 self.log.info("Done waiting for preinstalled Scylla")
-                if self.params.get('workaround_kernel_bug_for_iotune'):
-                    self.copy_preconfigured_iotune_files(node)
             if self.params.get('print_kernel_callstack'):
                 save_kallsyms_map(node=node)
             if node.is_nonroot_install:

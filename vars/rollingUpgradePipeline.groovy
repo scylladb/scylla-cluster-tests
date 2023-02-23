@@ -54,9 +54,6 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_k8s_cluster', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_k8s_cluster')
-            booleanParam(defaultValue: "${pipelineParams.get('workaround_kernel_bug_for_iotune', false)}",
-                 description: 'Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, only effect GCE backend',
-                 name: 'workaround_kernel_bug_for_iotune')
             string(defaultValue: '', description: 'scylla option: internode_compression', name: 'internode_compression')
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
@@ -226,7 +223,6 @@ def call(Map pipelineParams) {
                                                             export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
                                                             export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
 
-                                                            export SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE=${pipelineParams.workaround_kernel_bug_for_iotune}
                                                             if [[ ${pipelineParams.internode_compression} != null ]] ; then
                                                                 export SCT_INTERNODE_COMPRESSION=${pipelineParams.internode_compression}
                                                             fi
