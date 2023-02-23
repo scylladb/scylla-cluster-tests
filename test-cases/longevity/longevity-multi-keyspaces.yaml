@@ -33,3 +33,4 @@ append_scylla_args: '--blocked-reactor-notify-ms 500'
 
 # TODO: remove when https://github.com/scylladb/scylla-tools-java/issues/175 resolved
 stop_test_on_stress_failure: false
+use_prepared_loaders: true
