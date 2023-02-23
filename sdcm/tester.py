@@ -3544,7 +3544,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         range_histogram = CSRangeHistogramBuilder.build_histogram_from_dir(base_path=self.loaders.logdir,
                                                                            start_time=start_time,
                                                                            end_time=end_time)
-        return CSRangeHistogramSummary(range_histogram, tag_type).get_summary_for_operation(stress_operation)[0]
+        histogram_data = CSRangeHistogramSummary(range_histogram, tag_type).get_summary_for_operation(stress_operation)
+        return histogram_data[0] if histogram_data else {}
 
     def get_cs_range_histogram_by_interval(
             self, stress_operation: str,
