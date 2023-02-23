@@ -500,7 +500,7 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
 class IntegrationTests(unittest.TestCase):
     get_scylla_ami_version_output = ObjectDict(**{
         'Architecture': 'x86_64', 'CreationDate': '2022-10-13T11:10:59.000Z',
-        'ImageId': 'ami-0daa3e4e3d314d2b3', 'ImageLocation': '797456418907/ScyllaDB 4.6.9',
+        'ImageId': 'ami-0daa3e4e3d314d2b3', 'ImageLocation': '797456418907/ScyllaDB 5.0.10',
         'ImageType': 'machine', 'Public': True, 'OwnerId': '797456418907',
         'PlatformDetails': 'Linux/UNIX', 'UsageOperation': 'RunInstances',
         'State': 'available', 'BlockDeviceMappings': [
@@ -526,18 +526,18 @@ class IntegrationTests(unittest.TestCase):
              'VirtualName': 'ephemeral6'},
             {'DeviceName': '/dev/sdi',
              'VirtualName': 'ephemeral7'}],
-        'Description': 'ScyllaDB 4.6.9', 'EnaSupport': True, 'Hypervisor': 'xen',
-        'Name': 'ScyllaDB 4.6.9', 'RootDeviceName': '/dev/sda1', 'RootDeviceType': 'ebs',
+        'Description': 'ScyllaDB 5.0.10', 'EnaSupport': True, 'Hypervisor': 'xen',
+        'Name': 'ScyllaDB 5.0.10', 'RootDeviceName': '/dev/sda1', 'RootDeviceType': 'ebs',
         'Tags': [
-            {'Key': 'ScyllaMachineImageVersion', 'Value': '4.6.9-20221009.a36534e106b-1'},
-            {'Key': 'ScyllaPython3Version', 'Value': '4.6.9-0.20221009.18e7a4603-1'},
+            {'Key': 'ScyllaMachineImageVersion', 'Value': '5.0.10-20221009.a36534e106b-1'},
+            {'Key': 'ScyllaPython3Version', 'Value': '5.0.10-0.20221009.18e7a4603-1'},
             {'Key': 'user_data_format_version', 'Value': '2'},
-            {'Key': 'ScyllaToolsVersion', 'Value': '4.6.9-0.20221009.18e7a4603-1'},
-            {'Key': 'ScyllaJMXVersion', 'Value': '4.6.9-0.20221009.18e7a4603-1'},
-            {'Key': 'branch', 'Value': 'branch-4.6'},
+            {'Key': 'ScyllaToolsVersion', 'Value': '5.0.10-0.20221009.18e7a4603-1'},
+            {'Key': 'ScyllaJMXVersion', 'Value': '5.0.10-0.20221009.18e7a4603-1'},
+            {'Key': 'branch', 'Value': 'branch-5.0'},
             {'Key': 'scylla-git-commit', 'Value': '18e7a46038379e566619197eb11c1f650bfec2be'},
             {'Key': 'build-tag', 'Value': 'jenkins-scylla-4.6-ami-63'},
-            {'Key': 'ScyllaVersion', 'Value': '4.6.9-0.20221009.18e7a4603-1'},
+            {'Key': 'ScyllaVersion', 'Value': '5.0.10-0.20221009.18e7a4603-1'},
             {'Key': 'build-id', 'Value': '94'}
         ], 'VirtualizationType': 'hvm'})
 
