@@ -23,8 +23,6 @@ instance_provision: 'spot'
 scylla_version: 4.6.3
 use_preinstalled_scylla: true
 
-workaround_kernel_bug_for_iotune: true
-
 post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
 post_behavior_monitor_nodes: "destroy"

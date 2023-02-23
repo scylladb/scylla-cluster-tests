@@ -66,7 +66,7 @@ class QueryLimitsTest(ClusterTester):
         self.db_cluster.run("sudo cp /tmp/l /etc/sysconfig/scylla-server")
         self.db_cluster.run("sudo chown root.root /etc/sysconfig/scylla-server")
         # Configure seastar IO to use the smallest acceptable values (slow disk)
-        self.db_cluster.run('echo \'SEASTAR_IO="--num-io-queues 1 --max-io-requests 4"\' > /tmp/m')
+        self.db_cluster.run('echo \'SEASTAR_IO="--max-io-requests 4"\' > /tmp/m')
         self.db_cluster.run("sudo mv /tmp/m /etc/scylla.d/io.conf")
         self.db_cluster.run("sudo chown root.root /etc/scylla.d/io.conf")
         # Start scylla-server

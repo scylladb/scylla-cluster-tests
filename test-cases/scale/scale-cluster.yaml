@@ -22,5 +22,4 @@ nemesis_class_name: 'ChaosMonkey'
 
 cluster_health_check: false
 
-workaround_kernel_bug_for_iotune: true
 backtrace_decoding: false
