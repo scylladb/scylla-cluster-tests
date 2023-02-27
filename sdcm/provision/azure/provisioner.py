@@ -142,7 +142,10 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         self._vm_provider.delete(name, wait=wait)
         del self._cache[name]
         self._nic_provider.delete(self._nic_provider.get(name))
-        self._ip_provider.delete(self._ip_provider.get(name))
+        try:
+            self._ip_provider.delete(self._ip_provider.get(name))
+        except KeyError:
+            LOGGER.warning("IP address for instance %s could not be found in cache.", name)
 
     def reboot_instance(self, name: str, wait=True) -> None:
         self._vm_provider.reboot(name, wait)
