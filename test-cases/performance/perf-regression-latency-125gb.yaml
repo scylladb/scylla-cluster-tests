@@ -30,3 +30,4 @@ use_mgmt: true
 store_perf_results: true
 send_email: true
 email_recipients: ['scylla-perf-results@scylladb.com']
+logs_transport: "ssh"
