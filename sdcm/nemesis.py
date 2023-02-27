@@ -98,7 +98,7 @@ from sdcm.utils.k8s import (
     convert_cpu_value_from_k8s_to_units, convert_memory_value_from_k8s_to_units,
 )
 from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperiment, DiskError
-from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
+from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
@@ -1109,6 +1109,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis('Cluster is not configured to run with LDAP authorization, hence skipping')
         if not self.target_node.is_enterprise:
             raise UnsupportedNemesis('Cluster is not enterprise. LDAP is supported only for enterprise. Skipping')
+        if not self.cluster.params.get('ldap_server_type') == LdapServerType.OPENLDAP:
+            raise UnsupportedNemesis('This nemesis is supported only for open-Ldap. Skipping')
 
         self.log.info('Will now pause the LDAP container')
         ContainerManager.pause_container(self.tester.localhost, 'ldap')
