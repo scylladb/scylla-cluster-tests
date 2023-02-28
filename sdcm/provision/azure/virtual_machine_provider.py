@@ -43,7 +43,8 @@ class VirtualMachineProvider:
             v_ms = self._azure_service.compute.virtual_machines.list(self._resource_group_name)
             for v_m in v_ms:
                 v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, v_m.name)
-                self._cache[v_m.name] = v_m
+                if v_m.provisioning_state != "Deleting":
+                    self._cache[v_m.name] = v_m
         except ResourceNotFoundError:
             pass
 
