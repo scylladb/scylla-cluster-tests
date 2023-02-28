@@ -35,15 +35,12 @@ class IpAddressProvider:
     def __post_init__(self):
         """Discover existing ip addresses for resource group."""
         try:
-            ips = list(self._azure_service.network.public_ip_addresses.list(self._resource_group_name))
-        except ResourceNotFoundError:
-            return
-        for ip in ips:
-            try:
+            ips = self._azure_service.network.public_ip_addresses.list(self._resource_group_name)
+            for ip in ips:
                 ip = self._azure_service.network.public_ip_addresses.get(self._resource_group_name, ip.name)
                 self._cache[ip.name] = ip
-            except ResourceNotFoundError as exc:
-                LOGGER.warning("Could not get IP address '{}'. Exception: {}".format(ip.name, exc))
+        except ResourceNotFoundError:
+            pass
 
     def get_or_create(self, names: List[str] = "default", version: str = "IPV4") -> List[PublicIPAddress]:
         addresses = []
