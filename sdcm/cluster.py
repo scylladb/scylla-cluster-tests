@@ -2643,10 +2643,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         nodes_status = {}
         try:
             statuses = self.parent_cluster.get_nodetool_status(verification_node=self)
-
+            node_ip_map = self.parent_cluster.get_ip_to_node_map()
             for dc, dc_status in statuses.items():
                 for node_ip, node_properties in dc_status.items():
-                    if node := self.parent_cluster.find_node_by_ip(node_ip):
+                    if node := node_ip_map.get(node_ip):
                         nodes_status[node] = {'status': node_properties['state'], 'dc': dc}
                     else:
                         if node_ip:
@@ -2671,6 +2671,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             result = session.execute(f"select {', '.join(columns)} from system.peers")
             cql_results = result.all()
         err = ''
+        node_ip_map = self.parent_cluster.get_ip_to_node_map()
         for row in cql_results:
             peer = row.peer
             try:
@@ -2681,7 +2682,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 err += current_err
                 continue
 
-            if node := self.parent_cluster.find_node_by_ip(peer):
+            if node := node_ip_map.get(peer):
                 peers_details[node] = row._asdict()
             else:
                 current_err = f"'get_peers_info' failed to find a node by IP: {peer}\n"
@@ -2701,6 +2702,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         LOGGER.debug("get_gossip_info: %s", gossip_info)
         gossip_node_schemas = {}
         schema = ip = status = dc = ''
+        node_ip_map = self.parent_cluster.get_ip_to_node_map()
         for line in gossip_info.stdout.split():
             if line.startswith('SCHEMA:'):
                 schema = line.replace('SCHEMA:', '')
@@ -2712,7 +2714,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 dc = line.replace('DC:', '').split(',')[0]
 
             if schema and ip and status:
-                if node := self.parent_cluster.find_node_by_ip(ip):
+                if node := node_ip_map.get(ip):
                     gossip_node_schemas[node] = {'schema': schema, 'status': status, 'dc': dc}
                 elif status in self.GOSSIP_STATUSES_FILTER_OUT:
                     LOGGER.debug("Get gossip info. Node with IP %s is not found in the cluster. Node status is: %s",
@@ -3157,12 +3159,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def dead_nodes_ip_address_list(self):
         return [node.ip_address for node in self.dead_nodes_list]
 
-    def find_node_by_ip(self, node_ip):
-        for node in self.nodes:
-            if node_ip in node.get_all_ip_addresses():
-                return node
-
-        return None
+    def get_ip_to_node_map(self):
+        """returns {ip: node} map for all nodes in cluster to get node by ip"""
+        return {ip: node for node in self.nodes for ip in node.get_all_ip_addresses()}
 
     def init_log_directory(self):
         assert '_SCT_TEST_LOGDIR' in os.environ
