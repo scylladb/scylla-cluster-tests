@@ -469,6 +469,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.test_backup_rate_limit()
         with self.subTest('Test Backup Purge Removes Orphans Files'):
             self.test_backup_purge_removes_orphan_files()
+        with self.subTest('Test restore a backup with restore task'):
+            self.test_restore_backup_with_task()
         with self.subTest('Test Backup end of space'):  # Preferably at the end
             self.test_enospc_during_backup()
 
@@ -499,9 +501,25 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
-
+        self.run_verification_read_stress()
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_basic_backup')
+
+    def test_restore_backup_with_task(self):
+        self.log.info('starting test_restore_backup_with_task')
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
+        assert backup_task_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, restore_data_with_task=True,
+                                   timeout=1000)
+        self.run_verification_read_stress()
+        mgr_cluster.delete()  # remove cluster at the end of the test
+        self.log.info('finishing test_restore_backup_with_task')
 
     def test_backup_multiple_ks_tables(self):
         self.log.info('starting test_backup_multiple_ks_tables')
