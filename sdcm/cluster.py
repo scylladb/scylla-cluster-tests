@@ -974,6 +974,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         except Exception:  # pylint: disable=broad-except
             pass
 
+    def restart_binary_protocol(self, verify_up=True):
+        """
+        Restart the native transport.
+        """
+        # Disable cql interface, so all connections will be dropped, but the node will still function as replica
+        self.run_nodetool(sub_cmd="disablebinary")
+        # Bring cql interface back
+        self.run_nodetool(sub_cmd="enablebinary")
+
+        if verify_up:
+            self.wait_db_up(timeout=60)
+
     @property
     def uptime(self):
         return datetime.strptime(self.remoter.run('uptime -s', ignore_status=True).stdout.strip(), '%Y-%m-%d %H:%M:%S')
@@ -4437,6 +4449,15 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.stop_scylla(verify_down=True)
             node.start_scylla(verify_up=True)
             self.log.debug("'%s' restarted.", node.name)
+
+    def restart_binary_protocol(self, nodes=None, random_order=False, verify_up=True):
+        nodes_to_restart = (nodes or self.nodes)[:]  # create local copy of nodes list
+        if random_order:
+            random.shuffle(nodes_to_restart)
+        for node in nodes_to_restart:
+            self.log.info("Restart native transport on %s", node.name)
+            node.restart_binary_protocol(verify_up=verify_up)
+            self.log.debug("Restarted native transport on %s", node.name)
 
     def get_seed_selected_by_reflector(self, node=None):
         """
