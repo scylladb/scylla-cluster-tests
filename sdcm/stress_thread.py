@@ -102,6 +102,10 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
     def create_stress_cmd(self, cmd_runner, keyspace_idx):
         stress_cmd = self.stress_cmd
 
+        if "no-warmup" not in stress_cmd:
+            # add no-warmup to stress_cmd if it's not there. See issue #5767
+            stress_cmd = re.sub(r'(cassandra-stress [\w]+)', r'\1 no-warmup', stress_cmd)
+
         # When using cassandra-stress with "user profile" the profile yaml should be provided
         if 'profile' in stress_cmd and not self.profile:
             # support of using -profile in sct test-case yaml, assumes they exists data_dir
