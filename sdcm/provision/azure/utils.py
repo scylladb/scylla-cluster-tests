@@ -70,7 +70,7 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
             image.tags["scylla_version"] = image.tags.get('scylla_version', image.tags.get('ScyllaVersion'))
             # Filter by tags
             for tag_name, expected_value in tags_to_search.items():
-                actual_value = image.tags.get(tag_name)
+                actual_value = image.tags.get(tag_name).replace('~', '-')
                 if callable(expected_value):
                     if not expected_value(actual_value):
                         break
