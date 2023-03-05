@@ -845,8 +845,8 @@ class AzureSctRunner(SctRunner):
         "version": "latest",
     }
     SOURCE_IMAGE_REGION = AzureRegion.SCT_GALLERY_REGION
-    IMAGE_BUILDER_INSTANCE_TYPE = "Standard_D2s_v3"
-    REGULAR_TEST_INSTANCE_TYPE = "Standard_D2s_v3"  # 2 vcpus, 8G, recommended by Ubuntu 20.04 LTS image publisher
+    IMAGE_BUILDER_INSTANCE_TYPE = "Standard_D2_v4"
+    REGULAR_TEST_INSTANCE_TYPE = "Standard_D2_v4"  # 2 vcpus, 8G, recommended by Ubuntu 20.04 LTS image publisher
     LONGTERM_TEST_INSTANCE_TYPE = "Standard_E2s_v3"  # 2 vcpus, 16G, recommended by Ubuntu 20.04 LTS image publisher
 
     def __init__(self, region_name: str, availability_zone: str):
