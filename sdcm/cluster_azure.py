@@ -269,7 +269,7 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
 
     def __init__(self, image_id, root_disk_size, provisioners, credentials,  # pylint: disable=too-many-arguments
-                 instance_type='Standard_D2s_v3',
+                 instance_type='Standard_D2_v4',
                  user_name='centos',
                  user_prefix=None, n_nodes=1, params=None, region_names=None):
         # pylint: disable=too-many-locals
@@ -295,7 +295,7 @@ class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
 class MonitorSetAzure(cluster.BaseMonitorSet, AzureCluster):
 
     def __init__(self, image_id, root_disk_size, provisioners, credentials,  # pylint: disable=too-many-arguments
-                 instance_type='Standard_D2s_v3',
+                 instance_type='Standard_D2_v4',
                  user_name='centos', user_prefix=None, n_nodes=1,
                  targets=None, params=None, region_names=None):
         # pylint: disable=too-many-locals

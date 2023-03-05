@@ -1080,7 +1080,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.loaders = LoaderSetAzure(
             image_id=self.params.get('azure_image_loader'),
             root_disk_size=loader_info['disk_size'],
-            instance_type="Standard_D2s_v3",
+            instance_type="Standard_D2_v4",
             provisioners=provisioners,
             n_nodes=loader_info['n_nodes'],
             user_name=self.params.get('ami_loader_user'),
