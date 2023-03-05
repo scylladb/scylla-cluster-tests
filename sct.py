@@ -99,6 +99,7 @@ from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
 from sdcm.utils.es_index import create_index, get_mapping
+import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
 from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
@@ -612,7 +613,19 @@ def list_images(cloud_provider: str, branch: str, version: str, region: str, arc
                         title="GCE Machine Images by version")
                 )
             case "azure":
-                click.echo("Azure image listing not implemented yet.")
+                if arch:
+                    click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
+                azure_images = azure_utils.get_scylla_images(scylla_version=version, region_name=region)
+                rows = []
+                for image in azure_images:
+                    rows.append(['Azure', image.name, image.id, 'N/A'])
+                click.echo(
+                    create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                        title="Azure Machine Images by version")
+                )
+
+            case _:
+                click.echo(f"Cloud provider {cloud_provider} is not supported")
 
     elif branch:
         if ":" not in branch:
@@ -635,7 +648,19 @@ def list_images(cloud_provider: str, branch: str, version: str, region: str, arc
                     )
                 )
             case "azure":
-                click.echo("Azure image listing not implemented yet.")
+                if arch:
+                    click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
+                azure_images = azure_utils.get_scylla_images(scylla_version=branch, region_name=region)
+                rows = []
+                for image in azure_images:
+                    rows.append(['Azure', image.name, image.id, 'N/A'])
+                click.echo(
+                    create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                        title="Azure Machine Images by version")
+                )
+
+            case _:
+                click.echo(f"Cloud provider {cloud_provider} is not supported")
 
 
 @cli.command('list-repos', help='List repos url of Scylla formal versions')

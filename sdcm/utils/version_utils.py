@@ -69,7 +69,7 @@ SEMVER_REGEX = re.compile(
 )
 
 SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
-SCYLLA_VERSION_GROUPED_RE = re.compile(r'(?P<version>[\w.~]+)-0?\.?(?P<date>[\d]+)\.(?P<commit_id>\w+)')
+SCYLLA_VERSION_GROUPED_RE = re.compile(r'(?P<version>[\w.~]+)-(?P<build>0|rc\d)?\.?(?P<date>[\d]+)\.(?P<commit_id>\w+)')
 SSTABLE_FORMAT_VERSION_REGEX = re.compile(r'Feature (.*)_SSTABLE_FORMAT is enabled')
 PRIMARY_XML_GZ_REGEX = re.compile(r'="(.*?primary.xml.gz)"')
 
