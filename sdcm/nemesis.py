@@ -1827,7 +1827,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
         self.target_node.run_nodetool("flush")
         # do the actual truncation
-        self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(keyspace_truncate, table), timeout=120)
+        truncate_timeout = 600
+        self.target_node.run_cqlsh(cmd=f'TRUNCATE {keyspace_truncate}.{table} USING TIMEOUT {int(truncate_timeout)}s',
+                                   timeout=truncate_timeout)
 
     def disrupt_truncate_large_partition(self):
         """
@@ -1848,7 +1850,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
         self.target_node.run_nodetool("flush")
         # do the actual truncation
-        self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(ks_name, table), timeout=120)
+        truncate_timeout = 600
+        self.target_node.run_cqlsh(cmd=f'TRUNCATE {ks_name}.{table} USING TIMEOUT {int(truncate_timeout)}s',
+                                   timeout=truncate_timeout)
 
     def _modify_table_property(self, name, val, filter_out_table_with_counter=False, keyspace_table=None):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
