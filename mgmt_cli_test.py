@@ -473,6 +473,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.test_restore_backup_with_task()
         with self.subTest('Test Backup end of space'):  # Preferably at the end
             self.test_enospc_during_backup()
+        with self.subTest('Test Restore end of space'):
+            self.test_enospc_before_restore()
 
     def create_ks_and_tables(self, num_ks, num_table):
         # FIXME: beforehand we better change to have RF=1 to avoid restoring content while restoring replica of data
@@ -888,6 +890,37 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                 if has_enospc_been_reached:
                     clean_enospc_on_node(target_node=target_node, sleep_time=30)
         self.log.info('finishing test_enospc_during_backup')
+
+    def test_enospc_before_restore(self):
+        self.log.info('starting test_enospc_before_restore')
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
+        assert backup_task_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        target_node = self.db_cluster.nodes[1]
+        with ignore_no_space_errors(node=target_node):
+            try:
+                reach_enospc_on_node(target_node=target_node)
+
+                snapshot_tag = backup_task.get_snapshot_tag()
+                restore_task = mgr_cluster.create_restore_task(restore_data=True, location_list=self.locations,
+                                                               snapshot_tag=snapshot_tag)
+                final_status = restore_task.wait_and_get_final_status(step=30)
+
+                assert final_status == TaskStatus.ERROR, \
+                    f"The restore task is supposed to fail, since node {target_node} lacks the disk space to download" \
+                    f"the snapshot files"
+                full_progress_string = restore_task.progress_string()
+                assert "not enough disk space" in full_progress_string, \
+                    f"The restore failed as expected when one of the nodes was out of disk space, but with an ill " \
+                    f"fitting error message: {full_progress_string}"
+            finally:
+                clean_enospc_on_node(target_node=target_node, sleep_time=30)
+        self.log.info('finishing test_enospc_before_restore')
 
     def _delete_keyspace_directory(self, db_node, keyspace_name):
         # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
