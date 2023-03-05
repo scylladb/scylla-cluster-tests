@@ -33,6 +33,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
+            string(defaultValue: '',
+                   description: 'cloud path for RPMs, s3:// or gs://',
+                   name: 'update_db_packages')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot',
                    name: 'provision_type')
@@ -217,6 +220,11 @@ def call(Map pipelineParams) {
                                                             echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
                                                             exit 1
                                                         fi
+
+                                                        if [[ "${params.update_db_packages || false}" == "true" ]] ; then
+                                                            export SCT_UPDATE_DB_PACKAGES="${params.update_db_packages}"
+                                                        fi
+
 
 
                                                         export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
