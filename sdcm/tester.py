@@ -106,7 +106,8 @@ from sdcm.logcollector import (
     KubernetesLogCollector,
     LoaderLogCollector,
     MonitorLogCollector,
-    SCTLogCollector,
+    BaseSCTLogCollector,
+    PythonSCTLogCollector,
     ScyllaLogCollector,
     SirenManagerLogCollector,
 )
@@ -2866,9 +2867,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @silence()
     def collect_sct_logs(self):
-        s3_link = SCTLogCollector(
-            [], self.test_config.test_id(), os.path.join(self.logdir, "collected_logs"), params=self.params
-        ).collect_logs(self.logdir)
+        s3_link = []
+        for log_collector in [BaseSCTLogCollector, PythonSCTLogCollector]:
+            s3_link.extend(log_collector(
+                [], self.test_config.test_id(), os.path.join(self.logdir, "collected_logs"), params=self.params
+            ).collect_logs(self.logdir))
         if s3_link:
             self.log.info(s3_link)
             self.argus_collect_logs({"sct_job_log": s3_link})
