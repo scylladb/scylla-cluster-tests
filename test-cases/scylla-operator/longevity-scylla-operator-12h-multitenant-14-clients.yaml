@@ -50,3 +50,5 @@ nemesis_during_prepare: false
 user_prefix: 'long-scylla-operator-12h-multitenant-14-clients'
 
 k8s_enable_tls: true
+
+k8s_loader_run_type: 'static'
