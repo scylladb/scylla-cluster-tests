@@ -5,3 +5,5 @@ authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
+prepare_saslauthd: false
+use_ldap_authentication: false

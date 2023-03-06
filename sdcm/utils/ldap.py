@@ -91,3 +91,7 @@ class LdapContainerMixin:  # pylint: disable=too-few-public-methods
     @staticmethod
     def modify_ldap_entry(*args, **kwargs):
         return LdapContainerMixin.ldap_conn.modify(*args, **kwargs)
+
+    @staticmethod
+    def delete_ldap_entry(*args, **kwargs):
+        return LdapContainerMixin.ldap_conn.delete(*args, **kwargs)
