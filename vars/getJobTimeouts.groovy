@@ -7,6 +7,17 @@ List<Integer> call(Map params, String region){
     #!/bin/bash
     export SCT_CLUSTER_BACKEND="${params.backend}"
     export SCT_CONFIG_FILES=${test_config}
+    if [[ -n "${params.region ? params.region : ''}" ]] ; then
+        export SCT_REGION_NAME=${current_region}
+    fi
+
+    if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
+        export SCT_GCE_DATACENTER=${params.gce_datacenter}
+    fi
+
+    if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
+        export SCT_AZURE_REGION_NAME=${params.azure_region_name}
+    fi
     ./docker/env/hydra.sh output-conf -b "${params.backend}"
     """
     def testData = sh(script: cmd, returnStdout: true).trim()
