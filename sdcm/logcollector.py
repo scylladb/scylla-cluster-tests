@@ -748,6 +748,12 @@ class LogCollector:
     def update_db_info(self):
         pass
 
+    def _compress_file(self, src_path: str, src_name: str) -> str:  # pylint: disable=no-self-use
+        archive_name = f"{src_name}.tar.gz"
+        with tarfile.open(archive_name, "w:gz") as tar:
+            tar.add(src_path, arcname=src_name)
+        return archive_name
+
     def archive_to_tarfile(self, src_path: str, add_test_id_to_archive: bool = False) -> str:
         src_name = os.path.basename(src_path)
         if add_test_id_to_archive:
@@ -755,15 +761,11 @@ class LogCollector:
             extension = f".{src_name.split('.')[-1]}"
             if extension in ['.log', '.json']:
                 src_name = src_name.replace(extension, f"-{self.test_id.split('-')[0]}{extension}")
-
-        archive_name = f"{src_name}.tar.gz"
         try:
-            with tarfile.open(archive_name, "w:gz") as tar:
-                tar.add(src_path, arcname=src_name)
+            return self._compress_file(src_path, src_name)
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.error("Error during archive creation. Details: \n%s", details)
             return None
-        return archive_name
 
 
 class ScyllaLogCollector(LogCollector):
@@ -916,7 +918,7 @@ class SirenManagerLogCollector(LogCollector):
     collect_timeout = 3600
 
 
-class SCTLogCollector(LogCollector):
+class BaseSCTLogCollector(LogCollector):
     """logs for hydra test run
 
     Find and collect local version of files
@@ -928,8 +930,6 @@ class SCTLogCollector(LogCollector):
     """
     log_entities = [
         FileLog(name='profile.stats',
-                search_locally=True),
-        FileLog(name='sct.log',
                 search_locally=True),
         FileLog(name='email_data.json',
                 search_locally=True),
@@ -963,8 +963,9 @@ class SCTLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name='result_gradual_increase.log'),
     ]
-    cluster_log_type = 'sct-runner'
-    cluster_dir_prefix = 'sct-runner'
+    cluster_log_type = 'sct-runner-events'
+    cluster_dir_prefix = 'sct-runner-events'
+    too_big_log_size = 3*1024*1024*1024
 
     def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
         for ent in self.log_entities:
@@ -989,13 +990,7 @@ class SCTLogCollector(LogCollector):
                 LOGGER.warning('Nothing found')
                 return []
 
-        if self.is_collect_to_a_single_archive:
-            s3_links = self.create_single_archive_and_upload()
-        else:
-            LOGGER.info("SCT log files are too big, uploading them separately")
-            s3_links = self.create_archive_per_file_and_upload()
-
-        return s3_links
+        return self.create_archive_and_upload()
 
     def get_files_size(self) -> int:
         total_size = 0
@@ -1009,7 +1004,7 @@ class SCTLogCollector(LogCollector):
 
     @property
     def is_collect_to_a_single_archive(self) -> bool:
-        return self.get_files_size() < 3*1024*1024*1024
+        return self.get_files_size() < self.too_big_log_size
 
     def create_single_archive_and_upload(self) -> list[str]:
         final_archive = self.archive_to_tarfile(self.local_dir)
@@ -1033,8 +1028,52 @@ class SCTLogCollector(LogCollector):
                 remove_files(file_archive)
         return s3_links
 
+    def create_archive_and_upload(self) -> list[str]:
+        if self.is_collect_to_a_single_archive:
+            s3_links = self.create_single_archive_and_upload()
+        else:
+            LOGGER.info("SCT log files are too big, uploading them separately")
+            s3_links = self.create_archive_per_file_and_upload()
 
-class KubernetesAPIServerLogCollector(SCTLogCollector):
+        return s3_links
+
+
+class PythonSCTLogCollector(BaseSCTLogCollector):
+    log_entities = [
+        FileLog(name='sct.log', search_locally=True),
+    ]
+    cluster_log_type = 'sct-runner-python-log'
+    cluster_dir_prefix = 'sct-runner-python-log'
+
+    def _compress_file(self, src_path: str, src_name: str) -> list[str]:
+        """
+        In case of big SCT.log file, it will be split into several GZ files by bash script
+        that uses minimum disc space to mitigate concern: larger SCT disks translates to higher costs.
+        Also, GZ is used instead of TAR.GZ because of the same concern
+        and because the TAR cli cannot be used to read the anonymous pipeline,
+        only files, that will double the used space.
+        """
+        if os.path.getsize(src_path) < self.too_big_log_size:
+            return [super()._compress_file(src_path, src_name)]
+        else:
+            runner = LocalCmdRunner()
+            runner.run(
+                f"bash {os.path.join(os.path.dirname(__file__), 'log_archive.sh')} "
+                f"{src_path} {self.too_big_log_size} {src_name}")
+            res = runner.run(f"ls *{src_name}.gz")
+            return res.stdout.rstrip("\n").split("\n")
+
+    def create_archive_and_upload(self) -> list[str]:
+        file_archives = self.archive_to_tarfile(os.path.join(self.local_dir, "sct.log"))
+        s3_links = []
+        for file_archive in file_archives:
+            s3_links.append(upload_archive_to_s3(file_archive, f"{self.test_id}/{self.current_run}"))
+            remove_files(file_archive)
+        remove_files(self.local_dir)
+        return s3_links
+
+
+class KubernetesAPIServerLogCollector(BaseSCTLogCollector):
     """Gather K8S API server logs."""
     log_entities = [
         DirLog(name='kube-apiserver/*', search_locally=True),
@@ -1112,7 +1151,7 @@ class KubernetesAPIServerLogCollector(SCTLogCollector):
         LOGGER.info("Created K8S API call stats file at '%s'.", dst_file_path)
 
 
-class KubernetesLogCollector(SCTLogCollector):
+class KubernetesLogCollector(BaseSCTLogCollector):
     """Gather K8S logs."""
     log_entities = [
         FileLog(name='cert_manager.log', search_locally=True),
@@ -1146,7 +1185,7 @@ class JepsenLogCollector(LogCollector):
         return s3_link
 
 
-class ParallelTimelinesReportCollector(SCTLogCollector):
+class ParallelTimelinesReportCollector(BaseSCTLogCollector):
     """
     Collect HTML file with parallel timelines report and upload it to S3
     """
@@ -1162,7 +1201,7 @@ class ParallelTimelinesReportCollector(SCTLogCollector):
         return True
 
 
-class SSTablesCollector(SCTLogCollector):
+class SSTablesCollector(BaseSCTLogCollector):
     """
     Collect corrupted sstables from db node.
     """
@@ -1256,7 +1295,8 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         self.pt_report_set = []
         self.cluster_log_collectors = {
             ScyllaLogCollector: self.db_cluster,
-            SCTLogCollector: self.sct_set,
+            BaseSCTLogCollector: self.sct_set,
+            PythonSCTLogCollector: self.sct_set,
             MonitorLogCollector: self.monitor_set,
             LoaderLogCollector: self.loader_set,
         }
@@ -1524,6 +1564,8 @@ def check_archive(remoter, path: str) -> bool:
         cmd = f"tar tzf '{path}'"
     elif path.endswith(".zip"):
         cmd = f"unzip -qql '{path}'"
+    elif path.endswith(".gz"):
+        cmd = f"gzip -t '{path}' && gzip -lv '{path}'"
     else:
         raise ValueError(f"Unsupported archive type: {path}")
     result = remoter.run(cmd, ignore_status=True)
