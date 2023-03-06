@@ -12,6 +12,8 @@ n_loaders: 2
 n_monitor_nodes: 1
 round_robin: true
 
+sla: true
+
 instance_type_db: 'i3.2xlarge'
 instance_type_loader: 'c5.2xlarge'
 

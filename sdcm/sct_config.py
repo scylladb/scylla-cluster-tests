@@ -490,6 +490,10 @@ class SCTConfiguration(dict):
         dict(name="authorizer", env="SCT_AUTHORIZER", type=str,
              help="which authorizer scylla will use AllowAllAuthorizer/CassandraAuthorizer"),
 
+        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+        dict(name="sla", env="SCT_SLA", type=boolean,
+             help="run SLA nemeses if the test is SLA only"),
+
         dict(name="system_auth_rf", env="SCT_SYSTEM_AUTH_RF", type=int,
              help="Replication factor will be set to system_auth"),
 

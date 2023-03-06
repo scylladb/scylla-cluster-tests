@@ -1651,6 +1651,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
 
     def disrupt_remove_service_level_while_load(self):
+        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+        if not self.cluster.params.get('sla'):
+            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
+
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
 
@@ -3924,6 +3928,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return column_definition, data_set_size
 
     def disrupt_sla_increase_shares_during_load(self):
+        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+        if not self.cluster.params.get('sla'):
+            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
+
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
 
@@ -3945,6 +3953,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.format_error_for_sla_test_and_raise(error_events=error_events)
 
     def disrupt_sla_decrease_shares_during_load(self):
+        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+        if not self.cluster.params.get('sla'):
+            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
+
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
 
@@ -3966,6 +3978,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.format_error_for_sla_test_and_raise(error_events=error_events)
 
     def disrupt_replace_service_level_using_detach_during_load(self):
+        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+        if not self.cluster.params.get('sla'):
+            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
+
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
 
@@ -3988,6 +4004,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.format_error_for_sla_test_and_raise(error_events=error_events)
 
     def disrupt_replace_service_level_using_drop_during_load(self):
+        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+        if not self.cluster.params.get('sla'):
+            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
+
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
 
@@ -4011,6 +4031,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.format_error_for_sla_test_and_raise(error_events=error_events)
 
     def disrupt_increase_shares_by_attach_another_sl_during_load(self):
+        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+        if not self.cluster.params.get('sla'):
+            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
+
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
 
@@ -4034,6 +4058,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.format_error_for_sla_test_and_raise(error_events=error_events)
 
     def disrupt_maximum_allowed_sls_with_max_shares_during_load(self):
+        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
+        if not self.cluster.params.get('sla'):
+            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
+
         if not self.cluster.nodes[0].is_enterprise:
             raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
 
@@ -4446,6 +4474,7 @@ class RefreshBigMonkey(Nemesis):
 
 class RemoveServiceLevelMonkey(Nemesis):
     disruptive = True
+    sla = True
 
     def disrupt(self):
         self.disrupt_remove_service_level_while_load()
