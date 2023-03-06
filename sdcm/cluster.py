@@ -585,8 +585,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             sb_version = f'heads/{sb_version}'
         self.remoter.sudo(shell_script_cmd(f"""\
             rm -rf /usr/local/go
-            rm -f /tmp/sb_install || true
-            mkdir /tmp/sb_install
+            rm -rf /tmp/sb_install || true
+            mkdir -p /tmp/sb_install
             cd /tmp/sb_install
             curl -Lo go.tar.gz https://storage.googleapis.com/golang/go1.17.4.linux-amd64.tar.gz
             tar -C /usr/local -xvzf go.tar.gz
