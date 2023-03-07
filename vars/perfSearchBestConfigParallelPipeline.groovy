@@ -83,6 +83,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: 'Write Cassandra Stress command to run', name: 'stress_cmd_w')
             string(defaultValue: '', description: 'Read Cassandra Stress command to run', name: 'stress_cmd_r')
             string(defaultValue: '', description: 'Mixed Cassandra Stress command to run', name: 'stress_cmd_m')
+            booleanParam(name: 'use_client_encryption',
+                         defaultValue: false,
+                         description: 'Enable client encryption')
 
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', 'https://storage.googleapis.com/scylla-operator-charts/latest')}",
                    description: 'Scylla Operator helm repo',
@@ -254,6 +257,7 @@ def call(Map pipelineParams) {
                                                             export SCT_STRESS_CMD_M="${params.stress_cmd_m}"
                                                         fi
 
+                                                        export SCT_CLIENT_ENCRYPT=${params.use_client_encryption}
 
                                                         export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
 
