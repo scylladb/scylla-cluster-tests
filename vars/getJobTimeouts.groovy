@@ -8,7 +8,7 @@ List<Integer> call(Map params, String region){
     export SCT_CLUSTER_BACKEND="${params.backend}"
     export SCT_CONFIG_FILES=${test_config}
     if [[ -n "${params.region ? params.region : ''}" ]] ; then
-        export SCT_REGION_NAME=${current_region}
+        export SCT_REGION_NAME=${params.region}
     fi
 
     if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
