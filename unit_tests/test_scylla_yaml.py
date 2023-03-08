@@ -125,6 +125,7 @@ class ScyllaYamlTest(unittest.TestCase):
                         class_name='org.apache.cassandra.locator.SimpleSeedProvider',
                         parameters=[{'seeds': ['1.1.1.1', '2.2.2.2']}]),
                 ],
+                'force_schema_commit_log': True,
             },
             expected_without_defaults={
                 'background_writer_scheduling_quota': 1.0,
@@ -149,6 +150,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 },
                 'prometheus_prefix': 'someprefix',
                 'log_to_stdout': True,
+                'force_schema_commit_log': True,
             },
             expected_with_defaults={
                 'broadcast_address': '',
@@ -395,6 +397,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'system_info_encryption': None,
                 'kmip_hosts': None,
                 'stream_io_throughput_mb_per_sec': 0,
+                'force_schema_commit_log': True,
             }
         )
 
@@ -439,6 +442,8 @@ class ScyllaYamlTest(unittest.TestCase):
         yaml1.update(append_scylla_args_dict)
         assert yaml1.enable_sstables_mc_format == append_scylla_args_dict["enable_sstables_mc_format"]
         assert yaml1.enable_sstables_md_format == append_scylla_args_dict["enable_sstables_md_format"]
+
+        assert yaml1.force_schema_commit_log == append_scylla_args_dict["force_schema_commit_log"]  # pylint: disable=no-member
 
     @staticmethod
     def test_copy():

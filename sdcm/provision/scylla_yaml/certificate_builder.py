@@ -14,16 +14,20 @@
 from functools import cached_property
 from typing import Optional, Any
 
+from pydantic import Field
+
 from sdcm.provision.helpers.certificate import install_client_certificate
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, ClientEncryptionOptions, \
     ServerEncryptionOptions
 
 
+# Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
+# pylint: disable=no-member
 class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes regarding encryption
     """
-    node: Any
+    node: Any = Field(as_dict=False)
 
     @cached_property
     def _ssl_files_path(self) -> str:
