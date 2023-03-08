@@ -209,6 +209,7 @@ class LongevityDataValidator:
             cs_profile = profiles[0]
             _, profile = get_profile_content(cs_profile)
             self._keyspace_name = profile['keyspace']
+            LOGGER.debug("Keyspace name: %s, profile: %s", self._keyspace_name, profile)
 
         return self._keyspace_name
 

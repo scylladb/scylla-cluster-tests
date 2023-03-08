@@ -49,8 +49,12 @@ class LWTLongevityTest(LongevityTest):
         # Wait for MVs data will be fully inserted (running on background)
         time.sleep(300)
 
+        # Data validation can be run when no nemesis, that almost not happens in case of parallel nemesis.
+        # If we even will catch period when no nemesis are running, it may happens that the nemesis will start on the
+        # middle of data validation and fail it
         if self.db_cluster.nemesis_count > 1:
             self.data_validator = MagicMock()
+            self.data_validator.keyspace_name = None
             DataValidatorEvent.DataValidator(severity=Severity.WARNING,
                                              message="Test runs with parallel nemesis. Data validator is disabled."
                                              ).publish()
@@ -82,7 +86,13 @@ class LWTLongevityTest(LongevityTest):
 
     def validate_data(self):
         node = self.db_cluster.nodes[0]
-        with self.db_cluster.cql_connection_patient(node, keyspace=self.data_validator.keyspace_name) as session:
+        if not (keyspace := self.data_validator.keyspace_name):
+            DataValidatorEvent.DataValidator(severity=Severity.WARNING,
+                                             message="Failed fo get keyspace name. Data validator is disabled."
+                                             ).publish()
+            return
+
+        with self.db_cluster.cql_connection_patient(node, keyspace=keyspace) as session:
             self.data_validator.validate_range_not_expected_to_change(session=session)
             self.data_validator.validate_range_expected_to_change(session=session)
             self.data_validator.validate_deleted_rows(session=session)
