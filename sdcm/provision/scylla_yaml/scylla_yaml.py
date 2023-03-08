@@ -15,7 +15,7 @@ from typing import List, Literal, Union
 
 import logging
 import yaml
-from pydantic import Field, validator, BaseModel  # pylint: disable=no-name-in-module
+from pydantic import Field, validator, BaseModel, Extra  # pylint: disable=no-name-in-module
 
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
     ServerEncryptionOptions, ClientEncryptionOptions
@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 
 class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
+
+    class Config:  # pylint: disable=too-few-public-methods
+        extra = Extra.allow
+
     broadcast_address: str = ""
     api_port: int = 10000
     api_address: str = ""
@@ -342,8 +346,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
         for attr_name, attr_value in obj.items():
             attr_info = fields_data.get(attr_name, None)
             if attr_info is None:
-                raise ValueError("Provided unknown attribute `%s`" % (attr_name,))
-            if hasattr(attr_info.type_, "__attrs_attrs__"):
+                logger.warning("Provided unknown attribute `%s`", attr_name)
+            if attr_info and hasattr(attr_info.type_, "__attrs_attrs__"):
                 if attr_value is not None:
                     if not isinstance(attr_value, dict):
                         raise ValueError("Unexpected data `%s` in attribute `%s`" % (
@@ -362,7 +366,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
             if isinstance(obj, ScyllaYaml):
                 for attr_name, attr_value in obj.__dict__.items():
                     attr_type = fields_data.get(attr_name)
-                    if attr_value != attr_type.default and attr_value != getattr(self, attr_name, None):
+                    if (attr_type and attr_value != attr_type.default) and attr_value != getattr(self, attr_name, None):
                         setattr(self, attr_name, attr_value)
             elif isinstance(obj, dict):
                 self._update_dict(obj, fields_data=fields_data)
