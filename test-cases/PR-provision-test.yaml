@@ -20,7 +20,6 @@ nemesis_interval: 1
 user_prefix: 'PR-provision-test'
 instance_provision: 'spot'
 
-scylla_version: 4.6.3
 use_preinstalled_scylla: true
 
 post_behavior_db_nodes: "destroy"
