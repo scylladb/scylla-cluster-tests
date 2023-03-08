@@ -869,7 +869,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         target_node = self.db_cluster.nodes[1]
 
-        has_enospc_been_reached = False
         with ignore_no_space_errors(node=target_node):
             try:
                 backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
@@ -877,7 +876,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                 backup_task.stop()
 
                 reach_enospc_on_node(target_node=target_node)
-                has_enospc_been_reached = True
 
                 backup_task.start()
 
@@ -887,8 +885,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                                               "to the previous run"
 
             finally:
-                if has_enospc_been_reached:
-                    clean_enospc_on_node(target_node=target_node, sleep_time=30)
+                clean_enospc_on_node(target_node=target_node, sleep_time=30)
         self.log.info('finishing test_enospc_during_backup')
 
     def test_enospc_before_restore(self):
