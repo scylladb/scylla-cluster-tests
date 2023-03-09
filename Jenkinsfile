@@ -205,18 +205,18 @@ pipeline {
                         if (pullRequestContainsLabels("test-provision,test-provision-${backend}")) {
                             sctParallelTests["provision test on ${backend}"] = {
                                 def curr_params = createRunConfiguration(backend)
+                                def working_dir = "${backend}/scylla-cluster-tests"
                                 def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name)
                                 withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                                     script {
                                         def result = null
-
-                                        dir('scylla-cluster-tests') {
+                                        dir(working_dir) {
                                             checkout scm
                                         }
                                         if (sct_runner_backends.contains(backend)){
                                             try {
                                                 wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
+                                                    dir(working_dir) {
                                                         echo "calling createSctRunner"
                                                         createSctRunner(curr_params, 90 , builder.region)
                                                     }
@@ -230,7 +230,7 @@ pipeline {
                                         try {
                                             wrap([$class: 'BuildUser']) {
                                                 env.BUILD_USER_ID=env.CHANGE_AUTHOR
-                                                dir('scylla-cluster-tests') {
+                                                dir(working_dir) {
                                                     runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
                                                     result = 'SUCCESS'
                                                     pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
@@ -243,7 +243,7 @@ pipeline {
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
+                                                dir(working_dir) {
                                                     runCollectLogs(curr_params, builder.region)
                                                 }
                                             }
@@ -252,7 +252,7 @@ pipeline {
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
+                                                dir(working_dir) {
                                                     runCleanupResource(curr_params, builder.region)
                                                 }
                                             }
@@ -262,7 +262,7 @@ pipeline {
                                         if (!(backend in ['k8s-local-kind-aws', 'k8s-eks'])) {
                                             try {
                                                 wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
+                                                    dir(working_dir) {
                                                         runRestoreMonitoringStack()
                                                     }
                                                 }
