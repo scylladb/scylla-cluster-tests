@@ -26,6 +26,7 @@ import boto3
 
 import libcloud.storage.types
 import libcloud.storage.providers
+import yaml
 from invoke import exceptions
 from pkg_resources import parse_version
 from tenacity import RetryError
@@ -199,17 +200,27 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
             self.restore_backup_from_backup_task(mgr_cluster=mgr_cluster, backup_task=backup_task,
                                                  keyspace_and_table_list=per_keyspace_tables_dict)
 
-    def restore_schema_with_task(self, mgr_cluster, backup_task, timeout):
+    def restore_schema_with_task(self, mgr_cluster, backup_task, timeout, location_list=None):
         snapshot_tag = backup_task.get_snapshot_tag()
-        restore_task = mgr_cluster.create_restore_task(restore_schema=True, location_list=self.locations,
+        self.restore_schema_with_task_from_snapshot_tag(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
+                                                        timeout=timeout, location_list=location_list)
+
+    def restore_schema_with_task_from_snapshot_tag(self, mgr_cluster, snapshot_tag, timeout, location_list=None):
+        location_list = location_list if location_list else self.locations
+        restore_task = mgr_cluster.create_restore_task(restore_schema=True, location_list=location_list,
                                                        snapshot_tag=snapshot_tag)
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
         assert restore_task.status == TaskStatus.DONE, f"Schema restoration of {snapshot_tag} has failed!"
         self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
 
-    def restore_data_with_task(self, mgr_cluster, backup_task, timeout):
+    def restore_data_with_task(self, mgr_cluster, backup_task, timeout, location_list=None):
         snapshot_tag = backup_task.get_snapshot_tag()
-        restore_task = mgr_cluster.create_restore_task(restore_data=True, location_list=self.locations,
+        self.restore_data_with_task_from_snapshot_tag(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
+                                                      timeout=timeout, location_list=location_list)
+
+    def restore_data_with_task_from_snapshot_tag(self, mgr_cluster, snapshot_tag, timeout, location_list=None):
+        location_list = location_list if location_list else self.locations
+        restore_task = mgr_cluster.create_restore_task(restore_data=True, location_list=location_list,
                                                        snapshot_tag=snapshot_tag)
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
         assert restore_task.status == TaskStatus.DONE, f"Data restoration of {snapshot_tag} has failed!"
@@ -472,6 +483,41 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.db_cluster.nodes[0].run_cqlsh('TRUNCATE keyspace1.standard1')
         self.restore_data_with_task(mgr_cluster=mgr_cluster, backup_task=backup_task, timeout=110000)
         self.run_verification_read_stress()
+
+    @staticmethod
+    def _get_persistent_snapshots():
+        with open("defaults/manager_persistent_snapshots.yaml", encoding="utf-8") as mgmt_snapshot_yaml:
+            persistent_manager_snapshots_dict = yaml.safe_load(mgmt_snapshot_yaml)
+        return persistent_manager_snapshots_dict
+
+    def test_restore_multiple_backup_snapshots(self):
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
+        if self.params.get('cluster_backend') != 'aws':
+            self.log.error("Test supports only AWS ATM")
+            return
+        persistent_manager_snapshots_dict = self._get_persistent_snapshots()
+        target_bucket = persistent_manager_snapshots_dict["aws"]["bucket"]
+        location_list = [f"s3:{target_bucket}"]
+        read_stress_list = []
+        for _, snapshot_info in persistent_manager_snapshots_dict["aws"]["snapshots"].items():
+            self.log.info("Restoring the keyspace %s", snapshot_info["keyspace_name"])
+            self.restore_schema_with_task_from_snapshot_tag(mgr_cluster=mgr_cluster,
+                                                            snapshot_tag=snapshot_info["snapshot_tag"],
+                                                            timeout=180,
+                                                            # Schema restore is not correlated with the data size
+                                                            location_list=location_list)
+            self.restore_data_with_task_from_snapshot_tag(mgr_cluster=mgr_cluster,
+                                                          snapshot_tag=snapshot_info["snapshot_tag"],
+                                                          timeout=snapshot_info["expected_timeout"],
+                                                          location_list=location_list)
+            stress_command = snapshot_info["confirmation_stress_command"]
+            read_stress_list.append(stress_command)
+        for stress in read_stress_list:
+            read_thread = self.run_stress_thread(stress_cmd=stress, round_robin=False)
+            self.verify_stress_thread(cs_thread_pool=read_thread)
 
     def test_backup_feature(self):
         self.generate_load_and_wait_for_results()
