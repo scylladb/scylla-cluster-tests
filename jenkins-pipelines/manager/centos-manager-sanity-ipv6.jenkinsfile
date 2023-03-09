@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 managerPipeline(
     backend: 'aws',
     ip_ssh_connections: 'ipv6',
-    region: 'eu-west-1',
+    region: 'us-east-1',
     test_name: 'mgmt_cli_test.MgmtCliTest.test_manager_sanity',
     test_config: 'test-cases/manager/manager-regression-ipv6.yaml',
 
