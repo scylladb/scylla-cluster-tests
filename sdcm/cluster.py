@@ -368,11 +368,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @property
     def host_id(self):
-        full_nodetool_status = self.parent_cluster.get_nodetool_status(verification_node=self)
-        for data_center in full_nodetool_status:
-            if self.ip_address in full_nodetool_status[data_center]:
-                return full_nodetool_status[data_center][self.ip_address]['host_id']
-        raise AssertionError(f"Could not find the requested node {self.ip_address} in nodetool status")
+        return self.parent_cluster.get_nodetool_info(self, publish_event=False).get('ID')
 
     @property
     def db_node_instance_type(self) -> Optional[str]:
@@ -4058,7 +4054,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         return status
 
     @staticmethod
-    def get_nodetool_info(node):
+    def get_nodetool_info(node, **kwargs):
         """
             Runs nodetool info and generates status structure.
             Info format:
@@ -4066,7 +4062,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             :param node: node to run the nodetool on
             :return: dict
         """
-        res = node.run_nodetool('info')
+        res = node.run_nodetool('info', **kwargs)
         # Removing unnecessary lines from the output
         proper_yaml_output = "\n".join([line for line in res.stdout.splitlines() if ":" in line])
         info_res = yaml.safe_load(proper_yaml_output)
