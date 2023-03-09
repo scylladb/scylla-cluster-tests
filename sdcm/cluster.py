@@ -1538,7 +1538,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             diff = old_scylla_yaml.diff(new_scylla_yaml)
             if not diff:
                 ScyllaYamlUpdateEvent(node_name=self.name,
-                                      message=f"ScyllaYaml has not been changed on node: {self.name}")
+                                      message=f"ScyllaYaml has not been changed on node: {self.name}").publish()
                 return
             scylla_yaml.clear()
             scylla_yaml.update(
@@ -1550,7 +1550,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 )
             )
             ScyllaYamlUpdateEvent(node_name=self.name, message=f"ScyllaYaml has been changed on node: {self.name}. "
-                                                               f"Diff: {diff}")
+                                                               f"Diff: {diff}").publish()
 
     def remote_manager_yaml(self):
         return self._remote_yaml(path=SCYLLA_MANAGER_YAML_PATH)
