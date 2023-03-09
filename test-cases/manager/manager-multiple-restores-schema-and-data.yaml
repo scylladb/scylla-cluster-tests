@@ -1,0 +1,15 @@
+test_duration: 2100
+
+instance_type_db: 'i3en.3xlarge'
+
+# Using this region specifically because the bucket that contain the persistent snapshots that this test use are in us-east-1
+region_name: us-east-1
+n_db_nodes: 5
+n_loaders: 1
+n_monitor_nodes: 1
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"
+
+user_prefix: manager-regression
