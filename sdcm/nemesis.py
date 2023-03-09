@@ -3618,23 +3618,29 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message='FinishEvent - Steady State sleep has been finished').publish()
 
     def disrupt_run_unique_sequence(self):
-        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
-        sleep_time_between_ops = sleep_time_between_ops if sleep_time_between_ops else 8
-        sleep_time_between_ops = sleep_time_between_ops * 60
-        if not self.has_steady_run:
-            self.steady_state_latency()
-            self.has_steady_run = True
-        InfoEvent(message='StartEvent - start a repair by ScyllaManager').publish()
-        self.disrupt_mgmt_repair_cli()
-        InfoEvent(message='FinishEvent - Manager repair has finished').publish()
-        time.sleep(sleep_time_between_ops)
-        InfoEvent(message='Starting terminate_and_replace disruption').publish()
-        self.disrupt_terminate_and_replace_node()
-        InfoEvent(message='Finished terminate_and_replace disruption').publish()
-        time.sleep(sleep_time_between_ops)
-        InfoEvent(message='Starting grow_shrink disruption').publish()
-        self.disrupt_grow_shrink_cluster()
-        InfoEvent(message="Finished grow_shrink disruption").publish()
+        InfoEvent(message='Starting grow cluster #1').publish()
+        self._grow_cluster()
+        InfoEvent(message='Finished grow cluster #1').publish()
+        time.sleep(600)
+        InfoEvent(message='Starting grow cluster #2').publish()
+        self._grow_cluster()
+        InfoEvent(message='Finished grow cluster #2').publish()
+        time.sleep(600)
+        InfoEvent(message='Starting grow cluster #3').publish()
+        self._grow_cluster()
+        InfoEvent(message='Finished grow cluster #3').publish()
+        time.sleep(600)
+        InfoEvent(message='Starting shrink cluster #1').publish()
+        self._shrink_cluster()
+        InfoEvent(message='Finished shrink cluster #1').publish()
+        time.sleep(600)
+        InfoEvent(message='Starting shrink cluster #2').publish()
+        self._shrink_cluster()
+        InfoEvent(message='Finished shrink cluster #2').publish()
+        time.sleep(600)
+        InfoEvent(message='Starting shrink cluster #3').publish()
+        self._shrink_cluster()
+        InfoEvent(message='Finished shrink cluster #3').publish()
 
     def _k8s_disrupt_memory_stress(self):
         """Uses chaos-mesh experiment based on https://github.com/chaos-mesh/memStress"""
