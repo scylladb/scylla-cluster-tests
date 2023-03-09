@@ -37,6 +37,7 @@ from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from contextlib import ExitStack, contextmanager
 import packaging.version
 
 import yaml
@@ -103,13 +104,14 @@ from sdcm.utils.version_utils import (
     SCYLLA_VERSION_RE,
 )
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import LogEvent
+from sdcm.sct_events.base import LogEvent, add_severity_limit_rules, max_severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PATTERNS, InfoEvent, SoftTimeoutEvent
 from sdcm.sct_events.grafana import set_grafana_url
-from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, ScyllaHelpErrorEvent, ScyllaYamlUpdateEvent
+from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, ScyllaHelpErrorEvent, ScyllaYamlUpdateEvent, SYSTEM_ERROR_EVENTS
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
+from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.monitorstack.ui import AlternatorDashboard
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3, \
@@ -3621,10 +3623,16 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
     Raise exception if setup failed or timeout expired.
     """
     @wraps(method)
-    def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements
+    def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements,too-many-locals
         cl_inst = args[0]
         LOGGER.debug('Class instance: %s', cl_inst)
         LOGGER.debug('Method kwargs: %s', kwargs)
+
+        # fail wait_for_init in case of *Startup failed* message in SYSTEM_ERROR_EVENTS, can be overwritten
+        default_critical_events = [{'event': type(event), 'regex': r'.*Startup failed.*'}
+                                   for event in SYSTEM_ERROR_EVENTS]
+        critical_events = kwargs.pop("critical_node_setup_events", default_critical_events)
+
         node_list = kwargs.get('node_list', None) or cl_inst.nodes
         timeout = kwargs.get('timeout', None)
         # remove all arguments which is not supported by BaseScyllaCluster.node_setup method
@@ -3665,6 +3673,30 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
                 cl_inst.log.error(msg)
                 raise NodeSetupTimeout(msg)
 
+        @contextmanager
+        def critical_node_setup_events():
+            for critical_event in critical_events:
+                event_obj = critical_event['event']()
+                critical_event['default_severity'] = max_severity(event_obj).name
+                rule_pattern = []
+                for key in (event_obj.base, event_obj.type, event_obj.subtype):
+                    if key:
+                        rule_pattern.append(key)
+                critical_event['rule_pattern'] = '.'.join(rule_pattern)
+
+            add_severity_limit_rules([f'{e["rule_pattern"]}=CRITICAL' for e in critical_events])
+
+            with ExitStack() as stack:
+                for critical_event in critical_events:
+                    stack.enter_context(EventsSeverityChangerFilter(
+                        new_severity=Severity.CRITICAL,
+                        event_class=critical_event['event'],
+                        regex=critical_event['regex'],
+                    ))
+                yield
+
+            add_severity_limit_rules([f'{e["rule_pattern"]}={e["default_severity"]}' for e in critical_events])
+
         start_time = time.perf_counter()
         init_nodes = []
         results = []
@@ -3674,26 +3706,27 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             cl_inst.update_db_binary(node_list, start_service=False)
             cl_inst.update_db_packages(node_list, start_service=False)
 
-        for node in node_list:
-            if isinstance(cl_inst, BaseScyllaCluster) \
-                    and not getattr(cl_inst, 'params', {}).get('use_legacy_cluster_init'):
-                init_nodes.append(node)
-                start_time = time.perf_counter()
-                node_setup(node)
+        with critical_node_setup_events():
+            for node in node_list:
+                if isinstance(cl_inst, BaseScyllaCluster) \
+                        and not getattr(cl_inst, 'params', {}).get('use_legacy_cluster_init'):
+                    init_nodes.append(node)
+                    start_time = time.perf_counter()
+                    node_setup(node)
+                    verify_node_setup(start_time)
+                else:
+                    setup_thread = threading.Thread(target=node_setup, name='NodeSetupThread',
+                                                    args=(node,), daemon=True)
+                    setup_thread.start()
+                    if isinstance(cl_inst, BaseScyllaCluster):
+                        cl_inst.log.info("Wait 120 seconds before next node setup")
+                        time.sleep(120)
+
+            while len(results) != len(node_list):
                 verify_node_setup(start_time)
-            else:
-                setup_thread = threading.Thread(target=node_setup, name='NodeSetupThread',
-                                                args=(node,), daemon=True)
-                setup_thread.start()
-                if isinstance(cl_inst, BaseScyllaCluster):
-                    cl_inst.log.info("Wait 120 seconds before next node setup")
-                    time.sleep(120)
 
-        while len(results) != len(node_list):
-            verify_node_setup(start_time)
-
-        if isinstance(cl_inst, BaseScyllaCluster):
-            cl_inst.wait_for_nodes_up_and_normal(nodes=node_list, verification_node=node_list[0], timeout=timeout)
+            if isinstance(cl_inst, BaseScyllaCluster):
+                cl_inst.wait_for_nodes_up_and_normal(nodes=node_list, verification_node=node_list[0], timeout=timeout)
 
         time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug('TestConfig duration -> %s s', int(time_elapsed))
