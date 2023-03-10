@@ -32,3 +32,4 @@ email_recipients: ['scylla-perf-results@scylladb.com']
 store_perf_results: false
 # tests are running on aws. The loader uses the shard-aware driver
 ami_id_loader: 'scylla-qa-loader-ami-v19'
+enable_argus: false
