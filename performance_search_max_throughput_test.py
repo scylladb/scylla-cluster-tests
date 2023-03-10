@@ -224,6 +224,8 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
 
     @staticmethod
     def _build_stress_command(cmd_tmpl: str, threads: int, duration: str) -> str:
+        if isinstance(cmd_tmpl, list):
+            cmd_tmpl = cmd_tmpl[0]
         cmd_tmpl = re.sub(r'\sthreads=\d+\s', f' threads={threads} ', cmd_tmpl)
         cmd_tmpl = re.sub(r'\sduration=\d+[mhd]\s', f' duration={duration} ', cmd_tmpl)
         return cmd_tmpl
