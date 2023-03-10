@@ -106,7 +106,8 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
                 "threads": threads,
                 "n_loaders": len(self.loaders.nodes),
                 "n_process": stress_num,
-                "total_threads": threads * stress_num * len(self.loaders.nodes)})
+                "total_threads": threads * stress_num * len(self.loaders.nodes),
+                "stress_cmd": stress_cmd})
 
             self.log.debug("Summary results for current step: %s", current_result)
             all_results.append(current_result)
@@ -173,7 +174,8 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
             "scylla_version": self.db_cluster.nodes[0].scylla_version_detailed,
             "start_time": format_timestamp(self.start_time),
             "instance_type_db": self.params.get("instance_type_db"),
-            "instance_type_loader": self.params.get("instance_type_loader")
+            "instance_type_loader": self.params.get("instance_type_loader"),
+            "prepare_cs_cmd": self.params.get("prepare_write_cmd")
         }
 
         analyzer = SearchBestThroughputConfigPerformanceAnalyzer(es_index=self._test_index,
