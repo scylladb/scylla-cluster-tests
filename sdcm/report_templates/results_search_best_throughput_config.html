@@ -23,6 +23,13 @@
     </div>
 
     <h2> Best throughput with configuration </h2>
+    {% if test_results['best_stat'].get('stress_cmd') %}
+        <h3>Command</h3>
+        <table id="results_table">
+        <tr><td>{{ test_results['best_stat'].get('stress_cmd') }}</td></tr>
+        </table>
+    {% endif %}
+
     <table id="results_table">
         <tr>
             <th> Number of Loaders </th>
@@ -70,5 +77,6 @@
                     <td> {{ stat['latency 99th percentile']}} </td>
                 </tr>
         {% endfor %}
+    </table>
 
 {% endblock %}
