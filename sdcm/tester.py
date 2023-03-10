@@ -397,7 +397,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         thread_stop_signal = threading.Event()
         thread = threading.Thread(name="argus-heartbeat",
                                   target=send_argus_heartbeat,
-                                  kwargs={"connection": self.test_config.argus_client(), "stop_signal": thread_stop_signal})
+                                  kwargs={"client": self.test_config.argus_client(), "stop_signal": thread_stop_signal})
         thread.daemon = True
         thread.start()
 
