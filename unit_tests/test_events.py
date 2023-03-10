@@ -458,27 +458,10 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertFalse(publish.called, "Publish function was called unexpectedly")
 
     @staticmethod
-    @mock.patch('sdcm.sct_events.base.SctEvent.publish')
-    def test_soft_timeout(publish):
-        with SoftTimeoutEvent(soft_timeout=0.1, operation="long-one") as event:
-            time.sleep(1)
+    def test_soft_timeout():
+        event = SoftTimeoutEvent(soft_timeout=0.1, operation="long-one", duration=0.2)
+        event.publish_or_dump()
+        event_data = str(event)
 
-        assert publish.called
         assert event.trace
-
-        event_data = str(event)
-        assert "operation 'long-one' took" in event_data
-        assert "soft_timeout=0:00:00.100" in event_data
-
-    @staticmethod
-    @mock.patch('sdcm.sct_events.base.SctEvent.publish')
-    def test_soft_timeout_no_timeout(publish):
-        with SoftTimeoutEvent(soft_timeout=None, operation="long-one") as event:
-            time.sleep(1)
-
-        assert not publish.called
-        assert not event.trace
-
-        event_data = str(event)
-        assert "operation 'long-one' took" not in event_data
-        assert "soft_timeout=0:00:00.100" not in event_data
+        assert "operation 'long-one' took 0.2s and soft-timeout was set to 0.1s" in event_data

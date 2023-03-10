@@ -72,6 +72,7 @@ from sdcm import wait, mgmt
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.utils import properties
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.common import (
     S3Storage,
@@ -105,7 +106,7 @@ from sdcm.utils.version_utils import (
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PATTERNS, InfoEvent, SoftTimeoutEvent
+from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PATTERNS, InfoEvent
 from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, ScyllaHelpErrorEvent, ScyllaYamlUpdateEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
@@ -4544,8 +4545,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.terminate_node(node)  # pylint: disable=no-member
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
-    def decommission(self, node: BaseNode, timeout: int | float = None, soft_timeout: int | float = None):
-        with SoftTimeoutEvent(soft_timeout=soft_timeout, operation="decommission"):
+    def decommission(self, node: BaseNode, timeout: int | float = None):
+        with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
             node.run_nodetool("decommission", timeout=timeout)
         self.verify_decommission(node)
 

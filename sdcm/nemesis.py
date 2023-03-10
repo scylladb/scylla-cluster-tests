@@ -53,7 +53,7 @@ from sdcm.cluster import (
     MAX_TIME_WAIT_FOR_DECOMMISSION,
     NodeSetupFailed,
     NodeSetupTimeout,
-    NodeStayInClusterAfterDecommission,
+    NodeStayInClusterAfterDecommission, HOUR_IN_SEC,
 )
 from sdcm.cluster_k8s import (
     KubernetesOps,
@@ -84,6 +84,7 @@ from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sla.sla_tests import SlaTests
 from sdcm.utils import cdc
+from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import (get_db_tables, generate_random_string,
                                update_certificates, reach_enospc_on_node, clean_enospc_on_node,
                                parse_nodetool_listsnapshots,
@@ -1202,7 +1203,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             new_node.replacement_node_ip = old_node_ip
         try:
-            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, check_node_health=False)
+            with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.nodes[0], timeout=timeout):
+                self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, check_node_health=False)
             self.cluster.clean_replacement_node_options(new_node)
         except (NodeSetupFailed, NodeSetupTimeout):
             self.log.warning("TestConfig of the '%s' failed, removing it from list of nodes" % new_node)
@@ -1222,7 +1224,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes():
             self.set_target_node(allow_only_last_node_in_rack=True)
         target_is_seed = self.target_node.is_seed
-        self.cluster.decommission(self.target_node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
+        self.cluster.decommission(self.target_node)
         new_node = None
         if add_node:
             # When adding node after decommission the node is declared as up only after it completed bootstrapping,
@@ -1237,8 +1239,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             try:
                 test_keyspaces = self.cluster.get_test_keyspaces()
                 for node in self.cluster.nodes:
-                    for keyspace in test_keyspaces:
-                        node.run_nodetool(sub_cmd='cleanup', args=keyspace)
+                    with adaptive_timeout(Operations.CLEANUP, node=node, timeout=HOUR_IN_SEC * 48):
+                        for keyspace in test_keyspaces:
+                            node.run_nodetool(sub_cmd='cleanup', args=keyspace)
             finally:
                 self.unset_current_running_nemesis(new_node)
         return new_node
@@ -1432,7 +1435,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         getattr(node, disruption_method)()
 
         self.log.info('Decommission %s', node)
-        self.cluster.decommission(node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
+        self.cluster.decommission(node, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
 
         new_node = self.add_new_node(rack=node.rack)
         self.unset_current_running_nemesis(new_node)
@@ -1542,7 +1545,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 thread.result()
 
     def disrupt_major_compaction(self):
-        self.target_node.run_nodetool("compact")
+        with adaptive_timeout(Operations.MAJOR_COMPACT, self.target_node, timeout=7200):
+            self.target_node.run_nodetool("compact")
 
     def disrupt_load_and_stream(self):
         # Checking the columns number of keyspace1.standard1
@@ -1815,18 +1819,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @latency_calculator_decorator(legend="Run repair process with nodetool repair")
     def repair_nodetool_repair(self, node=None, publish_event=True):
         node = node if node else self.target_node
-        node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
+        with adaptive_timeout(Operations.REPAIR, node, timeout=HOUR_IN_SEC * 48):
+            node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
 
     def repair_nodetool_rebuild(self):
-        self.target_node.run_nodetool('rebuild')
+        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
+            self.target_node.run_nodetool('rebuild')
 
     def disrupt_nodetool_cleanup(self):
         # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
         test_keyspaces = self.cluster.get_test_keyspaces()
         for node in self.cluster.nodes:
             InfoEvent('NodetoolCleanupMonkey %s' % node).publish()
-            for keyspace in test_keyspaces:
-                node.run_nodetool(sub_cmd="cleanup", args=keyspace)
+            with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC * 48):
+                for keyspace in test_keyspaces:
+                    node.run_nodetool(sub_cmd="cleanup", args=keyspace)
 
     def _prepare_test_table(self, ks='keyspace1', table=None):
         ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
@@ -1848,7 +1855,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._prepare_test_table(ks=keyspace_truncate)
 
         # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
-        self.target_node.run_nodetool("flush")
+        with adaptive_timeout(Operations.FLUSH, self.target_node, timeout=HOUR_IN_SEC * 2):
+            self.target_node.run_nodetool("flush")
         # do the actual truncation
         truncate_timeout = 600
         self.target_node.run_cqlsh(cmd=f'TRUNCATE {keyspace_truncate}.{table} USING TIMEOUT {int(truncate_timeout)}s',
@@ -1871,7 +1879,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.tester.verify_stress_thread(bench_thread)
 
         # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
-        self.target_node.run_nodetool("flush")
+        with adaptive_timeout(Operations.FLUSH, self.target_node, timeout=HOUR_IN_SEC * 2):
+            self.target_node.run_nodetool("flush")
         # do the actual truncation
         truncate_timeout = 600
         self.target_node.run_cqlsh(cmd=f'TRUNCATE {ks_name}.{table} USING TIMEOUT {int(truncate_timeout)}s',
@@ -3059,7 +3068,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             rnd_node = random.choice([n for n in self.cluster.nodes if n is not self.target_node])
             self.log.info("Running removenode command on {}, Removing node with the following host_id: {}"
                           .format(rnd_node.ip_address, host_id))
-            res = rnd_node.run_nodetool("removenode {}".format(host_id), ignore_status=True, verbose=True)
+            with adaptive_timeout(Operations.REMOVE_NODE, rnd_node, timeout=HOUR_IN_SEC * 48):
+                res = rnd_node.run_nodetool("removenode {}".format(host_id), ignore_status=True, verbose=True)
             if res.failed and re.match(removenode_reject_msg, res.stdout + res.stderr):
                 raise Exception(f"Removenode was rejected {res.stdout}\n{res.stderr}")
 
@@ -3114,8 +3124,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             try:
                 test_keyspaces = self.cluster.get_test_keyspaces()
                 for node in self.cluster.nodes:
-                    for keyspace in test_keyspaces:
-                        node.run_nodetool(sub_cmd='cleanup', args=keyspace)
+                    with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC * 48):
+                        for keyspace in test_keyspaces:
+                            node.run_nodetool(sub_cmd='cleanup', args=keyspace)
             finally:
                 self.unset_current_running_nemesis(new_node)
 
@@ -3431,7 +3442,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             delay=1
         )
         ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
-        self.target_node.run_nodetool("rebuild")
+        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
+            self.target_node.run_nodetool("rebuild")
 
     def start_and_interrupt_rebuild_streaming(self):
         """
@@ -3461,7 +3473,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         )
         ParallelObject(objects=[trigger, watcher], timeout=timeout + 60).call_objects()
         self.target_node.wait_db_up(timeout=300)
-        self.target_node.run_nodetool("rebuild")
+        with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
+            self.target_node.run_nodetool("rebuild")
 
     def disrupt_decommission_streaming_err(self):
         """
@@ -3509,7 +3522,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         will be skipped.
         """
         self.log.debug("Rebuild sstables by scrub with `--skip-corrupted`, corrupted partitions will be skipped.")
-        with ignore_scrub_invalid_errors():
+        with ignore_scrub_invalid_errors(), adaptive_timeout(Operations.SCRUB, self.target_node, timeout=HOUR_IN_SEC * 48):
             for ks in self.cluster.get_test_keyspaces():
                 self.target_node.run_nodetool("scrub", args=f"--skip-corrupted {ks}")
 
@@ -3521,7 +3534,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @latency_calculator_decorator(legend="Decommission node: remove node from cluster")
     def decommission_node(self, node):
-        self.cluster.decommission(node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
+        self.cluster.decommission(node)
 
     def decommission_nodes(self, add_nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue,
                            dc_idx: Optional[int] = None):
@@ -3900,7 +3913,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
                 datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
                 self._write_read_data_to_multi_dc_keyspace(datacenters)
-            self.cluster.decommission(new_node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
+            self.cluster.decommission(new_node)
             node_added = False
             datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
             assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
@@ -3909,7 +3922,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with self.cluster.cql_connection_patient(node) as session:
                 session.execute('DROP KEYSPACE IF EXISTS keyspace_new_dc')
             if node_added:
-                self.cluster.decommission(new_node, soft_timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
+                self.cluster.decommission(new_node)
 
     def get_cassandra_stress_write_cmds(self):
         write_cmds = self.tester.params.get("prepare_write_cmd")
@@ -4126,7 +4139,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 raise UnsupportedNemesis(  # pylint: disable=raise-missing-from
                     "Tried to create already existing index. See log for details")
             try:
-                wait_for_index_to_be_built(self.target_node, ks, index_name, timeout=7200)
+                with adaptive_timeout(operation=Operations.CREATE_INDEX, node=self.target_node, timeout=7200) as timeout:
+                    wait_for_index_to_be_built(self.target_node, ks, index_name, timeout=timeout)
                 verify_query_by_index_works(session, ks, cf, column)
                 sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
                                               min_duration=300, max_duration=2400)
