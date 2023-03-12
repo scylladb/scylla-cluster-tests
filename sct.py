@@ -34,6 +34,7 @@ import pytest
 import click
 import click_completion
 from prettytable import PrettyTable
+from argus.client.sct.types import LogLink
 
 from sdcm.localhost import LocalHost
 from sdcm.remote import LOCALRUNNER
@@ -1019,7 +1020,6 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
     # pylint: disable=import-outside-toplevel
     try:
-        from argus.client.sct.types import LogLink
         argus_client = get_argus_client(run_id=test_id)
         log_links = []
         for _, s3_links in logs.items():
