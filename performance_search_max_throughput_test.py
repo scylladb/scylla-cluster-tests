@@ -91,7 +91,7 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
         threads = start_threads
         self.log.info("Start search best performance")
         self.log.debug("Use c-s cmd template %s", stress_cmd_tmpl)
-        while len(self.loaders.nodes) > 1:
+        while len(self.loaders.nodes) > 0:
             stress_cmd = self._build_stress_command(cmd_tmpl=stress_cmd_tmpl,
                                                     threads=threads,
                                                     duration=stress_step_duration)
