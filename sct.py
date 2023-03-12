@@ -35,8 +35,6 @@ import click
 import yaml
 from prettytable import PrettyTable
 from argus.client.sct.types import LogLink
-from argus.client.base import ArgusClientError
-from argus.backend.util.enums import TestStatus
 
 import sct_ssh
 import sct_scan_issues
@@ -1233,7 +1231,6 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
     # pylint: disable=import-outside-toplevel
     try:
-        from argus.client.sct.types import LogLink
         argus_client = get_argus_client(run_id=test_id)
         log_links = []
         for _, s3_links in logs.items():
