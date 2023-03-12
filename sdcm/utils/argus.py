@@ -8,7 +8,31 @@ from sdcm.keystore import KeyStore
 LOGGER = logging.getLogger(__name__)
 
 
+class ArgusError(Exception):
+
+    def __init__(self, message: str, *args: list) -> None:
+        self._message = message
+        super().__init__(*args)
+
+    @property
+    def message(self):
+        return self._message
+
+
+def is_uuid(uuid) -> bool:
+    if isinstance(uuid, UUID):
+        return True
+
+    try:
+        UUID(uuid)
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
 def get_argus_client(run_id: UUID | str) -> ArgusSCTClient:
+    if not is_uuid(run_id):
+        raise ArgusError("Malformed UUID provided")
     creds = KeyStore().get_argus_rest_credentials()
     argus_client = ArgusSCTClient(run_id=run_id, auth_token=creds["token"], base_url=creds["baseUrl"])
 
