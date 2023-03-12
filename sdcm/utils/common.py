@@ -39,7 +39,7 @@ import io
 import tempfile
 from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any
 from urllib.parse import urlparse
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 from textwrap import dedent
 from contextlib import closing
 from functools import wraps, cached_property, lru_cache
@@ -65,7 +65,7 @@ import yaml
 from packaging.version import Version
 
 from sdcm.provision.azure.provisioner import AzureProvisioner
-from sdcm.utils.argus import get_argus_client, terminate_resource_in_argus
+from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
@@ -709,12 +709,16 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
     return instances
 
 
-def clean_instances_aws(tags_dict, dry_run=False):
+def clean_instances_aws(tags_dict: dict, dry_run=False):
     """Remove all instances with specific tags in AWS."""
     # pylint: disable=too-many-locals,import-outside-toplevel
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
-    argus_client = get_argus_client(run_id=tags_dict["TestId"])
+    try:
+        argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
+    except ArgusError as exc:
+        LOGGER.warning("Unable to initialize Argus: %s", exc.message)
+        argus_client = MagicMock()
 
     for region, instance_list in aws_instances.items():
         if not instance_list:
@@ -1033,7 +1037,11 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
     def delete_instance(instance_with_tags: tuple[GCENode, dict]):
         instance, tags_dict = instance_with_tags
         LOGGER.info("Going to delete: %s", instance.name)
-        argus_client = get_argus_client(run_id=tags_dict["TestId"])
+        try:
+            argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
+        except ArgusError as exc:
+            LOGGER.warning("Unable to initialize Argus: %s", exc.message)
+            argus_client = MagicMock()
 
         if not dry_run:
             # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.base.Node.destroy
@@ -1045,7 +1053,7 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
                    timeout=60).run(delete_instance, ignore_exceptions=True)
 
 
-def clean_instances_azure(tags_dict, dry_run=False):
+def clean_instances_azure(tags_dict: dict, dry_run=False):
     """
     Cleans instances by tags.
 
@@ -1053,7 +1061,11 @@ def clean_instances_azure(tags_dict, dry_run=False):
     :return: None
     """
     assert tags_dict, "Running clean instances without tags would remove all SCT related resources in all regions"
-    argus_client = get_argus_client(run_id=tags_dict["TestId"])
+    try:
+        argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
+    except ArgusError as exc:
+        LOGGER.warning("Unable to initialize Argus: %s", exc.message)
+        argus_client = MagicMock()
     provisioners = AzureProvisioner.discover_regions(tags_dict.get("TestId", ""))
     for provisioner in provisioners:
         all_instances = provisioner.list_instances()
