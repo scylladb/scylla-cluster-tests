@@ -17,4 +17,4 @@ round_robin: true
 authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
-authorizer: 'ScyllaAuthorizer'
+authorizer: 'CassandraAuthorizer'
