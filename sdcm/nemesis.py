@@ -1840,6 +1840,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False, round_robin=True)
             cs_thread.verify_results()
 
+    @staticmethod
+    @scylla_versions(("5.2.rc0", "5.1"), ("2023.1.rc0", "2022.2"))
+    def _using_timeout(truncate_timeout):
+        return f' USING TIMEOUT {int(truncate_timeout)}s'
+
     def disrupt_truncate(self):
         keyspace_truncate = 'ks_truncate'
         table = 'standard1'
@@ -1850,7 +1855,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.run_nodetool("flush")
         # do the actual truncation
         truncate_timeout = 600
-        self.target_node.run_cqlsh(cmd=f'TRUNCATE {keyspace_truncate}.{table} USING TIMEOUT {int(truncate_timeout)}s',
+        self.target_node.run_cqlsh(cmd=f'TRUNCATE {keyspace_truncate}.{table} {self._using_timeout(truncate_timeout)}',
                                    timeout=truncate_timeout)
 
     def disrupt_truncate_large_partition(self):
@@ -1873,7 +1878,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.run_nodetool("flush")
         # do the actual truncation
         truncate_timeout = 600
-        self.target_node.run_cqlsh(cmd=f'TRUNCATE {ks_name}.{table} USING TIMEOUT {int(truncate_timeout)}s',
+        self.target_node.run_cqlsh(cmd=f'TRUNCATE {ks_name}.{table} {self._using_timeout(truncate_timeout)}',
                                    timeout=truncate_timeout)
 
     def _modify_table_property(self, name, val, filter_out_table_with_counter=False, keyspace_table=None):
