@@ -1841,6 +1841,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False, round_robin=True)
             cs_thread.verify_results()
 
+    @scylla_versions(("5.2.rc0", None), ("2023.1.rc0", None))
+    def _truncate_cmd_timeout_suffix(self, truncate_timeout):  # pylint: disable=no-self-use
+        # NOTE: 'self' is used by the 'scylla_versions' decorator
+        return f' USING TIMEOUT {int(truncate_timeout)}s'
+
+    @scylla_versions((None, "5.1"), (None, "2022.2"))
+    def _truncate_cmd_timeout_suffix(self, truncate_timeout):  # pylint: disable=no-self-use
+        # NOTE: 'self' is used by the 'scylla_versions' decorator
+        return ''
+
     def disrupt_truncate(self):
         keyspace_truncate = 'ks_truncate'
         table = 'standard1'
@@ -1851,8 +1861,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.run_nodetool("flush")
         # do the actual truncation
         truncate_timeout = 600
-        self.target_node.run_cqlsh(cmd=f'TRUNCATE {keyspace_truncate}.{table} USING TIMEOUT {int(truncate_timeout)}s',
-                                   timeout=truncate_timeout)
+        truncate_cmd_timeout_suffix = self._truncate_cmd_timeout_suffix(truncate_timeout)
+        self.target_node.run_cqlsh(
+            cmd=f'TRUNCATE {keyspace_truncate}.{table}{truncate_cmd_timeout_suffix}',
+            timeout=truncate_timeout)
 
     def disrupt_truncate_large_partition(self):
         """
@@ -1874,8 +1886,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.run_nodetool("flush")
         # do the actual truncation
         truncate_timeout = 600
-        self.target_node.run_cqlsh(cmd=f'TRUNCATE {ks_name}.{table} USING TIMEOUT {int(truncate_timeout)}s',
-                                   timeout=truncate_timeout)
+        truncate_cmd_timeout_suffix = self._truncate_cmd_timeout_suffix(truncate_timeout)
+        self.target_node.run_cqlsh(
+            cmd=f'TRUNCATE {ks_name}.{table}{truncate_cmd_timeout_suffix}',
+            timeout=truncate_timeout)
 
     def _modify_table_property(self, name, val, filter_out_table_with_counter=False, keyspace_table=None):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
