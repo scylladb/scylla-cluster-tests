@@ -229,6 +229,7 @@ class TestSisyphusMonkeyNemesisFilter:
             "disrupt_modify_table",
             "disrupt_toggle_table_gc_mode",
             "disrupt_create_index",
+            "disrupt_add_remove_mv",
         ]
 
     @pytest.fixture(autouse=True)
