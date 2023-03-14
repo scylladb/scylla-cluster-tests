@@ -22,6 +22,10 @@
   - disruptive = False
   - schema_changes = True
   - free_tier_set = True
+- disrupt_add_remove_mv:
+  - disruptive = True
+  - schema_changes = True
+  - free_tier_set = True
 - disrupt_decommission_streaming_err:
   - disruptive = True
   - topology_changes = True
