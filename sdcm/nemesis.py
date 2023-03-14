@@ -3201,7 +3201,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _install_iptables(self) -> None:
         if self.target_node.distro.is_ubuntu:  # iptables is missing in a minimized Ubuntu installation
-            self.target_node.remoter.sudo("apt install iptables")
+            self.target_node.install_package("iptables")
 
     @staticmethod
     def _iptables_randomly_get_random_matching_rule():
