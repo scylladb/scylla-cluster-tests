@@ -99,8 +99,10 @@ from sdcm.utils.k8s import (
 )
 from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperiment, DiskError
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
-from sdcm.utils.nemesis_utils.indexes import get_table_with_biggest_partitions_count, get_random_column_name, create_index, \
-    wait_for_index_to_be_built, verify_query_by_index_works, drop_index
+from sdcm.utils.nemesis_utils.indexes import get_table_with_biggest_partitions_count, get_random_column_name, \
+    create_index, \
+    wait_for_index_to_be_built, verify_query_by_index_works, drop_index, drop_materialized_view, \
+    wait_for_view_to_be_built, get_partition_key_name
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
@@ -4038,6 +4040,44 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             finally:
                 drop_index(session, ks, index_name)
 
+    def disrupt_add_remove_mv(self):
+        """
+        Create a Materialized view on an existing table while a node is down.
+        Take node up and run a repair.
+        Verify the MV can be used in a query.
+        Finally, drop the MV.
+        """
+        node1, node2 = self.cluster.nodes[:2]
+        self.log.info("Stopping Scylla on node1")
+        ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=node2, filter_empty_tables=True, filter_out_mv=True)
+        if not ks_cfs:
+            raise UnsupportedNemesis(
+                'Non-system keyspace and table are not found. nemesis can\'t be run')
+        ks_name, base_table_name = random.choice(ks_cfs).split('.')
+        view_name = f'{base_table_name}_view'
+        node1.stop_scylla()
+        with self.cluster.cql_connection_patient(node2) as session:
+            partition_key_name = get_partition_key_name(session=session, ks=ks_name, cf=base_table_name)
+            column = f'"{get_random_column_name(session=session, ks=ks_name, cf=base_table_name)}"'
+            InfoEvent(message=f'Create a materialized-view for table {ks_name}.{base_table_name}').publish()
+            try:
+                self.tester.create_materialized_view(ks_name, base_table_name, view_name, [column],
+                                                     [partition_key_name], session,
+                                                     mv_columns=[column, partition_key_name])
+            except Exception as error:  # pylint: disable=broad-except
+                self.log.warning('Failed creating a materialized view: %s', error)
+                return
+            try:
+                wait_for_view_to_be_built(self.target_node, ks_name, view_name, timeout=1200)
+                self.log.info("Starting Scylla on node1")
+                node1.start_scylla()
+                node1.run_nodetool(sub_cmd="repair -pr")
+                # TODO: run a select from MV
+                sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
+                                              min_duration=300, max_duration=2400)
+            finally:
+                drop_materialized_view(session, ks_name, view_name)
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
     """
@@ -5412,3 +5452,13 @@ class CreateIndexNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_create_index()
+
+
+class AddRemoveMvNemesis(Nemesis):
+
+    disruptive = True
+    schema_changes = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_add_remove_mv()
