@@ -357,9 +357,10 @@ class SlaPerUserTest(LongevityTest):
 
         read_users = []
         for share in shares:
-            read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share).create(),
+            read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share,
+                                            superuser=True).create(),
                                'role': Role(session=session, name='role%d' % share, password='role%d' % share,
-                                            login=True).create(),
+                                            login=True, superuser=True).create(),
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
                                                              shares=share).create()})
 
@@ -432,9 +433,10 @@ class SlaPerUserTest(LongevityTest):
 
         # Define Service Levels/Roles/Users
         for share in shares:
-            read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share).create(),
+            read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share,
+                                            superuser=True).create(),
                                'role': Role(session=session, name='role%d' % share, password='role%d' % share,
-                                            login=True).create(),
+                                            login=True, superuser=True).create(),
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
                                                              shares=share).create()})
 
@@ -499,9 +501,10 @@ class SlaPerUserTest(LongevityTest):
 
         # Define Service Levels/Roles/Users
         for share in shares:
-            read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share).create(),
+            read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share,
+                                            superuser=True).create(),
                                'role': Role(session=session, name='role%d' % share,
-                                            password='role%d' % share, login=True).create(),
+                                            password='role%d' % share, login=True, superuser=True).create(),
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
                                                              shares=share).create()})
 
@@ -569,9 +572,10 @@ class SlaPerUserTest(LongevityTest):
         shares = [190, 950]
         read_users = []
         for share in shares:
-            read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share).create(),
+            read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share,
+                                            superuser=True).create(),
                                'role': Role(session=session, name='role%d' % share, password='role%d' % share,
-                                            login=True).create(),
+                                            login=True, superuser=True).create(),
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
                                                              shares=share).create()})
 
@@ -638,9 +642,10 @@ class SlaPerUserTest(LongevityTest):
         shares = [190, 950]
         read_users = []
         for share in shares:
-            read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share).create(),
+            read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share,
+                                            superuser=True).create(),
                                'role': Role(session=session, name='role%d' % share, password='role%d' % share,
-                                            login=True).create(),
+                                            login=True, superuser=True).create(),
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
                                                              shares=share).create()})
 
@@ -750,8 +755,9 @@ class SlaPerUserTest(LongevityTest):
 
         # Define Service Levels/Roles/Users
         interactive_role = Role(session=session, name="interactive",
-                                password="interactive", login=True, verbose=True).create()
-        batch_role = Role(session=session, name="batch", password="batch", login=True, verbose=True).create()
+                                password="interactive", login=True, verbose=True, superuser=True).create()
+        batch_role = Role(session=session, name="batch", password="batch", login=True, verbose=True,
+                          superuser=True).create()
         interactive_sla = ServiceLevel(session=session, name="interactive", shares=None,
                                        workload_type="interactive").create()
         batch_sla = ServiceLevel(session=session, name="batch", shares=None,
