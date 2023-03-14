@@ -195,37 +195,24 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
                 self.log.info(f'running truncate on {keyspace_name}.{table_name}')
                 self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {keyspace_name}.{table_name}')
         if restore_data_with_task:
-            self.restore_data_with_task(mgr_cluster=mgr_cluster, backup_task=backup_task, timeout=timeout)
+            self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
+                                          timeout=timeout, restore_data=True)
         else:
             self.restore_backup_from_backup_task(mgr_cluster=mgr_cluster, backup_task=backup_task,
                                                  keyspace_and_table_list=per_keyspace_tables_dict)
 
-    def restore_schema_with_task(self, mgr_cluster, backup_task, timeout, location_list=None):
-        snapshot_tag = backup_task.get_snapshot_tag()
-        self.restore_schema_with_task_from_snapshot_tag(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
-                                                        timeout=timeout, location_list=location_list)
-
-    def restore_schema_with_task_from_snapshot_tag(self, mgr_cluster, snapshot_tag, timeout, location_list=None):
+    def restore_backup_with_task(self, mgr_cluster, snapshot_tag, timeout, restore_schema=False, restore_data=False,
+                                 location_list=None):
         location_list = location_list if location_list else self.locations
-        restore_task = mgr_cluster.create_restore_task(restore_schema=True, location_list=location_list,
-                                                       snapshot_tag=snapshot_tag)
+        restore_task = mgr_cluster.create_restore_task(restore_schema=restore_schema, restore_data=restore_data,
+                                                       location_list=location_list, snapshot_tag=snapshot_tag)
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
-        assert restore_task.status == TaskStatus.DONE, f"Schema restoration of {snapshot_tag} has failed!"
-        self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
-
-    def restore_data_with_task(self, mgr_cluster, backup_task, timeout, location_list=None):
-        snapshot_tag = backup_task.get_snapshot_tag()
-        self.restore_data_with_task_from_snapshot_tag(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
-                                                      timeout=timeout, location_list=location_list)
-
-    def restore_data_with_task_from_snapshot_tag(self, mgr_cluster, snapshot_tag, timeout, location_list=None):
-        location_list = location_list if location_list else self.locations
-        restore_task = mgr_cluster.create_restore_task(restore_data=True, location_list=location_list,
-                                                       snapshot_tag=snapshot_tag)
-        restore_task.wait_and_get_final_status(step=30, timeout=timeout)
-        assert restore_task.status == TaskStatus.DONE, f"Data restoration of {snapshot_tag} has failed!"
-        for node in self.db_cluster.nodes:
-            node.run_nodetool("repair")  # After data restoration, you should repair every node
+        assert restore_task.status == TaskStatus.DONE, f"Restoration of {snapshot_tag} has failed!"
+        if restore_schema:
+            self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
+        if restore_data:
+            for node in self.db_cluster.nodes:
+                node.run_nodetool("repair")  # After data restoration, you should repair every node
 
     def run_verification_read_stress(self):
         stress_queue = []
@@ -481,7 +468,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         self.db_cluster.nodes[0].run_cqlsh('TRUNCATE keyspace1.standard1')
-        self.restore_data_with_task(mgr_cluster=mgr_cluster, backup_task=backup_task, timeout=110000)
+        self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
+                                      timeout=110000, restore_data=True)
         self.run_verification_read_stress()
 
     @staticmethod
@@ -504,15 +492,12 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         read_stress_list = []
         for _, snapshot_info in persistent_manager_snapshots_dict["aws"]["snapshots"].items():
             self.log.info("Restoring the keyspace %s", snapshot_info["keyspace_name"])
-            self.restore_schema_with_task_from_snapshot_tag(mgr_cluster=mgr_cluster,
-                                                            snapshot_tag=snapshot_info["snapshot_tag"],
-                                                            timeout=180,
-                                                            # Schema restore is not correlated with the data size
-                                                            location_list=location_list)
-            self.restore_data_with_task_from_snapshot_tag(mgr_cluster=mgr_cluster,
-                                                          snapshot_tag=snapshot_info["snapshot_tag"],
-                                                          timeout=snapshot_info["expected_timeout"],
-                                                          location_list=location_list)
+            # Schema restore is not correlated with the data size
+            self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_info["snapshot_tag"],
+                                          timeout=180, restore_schema=True, location_list=location_list)
+            self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_info["snapshot_tag"],
+                                          timeout=snapshot_info["expected_timeout"], restore_data=True,
+                                          location_list=location_list)
             stress_command = snapshot_info["confirmation_stress_command"]
             read_stress_list.append(stress_command)
         for stress in read_stress_list:
