@@ -186,6 +186,14 @@ class NodeStayInClusterAfterDecommission(Exception):
     """ raise after decommission finished but node stay in cluster"""
 
 
+class NodeCleanedAfterDecommissionAborted(Exception):
+    """ raise after decommission aborted and node cleaned from group0(Raft)"""
+
+
+class Group0MembersNotConsistenWithTokenRingMembers(Exception):
+    """ raise if set of group0 members differs from Tokein Ring members after removing Ghost members"""
+
+
 def prepend_user_prefix(user_prefix: str, base_name: str):
     return '%s-%s' % (user_prefix, base_name)
 
@@ -3031,6 +3039,69 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return
         self.remoter.run(f"sudo kill -s SIGHUP {pid}")
 
+    def get_token_ring_members(self) -> list[dict[str, str]]:
+        token_ring_members = []
+        self.log.debug("Get token ring members")
+        token_ring_members_cmd = 'curl -s -X GET --header "Content-Type: application/json" --header ' \
+            '"Accept: application/json" "http://127.0.0.1:10000/storage_service/host_id"'
+        result = self.remoter.run(token_ring_members_cmd, ignore_status=True, verbose=True)
+        if not result.stdout:
+            return []
+        try:
+            result_json = json.loads(result.stdout)
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.warning("Failed to parse response %s", exc)
+            return []
+
+        for member in result_json:
+            token_ring_members.append({"host_id": member.get("value"), "ip_address": member.get("key")})
+        self.log.debug("Token ring members %s", token_ring_members)
+        return token_ring_members
+
+    def get_group0_members(self) -> list[dict[str, str]]:
+        self.log.debug("Get group0 members")
+        group0_members = []
+        result = self.run_cqlsh("select value from system.scylla_local where key = 'raft_group0_id'",
+                                split=True, num_retry_on_failure=3)
+        # run_cqlsh return splitted ouput if data was found:
+        # [
+        #   ""
+        #   "value"
+        #   "----------"
+        #   "<value> "
+        #   ""
+        #   "Rows ..."
+        # ]
+        #
+        # 4th element is needed only
+        if not result or len(result) <= 3:
+            return []
+        raft_group0_id = result[3].strip()
+
+        result = self.run_cqlsh(
+            f"select server_id, can_vote from system.raft_state where group_id = {raft_group0_id} and disposition = 'CURRENT'",
+            split=True)
+        # run_cqlsh return splitted ouput if data was found:
+        # [
+        #   ""
+        #   "value | server_id"
+        #   "----------"
+        #   "<value1> | <server_id1"
+        #   "<value2> | <server_id2"
+        #   ""
+        #   "Rows ..."
+        # ]
+        #
+        # Start parsing from 4th line
+
+        for line in result[3:]:
+            member = line.split("|")
+            if not member or len(member) != 2:
+                break
+            group0_members.append({"host_id": member[0].strip(), "voter": member[1].strip()})
+        self.log.debug("Group0 members: %s", group0_members)
+        return group0_members
+
 
 class FlakyRetryPolicy(RetryPolicy):
 
@@ -4538,7 +4609,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         for node in self.nodes:
             node.run_nodetool('repair')
 
-    def verify_decommission(self, node):
+    def verify_decommission(self, node: BaseNode):
         def get_node_ip_list(verification_node):
             try:
                 ip_node_list = []
@@ -4559,10 +4630,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             verification_node = random.choice(undecommission_nodes)
             node_ip_list = get_node_ip_list(verification_node)
 
+        missing_host_ids = self.diff_token_ring_group0_members(verification_node)
+
         decommission_done = list(node.follow_system_log(
             patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
 
-        if target_node_ip in node_ip_list and not decommission_done:
+        if target_node_ip in node_ip_list and not missing_host_ids and not decommission_done:
+            # Decommission was interrupted during streaming data.
             cluster_status = self.get_nodetool_status(verification_node)
             error_msg = ('Node that was decommissioned %s still in the cluster. '
                          'Cluster status info: %s' % (node,
@@ -4572,6 +4646,20 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             LOGGER.error(error_msg)
             raise NodeStayInClusterAfterDecommission(error_msg)
 
+        self.log.debug("Difference between token ring and group0 is %s", missing_host_ids)
+        if missing_host_ids:
+            # decommission was aborted after all data was streamed and node removed from
+            # token ring but left in group0. we can safely removenode and terminate it
+            # terminate node to be sure that it want return back to cluster,
+            # because node was just rebooted and could cause unpredictable cluster state.
+            LOGGER.debug("Terminate node %s", node.name)
+            self.terminate_node(node)  # pylint: disable=no-member
+            self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
+            self.log.debug("Node %s was terminated", node.name)
+            self.clean_group0_garbage(verification_node, raise_exception=True)
+            LOGGER.error("Decommission for node %s was aborted", node)
+            raise NodeCleanedAfterDecommissionAborted(f"Decommission for node {node} was aborted")
+
         LOGGER.info('Decommission %s PASS', node)
         self.terminate_node(node)  # pylint: disable=no-member
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
@@ -4580,6 +4668,35 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
             node.run_nodetool("decommission", timeout=timeout)
         self.verify_decommission(node)
+
+    def clean_group0_garbage(self, node: BaseNode, raise_exception: bool = False):
+        InfoEvent("Clean host ids from group0").publish()
+        host_ids = self.diff_token_ring_group0_members(node)
+        if not host_ids:
+            self.log.debug("Node could return to token ring but not yet bootstrap")
+            # Add host id which cann't vote after decommission was aborted because it is already terminated")
+            host_ids = [member['host_id'] for member in node.get_group0_members() if not member['voter']]
+        while host_ids:
+            removing_host_id = host_ids.pop(0)
+            ingore_dead_nodes_opt = f"--ignore-dead-nodes {','.join(host_ids)}" if host_ids else ""
+
+            result = node.run_nodetool(f"removenode {removing_host_id} {ingore_dead_nodes_opt}",
+                                       ignore_status=True,
+                                       verbose=True,
+                                       retry=3)
+            if not result.ok:
+                self.log.error("Removenode with host_id %s failed with %s",
+                               removing_host_id, result.stdout + result.stderr)
+            if not host_ids:
+                break
+
+        if missing_host_ids := self.diff_token_ring_group0_members(node):
+            token_ring_members = node.get_token_ring_members()
+            group0_members = node.get_group0_members()
+            error_msg = f"Token ring {token_ring_members} and group0 {group0_members} are differs on: {missing_host_ids}"
+            self.log.error(error_msg)
+            if raise_exception:
+                raise Group0MembersNotConsistenWithTokenRingMembers(error_msg)
 
     @property
     def scylla_manager_node(self) -> BaseNode:
@@ -4643,6 +4760,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         self.log.info("DB nodes CPU modes: %s", results)
         return results
+
+    def diff_token_ring_group0_members(self, node: BaseNode) -> list[str]:
+        self.log.debug("Compare token ring and group0 members")
+        group0_members = node.get_group0_members()
+        group0_members_ids = {member["host_id"] for member in group0_members}
+        token_ring_members = node.get_token_ring_members()
+        token_ring_member_ids = {member["host_id"] for member in token_ring_members}
+        self.log.debug("Token rings members ids: %s", token_ring_member_ids)
+        self.log.debug("Group0 members ids: %s", group0_members_ids)
+        return list(group0_members_ids - token_ring_member_ids)
 
 
 class BaseLoaderSet():

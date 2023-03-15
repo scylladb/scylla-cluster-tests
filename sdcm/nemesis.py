@@ -54,6 +54,8 @@ from sdcm.cluster import (
     NodeSetupFailed,
     NodeSetupTimeout,
     NodeStayInClusterAfterDecommission, HOUR_IN_SEC,
+    NodeCleanedAfterDecommissionAborted,
+    Group0MembersNotConsistenWithTokenRingMembers,
 )
 from sdcm.cluster_k8s import (
     KubernetesOps,
@@ -3112,13 +3114,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # dead_nodes_list, so the health validator terminate the job
             if exit_status != 0:
                 self.log.error(f"nodetool removenode command exited with status {exit_status}")
-                self.log.debug(
-                    f"Remove failed node {node_to_remove} from dead node list {self.cluster.dead_nodes_list}")
-                node = next((n for n in self.cluster.dead_nodes_list if n.ip_address == node_to_remove.ip_address), None)
-                if node:
-                    self.cluster.dead_nodes_list.remove(node)
+                # check difference between group0 and token ring,
+                garbage_host_ids = self.cluster.diff_token_ring_group0_members(verification_node)
+                self.log.debug("Difference between token ring and group0 is %s", garbage_host_ids)
+                if garbage_host_ids:
+                    # if difference found, clean garbage and continue
+                    self.cluster.clean_group0_garbage(verification_node)
                 else:
-                    self.log.debug(f"Node {node.name} with ip {node.ip_address} was not found in dead_nodes_list")
+                    # group0 and token ring are consistent. Removenode failed by meanigfull reason.
+                    # remove node from dead_nodes list to raise critical issue by HealthValidator
+                    self.log.debug(
+                        f"Remove failed node {node_to_remove} from dead node list {self.cluster.dead_nodes_list}")
+                    node = next((n for n in self.cluster.dead_nodes_list if n.ip_address ==
+                                node_to_remove.ip_address), None)
+                    if node:
+                        self.cluster.dead_nodes_list.remove(node)
+                    else:
+                        self.log.debug(f"Node {node.name} with ip {node.ip_address} was not found in dead_nodes_list")
 
             # verify node is removed by nodetool status
             removed_node_status = self.cluster.get_node_status_dictionary(
@@ -3399,6 +3411,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             except NodeStayInClusterAfterDecommission:
                 self.log.debug('The decommission of target node is successfully interrupted')
                 return None
+            except NodeCleanedAfterDecommissionAborted:
+                self.log.debug("Decommission aborted, Group0 was cleaned successfully. New node will be added")
+            except Group0MembersNotConsistenWithTokenRingMembers as exc:
+                self.log.error("Cluster state could be not predictable due to ghost members in raft group0: %s", exc)
+                raise
+
             except Exception as exc:  # pylint: disable=broad-except
                 self.log.error('Unexpected exception raised in checking decommission status: %s', exc)
 
@@ -3415,7 +3433,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             retry=0,
         )
 
-        log_follower = self.target_node.follow_system_log(patterns=["DECOMMISSIONING: unbootstrap starts"])
+        terminate_patterns = ["DECOMMISSIONING: unbootstrap starts",
+                              "DECOMMISSIONING: unbootstrap done",
+                              "becoming a group 0 non-voter",
+                              "became a group 0 non-voter",
+                              "leaving token ring",
+                              "left token ring",
+                              "Finished token ring movement"]
+        self.use_nemesis_seed()
+        terminate_pattern = random.choice(terminate_patterns)
+        self.log.debug("Reboot node after log message: '%s'", terminate_pattern)
+
+        log_follower = self.target_node.follow_system_log(patterns=[terminate_pattern])
 
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
