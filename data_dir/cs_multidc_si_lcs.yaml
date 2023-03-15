@@ -16,8 +16,8 @@ table_definition: |
       c3 blob,
       c4 blob,
       PRIMARY KEY (key)
-      WITH compaction = {'class': 'LeveledCompactionStrategy'}
-  );
+    )  WITH compaction = {'class': 'LeveledCompactionStrategy'};
+
 extra_definitions:
   - CREATE INDEX IF NOT EXISTS sec_ind_c2 ON keyspace1.standard2 (c2)
   - CREATE INDEX IF NOT EXISTS sec_ind_c3 ON keyspace1.standard2 (c3)
