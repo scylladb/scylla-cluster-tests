@@ -19,6 +19,7 @@ n_loaders: 3
 n_monitor_nodes: 1
 
 instance_type_db: 'i3en.xlarge'
+instance_type_runner: 'r5.xlarge'
 
 nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
 nemesis_selector: [["topology_changes"],["schema_changes"]]
