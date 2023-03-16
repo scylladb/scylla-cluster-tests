@@ -1,0 +1,16 @@
+test_duration: 120
+
+use_ldap: true
+ldap_server_type: 'openldap'
+use_ldap_authorization: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+instance_type_db: 'i3.large'
+user_prefix: 'test-add-remove-ldap-permissions'
+stress_cmd: "cassandra-stress write no-warmup cl=QUORUM duration=10m -schema 'replication(factor=3)' -mode cql3 native -rate threads=2 -pop seq=1..1002003 -log interval=5"

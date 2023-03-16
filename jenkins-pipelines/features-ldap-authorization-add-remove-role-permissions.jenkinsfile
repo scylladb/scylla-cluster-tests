@@ -1,0 +1,12 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'test_add_remove_ldap_role_permission.AddRemoveLdapRolePermissionTest.test_add_remove_ldap_role_permission',
+    test_config: "test-cases/features/test_add_remove_ldap_role_permission.yaml"
+
+)
