@@ -430,9 +430,6 @@ class ParallelObject:
         if ignore_exceptions:
             return results
 
-        timed_out = [result for result in results if isinstance(result.exc, FuturesTimeoutError)]
-        if timed_out:
-            raise FuturesTimeoutError("when running on: %s" % [r.obj for r in results])
         runs_that_finished_with_exception = [res for res in results if res.exc]
         if runs_that_finished_with_exception:
             raise ParallelObjectException(results=results)

@@ -78,9 +78,10 @@ class ParallelObjectTester(unittest.TestCase):
     def test_raised_exception_by_timeout(self):
         test_timeout = min(self.rand_timeouts)
         start_time = time.time()
-        with self.assertRaises(concurrent.futures.TimeoutError):
+        with self.assertRaises(ParallelObjectException) as exp:
             parallel_object = ParallelObject(self.rand_timeouts, timeout=test_timeout)
             parallel_object.run(dummy_func_return_tuple)
+        assert any(isinstance(e.exc, concurrent.futures.TimeoutError) for e in exp.exception.results)
         run_time = int(time.time() - start_time)
         self.assertAlmostEqual(first=test_timeout, second=run_time, delta=1)
 
