@@ -3415,7 +3415,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         self._destroy_data_and_restart_scylla()
         trigger = partial(
-            self.target_node.run_nodetool, sub_cmd="repair", warning_event_on_exception=(Exception,), retry=0,
+            self.target_node.run_nodetool, sub_cmd="repair", warning_event_on_exception=(Exception,), retry=0, timeout=600,
         )
         log_follower = self.target_node.follow_system_log(patterns=["Repair 1 out of"])
 
@@ -3438,11 +3438,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         self._destroy_data_and_restart_scylla()
 
+        timeout = 1800 if self._is_it_on_kubernetes() else 400
         trigger = partial(
-            self.target_node.run_nodetool, sub_cmd="rebuild", warning_event_on_exception=(Exception,), retry=0,
+            self.target_node.run_nodetool, sub_cmd="rebuild", warning_event_on_exception=(Exception,), retry=0, timeout=timeout//2
         )
         log_follower = self.target_node.follow_system_log(patterns=["rebuild from dc:"])
-        timeout = 1800 if self._is_it_on_kubernetes() else 400
 
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
