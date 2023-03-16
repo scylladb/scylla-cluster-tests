@@ -95,8 +95,18 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
                     # The dest version is a minor release of latest enterprise release
                     ent_base_version.append(version)
                 else:
-                    # Choose the last two releases as upgrade base
-                    ent_base_version += ent_release_list[idx-1:][:2]
+                    lts_version = re.compile(r'\d{4}\.1')  # lts = long term support
+                    sts_version = re.compile(r'\d{4}\.2')  # sts = short term support
+
+                    if sts_version.search(version) or ComparableScyllaVersion(version) < '2023.1':
+                        # we need to support last LTS version
+                        ent_base_version += ent_release_list[idx - 1:][:2]
+                    elif lts_version.search(version):
+                        # we need to support last version + last LTS version
+                        idx = 2 if idx == 1 else idx
+                        ent_base_version += ent_release_list[idx - 2:][:2]
+                    else:
+                        LOGGER.warning('enterprise version format not the default - %s', version)
             elif version == 'enterprise' or ComparableScyllaVersion(version) > ent_release_list[0]:
                 ent_base_version.append(ent_release_list[-1])
             elif re.match(r'\d+.\d+', version) and ComparableScyllaVersion(version) >= ent_release_list[0]:
@@ -133,8 +143,7 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
 
     def filter_rc_only_version(self, base_version_list: list) -> list:
         LOGGER.info("Filtering rc versions from base version list...")
-        if base_version_list and len(base_version_list) > 1:
-            # if there's only release candidates in this repo, skip this version
+        if base_version_list and self.scylla_version not in ('enterprise', 'master'):
             filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if 'rc' not in v]
             if not filter_rc:
                 base_version_list = base_version_list[:-1]
