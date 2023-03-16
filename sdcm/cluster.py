@@ -593,8 +593,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
             echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
             source $HOME/.bash_profile
-            curl -Lo sb.zip https://github.com/scylladb/scylla-bench/archive/refs/{sb_version}.zip
-            unzip sb.zip
+            curl -Lo sb.tar.gz https://github.com/scylladb/scylla-bench/archive/refs/{sb_version}.tar.gz
+            tar -C . -xvzf sb.tar.gz
             cd ./scylla-bench-*
             GO111MODULE=on go install .
         """))
