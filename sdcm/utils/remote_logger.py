@@ -18,14 +18,27 @@ from abc import abstractmethod, ABCMeta
 from datetime import datetime
 from functools import cached_property
 from threading import Thread, Event as ThreadEvent
+from typing import Generator
 from multiprocessing import Process, Event
 from textwrap import dedent
 
+import kubernetes as k8s
+from dateutil.parser import isoparse
+from urllib3.exceptions import (
+    MaxRetryError,
+    ProtocolError,
+    ReadTimeoutError,
+)
+
 from sdcm import wait
 from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.sct_events import Severity
 from sdcm.sct_events.decorators import raise_event_on_failure
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.decorators import retrying
+
+logging.getLogger('parso.python.diff').setLevel(logging.WARNING)
 
 
 class LoggerBase(metaclass=ABCMeta):
@@ -302,6 +315,160 @@ class KubectlGeneralLogger(CommandNodeLoggerBase):
         return f"{cmd} >> {self._target_log_file} 2>&1"  # pylint: disable=protected-access
 
 
+class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attributes
+    READ_REQUEST_TIMEOUT = 1200  # 20 minutes
+    RECONNECT_DELAY = 30
+    CHUNK_SIZE = 64
+
+    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", target_log_file: str):
+        """
+        Reads logs from a k8s pod using k8s client API and forwards it to a file.
+
+        It is self-healing and will re-open the stream if it is closed and continue reading logs from place it stopped.
+        """
+        super().__init__(target_log_file)
+        self._pod_name = pod.name
+        self._parent_cluster = pod.parent_cluster
+        self._last_log_timestamp = ""
+        self._last_read_timestamp = None
+        self._k8s_core_v1_api = KubernetesOps.core_v1_api(self._parent_cluster.k8s_cluster.get_api_client())
+        self._termination_event = ThreadEvent()
+        self._file_object = open(self._target_log_file, "a", encoding="utf-8")  # pylint: disable=consider-using-with
+        self._log_reader = None
+        self._stream = None
+        self._thread = Thread(target=self._log_loop)
+
+    def start(self):
+        self._log.info("Starting logger for pod %s", self._pod_name)
+        self._thread.start()
+
+    def stop(self, timeout=None):
+        self._log.info("Stopping logger for pod %s", self._pod_name)
+        self._termination_event.set()
+        if self._stream:
+            self._stream.close()
+        self._thread.join(timeout)
+        self._file_object.close()
+
+    def _wait_for_pod_not_pending_or_unknown(self, namespace, pod_name, timeout=60):
+        self._log.debug("Waiting for pod %s to be in not pending/unknown state", self._pod_name)
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                pod = self._k8s_core_v1_api.read_namespaced_pod(name=pod_name, namespace=namespace)
+                pod_status = pod.status.phase
+                if pod_status.lower() not in ("pending", "unknown"):
+                    self._log.debug("Pod %s is in '%s' state", self._pod_name, pod_status)
+                    return True
+            except k8s.client.exceptions.ApiException as exc:
+                self._log.debug("Error occurred while fetching pod %s status: %s", self._pod_name, exc)
+            time.sleep(5)
+        self._log.debug("Timeout waiting for pod: '{pod_name}' is still in '{pod_status}' state.")
+        return False
+
+    @retrying(n=20, sleep_time=3, allowed_exceptions=(ConnectionError, ))
+    def _open_stream(self) -> None:
+        if self._stream:
+            self._stream.close()
+            self._stream = None
+        if self._termination_event.is_set():
+            return
+        self._wait_for_pod_not_pending_or_unknown(self._parent_cluster.namespace, self._pod_name)
+        self._log.debug("Opening log reader stream for pod %s", self._pod_name)
+        since_seconds = round(time.time() - self._last_read_timestamp + 1) if self._last_read_timestamp else None
+        try:
+            self._stream = self._k8s_core_v1_api.read_namespaced_pod_log(
+                name=self._pod_name,
+                namespace=self._parent_cluster.namespace,
+                container=self._parent_cluster.container,
+                timestamps=True,
+                follow=True,
+                since_seconds=since_seconds,
+                # NOTE: need to set a timeout, because GKE's 'pod_log' API tends to hang
+                _request_timeout=self.READ_REQUEST_TIMEOUT,
+                _preload_content=False
+            )
+
+            self._log_reader = self._read_log_lines(self._stream)
+            self._reread_logs_till_last_logged_timestamp()
+        except (k8s.client.rest.ApiException, StopIteration) as exc:
+            self._log.warning(
+                "'_open_stream()': failed to open pod log stream:\n%s", exc)
+            # NOTE: following is workaround for the error 401 which may happen due to
+            #       some config data corruption during the forced socket connection failure
+            self._k8s_core_v1_api = KubernetesOps.core_v1_api(self._parent_cluster.k8s_cluster.get_api_client())
+            raise ConnectionError(str(exc)) from None
+
+    def _reread_logs_till_last_logged_timestamp(self):
+        """Upon reconnection, reread the log till last logged timestamp is found to avoid duplication"""
+        if not self._last_log_timestamp:
+            return
+        log_timestamp, line = next(self._log_reader)
+        if isoparse(log_timestamp) >= isoparse(self._last_log_timestamp):
+            self._log.debug("Current timestap is greater than last logged timestamp. No need to reread logs")
+            self._write_log_line(log_timestamp, line)
+            return
+        self._log.debug("Rereading logs till %s", self._last_log_timestamp)
+        while True:
+            for _ in range(1000):
+                log_timestamp = next(self._log_reader)[0]
+                if log_timestamp == self._last_log_timestamp:
+                    return
+            # each 1000 lines, check if we didn't pass the date, this should not happen and possibly we can drop this code after some time
+            if isoparse(log_timestamp) >= isoparse(self._last_log_timestamp):
+                TestFrameworkEvent(source="K8sClientLogger",
+                                   message=f"Failed to find last log timestamp in the log stream for {self._pod_name} after reconnection."
+                                           f" Possibly some log lines are missed or duplicated. Last reread timestamp: {log_timestamp}",
+                                   severity=Severity.ERROR).publish()
+                return
+
+    def _write_log_line(self, timestamp, line):
+        self._last_read_timestamp = time.time()
+        self._last_log_timestamp = timestamp
+        self._file_object.write(line)
+
+    def _read_log_lines(self, stream) -> Generator[tuple[str, str], None, None]:
+        """Reads log lines. Returns a tuple of timestamp and log line"""
+        buffer = ''
+        while not self._termination_event.is_set():
+            chunk = stream.read(self.CHUNK_SIZE).decode("utf-8")
+            if not chunk:
+                break
+            buffer += chunk
+            while '\n' in buffer:
+                line, buffer = buffer.split('\n', 1)
+                try:
+                    timestamp, line = line.split(maxsplit=1)
+                    yield timestamp, line + "\n"
+                except ValueError:
+                    # sometimes returns empty line without timestamp, ignore it
+                    pass
+                except StopIteration:
+                    return
+
+    def _log_loop(self):
+        self._open_stream()
+        while not self._termination_event.is_set():
+            try:
+                timestamp, line = next(self._log_reader)
+                self._write_log_line(timestamp, line)
+            except StopIteration:
+                # pod probably has been deleted, waiting for a while and trying to reconnect
+                self._log.debug("Stream from pod %s logs has been closed, "
+                                "waiting for %s seconds and trying to reconnect",
+                                self._pod_name, self.RECONNECT_DELAY)
+                time.sleep(self.RECONNECT_DELAY)
+                self._open_stream()
+            except (MaxRetryError, ProtocolError, ReadTimeoutError, TimeoutError, AttributeError) as exc:
+                self._log.debug(
+                    "'_read_log_line()': failed to read from pod %s log stream:%s", self._pod_name, exc)
+                self._open_stream()
+            except Exception as exc:  # pylint: disable=broad-except
+                self._log.error(
+                    "'_read_log_line()': failed to read from pod %s log stream:%s", self._pod_name, exc)
+                self._open_stream()
+
+
 class KubectlClusterEventsLogger(CommandClusterLoggerBase):
     restart_delay = 30
 
@@ -404,6 +571,8 @@ def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint:
         return DockerGeneralLogger(node, target_log_file)
     if logs_transport == 'kubectl':
         return KubectlGeneralLogger(node, target_log_file)
+    if logs_transport == 'k8s_client':
+        return K8sClientLogger(node, target_log_file)
     if logs_transport == 'ssh':
         if node.init_system == 'systemd':
             if 'db-node' in node.name and node.is_nonroot_install and node.remoter.run(
