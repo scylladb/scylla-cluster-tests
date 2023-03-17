@@ -119,7 +119,8 @@ from sdcm.utils.gce_utils import get_gce_services
 from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
-from sdcm.utils.csrangehistogram import CSRangeHistogramBuilder, CSRangeHistogramSummary, CSHistogramTagTypes
+from sdcm.utils.csrangehistogram import CSHistogramTagTypes, CSWorkloadTypes, make_cs_range_histogram_summary, \
+    make_cs_range_histogram_summary_by_interval
 
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
@@ -3579,10 +3580,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return {}
         self.log.info("Build HDR histogram with start time: %s, end time: %s; for operation: %s",
                       start_time, end_time, stress_operation)
-        range_histogram = CSRangeHistogramBuilder.build_histogram_from_dir(base_path=self.loaders.logdir,
-                                                                           start_time=start_time,
-                                                                           end_time=end_time)
-        histogram_data = CSRangeHistogramSummary(range_histogram, tag_type).get_summary_for_operation(stress_operation)
+        histogram_data = make_cs_range_histogram_summary(
+            workload=CSWorkloadTypes(stress_operation),
+            base_path=self.loaders.logdir, start_time=start_time, end_time=end_time,
+            tag_type=tag_type)
         return histogram_data[0] if histogram_data else {}
 
     def get_cs_range_histogram_by_interval(
@@ -3593,8 +3594,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return []
         self.log.info("Build HDR histogram with start time: %s, end time: %s, time interval: %s for operation: %s",
                       start_time, end_time, time_interval, stress_operation)
-        range_histograms = CSRangeHistogramBuilder.build_histograms_range_with_interval(path=self.loaders.logdir,
-                                                                                        start_time=start_time,
-                                                                                        end_time=end_time,
-                                                                                        interval=time_interval)
-        return CSRangeHistogramSummary(range_histograms, tag_type).get_summary_for_operation(stress_operation)
+        return make_cs_range_histogram_summary_by_interval(
+            workload=CSWorkloadTypes(stress_operation),
+            path=self.loaders.logdir, start_time=start_time, end_time=end_time,
+            interval=time_interval, tag_type=tag_type)

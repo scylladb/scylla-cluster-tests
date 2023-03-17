@@ -20,7 +20,7 @@ from typing import NamedTuple
 
 from sdcm.prometheus import NemesisMetrics
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
-from sdcm.utils.csrangehistogram import CSRangeHistogramBuilder, CSHistogramTags, CSRangeHistogramSummary
+from sdcm.utils.csrangehistogram import CSHistogramTags, CSWorkloadTypes, make_cs_range_histogram_summary_from_log_line
 
 LOGGER = logging.getLogger(__name__)
 
@@ -196,9 +196,8 @@ class CassandraStressHDRExporter(StressExporter):
                                   self.cpu_idx, name, self.keyspace).set(value)
 
     def split_line(self, line: str) -> list:
-        histogram = CSRangeHistogramBuilder.build_from_log_line(log_line=line,
-                                                                hst_log_start_time=self.log_start_time)
-        summary_data = CSRangeHistogramSummary(histogram).get_summary_for_operation(self.stress_operation)[0]
+        summary_data = make_cs_range_histogram_summary_from_log_line(
+            workload=CSWorkloadTypes(self.stress_operation), log_line=line, hst_log_start_time=self.log_start_time)
         self.hdr_tag, percentiles = summary_data.popitem()
         return list(percentiles.values())
 
