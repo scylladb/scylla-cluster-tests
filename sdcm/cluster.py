@@ -1094,6 +1094,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self._db_log_reader_thread.stop()
         if self._alert_manager and self._alert_manager.is_alive():
             self._alert_manager.stop()
+        if self._journal_thread:
+            self._journal_thread.stop(timeout=5)
 
     @log_run_info
     def wait_till_tasks_threads_are_stopped(self, timeout: float = 120):
