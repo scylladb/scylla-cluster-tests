@@ -368,6 +368,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             if self.params.get('ip_ssh_connections') == 'ipv6' and not node.distro.is_amazon2 and \
                     not node.distro.is_ubuntu:
                 node.config_ipv6_as_persistent()
+            if self.params.get('fake_scylla_rack') > 0:
+                rack = self._node_index % self.params.get('fake_scylla_rack')
+                cmd = f"sudo sh -c 'mkdir /etc/scylla/; echo \"\ndc=1\nrack=RACK{rack}\nprefer_local=true\ndc_suffix=scylla_node\n\" >> /etc/scylla/cassandra-rackdc.properties'"
+                node.remoter.run(cmd)
         self._node_index += len(added_nodes)
         self.nodes += added_nodes
         self.write_node_public_ip_file()

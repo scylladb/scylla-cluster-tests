@@ -1,5 +1,5 @@
 test_duration: 1200
-prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=1073741824 -schema 'replication(factor=1) compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native  -rate threads=1000 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..1073741824"]
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=1073741824 -schema 'replication(factor=3) compaction(strategy=IncrementalCompactionStrategy) replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_east=2,us-west-2scylla_node_west=1)' -mode cql3 native  -rate threads=1000 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..1073741824"]
 
 stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=800m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=1 fixed=1/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..1073741824"
 
@@ -17,6 +17,9 @@ instance_type_db: 'i4i.4xlarge'
 nemesis_class_name: 'NemesisSequence'
 nemesis_interval: 60
 nemesis_sequence_sleep_between_ops: 10
+
+endpoint_snitch: 'org.apache.cassandra.locator.SimpleSnitch'
+fake_scylla_rack: 3
 
 user_prefix: 'elasticity'
 ami_id_db_scylla_desc: 'VERSION_DESC'

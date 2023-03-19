@@ -857,6 +857,9 @@ class SCTConfiguration(dict):
         dict(name="k8s_scylla_rack", env="SCT_K8S_SCYLLA_RACK", type=str,
              help=""),
 
+        dict(name="fake_scylla_rack", env="SCT_FAKE_SCYLLA_RACK", type=int,
+             help="if anything will be set in here, we will configure the cluster to use SimpleSnitch and fake racks "),
+
         dict(name="k8s_scylla_cluster_name", env="SCT_K8S_SCYLLA_CLUSTER_NAME", type=str,
              help=""),
         dict(name="k8s_n_scylla_pods_per_cluster", env="K8S_N_SCYLLA_PODS_PER_CLUSTER",
