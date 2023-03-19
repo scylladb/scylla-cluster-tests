@@ -3618,29 +3618,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message='FinishEvent - Steady State sleep has been finished').publish()
 
     def disrupt_run_unique_sequence(self):
+        self.steady_state_latency(60)
         InfoEvent(message='Starting grow cluster #1').publish()
         self._grow_cluster()
         InfoEvent(message='Finished grow cluster #1').publish()
         time.sleep(600)
-        InfoEvent(message='Starting grow cluster #2').publish()
-        self._grow_cluster()
-        InfoEvent(message='Finished grow cluster #2').publish()
-        time.sleep(600)
-        InfoEvent(message='Starting grow cluster #3').publish()
-        self._grow_cluster()
-        InfoEvent(message='Finished grow cluster #3').publish()
-        time.sleep(600)
         InfoEvent(message='Starting shrink cluster #1').publish()
         self._shrink_cluster()
         InfoEvent(message='Finished shrink cluster #1').publish()
-        time.sleep(600)
-        InfoEvent(message='Starting shrink cluster #2').publish()
-        self._shrink_cluster()
-        InfoEvent(message='Finished shrink cluster #2').publish()
-        time.sleep(600)
-        InfoEvent(message='Starting shrink cluster #3').publish()
-        self._shrink_cluster()
-        InfoEvent(message='Finished shrink cluster #3').publish()
 
     def _k8s_disrupt_memory_stress(self):
         """Uses chaos-mesh experiment based on https://github.com/chaos-mesh/memStress"""

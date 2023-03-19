@@ -1,12 +1,14 @@
 test_duration: 1200
-prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=1073741824 -schema 'replication(factor=3) compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native  -rate threads=1000 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..1073741824"]
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=1073741824 -schema 'replication(factor=1) compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native  -rate threads=1000 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..1073741824"]
 
 stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=800m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=1 fixed=1/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..1073741824"
 
-n_db_nodes: 3
+n_db_nodes: 1
 nemesis_add_node_cnt: 3
 n_loaders: 1
 n_monitor_nodes: 1
+
+system_auth_rf: 1
 
 instance_type_loader: 'c5.2xlarge'
 instance_type_monitor: 't3.large'
