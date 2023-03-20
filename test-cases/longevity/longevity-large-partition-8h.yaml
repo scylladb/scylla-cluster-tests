@@ -41,6 +41,7 @@ n_monitor_nodes: 1
 round_robin: true
 
 instance_type_db: 'i3.2xlarge'
+azure_instance_type_db: 'Standard_L8s_v3'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '015'
