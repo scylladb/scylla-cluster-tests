@@ -12,7 +12,7 @@ n_monitor_nodes: 1
 num_loaders_step: 0
 stress_threads_start_num: 50
 num_threads_step: 25
-stress_step_duration: '15m'
+stress_step_duration: '30'
 max_deviation: 5 # 5% relative difference
 n_stress_process: 1
 
