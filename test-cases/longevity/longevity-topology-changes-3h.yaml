@@ -1,17 +1,19 @@
 test_duration: 260
 
-prepare_write_cmd:  ["cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+pre_create_keyspace: "CREATE KEYSPACE scylla_bench WITH replication = {'class': 'NetworkTopologyStrategy', 'eu-westscylla_node_west': '3'};"
+prepare_write_cmd:  ["cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
                      "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=50 -clustering-row-count=10000 -clustering-row-size=uniform:1024..8192 -concurrency=25 -connection-count=25 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s"
                     ]
 
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-             "cassandra-stress read  cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
 
              "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=50 -clustering-row-count=10000 -clustering-row-size=uniform:1024..8192 -concurrency=25 -connection-count=25 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=180m",
              "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=50 -clustering-row-count=10000 -clustering-row-size=uniform:1024..8192 -concurrency=25 -connection-count=25 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=180m",
              ]
 
-n_db_nodes: 4
+availability_zone: 'a,b,c'
+n_db_nodes: 3
 n_loaders: 2
 n_monitor_nodes: 1
 
@@ -22,8 +24,9 @@ nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: ['topology_changes']
 nemesis_interval: 5
 nemesis_filter_seeds: false
+nemesis_add_node_cnt: 3
 
-seeds_num: 2
+seeds_num: 3
 
 
 user_prefix: 'longevity-topologychanges-asymetric-shards-3h'
