@@ -299,11 +299,13 @@ def get_ec2_network_configuration(regions: list[str], availability_zones: list[s
     ec2_security_group_ids = []
     ec2_subnet_ids = []
     for region in regions:
+        region_subnets = []
+        ec2_subnet_ids.append(region_subnets)
         aws_region = AwsRegion(region_name=region)
         for availability_zone in availability_zones:
             sct_subnet = aws_region.sct_subnet(region_az=region + availability_zone)
             assert sct_subnet, f"No SCT subnet configured for {region}! Run 'hydra prepare-aws-region'"
-            ec2_subnet_ids.append(sct_subnet.subnet_id)
+            region_subnets.append(sct_subnet.subnet_id)
 
             security_groups = []
             sct_sg = aws_region.sct_security_group

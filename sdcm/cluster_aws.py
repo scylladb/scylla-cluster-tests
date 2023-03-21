@@ -139,7 +139,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if instance_profile:
             params['IamInstanceProfile'] = {'Name': instance_profile}
         ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx])
-        subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
+        subnet_info = ec2.get_subnet_info(interfaces[0]["SubnetId"])
         region_name_with_az = subnet_info['AvailabilityZone']
         LOGGER.debug('Sending an On-Demand request with params: %s', params)
         LOGGER.debug('Using EC2 service with DC-index: %s, (associated with region: %s)',
@@ -157,7 +157,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         # pylint: disable=too-many-locals
         ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
                                           spot_max_price_percentage=self.params.get('spot_max_price'))
-        subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
+        subnet_info = ec2.get_subnet_info(interfaces[0]["SubnetId"])
         spot_params = dict(instance_type=self._ec2_instance_type,
                            image_id=self._ec2_ami_id[dc_idx],
                            region_name=subnet_info['AvailabilityZone'],
@@ -190,7 +190,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
         return instances
 
-    def _create_instances(self, count, ec2_user_data='', dc_idx=0):
+    def _create_instances(self, count, ec2_user_data='', dc_idx=0, az_idx=0):
         if not count:  # EC2 API fails if we request zero instances.
             return []
 
@@ -198,15 +198,15 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             ec2_user_data = self._ec2_user_data
         self.log.debug("Passing user_data '%s' to create_instances", ec2_user_data)
         interfaces = [{'DeviceIndex': 0,
-                       'SubnetId': self._ec2_subnet_id[dc_idx],
+                       'SubnetId': self._ec2_subnet_id[dc_idx][az_idx],
                        'AssociatePublicIpAddress': True,
                        'Groups': self._ec2_security_group_ids[dc_idx]}]
         if self.extra_network_interface:
             interfaces = [{'DeviceIndex': 0,
-                           'SubnetId': self._ec2_subnet_id[dc_idx],
+                           'SubnetId': self._ec2_subnet_id[dc_idx][az_idx],
                            'Groups': self._ec2_security_group_ids[dc_idx]},
                           {'DeviceIndex': 1,
-                           'SubnetId': self._ec2_subnet_id[dc_idx],
+                           'SubnetId': self._ec2_subnet_id[dc_idx][az_idx],
                            'Groups': self._ec2_security_group_ids[dc_idx]}]
 
         self.log.info(f"Create {self.instance_provision} instance(s)")
@@ -339,9 +339,9 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 ec2_user_data += ' --bootstrap false '
         return ec2_user_data
 
-    def _create_or_find_instances(self, count, ec2_user_data, dc_idx):
+    def _create_or_find_instances(self, count, ec2_user_data, dc_idx, az_idx=0):
         if self.nodes:
-            return self._create_instances(count, ec2_user_data, dc_idx)
+            return self._create_instances(count, ec2_user_data, dc_idx, az_idx)
         if self.test_config.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx)
             assert len(instances) == count, f"Found {len(instances)} instances, while expect {count}"
@@ -351,16 +351,16 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             self.log.info('Found provisioned instances = %s', instances)
             return instances
         self.log.info('Found no provisioned instances. Provision them.')
-        return self._create_instances(count, ec2_user_data, dc_idx)
+        return self._create_instances(count, ec2_user_data, dc_idx, az_idx)
 
     # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
         ec2_user_data = self.prepare_user_data(enable_auto_bootstrap=enable_auto_bootstrap)
 
-        instances = self._create_or_find_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx)
+        instances = self._create_or_find_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx, az_idx=rack)
         added_nodes = [self._create_node(instance, self._ec2_ami_username,
                                          self.node_prefix, node_index,
-                                         self.logdir, dc_idx=dc_idx)
+                                         self.logdir, dc_idx=dc_idx, rack=rack)
                        for node_index, instance in
                        enumerate(instances, start=self._node_index + 1)]
         for node in added_nodes:
@@ -375,11 +375,11 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         return added_nodes
 
     def _create_node(self, instance, ami_username, node_prefix, node_index,  # pylint: disable=too-many-arguments
-                     base_logdir, dc_idx):
+                     base_logdir, dc_idx, rack):
         node = AWSNode(ec2_instance=instance, ec2_service=self._ec2_services[dc_idx],
                        credentials=self._credentials[dc_idx], parent_cluster=self, ami_username=ami_username,
                        node_prefix=node_prefix, node_index=node_index,
-                       base_logdir=base_logdir, dc_idx=dc_idx)
+                       base_logdir=base_logdir, dc_idx=dc_idx, rack=rack)
         node.init()
         return node
 
@@ -393,7 +393,7 @@ class AWSNode(cluster.BaseNode):
 
     def __init__(self, ec2_instance, ec2_service, credentials, parent_cluster,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, ami_username='root',
-                 base_logdir=None, dc_idx=0):
+                 base_logdir=None, dc_idx=0, rack=0):
         self.node_index = node_index
         self._instance = ec2_instance
         self._ec2_service: EC2ServiceResource = ec2_service
@@ -407,7 +407,7 @@ class AWSNode(cluster.BaseNode):
                          ssh_login_info=ssh_login_info,
                          base_logdir=base_logdir,
                          node_prefix=node_prefix,
-                         dc_idx=dc_idx)
+                         dc_idx=dc_idx, rack=rack)
 
     def init(self):
         LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))

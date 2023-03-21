@@ -3125,12 +3125,16 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         # NOTE: following is needed in case of K8S where we init multiple DB clusters first
         #       and only then we add nodes to it calling code in parallel.
+        # round-robin racks when backend is aws and multiple az's are specified
+        azs = len(self.params.get('availability_zone').split(",")) if self.params.get('cluster_backend') == 'aws' else 1
         if add_nodes:
             if isinstance(n_nodes, list):
                 for dc_idx, num in enumerate(n_nodes):
-                    self.add_nodes(num, dc_idx=dc_idx, enable_auto_bootstrap=self.auto_bootstrap)
+                    for az_index in range(num):
+                        self.add_nodes(1, dc_idx=dc_idx, rack=az_index % azs, enable_auto_bootstrap=self.auto_bootstrap)
             elif isinstance(n_nodes, int):  # legacy type
-                self.add_nodes(n_nodes, enable_auto_bootstrap=self.auto_bootstrap)
+                for az_index in range(n_nodes):
+                    self.add_nodes(1, rack=az_index % azs, enable_auto_bootstrap=self.auto_bootstrap)
             else:
                 raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
             self.run_node_benchmarks()

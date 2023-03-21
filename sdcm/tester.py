@@ -1600,7 +1600,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.k8s_cluster = eks.EksCluster(eks_cluster_version=self.params.get("eks_cluster_version"),
                                           ec2_security_group_ids=ec2_security_group_ids,
-                                          ec2_subnet_ids=ec2_subnet_ids,
+                                          ec2_subnet_ids=ec2_subnet_ids[0],
                                           credentials=self.credentials,
                                           ec2_role_arn=self.params.get("eks_role_arn"),
                                           nodegroup_role_arn=self.params.get("eks_nodegroup_role_arn"),
