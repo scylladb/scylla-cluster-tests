@@ -205,7 +205,7 @@ class ScanOperationThread:
             time.sleep(self.fullscan_params.interval)
         # summary for Jenkins. may not log because nobody wait the thread.
         # Fullscan stats logs with debug level in each loop
-        self.log.info("Fullscan stats:\n%s", self.fullscan_stats.get_stats_pretty_table())
+        self.log.debug("Fullscan stats:\n%s", self.fullscan_stats.get_stats_pretty_table())
 
     def start(self):
         self._thread.start()
@@ -320,7 +320,7 @@ class FullscanOperationBase:
         return self.run_scan_event(cmd=cmd or self.randomly_form_cql_statement(), scan_event=self.scan_event)
 
     def fetch_result_pages(self, result, read_pages):
-        self.log.info('Will fetch up to %s result pages..', read_pages)
+        self.log.debug('Will fetch up to %s result pages..', read_pages)
         pages = 0
         while result.has_more_pages and pages <= read_pages:
             if read_pages > 0:
@@ -515,12 +515,12 @@ class FullPartitionScanOperation(FullscanOperationBase):
             self.normal_query_output.flush()
             file_names = f' {self.normal_query_output.name} {self.reversed_query_output.name}'
             diff_cmd = f"diff -y --suppress-common-lines {file_names}"
-            self.log.info("Comparing scan queries output files by: %s", diff_cmd)
+            self.log.debug("Comparing scan queries output files by: %s", diff_cmd)
             result = LOCAL_CMD_RUNNER.run(cmd=diff_cmd, ignore_status=True)
 
         if not result.stderr:
             if not result.stdout:
-                self.log.info("Compared output of normal and reversed queries is identical!")
+                self.log.debug("Compared output of normal and reversed queries is identical!")
                 result = True
             else:
                 self.log.warning("Normal and reversed queries output differs: \n%s", result.stdout.strip())
@@ -530,7 +530,7 @@ class FullPartitionScanOperation(FullscanOperationBase):
                     result = LOCAL_CMD_RUNNER.run(cmd=cmd, ignore_status=True)
                     if result.stdout:
                         stdout = result.stdout.strip()
-                        self.log.info("%s command output is: \n%s", cmd, stdout)
+                        self.log.debug("%s command output is: \n%s", cmd, stdout)
         else:
             self.log.warning("Comparison of output of normal and reversed queries failed with stderr:\n%s",
                              result.stderr)
@@ -640,8 +640,8 @@ class FullScanAggregatesOperation(FullscanOperationBase):
         self.log.debug("Fullscan aggregation result: %s", output)
 
         if not regex_found:
-            self.log.info("\n".join([str(i) for i in get_query_trace]))
-            self.log.info("Fullscan aggregation result: %s", output)
+            self.log.debug("\n".join([str(i) for i in get_query_trace]))
+            self.log.debug("Fullscan aggregation result: %s", output)
             return "Fullscan failed - 'Dispatching forward_request' message was not found in query trace events", \
                 Severity.WARNING
 
