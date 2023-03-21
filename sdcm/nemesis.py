@@ -3399,8 +3399,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
             delay=0
         )
-
-        ParallelObject(objects=[trigger, watcher], timeout=1200).call_objects()
+        timeout = 1200
+        if self.cluster.params.get('cluster_backend') == 'azure':
+            timeout += 1200  # Azure reboot can take up to 20min to initiate
+        ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
         if new_node := decommission_post_action():
             new_node.run_nodetool("rebuild")
         else:
@@ -3418,7 +3420,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.run_nodetool, sub_cmd="repair", warning_event_on_exception=(Exception,), retry=0, timeout=600,
         )
         log_follower = self.target_node.follow_system_log(patterns=["Repair 1 out of"])
-
+        timeout = 1200
+        if self.cluster.params.get('cluster_backend') == 'azure':
+            timeout += 1200  # Azure reboot can take up to 20min to initiate
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
             log_follower=log_follower,
@@ -3426,7 +3430,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
             delay=1
         )
-        ParallelObject(objects=[trigger, watcher], timeout=1200).call_objects()
+        ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
         self.target_node.run_nodetool("rebuild")
 
     def start_and_interrupt_rebuild_streaming(self):
@@ -3439,6 +3443,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._destroy_data_and_restart_scylla()
 
         timeout = 1800 if self._is_it_on_kubernetes() else 400
+        if self.cluster.params.get('cluster_backend') == 'azure':
+            timeout += 1200  # Azure reboot can take up to 20min to initiate
+
         trigger = partial(
             self.target_node.run_nodetool, sub_cmd="rebuild", warning_event_on_exception=(Exception,), retry=0, timeout=timeout//2
         )
