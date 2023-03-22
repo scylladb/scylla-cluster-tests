@@ -21,6 +21,7 @@ from functools import cached_property
 import re
 import time
 from textwrap import dedent
+from datetime import datetime
 
 import boto3
 
@@ -208,6 +209,8 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
                                                        location_list=location_list, snapshot_tag=snapshot_tag)
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
         assert restore_task.status == TaskStatus.DONE, f"Restoration of {snapshot_tag} has failed!"
+        InfoEvent(message=f'The restore task has ended successfully. '
+                          f'Restore run time: {restore_task.duration}.').publish()
         if restore_schema:
             self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
         if restore_data:
@@ -218,9 +221,13 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
         stress_queue = []
         stress_cmd = self.params.get('stress_read_cmd')
         keyspace_num = self.params.get('keyspace_num')
+        InfoEvent(message='Starting read stress for data verification').publish()
+        stress_start_time = datetime.now()
         self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
         for stress in stress_queue:
             self.verify_stress_thread(cs_thread_pool=stress)
+        stress_run_time = datetime.now() - stress_start_time
+        InfoEvent(message=f'The read stress run was completed. Total run time: {stress_run_time}').publish()
 
     def _generate_load(self, keyspace_name_to_replace=None):
         self.log.info('Starting c-s write workload')
@@ -467,6 +474,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         backup_task_status = backup_task.wait_and_get_final_status(timeout=110000)
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        InfoEvent(message=f'The backup task has ended successfully. Backup run time: {backup_task.duration}').publish()
         self.db_cluster.nodes[0].run_cqlsh('TRUNCATE keyspace1.standard1')
         self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
                                       timeout=110000, restore_data=True)
