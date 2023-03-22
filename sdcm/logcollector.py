@@ -1064,7 +1064,7 @@ class PythonSCTLogCollector(BaseSCTLogCollector):
             return res.stdout.rstrip("\n").split("\n")
 
     def create_archive_and_upload(self) -> list[str]:
-        file_archives = self.archive_to_tarfile(os.path.join(self.local_dir, "sct.log"))
+        file_archives = self.archive_to_tarfile(os.path.join(self.local_dir, "sct.log"), add_test_id_to_archive=True)
         s3_links = []
         for file_archive in file_archives:
             s3_links.append(upload_archive_to_s3(file_archive, f"{self.test_id}/{self.current_run}"))
