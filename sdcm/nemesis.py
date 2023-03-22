@@ -78,6 +78,7 @@ from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors
                                                  ignore_stream_mutation_fragments_errors,
                                                  ignore_ycsb_connection_refused, decorate_with_context,
                                                  ignore_reactor_stall_errors)
+from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent
@@ -4170,8 +4171,13 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
     def data_validation_prints(args):
         try:
             if hasattr(args[0].tester, 'data_validator') and args[0].tester.data_validator:
-                with args[0].cluster.cql_connection_patient(
-                        args[0].cluster.nodes[0], keyspace=args[0].tester.data_validator.keyspace_name) as session:
+                if not (keyspace := args[0].tester.data_validator.keyspace_name):
+                    DataValidatorEvent.DataValidator(severity=Severity.NORMAL,
+                                                     message="Failed fo get keyspace name. Data validator is disabled."
+                                                     ).publish()
+                    return
+
+                with args[0].cluster.cql_connection_patient(args[0].cluster.nodes[0], keyspace=keyspace) as session:
                     args[0].tester.data_validator.validate_range_not_expected_to_change(session, during_nemesis=True)
                     args[0].tester.data_validator.validate_range_expected_to_change(session, during_nemesis=True)
                     args[0].tester.data_validator.validate_deleted_rows(session, during_nemesis=True)
