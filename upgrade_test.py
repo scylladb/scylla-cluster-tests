@@ -257,8 +257,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # pylint: disable=too-many-branches,too-many-statements
 
         InfoEvent(message='Rollbacking a Node').publish()
-        # fixme: auto identify new_introduced_pkgs, remove this parameter
-        new_introduced_pkgs = self.params.get('new_introduced_pkgs')
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout
         # flush all memtables to SSTables
@@ -295,6 +293,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         elif self.upgrade_rollback_mode == 'minor_release':
             node.remoter.run(r'sudo yum downgrade scylla\*%s-\* -y' % self.orig_ver.split('-')[0])
         else:
+            # first check if scylla-cqlsh had version to downgrade to
+            # and if not, we need to remove it before downgrade whole of scylla
+            result = node.remoter.sudo(r"yum downgrade scylla-\*cqlsh -y", ignore_status=True)
+            new_introduced_pkgs = r"scylla-\*cqlsh" if ("Nothing to do" in result.stdout or result.failed) else ""
             if new_introduced_pkgs:
                 node.remoter.run('sudo yum remove %s -y' % new_introduced_pkgs)
             node.remoter.run(r'sudo yum downgrade scylla\* -y')
