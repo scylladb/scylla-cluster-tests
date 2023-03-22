@@ -1,0 +1,34 @@
+test_duration: 4320
+
+# TODO: When https://github.com/scylladb/scylla-manager/issues/3298 will be solved, we will split this scenario into two: One backup only scenario and one scenario that only restores said backup
+
+# Using cl=ALL opposed to cl=ONE so that in the future, when we will use multi node setup, the stress will work all the same.
+prepare_write_cmd: ["cassandra-stress write cl=ALL n=1006632960 -schema 'replication(factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..1006632960",
+                    "cassandra-stress write cl=ALL n=1006632960 -schema 'replication(factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1006632961..2013265920",
+                    "cassandra-stress write cl=ALL n=1006632960 -schema 'replication(factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=2013265921..3019898880",
+                    "cassandra-stress write cl=ALL n=1006632960 -schema 'replication(factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=3019898881..4026531840"]
+
+# Keeping it at cl=ONE because that can help identifying data loss even in a multi node setup.
+stress_read_cmd: ["cassandra-stress read cl=ONE n=1006632960 -schema 'replication(factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..1006632960",
+                  "cassandra-stress read cl=ONE n=1006632960 -schema 'replication(factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1006632961..2013265920",
+                  "cassandra-stress read cl=ONE n=1006632960 -schema 'replication(factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=2013265921..3019898880",
+                  "cassandra-stress read cl=ONE n=1006632960 -schema 'replication(factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=3019898881..4026531840"]
+
+# TODO: Lowering data size to 4TB until https://github.com/scylladb/scylla-manager/issues/3308 and https://github.com/scylladb/scylla-manager/issues/3298 are solved
+
+round_robin: true
+
+instance_type_db: 'i3en.6xlarge'
+instance_type_loader: 'c5.xlarge'
+
+region_name: us-east-1
+n_db_nodes: 1
+n_loaders: 4
+n_monitor_nodes: 1
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"
+
+user_prefix: manager-regression
+space_node_threshold: 6442
