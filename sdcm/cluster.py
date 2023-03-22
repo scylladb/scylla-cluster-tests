@@ -4645,6 +4645,10 @@ class BaseLoaderSet():
                 self.log.info("Swap file for the loader is not configured")
             else:
                 node.create_swap_file(swap_size)
+
+        if node.distro.is_rhel_like:
+            node.install_epel()
+
         # update repo cache and system after system is up
         node.update_repo_cache()
 
