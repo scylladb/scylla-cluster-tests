@@ -203,6 +203,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             result = latency.collect_latency(monitor, start, end, workload, args[0].cluster, all_nodes_list)
             result["screenshots"] = screenshots
             result["duration"] = f"{datetime.timedelta(seconds=int(end - start))}"
+            result["duration_in_sec"] = int(end - start)
             result["hdr"] = args[0].tester.get_cs_range_histogram_by_interval(stress_operation=workload,
                                                                               start_time=start,
                                                                               end_time=end)
