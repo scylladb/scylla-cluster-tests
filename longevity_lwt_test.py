@@ -50,12 +50,12 @@ class LWTLongevityTest(LongevityTest):
         time.sleep(300)
 
         # Data validation can be run when no nemesis, that almost not happens in case of parallel nemesis.
-        # If we even will catch period when no nemesis are running, it may happens that the nemesis will start on the
+        # If we even will catch period when no nemesis are running, it may happen that the nemesis will start in the
         # middle of data validation and fail it
         if self.db_cluster.nemesis_count > 1:
             self.data_validator = MagicMock()
             self.data_validator.keyspace_name = None
-            DataValidatorEvent.DataValidator(severity=Severity.WARNING,
+            DataValidatorEvent.DataValidator(severity=Severity.NORMAL,
                                              message="Test runs with parallel nemesis. Data validator is disabled."
                                              ).publish()
         else:
@@ -63,9 +63,9 @@ class LWTLongevityTest(LongevityTest):
                                                          user_profile_name='c-s_lwt',
                                                          base_table_partition_keys=self.BASE_TABLE_PARTITION_KEYS)
 
-        self.data_validator.copy_immutable_expected_data()
-        self.data_validator.copy_updated_expected_data()
-        self.data_validator.save_count_rows_for_deletion()
+            self.data_validator.copy_immutable_expected_data()
+            self.data_validator.copy_updated_expected_data()
+            self.data_validator.save_count_rows_for_deletion()
 
         # Run nemesis during stress as it was stopped before copy expected data
         if self.params.get('nemesis_during_prepare'):
@@ -87,7 +87,7 @@ class LWTLongevityTest(LongevityTest):
     def validate_data(self):
         node = self.db_cluster.nodes[0]
         if not (keyspace := self.data_validator.keyspace_name):
-            DataValidatorEvent.DataValidator(severity=Severity.WARNING,
+            DataValidatorEvent.DataValidator(severity=Severity.NORMAL,
                                              message="Failed fo get keyspace name. Data validator is disabled."
                                              ).publish()
             return
