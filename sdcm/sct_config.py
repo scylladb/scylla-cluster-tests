@@ -1121,9 +1121,6 @@ class SCTConfiguration(dict):
         dict(name="test_upgrade_from_installed_3_1_0", env="SCT_TEST_UPGRADE_FROM_INSTALLED_3_1_0", type=boolean,
              help="Enable an option for installed 3.1.0 for work around a scylla issue if it's true"),
 
-        dict(name="new_introduced_pkgs", env="SCT_NEW_INTRODUCED_PKGS", type=str,
-             help=""),
-
         dict(name="recover_system_tables", env="SCT_RECOVER_SYSTEM_TABLES", type=boolean,
              help=""),
 
