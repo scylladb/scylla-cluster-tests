@@ -421,6 +421,10 @@ class ScyllaYamlUpdateEvent(InformationalEvent):
         super().__init__(severity=severity)
         self.message = message or f"Updating scylla.yaml contents on node: {node_name}. Diff: {diff}"
 
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": message={0.message}"
+
 
 SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
     ScyllaServerStatusEvent,
