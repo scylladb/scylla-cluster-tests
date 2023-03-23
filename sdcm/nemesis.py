@@ -1054,7 +1054,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 if len(tables) > 20:
                     break
 
-        if not tables and errors:
+        if not tables:
             raise ValueError(
                 f'A non-empty user table is not found. Nemesis can\'t run. Got errors of: {errors}')
 
