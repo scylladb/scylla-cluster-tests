@@ -612,7 +612,7 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):  # pylint: disable=too-m
     with db_cluster.nodes[0].actual_scylla_yaml() as props:
         original_hinted_handoff = dict(props).get(hh_enabled_option_name)
         if not configmap_scylla_yaml_content.get(hh_throttle_option_name):
-            original_hinted_handoff_throttle_in_kb = dict(props).get(hh_throttle_option_name)
+            original_hinted_handoff_throttle_in_kb = dict(props).get(hh_throttle_option_name) or 1024
 
     log.info("configMap's scylla.yaml = %s", configmap_scylla_yaml_content)
 
@@ -664,7 +664,7 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):  # pylint: disable=too-m
     for node in db_cluster.nodes:
         with node.actual_scylla_yaml() as props:
             assert dict(props).get(hh_enabled_option_name) == original_hinted_handoff
-            assert dict(props).get(hh_throttle_option_name) == original_hinted_handoff_throttle_in_kb
+            assert (dict(props).get(hh_throttle_option_name) or 1024) == original_hinted_handoff_throttle_in_kb
 
     for node in db_cluster.nodes:
         db_cluster.wait_for_nodes_up_and_normal(nodes=db_cluster.nodes, verification_node=node)

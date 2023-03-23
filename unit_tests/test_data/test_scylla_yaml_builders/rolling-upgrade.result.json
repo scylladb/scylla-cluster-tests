@@ -22,5 +22,9 @@
   },
   "experimental": true,
   "saslauthd_socket_path": "/run/saslauthd/mux",
-  "prometheus_address": "0.0.0.0"
+  "prometheus_address": "0.0.0.0",
+  "alternator_enforce_authorization": false,
+  "auto_bootstrap": true,
+  "enable_ipv6_dns_lookup": false,
+  "hinted_handoff_enabled": true
 }
