@@ -6,6 +6,9 @@ n_loaders: 56
 k8s_n_loader_pods_per_cluster: 4
 k8s_tenants_num: 14
 
+# NOTE: K8S Scylla nodes have 3.5Tb disk size
+k8s_scylla_disk_gi: 249
+
 prepare_write_cmd: [
     "cassandra-stress write no-warmup cl=ALL n=5000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=2 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
     "cassandra-stress write no-warmup cl=ALL n=5000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=2 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
