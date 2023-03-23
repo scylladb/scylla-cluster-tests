@@ -55,7 +55,10 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         self._vm_provider = VirtualMachineProvider(
             self._resource_group_name, self._region, self._az, self._azure_service)
         for v_m in self._vm_provider.list():
-            self._cache[v_m.name] = self._vm_to_instance(v_m)
+            try:
+                self._cache[v_m.name] = self._vm_to_instance(v_m)
+            except KeyError as exc:
+                LOGGER.warning("Failed to cache %s instance. Probably is pending deletion. Error: %s", v_m.name, exc)
 
     @staticmethod
     def _convert_az_to_zone(availability_zone: str) -> str:
