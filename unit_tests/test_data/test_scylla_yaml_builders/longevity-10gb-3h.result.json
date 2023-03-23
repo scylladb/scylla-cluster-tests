@@ -17,5 +17,8 @@
   "broadcast_rpc_address": "__NODE_IPV6_ADDRESS__",
   "experimental": true,
   "prometheus_address": "__NODE_IPV6_ADDRESS__",
-  "enable_ipv6_dns_lookup": true
+  "enable_ipv6_dns_lookup": true,
+  "alternator_enforce_authorization": false,
+  "auto_bootstrap": true,
+  "hinted_handoff_enabled": true
 }
