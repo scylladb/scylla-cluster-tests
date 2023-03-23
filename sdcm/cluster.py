@@ -3519,7 +3519,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         """
         try:
             result = session.execute(SimpleStatement(f"SELECT * FROM {table_name}", fetch_size=10))
-            return bool(len(result.one())), None
+            return result and bool(len(result.one())), None
 
         except Exception as exc:  # pylint: disable=broad-except
             self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
