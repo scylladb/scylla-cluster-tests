@@ -204,7 +204,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'authorizer': 'CassandraAuthorizer',
                 'enable_ipv6_dns_lookup': False,
                 'endpoint_snitch': 'org.apache.cassandra.locator.GossipingPropertyFileSnitch',
-                'hinted_handoff_enabled': 'enabled',
+                'hinted_handoff_enabled': True,
                 'ldap_attr_role': 'cn', 'ldap_bind_dn': 'SOMEDN', 'ldap_bind_passwd': 'PASSWORD',
                 'ldap_url_template': 'ldap://3.3.3.3:389/dc=scylla-qa,dc=com?cn?sub?(member=CN={USER},dc=scylla-qa,dc=com)',
                 'role_manager': 'com.scylladb.auth.LDAPRoleManager',
