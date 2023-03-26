@@ -221,6 +221,12 @@ def ignore_stream_mutation_fragments_errors():
             regex=r".*storage_proxy \- exception during mutation write.*gate_closed_exception",
             extra_time_to_expiration=30
         ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*storage_service \- .*Operation failed",
+            extra_time_to_expiration=30
+        ))
         yield
 
 
