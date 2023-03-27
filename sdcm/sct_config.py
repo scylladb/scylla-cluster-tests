@@ -1287,7 +1287,10 @@ class SCTConfiguration(dict):
              help="Number of of raid level: 0 - RAID0, 5 - RAID5"),
 
         dict(name="bare_loaders", env="SCT_BARE_LOADERS", type=boolean,
-             help="Don't install anything but collectd to the loaders during cluster setup")
+             help="Don't install anything but collectd to the loaders during cluster setup"),
+
+        dict(name="enable_argus", env="SCT_ENABLE_ARGUS", type=boolean,
+             help="Control reporting to argus"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
