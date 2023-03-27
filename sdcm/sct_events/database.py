@@ -34,6 +34,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     UNKNOWN_VERB: Type[LogEventProtocol]
     CLIENT_DISCONNECT: Type[LogEventProtocol]
     SEMAPHORE_TIME_OUT: Type[LogEventProtocol]
+    LDAP_CONNECTION_RESET: Type[LogEventProtocol]
     SYSTEM_PAXOS_TIMEOUT: Type[LogEventProtocol]
     SERVICE_LEVEL_CONTROLLER: Type[LogEventProtocol]
     GATE_CLOSED: Type[LogEventProtocol]
@@ -88,6 +89,10 @@ DatabaseLogEvent.add_subevent_type("CLIENT_DISCONNECT", severity=Severity.WARNIN
                                    regex=r"cql_server - exception while processing connection:")
 DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNING,
                                    regex="semaphore_timed_out")
+# The below ldap-connection-reset is dependent on https://github.com/scylladb/scylla-enterprise/issues/2710
+DatabaseLogEvent.add_subevent_type("LDAP_CONNECTION_RESET", severity=Severity.WARNING,
+                                   regex=r"ldap_connection - Seastar read failed: std::system_error \(error system:104, "
+                                         r"recv: Connection reset by peer\)")
 # This scylla WARNING includes "exception" word and reported as ERROR. To prevent it I add the subevent below and locate
 # it before DATABASE_ERROR. Message example:
 # storage_proxy - Failed to apply mutation from 10.0.2.108#8: exceptions::mutation_write_timeout_exception
@@ -148,6 +153,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.UNKNOWN_VERB(),
     DatabaseLogEvent.CLIENT_DISCONNECT(),
     DatabaseLogEvent.SEMAPHORE_TIME_OUT(),
+    DatabaseLogEvent.LDAP_CONNECTION_RESET(),
     DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT(),
     DatabaseLogEvent.SERVICE_LEVEL_CONTROLLER(),
     DatabaseLogEvent.GATE_CLOSED(),
