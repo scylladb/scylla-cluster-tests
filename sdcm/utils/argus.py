@@ -26,7 +26,7 @@ def is_uuid(uuid) -> bool:
     try:
         UUID(uuid)
         return True
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, TypeError):
         return False
 
 
