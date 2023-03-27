@@ -13,13 +13,19 @@
 
 import math
 import time
+from functools import partial
 from textwrap import dedent
 
 from longevity_test import LongevityTest
 from sdcm.cluster import BaseNode
 from sdcm.db_stats import AVAIL_SIZE_METRIC, AVAIL_SIZE_METRIC_OLD, GB_SIZE
-from sdcm.sct_events.system import InfoEvent
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
+from sdcm.utils.common import ParallelObject
 from test_lib.compaction import CompactionStrategy, LOGGER
+
+KEYSPACE_NAME = 'keyspace1'
+TABLE_NAME = 'standard1'
 
 
 class IcsSpaceAmplificationTest(LongevityTest):
@@ -93,8 +99,8 @@ class IcsSpaceAmplificationTest(LongevityTest):
             dict_nodes_used_capacity[node.private_ip_address] = self.prometheus_db.get_used_capacity_gb(node=node)
         return dict_nodes_used_capacity
 
-    def _alter_table_compaction(self, compaction_strategy=CompactionStrategy.INCREMENTAL, table_name='standard1',
-                                keyspace_name='keyspace1',
+    def _alter_table_compaction(self, compaction_strategy=CompactionStrategy.INCREMENTAL, table_name=TABLE_NAME,
+                                keyspace_name=KEYSPACE_NAME,
                                 additional_compaction_params: dict = None):
         """
          Alters table compaction like: ALTER TABLE mykeyspace.mytable WITH
@@ -133,7 +139,14 @@ class IcsSpaceAmplificationTest(LongevityTest):
         """
         (1) writing new data. wait for compactions to finish.
         (2) over-writing existing data.
-        (3) measure space amplification after over-writing with SAG=None,1.5,1.2,None
+        (3) measure space amplification after over-writing with SAG=1.5,1.2,None
+        (3.1) The expected disk-usage for the above values is:
+        prepare: 1.15TB
+        SAG 1.5: 1.8TB
+        SAG 1.2: 1.3TB - 1.6TB
+        No SAG:  2.2TB
+        Example test output:
+        Nodes used capacity before start overwriting data: {'10.4.1.43': 1307.47, '10.4.1.34': 1665.81, '10.4.1.144': 1297.73}
         """
 
         self._set_enforce_min_threshold_true()
@@ -145,24 +158,41 @@ class IcsSpaceAmplificationTest(LongevityTest):
         self.wait_no_compactions_running()
 
         stress_cmd = self.params.get('stress_cmd')
-        sag_testing_values = [None, '1.5', '1.2', '1.5', None]
+        sag_testing_values = ['1.5', '1.2', None]
         column_size = 205
         num_of_columns = 5
         # the below number is 1TB (yaml stress cmd total write) in bytes / 205 (column_size) / 5 (num_of_columns)
         overwrite_ops_num = 1072694271
         total_data_to_overwrite_gb = round(overwrite_ops_num * column_size * num_of_columns / (1024 ** 3), 2)
         min_threshold = '4'
-
+        max_delta_capacity = 1.15  # The max allowed used-capacity deviation delta, after a major compaction
+        capacity_exceed_msg = "Node {} capacity exceeded allowed delta: {} / {}"
+        nodes_original_capacity_with_delta = self._get_nodes_used_capacity()
+        for node in nodes_original_capacity_with_delta:
+            nodes_original_capacity_with_delta[node] = nodes_original_capacity_with_delta[node] * max_delta_capacity
         # (2) over-writing existing data.
         for sag in sag_testing_values:
+            additional_compaction_params = {'min_threshold': min_threshold}
+            if sag:
+                additional_compaction_params.update({'space_amplification_goal': sag})
+            self.log.info('Run a major compaction on nodes and wait for compactions end')
+            triggers = [partial(node.run_nodetool, sub_cmd="compact", args=f"{KEYSPACE_NAME} {TABLE_NAME}", ) for
+                        node in self.db_cluster.nodes]
+            ParallelObject(objects=triggers, timeout=3000).call_objects()
+            self.wait_compactions_are_running()
+            self.wait_no_compactions_running(n=120)
             dict_nodes_capacity_before_overwrite_data = self._get_nodes_used_capacity()
             InfoEvent(
                 message=f"Nodes used capacity before start overwriting data:"
                         f" {dict_nodes_capacity_before_overwrite_data}").publish()
-            additional_compaction_params = {'min_threshold': min_threshold}
-            if sag:
-                additional_compaction_params.update({'space_amplification_goal': sag})
-            # (3) Altering compaction with SAG=None,1.5,1.2,1.5,None
+            for node, capacity in dict_nodes_capacity_before_overwrite_data.items():
+                if capacity > nodes_original_capacity_with_delta[node]:
+                    TestFrameworkEvent(source=self.__class__.__name__,
+                                       message=capacity_exceed_msg.format(node, capacity,
+                                                                          nodes_original_capacity_with_delta[node]),
+                                       severity=Severity.ERROR).publish()
+
+            # (3) Altering compaction with SAG=1.5,1.2,None
             self._alter_table_compaction(additional_compaction_params=additional_compaction_params)
             stress_queue = []
             InfoEvent(message=f"Starting C-S over-write load: {stress_cmd}").publish()
@@ -181,5 +211,10 @@ class IcsSpaceAmplificationTest(LongevityTest):
             self.measure_nodes_space_amplification_after_write(
                 dict_nodes_initial_capacity=dict_nodes_capacity_before_overwrite_data,
                 written_data_size_gb=total_data_to_overwrite_gb, start_time=start_time)
+
+            dict_nodes_capacity_after_overwrite_data = self._get_nodes_used_capacity()
+            InfoEvent(
+                message=f"Nodes used capacity before start overwriting data:"
+                        f" {dict_nodes_capacity_after_overwrite_data}").publish()
 
         InfoEvent(message="Space-amplification-goal testing cycles are done.").publish()

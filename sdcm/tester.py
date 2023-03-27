@@ -3183,21 +3183,29 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
-    def wait_no_compactions_running(self, n=80, sleep_time=60):  # pylint: disable=invalid-name
-        # Wait for up to 80 mins that there are no running compactions
-        @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
-        def is_compactions_done():
-            compaction_query = "sum(scylla_compaction_manager_compactions{})"
-            now = time.time()
-            results = self.prometheus_db.query(query=compaction_query, start=now - 60, end=now)
-            self.log.debug("scylla_compaction_manager_compactions: {results}".format(**locals()))
-            assert results or results == [], "No results from Prometheus"
-            # if all are zeros the result will be False, otherwise there are still compactions
-            if results:
-                assert any((float(v[1]) for v in results[0]["values"])) is False, \
-                    "Waiting until all compactions settle down"
+    @property
+    def is_compaction_running(self):
+        compaction_query = "sum(scylla_compaction_manager_compactions{})"
+        now = time.time()
+        results = self.prometheus_db.query(query=compaction_query, start=now - 60, end=now)
+        self.log.debug("scylla_compaction_manager_compactions: {results}".format(**locals()))
+        assert results or results == [], "No results from Prometheus"
+        # if any result values is not zero - there are running compactions.
+        return any((float(v[1]) for v in results[0]["values"]))
 
-        is_compactions_done()
+    def wait_compactions_are_running(self, n=20, sleep_time=60):  # pylint: disable=invalid-name
+        # Wait until there are running compactions
+        @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
+        def _is_compaction_running():
+            assert self.is_compaction_running, "Waiting for compaction to start"
+        _is_compaction_running()
+
+    def wait_no_compactions_running(self, n=80, sleep_time=60):  # pylint: disable=invalid-name
+        # Wait until there are no running compactions
+        @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
+        def _is_no_compaction_running():
+            assert not self.is_compaction_running, "Waiting until all compactions settle down"
+        _is_no_compaction_running()
 
     def metric_has_data(self, metric_query, n=80, sleep_time=60, ):  # pylint: disable=invalid-name
         """
