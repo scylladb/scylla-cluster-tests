@@ -1453,7 +1453,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             gce_network=self.params.get("gce_network"),
             services=services,
             user_prefix=self.params.get("user_prefix"),
-            gce_instance_type='n1-standard-2',
+            gce_instance_type=self.params.get('k8s_instance_type_auxiliary'),
             n_nodes=self.params.get('k8s_n_auxiliary_nodes'),
             params=self.params,
             gce_datacenter=gce_datacenter,
@@ -1621,7 +1621,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 name=self.k8s_cluster.AUXILIARY_POOL_NAME,
                 # NOTE: It should have at least 5 vCPU to be able to hold all the pods
                 num_nodes=self.params.get('k8s_n_auxiliary_nodes'),
-                instance_type="t3.large",
+                instance_type=self.params.get('k8s_instance_type_auxiliary'),
                 disk_size=40,
                 role_arn=self.k8s_cluster.nodegroup_role_arn,
                 k8s_cluster=self.k8s_cluster),

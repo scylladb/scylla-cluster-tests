@@ -201,6 +201,7 @@
 | **<a href="#user-content-k8s_loader_cluster_name" name="k8s_loader_cluster_name">k8s_loader_cluster_name</a>**  |  | N/A | SCT_K8S_LOADER_CLUSTER_NAME
 | **<a href="#user-content-k8s_n_loader_pods_per_cluster" name="k8s_n_loader_pods_per_cluster">k8s_n_loader_pods_per_cluster</a>**  | Number of loader pods per loader cluster. | N/A | SCT_K8S_N_LOADER_PODS_PER_CLUSTER
 | **<a href="#user-content-k8s_loader_run_type" name="k8s_loader_run_type">k8s_loader_run_type</a>**  | Defines how the loader pods must run. It may be either 'static' (default, run stress command on the constantly existing idle pod having reserved resources, perf-oriented) or 'dynamic' (run stress commad in a separate pod as main thread and get logs in a searate retryable API call not having resource reservations). | dynamic | SCT_K8S_LOADER_RUN_TYPE
+| **<a href="#user-content-k8s_instance_type_auxiliary" name="k8s_instance_type_auxiliary">k8s_instance_type_auxiliary</a>**  | Instance type for the nodes of the K8S auxiliary/default node pool. | N/A | SCT_K8S_INSTANCE_TYPE_AUXILIARY
 | **<a href="#user-content-mini_k8s_version" name="mini_k8s_version">mini_k8s_version</a>**  |  | N/A | SCT_MINI_K8S_VERSION
 | **<a href="#user-content-k8s_cert_manager_version" name="k8s_cert_manager_version">k8s_cert_manager_version</a>**  |  | N/A | SCT_K8S_CERT_MANAGER_VERSION
 | **<a href="#user-content-k8s_minio_storage_size" name="k8s_minio_storage_size">k8s_minio_storage_size</a>**  |  | 10Gi | SCT_K8S_MINIO_STORAGE_SIZE

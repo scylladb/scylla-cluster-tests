@@ -885,6 +885,8 @@ class SCTConfiguration(dict):
                   "existing idle pod having reserved resources, perf-oriented) or "
                   "'dynamic' (run stress commad in a separate pod as main thread and get logs "
                   "in a searate retryable API call not having resource reservations)."),
+        dict(name="k8s_instance_type_auxiliary", env="SCT_K8S_INSTANCE_TYPE_AUXILIARY", type=str,
+             help="Instance type for the nodes of the K8S auxiliary/default node pool."),
 
         dict(name="mini_k8s_version", env="SCT_MINI_K8S_VERSION", type=str,
              help=""),
