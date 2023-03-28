@@ -9,6 +9,7 @@ prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=31250000 -schema 
 stress_cmd_w: "cassandra-stress write no-warmup cl=ALL n=125000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..125000000"
 stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..125000000,62500000,125000000)' "
 stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..125000000,62500000,125000000)' "
+stress_multiplier: 2
 
 n_db_nodes: 3
 n_loaders: 4
