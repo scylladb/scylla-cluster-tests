@@ -15,6 +15,8 @@ n_db_nodes: 4
 k8s_n_scylla_pods_per_cluster: 3
 k8s_n_auxiliary_nodes: 2
 
+k8s_instance_type_auxiliary: 'n1-standard-2'
+
 # '4.3.0' version doesn't work with GKE: https://github.com/scylladb/scylla/issues/8032
 scylla_version: '4.5.3'
 scylla_mgmt_agent_version: '3.0.0'

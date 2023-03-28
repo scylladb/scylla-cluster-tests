@@ -46,6 +46,8 @@ n_db_nodes: 4
 k8s_n_scylla_pods_per_cluster: 3
 k8s_n_auxiliary_nodes: 3
 
+k8s_instance_type_auxiliary: 't3.large'
+
 # TODO: add '--abort-on-seastar-bad-alloc' arg to the 'append_scylla_args' option when
 #       following operator bug gets fixed: https://github.com/scylladb/scylla-operator/issues/991
 #       '--blocked-reactor-notify-ms 100' cannot be set, because it gets set by operator itself
