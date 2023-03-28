@@ -857,9 +857,16 @@ class SCTConfiguration(dict):
 
         dict(name="k8s_scylla_datacenter", env="SCT_K8S_SCYLLA_DATACENTER", type=str,
              help=""),
-
         dict(name="k8s_scylla_rack", env="SCT_K8S_SCYLLA_RACK", type=str,
              help=""),
+        dict(name="k8s_scylla_cpu_limit", env="SCT_K8S_SCYLLA_CPU_LIMIT",
+             type=str, k8s_multitenancy_supported=True,
+             help="The CPU limit that will be set for each Scylla cluster deployed in K8S. "
+                  "If not set, then will be autocalculated. Example: '500m' or '2'"),
+        dict(name="k8s_scylla_memory_limit", env="SCT_K8S_SCYLLA_MEMORY_LIMIT",
+             type=str, k8s_multitenancy_supported=True,
+             help="The memory limit that will be set for each Scylla cluster deployed in K8S. "
+                  "If not set, then will be autocalculated. Example: '16384Mi'"),
 
         dict(name="k8s_scylla_cluster_name", env="SCT_K8S_SCYLLA_CLUSTER_NAME", type=str,
              help=""),

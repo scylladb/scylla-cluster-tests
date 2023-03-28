@@ -831,7 +831,7 @@ def test_nodetool_flush_and_reshard(db_cluster: ScyllaPodCluster):
 
     # Calculate new value for the CPU cores dedicated for Scylla pods
     current_cpus = convert_cpu_value_from_k8s_to_units(
-        db_cluster.k8s_cluster.calculated_cpu_limit)
+        db_cluster.k8s_cluster.scylla_cpu_limit)
     new_cpus = current_cpus + 1 if current_cpus <= 1 else current_cpus - 1
     new_cpus = convert_cpu_units_to_k8s_value(new_cpus)
 
@@ -844,4 +844,4 @@ def test_nodetool_flush_and_reshard(db_cluster: ScyllaPodCluster):
         verify_resharding_on_k8s(db_cluster, new_cpus)
     finally:
         # Return the cpu count back and wait for the resharding begin and finish
-        verify_resharding_on_k8s(db_cluster, db_cluster.k8s_cluster.calculated_cpu_limit)
+        verify_resharding_on_k8s(db_cluster, db_cluster.k8s_cluster.scylla_cpu_limit)

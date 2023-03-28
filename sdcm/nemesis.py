@@ -1348,7 +1348,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         # Calculate new value for the CPU cores dedicated for Scylla pods
         current_cpus = convert_cpu_value_from_k8s_to_units(
-            self.cluster.k8s_cluster.calculated_cpu_limit)
+            self.cluster.k8s_cluster.scylla_cpu_limit)
         if current_cpus <= 1:
             new_cpus = current_cpus + 1
         else:

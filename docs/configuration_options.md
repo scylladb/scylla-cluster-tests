@@ -194,6 +194,8 @@
 | **<a href="#user-content-k8s_functional_test_dataset" name="k8s_functional_test_dataset">k8s_functional_test_dataset</a>**  | Defines whether dataset uses for pre-fill cluster in functional test. Defined in sdcm.utils.sstable.load_inventory. Expected values: BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA | N/A | SCT_K8S_FUNCTIONAL_TEST_DATASET
 | **<a href="#user-content-k8s_scylla_datacenter" name="k8s_scylla_datacenter">k8s_scylla_datacenter</a>**  |  | N/A | SCT_K8S_SCYLLA_DATACENTER
 | **<a href="#user-content-k8s_scylla_rack" name="k8s_scylla_rack">k8s_scylla_rack</a>**  |  | N/A | SCT_K8S_SCYLLA_RACK
+| **<a href="#user-content-k8s_scylla_cpu_limit" name="k8s_scylla_cpu_limit">k8s_scylla_cpu_limit</a>**  | The CPU limit that will be set for each Scylla cluster deployed in K8S. If not set, then will be autocalculated. Example: '500m' or '2' | N/A | SCT_K8S_SCYLLA_CPU_LIMIT
+| **<a href="#user-content-k8s_scylla_memory_limit" name="k8s_scylla_memory_limit">k8s_scylla_memory_limit</a>**  | The memory limit that will be set for each Scylla cluster deployed in K8S. If not set, then will be autocalculated. Example: '16384Mi' | N/A | SCT_K8S_SCYLLA_MEMORY_LIMIT
 | **<a href="#user-content-k8s_scylla_cluster_name" name="k8s_scylla_cluster_name">k8s_scylla_cluster_name</a>**  |  | N/A | SCT_K8S_SCYLLA_CLUSTER_NAME
 | **<a href="#user-content-k8s_n_scylla_pods_per_cluster" name="k8s_n_scylla_pods_per_cluster">k8s_n_scylla_pods_per_cluster</a>**  | Number of loader pods per loader cluster. | 3 | K8S_N_SCYLLA_PODS_PER_CLUSTER
 | **<a href="#user-content-k8s_scylla_disk_gi" name="k8s_scylla_disk_gi">k8s_scylla_disk_gi</a>**  |  | N/A | SCT_K8S_SCYLLA_DISK_GI
