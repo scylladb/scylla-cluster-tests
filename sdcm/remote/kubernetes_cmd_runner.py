@@ -481,8 +481,7 @@ class KubernetesPodWatcher(KubernetesRunner):
                     "'log reader' socket is '%s'.",
                     pod_name, "closed" if self.process.closed else "open")
                 self._stop_pod()
-                raise InterruptedError(
-                    "The '%s' pod execution was interrupted by the 'tearDown'" % pod_name)
+                return
             if self.process.closed:
                 LOGGER.warning(
                     "'stop()' method is called for the '%s' pod, which is running "
