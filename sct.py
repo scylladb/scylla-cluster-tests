@@ -1734,5 +1734,6 @@ cli.add_command(sct_ssh.copy_cmd)
 cli.add_command(sct_ssh.attach_test_sg_cmd)
 cli.add_command(sct_ssh.ssh_cmd)
 
+
 if __name__ == '__main__':
     cli.main(prog_name="hydra")

@@ -299,7 +299,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.configure_remote_logging()
         self.start_task_threads()
         self._init_port_mapping()
-
         self.set_keep_alive()
         if self.node_type == "db" and not self.is_kubernetes() \
                 and self.parent_cluster.params.get("print_kernel_callstack"):
