@@ -33,10 +33,4 @@ space_node_threshold: [64424, 64423]
 
 user_prefix: 'longevity-scylla-operator-3h-multitenant'
 
-# NOTE: enable 'cluster_health_check' back only when SCT becomes smart enough
-#       to detect multiple pod disruptions in multi-tenant setups
-#       using exclusive nemesis disruptions.
-#       See: https://github.com/scylladb/scylla-cluster-tests/issues/5745
-cluster_health_check: false
-
 k8s_enable_tls: true

@@ -4223,110 +4223,113 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
     def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-branches
-        args[0].set_target_node()
         method_name = method.__name__
-        args[0].current_disruption = "".join(p.capitalize() for p in method_name.replace("disrupt_", "").split("_"))
-        args[0].cluster.check_cluster_health()
-        num_nodes_before = len(args[0].cluster.nodes)
-        start_time = time.time()
-        args[0].log.debug('Start disruption at `%s`', datetime.datetime.fromtimestamp(start_time))
-        class_name = args[0].get_class_name()
-        if class_name.find('Chaos') < 0:
-            args[0].metrics_srv.event_start(class_name)
-        result = None
-        status = True
-        # pylint: disable=protected-access
-        args[0]._set_current_disruption(f"{args[0].current_disruption} {args[0].target_node}")
-        args[0].set_current_running_nemesis(node=args[0].target_node)
-        log_info = {
-            'operation': args[0].current_disruption,
-            'start': int(start_time),
-            'end': 0,
-            'duration': 0,
-            'node': str(args[0].target_node),
-            'subtype': 'end',
-        }
-        # TODO: Temporary print. Will be removed later
-        data_validation_prints(args=args)
+        nemesis_run_info_key = f"{id(args[0])}--{method_name}"
+        try:
+            NEMESIS_LOCK.acquire()  # pylint: disable=consider-using-with
+            if not is_exclusive:
+                NEMESIS_RUN_INFO[nemesis_run_info_key] = "Running"
+                NEMESIS_LOCK.release()
+            else:
+                while NEMESIS_RUN_INFO:
+                    # NOTE: exclusive nemesis will wait before the end of all other ones
+                    time.sleep(10)
 
-        with DisruptionEvent(nemesis_name=args[0].get_disrupt_name(),
-                             node=args[0].target_node, publish_event=True) as nemesis_event:
-            nemesis_info = argus_create_nemesis_info(nemesis=args[0], class_name=class_name,
-                                                     method_name=method_name, start_time=start_time)
-            nemesis_run_info_key = f"{id(args[0])}--{method_name}"
-            try:
-                NEMESIS_LOCK.acquire()  # pylint: disable=consider-using-with
-                if not is_exclusive:
-                    NEMESIS_RUN_INFO[nemesis_run_info_key] = "Running"
-                    NEMESIS_LOCK.release()
-                else:
-                    while NEMESIS_RUN_INFO:
-                        # NOTE: exclusive nemesis will wait before the end of all other ones
-                        time.sleep(10)
-                result = method(*args[1:], **kwargs)
-            except (UnsupportedNemesis, MethodVersionNotFound) as exp:
-                skip_reason = str(exp)
-                log_info.update({'subtype': 'skipped', 'skip_reason': skip_reason})
-                nemesis_event.skip(skip_reason=skip_reason)
-                raise
-            except Exception as details:  # pylint: disable=broad-except
-                nemesis_event.add_error([str(details)])
-                nemesis_event.full_traceback = traceback.format_exc()
-                nemesis_event.severity = Severity.ERROR
-                args[0].error_list.append(str(details))
-                args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
-                log_info.update({'error': str(details), 'full_traceback': traceback.format_exc()})
-                status = False
-            finally:
-                if is_exclusive:
-                    # NOTE: sleep the nemesis interval here because the next one is already
-                    #       ready to start right after the lock gets released.
-                    if args[0].tester.params.get('k8s_tenants_num') > 1:
-                        args[0].log.debug(
-                            "Exclusive nemesis: Sleep for '%s' seconds",
-                            args[0].interval)
-                        time.sleep(args[0].interval)
-                    NEMESIS_LOCK.release()
-                else:
-                    NEMESIS_RUN_INFO.pop(nemesis_run_info_key)
+            args[0].set_target_node()
+            args[0].current_disruption = "".join(p.capitalize() for p in method_name.replace("disrupt_", "").split("_"))
+            args[0].cluster.check_cluster_health()
+            num_nodes_before = len(args[0].cluster.nodes)
+            start_time = time.time()
+            args[0].log.debug('Start disruption at `%s`', datetime.datetime.fromtimestamp(start_time))
+            class_name = args[0].get_class_name()
+            if class_name.find('Chaos') < 0:
+                args[0].metrics_srv.event_start(class_name)
+            result = None
+            status = True
+            # pylint: disable=protected-access
+            args[0]._set_current_disruption(f"{args[0].current_disruption} {args[0].target_node}")
+            args[0].set_current_running_nemesis(node=args[0].target_node)
+            log_info = {
+                'operation': args[0].current_disruption,
+                'start': int(start_time),
+                'end': 0,
+                'duration': 0,
+                'node': str(args[0].target_node),
+                'subtype': 'end',
+            }
+            # TODO: Temporary print. Will be removed later
+            data_validation_prints(args=args)
 
-                end_time = time.time()
-                time_elapsed = int(end_time - start_time)
-                log_info.update({
-                    'end': int(end_time),
-                    'duration': time_elapsed,
-                })
-                args[0].duration_list.append(time_elapsed)
-                args[0].operation_log.append(copy.deepcopy(log_info))
-                args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
+            with DisruptionEvent(nemesis_name=args[0].get_disrupt_name(),
+                                 node=args[0].target_node, publish_event=True) as nemesis_event:
+                nemesis_info = argus_create_nemesis_info(nemesis=args[0], class_name=class_name,
+                                                         method_name=method_name, start_time=start_time)
+                try:
+                    result = method(*args[1:], **kwargs)
+                except (UnsupportedNemesis, MethodVersionNotFound) as exp:
+                    skip_reason = str(exp)
+                    log_info.update({'subtype': 'skipped', 'skip_reason': skip_reason})
+                    nemesis_event.skip(skip_reason=skip_reason)
+                    raise
+                except Exception as details:  # pylint: disable=broad-except
+                    nemesis_event.add_error([str(details)])
+                    nemesis_event.full_traceback = traceback.format_exc()
+                    nemesis_event.severity = Severity.ERROR
+                    args[0].error_list.append(str(details))
+                    args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
+                    log_info.update({'error': str(details), 'full_traceback': traceback.format_exc()})
+                    status = False
+                finally:
+                    end_time = time.time()
+                    time_elapsed = int(end_time - start_time)
+                    log_info.update({
+                        'end': int(end_time),
+                        'duration': time_elapsed,
+                    })
+                    args[0].duration_list.append(time_elapsed)
+                    args[0].operation_log.append(copy.deepcopy(log_info))
+                    args[0].log.debug('%s duration -> %s s', args[0].current_disruption, time_elapsed)
 
-                if class_name.find('Chaos') < 0:
-                    args[0].metrics_srv.event_stop(class_name)
-                disrupt = args[0].get_disrupt_name()
-                del log_info['operation']
+                    if class_name.find('Chaos') < 0:
+                        args[0].metrics_srv.event_stop(class_name)
+                    disrupt = args[0].get_disrupt_name()
+                    del log_info['operation']
 
-                try:  # So that the nemesis thread won't stop due to elasticsearch failure
-                    args[0].update_stats(disrupt, status, log_info)
-                except ElasticSearchConnectionTimeout as err:
-                    args[0].log.warning(f"Connection timed out when attempting to update elasticsearch statistics:\n"
-                                        f"{err}")
-                except Exception as err:  # pylint: disable=broad-except
-                    args[0].log.warning(f"Unexpected error when attempting to update elasticsearch statistics:\n"
-                                        f"{err}")
-                args[0].log.info(f"log_info: {log_info}")
-                nemesis_event.duration = time_elapsed
+                    try:  # So that the nemesis thread won't stop due to elasticsearch failure
+                        args[0].update_stats(disrupt, status, log_info)
+                    except ElasticSearchConnectionTimeout as err:
+                        args[0].log.warning(f"Connection timed out when attempting to update elasticsearch statistics:\n"
+                                            f"{err}")
+                    except Exception as err:  # pylint: disable=broad-except
+                        args[0].log.warning(f"Unexpected error when attempting to update elasticsearch statistics:\n"
+                                            f"{err}")
+                    args[0].log.info(f"log_info: {log_info}")
+                    nemesis_event.duration = time_elapsed
 
-                if nemesis_info:
-                    argus_finalize_nemesis_info(nemesis=args[0], method_name=method_name, start_time=int(
-                        start_time), nemesis_event=nemesis_event)
+                    if nemesis_info:
+                        argus_finalize_nemesis_info(nemesis=args[0], method_name=method_name, start_time=int(
+                            start_time), nemesis_event=nemesis_event)
 
-        args[0].cluster.check_cluster_health()
-        num_nodes_after = len(args[0].cluster.nodes)
-        if num_nodes_before != num_nodes_after:
-            args[0].log.error('num nodes before %s and nodes after %s does not match' %
-                              (num_nodes_before, num_nodes_after))
-        # TODO: Temporary print. Will be removed later
-        data_validation_prints(args=args)
+            args[0].cluster.check_cluster_health()
+            num_nodes_after = len(args[0].cluster.nodes)
+            if num_nodes_before != num_nodes_after:
+                args[0].log.error('num nodes before %s and nodes after %s does not match' %
+                                  (num_nodes_before, num_nodes_after))
+            # TODO: Temporary print. Will be removed later
+            data_validation_prints(args=args)
+        finally:
+            if is_exclusive:
+                # NOTE: sleep the nemesis interval here because the next one is already
+                #       ready to start right after the lock gets released.
+                if args[0].tester.params.get('k8s_tenants_num') > 1:
+                    args[0].log.debug(
+                        "Exclusive nemesis: Sleep for '%s' seconds",
+                        args[0].interval)
+                    time.sleep(args[0].interval)
+                NEMESIS_LOCK.release()
+            else:
+                NEMESIS_RUN_INFO.pop(nemesis_run_info_key)
+
         return result
 
     return wrapper
