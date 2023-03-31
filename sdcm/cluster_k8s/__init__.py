@@ -2163,6 +2163,7 @@ class LoaderPodContainer(BasePodContainer):
             namespace=self.parent_cluster.namespace,
             environ=environ,
         )
+        self._add_node_to_argus()
 
     def _init_remoter(self, ssh_login_info):
         pass
