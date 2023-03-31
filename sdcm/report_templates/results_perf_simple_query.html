@@ -1,0 +1,103 @@
+{% extends 'results_base_custom.html' %}
+{% block body %}
+<h3>Test: {{ subject }}</h3>
+<h3>
+    <span>Testrun id:</span>
+    <span class="blue">{{ testrun_id }}</span>
+</h3>
+<h3>
+    <span>Test start time: </span>
+    <span class="blue">{{ test_version.run_date_time }}</span>
+</h3>
+<h3>
+    <span>Version: </span>
+    <span class="blue">{{ test_version.version }} </span>
+</h3>
+<div>
+    <span> Build Date: </span>
+    <span class="blue"> {{ test_version.date }} </span>
+    <span> , Commit Id: </span>
+    <span class="blue"> {{ test_version.commit_id }}</span>
+</div>
+<h2> Test results </h2>
+
+<table id="results_table">
+    <tr>
+        {% for key, result in test_stats.items() %}
+        {% if key=="test_version" %}
+        {% for key, result in test_stats["test_version"].items() %}
+        <th>{{ key }}</th>
+        {% endfor %}
+        {% else %}
+        <th>{{ key }}</th>
+        {% endif %}
+        {% endfor %}
+
+    </tr>
+    <tr>
+        {% for key, result in test_stats.items() %}
+        {% if key=="test_version" %}
+        {% for key, result in result.items() %}
+        <td>{{ result }}</td>
+        {% endfor %}
+        {% else %}
+        <td>{{ result }}</td>
+        {% endif %}
+        {% endfor %}
+</table>
+<h3> Median absolute deviation percentage:
+    {% if is_deviation_within_limits %}
+    {{ deviation_diff }}%
+    {% else %}
+    <span class="red fbold">{{ deviation_diff }}%</span>
+    {% endif %}
+</h3>
+
+{% for table in [[last_results_table, collect_last_results_count],[scylla_date_results_table, collect_last_scylla_date_count]] %}
+<h2> {{ table[1] }} </h2>
+<table id="results_table">
+    <tr>
+        {% for key, result in table[0][0].items() %}
+        {% if "_within_limits" not in key and "_diff" not in key %}
+        {% if key=="test_version" %}
+        {% for key, result in table[0][0]["test_version"].items() %}
+        <th>{{ key }}</th>
+        {% endfor %}
+        {% else %}
+        <th>{{ key }}</th>
+        {% endif %}
+        {% endif %}
+        {% endfor %}
+
+    </tr>
+    {% for line in table[0] %}
+    <tr>
+        {% for key, result in line.items() %}
+        {% if key=="test_version" %}
+        {% for key, result in result.items() %}
+        <td>{{ result }}</td>
+        {% endfor %}
+        {% elif "is_"+key+"_within_limits" in line %}
+        {% if line["is_"+key+"_within_limits"] %}
+        {% if line[key+"_diff"] > 0 %}
+        <td>{{ result }}(<span class="green fbold">{{ line[key+"_diff"] }}%</span>)</td>
+        {% else %}
+        <td>{{ result }}({{ line[key+"_diff"] }}%)</td>
+        {% endif %}
+        {% else %}
+        <td>{{ result }}(<span class="red fbold">{{  line[key+"_diff"] }}%</span>)</td>
+        {% endif %}
+        {% elif "_within_limits" not in key and "_diff" not in key %}
+        <td>{{ result }}</td>
+        {% endif %}
+        {% endfor %}
+
+    </tr>
+    {% endfor %}
+</table>
+{% endfor %}
+
+
+{% endblock %}
+{-% block links %-}
+{-% endblock %-}

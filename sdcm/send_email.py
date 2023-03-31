@@ -553,6 +553,23 @@ class SnitchEmailReporter(BaseEmailReporter):
     pass
 
 
+class PerfSimpleQueryReporter(BaseEmailReporter):
+    _fields = (
+        "subject",
+        "testrun_id",
+        "test_stats",
+        "last_results_table",
+        "scylla_date_results_table",
+        "job_url",
+        "test_version",
+        "collect_last_results_count",
+        "collect_last_scylla_date_count",
+        "deviation_diff",
+        "is_deviation_within_limits"
+    )
+    email_template_file = "results_perf_simple_query.html"
+
+
 def build_reporter(name: str,
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
@@ -583,6 +600,8 @@ def build_reporter(name: str,
         return ClusterConfigurationTestsReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Snitch" in name:
         return SnitchEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "PerfSimpleQuery" in name:
+        return PerfSimpleQueryReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 
