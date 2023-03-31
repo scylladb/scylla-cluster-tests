@@ -1943,6 +1943,10 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
 
 class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-method,too-many-public-methods
+    @cached_property
+    def node_type(self) -> str:
+        return 'db'
+
     def restart(self):
         pass
 
@@ -2135,6 +2139,10 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
 class LoaderPodContainer(BasePodContainer):
     TEMPLATE_PATH = LOADER_POD_CONFIG_PATH
 
+    @cached_property
+    def node_type(self) -> str:
+        return 'loader'
+
     def __init__(self, name: str, parent_cluster: PodCluster,
                  node_prefix: str = "node", node_index: int = 1,
                  base_logdir: Optional[str] = None, dc_idx: int = 0, rack=0):
@@ -2177,6 +2185,10 @@ class LoaderPodContainer(BasePodContainer):
 
 class LoaderStsContainer(BasePodContainer):
     TEMPLATE_PATH = LOADER_STS_CONFIG_PATH
+
+    @cached_property
+    def node_type(self) -> str:
+        return 'loader'
 
     def terminate_k8s_host(self):
         raise NotImplementedError()

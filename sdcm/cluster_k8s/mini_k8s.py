@@ -669,10 +669,6 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
     def restart(self):
         self.host_remoter.run(f"docker restart {self.docker_id}")
 
-    @cached_property
-    def node_type(self) -> 'str':
-        return 'db'
-
     def terminate_k8s_node(self):
         raise NotImplementedError("Not supported on local K8S backends")
 

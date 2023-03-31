@@ -308,7 +308,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def _add_node_to_argus(self):
         try:
             client = self.test_config.argus_client()
-            shards = -1 if "db-node" in self.instance_name else self.cpu_cores
+            shards = -1 if "db" in self.node_type else self.cpu_cores
             client.create_resource(
                 name=self.name,
                 resource_type=self.node_type,
@@ -325,7 +325,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def update_shards_in_argus(self):
         try:
             client = self.test_config.argus_client()
-            shards = self.scylla_shards if "db-node" in self.instance_name else self.cpu_cores
+            shards = self.scylla_shards if "db" in self.node_type else self.cpu_cores
             shards = int(shards) if shards else 0
             client.update_shards_for_resource(name=self.name, new_shards=shards)
         except Exception:  # pylint: disable=broad-except
