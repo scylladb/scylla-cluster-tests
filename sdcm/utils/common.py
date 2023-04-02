@@ -1444,7 +1444,11 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, ver
         filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
 
         if version and version != "all":
-            filters += f"(name eq '.*scylla(-enterprise)?-{version.replace('.', '-')}.*')"
+            filters += f"(name eq 'scylla(db)?(-enterprise)?-{version.replace('.', '-')}"
+            if 'rc' not in version:
+                filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
+            else:
+                filters += "')"
 
         compute_engine = get_gce_driver()
         _SCYLLA_GCE_IMAGE_CACHE.extend(sorted(
