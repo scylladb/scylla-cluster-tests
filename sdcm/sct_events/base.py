@@ -232,6 +232,11 @@ class SctEvent:
             if not running_disruption_events:
                 return
 
+            # Issue https://github.com/scylladb/scylla-cluster-tests/issues/5974.
+            # Prevent printing previously running nemeses
+            if len(running_disruption_events) == 1:
+                self.subcontext = []
+
             for nemesis in running_disruption_events:
                 # To prevent multiplying of subcontext for LogEvent
                 if nemesis not in self.subcontext:
