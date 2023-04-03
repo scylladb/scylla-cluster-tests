@@ -139,10 +139,15 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
                     self.log.info("Decrease number of stress processes")
                     stress_num -= stress_num_step
                     if stress_num < 1:
+                        self.log.info("No processes left for run. Stop test")
                         break
                 else:
                     self.log.info("Decrease number of loaders and back to start num of process")
-                    self.loaders.nodes = original_nodes_list[:len(self.loaders.nodes) - num_loaders_step]
+                    new_num_of_nodes = len(self.loaders.nodes) - num_loaders_step
+                    if new_num_of_nodes < 1:
+                        self.log.info("No loaders left for run. Stop test")
+                        break
+                    self.loaders.nodes = original_nodes_list[:new_num_of_nodes]
                     stress_num = origin_stress_num
 
                 threads = (best_result["total_threads"] // (len(self.loaders.nodes) * stress_num)) - threads_step
