@@ -868,7 +868,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             dns_domains = [f"{cluster_name}.sct.scylladb.com"]
             expose_options = {"cql": {"ingress": {
                 "annotations": {
-                    "haproxy.org/scale-server-slots": "1",
                     "haproxy.org/ssl-passthrough": "true",
                 },
                 "disabled": False,
