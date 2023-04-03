@@ -1562,7 +1562,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             map_files_to_node = SstableLoadUtils.distribute_test_files_to_cluster_nodes(nodes=self.cluster.nodes,
                                                                                         test_data=test_data)
             for sstables_info, load_on_node in map_files_to_node:
-                SstableLoadUtils.upload_sstables(load_on_node, test_data=sstables_info)
+                SstableLoadUtils.upload_sstables(load_on_node, test_data=sstables_info, table_name="standard1")
                 system_log_follower = SstableLoadUtils.run_load_and_stream(load_on_node)
                 SstableLoadUtils.validate_load_and_stream_status(load_on_node, system_log_follower)
 
@@ -1598,7 +1598,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # Executing rolling refresh one by one
             shards_num = self.cluster.nodes[0].scylla_shards
             for node in self.cluster.nodes:
-                SstableLoadUtils.upload_sstables(node, test_data=test_data[0],
+                SstableLoadUtils.upload_sstables(node, test_data=test_data[0], table_name="standard1",
                                                  is_cloud_cluster=self.cluster.params.get("db_type") == 'cloud_scylla')
                 system_log_follower = SstableLoadUtils.run_refresh(node, test_data=test_data[0])
                 # NOTE: resharding happens only if we have more than 1 core.
