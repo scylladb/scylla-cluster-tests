@@ -2188,7 +2188,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def create_table(self, name, key_type="varchar",  # pylint: disable=too-many-arguments,too-many-branches
                      speculative_retry=None, read_repair=None, compression=None,
                      gc_grace=None, columns=None, compaction=None,
-                     compact_storage=False, in_memory=False, scylla_encryption_options=None, keyspace_name=None,
+                     compact_storage=False, scylla_encryption_options=None, keyspace_name=None,
                      sstable_size=None):
 
         # pylint: disable=too-many-locals
@@ -2214,7 +2214,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # will default to lz4 compression
             query += ' AND compression = {}'
 
-        if not in_memory and (compaction is not None or sstable_size):
+        if compaction is not None or sstable_size:
             compaction = compaction or self.params.get('compaction_strategy')
             prefix = ' AND compaction={'
             postfix = '}'
@@ -2230,8 +2230,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if speculative_retry is not None:
             query = ('%s AND speculative_retry=\'%s\'' %
                      (query, speculative_retry))
-        if in_memory:
-            query += " AND in_memory=true AND compaction={'class': 'InMemoryCompactionStrategy'}"
         if scylla_encryption_options:
             query = '%s AND scylla_encryption_options=%s' % (query, scylla_encryption_options)
         if compact_storage:
@@ -2922,17 +2920,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.verify_stress_thread(cs_thread_pool=stress)
 
         return write_queue
-
-    @log_run_info
-    def alter_table_to_in_memory(self, key_space_name="keyspace1", table_name="standard1", node=None):
-        if not node:
-            node = self.db_cluster.nodes[0]
-        compaction_strategy = "%s" % {"class": "InMemoryCompactionStrategy"}
-        cql_cmd = "ALTER table {key_space_name}.{table_name} " \
-                  "WITH in_memory=true AND compaction={compaction_strategy}".format(key_space_name=key_space_name,
-                                                                                    table_name=table_name,
-                                                                                    compaction_strategy=compaction_strategy)
-        node.run_cqlsh(cql_cmd)
 
     def alter_table_encryption(self, table, scylla_encryption_options=None, upgradesstables=True):
         """

@@ -40,7 +40,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.info('Running nodetool repair on {}'.format(node.name))
         node.run_nodetool(sub_cmd='repair')
 
-    def _pre_create_schema_large_scale(self, keyspace_num=1, in_memory=False, scylla_encryption_options=None):
+    def _pre_create_schema_large_scale(self, keyspace_num=1, scylla_encryption_options=None):
         """
         For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
         cassandra-stress.
@@ -54,7 +54,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             table_name = "{}.standard1".format(keyspace_name)
             self.create_table(name=table_name, key_type='blob', read_repair=0.0, compact_storage=True,
                               columns={'"C0"': 'blob'},
-                              in_memory=in_memory, scylla_encryption_options=scylla_encryption_options)
+                              scylla_encryption_options=scylla_encryption_options)
 
     def _update_cl_in_stress_cmd(self, str_stress_cmd, consistency_level):
         for param in str_stress_cmd.split():
