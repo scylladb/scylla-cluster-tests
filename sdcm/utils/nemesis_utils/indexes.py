@@ -62,6 +62,11 @@ def verify_query_by_index_works(session, ks, cf, column) -> None:
     # get some value from table to use it in query by index
     result = session.execute(SimpleStatement(f'SELECT "{column}" FROM {ks}.{cf} limit 1', fetch_size=1))
     value = list(result)[0][0]
+    if value is None:
+        # scylla does not support 'is null' in where clause: https://github.com/scylladb/scylladb/issues/8517
+        InfoEvent(message=f"No value for column {column} in {ks}.{cf}, skipping querying created index.",
+                  severity=Severity.NORMAL).publish()
+        return
     match type(value).__name__:
         case "str" | "datetime":
             value = f"'{value}'"
