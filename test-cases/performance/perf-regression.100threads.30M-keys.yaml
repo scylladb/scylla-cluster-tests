@@ -1,20 +1,21 @@
 test_duration: 300
 
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
-prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=30000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
-stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
-stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+prepare_write_cmd: "cassandra-stress write no-warmup cl=ALL n=50331648 -schema 'replication(factor=3)' -mode cql3 native -rate threads=50 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..50331648"
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=120 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..50331648,25165824,1006632)' "
+stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..50331648,25165824,1006632)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..50331648,25165824,1006632)' "
+
 stress_multiplier: 2
 
 # NOTE: following is needed for the K8S case
 k8s_loader_run_type: 'static'
 
 n_db_nodes: 3
-n_loaders: 4
+n_loaders: 6
 n_monitor_nodes: 1
 
-instance_type_db: 'i3.2xlarge'
-instance_type_loader: 'c4.2xlarge'
+instance_type_db: 'i4i.4xlarge'
+instance_type_loader: 'c5.2xlarge'
 instance_type_monitor: 't3.small'
 
 user_prefix: 'perf-regression'
@@ -26,7 +27,7 @@ print_kernel_callstack: true
 store_perf_results: true
 use_mgmt: false
 send_email: true
-email_recipients: ['scylla-perf-results@scylladb.com']
+email_recipients: ['raya.kurlyand@scylladb.com']
 
 custom_es_index: 'performancestatsv2'
 use_hdr_cs_histogram: true
