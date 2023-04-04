@@ -69,6 +69,7 @@ def verify_query_by_index_works(session, ks, cf, column) -> None:
         return
     match type(value).__name__:
         case "str" | "datetime":
+            value = str(value).replace("'", "''")
             value = f"'{value}'"
         case "bytes":
             value = "0x" + value.hex()
