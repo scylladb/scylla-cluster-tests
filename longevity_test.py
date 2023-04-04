@@ -336,7 +336,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             prepare_write_cmd = [prepare_write_cmd]
         return max([self._get_columns_num_of_single_stress(single_stress_cmd=stress) for stress in prepare_write_cmd])
 
-    def _pre_create_schema(self, keyspace_num=1, in_memory=False, scylla_encryption_options=None):
+    def _pre_create_schema(self, keyspace_num=1, scylla_encryption_options=None):
         """
         For cases we are testing many keyspaces and tables, It's a possibility that we will do it better and faster than
         cassandra-stress.
@@ -356,7 +356,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 columns[cs_key] = 'blob'
             self.create_table(name='standard1', keyspace_name=keyspace_name, key_type='blob', read_repair=0.0, compact_storage=True,
                               columns=columns,
-                              in_memory=in_memory, scylla_encryption_options=scylla_encryption_options,
+                              scylla_encryption_options=scylla_encryption_options,
                               compaction=compaction_strategy, sstable_size=sstable_size)
 
     def _pre_create_templated_user_schema(self, batch_start=None, batch_end=None):
