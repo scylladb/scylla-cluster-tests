@@ -20,7 +20,7 @@ from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from sdcm.cluster import BaseNode
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.sct_events.filters import EventsFilter
 from sdcm.sct_events.system import InfoEvent
 
 LOGGER = logging.getLogger(__name__)
@@ -119,17 +119,18 @@ def verify_query_by_index_works(session, ks, cf, column) -> None:
 
 def drop_index(session, ks, index_name) -> None:
     InfoEvent(message=f"Starting dropping index: {ks}.{index_name}").publish()
-    with DbEventsFilter(
-            db_event=DatabaseLogEvent.DATABASE_ERROR,
-            line="Error applying view update"):
+    with EventsFilter(
+            event_class=DatabaseLogEvent.DATABASE_ERROR,
+            regex="Error applying view update",
+            extra_time_to_expiration=180,  # errors can happen only within few minutes after index drop scylladb/#12977
+    ):
         session.execute(f'DROP INDEX {ks}.{index_name}')
-        time.sleep(30)  # errors can happen only within several seconds after index drop #12977
 
 
 def drop_materialized_view(session, ks, view_name) -> None:
     LOGGER.info('start dropping MV: %s.%s', ks, view_name)
-    with DbEventsFilter(
-            db_event=DatabaseLogEvent.DATABASE_ERROR,
-            line="Error applying view update"):
+    with EventsFilter(
+            event_class=DatabaseLogEvent.DATABASE_ERROR,
+            regex="Error applying view update",
+            extra_time_to_expiration=180):
         session.execute(f'DROP MATERIALIZED VIEW {ks}.{view_name}')
-        time.sleep(30)  # errors can happen only within several seconds after index drop #12977
