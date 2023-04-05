@@ -1,5 +1,21 @@
 {
-  "dashboard": {
+    "uid": "grafana",
+    "title": "[$test_name] Scylla Per Server Metrics Nemesis Master",
+    "version": 1,
+    "schemaVersion": 36,
+    "timezone": "utc",
+    "fiscalYearStartMonth": 0,
+    "weekStart": "",
+    "refresh": false,
+    "editable": true,
+    "liveNow": false,
+    "style": "dark",
+    "graphTooltip": 1,
+    "iteration": 1660573895324,
+    "tags": [
+      "master"
+    ],
+    "links": [],
     "annotations": {
       "list": [
         {
@@ -138,12 +154,6 @@
         }
       ]
     },
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 1,
-    "iteration": 1660573895324,
-    "links": [],
-    "liveNow": false,
     "panels": [
       {
         "class": "text_panel",
@@ -7588,12 +7598,6 @@
         }
       }
     ],
-    "refresh": false,
-    "schemaVersion": 36,
-    "style": "dark",
-    "tags": [
-      "master"
-    ],
     "templating": {
       "list": [
         {
@@ -7862,10 +7866,5 @@
         "7d",
         "30d"
       ]
-    },
-    "timezone": "utc",
-    "title": "[$test_name] Scylla Per Server Metrics Nemesis Master",
-    "version": 1,
-    "weekStart": ""
-  }
+    }
 }
