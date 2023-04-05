@@ -1288,11 +1288,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             "/spec/datacenter/racks/0/resources", {
                 "limits": {
                     "cpu": cpus,
-                    "memory": self.cluster.k8s_cluster.calculated_memory_limit,
+                    "memory": self.cluster.k8s_cluster.scylla_memory_limit,
                 },
                 "requests": {
                     "cpu": cpus,
-                    "memory": self.cluster.k8s_cluster.calculated_memory_limit,
+                    "memory": self.cluster.k8s_cluster.scylla_memory_limit,
                 },
             })
 
@@ -3698,7 +3698,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self._is_chaos_mesh_initialized():
             raise UnsupportedNemesis(
                 "Chaos Mesh is not installed. Set 'k8s_use_chaos_mesh' config option to 'true'")
-        memory_limit = self.cluster.k8s_cluster.calculated_memory_limit
+        memory_limit = self.cluster.k8s_cluster.scylla_memory_limit
         # If a container's memory usage increases too quickly the OOM killer is invoked
         # so reduce ramp to ~2GB/s: time_to_reach = memory (in GB) /2
         time_to_reach_secs = int(convert_memory_value_from_k8s_to_units(memory_limit)/2)
