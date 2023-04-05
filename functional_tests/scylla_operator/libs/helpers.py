@@ -185,11 +185,11 @@ def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: Union[str, int,
         "/spec/datacenter/racks/0/resources", {
             "limits": {
                 "cpu": cpus,
-                "memory": db_cluster.k8s_cluster.calculated_memory_limit,
+                "memory": db_cluster.k8s_cluster.scylla_memory_limit,
             },
             "requests": {
                 "cpu": cpus,
-                "memory": db_cluster.k8s_cluster.calculated_memory_limit,
+                "memory": db_cluster.k8s_cluster.scylla_memory_limit,
             },
         })
 
