@@ -5,7 +5,7 @@ stress_cmd:      "scylla-bench -workload=uniform -mode=counter_update -replicati
 stress_read_cmd: "scylla-bench -workload=uniform -mode=counter_read   -replication-factor=3 -partition-count=1000 -clustering-row-count=10 -concurrency 512 -duration 360m -validate-data"
 
 n_db_nodes: '3 3 3'
-n_loaders:  3
+n_loaders:  '1 1 1'
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.2xlarge'
