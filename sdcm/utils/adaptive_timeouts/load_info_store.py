@@ -28,7 +28,7 @@ from sdcm.utils.metaclasses import Singleton
 LOGGER = logging.getLogger(__name__)
 
 
-def convert_to_mb(value) -> float:
+def convert_to_mb(value) -> int:
     pattern = re.compile(r'^(\d+(\.\d+)?) *([KMGT]?B)$')
     match = pattern.match(value)
     if match:
@@ -43,7 +43,7 @@ def convert_to_mb(value) -> float:
                 number *= 1024 * 1024
             case 'PB':
                 number *= 1024 * 1024 * 1024
-        return number
+        return int(number)
     raise ValueError(f"Couldn't parse value {value} to MB")
 
 
