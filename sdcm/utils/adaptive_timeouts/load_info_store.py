@@ -68,7 +68,7 @@ class NodeLoadInfoService:
 
     @cached(cache=TTLCache(maxsize=1024, ttl=300))
     def _get_nodetool_info(self):
-        return self.remoter.run('nodetool info', retry=3).stdout
+        return self.remoter.run('nodetool info', verbose=False).stdout
 
     @cached(cache=TTLCache(maxsize=1024, ttl=60))
     def _get_node_load(self) -> tuple[float, float, float]:
@@ -81,7 +81,7 @@ class NodeLoadInfoService:
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.debug("Couldn't get node load from prometheus metrics. Error: %s", exc)
             # fallback to uptime
-            load_1, load_5, load_15 = self.remoter.run('uptime', retry=3).stdout.split("load average: ")[1].split(",")
+            load_1, load_5, load_15 = self.remoter.run('uptime').stdout.split("load average: ")[1].split(",")
             return float(load_1), float(load_5), float(load_15)
 
     @retrying(n=5, sleep_time=1, allowed_exceptions=(ValueError,))
