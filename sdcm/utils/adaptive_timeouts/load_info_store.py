@@ -12,7 +12,7 @@
 # Copyright (c) 2023 ScyllaDB
 import logging
 import uuid
-from functools import cache, cached_property
+from functools import cached_property
 import re
 from typing import Any
 
@@ -57,11 +57,10 @@ class NodeLoadInfoService:
         self.remoter = remoter
         self._name = name
         self._scylla_version = scylla_version
-        self._io_properties = yaml.safe_load(self._get_io_properites_yaml())
 
-    @cache
-    def _get_io_properites_yaml(self):
-        return self.remoter.run('cat /etc/scylla.d/io_properties.yaml', retry=3).stdout
+    @cached_property
+    def _io_properties(self):
+        return yaml.safe_load(self.remoter.run('cat /etc/scylla.d/io_properties.yaml', verbose=False).stdout)
 
     @cached(cache=TTLCache(maxsize=1024, ttl=300))
     def _cf_stats(self, keyspace):
