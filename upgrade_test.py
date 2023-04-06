@@ -828,7 +828,7 @@ class UpgradeTest(FillDatabaseData):
         with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], user=DEFAULT_USER,
                                                     password=DEFAULT_USER_PASSWORD) as session:
             for index, shares in enumerate(service_level_shares):
-                roles.append(create_sla_auth(session=session, shares=shares, index=str(index)))
+                roles.append(create_sla_auth(session=session, shares=shares, index=index))
 
         add_sla_credentials_to_stress_cmds(workload_names=workloads_with_sla, roles=roles,
                                            params=self.params, parent_class_name=self.__class__.__name__)
