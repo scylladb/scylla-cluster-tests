@@ -1994,18 +1994,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         else:
             additional_pkgs = 'xfsprogs mdadm'
 
-        # Offline install does't provide openjdk-8, it has to be installed in advance
+        # Offline install does't provide openjdk-11, it has to be installed in advance
         # https://github.com/scylladb/scylla-jmx/issues/127
         if self.is_rhel_like():
-            self.remoter.run(f'sudo yum install -y java-1.8.0-openjdk {additional_pkgs}')
+            self.remoter.run(f'sudo yum install -y java-11-openjdk-headless {additional_pkgs}')
         elif self.distro.is_sles:
             raise Exception("Offline install on SLES isn't supported")
         elif self.distro.is_debian10 or self.distro.is_debian11:
             self.remoter.run(f'sudo apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
         else:
-            self.remoter.run(f'sudo apt-get install -y openjdk-8-jre-headless {additional_pkgs}')
+            self.remoter.run(f'sudo apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
             self.remoter.run('sudo update-java-alternatives --jre-headless '
-                             '-s java-1.8.0-openjdk-${dpkg-architecture -q DEB_BUILD_ARCH}')
+                             '-s java-1.11.0-openjdk-${dpkg-architecture -q DEB_BUILD_ARCH}')
 
         package_version_cmds_v2 = dedent("""
             tar -xzO --wildcards -f ./unified_package.tar.gz .relocatable_package_version
