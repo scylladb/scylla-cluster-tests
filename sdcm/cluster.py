@@ -2086,7 +2086,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self.distro.is_rhel_like or self.distro.is_sles:
             result = self.remoter.run(f'rpm -q {self.scylla_pkg()}', verbose=False, ignore_status=True)
         elif self.distro.is_ubuntu or self.distro.is_debian:
-            result = self.remoter.run(f'dpkg-query --show {self.scylla_pkg()}', verbose=False, ignore_status=True)
+            result = self.remoter.run(f'dpkg-query --status {self.scylla_pkg()}', verbose=False, ignore_status=True)
         else:
             raise ValueError(f"Unsupported Linux distribution: {self.distro}")
         if result.exit_status == 0:
