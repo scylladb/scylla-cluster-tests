@@ -79,7 +79,7 @@ Ask your AWS account admin to create a user and access key for AWS) and then con
     Default output format [None]:
 
 
-From here you can proceed with on of the 2 options
+From here you can proceed with one of the 2 options
 
 Option 1: Setup SCT in Docker
 -----------------------------
