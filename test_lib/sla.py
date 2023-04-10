@@ -14,9 +14,9 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_USER = "cassandra"
 DEFAULT_USER_PASSWORD = "cassandra"
-STRESS_ROLE_NAME_TEMPLATE = 'role%s_%d'
+STRESS_ROLE_NAME_TEMPLATE = 'role%s_%s'
 STRESS_ROLE_PASSWORD_TEMPLATE = 'rolep%s'
-SERVICE_LEVEL_NAME_TEMPLATE = 'sl%s_%d'
+SERVICE_LEVEL_NAME_TEMPLATE = 'sl%s_%s'
 
 
 def sla_result_to_dict(sla_result):
@@ -353,7 +353,7 @@ class User(UserRoleBase):
         return self
 
 
-def create_sla_auth(session, shares: int, index: int) -> Role:
+def create_sla_auth(session, shares: int, index: str) -> Role:
     role = Role(session=session, name=STRESS_ROLE_NAME_TEMPLATE % (shares or '', index),
                 password=STRESS_ROLE_PASSWORD_TEMPLATE % shares or '', login=True).create()
     role.attach_service_level(ServiceLevel(session=session, name=SERVICE_LEVEL_NAME_TEMPLATE % (shares or '', index),
