@@ -221,3 +221,5 @@ stop_on_hw_perf_failure: false
 custom_es_index: ''
 
 run_fullscan: []
+
+stress_step_duration: '15m'

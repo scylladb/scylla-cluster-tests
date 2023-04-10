@@ -77,7 +77,10 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: 'Number of stress process per loader', name: 'n_stress_process')
             string(defaultValue: '', description: 'Number of process add/remove on each round', name: 'stress_process_step')
 
-            string(defaultValue: '', description: 'Relative difference between current and best to choose new best result', name: 'max_deviation')
+            string(defaultValue: '', description: 'Stress step duration for c-s command, ex: 15m, 3h, etc. Default value is 15 minutes',
+                   name: 'stress_step_duration')
+            string(defaultValue: '', description: 'Relative difference between current and best to choose new best result',
+                   name: 'max_deviation')
 
             string(defaultValue: '', description: 'Prepare Cassandra Stress command to run', name: 'prepare_write_cmd')
             string(defaultValue: '', description: 'Write Cassandra Stress command to run', name: 'stress_cmd_w')
@@ -86,6 +89,9 @@ def call(Map pipelineParams) {
             booleanParam(name: 'use_client_encryption',
                          defaultValue: false,
                          description: 'Enable client encryption')
+            booleanParam(name: 'use_prepared_loaders',
+                         defaultValue: true,
+                         description: 'Run c-s process in docker (False), on prepared instance(True)')
 
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', 'https://storage.googleapis.com/scylla-operator-charts/latest')}",
                    description: 'Scylla Operator helm repo',
@@ -257,7 +263,12 @@ def call(Map pipelineParams) {
                                                             export SCT_STRESS_CMD_M="${params.stress_cmd_m}"
                                                         fi
 
+                                                        if [[ ! -z "${params.stress_step_duration}" ]] ; then
+                                                            export SCT_STRESS_STEP_DURATION="${params.stress_step_duration}"
+                                                        fi
+
                                                         export SCT_CLIENT_ENCRYPT=${params.use_client_encryption}
+                                                        export SCT_USE_PREPARED_LOADERS=${params.use_prepared_loaders}
 
                                                         export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
 
