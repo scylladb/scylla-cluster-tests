@@ -97,7 +97,7 @@ from sdcm.wait import wait_for
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
     get_gc_mode, GcMode
 from test_lib.cql_types import CQLTypeBuilder
-from test_lib.sla import ServiceLevel
+from test_lib.sla import ServiceLevel, DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1539,8 +1539,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         role = self.tester.roles[0]
 
-        with self.cluster.cql_connection_patient(node=self.cluster.nodes[0], user=self.tester.DEFAULT_USER,
-                                                 password=self.tester.DEFAULT_USER_PASSWORD) as session:
+        with self.cluster.cql_connection_patient(node=self.cluster.nodes[0], user=DEFAULT_USER,
+                                                 password=DEFAULT_USER_PASSWORD) as session:
             self.log.info("Drop service level %s", role.attached_service_level_name)
             removed_shares = role.attached_service_level.shares
             role.attached_service_level.session = session
@@ -1551,8 +1551,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             finally:
                 role.attach_service_level(
                     ServiceLevel(session=session,
-                                 name=self.tester.SERVICE_LEVEL_NAME_TEMPLATE % (
-                                     removed_shares, random.randint(0, 10)),
+                                 name=SERVICE_LEVEL_NAME_TEMPLATE % (removed_shares, str(random.randint(0, 10))),
                                  shares=removed_shares).create())
 
     def refresh_nodes_ip_and_reconfigure_monitor(self, nodes: list = None):
