@@ -142,3 +142,14 @@ def fixture_params(request: pytest.FixtureRequest):
 @pytest.fixture(scope='function', autouse=True)
 def fixture_cleanup_continuous_events_registry():
     ContinuousEventsRegistry().cleanup_registry()
+
+
+def pytest_sessionfinish():
+    # pytest's capsys is enabled by default, see
+    # https://docs.pytest.org/en/7.1.x/how-to/capture-stdout-stderr.html.
+    # but pytest closes its internal stream for capturing the stdout and
+    # stderr, so we are not able to write the logger anymore once the test
+    # session finishes. see https://github.com/pytest-dev/pytest/issues/5577,
+    # to silence the warnings, let's just prevent logging from raising
+    # exceptions.
+    logging.raiseExceptions = False
