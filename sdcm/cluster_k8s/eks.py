@@ -663,7 +663,7 @@ class MonitorSetEKS(MonitorSetAWS):
         pass
 
     # NOTE: setting and filtering of the "MonitorId" tag is needed for the multi-tenant setup.
-    def _get_instances(self, dc_idx):
+    def _get_instances(self, dc_idx, running=False):
         if not self.monitor_id:
             raise ValueError("'monitor_id' must exist")
 
@@ -673,6 +673,7 @@ class MonitorSetEKS(MonitorSetAWS):
             tags_dict={'MonitorId': self.monitor_id, 'NodeType': self.node_type},
             region_name=self.region_names[dc_idx],
             group_as_region=True,
+            running=running,
         )
         instances = results[self.region_names[dc_idx]]
 
