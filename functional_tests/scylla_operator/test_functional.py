@@ -372,6 +372,19 @@ def test_orphaned_services_multi_rack(db_cluster):
     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
 
 
+def test_nodetool_drain(db_cluster):
+    """Covers https://github.com/scylladb/scylla-enterprise/issues/2808"""
+    target_node = random.choice(db_cluster.non_seed_nodes)
+
+    target_node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
+    target_node.run_nodetool("status", ignore_status=True, warning_event_on_exception=(Exception,))
+    target_node.stop_scylla_server(verify_up=False, verify_down=True, ignore_status=True)
+    target_node.start_scylla_server(verify_up=True, verify_down=False)
+
+    for node in db_cluster.nodes:
+        db_cluster.wait_for_nodes_up_and_normal(nodes=db_cluster.nodes, verification_node=node)
+
+
 # NOTE: may fail from time to time due to the https://github.com/scylladb/scylla-operator/issues/791
 def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
     """
