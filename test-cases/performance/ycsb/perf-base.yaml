@@ -16,6 +16,9 @@ prepare_write_cmd:
     -p scylla.coreconnections=14 -p scylla.maxconnections=14
     -p scylla.readconsistencylevel=ALL -p scylla.writeconsistencylevel=ALL
 
+# there is also post_prepare_cql_cmds option can be used in performanse tests now. Example:
+# post_prepare_cql_cmds: "ALTER TABLE keyspace1.standard1 WITH speculative_retry = 'NONE'"
+
 # --target must be set to have correct latency results for const throughput - see coordinated omission avoidance problem
 #
 # we need high concurrency per shard to at least somewhat load request queues
