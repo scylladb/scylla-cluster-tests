@@ -1,6 +1,7 @@
 ClusterHealthValidatorEvent.NodeStatus: CRITICAL
 ClusterHealthValidatorEvent.MonitoringStatus: WARNING
 ClusterHealthValidatorEvent.NodePeersNulls: ERROR
+ClusterHealthValidatorEvent.Group0TokenRingInconsistency: ERROR
 ClusterHealthValidatorEvent.NodeSchemaVersion: ERROR
 ClusterHealthValidatorEvent.NodesNemesis: WARNING
 ClusterHealthValidatorEvent.ScyllaCloudClusterServerDiagnostic: CRITICAL
