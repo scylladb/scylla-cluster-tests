@@ -263,3 +263,24 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
     if not err:
         LOGGER.debug('Schema agreement has been completed on all nodes')
     return err
+
+
+def check_group0_tokenring_consistency(group0_members: list[dict[str, str]],
+                                       tokenring_members: list[dict[str, str]],
+                                       current_node) -> HealthEventsGenerator:
+    LOGGER.debug("Check all nodes in group0 are voters")
+    token_ring_node_ids = [member["host_id"] for member in tokenring_members]
+    for member in group0_members:
+        if member["voter"] and member["host_id"] in token_ring_node_ids:
+            continue
+        error_message = f"Node {current_node.name} has group0 member with host_id {member['host_id']} with " \
+            f"can_vote {member['voter']} and " \
+            f"presents in token ring {member['host_id'] in token_ring_node_ids}. " \
+            f"Inconsistency between group0: {group0_members} " \
+            f"and tokenring: {tokenring_members}"
+        LOGGER.error(error_message)
+        yield ClusterHealthValidatorEvent.Group0TokenRingInconsistency(
+            severity=Severity.ERROR,
+            node=current_node.name,
+            error=error_message,
+        )
