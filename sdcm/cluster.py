@@ -93,7 +93,7 @@ from sdcm.utils.install import InstallMode
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
     check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers, \
-    CHECK_NODE_HEALTH_RETRIES, CHECK_NODE_HEALTH_RETRY_DELAY
+    check_group0_tokenring_consistency, CHECK_NODE_HEALTH_RETRIES, CHECK_NODE_HEALTH_RETRY_DELAY
 from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.test_config import TestConfig
@@ -2598,6 +2598,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         nodes_status = self.get_nodes_status()
         peers_details = self.get_peers_info() or {}
         gossip_info = self.get_gossip_info() or {}
+        group0_members = self.get_group0_members()
+        tokenring_members = self.get_token_ring_members()
 
         return itertools.chain(
             check_nodes_status(
@@ -2617,6 +2619,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 gossip_info=gossip_info,
                 peers_details=peers_details,
                 current_node=self),
+            check_group0_tokenring_consistency(
+                group0_members=group0_members,
+                tokenring_members=tokenring_members,
+                current_node=self)
         )
 
     def check_node_health(self, retries: int = CHECK_NODE_HEALTH_RETRIES) -> None:
@@ -3084,10 +3090,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # run_cqlsh return splitted ouput if data was found:
         # [
         #   ""
-        #   "value | server_id"
+        #   "server_id | can_vote"
         #   "----------"
-        #   "<value1> | <server_id1"
-        #   "<value2> | <server_id2"
+        #   "<value1> | True"
+        #   "<value2> | False"
         #   ""
         #   "Rows ..."
         # ]
@@ -3098,7 +3104,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             member = line.split("|")
             if not member or len(member) != 2:
                 break
-            group0_members.append({"host_id": member[0].strip(), "voter": member[1].strip()})
+            group0_members.append({"host_id": member[0].strip(),
+                                   "voter": member[1].strip() == "True"})
         self.log.debug("Group0 members: %s", group0_members)
         return group0_members
 
