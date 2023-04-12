@@ -1,9 +1,9 @@
 test_duration: 300
 
 prepare_write_cmd: "cassandra-stress write no-warmup cl=ALL n=402653184 -schema 'replication(factor=3)' -mode cql3 native -rate threads=50 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..50331648"
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=120 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..402653184,201326592,8053063)' "
-stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..402653184,201326592,8053063)' "
-stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..402653184,201326592,8053063)' "
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..402653184,201326592,8053063)' "
+stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..402653184,201326592,8053063)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=175 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..402653184,201326592,8053063)' "
 
 stress_multiplier: 6
 
@@ -11,7 +11,7 @@ stress_multiplier: 6
 k8s_loader_run_type: 'static'
 
 n_db_nodes: 3
-n_loaders: 4
+n_loaders: 6
 n_monitor_nodes: 1
 
 instance_type_db: 'i4i.4xlarge'
