@@ -21,6 +21,7 @@ import copy
 import datetime
 import inspect
 import logging
+import math
 import os
 import random
 import re
@@ -149,6 +150,14 @@ class LogContentNotFound(Exception):
 
 
 class LdapNotRunning(Exception):
+    pass
+
+
+class TimestampNotFound(Exception):
+    pass
+
+
+class PartitionNotFound(Exception):
     pass
 
 
@@ -2140,6 +2149,34 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug(f'Partitions for delete: {partitions_for_delete}')
         return partitions_for_delete
 
+    def get_random_timestamp_from_partition(self, ks_cf, pkey, partition_percentage=0.25) -> tuple[int, int]:
+        """
+            Get a write timestamp from a "pivot" row inside a single partition.
+            partition_percentage controls where the "pivot" is, default is 25% of the partition size (total number of rows)
+            Returns timestamp and the clustering key value as tuple
+        """
+        with self.cluster.cql_connection_patient(node=self.target_node) as session:
+            number_of_rows = session.execute(
+                SimpleStatement(f"select count(ck) from {ks_cf} where pk = {pkey}")).one().system_count_ck
+            fetch_limit = max(math.ceil(number_of_rows * partition_percentage), 11)
+            self.log.debug(
+                "[%s_using_timestamp] Partition size: %s, fetching up to %s",
+                self.get_disrupt_name(),
+                number_of_rows,
+                fetch_limit
+            )
+            partition = session.execute(SimpleStatement(
+                f"select pk, ck from {ks_cf} where pk = {pkey} limit {fetch_limit}")).all()
+            delete_mark = partition[-1].ck
+            timestamp = session.execute(
+                SimpleStatement(f"select writetime(v) from {ks_cf} where pk = {pkey} and ck = {delete_mark}")).one().writetime_v
+            if not timestamp:
+                message = f"Unable to get writetime for row (pk = {pkey}, ck = {delete_mark})"
+                self.log.error(message)
+                raise TimestampNotFound(message)
+
+            return timestamp, delete_mark
+
     def run_deletions(self, queries, ks_cf):
         for cmd in queries:
             self.log.debug(f'delete query: {cmd}')
@@ -2147,6 +2184,26 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 session.execute(cmd, timeout=3600)
 
         self.target_node.run_nodetool('flush', args=ks_cf.replace('.', ' '))
+
+    def _verify_using_timestamp_deletions(self, ks_cf: str, verification_queries: list[tuple[int, int, int]]):
+        mv_not_configured = False
+        mv_table_name = ".".join([ks_cf.split(sep=".")[0], "view_test"])
+        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+            # pylint: disable=invalid-name
+            for pk, ck, ts in verification_queries:
+                result = session.execute(SimpleStatement(
+                    f"SELECT pk, ck, writetime(v) FROM {ks_cf} WHERE pk = {pk} AND ck = {ck}")).one()
+                assert not result or result.writetime_v != ts, \
+                    f"USING TIMESTAMP: deletion failed for ({pk}, {ck}), row still exists, timestamp used: {ts}"
+                if not mv_not_configured:
+                    try:
+                        result = session.execute(
+                            SimpleStatement(
+                                f"SELECT pk, ck, writetime(v) FROM {mv_table_name} WHERE pk = {pk} AND ck = {ck}")).one()
+                        assert not result or result.writetime_v != ts, f"USING TIMESTAMP: deletion failed for ({pk}, {ck}), " \
+                            f"row still exists in MV (!!!), timestamp used: {ts}"
+                    except InvalidRequest:
+                        mv_not_configured = True
 
     def delete_half_partition(self, ks_cf):
         self.log.debug('Delete by range - half of partition')
@@ -2160,6 +2217,29 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for pkey, ckey in partitions_for_delete.items():
             queries.append(f"delete from {ks_cf} where pk = {pkey} and ck > {int(ckey[1] / 2)}")
         self.run_deletions(queries=queries, ks_cf=ks_cf)
+        return partitions_for_delete
+
+    def delete_by_range_using_timestamp(self, ks_cf: str):
+        self.log.debug('Delete by range - using timestamp')
+
+        partitions_for_delete = self.choose_partitions_for_delete(10, ks_cf, with_clustering_key_data=False)
+        if not partitions_for_delete:
+            message = "Unable to find partitions to delete"
+            self.log.error(message)
+            raise PartitionNotFound(message)
+
+        queries = []
+        verification_queries = []
+        partition_percentage = random.randint(25, 75) / 100
+        for pkey, _ in partitions_for_delete.items():
+            self.log.debug("Using USING TIMESTAMP clause in the deletion for this partition: %s", pkey)
+            timestamp, clustering_key = self.get_random_timestamp_from_partition(
+                ks_cf=ks_cf, pkey=pkey, partition_percentage=partition_percentage)
+            queries.append(SimpleStatement(f"delete from {ks_cf} using timestamp {timestamp} where pk = {pkey}"))
+            verification_queries.append([pkey, clustering_key, timestamp])
+
+        self.run_deletions(queries=queries, ks_cf=ks_cf)
+        self._verify_using_timestamp_deletions(ks_cf=ks_cf, verification_queries=verification_queries)
 
         return partitions_for_delete
 
@@ -2241,7 +2321,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.verify_initial_inputs_for_delete_nemesis()
 
         ks_cf = 'scylla_bench.test'
-        partitions_for_exclude = self.delete_half_partition(ks_cf)
+        if random.random() > 0.5:
+            partitions_for_exclude = self.delete_half_partition(ks_cf)
+        else:
+            partitions_for_exclude = self.delete_by_range_using_timestamp(ks_cf)
 
         self.delete_range_in_few_partitions(ks_cf, partitions_for_exclude)
 
