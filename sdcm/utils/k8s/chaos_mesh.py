@@ -37,7 +37,6 @@ class ChaosMeshException(Exception):
 
 class ChaosMeshExperimentException(ChaosMeshException):
 
-    # pylint: disable=too-many-arguments
     def __init__(self, msg: str, experiment: "ChaosMeshExperiment"):
         super().__init__(msg)
         self.message = f"{msg}. Search debug log about {experiment.name}"
@@ -150,7 +149,7 @@ class ChaosMeshExperiment:
 
     def start(self):
         """Starts experiment. Does not wait for finish."""
-        LOGGER.debug("Starting a pod-failure experiment %s", self._name)
+        LOGGER.debug("Starting a %s experiment %s", self.CHAOS_KIND, self._name)
         assert self._k8s_cluster, "K8s cluster hasn't been configured for this experiment."
         with NamedTemporaryFile(suffix=".yaml", mode="w") as experiment_config_file:
             yaml.dump(self._experiment, experiment_config_file)
@@ -332,3 +331,141 @@ class IOFaultChaosExperiment(ChaosMeshExperiment):
             self._experiment["spec"]["path"] = path
         if methods:
             self._experiment["spec"]["methods"] = methods
+
+
+class NetworkPacketLossExperiment(ChaosMeshExperiment):
+    """
+    Simulates packet loss in the network by randomly dropping a specified percentage of packets.
+    """
+    CHAOS_KIND = "NetworkChaos"
+
+    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str,
+                 probability: int = 0, correlation: int = 0):
+        """Simulate packet loss fault into a specified Pod for a period of time.
+
+            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+            :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
+            :param probability: Indicates the probability of packet loss. Range of value: [0, 100]
+            :param correlation: Indicates the correlation between the probability of current packet loss
+                                and the previous time's packet loss. Range of value: [0, 100]
+        """
+        # timeout based on duration + 10 seconds margin
+        timeout = time_period_str_to_seconds(duration) + 10
+        super().__init__(
+            pod=pod, name=f"network-packet-loss-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
+        deep_merge(self._experiment, {
+            "spec": {
+                "action": "loss",
+                "duration": duration,
+                "loss": {
+                    "loss": str(probability),
+                    "correlation": str(correlation)
+                }
+            }
+        })
+
+
+class NetworkCorruptExperiment(ChaosMeshExperiment):
+    """
+    Simulates network packet corruption by altering a specified percentage of packets.
+    """
+    CHAOS_KIND = "NetworkChaos"
+
+    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str,
+                 probability: int = 0, correlation: int = 0):
+        """Simulate network corrupt fault into a specified Pod for a period of time.
+
+            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+            :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
+            :param probability: Indicates the probability of packet corruption. Range of value: [0, 100]
+            :param correlation: Indicates the correlation between the probability of current packet corruption
+                                and the previous time's packet corruption. Range of value: [0, 100]
+        """
+        # timeout based on duration + 10 seconds margin
+        timeout = time_period_str_to_seconds(duration) + 10
+        super().__init__(
+            pod=pod, name=f"network-corrupt-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
+        deep_merge(self._experiment, {
+            "spec": {
+                "action": "corrupt",
+                "duration": duration,
+                "corrupt": {
+                    "corrupt": str(probability),
+                    "correlation": str(correlation)
+                }
+            }
+        })
+
+
+class NetworkDelayExperiment(ChaosMeshExperiment):
+    """
+    Introduces latency in network communication by adding a specified delay to packet transmission.
+    """
+    CHAOS_KIND = "NetworkChaos"
+
+    # pylint: disable=too-many-arguments
+    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, latency: str,
+                 correlation: int = 0, jitter: str = "0"):
+        """Simulate network delay fault into a specified Pod for a period of time.
+
+            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+            :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
+            :param latency: Indicates the network latency (example: 10ms)
+            :param correlation: Indicates the correlation between the current latency and the previous one. Range of value: [0, 100]
+            :param jitter: Indicates the range of the network latency (example: 5ms)
+        """
+        # timeout based on duration + 10 seconds margin
+        timeout = time_period_str_to_seconds(duration) + 10
+        super().__init__(
+            pod=pod, name=f"network-delay-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
+        deep_merge(self._experiment, {
+            "spec": {
+                "action": "delay",
+                "duration": duration,
+                "delay": {
+                    "latency": latency,
+                    "correlation": str(correlation),
+                    "jitter": jitter,
+                }
+            }
+        })
+
+
+class NetworkBandwidthLimitExperiment(ChaosMeshExperiment):
+    """
+    Limits the network bandwidth by throttling the data transfer rate to a specified value.
+    """
+    CHAOS_KIND = "NetworkChaos"
+
+    # pylint: disable=too-many-arguments
+    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str,
+                 rate: str, limit: int, buffer: int):
+        """Simulate network bandwidth limit fault into a specified Pod for a period of time.
+
+            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+            :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
+            :param rate: Indicates the rate of bandwidth limit (example: 1mbps)
+            :param limit: Indicates the number of bytes waiting in queue (example: 20971520)
+            :param buffer: Indicates the maximum number of bytes that can be sent instantaneously (example: 10000)
+
+            for more details refer to https://man7.org/linux/man-pages/man8/tc-tbf.8.html
+            The limit is suggested to set to at least 2 * rate * latency,
+            where the latency is the estimated latency between source and target,
+            and it can be estimated through ping command.
+            Too small limit can cause high loss rate and impact the throughput of the tcp connection.
+        """
+        # timeout based on duration + 10 seconds margin
+        timeout = time_period_str_to_seconds(duration) + 10
+        super().__init__(
+            pod=pod, name=f"network-limit-{pod.name}-{datetime.now().strftime('%d-%H.%M.%S')}", timeout=timeout)
+        deep_merge(self._experiment, {
+            "spec": {
+                "action": "bandwidth",
+                "duration": duration,
+                "bandwidth": {
+                    "rate": rate,
+                    "limit": limit,
+                    "buffer": buffer,
+                }
+            }
+        })
