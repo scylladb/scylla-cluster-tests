@@ -100,7 +100,8 @@ from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units, convert_memory_value_from_k8s_to_units,
 )
-from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperiment, DiskError
+from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperiment, DiskError, NetworkDelayExperiment, \
+    NetworkPacketLossExperiment, NetworkCorruptExperiment, NetworkBandwidthLimitExperiment
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 from sdcm.utils.nemesis_utils.indexes import get_random_column_name, create_index, \
@@ -2965,8 +2966,53 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         return "{}{}".format(random.randrange(min_limit, max_limit), rate_limit_suffix)
 
+    def _disrupt_network_random_interruptions_k8s(self, list_of_timeout_options):
+        interruptions = ["delay", "loss", "corrupt"]
+        rate_limit: Optional[str] = self.get_rate_limit_for_network_disruption()
+        if not rate_limit:
+            self.log.warning("NetworkRandomInterruption won't limit network bandwidth due to lack of monitoring nodes.")
+        else:
+            interruptions.append("rate")
+        duration = f"{random.choice(list_of_timeout_options)}s"
+        match random.choice(interruptions):
+            case "delay":
+                delay_in_msecs = random.randrange(50, 300)
+                jitter = delay_in_msecs * 0.2
+                LOGGER.info("Delaying network - duration: %s delay: %s ms",
+                            duration, delay_in_msecs)
+                experiment = NetworkDelayExperiment(self.target_node, duration,
+                                                    f"{delay_in_msecs}ms", correlation=20, jitter=f"{jitter}ms")
+            case "loss":
+                loss_percentage = random.randrange(1, 15)
+                LOGGER.info("Dropping network packets - duration: %s loss_percentage: %s%%",
+                            duration, loss_percentage)
+                experiment = NetworkPacketLossExperiment(
+                    self.target_node, duration, loss_percentage, correlation=20)
+            case "corrupt":
+                corrupt_percentage = random.randrange(1, 15)
+                LOGGER.info("Corrupting network packets - duration: %s corrupt_percentage: %s%%",
+                            duration, corrupt_percentage)
+                experiment = NetworkCorruptExperiment(self.target_node, duration,
+                                                      corrupt_percentage, correlation=20)
+            case "rate":
+                rate, suffix = rate_limit[:-4], rate_limit[-4:]
+                limit_base = int(rate) * 1024 * (1024 if suffix == "mbps" else 1)
+                limit = limit_base * 20
+                LOGGER.info("Limiting network bandwidth - duration: %s rate: %s limit: %s",
+                            duration, rate_limit, limit)
+                experiment = NetworkBandwidthLimitExperiment(
+                    self.target_node, duration, rate=rate_limit, limit=limit, buffer=10000)
+        experiment.start()
+        experiment.wait_until_finished()
+        self._wait_all_nodes_un()
+
     def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
         # pylint: disable=too-many-locals
+        list_of_timeout_options = [10, 60, 120, 300, 500]
+        if self._is_it_on_kubernetes():
+            self._disrupt_network_random_interruptions_k8s(list_of_timeout_options)
+            return
+
         if not self.cluster.extra_network_interface:
             raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
@@ -2996,7 +3042,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             list_of_tc_options.append(
                 ("NetworkRandomInterruption_{}_limit".format(rate_limit), "--rate {}".format(rate_limit)))
 
-        list_of_timeout_options = [10, 60, 120, 300, 500]
         option_name, selected_option = random.choice(list_of_tc_options)
         wait_time = random.choice(list_of_timeout_options)
 
@@ -3010,7 +3055,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.traffic_control(None)
             self._wait_all_nodes_un()
 
+    def _disrupt_network_block_k8s(self, list_of_timeout_options):
+        duration = f"{random.choice(list_of_timeout_options)}s"
+        experiment = NetworkPacketLossExperiment(self.target_node, duration, probability=100)
+        experiment.start()
+        experiment.wait_until_finished()
+        self._wait_all_nodes_un()
+
     def disrupt_network_block(self):
+        list_of_timeout_options = [10, 60, 120, 300, 500]
+        if self._is_it_on_kubernetes():
+            self._disrupt_network_block_k8s(list_of_timeout_options)
+            return
+
         if not self.cluster.extra_network_interface:
             raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
@@ -3018,7 +3075,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis("Traffic control package not installed on system")
 
         selected_option = "--loss 100%"
-        list_of_timeout_options = [10, 60, 120, 300, 500]
         wait_time = random.choice(list_of_timeout_options)
         self.log.debug("BlockNetwork: [%s] for %dsec", selected_option, wait_time)
         self.target_node.traffic_control(None)
