@@ -206,11 +206,11 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: 30, unit: 'MINUTES') {
-                                        if ((params.backend == 'aws' || params.backend == 'azure') && !params.availability_zone.contains(',')) {
+                                        if (params.backend == 'aws' || params.backend == 'azure') {
                                             provisionResources(params, builder.region)
                                         } else {
                                             sh """
-                                                echo 'Skipping because non-AWS/Azure backends and multi-az are not supported'
+                                                echo 'Skipping because non-AWS/Azure backends are not supported'
                                             """
                                         }
                                         completed_stages['provision_resources'] = true

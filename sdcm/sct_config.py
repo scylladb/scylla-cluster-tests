@@ -1318,8 +1318,7 @@ class SCTConfiguration(dict):
              help="""Use legacy cluster initialization with autobootsrap disabled and parallel node setup"""),
         dict(name="availability_zone", env="SCT_AVAILABILITY_ZONE",
              type=str,
-             help="""Availability zone to use. Specify multiple (comma separated) to deploy resources to multi az (works on AWS).
-                  "Same for multi-region scenario."""),
+             help="Availability zone to use. Same for multi-region scenario."),
         dict(name="aws_fallback_to_next_availability_zone", env="SCT_AWS_FALLBACK_TO_NEXT_AVAILABILITY_ZONE",
              type=boolean,
              help="""Try all availability zones one by one in order to maximize the chances of getting
