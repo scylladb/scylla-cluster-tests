@@ -51,9 +51,18 @@ class EventsAnalyzer(BaseEventsProcess[Tuple[str, Any], None], threading.Thread)
                 except TestFailure:
                     self.kill_test(sys.exc_info())
 
-    def kill_test(self, backtrace_with_reason) -> None:
+    def kill_test(self, backtrace_with_reason, memo={}) -> None:  # pylint: disable=dangerous-default-value
         self.terminate()
         if tester := TestConfig().tester_obj():
+            if memo:
+                # NOTE: in some cases we may get flooded with the CRITICAL events.
+                #       And we should call 'kill_test' only once to avoid following:
+                #       - Long awaiting of the events handler closing in the tearDown stage.
+                #         It won't return until all the events are processed causing job timeout.
+                #       - Catching old python bug: https://bugs.python.org/issue24283
+                #       Also, in general, it makes no sense to kill test more than once.
+                return
+            memo["kill_test_has_run"] = True
             tester.kill_test(backtrace_with_reason)
         else:
             LOGGER.error("No test was registered using `TestConfig.set_tester_obj()', do not kill")
