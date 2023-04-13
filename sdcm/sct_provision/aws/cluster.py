@@ -192,11 +192,12 @@ class ClusterBase(BaseModel):
             provisioner=AWSInstanceProvisioner(),
         ).provision_plan
 
-    def _instance_parameters(self, region_id: int) -> AWSInstanceParams:
+    def _instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
         params_builder = self._INSTANCE_PARAMS_BUILDER(  # pylint: disable=not-callable
             params=self.params,
             region_id=region_id,
-            user_data_raw=self._user_data
+            user_data_raw=self._user_data,
+            availability_zone=availability_zone,
         )
         return AWSInstanceParams(**params_builder.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True))
 
@@ -205,7 +206,7 @@ class ClusterBase(BaseModel):
             return []
         total_instances_provisioned = []
         for region_id in range(len(self._regions_with_nodes)):
-            instance_parameters = self._instance_parameters(region_id=region_id)
+            instance_parameters = self._instance_parameters(region_id=region_id, availability_zone=0)
             node_tags = self._node_tags(region_id=region_id)
             node_names = self._node_names(region_id=region_id)
             node_count = self._node_nums[region_id]

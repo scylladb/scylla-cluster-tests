@@ -29,6 +29,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     params: Union[SCTConfiguration, dict] = Field(as_dict=False)
     region_id: int = Field(as_dict=False)
     user_data_raw: Union[str, UserDataBuilderBase] = Field(as_dict=False)
+    availability_zone: int = 0
 
     _INSTANCE_TYPE_PARAM_NAME: str = None
     _IMAGE_ID_PARAM_NAME: str = None
@@ -113,7 +114,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return self.params.get('availability_zone').split(',')
 
     @cached_property
-    def _ec2_network_configuration(self) -> Tuple[List[str], List[str]]:
+    def _ec2_network_configuration(self) -> Tuple[List[str], List[List[str]]]:
         return get_ec2_network_configuration(
             regions=self.params.region_names,
             availability_zones=self._availability_zones,
@@ -131,7 +132,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     @property
     def _network_interface_params(self):
         return {
-            'SubnetId': self._ec2_subnet_ids[self.region_id],  # pylint: disable=invalid-sequence-index
+            'SubnetId': self._ec2_subnet_ids[self.region_id][self.availability_zone],  # pylint: disable=invalid-sequence-index
             'Groups': self._ec2_security_group_ids[self.region_id],  # pylint: disable=invalid-sequence-index
         }
 
