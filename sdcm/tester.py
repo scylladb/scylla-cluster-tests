@@ -122,6 +122,7 @@ from sdcm.keystore import KeyStore
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes, CSWorkloadTypes, make_cs_range_histogram_summary, \
     make_cs_range_histogram_summary_by_interval
+from sdcm.utils.raft.common import validate_raft_on_nodes
 
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
@@ -853,6 +854,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         for db_cluster in self.db_clusters_multitenant:
             if db_cluster:
                 db_cluster.validate_seeds_on_all_nodes()
+                validate_raft_on_nodes(nodes=db_cluster.nodes)
 
     def set_system_auth_rf(self, db_cluster=None):
         if not db_cluster:

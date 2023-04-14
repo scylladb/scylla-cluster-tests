@@ -123,6 +123,7 @@ from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
+from sdcm.utils.raft import get_raft_mode
 from sdcm.coredump import CoredumpExportSystemdThread
 from sdcm.keystore import KeyStore
 from sdcm.paths import (
@@ -188,10 +189,6 @@ class NodeStayInClusterAfterDecommission(Exception):
 
 class NodeCleanedAfterDecommissionAborted(Exception):
     """ raise after decommission aborted and node cleaned from group0(Raft)"""
-
-
-class Group0MembersNotConsistenWithTokenRingMembers(Exception):
-    """ raise if set of group0 members differs from Tokein Ring members after removing Ghost members"""
 
 
 def prepend_user_prefix(user_prefix: str, base_name: str):
@@ -645,6 +642,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 return node_seeds.split(',')
             else:
                 raise Exception('Seeds not found in the scylla.yaml')
+
+    @cached_property
+    def raft(self):
+        return get_raft_mode(self)
 
     @staticmethod
     def is_kubernetes() -> bool:
@@ -2606,7 +2607,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         nodes_status = self.get_nodes_status()
         peers_details = self.get_peers_info() or {}
         gossip_info = self.get_gossip_info() or {}
-        group0_members = self.get_group0_members()
+        group0_members = self.raft.get_group0_members()
         tokenring_members = self.get_token_ring_members()
 
         return itertools.chain(
@@ -3055,8 +3056,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @retrying(n=5, sleep_time=5, raise_on_exceeded=False)
     def get_token_ring_members(self) -> list[dict[str, str]]:
-        token_ring_members = []
         self.log.debug("Get token ring members")
+        token_ring_members = []
         token_ring_members_cmd = 'curl -s -X GET --header "Content-Type: application/json" --header ' \
             '"Accept: application/json" "http://127.0.0.1:10000/storage_service/host_id"'
         result = self.remoter.run(token_ring_members_cmd, ignore_status=True, verbose=True)
@@ -3065,40 +3066,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         try:
             result_json = json.loads(result.stdout)
         except Exception as exc:  # pylint: disable=broad-except
-            self.log.warning("Failed to parse response %s", exc)
+            self.log.warning("Error getting token-ring data: %s", exc)
             return []
 
         for member in result_json:
             token_ring_members.append({"host_id": member.get("value"), "ip_address": member.get("key")})
-        self.log.debug("Token ring members %s", token_ring_members)
         return token_ring_members
-
-    @retrying(n=5, sleep_time=5, raise_on_exceeded=False)
-    def get_group0_members(self) -> list[dict[str, str]]:
-        self.log.debug("Get group0 members")
-        group0_members = []
-        try:
-            with self.parent_cluster.cql_connection_patient_exclusive(node=self) as session:
-                row = session.execute("select value from system.scylla_local where key = 'raft_group0_id'").one()
-                if not row:
-                    return []
-                raft_group0_id = row.value
-
-                rows = session.execute(f"select server_id, can_vote from system.raft_state  \
-                                       where group_id = {raft_group0_id} and disposition = 'CURRENT'").all()
-
-                for row in rows:
-                    group0_members.append({"host_id": str(row.server_id),
-                                           "voter": row.can_vote})
-        except Exception as exc:  # pylint: disable=broad-except
-            err_msg = f"Get group0 members failed with error: {exc}"
-            self.log.error(err_msg)
-            InfoEvent(message=err_msg, severity=Severity.ERROR).publish()
-
-            raise
-
-        self.log.debug("Group0 members: %s", group0_members)
-        return group0_members
 
 
 class FlakyRetryPolicy(RetryPolicy):
@@ -4647,7 +4620,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             verification_node = random.choice(undecommission_nodes)
             node_ip_list = get_node_ip_list(verification_node)
 
-        missing_host_ids = self.diff_token_ring_group0_members(verification_node)
+        missing_host_ids = verification_node.raft.diff_token_ring_group0_members()
+
+        if not missing_host_ids:
+            self.log.debug("Node %s returned to tokenring, but stay non-voter. Add its host-id for remove")
+            missing_host_ids = verification_node.raft.get_group0_non_voters()
 
         decommission_done = list(node.follow_system_log(
             patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
@@ -4673,7 +4650,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self.terminate_node(node)  # pylint: disable=no-member
             self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
             self.log.debug("Node %s was terminated", node.name)
-            self.clean_group0_garbage(verification_node, raise_exception=True)
+            verification_node.raft.clean_group0_garbage(raise_exception=True)
             LOGGER.error("Decommission for node %s was aborted", node)
             raise NodeCleanedAfterDecommissionAborted(f"Decommission for node {node} was aborted")
 
@@ -4685,35 +4662,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
             node.run_nodetool("decommission", timeout=timeout)
         self.verify_decommission(node)
-
-    def clean_group0_garbage(self, node: BaseNode, raise_exception: bool = False):
-        InfoEvent("Clean host ids from group0").publish()
-        host_ids = self.diff_token_ring_group0_members(node)
-        if not host_ids:
-            self.log.debug("Node could return to token ring but not yet bootstrap")
-            # Add host id which cann't vote after decommission was aborted because it is already terminated")
-            host_ids = [member['host_id'] for member in node.get_group0_members() if not member['voter']]
-        while host_ids:
-            removing_host_id = host_ids.pop(0)
-            ingore_dead_nodes_opt = f"--ignore-dead-nodes {','.join(host_ids)}" if host_ids else ""
-
-            result = node.run_nodetool(f"removenode {removing_host_id} {ingore_dead_nodes_opt}",
-                                       ignore_status=True,
-                                       verbose=True,
-                                       retry=3)
-            if not result.ok:
-                self.log.error("Removenode with host_id %s failed with %s",
-                               removing_host_id, result.stdout + result.stderr)
-            if not host_ids:
-                break
-
-        if missing_host_ids := self.diff_token_ring_group0_members(node):
-            token_ring_members = node.get_token_ring_members()
-            group0_members = node.get_group0_members()
-            error_msg = f"Token ring {token_ring_members} and group0 {group0_members} are differs on: {missing_host_ids}"
-            self.log.error(error_msg)
-            if raise_exception:
-                raise Group0MembersNotConsistenWithTokenRingMembers(error_msg)
 
     @property
     def scylla_manager_node(self) -> BaseNode:
@@ -4777,16 +4725,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         self.log.info("DB nodes CPU modes: %s", results)
         return results
-
-    def diff_token_ring_group0_members(self, node: BaseNode) -> list[str]:
-        self.log.debug("Compare token ring and group0 members")
-        group0_members = node.get_group0_members()
-        group0_members_ids = {member["host_id"] for member in group0_members}
-        token_ring_members = node.get_token_ring_members()
-        token_ring_member_ids = {member["host_id"] for member in token_ring_members}
-        self.log.debug("Token rings members ids: %s", token_ring_member_ids)
-        self.log.debug("Group0 members ids: %s", group0_members_ids)
-        return list(group0_members_ids - token_ring_member_ids)
 
 
 class BaseLoaderSet():
