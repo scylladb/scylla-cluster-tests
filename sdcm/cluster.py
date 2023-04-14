@@ -3086,9 +3086,20 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # ]
         #
         # 4th element is needed only
+        #
+        # And if was not found (raft disbled):
+        # [
+        #   ""
+        #   "value"
+        #   "-------"
+        #   ""
+        #   "(0 rows)"
+        # ]
         if not result or len(result) <= 3:
             return []
         raft_group0_id = result[3].strip()
+        if not raft_group0_id or "0 rows" in raft_group0_id:
+            return []
 
         result = self.run_cqlsh(
             f"select server_id, can_vote from system.raft_state where group_id = {raft_group0_id} and disposition = 'CURRENT'",
