@@ -16,6 +16,7 @@
 """
 Classes that introduce disruption in clusters.
 """
+import contextlib
 import copy
 import datetime
 import inspect
@@ -52,10 +53,9 @@ from sdcm.cluster import (
     MAX_TIME_WAIT_FOR_NEW_NODE_UP,
     MAX_TIME_WAIT_FOR_DECOMMISSION,
     NodeSetupFailed,
-    NodeSetupTimeout,
-    NodeStayInClusterAfterDecommission, HOUR_IN_SEC,
+    NodeSetupTimeout, HOUR_IN_SEC,
     NodeCleanedAfterDecommissionAborted,
-    Group0MembersNotConsistenWithTokenRingMembers,
+    NodeStayInClusterAfterDecommission,
 )
 from sdcm.cluster_k8s import (
     KubernetesOps,
@@ -111,11 +111,13 @@ from sdcm.utils.replication_strategy_utils import temporary_replication_strategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
+from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException
 from sdcm.wait import wait_for
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
     get_gc_mode, GcMode
 from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
+
 
 LOGGER = logging.getLogger(__name__)
 # NOTE: following lock is needed in the K8S multitenant case
@@ -217,7 +219,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.cluster: Union[BaseCluster, BaseScyllaCluster] = tester_obj.db_cluster
         self.loaders = tester_obj.loaders
         self.monitoring_set = tester_obj.monitors
-        self.target_node = None
+        self.target_node: BaseNode = None
         self.disruptions_list = []
         self.termination_event = termination_event
         self.operation_log = []
@@ -3114,11 +3116,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if exit_status != 0:
                 self.log.error(f"nodetool removenode command exited with status {exit_status}")
                 # check difference between group0 and token ring,
-                garbage_host_ids = self.cluster.diff_token_ring_group0_members(verification_node)
+                garbage_host_ids = verification_node.raft.diff_token_ring_group0_members()
                 self.log.debug("Difference between token ring and group0 is %s", garbage_host_ids)
                 if garbage_host_ids:
                     # if difference found, clean garbage and continue
-                    self.cluster.clean_group0_garbage(verification_node)
+                    verification_node.raft.clean_group0_garbage()
                 else:
                     # group0 and token ring are consistent. Removenode failed by meanigfull reason.
                     # remove node from dead_nodes list to raise critical issue by HealthValidator
@@ -3419,7 +3421,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 return None
             except NodeCleanedAfterDecommissionAborted:
                 self.log.debug("Decommission aborted, Group0 was cleaned successfully. New node will be added")
-            except Group0MembersNotConsistenWithTokenRingMembers as exc:
+            except Group0MembersNotConsistentWithTokenRingMembersException as exc:
                 self.log.error("Cluster state could be not predictable due to ghost members in raft group0: %s", exc)
                 raise
 
@@ -3439,13 +3441,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             retry=0,
         )
 
-        terminate_patterns = ["DECOMMISSIONING: unbootstrap starts",
-                              "DECOMMISSIONING: unbootstrap done",
-                              "becoming a group 0 non-voter",
-                              "became a group 0 non-voter",
-                              "leaving token ring",
-                              "left token ring",
-                              "Finished token ring movement"]
+        terminate_patterns = self.target_node.raft.get_log_patterns_for_decommission_abort()
         self.use_nemesis_seed()
         terminate_pattern = random.choice(terminate_patterns)
         self.log.debug("Reboot node after log message: '%s'", terminate_pattern)
@@ -3462,14 +3458,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         timeout = 1200
         if self.cluster.params.get('cluster_backend') == 'azure':
             timeout += 1200  # Azure reboot can take up to 20min to initiate
-        ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
 
-        if new_node := decommission_post_action():
-            self.wait_node_fully_start(new_node)
-            new_node.run_nodetool("rebuild", retry=0)
-        else:
-            self.wait_node_fully_start(self.target_node)
-            self.target_node.run_nodetool(sub_cmd="rebuild", retry=0)
+        with contextlib.ExitStack() as stack:
+            for expected_start_failed_context in self.target_node.raft.get_severity_change_filters_scylla_start_failed(timeout):
+                stack.enter_context(expected_start_failed_context)
+
+            ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
+            if new_node := decommission_post_action():
+                self.wait_node_fully_start(new_node)
+                new_node.run_nodetool("rebuild", retry=0)
+            else:
+                self.wait_node_fully_start(self.target_node)
+                self.target_node.run_nodetool(sub_cmd="rebuild", retry=0)
 
     def start_and_interrupt_repair_streaming(self):
         """
