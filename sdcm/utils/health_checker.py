@@ -268,7 +268,11 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
 def check_group0_tokenring_consistency(group0_members: list[dict[str, str]],
                                        tokenring_members: list[dict[str, str]],
                                        current_node) -> HealthEventsGenerator:
-    LOGGER.debug("Check all nodes in group0 are voters")
+    if not current_node.raft.is_enabled:
+        LOGGER.debug("Raft feature is disabled on node %s (host_id=%s)", current_node.name, current_node.host_id)
+        return
+    LOGGER.debug("Check group0 and tokenring consistency on node %s (host_id=%s)...",
+                 current_node.name, current_node.host_id)
     token_ring_node_ids = [member["host_id"] for member in tokenring_members]
     for member in group0_members:
         if member["voter"] and member["host_id"] in token_ring_node_ids:
@@ -284,3 +288,5 @@ def check_group0_tokenring_consistency(group0_members: list[dict[str, str]],
             node=current_node.name,
             error=error_message,
         )
+    LOGGER.debug("Group0 and token-ring are consistent on node %s (host_id=%s)...",
+                 current_node.name, current_node.host_id)
