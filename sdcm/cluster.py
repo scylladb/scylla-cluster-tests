@@ -3252,11 +3252,13 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             grouped_by_region[node.region].append(node)
         return grouped_by_region
 
-    def get_datacenter_name_per_region(self):
+    def get_datacenter_name_per_region(self, db_nodes=None):
         datacenter_name_per_region = {}
-        for region, nodes in self.nodes_by_region().items():
-            status = nodes[0].get_nodes_status()
-            datacenter_name_per_region[region] = status[nodes[0]]['dc']
+        for region, nodes in self.nodes_by_region(nodes=db_nodes).items():
+            if status := nodes[0].get_nodes_status():
+                datacenter_name_per_region[region] = status[nodes[0]]['dc']
+            else:
+                LOGGER.error("Failed to get nodes status from node %s", nodes[0])
 
         return datacenter_name_per_region
 
