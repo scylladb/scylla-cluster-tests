@@ -100,7 +100,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         self.stop_test_on_failure = stop_test_on_failure
         self.compaction_strategy = compaction_strategy
 
-    def create_stress_cmd(self, cmd_runner, keyspace_idx):
+    def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):  # pylint: disable=too-many-branches
         stress_cmd = self.stress_cmd
 
         if "no-warmup" not in stress_cmd:
@@ -135,8 +135,19 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         if (connection_bundle_file := self.node_list[0].parent_cluster.connection_bundle_file) and '-node' not in stress_cmd:
             stress_cmd += f" -cloudconf file={Path('/tmp') / connection_bundle_file.name}"
         elif self.node_list and '-node' not in stress_cmd:
+            stress_cmd += " -node "
+            if self.loader_set.test_config.MULTI_REGION:
+                # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
+                # not for loader nodes. So call next function for DB nodes
+                datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
+                if loader_dc := datacenter_name_per_region.get(loader.region):
+                    stress_cmd += f"datacenter={loader_dc} "
+                else:
+                    LOGGER.error("Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
+                                 loader.region, datacenter_name_per_region)
+
             node_ip_list = [n.cql_ip_address for n in self.node_list]
-            stress_cmd += " -node {}".format(",".join(node_ip_list))
+            stress_cmd += ",".join(node_ip_list)
         if 'skip-unsupported-columns' in self._get_available_suboptions(cmd_runner, '-errors'):
             stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns'])
         return stress_cmd
@@ -246,7 +257,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                                                                           f' --entrypoint /bin/bash'
                                                                           f' -v $HOME/{remote_hdr_file_name}:/{remote_hdr_file_name}')
 
-        stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx)
+        stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx, loader)
         if self.params.get('cs_debug'):
             cmd_runner.send_files(get_data_dir_path('logback-tools-debug.xml'),
                                   '/etc/scylla/cassandra/logback-tools.xml', delete_dst=True)
