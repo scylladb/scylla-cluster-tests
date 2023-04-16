@@ -26,6 +26,21 @@ from sdcm.sct_events.system import InfoEvent
 LOGGER = logging.getLogger(__name__)
 
 
+def is_cf_a_view(node: BaseNode, ks, cf) -> bool:
+    """
+    Check if a CF is a materialized-view or not (a normal table)
+    """
+    with node.parent_cluster.cql_connection_patient(node) as session:
+        try:
+            result = session.execute(f"SELECT view_name FROM system_schema.views"
+                                     f" WHERE keyspace_name = '{ks}'"
+                                     f" AND view_name = '{cf}'")
+            return result and bool(len(result.one()))
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.debug('Got no result from system_schema.views for %s.%s table. Error: %s', ks, cf, exc)
+            return False
+
+
 def get_column_names(session, ks, cf, is_partition_key: bool = False) -> list:
     filter_kind = " kind in ('static', 'regular')" if not is_partition_key else "kind = 'partition_key'"
     res = session.execute(f"SELECT column_name FROM system_schema.columns"
