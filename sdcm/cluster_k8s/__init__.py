@@ -857,6 +857,13 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 "disabled": False,
                 "ingressClassName": "haproxy",
             }}}
+        # NOTE: '5578536' value is defined in the scylla repo here:
+        #       dist/common/sysctl.d/99-scylla-aio.conf
+        #       It is the same for the 4.3.x , 4.4.x and 4.5.x versions
+        sysctls = ["fs.aio-max-nr=5578536", ]
+        if self.params.get('print_kernel_callstack'):
+            sysctls += ["kernel.perf_event_paranoid=0", ]
+
         return HelmValues({
             'nameOverride': '',
             'fullnameOverride': cluster_name,
@@ -882,10 +889,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             'cpuset': True,
             'hostNetworking': False,
             'automaticOrphanedNodeCleanup': True,
-            # NOTE: '5578536' value is defined in the scylla repo here:
-            #       dist/common/sysctl.d/99-scylla-aio.conf
-            #       It is the same for the 4.3.x , 4.4.x and 4.5.x versions
-            'sysctls': ["fs.aio-max-nr=5578536"],
+            'sysctls': sysctls,
             'serviceMonitor': {
                 'create': False
             },
