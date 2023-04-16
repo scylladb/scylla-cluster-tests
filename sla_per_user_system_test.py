@@ -107,7 +107,13 @@ class SlaPerUserTest(LongevityTest):
             self.log.debug('ROLE - SERVICE LEVEL - SCHEDULER: {}'.format(test_users_to_sg))
             # End Temporary solution
 
-            shards_time_per_sla = self.prometheus_stats.get_scylla_scheduler_runtime_ms(start_time, end_time, node_ip)
+            # Query 'scylla_scheduler_runtime_ms' from prometheus. If no data returned, try to increase the step time
+            # and query again
+            for step in ['30s', '45s', '60s', '120s']:
+                self.log.debug("Query 'scylla_scheduler_runtime_ms' on the node %s with irate step %s ", node_ip, step)
+                if shards_time_per_sla := self.prometheus_stats.get_scylla_scheduler_runtime_ms(
+                        start_time, end_time, node_ip, irate_sample_sec=step):
+                    break
             # TODO: follow after this issue (prometheus return empty answer despite the data exists),
             #  if it is reproduced
             # if not (shards_time_per_sla and scheduler_shares):
