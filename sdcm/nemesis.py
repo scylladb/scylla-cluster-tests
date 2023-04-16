@@ -105,7 +105,7 @@ from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 from sdcm.utils.nemesis_utils.indexes import get_random_column_name, create_index, \
     wait_for_index_to_be_built, verify_query_by_index_works, drop_index, get_partition_key_name, \
-    wait_for_view_to_be_built, drop_materialized_view
+    wait_for_view_to_be_built, drop_materialized_view, is_cf_a_view
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
@@ -2335,13 +2335,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         list_additional_params = get_compaction_random_additional_params()
         all_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
-        non_mview_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_out_mv=True)
 
         if not all_ks_cfs:
             raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. toggle_tables_ics nemesis can\'t run')
 
-        mview_ks_cfs = list(set(all_ks_cfs) - set(non_mview_ks_cfs))
         keyspace_table = random.choice(all_ks_cfs)
         keyspace, table = keyspace_table.split('.')
         cur_compaction_strategy = get_compaction_strategy(node=self.target_node, keyspace=keyspace,
@@ -2356,7 +2354,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if new_compaction_strategy in [CompactionStrategy.INCREMENTAL, CompactionStrategy.SIZE_TIERED]:
             for param in list_additional_params:
                 new_compaction_strategy_as_dict.update(param)
-        alter_command_prefix = 'ALTER TABLE ' if keyspace_table not in mview_ks_cfs else 'ALTER MATERIALIZED VIEW '
+        alter_command_prefix = 'ALTER TABLE ' if not is_cf_a_view(
+            node=self.target_node, ks=keyspace, cf=table) else 'ALTER MATERIALIZED VIEW '
         cmd = alter_command_prefix + \
             " {keyspace_table} WITH compaction = {new_compaction_strategy_as_dict};".format(**locals())
         self.log.debug("Toggle table ICS query to execute: {}".format(cmd))
