@@ -1,12 +1,12 @@
 test_duration: 800
 
 prepare_write_cmd:  ["cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-                     "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(write=1)' -port jmx=6868 -mode cql3 native -rate threads=40 n=3000000 -log interval=5"
+                     "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(write=1)' n=3000000 -port jmx=6868 -mode cql3 native -rate threads=40 -log interval=5"
                     ]
 
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
              "cassandra-stress read  cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-             "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(write=1,read=1,si_read1=1,si_read2=1)' -port jmx=6868 -mode cql3 native -rate threads=40 duration=700m -log interval=5",
+             "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(write=1,read=1,si_read1=1,si_read2=1)' duration=700m -port jmx=6868 -mode cql3 native -rate threads=40 -log interval=5",
              ]
 
 n_db_nodes: '5 5'
