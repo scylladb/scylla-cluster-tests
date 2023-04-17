@@ -177,15 +177,24 @@ spec:
       - name: node-setup
         image: scylladb/scylla-machine-image:k8s-aws-666.development-20201023.0c4dfa1
         imagePullPolicy: Always
-        # NOTE: 'args' will be updated in the code
-        #        when perf tuning is disabled it is ['--all']
-        #        when perf tuning is enabled it is ['--setup-disks']
-        args: ${SCYLLA_MACHINE_IMAGE_ARGS}
         env:
           - name: ROOT_DISK
             value: /mnt/hostfs/mnt/raid-disks/disk0
           - name: SCYLLAD_CONF_MOUNT
             value: /mnt/scylla.d/
+        command:
+          - "/bin/bash"
+          - "-c"
+          - "--"
+        args:
+          - |
+            # NOTE: following is needed to avoid package installation failures caused
+            #       by the absent scylla package repositories.
+            yum-config-manager --disable scylla --disable scylla-generic --disable scylladb-scylla-3rdparty
+            # NOTE: 'args' will be updated in the code
+            #        when perf tuning is disabled it is ['--all']
+            #        when perf tuning is enabled it is ['--setup-disks']
+            /opt/scylladb/scylla-machine-image/scylla_k8s_node_setup ${SCYLLA_MACHINE_IMAGE_ARGS}
         securityContext:
           privileged: true
         volumeMounts:
