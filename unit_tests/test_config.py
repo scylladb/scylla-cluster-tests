@@ -440,7 +440,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     @pytest.mark.integration
     def test_16_default_oracle_scylla_version_eu_west_1(self):
-        ami_4_6_9 = "ami-0daa3e4e3d314d2b3"
+        ami_2021_1_15 = "ami-0dfb316a2cc0ab399"
 
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
@@ -451,7 +451,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
-        self.assertEqual(conf.get('ami_id_db_oracle'), ami_4_6_9)
+        self.assertEqual(conf.get('ami_id_db_oracle'), ami_2021_1_15)
 
     def test_16_oracle_scylla_version_us_east_1(self):
         ami_4_6_3 = "ami-09c658571b2d46d18"
