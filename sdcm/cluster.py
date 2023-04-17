@@ -3570,7 +3570,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             for row in current_rows:
                 table_name = f"{getattr(row, column_names[0])}.{getattr(row, column_names[1])}"
 
-                if filter_out_system and getattr(row, column_names[0]).startswith(("system", "alternator_usertable")):
+                if filter_out_system and getattr(row, column_names[0]).startswith(("system", "alternator_usertable", "audit")):
                     continue
 
                 if is_column_type and (filter_out_table_with_counter and "counter" in row.type):
