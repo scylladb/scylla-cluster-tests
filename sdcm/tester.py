@@ -3032,19 +3032,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                                           'email_recipients'),
                                                                       events=get_events_grouped_by_category(
                                                                           _registry=self.events_processes_registry))
-        workload = self._test_index.split("-")[-1]
-        histogram_total_data = self.get_cs_range_histogram(stress_operation=workload,
-                                                           start_time=start_time,
-                                                           end_time=end_time)
-        histogram_data_by_interval = self.get_cs_range_histogram_by_interval(stress_operation=workload,
-                                                                             start_time=start_time,
-                                                                             end_time=end_time)
         with open(self.latency_results_file, encoding="utf-8") as file:
             latency_results = json.load(file)
         self.log.debug('latency_results were loaded from file %s and its result is %s',
                        self.latency_results_file, latency_results)
         benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
         if latency_results and self.create_stats:
+            workload = self._test_index.split("-")[-1]
+            histogram_total_data = self.get_cs_range_histogram(stress_operation=workload,
+                                                               start_time=start_time,
+                                                               end_time=end_time)
+            histogram_data_by_interval = self.get_cs_range_histogram_by_interval(stress_operation=workload,
+                                                                                 start_time=start_time,
+                                                                                 end_time=end_time)
             latency_results["summary"] = {"hdr_summary": histogram_total_data,
                                           "hdr": histogram_data_by_interval}
             latency_results = calculate_latency(latency_results)
