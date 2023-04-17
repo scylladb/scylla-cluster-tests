@@ -499,14 +499,14 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
 
 class IntegrationTests(unittest.TestCase):
     get_scylla_ami_version_output = ObjectDict(**{
-        'Architecture': 'x86_64', 'CreationDate': '2022-10-13T11:10:59.000Z',
-        'ImageId': 'ami-0daa3e4e3d314d2b3', 'ImageLocation': '797456418907/ScyllaDB 5.0.10',
+        'Architecture': 'x86_64', 'CreationDate': '2022-10-13T13:17:17.000Z',
+        'ImageId': 'ami-0dfb316a2cc0ab399', 'ImageLocation': '797456418907/ScyllaDB Enterprise 2021.1.15',
         'ImageType': 'machine', 'Public': True, 'OwnerId': '797456418907',
         'PlatformDetails': 'Linux/UNIX', 'UsageOperation': 'RunInstances',
         'State': 'available', 'BlockDeviceMappings': [
             {'DeviceName': '/dev/sda1',
              'Ebs': {'DeleteOnTermination': True,
-                     'SnapshotId': 'snap-0a2df75621efaf18c',
+                     'SnapshotId': 'snap-0717a2bee0a38bc84',
                      'VolumeSize': 30,
                      'VolumeType': 'gp2',
                      'Encrypted': False}},
@@ -526,19 +526,19 @@ class IntegrationTests(unittest.TestCase):
              'VirtualName': 'ephemeral6'},
             {'DeviceName': '/dev/sdi',
              'VirtualName': 'ephemeral7'}],
-        'Description': 'ScyllaDB 5.0.10', 'EnaSupport': True, 'Hypervisor': 'xen',
-        'Name': 'ScyllaDB 5.0.10', 'RootDeviceName': '/dev/sda1', 'RootDeviceType': 'ebs',
+        'Description': 'ScyllaDB Enterprise 2021.1.15', 'EnaSupport': True, 'Hypervisor': 'xen',
+        'Name': 'ScyllaDB Enterprise 2021.1.15', 'RootDeviceName': '/dev/sda1', 'RootDeviceType': 'ebs',
         'Tags': [
-            {'Key': 'ScyllaMachineImageVersion', 'Value': '5.0.10-20221009.a36534e106b-1'},
-            {'Key': 'ScyllaPython3Version', 'Value': '5.0.10-0.20221009.18e7a4603-1'},
+            {'Key': 'ScyllaMachineImageVersion', 'Value': '2021.1.15-20221011.82741b636ba-1'},
+            {'Key': 'ScyllaPython3Version', 'Value': '2021.1.15-20221011.82741b636ba-1'},
             {'Key': 'user_data_format_version', 'Value': '2'},
-            {'Key': 'ScyllaToolsVersion', 'Value': '5.0.10-0.20221009.18e7a4603-1'},
-            {'Key': 'ScyllaJMXVersion', 'Value': '5.0.10-0.20221009.18e7a4603-1'},
-            {'Key': 'branch', 'Value': 'branch-5.0'},
-            {'Key': 'scylla-git-commit', 'Value': '18e7a46038379e566619197eb11c1f650bfec2be'},
-            {'Key': 'build-tag', 'Value': 'jenkins-scylla-4.6-ami-63'},
-            {'Key': 'ScyllaVersion', 'Value': '5.0.10-0.20221009.18e7a4603-1'},
-            {'Key': 'build-id', 'Value': '94'}
+            {'Key': 'ScyllaToolsVersion', 'Value': '2021.1.15-20221011.82741b636ba-1'},
+            {'Key': 'ScyllaJMXVersion', 'Value': '2021.1.15-20221011.82741b636ba-1'},
+            {'Key': 'branch', 'Value': 'branch-2021.1'},
+            {'Key': 'scylla-git-commit', 'Value': '3d8c23d0b20af12302608c6286ace0c3dc070828'},
+            {'Key': 'build-tag', 'Value': 'jenkins-enterprise-2021.1-promote-release-213'},
+            {'Key': 'ScyllaVersion', 'Value': '2021.1.15-20221011.82741b636ba-1'},
+            {'Key': 'build-id', 'Value': '213'}
         ], 'VirtualizationType': 'hvm'})
 
     @property
