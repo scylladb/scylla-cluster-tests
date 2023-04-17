@@ -977,18 +977,24 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             node_pools = [node_pools]
 
         LOGGER.info("Install DaemonSets required by scylla nodes")
-        scylla_machine_image_args = ['--all']
+        scylla_machine_image_args = '--all'
         if ComparableScyllaOperatorVersion(self._scylla_operator_chart_version) > "1.5.0":
             # NOTE: operator versions newer than v1.5.0 have it's own perf tuning,
             #       so, we should not do anything else than disk setup in such a case.
-            scylla_machine_image_args = ['--setup-disks']
+            scylla_machine_image_args = '--setup-disks'
 
         def scylla_machine_image_args_modifier(obj):
             if obj["kind"] != "DaemonSet":
                 return
             for container_data in obj["spec"]["template"]["spec"]["containers"]:
-                if "scylla-machine-image:" in container_data["image"]:
-                    container_data["args"] = scylla_machine_image_args
+                if "scylla-machine-image:" not in container_data["image"]:
+                    continue
+                replacement_substr = "${SCYLLA_MACHINE_IMAGE_ARGS}"
+                for i, _arg in enumerate(container_data["args"]):
+                    if replacement_substr not in _arg:
+                        continue
+                    container_data["args"][i] = container_data["args"][i].replace(
+                        replacement_substr, scylla_machine_image_args)
 
         self.apply_file(
             self.NODE_PREPARE_FILE,
