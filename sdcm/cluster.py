@@ -3375,7 +3375,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 is_valid_table = True
                 table_name = f"{getattr(row, column_names[0])}.{getattr(row, column_names[1])}"
 
-                if filter_out_system and getattr(row, column_names[0]).startswith(("system", "alternator_usertable")):
+                if filter_out_system and getattr(row, column_names[0]).startswith(("system", "alternator_usertable", "audit")):
                     is_valid_table = False
                 elif is_column_type and (filter_out_table_with_counter and "counter" in row.type):
                     is_valid_table = False
