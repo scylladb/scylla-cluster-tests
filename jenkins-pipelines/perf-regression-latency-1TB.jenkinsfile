@@ -8,7 +8,5 @@ perfRegressionParallelPipeline(
     region: "us-east-1",
     test_name: "performance_regression_test.PerformanceRegressionTest",
     test_config: """["test-cases/performance/perf-regression-latency-1TB.yaml"]""",
-    sub_tests: ["test_latency"],
-
-    timeout: [time: 500, unit: "MINUTES"]
+    sub_tests: ["test_latency"]
 )
