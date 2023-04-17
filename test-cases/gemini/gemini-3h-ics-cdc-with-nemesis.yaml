@@ -30,5 +30,5 @@ stress_cdclog_reader_cmd: "cdc-stressor -duration 215m -stream-query-round-durat
 
 db_type: mixed_scylla
 instance_type_db_oracle: 'i3.8xlarge'
-oracle_scylla_version: "2020.1.7"
+oracle_scylla_version: "2020.1.14"
 append_scylla_args_oracle: '--enable-cache false'
