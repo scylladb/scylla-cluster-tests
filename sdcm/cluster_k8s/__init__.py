@@ -86,7 +86,7 @@ from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.decorators import timeout as timeout_wrapper
 from sdcm.utils.k8s.chaos_mesh import ChaosMesh
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
-    KubectlClusterEventsLogger, ScyllaManagerLogger, KubernetesWrongSchedulingLogger
+    KubectlClusterEventsLogger, ScyllaManagerLogger, KubernetesWrongSchedulingLogger, HaproxyIngressLogger
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.version_utils import ComparableScyllaOperatorVersion
 from sdcm.wait import wait_for
@@ -286,6 +286,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     _scylla_manager_journal_thread: Optional[ScyllaManagerLogger] = None
     _scylla_operator_journal_thread: Optional[ScyllaOperatorLogger] = None
     _scylla_operator_scheduling_thread: Optional[KubernetesWrongSchedulingLogger] = None
+    _haproxy_ingress_log_thread: Optional[HaproxyIngressLogger] = None
     _scylla_cluster_events_threads: Dict[str, KubectlClusterEventsLogger] = {}
 
     _scylla_operator_log_monitor_thread: Optional[ScyllaOperatorLogMonitoring] = None
@@ -429,6 +430,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def scylla_manager_log(self) -> str:
         return os.path.join(self.logdir, "scylla_manager.log")
 
+    @cached_property
+    def haproxy_ingress_log(self) -> str:
+        return os.path.join(self.logdir, "haproxy_ingress.log")
+
     def start_cert_manager_journal_thread(self) -> None:
         self._cert_manager_journal_thread = CertManagerLogger(self, self.cert_manager_log)
         self._cert_manager_journal_thread.start()
@@ -436,6 +441,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def start_scylla_manager_journal_thread(self):
         self._scylla_manager_journal_thread = ScyllaManagerLogger(self, self.scylla_manager_log)
         self._scylla_manager_journal_thread.start()
+
+    def start_haproxy_ingress_log_thread(self) -> None:
+        self._haproxy_ingress_log_thread = HaproxyIngressLogger(self, self.haproxy_ingress_log)
+        self._haproxy_ingress_log_thread.start()
 
     def set_nodeselector_for_deployments(self, pool_name: str,
                                          namespace: str = "kube-system",
@@ -1075,6 +1084,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 environ=environ)
         self.kubectl_wait("--all --for=condition=Ready pod",
                           namespace=INGRESS_CONTROLLER_NAMESPACE, timeout=306)
+        self.start_haproxy_ingress_log_thread()
 
     @log_run_info
     def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool, namespace: str = SCYLLA_NAMESPACE,

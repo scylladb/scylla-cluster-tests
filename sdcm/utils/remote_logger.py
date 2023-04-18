@@ -357,6 +357,18 @@ class ScyllaOperatorLogger(CommandClusterLoggerBase):
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
+class HaproxyIngressLogger(CommandClusterLoggerBase):
+    restart_delay = 30
+
+    @property
+    def _logger_cmd(self) -> str:
+        cmd = self._cluster.kubectl_cmd(
+            f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
+            "-l app.kubernetes.io/name=haproxy-ingress",
+            namespace="haproxy-controller")
+        return f"{cmd} >> {self._target_log_file} 2>&1"  # pylint: disable=protected-access
+
+
 class KubernetesWrongSchedulingLogger(CommandClusterLoggerBase):
     restart_delay = 120
     WRONG_SCHEDULED_PODS_MESSAGE = "Not allowed pods are scheduled on Scylla node found"
