@@ -3073,56 +3073,63 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def get_group0_members(self) -> list[dict[str, str]]:
         self.log.debug("Get group0 members")
         group0_members = []
-        result = self.run_cqlsh("select value from system.scylla_local where key = 'raft_group0_id'",
-                                split=True, num_retry_on_failure=3)
-        # run_cqlsh return splitted ouput if data was found:
-        # [
-        #   ""
-        #   "value"
-        #   "----------"
-        #   "<value> "
-        #   ""
-        #   "Rows ..."
-        # ]
-        #
-        # 4th element is needed only
-        #
-        # And if was not found (raft disbled):
-        # [
-        #   ""
-        #   "value"
-        #   "-------"
-        #   ""
-        #   "(0 rows)"
-        # ]
-        if not result or len(result) <= 3:
-            return []
-        raft_group0_id = result[3].strip()
-        if not raft_group0_id or "0 rows" in raft_group0_id:
-            return []
+        try:
 
-        result = self.run_cqlsh(
-            f"select server_id, can_vote from system.raft_state where group_id = {raft_group0_id} and disposition = 'CURRENT'",
-            split=True)
-        # run_cqlsh return splitted ouput if data was found:
-        # [
-        #   ""
-        #   "server_id | can_vote"
-        #   "----------"
-        #   "<value1> | True"
-        #   "<value2> | False"
-        #   ""
-        #   "Rows ..."
-        # ]
-        #
-        # Start parsing from 4th line
+            result = self.run_cqlsh("select value from system.scylla_local where key = 'raft_group0_id'",
+                                    split=True, num_retry_on_failure=3)
+            # run_cqlsh return splitted ouput if data was found:
+            # [
+            #   ""
+            #   "value"
+            #   "----------"
+            #   "<value> "
+            #   ""
+            #   "Rows ..."
+            # ]
+            #
+            # 4th element is needed only
+            #
+            # And if was not found (raft disbled):
+            # [
+            #   ""
+            #   "value"
+            #   "-------"
+            #   ""
+            #   "(0 rows)"
+            # ]
+            if not result or len(result) <= 3:
+                return []
+            raft_group0_id = result[3].strip()
+            if not raft_group0_id or "0 rows" in raft_group0_id:
+                return []
 
-        for line in result[3:]:
-            member = line.split("|")
-            if not member or len(member) != 2:
-                break
-            group0_members.append({"host_id": member[0].strip(),
-                                   "voter": member[1].strip() == "True"})
+            result = self.run_cqlsh(
+                f"select server_id, can_vote from system.raft_state where group_id = {raft_group0_id} and disposition = 'CURRENT'",
+                split=True)
+            # run_cqlsh return splitted ouput if data was found:
+            # [
+            #   ""
+            #   "server_id | can_vote"
+            #   "----------"
+            #   "<value1> | True"
+            #   "<value2> | False"
+            #   ""
+            #   "Rows ..."
+            # ]
+            #
+            # Start parsing from 4th line
+
+            for line in result[3:]:
+                member = line.split("|")
+                if not member or len(member) != 2:
+                    break
+                group0_members.append({"host_id": member[0].strip(),
+                                       "voter": member[1].strip() == "True"})
+        except Exception as exc:  # pylint: disable=broad-except
+            err_msg = f"Get group0 members failed with error: {exc}"
+            self.log.error(err_msg)
+            InfoEvent(message=err_msg, severity=Severity.ERROR).publish()
+
         self.log.debug("Group0 members: %s", group0_members)
         return group0_members
 
