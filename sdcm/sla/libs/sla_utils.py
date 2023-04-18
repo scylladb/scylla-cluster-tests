@@ -129,7 +129,7 @@ class SlaUtils:
 
         return results
 
-    # pylint: disable=too-many-arguments,too-many-locals
+    # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
     def validate_scheduler_runtime(self, start_time, end_time, read_users, prometheus_stats, db_cluster,
                                    expected_ratio=None, load_high_enough=None, publish_wp_error_event=False,
                                    possible_issue=None):
@@ -156,14 +156,20 @@ class SlaUtils:
                 continue
 
             node_ip = node.private_ip_address
-            scheduler_runtime_per_sla = prometheus_stats.get_scylla_scheduler_runtime_ms(start_time, end_time, node_ip,
-                                                                                         irate_sample_sec='60s')
+            # TODO: follow after this issue (prometheus return empty answer despite the data exists),
+            #  if it is reproduced
+            # Query 'scylla_scheduler_runtime_ms' from prometheus. If no data returned, try to increase the step time
+            # and query again
+            for step in ['30s', '45s', '60s', '120s']:
+                LOGGER.debug("Query 'scylla_scheduler_runtime_ms' on the node %s with irate step %s ", node_ip, step)
+                if scheduler_runtime_per_sla := prometheus_stats.get_scylla_scheduler_runtime_ms(
+                        start_time, end_time, node_ip, irate_sample_sec=step):
+                    break
+
             # Example of scheduler_runtime_per_sla:
             #   {'10.0.2.177': {'sl:default': [410.5785714285715, 400.36428571428576],
             #   'sl:sl500_596ca81a': [177.11428571428573, 182.02857142857144]}
             LOGGER.debug('SERVICE LEVEL GROUP - RUNTIMES: {}'.format(scheduler_runtime_per_sla))
-            # TODO: follow after this issue (prometheus return empty answer despite the data exists),
-            #  if it is reproduced
             if not scheduler_runtime_per_sla:
                 # Set this message as WARNING because I found that prometheus return empty answer despite the data
                 # exists (I run this request manually and got data). Prometheus request doesn't fail, it succeeded but
