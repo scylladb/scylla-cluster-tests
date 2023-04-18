@@ -317,9 +317,8 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         with self.subTest("check Scylla server after installation"):
             self.check_scylla()
 
-        if not self.node.is_nonroot_install:
-            with self.subTest("check cqlsh installation"):
-                self.check_cqlsh()
+        with self.subTest("check cqlsh installation"):
+            self.check_cqlsh()
 
         # We don't install any time sync service in docker, so the test is unnecessary:
         # https://github.com/scylladb/scylla/tree/master/dist/docker/etc/supervisord.conf.d
