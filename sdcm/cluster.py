@@ -3098,6 +3098,14 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             grouped_by_region[node.region].append(node)
         return grouped_by_region
 
+    def get_datacenter_name_per_region(self):
+        datacenter_name_per_region = {}
+        for region, nodes in self.nodes_by_region().items():
+            status = nodes[0].get_nodes_status()
+            datacenter_name_per_region[region] = status[nodes[0]]['dc']
+
+        return datacenter_name_per_region
+
     def send_file(self, src, dst, verbose=False):
         for loader in self.nodes:
             loader.remoter.send_files(src=src, dst=dst, verbose=verbose)

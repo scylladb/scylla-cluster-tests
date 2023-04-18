@@ -419,8 +419,19 @@ class TestBaseMonitorSet(unittest.TestCase):
 
 class NodetoolDummyNode(BaseNode):  # pylint: disable=abstract-method
 
-    def __init__(self, resp):  # pylint: disable=super-init-not-called
+    def __init__(self, resp, myregion=None, myname=None):  # pylint: disable=super-init-not-called
         self.resp = resp
+        self.myregion = myregion
+        self.myname = myname
+        self.parent_cluster = None
+
+    @property
+    def region(self):
+        return self.myregion
+
+    @property
+    def name(self):
+        return self.myname
 
     def run_nodetool(self, *args, **kwargs):  # pylint: disable=unused-argument
         return Result(exited=0, stderr="", stdout=self.resp)
@@ -432,6 +443,10 @@ class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=abs
     def __init__(self, params):  # pylint: disable=super-init-not-called
         self.nodes = params
         self.name = 'dummy_cluster'
+
+    def get_ip_to_node_map(self):
+        """returns {ip: node} map for all nodes in cluster to get node by ip"""
+        return {node.myname: node for node in self.nodes}
 
 
 class TestNodetoolStatus(unittest.TestCase):
@@ -457,6 +472,30 @@ class TestNodetoolStatus(unittest.TestCase):
                             'host_id': 'e5bcb094-e4de-43aa-8dc9-b1bf74b3b346', 'rack': '1a'},
                            '10.0.198.153': {'state': 'UN', 'load': '?', 'tokens': '256', 'owns': '?',
                                             'host_id': 'fba174cd-917a-40f6-ab62-cc58efaaf301', 'rack': '1a'}}}
+
+    def test_datacenter_name_per_region(self):  # pylint: disable=no-self-use
+        resp = "\n".join(["Datacenter: eastus",
+                          "==================",
+                          "Status=Up/Down",
+                          "|/ State=Normal/Leaving/Joining/Moving",
+                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                          "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
+                          "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a",
+                          "Datacenter: westus",
+                          "==================",
+                          "Status=Up/Down",
+                          "|/ State=Normal/Leaving/Joining/Moving",
+                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                          "UN  10.1.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74546346  2a"
+                          ]
+                         )
+        node1 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.59.34")
+        node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
+        node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname='10.1.59.34')
+        db_cluster = DummyScyllaCluster([node1, node2, node3])
+        node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
+        datacenter_name_per_region = db_cluster.get_datacenter_name_per_region()
+        assert datacenter_name_per_region == {'east-us': 'eastus', 'west-us': 'westus'}
 
     def test_can_get_nodetool_status_ipv6(self):  # pylint: disable=no-self-use
         resp = "\n".join(["Datacenter: eu-north",
