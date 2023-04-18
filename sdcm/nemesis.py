@@ -74,7 +74,7 @@ from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2Unexp
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
-from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
+from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
 from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors, ignore_no_space_errors,
                                                  ignore_scrub_invalid_errors, ignore_view_error_gate_closed_exception,
                                                  ignore_stream_mutation_fragments_errors,
@@ -4224,9 +4224,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             node1.stop_scylla()
             InfoEvent(message=f'Create a materialized-view for table {ks_name}.{base_table_name}').publish()
             try:
-                self.tester.create_materialized_view(ks_name, base_table_name, view_name, [column],
-                                                     primary_key_columns, session,
-                                                     mv_columns=[column] + primary_key_columns)
+                with EventsFilter(event_class=DatabaseLogEvent,
+                                  regex='.*view - Error applying view update.*',
+                                  extra_time_to_expiration=30):
+                    self.tester.create_materialized_view(ks_name, base_table_name, view_name, [column],
+                                                         primary_key_columns, session,
+                                                         mv_columns=[column] + primary_key_columns)
             except Exception as error:  # pylint: disable=broad-except
                 self.log.warning('Failed creating a materialized view: %s', error)
                 node1.start_scylla()
