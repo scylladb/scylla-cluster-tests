@@ -3147,7 +3147,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     Cluster of Node objects.
     """
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster', node_prefix='node', n_nodes=3, params=None,
                  region_names=None, node_type=None, extra_network_interface=False, add_nodes=True):
         self.extra_network_interface = extra_network_interface
@@ -3192,11 +3192,20 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         if add_nodes:
             if isinstance(n_nodes, list):
                 for dc_idx, num in enumerate(n_nodes):
-                    for az_index in range(num):
-                        self.add_nodes(1, dc_idx=dc_idx, rack=az_index % azs, enable_auto_bootstrap=self.auto_bootstrap)
+                    # spread nodes evenly across AZ's
+                    nodes_per_az = [0]*azs
+                    for idx in range(num):
+                        nodes_per_az[idx % azs] += 1
+                    for az_index in range(azs):
+                        self.add_nodes(nodes_per_az[az_index], dc_idx=dc_idx, rack=az_index,
+                                       enable_auto_bootstrap=self.auto_bootstrap)
             elif isinstance(n_nodes, int):  # legacy type
-                for az_index in range(n_nodes):
-                    self.add_nodes(1, rack=az_index % azs, enable_auto_bootstrap=self.auto_bootstrap)
+                # spread nodes evenly across AZ's
+                nodes_per_az = [0] * azs
+                for idx in range(n_nodes):
+                    nodes_per_az[idx % azs] += 1
+                for az_index in range(azs):
+                    self.add_nodes(nodes_per_az[az_index], rack=az_index, enable_auto_bootstrap=self.auto_bootstrap)
             else:
                 raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
             self.run_node_benchmarks()
