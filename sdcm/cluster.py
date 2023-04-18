@@ -3020,6 +3020,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return
         self.remoter.run(f"sudo kill -s SIGHUP {pid}")
 
+    @retrying(n=5, sleep_time=5, raise_on_exceeded=False)
     def get_token_ring_members(self) -> list[dict[str, str]]:
         token_ring_members = []
         self.log.debug("Get token ring members")
@@ -3039,6 +3040,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.debug("Token ring members %s", token_ring_members)
         return token_ring_members
 
+    @retrying(n=5, sleep_time=5, raise_on_exceeded=False)
     def get_group0_members(self) -> list[dict[str, str]]:
         self.log.debug("Get group0 members")
         group0_members = []
