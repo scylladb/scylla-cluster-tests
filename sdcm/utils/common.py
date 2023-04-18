@@ -1598,15 +1598,19 @@ class FileFollowerIterator():  # pylint: disable=too-few-public-methods
     def __iter__(self):
         with open(self.filename, encoding="utf-8") as input_file:
             line = ''
+            poller = select.poll()  # pylint: disable=no-member
+            registered = False
             while not self.thread_obj.stopped():
-                poller = select.poll()  # pylint: disable=no-member
-                poller.register(input_file, select.POLLIN)  # pylint: disable=no-member
+                if not registered:
+                    poller.register(input_file, select.POLLIN)  # pylint: disable=no-member
+                    registered = True
                 if poller.poll(100):
                     line += input_file.readline()
                 if not line or not line.endswith('\n'):
                     time.sleep(0.1)
                     continue
                 poller.unregister(input_file)
+                registered = False
                 yield line
                 line = ''
             yield line
