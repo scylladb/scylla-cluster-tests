@@ -41,22 +41,25 @@ def is_cf_a_view(node: BaseNode, ks, cf) -> bool:
             return False
 
 
-def get_column_names(session, ks, cf, is_partition_key: bool = False) -> list:
-    filter_kind = " kind in ('static', 'regular')" if not is_partition_key else "kind = 'partition_key'"
-    res = session.execute(f"SELECT column_name FROM system_schema.columns"
+def get_column_names(session, ks, cf, is_primary_key: bool = False, filter_out_collections: bool = False) -> list:
+    filter_kind = " kind in ('static', 'regular')" if not is_primary_key else "kind in ('partition_key', 'clustering')"
+    res = session.execute(f"SELECT column_name, type FROM system_schema.columns"
                           f" WHERE keyspace_name = '{ks}'"
                           f" AND table_name = '{cf}'"
                           f" AND {filter_kind}"
                           f" ALLOW FILTERING")
-    return [row.column_name for row in list(res)]
+    res_list = list(res)
+    column_names = [row.column_name for row in res_list]
+    if filter_out_collections:
+        collection_types = ('list', 'set', 'map')
+        column_names = [row.column_name for row in res_list if not str(row.type).startswith(collection_types)]
+    return column_names
 
 
-def get_random_column_name(session, ks, cf) -> str:
-    return random.choice(get_column_names(session=session, ks=ks, cf=cf))
-
-
-def get_partition_key_name(session, ks, cf) -> str:
-    return get_column_names(session=session, ks=ks, cf=cf, is_partition_key=True)[0]
+def get_random_column_name(session, ks, cf, filter_out_collections: bool = False) -> str | None:
+    if column_names := get_column_names(session=session, ks=ks, cf=cf, filter_out_collections=filter_out_collections):
+        return random.choice(column_names)
+    return None
 
 
 def create_index(session, ks, cf, column) -> str:
