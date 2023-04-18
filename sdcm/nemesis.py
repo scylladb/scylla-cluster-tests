@@ -104,7 +104,7 @@ from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperi
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 from sdcm.utils.nemesis_utils.indexes import get_random_column_name, create_index, \
-    wait_for_index_to_be_built, verify_query_by_index_works, drop_index, get_partition_key_name, \
+    wait_for_index_to_be_built, verify_query_by_index_works, drop_index, get_column_names, \
     wait_for_view_to_be_built, drop_materialized_view, is_cf_a_view
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
@@ -2309,13 +2309,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
              this nemesis since not applicable to a longevity test.
         """
         all_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
-        non_mview_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_out_mv=True)
 
         if not all_ks_cfs:
             raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. toggle_table_gc_mode nemesis can\'t run')
 
-        mview_ks_cfs = list(set(all_ks_cfs) - set(non_mview_ks_cfs))
         keyspace_table = random.choice(all_ks_cfs)
         keyspace, table = keyspace_table.split('.')
         if get_gc_mode(node=self.target_node, keyspace=keyspace, table=table) != GcMode.REPAIR:
@@ -2324,7 +2322,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             new_gc_mode = GcMode.TIMEOUT
         new_gc_mode_as_dict = {'mode': new_gc_mode.value}
 
-        alter_command_prefix = 'ALTER TABLE ' if keyspace_table not in mview_ks_cfs else 'ALTER MATERIALIZED VIEW '
+        alter_command_prefix = 'ALTER TABLE ' if not is_cf_a_view(
+            node=self.target_node, ks=keyspace, cf=table) else 'ALTER MATERIALIZED VIEW '
         cmd = alter_command_prefix + f" {keyspace_table} WITH tombstone_gc = {new_gc_mode_as_dict};"
         self.log.info("Alter GC mode query to execute: %s", cmd)
         self.target_node.run_cqlsh(cmd)
@@ -4181,6 +4180,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 raise UnsupportedNemesis("No table found to create index on")
             ks, cf = random.choice(ks_cf_list).split('.')
             column = get_random_column_name(session, ks, cf)
+            if not column:
+                raise UnsupportedNemesis("No column found to create index on")
             try:
                 index_name = create_index(session, ks, cf, column)
             except InvalidRequest as exc:
@@ -4204,24 +4205,31 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Finally, drop the MV.
         """
         node1, node2 = self.cluster.nodes[:2]
-        self.log.info("Stopping Scylla on node1")
         ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=node2, filter_empty_tables=True, filter_out_mv=True)
         if not ks_cfs:
             raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. nemesis can\'t be run')
         ks_name, base_table_name = random.choice(ks_cfs).split('.')
         view_name = f'{base_table_name}_view'
-        node1.stop_scylla()
         with self.cluster.cql_connection_patient(node2) as session:
-            partition_key_name = get_partition_key_name(session=session, ks=ks_name, cf=base_table_name)
-            column = f'"{get_random_column_name(session=session, ks=ks_name, cf=base_table_name)}"'
+            primary_key_columns = get_column_names(session=session, ks=ks_name, cf=base_table_name, is_primary_key=True)
+            # selecting a supported column for creating a materialized-view (not a collection type).
+            column = get_random_column_name(session=session, ks=ks_name,
+                                            cf=base_table_name, filter_out_collections=True)
+            if not column:
+                raise UnsupportedNemesis(
+                    'A supported column for creating MV is not found. nemesis can\'t run')
+            column = f'"{column}"'
+            self.log.info("Stopping Scylla on node1")
+            node1.stop_scylla()
             InfoEvent(message=f'Create a materialized-view for table {ks_name}.{base_table_name}').publish()
             try:
                 self.tester.create_materialized_view(ks_name, base_table_name, view_name, [column],
-                                                     [partition_key_name], session,
-                                                     mv_columns=[column, partition_key_name])
+                                                     primary_key_columns, session,
+                                                     mv_columns=[column] + primary_key_columns)
             except Exception as error:  # pylint: disable=broad-except
                 self.log.warning('Failed creating a materialized view: %s', error)
+                node1.start_scylla()
                 raise
             try:
                 self.log.info("Starting Scylla on node1")
