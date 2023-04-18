@@ -2747,14 +2747,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                       auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout,
                       connect_timeout=connect_timeout, ssl_params=ssl_params)
 
+        cqlsh_cmd = self.add_install_prefix('/usr/bin/cqlsh')
         if self.is_cqlsh_support_cloud_bundle:
             connection_bundle_file = self.parent_cluster.connection_bundle_file
             target_connection_bundle_file = str(Path('/tmp/') / connection_bundle_file.name)
             self.remoter.send_files(str(connection_bundle_file), target_connection_bundle_file)
 
-            return f'cqlsh {options} -e "{command}" --cloudconf {target_connection_bundle_file}'
-        return 'cqlsh {options} -e "{command}" {host} {port}'.format(options=options, command=command, host=host,
-                                                                     port=port)
+            return f'{cqlsh_cmd} {options} -e "{command}" --cloudconf {target_connection_bundle_file}'
+        return f'{cqlsh_cmd} {options} -e "{command}" {host} {port}'
 
     def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=120, verbose=True, split=False, target_db_node=None,
                   connect_timeout=60, num_retry_on_failure=1):
