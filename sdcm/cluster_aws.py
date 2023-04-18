@@ -340,7 +340,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         return ec2_user_data
 
     def _create_or_find_instances(self, count, ec2_user_data, dc_idx, az_idx=0):
-        if self.nodes:
+        nodes = [node for node in self.nodes if node.dc_idx == dc_idx]
+        if nodes:
             return self._create_instances(count, ec2_user_data, dc_idx, az_idx)
         if self.test_config.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx)
