@@ -178,13 +178,13 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_12_scylla_version_ami(self):
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = '4.6.3'
+        os.environ['SCT_SCYLLA_VERSION'] = '5.1.8'
 
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
-        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-03d8b6dcd63bd4e24 ami-09c658571b2d46d18')
+        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-0e8a0f4016294654a ami-0554f19f2ba89f446')
 
     @pytest.mark.integration
     @staticmethod
@@ -287,18 +287,18 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_13_scylla_version_ami_branch(self):  # pylint: disable=invalid-name
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = 'branch-5.0:32'
+        os.environ['SCT_SCYLLA_VERSION'] = 'branch-5.1:32'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
-        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-076a213c791dc19cd ami-0625f2d18e05bf206')
+        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-01eb9abb50c383ff9 ami-0897d6d6d87bed868')
 
     @pytest.mark.integration
     def test_13_scylla_version_ami_branch_latest(self):  # pylint: disable=invalid-name
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = 'branch-4.2:latest'
+        os.environ['SCT_SCYLLA_VERSION'] = 'branch-5.1:latest'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -605,13 +605,13 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_20_user_data_format_version_aws(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = 'master:latest'
-        os.environ['SCT_ORACLE_SCYLLA_VERSION'] = '4.6.0'
+        os.environ['SCT_ORACLE_SCYLLA_VERSION'] = '5.1.8'
         os.environ['SCT_DB_TYPE'] = 'mixed_scylla'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
         self.assertEqual(conf['user_data_format_version'], '3')
-        self.assertEqual(conf['oracle_user_data_format_version'], '2')
+        self.assertEqual(conf['oracle_user_data_format_version'], '3')
 
     @pytest.mark.integration
     def test_20_user_data_format_version_aws_2(self):
