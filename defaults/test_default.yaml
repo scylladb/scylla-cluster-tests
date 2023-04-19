@@ -206,7 +206,7 @@ stress_image:
   nosqlbench: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
   cassandra-stress: '' # default would be same version as scylla under test
   scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.16'
-  gemini: 'scylladb/hydra-loaders:gemini-1.7.8'
+  gemini: 'scylladb/hydra-loaders:gemini-1.7.8-minideb'
   alternator-dns: 'scylladb/hydra-loaders:alternator-dns-0.1'
   cdc-stresser: 'scylladb/hydra-loaders:cdc-stresser-20210630'
   kcl: 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'
