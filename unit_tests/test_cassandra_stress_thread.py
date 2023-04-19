@@ -111,3 +111,32 @@ def test_03_cassandra_stress_client_encrypt(request, docker_scylla, params):
 
     assert "latency 99th percentile" in output[0]
     assert float(output[0]["latency 99th percentile"]) > 0
+
+
+def test_03_cassandra_stress_multi_region(request, docker_scylla, params):
+    loader_set = LocalLoaderSetDummy()
+    loader_set.test_config.set_multi_region(True)
+    request.addfinalizer(lambda: loader_set.test_config.set_multi_region(False))
+    cmd = (
+        """cassandra-stress write cl=ONE duration=1m -schema 'replication(factor=1) """
+        """compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native """
+        """-rate threads=10 -pop seq=1..10000000 -log interval=5"""
+    )
+
+    cs_thread = CassandraStressThread(
+        loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params
+    )
+
+    def cleanup_thread():
+        cs_thread.kill()
+
+    request.addfinalizer(cleanup_thread)
+
+    cs_thread.run()
+
+    output = cs_thread.get_results()
+    assert "latency mean" in output[0]
+    assert float(output[0]["latency mean"]) > 0
+
+    assert "latency 99th percentile" in output[0]
+    assert float(output[0]["latency 99th percentile"]) > 0
