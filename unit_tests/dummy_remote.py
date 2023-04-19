@@ -18,7 +18,7 @@ import shutil
 import logging
 
 from sdcm.remote import LocalCmdRunner
-from sdcm.cluster import BaseNode, BaseScyllaCluster
+from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 
 
 class DummyOutput:
@@ -70,7 +70,8 @@ class LocalNode(BaseNode):
         pass
 
 
-class LocalLoaderSetDummy:
+class LocalLoaderSetDummy(BaseCluster):
+    # pylint: disable=super-init-not-called,abstract-method
     def __init__(self, nodes=None):
         self.name = "LocalLoaderSetDummy"
         self.nodes = nodes if nodes is not None else [LocalNode("loader_node", parent_cluster=self)]
