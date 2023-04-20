@@ -2669,8 +2669,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         mgr_cluster = self.cluster.get_cluster_manager()
         mgr_task = mgr_cluster.create_repair_task()
         task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
-        assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
-            mgr_task.id, str(mgr_task.status))
+        assert task_final_status == TaskStatus.DONE,\
+            f'Task: {mgr_task.id} final status is: {str(mgr_task.status)}.\nTask progress string: ' \
+            f'{mgr_task.progress_string(parse_table_res=False, is_verify_errorless_result=True).stdout}'
         self.log.info('Task: {} is done.'.format(mgr_task.id))
 
     def disrupt_abort_repair(self):
