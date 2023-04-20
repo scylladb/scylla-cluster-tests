@@ -1981,6 +1981,8 @@ class SCTConfiguration(dict):
         self._validate_seeds_number()
         if self.get('n_db_nodes'):
             self._validate_nemesis_can_run_on_non_seed()
+            self._validate_number_of_db_nodes_divides_by_az_number()
+
         if 'extra_network_interface' in self and len(self.region_names) >= 2:
             raise ValueError("extra_network_interface isn't supported for multi region use cases")
         self._check_partition_range_with_data_validation_correctness()
@@ -2058,6 +2060,12 @@ class SCTConfiguration(dict):
         num_of_db_nodes = sum([int(i) for i in str(self.get('n_db_nodes')).split(' ')]) + int(self.get('add_node_cnt'))
         assert num_of_db_nodes > seeds_num, \
             "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
+
+    def _validate_number_of_db_nodes_divides_by_az_number(self):
+        az_count = len(self.get('availability_zone').split(',')) if self.get('availability_zone') else 1
+        for nodes_num in [int(i) for i in str(self.get('n_db_nodes')).split(' ')]:
+            assert nodes_num % az_count == 0, \
+                f"Number of db nodes ({nodes_num}) should be divisible by number of availability zones ({az_count})"
 
     def _check_per_backend_required_values(self, backend: str):
         if backend in self.available_backends:

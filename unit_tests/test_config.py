@@ -790,6 +790,18 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                 "field 'validate_data' must be an instance of <class 'bool'>, but got 'no'\n\t" \
                 "field 'full_scan_aggregates_operation_limit' must be an instance of <class 'int'>, but got 'a'"
 
+    def test_28_number_of_nodes_per_az_must_be_divisable_by_number_of_az(self):
+        os.environ['SCT_N_DB_NODES'] = '3 3 2'
+        os.environ['SCT_REGION_NAME'] = 'eu-west-1 eu-west-2 us-east-1'
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b,c'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = "['ami-06f919eb', 'ami-06f919eb', 'ami-06f919eb']"
+        with self.assertRaises(AssertionError) as context:
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+
+        self.assertIn("should be divisible by number of availability zones", str(context.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
