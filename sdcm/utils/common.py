@@ -708,8 +708,10 @@ def aws_tags_to_dict(tags_list):
             tags_dict[item["Key"]] = item["Value"]
     return tags_dict
 
+# pylint: disable=too-many-arguments
 
-def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as_region=False, verbose=False):
+
+def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as_region=False, verbose=False, availability_zone=None):
     """
     list all instances with specific tags AWS
 
@@ -718,6 +720,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
     :param running: get all running instances
     :param group_as_region: if True the results would be grouped into regions
     :param verbose: if True will log progress information
+    :param availability_zone: availability zone letter (e.g. 'a', 'b', 'c')
 
     :return: instances dict where region is a key
     """
@@ -747,6 +750,11 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         else:
             instances[curr_region_name] = [i for i in instances[curr_region_name]
                                            if not i['State']['Name'] == 'terminated']
+    if availability_zone is not None:
+        # filter by availability zone (a, b, c, etc.)
+        for curr_region_name in instances:
+            instances[curr_region_name] = [i for i in instances[curr_region_name]
+                                           if i['Placement']['AvailabilityZone'] == curr_region_name + availability_zone]
     if not group_as_region:
         instances = list(itertools.chain(*list(instances.values())))  # flatten the list of lists
         total_items = len(instances)

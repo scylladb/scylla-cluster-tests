@@ -82,12 +82,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
 
     @property
     def Placement(self) -> Optional[AWSPlacementInfo]:  # pylint: disable=invalid-name
-        """
-        If only one AZ is configured let's restrict it via placement option
-        """
-        if len(self._availability_zones) != 1:
-            return None
-        return AWSPlacementInfo(AvailabilityZone=self._region_name + self._availability_zones[0])
+        return AWSPlacementInfo(AvailabilityZone=self._region_name + self._availability_zones[self.availability_zone])
 
     @property
     def UserData(self) -> Optional[str]:  # pylint: disable=invalid-name

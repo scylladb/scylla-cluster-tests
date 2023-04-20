@@ -307,19 +307,19 @@ def get_ec2_network_configuration(regions: list[str], availability_zones: list[s
             assert sct_subnet, f"No SCT subnet configured for {region}! Run 'hydra prepare-aws-region'"
             region_subnets.append(sct_subnet.subnet_id)
 
-            security_groups = []
-            sct_sg = aws_region.sct_security_group
-            assert sct_sg, f"No SCT security group configured for {region}! Run 'hydra prepare-aws-region'"
-            security_groups.append(sct_sg.group_id)
+        security_groups = []
+        sct_sg = aws_region.sct_security_group
+        assert sct_sg, f"No SCT security group configured for {region}! Run 'hydra prepare-aws-region'"
+        security_groups.append(sct_sg.group_id)
 
-            if params.get('intra_node_comm_public') or params.get('ip_ssh_connections') == 'public':
-                test_config = TestConfig()
-                test_id = test_config.test_id()
+        if params.get('intra_node_comm_public') or params.get('ip_ssh_connections') == 'public':
+            test_config = TestConfig()
+            test_id = test_config.test_id()
 
-                test_sg = aws_region.provide_sct_test_security_group(test_id)
-                security_groups.append(test_sg.group_id)
+            test_sg = aws_region.provide_sct_test_security_group(test_id)
+            security_groups.append(test_sg.group_id)
 
-            ec2_security_group_ids.append(security_groups)
+        ec2_security_group_ids.append(security_groups)
 
     return ec2_security_group_ids, ec2_subnet_ids
 

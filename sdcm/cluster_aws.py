@@ -298,16 +298,15 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             raise Exception('Unsuported type of cluster type %s' % self)
         return instances
 
-    def _get_instances(self, dc_idx):
-
+    def _get_instances(self, dc_idx, az_idx=None):
         test_id = self.test_config.test_id()
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
-
+        availability_zone = self.params.get('availability_zone').split(",")[az_idx] if az_idx is not None else None
         ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
                                           spot_max_price_percentage=self.params.get('spot_max_price'))
         results = list_instances_aws(tags_dict={'TestId': test_id, 'NodeType': self.node_type},
-                                     region_name=self.region_names[dc_idx], group_as_region=True)
+                                     region_name=self.region_names[dc_idx], group_as_region=True, availability_zone=availability_zone)
         instances = results[self.region_names[dc_idx]]
 
         def sort_by_index(item):
@@ -340,15 +339,15 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         return ec2_user_data
 
     def _create_or_find_instances(self, count, ec2_user_data, dc_idx, az_idx=0):
-        nodes = [node for node in self.nodes if node.dc_idx == dc_idx]
+        nodes = [node for node in self.nodes if node.dc_idx == dc_idx and node.rack == az_idx]
         if nodes:
             return self._create_instances(count, ec2_user_data, dc_idx, az_idx)
         if self.test_config.REUSE_CLUSTER:
-            instances = self._get_instances(dc_idx)
+            instances = self._get_instances(dc_idx, az_idx)
             assert len(instances) == count, f"Found {len(instances)} instances, while expect {count}"
             self.log.info('Found instances to be reused from test [%s] = %s', self.test_config.REUSE_CLUSTER, instances)
             return instances
-        if instances := self._get_instances(dc_idx):
+        if instances := self._get_instances(dc_idx, az_idx):
             self.log.info('Found provisioned instances = %s', instances)
             return instances
         self.log.info('Found no provisioned instances. Provision them.')
@@ -356,6 +355,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
+        if not count:
+            return []
         ec2_user_data = self.prepare_user_data(enable_auto_bootstrap=enable_auto_bootstrap)
 
         instances = self._create_or_find_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx, az_idx=rack)

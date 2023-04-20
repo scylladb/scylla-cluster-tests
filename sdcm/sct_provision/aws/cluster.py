@@ -34,6 +34,7 @@ from sdcm.test_config import TestConfig
 class ClusterNode(BaseModel):
     parent_cluster: 'ClusterBase' = None
     region_id: int
+    az_id: int
     node_num: int
     node_name_prefix: str
 
@@ -66,13 +67,14 @@ class ClusterBase(BaseModel):
         nodes = []
         node_num = 0
         for region_id in range(len(self._regions_with_nodes)):
-            for _ in range(self._node_nums[region_id]):
+            for idx in range(self._node_nums[region_id]):
                 node_num += 1
                 nodes.append(
                     ClusterNode(
                         parent_cluster=self,
                         node_num=node_num,
                         region_id=region_id,
+                        az_id=idx % len(self._azs),
                         node_name_prefix=self._node_prefix,
                     )
                 )
@@ -110,11 +112,17 @@ class ClusterBase(BaseModel):
     def tags(self):
         return self.common_tags | {"NodeType": str(self._NODE_TYPE), "UserName": self.params.get(self._USER_PARAM)}
 
-    def _node_tags(self, region_id: int) -> List[TagsType]:
-        return [node.tags for node in self.nodes if node.region_id == region_id]
+    def _az_nodes(self, region_id: int) -> List[int]:
+        az_nodes = [0] * len(self._azs)
+        for node_num in range(self._node_nums[region_id]):
+            az_nodes[node_num % len(self._azs)] += 1
+        return az_nodes
 
-    def _node_names(self, region_id: int) -> List[str]:
-        return [node.name for node in self.nodes if node.region_id == region_id]
+    def _node_tags(self, region_id: int, az_id: int) -> List[TagsType]:
+        return [node.tags for node in self.nodes if node.region_id == region_id and node.az_id == az_id]
+
+    def _node_names(self, region_id: int, az_id: int) -> List[str]:
+        return [node.name for node in self.nodes if node.region_id == region_id and node.az_id == az_id]
 
     @property
     def _instance_provision(self):
@@ -166,11 +174,6 @@ class ClusterBase(BaseModel):
     def _test_duration(self) -> int:
         return self.params.get('test_duration')
 
-    def _az(self, region_id: int) -> str:
-        if len(self._azs) == 1:
-            return self._azs[0]
-        return self._azs[region_id]
-
     def _spot_low_price(self, region_id: int) -> float:
         from sdcm.utils.pricing import AWSPricing  # pylint: disable=import-outside-toplevel
 
@@ -181,13 +184,13 @@ class ClusterBase(BaseModel):
         ))
         return on_demand_price * self.params.get('spot_max_price')
 
-    def provision_plan(self, region_id: int) -> ProvisionPlan:
+    def provision_plan(self, region_id: int, availability_zone: str) -> ProvisionPlan:
         return ProvisionPlanBuilder(
             initial_provision_type=self._instance_provision,
             duration=self._test_duration,
             fallback_provision_on_demand=self.params.get('instance_provision_fallback_on_demand'),
             region_name=self._region(region_id),
-            availability_zone=self._az(region_id),
+            availability_zone=availability_zone,
             spot_low_price=self._spot_low_price(region_id),
             provisioner=AWSInstanceProvisioner(),
         ).provision_plan
@@ -206,19 +209,23 @@ class ClusterBase(BaseModel):
             return []
         total_instances_provisioned = []
         for region_id in range(len(self._regions_with_nodes)):
-            instance_parameters = self._instance_parameters(region_id=region_id, availability_zone=0)
-            node_tags = self._node_tags(region_id=region_id)
-            node_names = self._node_names(region_id=region_id)
-            node_count = self._node_nums[region_id]
-            instances = self.provision_plan(region_id).provision_instances(
-                instance_parameters=instance_parameters,
-                node_tags=node_tags,
-                node_names=node_names,
-                node_count=node_count
-            )
-            if not instances:
-                raise RuntimeError('End of provision plan reached, but no instances provisioned')
-            total_instances_provisioned.extend(instances)
+            az_nodes = self._az_nodes(region_id=region_id)
+            for az_id, _ in enumerate(self._azs):
+                node_count = az_nodes[az_id]
+                if not node_count:
+                    continue
+                instance_parameters = self._instance_parameters(region_id=region_id, availability_zone=az_id)
+                node_tags = self._node_tags(region_id=region_id, az_id=az_id)
+                node_names = self._node_names(region_id=region_id, az_id=az_id)
+                instances = self.provision_plan(region_id, self._azs[az_id]).provision_instances(
+                    instance_parameters=instance_parameters,
+                    node_tags=node_tags,
+                    node_names=node_names,
+                    node_count=node_count
+                )
+                if not instances:
+                    raise RuntimeError('End of provision plan reached, but no instances provisioned')
+                total_instances_provisioned.extend(instances)
         return total_instances_provisioned
 
 
