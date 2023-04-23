@@ -10,6 +10,12 @@ DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)
 
 
+def get_persistent_snapshots():  # Snapshot sizes (dict keys) are in GB
+    with open("defaults/manager_persistent_snapshots.yaml", encoding="utf-8") as mgmt_snapshot_yaml:
+        persistent_manager_snapshots_dict = yaml.safe_load(mgmt_snapshot_yaml)
+    return persistent_manager_snapshots_dict
+
+
 def get_distro_name(distro_object):
     known_distro_dict = {
         Distro.AMAZON2: "centos7",
