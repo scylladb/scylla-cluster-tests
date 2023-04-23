@@ -4648,7 +4648,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def decommission(self, node: BaseNode, timeout: int | float = None):
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
-            node.run_nodetool("decommission", timeout=timeout)
+            node.run_nodetool("decommission", timeout=timeout, retry=0)
         self.verify_decommission(node)
 
     def clean_group0_garbage(self, node: BaseNode, raise_exception: bool = False):
