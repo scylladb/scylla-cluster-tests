@@ -152,11 +152,12 @@ class EventsProcessesRegistry:
 
     def get_events_process(self, name: str) -> EventsProcess:
         with self._registry_dict_lock:
-            LOGGER.debug("Get process `%s' from %s", name, self)
+            # this happens too many times during SCT run, leaving it for when debugging is needed
+            # LOGGER.debug("Get process `%s' from %s", name, self)
             return self._registry_dict.get(name)
 
     def __str__(self):
-        return f"{type(self).__name__}[lod_dir={self.log_dir},id=0x{id(self):x},default={self.default}]"
+        return f"{type(self).__name__}[log_dir={self.log_dir},id=0x{id(self):x},default={self.default}]"
 
 
 _EVENTS_PROCESSES_LOCK = threading.RLock()
