@@ -93,7 +93,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
 
         message_bin = message.encode("utf-8") + b"\n"
 
-        if event.severity != Severity.DEBUG:
+        if event.severity not in (Severity.DEBUG, Severity.WARNING):
             # Log event to the console
             tee = getattr(LOGGER, logging.getLevelName(event.log_level).lower())
             if tee and not isinstance(event, TestResultEvent):
