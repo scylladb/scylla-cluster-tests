@@ -1827,7 +1827,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def repair_nodetool_rebuild(self):
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
-            self.target_node.run_nodetool('rebuild')
+            self.target_node.run_nodetool('rebuild', retry=0)
 
     def disrupt_nodetool_cleanup(self):
         # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
@@ -3458,9 +3458,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             timeout += 1200  # Azure reboot can take up to 20min to initiate
         ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
         if new_node := decommission_post_action():
-            new_node.run_nodetool("rebuild")
+            new_node.run_nodetool("rebuild", retry=0)
         else:
-            self.target_node.run_nodetool(sub_cmd="rebuild")
+            self.target_node.run_nodetool(sub_cmd="rebuild", retry=0)
 
     def start_and_interrupt_repair_streaming(self):
         """
@@ -3486,7 +3486,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         )
         ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
-            self.target_node.run_nodetool("rebuild")
+            self.target_node.run_nodetool("rebuild", retry=0)
 
     def start_and_interrupt_rebuild_streaming(self):
         """
@@ -3517,7 +3517,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         ParallelObject(objects=[trigger, watcher], timeout=timeout + 60).call_objects()
         self.target_node.wait_db_up(timeout=300)
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
-            self.target_node.run_nodetool("rebuild")
+            self.target_node.run_nodetool("rebuild", retry=0)
 
     def disrupt_decommission_streaming_err(self):
         """
@@ -3956,7 +3956,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     strategy.replication_factors.update({new_dc_name: 1})
                     replication_strategy_setter(**{keyspace: strategy})
                 InfoEvent(message='execute rebuild on new datacenter').publish()
-                new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}")
+                new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", retry=0)
                 InfoEvent(message='Running full cluster repair on each node').publish()
                 for cluster_node in self.cluster.nodes:
                     cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
