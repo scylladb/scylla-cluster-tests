@@ -158,6 +158,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             scylla_yaml_updates.update({"enable_sstables_mc_format": True})
 
         InfoEvent(message='Upgrading a Node').publish()
+        # because of scylladb/scylla-enterprise#2818 we are for now adding this workaround
+        if node.distro.is_ubuntu:
+            node.remoter.sudo("apt-get remove shim-signed -y --allow-remove-essential")
         node.upgrade_system()
 
         # We assume that if update_db_packages is not empty we install packages from there.
