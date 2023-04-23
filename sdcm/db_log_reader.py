@@ -46,6 +46,7 @@ class DbLogReader(Process):
         '] repair - Repair',
         'repair id [id=',
         '] stream_session - [Stream ',
+        '] storage_proxy - Exception when communicating with',
     ]
     # pylint: disable=too-many-arguments
 
