@@ -25,14 +25,13 @@ from datetime import datetime
 
 import boto3
 
-import yaml
 from invoke import exceptions
 from pkg_resources import parse_version
 
 from sdcm import mgmt
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from sdcm.mgmt.cli import ScyllaManagerTool
-from sdcm.mgmt.common import reconfigure_scylla_manager
+from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots
 from sdcm.remote import shell_script_cmd
 from sdcm.tester import ClusterTester
 from sdcm.cluster import TestConfig
@@ -469,12 +468,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                       timeout=110000, restore_data=True)
         self.run_verification_read_stress()
 
-    @staticmethod
-    def _get_persistent_snapshots():
-        with open("defaults/manager_persistent_snapshots.yaml", encoding="utf-8") as mgmt_snapshot_yaml:
-            persistent_manager_snapshots_dict = yaml.safe_load(mgmt_snapshot_yaml)
-        return persistent_manager_snapshots_dict
-
     def test_restore_multiple_backup_snapshots(self):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
@@ -483,7 +476,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         if self.params.get('cluster_backend') != 'aws':
             self.log.error("Test supports only AWS ATM")
             return
-        persistent_manager_snapshots_dict = self._get_persistent_snapshots()
+        persistent_manager_snapshots_dict = get_persistent_snapshots()
         target_bucket = persistent_manager_snapshots_dict["aws"]["bucket"]
         location_list = [f"s3:{target_bucket}"]
         read_stress_list = []
