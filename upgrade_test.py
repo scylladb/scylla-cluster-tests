@@ -213,10 +213,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message='Upgrading a Node').publish()
         # because of scylladb/scylla-enterprise#2818 we are for now adding this workaround
         if node.distro.is_ubuntu:
-            InfoEvent(message='upgrade_node - removing "shim-signed" package as a workaround').publish()
             node.remoter.sudo("apt-get remove shim-signed -y --allow-remove-essential")
-            InfoEvent(message='upgrade_node - ended removing "shim-signed" package as a workaround').publish()
-        InfoEvent(message=f'upgrade_node - starting to "upgrade_system" of the node {node.name}').publish()
         node.upgrade_system()
         InfoEvent(message=f'upgrade_node - ended to "upgrade_system" of the node {node.name}').publish()
 
