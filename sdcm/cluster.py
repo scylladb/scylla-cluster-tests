@@ -2799,7 +2799,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                   connect_timeout=connect_timeout)
         while num_retry_on_failure:
             try:
-                cqlsh_out = self.remoter.run(cmd, timeout=timeout + 30,  # we give 30 seconds to cqlsh timeout mechanism to work
+                cqlsh_out = self.remoter.run(cmd, timeout=timeout + 120,  # we give 30 seconds to cqlsh timeout mechanism to work
                                              verbose=verbose)
                 break
             except Exception:  # pylint: disable=broad-except
