@@ -20,7 +20,8 @@ import logging
 import collections
 import re
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Any
 from sortedcontainers import SortedDict
 
 import jinja2
@@ -209,6 +210,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_latency_during_ops_short.html", logger=logger, events=events)
+        self.percentiles = ['percentile_90', 'percentile_99']
 
     def get_debug_events(self):
         return self.get_events(event_severity=[Severity.DEBUG.name])
@@ -223,7 +225,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         events_list = [stall for stall in debug_events[Severity.DEBUG.name] if 'type=KERNEL_CALLSTACK' in stall]
         return events_list
 
-    def _get_best_per_nemesis_for_each_version(self, test_doc, is_gce):  # pylint: disable=too-many-branches
+    def _get_previous_results(self, test_doc, is_gce=False):
         filter_path = ['hits.hits._id',
                        'hits.hits._source.results',
                        'hits.hits._source.versions',
@@ -231,7 +233,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                        'hits.hits._source.latency_during_ops']
         query = LatencyWithNemesisQueryFilter(test_doc, is_gce, use_wide_query=True, lastyear=True)()
 
-        self.log.debug("ES QUERY: %s", query)
+        LOGGER.debug("ES QUERY: %s", query)
         test_results = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
             index=self._es_index,
             doc_type=self._es_doc_type,
@@ -240,54 +242,146 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             size=self._limit)
         if not test_results:
             self.log.warning("No results found for query: %s", query)
-            return None
-        if test_doc["_source"].get("latency_during_ops"):
+            return []
+        return test_results["hits"]["hits"]
+
+    def _calculate_cycles_average(self, stat):
+        nemesis_cycles = stat.get('cycles', [])
+        nemesis_average_by_workloads = {}
+        operation_time_summary = []
+        operation_time_average = 0
+        for cycle in nemesis_cycles:
+            hdr_cycle_summary = cycle.get('hdr_summary', {})
+            for workload in hdr_cycle_summary:
+                nemesis_average_by_workloads.setdefault(
+                    workload, {perc: [] for perc in self.percentiles})
+                for perc in self.percentiles:
+                    nemesis_average_by_workloads[workload][perc].append(
+                        hdr_cycle_summary[workload].get(perc, 0))
+            operation_time_summary.append(cycle.get('duration_in_sec', 0))
+
+        for _, cycles_stats in nemesis_average_by_workloads.items():
+            for perc, values in cycles_stats.items():
+                cycles_stats[perc] = round(sum(values) / len(values), 2)
+
+        if operation_time_summary and sum(operation_time_summary):
+            operation_time_average = sum(operation_time_summary) / len(operation_time_summary)
+
+        stat.update({"hdr_summary_average": nemesis_average_by_workloads,
+                     "average_time_operation": f"{timedelta(seconds=int(operation_time_average))}",
+                     "average_time_operation_in_sec": int(operation_time_average)
+                     })
+
+    def _get_best_per_nemesis_for_each_version(self, test_doc, is_gce):  # pylint: disable=too-many-branches,too-many-locals
+        try:
+            if not test_doc["_source"].get("latency_during_ops"):
+                LOGGER.error("Document with id=%s doesn't have 'latency_during_ops' statistics", test_doc['_id'])
+                return {}
+
             results_per_nemesis_by_version = {nemesis: {}
                                               for nemesis in test_doc["_source"]["latency_during_ops"].keys()}
             best_results = {nemesis: {} for nemesis in test_doc["_source"]["latency_during_ops"].keys()}
-        else:
-            results_per_nemesis_by_version = {}
-            best_results = {}
-        # expected structure:
-        # {'_add_node' : {'5.1.dev': [{latency_during_ops: {....}}, ...],
-        #                 '5.0.dev': [{latency_during_ops: {....}}, ...]}}
-        for doc in test_results["hits"]["hits"]:
-            if doc["_id"] == test_doc["_id"]:
-                continue
-            version = doc["_source"]["versions"]["scylla-server"]["version"]
-            if not doc["_source"].get("latency_during_ops"):
-                continue
-            for nemesis in doc["_source"]["latency_during_ops"].keys():
-                if not results_per_nemesis_by_version.get(nemesis):
-                    results_per_nemesis_by_version[nemesis] = {}
-                    best_results[nemesis] = {}
 
+            def sort_results_by_versions(results: list[Any]):
+                """ filter unrelevant results and build dict for sorting
+
+                Filter out from search results any document, which doesn't have
+                relevant data: version info, statistics for steady state,
+                statistics per nemesis at all, or set of nemesis is differ
+                from current run
+                """
+                # expected structure:
+                # {'_add_node' : {'5.1.dev': [{latency_during_ops: {....}}, ...],
+                #                 '5.0.dev': [{latency_during_ops: {....}}, ...]}}
+                for doc in results:
+                    full_version_info = self._test_version(doc)
+                    latency_during_ops_stats = doc["_source"].get("latency_during_ops")
+                    if doc["_id"] == test_doc["_id"] \
+                            or not latency_during_ops_stats \
+                            or not full_version_info \
+                            or not latency_during_ops_stats.get("Steady State") \
+                            or not all(nemesis in latency_during_ops_stats for nemesis in results_per_nemesis_by_version):
+                        continue
+                    scylla_version = full_version_info.get('version')
+                    for nemesis in results_per_nemesis_by_version:
+                        nemesis_stat = latency_during_ops_stats.get(nemesis)
+                        results_per_nemesis_by_version[nemesis].setdefault(scylla_version, [])
+                        self._calculate_cycles_average(nemesis_stat)
+                        nemesis_stat.update({"version": full_version_info})
+                        nemesis_stat.update({"Steady State": latency_during_ops_stats["Steady State"]})
+                        results_per_nemesis_by_version[nemesis][scylla_version].append(nemesis_stat)
+
+            # choose best result for each nemesis per version
+            # by most less Cycles Average,  and Relative_to Steady
+            all_results = self._get_previous_results(test_doc, is_gce)
+            sort_results_by_versions(all_results)
             for nemesis in results_per_nemesis_by_version:
-                if version not in results_per_nemesis_by_version[nemesis]:
-                    results_per_nemesis_by_version[nemesis][version] = []
+                for version in results_per_nemesis_by_version[nemesis]:
+                    try:
+                        best_results[nemesis][version] = sorted(
+                            results_per_nemesis_by_version[nemesis][version],
+                            key=lambda obj: obj.get("average_time_operation_in_sec"))[0]
+                    except IndexError:
+                        best_results[nemesis][version] = {}
 
-                stat = doc["_source"]["latency_during_ops"].get(nemesis, None)
-                if stat and doc["_source"]["versions"].get("scylla-server"):
-                    stat.update({"version": self._test_version(doc)})
-                    results_per_nemesis_by_version[nemesis][version].append(stat)
+                best_results[nemesis] = {per_version: best_results[nemesis][per_version]
+                                         for per_version in sorted(best_results[nemesis].keys(),
+                                                                   key=lambda version: version,
+                                                                   reverse=True)}
+            return best_results
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.error("Search best results per version failed. Error: %s", exc)
+            return {}
 
-        # choose best result for each nemesis per version
-        # by most less Cycles Average and Relative_to Steady
-        for nemesis in results_per_nemesis_by_version.keys():
-            for version in results_per_nemesis_by_version[nemesis].keys():
-                try:
-                    best_results[nemesis][version] = sorted(
-                        results_per_nemesis_by_version[nemesis][version],
-                        key=lambda obj: (obj.get("Cycles Average", {}).get("c-s P99"),
-                                         obj.get("Relative to Steady", {}).get('c-s P99')))[0]
-                except IndexError:
-                    best_results[nemesis][version] = {}
+    def _compare_current_best_results_average(self, current_result, best_result):
+        """compare results between current and best results
 
-            best_results[nemesis] = {per_version: best_results[nemesis][per_version] for per_version in sorted(best_results[nemesis].keys(),
-                                                                                                               key=lambda version: version,
-                                                                                                               reverse=True)}
+        Calculate difference in percentage between curent test
+        and best per version for each nemesis nemesis and
+        update with new keys best_result dict:
+        # expected structure:
+            {'_add_node' : {'5.1.dev': {....
+                                        hdr_summary_diff: {
+                                          'READ' : {'percentile_90': 5.11,
+                                                    'percentile_99': -12.11}
+                                        }
+                                        average_time_operation_in_sec: 1000,
+                                        ...
+                                        }}},
+                            '5.0.dev': {....
+                                        hdr_summary_diff: {
+                                          'READ' : {'percentile_90': 1.11,
+                                                    'percentile_99': -2.11}
+                                        }
+                                        average_time_operation_in_sec: 1000,
+                                        ...
+                                        }}}
 
-        return best_results
+        """
+        try:
+            for nemesis in current_result:
+                if nemesis in ["Steady State", "summary"]:
+                    continue
+                nemesis_stat = current_result.get(nemesis)
+                self._calculate_cycles_average(nemesis_stat)
+            for nemesis in best_result:
+                if nemesis in ['Steady State', 'summary']:
+                    continue
+                for _, best in best_result[nemesis].items():
+                    for workload in best['hdr_summary_average']:
+                        diff = best.setdefault('hdr_summary_diff', {})
+                        diff.update({workload: {perc: 0 for perc in self.percentiles}})
+                        for perc in self.percentiles:
+                            current_value = current_result[nemesis]['hdr_summary_average'][workload][perc]
+                            best_version_value = best['hdr_summary_average'][workload][perc]
+                            diff[workload][perc] = round(
+                                ((current_value - best_version_value) / best_version_value) * 100, 2)
+                    current_duration_value = current_result[nemesis]['average_time_operation_in_sec']
+                    best_duration_value = best['average_time_operation_in_sec']
+                    best['average_time_operation_in_sec_diff'] = round(
+                        ((current_duration_value - best_duration_value) / best_duration_value) * 100, 2)
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.error("Compare results failed: %s", exc)
 
     def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         doc = self.get_test_by_id(test_id)
@@ -321,7 +415,8 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
         subject = f'Performance Regression Compare Results (latency during operations {dataset_size}) -' \
                   f' {test_name} - {test_version} - {str(test_start_time)}'
-        # best_results_per_nemesis = self._get_best_per_nemesis_for_each_version(doc, is_gce)
+        best_results_per_nemesis = self._get_best_per_nemesis_for_each_version(doc, is_gce)
+        self._compare_current_best_results_average(data, best_results_per_nemesis)
 
         results = dict(
             events_summary=events_summary,
@@ -342,6 +437,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             grafana_screenshots=self._get_grafana_screenshot(doc),
             job_url=doc['_source']['test_details'].get('job_url', ""),
             node_benchmarks=node_benchmarks,
+            best_stat_per_version=best_results_per_nemesis,
         )
         attachment_file = [
             self.save_html_to_file(results,

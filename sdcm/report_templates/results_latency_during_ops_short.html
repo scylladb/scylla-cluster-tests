@@ -49,18 +49,20 @@
                 <th> Percentile 99 </th>
                 <th> Percentile 99.9 </th>
             </tr>
+            {% set workloads = stats['summary']['hdr_summary'].keys() %}
             {% for workload, total in stats['summary']['hdr_summary'].items() %}
                 <tr>
                     <td> {{ workload }} </td>
                     <td> {{ total['start_time'] | format_timestamp }} </td>
                     <td> {{ total['end_time'] | format_timestamp }} </td>
                     <td> {{ total["percentile_50"] }}</td>
-                    <td style="background-color: {{ total["color"]["percentile_90"] }}"> {{ total["percentile_90"] }}</td>
-                    <td style="background-color: {{ total["color"]["percentile_99"] }}"> {{ total["percentile_99"] }}</td>
+                    <td style="color: {{ total["color"]["percentile_90"] }}"> {{ total["percentile_90"] }}</td>
+                    <td style="color: {{ total["color"]["percentile_99"] }}"> {{ total["percentile_99"] }}</td>
                     <td> {{ total["percentile_99_9"] }}</td>
                 </tr>
             {% endfor %}
         </table>
+        <span STYLE="font-size:12px" class="red">* All latency values are in ms. if latency has red color, check detailed HDR report</span>
     </div>
         <div>
             {% for operation, results in stats.items() %}
@@ -69,61 +71,98 @@
                     <table id="results_table">
                         <caption>{{ results['legend'] }}</caption>
                         <tr>
-                            <th> Cycle </th>
-                            <th> Scylla build </th>
-                            <th> Workload operation </th>
+                            <th rowspan="2"> Cycle </th>
+                            <th rowspan="2"> Scylla build </th>
                             {% set lat_type_list = ['percentile_90', 'percentile_99'] %}
                             {% set lat_color_list = ['color_90', 'color_99'] %}
+                            {% set colspan = lat_type_list | length %}
                             {% for lat_type in lat_type_list %}
-                                <th>Latency {{ lat_type }}</th>
-                                <th>Steady State {{lat_type}}</th>
+                                <th colspan="{{ colspan }}">Latency {{ lat_type }}</th>
+                                <th colspan="{{ colspan }}">Steady State {{lat_type}}</th>
                             {% endfor %}
-                            <th> Duration (sec) </th>
-
-                            <th>Commit id, date</th>
+                            <th rowspan="2"> Duration (sec) </th>
+                            <th rowspan="2">Commit id, date</th>
                         </tr>
+                        <tr>
+                            {% for _ in lat_type_list  %}
+                                {% for _ in ['Latency', 'Steady State'] %}
+                                    {% for workload in workloads %}
+                                        <th style="text-align: center;"> {{ workload }}</th>
+                                    {% endfor %}
+                                {% endfor %}
+                            {% endfor %}
+                        </tr>
+                        <tr><td  colspan="12" style="text-align: center">Acceptance criteria per cycle: P99 < 15 ms </td></tr>
                         {% for cycle in results["cycles"] %}
-                            {% set row_span = cycle["hdr_summary"]|length %}
                             {% set cycle_index = loop.index %}
-                            {% for workload in cycle["hdr_summary"] %}
+                             <tr>
+                                <td> Cycle #{{ cycle_index }} </td>
+                                <td> current build </td>
+                                {% for perc in lat_type_list %}
+                                        {% for workload in workloads  %}
+                                            <td style="text-align: right; color: {{ cycle['hdr_summary'][workload]['color'][perc] }};"> {{ cycle['hdr_summary'][workload][perc] }} </td>
+                                        {% endfor %}
+                                        {% for workload in workloads  %}
+                                            <td style="text-align: right;"> {{ stats["Steady State"]["hdr_summary"][workload][perc] }} </td>
+                                        {% endfor %}
+                                {% endfor %}
+                                <td style="text-align: right;"> {{ cycle.get('duration', "N/A") }} </td>
+                                <td style="text-align: center;"> {{ test_version }} </td>
+                            </tr>
+                        {% endfor %}
+                        <tr><td  colspan="12" style="text-align: center">Compare current average cycles results with previous version</td></tr>
+                        <tr style="background-color: rgb(244, 244, 244);">
+                            <td> average </td>
+                            <td> current build </td>
+                            {% for perc in lat_type_list %}
+                                    {% for workload in workloads  %}
+                                        <td style="text-align: right;"> {{ results['hdr_summary_average'][workload][perc] }} </td>
+                                    {% endfor %}
+                                    {% for workload in workloads  %}
+                                        <td style="text-align: right;"> {{ stats["Steady State"]["hdr_summary"][workload][perc] }} </td>
+                                    {% endfor %}
+                            {% endfor %}
+                            <td style="text-align: right;"> {{ results.get('average_time_operation', "N/A") }} </td>
+                            <td style="text-align: center;"> {{ test_version }} </td>
+                        </tr>
+                        {% if best_stat_per_version and best_stat_per_version.get(operation) %}
+                            {% for version, best in best_stat_per_version[operation].items() %}
                                 <tr>
-                                    {% if loop.first %}
-                                            <td rowspan="{{ row_span }}"> Cycle #{{ cycle_index }} </td>
-                                            <td rowspan="{{ row_span }}"> current build </td>
-                                            <td style="text-align: center;"> {{ workload }}</td>
-                                            {% for perc in lat_type_list %}
-                                                <td style="text-align: right; background-color: '{{ cycle['hdr_summary'][workload]['color'][perc] }}';"> {{ cycle['hdr_summary'][workload][perc]}} </td>
-                                                <td style="text-align: right;"> {{ stats["Steady State"]["hdr_summary"][workload][perc] }} </td>
+                                    <td > avg per version </td>
+                                    <td > {{ version }} </td>
+                                    {% for perc in lat_type_list %}
+                                            {% for workload in workloads %}
+                                                {% set best_perc_value = best.get('hdr_summary_diff')[workload][perc] %}
+                                                <td style="text-align: right"> {{ best.get('hdr_summary_average')[workload].get(perc, "n/a") }} <br/>(
+                                                    {% if best_perc_value <= -5 %}
+                                                        {% set color = "green" %}
+                                                    {% elif -5 < best_perc_value <= 5 %}
+                                                        {% set color = "grey" %}
+                                                    {% elif best_perc_value > 5 %}
+                                                        {% set color = "red" %}
+                                                    {% endif %}
+                                                    <span style="color: {{ color }};">{{best_perc_value }}%</span>) </td>
                                             {% endfor %}
-                                            <td rowspan="{{ row_span }}" style="text-align: right;"> {{ cycle.get('duration', "N/A") }} </td>
-                                            <td rowspan="{{ row_span }}" style="text-align: center;"> {{ test_version }} </td>
-                                    {% else %}
-                                            <td style="text-align: right;"> {{ workload }}</td>
-                                            {% for perc in lat_type_list %}
-                                                <td style="text-align: right; background-color: '{{ cycle['hdr_summary'][workload]['color'][perc] }}';"> {{ cycle['hdr_summary'][workload][perc]}} </td>
-                                                <td style="text-align: right;"> {{ stats["Steady State"]["hdr_summary"][workload][perc] }} </td>
+                                            {% for workload in workloads  %}
+                                                <td style="text-align: right;"> {{ best["Steady State"]["hdr_summary"][workload].get(perc, "n/a") }} </td>
                                             {% endfor %}
-                                    {% endif %}
+                                    {% endfor %}
+                                    {% set best_duration_value = best.get('average_time_operation_in_sec_diff') %}
+                                    <td style="text-align: right;"> {{ best.get('average_time_operation', "N/A") }} <br/>(
+                                        {% if best_duration_value <= -5 %}
+                                            {% set color = "green" %}
+                                        {% elif -5 < best_duration_value <= 5 %}
+                                            {% set color = "grey" %}
+                                        {% elif best_duration_value > 5 %}
+                                            {% set color = "red" %}
+                                        {% endif %}
+                                        <span style="color: {{ color }};">{{ best_duration_value }} </span> %) </td>
+                                    <td style="text-align: center;">{{ best.get('version')['commit_id'] }},<br/>{{ best.get('version')['date'] }}</td>
                                 </tr>
                             {% endfor %}
-                        <!-- {% if best_stat_per_version and best_stat_per_version.get(operation) %}
-                            {% for version, best in best_stat_per_version[operation].items() %}
-                            <tr>
-                                <td> {{ version }} </td>
-                                <td> {{ lat_type }} </td>
-                                {% for cycle in results['cycles'] %}
-                                    <td></td>
-                                {% endfor %}
-                                <td>{{ best.get('Cycles Average')['c-s P99'] }}</td>
-                                <td>{{ best_stat_per_version['Steady State'][version]['c-s P99'] }}</td>
-                                <td>{{ best.get('Relative to Steady')['c-s P99'] }}</td>
-                                <td>{{ best.get('version')['commit_id'] }},<br/>{{ best.get('version')['date'] }}</td>
-                            </tr>
-                            {% endfor %}
-                        {% endif %} -->
-                        {% endfor %}
+                        {% endif %}
                     </table>
-                    <span STYLE="font-size:12px" class="red">* All latency values are in ms.</span>
+                    <span STYLE="font-size:12px" class="red">* All latency values are in ms. if latency has color red, check detailed HDR report</span>
                     <div>
                         {% for cycle in results['cycles'] %}
                             {% for screenshot in cycle['screenshots'] %}
