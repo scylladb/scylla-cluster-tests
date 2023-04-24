@@ -1091,7 +1091,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not ContainerManager.is_running(self.tester.localhost, 'ldap'):
             raise LdapNotRunning("LDAP server was supposed to be running, but it is not")
 
-    @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
     def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=0):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         # TODO: make it work on K8S when we have decommissioned (by nodetool) nodes.
