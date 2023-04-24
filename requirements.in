@@ -51,3 +51,4 @@ azure-mgmt-subscription==1.0.0
 azure-mgmt-resourcegraph==8.0.0
 pydantic==1.8.2
 questionary==1.10.0
+setuptools<66.0.0
