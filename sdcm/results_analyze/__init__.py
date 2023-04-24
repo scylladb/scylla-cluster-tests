@@ -298,7 +298,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             best_results = {nemesis: {} for nemesis in test_doc["_source"]["latency_during_ops"].keys()}
 
             def sort_results_by_versions(results: list[Any]):
-                """ filter not relevant results and build dict for sorting
+                """ filter unrelevant results and build dict for sorting
 
                 Filter out from search results any document, which doesn't have
                 relevant data: version info, statistics for steady state,
@@ -322,10 +322,6 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                         nemesis_stat = latency_during_ops_stats.get(nemesis)
                         results_per_nemesis_by_version[nemesis].setdefault(scylla_version, [])
                         self._calculate_cycles_average(nemesis_stat)
-                        # if calculated average stat for nemesis is empty or 0, don't add it to version results
-                        if not nemesis_stat["hdr_summary_average"] \
-                           or not nemesis_stat["average_time_operation_in_sec"]:
-                            continue
                         nemesis_stat.update({"version": full_version_info})
                         nemesis_stat.update({"Steady State": latency_during_ops_stats["Steady State"]})
                         results_per_nemesis_by_version[nemesis][scylla_version].append(nemesis_stat)
@@ -355,7 +351,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     def _compare_current_best_results_average(self, current_result, best_result):
         """compare results between current and best results
 
-        Calculate difference in percentage between current test
+        Calculate difference in percentage between curent test
         and best per version for each nemesis nemesis and
         update with new keys best_result dict:
         # expected structure:
@@ -377,11 +373,30 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                                         }}}
 
         """
-        def _calculate_relative_change_magnitude(current_value, best_value):
-            if not best_value:
-                return "N/A"
-            else:
-                return round(((current_value - best_value) / best_value) * 100, 2)
+        try:
+            for nemesis in current_result:
+                if nemesis in ["Steady State", "summary"]:
+                    continue
+                nemesis_stat = current_result.get(nemesis)
+                self._calculate_cycles_average(nemesis_stat)
+            for nemesis in best_result:
+                if nemesis in ['Steady State', 'summary']:
+                    continue
+                for _, best in best_result[nemesis].items():
+                    for workload in best['hdr_summary_average']:
+                        diff = best.setdefault('hdr_summary_diff', {})
+                        diff.update({workload: {perc: 0 for perc in self.percentiles}})
+                        for perc in self.percentiles:
+                            current_value = current_result[nemesis]['hdr_summary_average'][workload][perc]
+                            best_version_value = best['hdr_summary_average'][workload][perc]
+                            diff[workload][perc] = round(
+                                ((current_value - best_version_value) / best_version_value) * 100, 2)
+                    current_duration_value = current_result[nemesis]['average_time_operation_in_sec']
+                    best_duration_value = best['average_time_operation_in_sec']
+                    best['average_time_operation_in_sec_diff'] = round(
+                        ((current_duration_value - best_duration_value) / best_duration_value) * 100, 2)
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.error("Compare results failed: %s", exc)
 
         try:
             for nemesis in current_result:
@@ -446,9 +461,8 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         config_files = ' '.join(doc["_source"]["setup_details"]["config_files"])
         dataset_size = re.search(r'(\d{3}gb)', config_files).group() or 'unknown size'
 
-        subject = (f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results '
-                   f'({email_subject_postfix} {dataset_size}) -'
-                   f' {test_name} - {test_version} - {str(test_start_time)}')
+        subject = f'Performance Regression Compare Results (latency during operations {dataset_size}) -' \
+                  f' {test_name} - {test_version} - {str(test_start_time)}'
         best_results_per_nemesis = self._get_best_per_nemesis_for_each_version(doc, is_gce)
         self._compare_current_best_results_average(data, best_results_per_nemesis)
 

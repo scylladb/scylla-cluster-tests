@@ -83,7 +83,7 @@
                             <th rowspan="2"> Scylla build </th>
                             {% set lat_type_list = ['percentile_90', 'percentile_99'] %}
                             {% set lat_color_list = ['color_90', 'color_99'] %}
-                            {% set colspan = workloads | length %}
+                            {% set colspan = lat_type_list | length %}
                             {% for lat_type in lat_type_list %}
                                 <th colspan="{{ colspan }}">Latency {{ lat_type }}</th>
                                 <th colspan="{{ colspan }}">Steady State {{lat_type}}</th>
@@ -108,8 +108,7 @@
                                 <td> current build </td>
                                 {% for perc in lat_type_list %}
                                         {% for workload in workloads  %}
-                                            {% set color = cycle['hdr_summary'][workload]['color'][perc] %}
-                                            <td style="text-align: right;"><span style="color: {{ color }};"> {{ cycle['hdr_summary'][workload][perc] }}</span></td>
+                                            <td style="text-align: right; color: {{ cycle['hdr_summary'][workload]['color'][perc] }};"> {{ cycle['hdr_summary'][workload][perc] }} </td>
                                         {% endfor %}
                                         {% for workload in workloads  %}
                                             <td style="text-align: right;"> {{ stats["Steady State"]["hdr_summary"][workload][perc] }} </td>
@@ -136,9 +135,6 @@
                         </tr>
                         {% if best_stat_per_version and best_stat_per_version.get(operation) %}
                             {% for version, best in best_stat_per_version[operation].items() %}
-                                {% if not best %}
-                                    {% continue %}
-                                {% endif %}
                                 <tr>
                                     <td > avg per version </td>
                                     <td > {{ version }} </td>
@@ -175,20 +171,6 @@
                         {% endif %}
                     </table>
                     <span STYLE="font-size:12px" class="red">* All latency values are in ms. if latency has color red, check detailed HDR report</span>
-                    {% for cycle in results['cycles'] %}
-                        {% if cycle.get('reactor_stalls_stats') %}
-                            <div>
-                                <span> <b>Cycle: {{ loop.index }} </b> :: </span>
-                                {% for event in cycle.get('reactor_stalls_stats') %}
-                                    <span><b>total number of reactor stalls:</b> {{ cycle['reactor_stalls_stats'][event].get("counter", "N/A") }}; </span>
-                                    {% for ms, number in cycle['reactor_stalls_stats'][event].get("ms").items() %}
-                                    <span> <b>stall value</b>:  <= {{ ms }} ms: <b>number</b>: {{ number }}; </span>
-                                    {% endfor %}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                    {% endfor %}
-
                     <div>
                         {% for cycle in results['cycles'] %}
                             {% for screenshot in cycle['screenshots'] %}
