@@ -1,13 +1,14 @@
-test_duration: 90
+test_duration: 140
 
-prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=5048570 -schema 'replication(factor=3)' -mode cql3 native -rate threads=80 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=5048570 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=800 -pop seq=1..5048570 -log interval=5"
 
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=40 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5",
-             "cassandra-stress read  cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=40 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=90m -schema 'replication(factor=3)' -mode cql3 native -rate threads=400 -pop seq=1..5048570 -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=90m -schema 'replication(factor=3)' -mode cql3 native -rate threads=400 -pop seq=1..5048570 -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=90m -schema 'replication(factor=3)' -mode cql3 native -rate threads=400 -pop seq=1..5048570 -log interval=5"
              ]
 
 n_db_nodes: 3
-n_loaders: 1
+n_loaders: 3
 n_monitor_nodes: 1
 seeds_num: 3
 
@@ -15,8 +16,8 @@ instance_type_db: 'i4i.large'
 gce_instance_type_db: 'n1-highmem-2'
 gce_instance_type_loader: 'e2-standard-2'
 azure_instance_type_db: 'Standard_L8s_v3'
-instance_type_loader: 'c5.large'
-azure_instance_type_loader: 'Standard_F2s_v2'
+instance_type_loader: 'c5.2xlarge'
+azure_instance_type_loader: 'Standard_F8s_v2'
 
 sla: true
 
