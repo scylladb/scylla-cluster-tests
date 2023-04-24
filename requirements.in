@@ -48,3 +48,4 @@ azure-mgmt-resource==20.0.0
 azure-mgmt-subscription==1.0.0
 azure-mgmt-resourcegraph==8.0.0
 pydantic==1.8.2
+setuptools<66.0.0
