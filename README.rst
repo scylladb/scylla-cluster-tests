@@ -116,7 +116,6 @@ To run SCT tests locally run following::
     pyenv virtualenv 3.10.0 sct310
     pyenv activate sct310
     pip install -r requirements.in
-    pip install -e git+https://github.com/bentsi/argus#egg=argus
 
 
 
