@@ -2949,7 +2949,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         now = time.time()
         results = prometheus_stats.query(query=query, start=now - 600, end=now)
         assert results, "no results for node_network_receive_bytes_total metric in Prometheus "
-        avg_bitrate_per_node = max([float(avg_rate) for _, avg_rate in results[0]["values"]])
+        received_bytes_over_time = [float(avg_rate) for _, avg_rate in results[0]["values"]]
+        avg_bitrate_per_node = (received_bytes_over_time[-1] - received_bytes_over_time[0]) / 600
         avg_mpbs_per_node = avg_bitrate_per_node / 1024 / 1024
 
         if avg_mpbs_per_node > 10:
