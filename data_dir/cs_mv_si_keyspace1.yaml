@@ -71,8 +71,8 @@ queries:
     cql: select * from keyspace1.sort_by_c4 where c4 = ? LIMIT 1
     fields: samerow
   si_read1:
-    cql: select * from keyspace1.sec_ind_c2 where c2 = ? LIMIT 1
+    cql: select * from keyspace1.standard2 where c2 = ? LIMIT 1
     fields: samerow
   si_read2:
-    cql: select * from keyspace1.sec_ind_c3 where c3 = ? LIMIT 1
+    cql: select * from keyspace1.standard2 where c3 = ? LIMIT 1
     fields: samerow
