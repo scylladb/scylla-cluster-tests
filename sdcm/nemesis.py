@@ -4205,7 +4205,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Verify the MV can be used in a query.
         Finally, drop the MV.
         """
-        node1, node2 = self.cluster.nodes[:2]
+        try:
+            node1, node2 = [node for node in self.cluster.nodes if not node.running_nemesis][:2]
+        except ValueError:
+            raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.") from ValueError
+        self.set_current_running_nemesis(node1)
+        self.set_current_running_nemesis(node2)
         ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=node2, filter_empty_tables=True, filter_out_mv=True)
         if not ks_cfs:
             raise UnsupportedNemesis(
@@ -4234,6 +4239,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             except Exception as error:  # pylint: disable=broad-except
                 self.log.warning('Failed creating a materialized view: %s', error)
                 node1.start_scylla()
+                self.unset_current_running_nemesis(node1)
+                self.unset_current_running_nemesis(node2)
                 raise
             try:
                 self.log.info("Starting Scylla on node1")
@@ -4245,6 +4252,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                               min_duration=300, max_duration=2400)
             finally:
                 drop_materialized_view(session, ks_name, view_name)
+                self.unset_current_running_nemesis(node1)
+                self.unset_current_running_nemesis(node2)
 
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
