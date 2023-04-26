@@ -2661,10 +2661,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
     def node_setup(self, node: BaseScyllaPodContainer, verbose: bool = False, timeout: int = 3600):
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
-
-        if self.test_config.MULTI_REGION:
-            node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
-
         self.node_config_setup()
 
     @cached_property
