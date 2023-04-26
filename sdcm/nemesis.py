@@ -4217,46 +4217,56 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Verify the MV can be used in a query.
         Finally, drop the MV.
         """
-        node1, node2 = self.cluster.nodes[:2]
-        ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=node2, filter_empty_tables=True, filter_out_mv=True)
-        if not ks_cfs:
-            raise UnsupportedNemesis(
-                'Non-system keyspace and table are not found. nemesis can\'t be run')
-        ks_name, base_table_name = random.choice(ks_cfs).split('.')
-        view_name = f'{base_table_name}_view'
-        with self.cluster.cql_connection_patient(node2) as session:
-            primary_key_columns = get_column_names(session=session, ks=ks_name, cf=base_table_name, is_primary_key=True)
-            # selecting a supported column for creating a materialized-view (not a collection type).
-            column = get_random_column_name(session=session, ks=ks_name,
-                                            cf=base_table_name, filter_out_collections=True)
-            if not column:
+
+        free_nodes = [node for node in self.cluster.nodes if not node.running_nemesis]
+        if not free_nodes:
+            raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
+        cql_query_executor_node = random.choice(free_nodes)
+        self.set_current_running_nemesis(cql_query_executor_node)
+        try:
+            ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=cql_query_executor_node,
+                                                            filter_empty_tables=True, filter_out_mv=True)
+            if not ks_cfs:
                 raise UnsupportedNemesis(
-                    'A supported column for creating MV is not found. nemesis can\'t run')
-            column = f'"{column}"'
-            self.log.info("Stopping Scylla on node1")
-            node1.stop_scylla()
-            InfoEvent(message=f'Create a materialized-view for table {ks_name}.{base_table_name}').publish()
-            try:
-                with EventsFilter(event_class=DatabaseLogEvent,
-                                  regex='.*view - Error applying view update.*',
-                                  extra_time_to_expiration=30):
-                    self.tester.create_materialized_view(ks_name, base_table_name, view_name, [column],
-                                                         primary_key_columns, session,
-                                                         mv_columns=[column] + primary_key_columns)
-            except Exception as error:  # pylint: disable=broad-except
-                self.log.warning('Failed creating a materialized view: %s', error)
-                node1.start_scylla()
-                raise
-            try:
-                self.log.info("Starting Scylla on node1")
-                node1.start_scylla()
-                node1.run_nodetool(sub_cmd="repair -pr")
-                wait_for_view_to_be_built(self.target_node, ks_name, view_name, timeout=7200)
-                session.execute(SimpleStatement(f'SELECT * FROM {ks_name}.{view_name} limit 1', fetch_size=10))
-                sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
-                                              min_duration=300, max_duration=2400)
-            finally:
-                drop_materialized_view(session, ks_name, view_name)
+                    'Non-system keyspace and table are not found. nemesis can\'t be run')
+            ks_name, base_table_name = random.choice(ks_cfs).split('.')
+            view_name = f'{base_table_name}_view'
+            with self.cluster.cql_connection_patient(cql_query_executor_node) as session:
+                primary_key_columns = get_column_names(
+                    session=session, ks=ks_name, cf=base_table_name, is_primary_key=True)
+                # selecting a supported column for creating a materialized-view (not a collection type).
+                column = get_random_column_name(session=session, ks=ks_name,
+                                                cf=base_table_name, filter_out_collections=True)
+                if not column:
+                    raise UnsupportedNemesis(
+                        'A supported column for creating MV is not found. nemesis can\'t run')
+                column = f'"{column}"'
+                self.log.info("Stopping Scylla on node %s", self.target_node.name)
+                self.target_node.stop_scylla()
+                InfoEvent(message=f'Create a materialized-view for table {ks_name}.{base_table_name}').publish()
+                try:
+                    with EventsFilter(event_class=DatabaseLogEvent,
+                                      regex='.*view - Error applying view update.*',
+                                      extra_time_to_expiration=30):
+                        self.tester.create_materialized_view(ks_name, base_table_name, view_name, [column],
+                                                             primary_key_columns, session,
+                                                             mv_columns=[column] + primary_key_columns)
+                except Exception as error:  # pylint: disable=broad-except
+                    self.log.warning('Failed creating a materialized view: %s', error)
+                    self.target_node.start_scylla()
+                    raise
+                try:
+                    self.log.info("Starting Scylla on node %s", self.target_node.name)
+                    self.target_node.start_scylla()
+                    self.target_node.run_nodetool(sub_cmd="repair -pr")
+                    wait_for_view_to_be_built(self.target_node, ks_name, view_name, timeout=7200)
+                    session.execute(SimpleStatement(f'SELECT * FROM {ks_name}.{view_name} limit 1', fetch_size=10))
+                    sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
+                                                  min_duration=300, max_duration=2400)
+                finally:
+                    drop_materialized_view(session, ks_name, view_name)
+        finally:
+            self.unset_current_running_nemesis(cql_query_executor_node)
 
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
