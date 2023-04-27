@@ -65,6 +65,7 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
 from sdcm.logcollector import save_kallsyms_map
 from sdcm.mgmt import TaskStatus
+from sdcm.mgmt.common import ScyllaManagerError
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.prometheus import nemesis_metrics_obj
@@ -2668,9 +2669,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         mgr_cluster = self.cluster.get_cluster_manager()
         mgr_task = mgr_cluster.create_repair_task()
         task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
-        assert task_final_status == TaskStatus.DONE,\
-            f'Task: {mgr_task.id} final status is: {str(mgr_task.status)}.\nTask progress string: ' \
-            f'{mgr_task.progress_string(parse_table_res=False, is_verify_errorless_result=True).stdout}'
+        if task_final_status != TaskStatus.DONE:
+            progress_full_string = mgr_task.progress_string(
+                parse_table_res=False, is_verify_errorless_result=True).stdout
+            if task_final_status != TaskStatus.ERROR_FINAL:
+                mgr_task.stop()
+            raise ScyllaManagerError(
+                f'Task: {mgr_task.id} final status is: {str(task_final_status)}.\nTask progress string: '
+                f'{progress_full_string}')
         self.log.info('Task: {} is done.'.format(mgr_task.id))
 
     def disrupt_abort_repair(self):
