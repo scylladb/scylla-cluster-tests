@@ -3650,8 +3650,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     rack = 0
                 self.set_target_node(rack=rack, is_seed=is_seed, allow_only_last_node_in_rack=True)
             else:
-                racks_count = len(self.tester.params.get("availability_zone").split(","))
-                rack_idx = rack if rack is not None else idx % racks_count
+                rack_idx = rack if rack is not None else idx % self.cluster.racks_count
                 # if rack is not specified, round-robin racks
                 self.set_target_node(is_seed=is_seed, dc_idx=dc_idx, rack=rack_idx)
             self.log.info("Next node will be removed %s", self.target_node)
@@ -3679,12 +3678,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if rack is None and self._is_it_on_kubernetes():
             rack = 0
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
-        racks_count = len(self.tester.params.get("availability_zone").split(","))
         self.log.info("Start grow cluster on %s nodes", add_nodes_number)
         InfoEvent(message=f"Start grow cluster on {add_nodes_number} nodes").publish()
         for idx in range(add_nodes_number):
             # if rack is not specified, round-robin racks to spread nodes evenly
-            rack_idx = rack if rack is not None else idx % racks_count
+            rack_idx = rack if rack is not None else idx % self.cluster.racks_count
             InfoEvent(message=f'GrowCluster - Add New node to {rack_idx} rack').publish()
             added_node = self.add_new_node(rack=rack_idx)
             self.unset_current_running_nemesis(added_node)

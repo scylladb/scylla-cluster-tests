@@ -71,6 +71,7 @@ from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml
 from sdcm import wait, mgmt
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
+from sdcm.snitch_configuration import get_snitch_config_class
 from sdcm.utils import properties
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
@@ -1507,18 +1508,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if build_id_result.ok:
                 return build_id_result.stdout.strip()
         return None
-
-    def datacenter_setup(self, datacenters):
-        cmd = "sudo sh -c 'echo \"\ndc={}\nrack=RACK1\nprefer_local=true\ndc_suffix={}\n\" >> /etc/scylla/cassandra-rackdc.properties'"
-        region_name = datacenters[self.dc_idx]
-        ret = re.findall('-([a-z]+).*-', region_name)
-        if ret:
-            dc_suffix = 'scylla_node_{}'.format(ret[0])
-        else:
-            dc_suffix = region_name.replace('-', '_')
-
-        cmd = cmd.format(datacenters[self.dc_idx], dc_suffix)
-        self.remoter.run(cmd)
 
     def _remote_yaml(self, path):
         self.log.debug("Update %s YAML file", path)
@@ -3133,6 +3122,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         # default 'cassandra' password is weak password, MS AD doesn't allow to use it.
         self.added_password_suffix = False
         self.node_benchmark_manager = ScyllaClusterBenchmarkManager()
+        self.racks_count = simulated_racks if (simulated_racks := self.params.get("simulated_racks")) else len(
+            self.params.get("availability_zone").split(","))
 
         if self.test_config.REUSE_CLUSTER:
             # get_node_ips_param should be defined in child
@@ -3152,7 +3143,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                     for idx in range(num):
                         nodes_per_az[idx % azs] += 1
                     for az_index in range(azs):
-                        self.add_nodes(nodes_per_az[az_index], dc_idx=dc_idx, rack=az_index,
+                        rack = None if self.params.get('simulated_racks') else az_index
+                        self.add_nodes(nodes_per_az[az_index], dc_idx=dc_idx, rack=rack,
                                        enable_auto_bootstrap=self.auto_bootstrap)
             elif isinstance(n_nodes, int):  # legacy type
                 # spread nodes evenly across AZ's
@@ -3160,7 +3152,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 for idx in range(n_nodes):
                     nodes_per_az[idx % azs] += 1
                 for az_index in range(azs):
-                    self.add_nodes(nodes_per_az[az_index], rack=az_index, enable_auto_bootstrap=self.auto_bootstrap)
+                    rack = None if self.params.get('simulated_racks') else az_index
+                    self.add_nodes(nodes_per_az[az_index], rack=rack, enable_auto_bootstrap=self.auto_bootstrap)
             else:
                 raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
             self.run_node_benchmarks()
@@ -4371,8 +4364,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             if self.test_config.BACKTRACE_DECODING:
                 node.install_scylla_debuginfo()
 
-            if self.test_config.MULTI_REGION:
-                node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
+            snitch_config = get_snitch_config_class(self.params)
+            snitch_config(node=node, datacenters=self.datacenter).apply()  # pylint: disable=no-member
             node.config_setup(append_scylla_args=self.get_scylla_args())
 
             self._scylla_post_install(node, install_scylla, nic_devname)

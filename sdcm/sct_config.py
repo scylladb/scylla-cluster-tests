@@ -1463,6 +1463,10 @@ class SCTConfiguration(dict):
         dict(name="custom_es_index", env="SCT_CUSTOM_ES_INDEX", type=str,
              help="""Use custom ES index for storing test results"""),
 
+        dict(name="simulated_racks", env="SCT_SIMULATED_RACKS", type=int,
+             help="""Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.
+             Provide number of racks to simulate."""),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -1785,6 +1789,13 @@ class SCTConfiguration(dict):
                 except TypeError as exp:
                     raise ValueError(
                         f" Got error: {repr(exp)}, on item '{param}'") from exp
+
+        # 15 Force endpoint_snitch to GossipingPropertyFileSnitch if using simulated_racks
+        if self.get("simulated_racks") > 1:
+            if snitch := self.get("endpoint_snitch"):
+                assert snitch.endswith("GossipingPropertyFileSnitch"), \
+                    f"Simulating racks requires endpoint_snitch to be GossipingPropertyFileSnitch while it set to {self['endpoint_snitch']}"
+            self["endpoint_snitch"] = "org.apache.cassandra.locator.GossipingPropertyFileSnitch"
 
     def log_config(self):
         self.log.info(self.dump_config())

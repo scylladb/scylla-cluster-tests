@@ -358,23 +358,24 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if not count:
             return []
         ec2_user_data = self.prepare_user_data(enable_auto_bootstrap=enable_auto_bootstrap)
-
-        instances = self._create_or_find_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx, az_idx=rack)
-        added_nodes = [self._create_node(instance, self._ec2_ami_username,
-                                         self.node_prefix, node_index,
-                                         self.logdir, dc_idx=dc_idx, rack=rack)
-                       for node_index, instance in
-                       enumerate(instances, start=self._node_index + 1)]
-        for node in added_nodes:
+        # if simulated_racks, create all instances in the same az
+        instance_az = 0 if self.params.get("simulated_racks") else rack
+        instances = self._create_or_find_instances(
+            count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx, az_idx=instance_az)
+        for node_index, instance in enumerate(instances):
+            self._node_index += 1
+            # in case rack is not specified, spread nodes to different racks
+            node_rack = node_index % self.racks_count if rack is None else rack
+            node = self._create_node(instance, self._ec2_ami_username, self.node_prefix,
+                                     self._node_index, self.logdir, dc_idx=dc_idx, rack=node_rack)
             node.enable_auto_bootstrap = enable_auto_bootstrap
             if self.params.get('ip_ssh_connections') == 'ipv6' and not node.distro.is_amazon2 and \
                     not node.distro.is_ubuntu:
                 node.config_ipv6_as_persistent()
-        self._node_index += len(added_nodes)
-        self.nodes += added_nodes
+            self.nodes.append(node)
         self.write_node_public_ip_file()
         self.write_node_private_ip_file()
-        return added_nodes
+        return self.nodes[-count:]
 
     def _create_node(self, instance, ami_username, node_prefix, node_index,  # pylint: disable=too-many-arguments
                      base_logdir, dc_idx, rack):
@@ -891,7 +892,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             count=count,
             ec2_user_data=ec2_user_data,
             dc_idx=dc_idx,
-            rack=0)
+            rack=rack)
         return added_nodes
 
     def node_setup(self, node, verbose=False, timeout=3600):

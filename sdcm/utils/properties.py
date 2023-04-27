@@ -46,7 +46,7 @@ def deserialize(data: Union[str, TextIO]) -> PropertiesDict:
         data = data.read()
     output = PropertiesDict()
     for line in data.splitlines():
-        if line.lstrip()[0] == '#':
+        if not line.strip() or line.lstrip()[0] == '#':
             output[line] = None
             continue
         line = line.split('=', 1)
