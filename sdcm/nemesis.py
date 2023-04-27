@@ -884,9 +884,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                        'ldap_bind_dn': '',
                        'ldap_bind_passwd': ''}
 
-        def destroy_ldap_container():
-            ContainerManager.destroy_container(self.tester.localhost, 'ldap')
-
         def remove_ldap_configuration_from_node(node):
             with node.remote_scylla_yaml() as scylla_yaml:
                 for key in ldap_config:
@@ -900,13 +897,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message='Disable LDAP Authorization Configuration').publish()
         for node in self.cluster.nodes:
             remove_ldap_configuration_from_node(node)
-        destroy_ldap_container()
+        self.log.info('Will now pause the LDAP container')
+        ContainerManager.pause_container(self.tester.localhost, 'ldap')
 
         self.log.debug('Will wait few minutes with LDAP disabled, before re-enabling it')
         time.sleep(600)
-
-        def create_ldap_container():
-            self.tester.configure_ldap(self.tester.localhost)
 
         def add_ldap_configuration_to_node(node):
             node.refresh_ip_address()
@@ -914,8 +909,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 scylla_yaml.update(ldap_config)
             node.restart_scylla_server()
 
-        InfoEvent(message='Re-enable LDAP Authorization Configuration').publish()
-        create_ldap_container()
+        self.log.info('Will now resume the LDAP container')
+        ContainerManager.unpause_container(self.tester.localhost, 'ldap')
         for node in self.cluster.nodes:
             add_ldap_configuration_to_node(node)
 
