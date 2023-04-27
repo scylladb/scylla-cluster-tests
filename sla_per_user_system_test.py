@@ -14,6 +14,8 @@
 # Copyright (c) 2016 ScyllaDB
 import time
 
+from pkg_resources import parse_version
+
 from longevity_test import LongevityTest
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.es import ES
@@ -349,11 +351,18 @@ class SlaPerUserTest(LongevityTest):
 
         Load from cache
         """
+
         # In ideal expected ratio between two users is 5.0.
         # Based on reality change it to 3.5
         # https://github.com/scylladb/scylla-cluster-tests/pull/4943#issuecomment-1168507500
         # http://13.48.103.68/test/71402aa7-051b-4803-a6b4-384529680fb7/runs?additionalRuns[]=1adf34d1-15cf-4973-80ce-9de130be0b09
-        self._two_users_load_througput_workload(shares=[190, 950], load=self.MIXED_LOAD, expected_shares_ratio=3.5)
+        expected_shares_ratio = 3.5
+        release = parse_version(self.db_cluster.nodes[0].scylla_version.replace("~", "-")).release[0]
+        if release >= 2023:
+            # Running the test with 2023.1  - ratio is improved
+            expected_shares_ratio = 4.2
+        self._two_users_load_througput_workload(shares=[190, 950], load=self.MIXED_LOAD,
+                                                expected_shares_ratio=expected_shares_ratio)
 
     def _two_users_load_througput_workload(self, shares, load, expected_shares_ratio=None):
         session = self.prepare_schema()
@@ -371,6 +380,8 @@ class SlaPerUserTest(LongevityTest):
                                                              shares=share).create()})
 
         self.attach_service_level(auths_list=read_users)
+        # Wait that service levels are propagated to all nodes
+        time.sleep(10)
 
         expected_shares_ratio = (expected_shares_ratio or
                                  self.calculate_metrics_ratio_per_user(two_users_list=read_users))
@@ -692,6 +703,9 @@ class SlaPerUserTest(LongevityTest):
 
     def _throughput_latency_tests_run(self, read_cmds, read_users, latency_user, improvement_expected):
         # pylint: disable=too-many-locals
+
+        # Wait that service levels are propagated to all nodes
+        time.sleep(10)
 
         # Run latency workload
         test_start_time = time.time()
