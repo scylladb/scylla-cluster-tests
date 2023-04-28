@@ -408,7 +408,7 @@ class SctRunner(ABC):
 
     @classmethod
     @abstractmethod
-    def list_sct_runners(cls) -> list[SctRunnerInfo]:
+    def list_sct_runners(cls, verbose: bool = True) -> list[SctRunnerInfo]:
         ...
 
     @staticmethod
@@ -595,8 +595,8 @@ class AwsSctRunner(SctRunner):
         return image.id
 
     @classmethod
-    def list_sct_runners(cls) -> list[SctRunnerInfo]:
-        all_instances = list_instances_aws(tags_dict={"NodeType": cls.NODE_TYPE}, group_as_region=True, verbose=True)
+    def list_sct_runners(cls, verbose: bool = True) -> list[SctRunnerInfo]:
+        all_instances = list_instances_aws(tags_dict={"NodeType": cls.NODE_TYPE}, group_as_region=True, verbose=verbose)
         sct_runners = []
         for region_name, instances in all_instances.items():
             client = boto3.client("ec2", region_name=region_name)
@@ -793,12 +793,12 @@ class GceSctRunner(SctRunner):
         return image.extra['selfLink']
 
     @classmethod
-    def list_sct_runners(cls) -> list[SctRunnerInfo]:
+    def list_sct_runners(cls, verbose: bool = True) -> list[SctRunnerInfo]:
         sct_runners = []
         instances = []
         for project in SUPPORTED_PROJECTS:
             with environment(SCT_GCE_PROJECT=project):
-                instances += list_instances_gce(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True)
+                instances += list_instances_gce(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=verbose)
         for instance in instances:
             tags = gce_meta_to_dict(instance.extra["metadata"])
             region = instance.extra["zone"].name
@@ -977,10 +977,10 @@ class AzureSctRunner(SctRunner):
         return image
 
     @classmethod
-    def list_sct_runners(cls) -> list[SctRunnerInfo]:
+    def list_sct_runners(cls, verbose: bool = True) -> list[SctRunnerInfo]:
         azure_service = AzureService()
         sct_runners = []
-        for instance in list_instances_azure(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True):
+        for instance in list_instances_azure(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=verbose):
             if launch_time := instance.tags.get("launch_time") or None:
                 try:
                     launch_time = datetime_from_formatted(date_string=launch_time)
@@ -1035,10 +1035,14 @@ def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str
     raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
 
 
-def list_sct_runners(test_runner_ip: str = None) -> list[SctRunnerInfo]:
-    LOGGER.info("Looking for SCT runner instances...")
+def list_sct_runners(test_runner_ip: str = None, verbose: bool = True) -> list[SctRunnerInfo]:
+    if verbose:
+        log = LOGGER.info
+    else:
+        log = LOGGER.debug
+    log("Looking for SCT runner instances...")
     sct_runner_classes = (AwsSctRunner, GceSctRunner, AzureSctRunner, )
-    sct_runners = chain.from_iterable(cls.list_sct_runners() for cls in sct_runner_classes)
+    sct_runners = chain.from_iterable(cls.list_sct_runners(verbose=False) for cls in sct_runner_classes)
 
     if test_runner_ip:
         if sct_runner_info := next((runner for runner in sct_runners if test_runner_ip in runner.public_ips), None):
@@ -1049,7 +1053,7 @@ def list_sct_runners(test_runner_ip: str = None) -> list[SctRunnerInfo]:
     else:
         sct_runners = list(sct_runners)
 
-    LOGGER.info("%d SCT runner(s) found:\n    %s", len(sct_runners), "\n    ".join(map(str, sct_runners)))
+    log("%d SCT runner(s) found:\n    %s", len(sct_runners), "\n    ".join(map(str, sct_runners)))
 
     return sct_runners
 
@@ -1065,7 +1069,7 @@ def update_sct_runner_tags(test_runner_ip: str = None, test_id: str = None, tags
     if test_runner_ip:
         runner_to_update = list_sct_runners(test_runner_ip=test_runner_ip)
     elif test_id:
-        listed_runners = list_sct_runners()
+        listed_runners = list_sct_runners(verbose=False)
         runner_to_update = [runner for runner in listed_runners if runner.test_id == test_id]
 
     if not runner_to_update:
