@@ -3331,6 +3331,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.debug(f"{name}: failed to execute cleanup command "
                                f"{cmd} on node {node} due to the following error: {str(exc)}")
 
+    def wait_node_fully_start(self, node, timeout=3600):
+        self.log.info('Waiting scylla services to start after node reboot')
+        node.wait_db_up(timeout)
+        self.log.info('Waiting JMX services to start after node reboot')
+        node.wait_jmx_up()
+        self.cluster.wait_for_nodes_up_and_normal(nodes=[node])
+
     @decorate_with_context([
         ignore_ycsb_connection_refused,
         ignore_view_error_gate_closed_exception
@@ -3456,9 +3463,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self.cluster.params.get('cluster_backend') == 'azure':
             timeout += 1200  # Azure reboot can take up to 20min to initiate
         ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
+
         if new_node := decommission_post_action():
+            self.wait_node_fully_start(new_node)
             new_node.run_nodetool("rebuild", retry=0)
         else:
+            self.wait_node_fully_start(self.target_node)
             self.target_node.run_nodetool(sub_cmd="rebuild", retry=0)
 
     def start_and_interrupt_repair_streaming(self):
@@ -3484,6 +3494,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             delay=1
         )
         ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
+
+        self.wait_node_fully_start(self.target_node)
+
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
             self.target_node.run_nodetool("rebuild", retry=0)
 
@@ -3514,7 +3527,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             delay=1
         )
         ParallelObject(objects=[trigger, watcher], timeout=timeout + 60).call_objects()
-        self.target_node.wait_db_up(timeout=300)
+        self.wait_node_fully_start(self.target_node, timeout=300)
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
             self.target_node.run_nodetool("rebuild", retry=0)
 
