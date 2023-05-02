@@ -568,7 +568,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=["keyspace1"])
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
@@ -949,7 +949,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=["keyspace1"])
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
