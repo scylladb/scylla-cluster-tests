@@ -4623,8 +4623,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 InfoEvent(message=f'Create a materialized-view for table {ks_name}.{base_table_name}').publish()
                 try:
                     with EventsFilter(event_class=DatabaseLogEvent,
-                                      regex='.*view - Error applying view update.*',
-                                      extra_time_to_expiration=30):
+                                      regex='.*Error applying view update.*',
+                                      extra_time_to_expiration=180):
                         self.tester.create_materialized_view(ks_name, base_table_name, view_name, [column],
                                                              primary_key_columns, session,
                                                              mv_columns=[column] + primary_key_columns)
