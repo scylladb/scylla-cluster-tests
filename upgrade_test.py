@@ -104,7 +104,7 @@ def recover_conf(node):
             r'test -e $conf.backup && sudo cp -v $conf.backup $conf; done')
 
 
-# pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-instance-attributes, too-many-public-methods
 class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     """
     Test a Scylla cluster upgrade.
@@ -825,6 +825,107 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message='Step10 - Verify that gemini did not failed during upgrade').publish()
         if self.version_cdc_support():
             self.verify_gemini_results(queue=gemini_thread)
+
+        InfoEvent(message='all nodes were upgraded, and last workaround is verified.').publish()
+
+    def test_custom_profile_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
+        """
+        Run a load of a custom profile.
+        Upgrade half of nodes in the cluster, and run rollback.
+        Upgrade all nodes to new version in the end.
+        """
+        InfoEvent(message='Running a prepare load for the initial custom data').publish()
+        prepare_cs_user_profiles = self.params.get('prepare_cs_user_profiles')
+        stress_before_upgrade = self.run_cs_user_profiles(cs_profiles=prepare_cs_user_profiles)
+        self.verify_stress_thread(cs_thread_pool=stress_before_upgrade)
+
+        # write workload during entire test
+        InfoEvent(message='Starting write workload during entire test').publish()
+        cs_user_profiles = self.params.get('cs_user_profiles')
+        entire_write_thread_pool = self.run_cs_user_profiles(cs_profiles=cs_user_profiles)
+
+        # Let to write_stress_during_entire_test complete the schema changes
+        self.metric_has_data(
+            metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}', n=10)
+
+        # generate random order to upgrade
+        nodes_num = len(self.db_cluster.nodes)
+        # prepare an array containing the indexes
+        indexes = list(range(nodes_num))
+        # shuffle it so we will upgrade the nodes in a random order
+        random.shuffle(indexes)
+
+        with ignore_upgrade_schema_errors():
+
+            step = 'Step1 - Upgrade First Node '
+            InfoEvent(message=step).publish()
+            # upgrade first node
+            self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
+            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
+            self.upgrade_node(self.db_cluster.node_to_upgrade)
+            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
+            self.db_cluster.node_to_upgrade.check_node_health()
+
+            InfoEvent(message='after upgraded one node').publish()
+            self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                          step=step+' - after upgraded one node')
+
+            step = 'Step2 - Upgrade Second Node '
+            InfoEvent(message=step).publish()
+            # upgrade second node
+            self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[1]]
+            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
+            self.upgrade_node(self.db_cluster.node_to_upgrade)
+            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
+            self.db_cluster.node_to_upgrade.check_node_health()
+
+            self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                          step=step+' - after upgraded two nodes')
+
+            InfoEvent(message='Step3 - Rollback Second Node ').publish()
+            # rollback second node
+            InfoEvent(message='Rollback Node %s begin' % self.db_cluster.nodes[indexes[1]].name).publish()
+            self.rollback_node(self.db_cluster.nodes[indexes[1]])
+            InfoEvent(message='Rollback Node %s ended' % self.db_cluster.nodes[indexes[1]].name).publish()
+            self.db_cluster.nodes[indexes[1]].check_node_health()
+
+        step = 'Step4 - Verify data during mixed cluster mode '
+        InfoEvent(message=step).publish()
+        InfoEvent(message='Repair the first upgraded Node').publish()
+        self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
+        self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                      step=step)
+
+        with ignore_upgrade_schema_errors():
+
+            step = 'Step5 - Upgrade rest of the Nodes '
+            InfoEvent(message=step).publish()
+            for i in indexes[1:]:
+                self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
+                InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
+                self.upgrade_node(self.db_cluster.node_to_upgrade)
+                InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
+                self.db_cluster.node_to_upgrade.check_node_health()
+                self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                              step=step)
+
+        InfoEvent(message='Step6 - Verify stress results after upgrade ').publish()
+        InfoEvent(message='Waiting for stress threads to complete after upgrade').publish()
+
+        self.verify_stress_thread(cs_thread_pool=entire_write_thread_pool)
+
+        InfoEvent(message='Step7 - Upgrade sstables to latest supported version ').publish()
+        # figure out what is the last supported sstable version
+        self.expected_sstable_format_version = self.get_highest_supported_sstable_version()
+
+        # run 'nodetool upgradesstables' on all nodes and check/wait for all file to be upgraded
+        upgradesstables = self.db_cluster.run_func_parallel(func=self.upgradesstables_if_command_available)
+
+        # only check sstable format version if all nodes had 'nodetool upgradesstables' available
+        if all(upgradesstables):
+            InfoEvent(message='Upgrading sstables if new version is available').publish()
+            tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
+            assert all(tables_upgraded), "Failed to upgrade the sstable format {}".format(tables_upgraded)
 
         InfoEvent(message='all nodes were upgraded, and last workaround is verified.').publish()
 

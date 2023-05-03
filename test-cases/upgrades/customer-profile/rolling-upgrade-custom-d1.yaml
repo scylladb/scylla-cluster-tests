@@ -1,0 +1,36 @@
+test_duration: 360
+
+# workloads
+# Customer profiles directory path is: scylla-qa-internal/customer-profile/cust_d
+
+# To be used in keyspace_entire_test:
+cs_duration: '300m'  # TODO: measure new upgrade test duration and adjust this one.
+cs_user_profiles:
+    - scylla-qa-internal/custom_d1/write_stress_during_entire_test.yaml
+# write_stress_during_entire_test: cassandra-stress user no-warmup profile=/tmp/write_stress_during_entire_test.yaml  ops'(insert=1,read=2)' cl=ALL n=5000000 -mode cql3 native -rate threads=1000 -pop seq=1..5000000
+
+# To be used in keyspace_custom_preload:
+prepare_cs_user_profiles:
+    - scylla-qa-internal/custom_d1/stress_before_upgrade.yaml
+#stress_before_upgrade: cassandra-stress user no-warmup profile=/tmp/stress_before_upgrade.yaml  ops'(insert=1)' cl=ALL n=5000000 -mode cql3 native -rate threads=1000 -pop seq=1..5000000
+
+n_db_nodes: 4
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.2xlarge'
+
+user_prefix: 'rolling-upgrade-custom-d1'
+
+server_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+
+recover_system_tables: true
+
+append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1'
+
+use_mgmt: false
+
+use_prepared_loaders: true
