@@ -3095,6 +3095,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.error(err_msg)
             InfoEvent(message=err_msg, severity=Severity.ERROR).publish()
 
+            raise
+
         self.log.debug("Group0 members: %s", group0_members)
         return group0_members
 
