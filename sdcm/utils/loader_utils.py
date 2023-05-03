@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import os
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -117,6 +117,26 @@ class LoaderUtilsMixin:
 
         return stress_queue
 
+    def run_cs_user_profiles(self, cs_profiles: str | int, stress_queue: list = None):
+        stress_queue = stress_queue or []
+        if not isinstance(cs_profiles, list):
+            cs_profiles = [cs_profiles]
+        round_robin = self.params.get('round_robin')
+        for cs_profile in cs_profiles:
+            assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
+            self.log.debug('Run stress with user profile %s', cs_profile)
+            profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
+            with open(cs_profile, encoding="utf-8") as file:
+                content = file.readlines()
+                for cmd in [line.lstrip('#').strip() for line in content if line.find('cassandra-stress') > 0]:
+                    stress_cmd = (cmd.format(profile_dst))
+                    params = {'stress_cmd': stress_cmd, 'profile': cs_profile, 'round_robin': round_robin}
+                    stress_params = dict(params)
+                    self.log.debug('stress cmd: {}'.format(stress_cmd))
+                    stress_queue.append(self.run_stress_thread(**stress_params))
+
+        return stress_queue
+
     def run_stress_and_verify_threads(self, params=None):
         stress_queue = []
 
@@ -155,28 +175,32 @@ class LoaderUtilsMixin:
         # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
         # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
         prepare_write_cmd = self.params.get('prepare_write_cmd')
+        prepare_cs_user_profiles = self.params.get('prepare_cs_user_profiles')
         keyspace_num = self.params.get('keyspace_num')
         write_queue = []
         verify_queue = []
 
-        if not prepare_write_cmd:
+        if not prepare_write_cmd and not prepare_cs_user_profiles:
             self.log.debug("No prepare write commands are configured to run. Continue with stress commands")
             return
-        # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
-        # the loaders (round_robin).
-        if keyspace_num > 1 and self.params.get('round_robin'):
-            self.log.debug("Using round_robin for multiple Keyspaces...")
-            for i in range(1, keyspace_num + 1):
-                keyspace_name = self._get_keyspace_name(i)
+        if prepare_write_cmd:
+            # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
+            # the loaders (round_robin).
+            if keyspace_num > 1 and self.params.get('round_robin'):
+                self.log.debug("Using round_robin for multiple Keyspaces...")
+                for i in range(1, keyspace_num + 1):
+                    keyspace_name = self._get_keyspace_name(i)
+                    self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
+                                                                   'keyspace_name': keyspace_name,
+                                                                   'round_robin': True})
+            # Not using round_robin and all keyspaces will run on all loaders
+            else:
                 self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                               'keyspace_name': keyspace_name,
-                                                               'round_robin': True})
-        # Not using round_robin and all keyspaces will run on all loaders
-        else:
-            self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                           'keyspace_num': keyspace_num,
-                                                           'round_robin': self.params.get('round_robin')})
+                                                               'keyspace_num': keyspace_num,
+                                                               'round_robin': self.params.get('round_robin')})
 
+        if prepare_cs_user_profiles:
+            self.run_cs_user_profiles(cs_profiles=prepare_cs_user_profiles, stress_queue=write_queue)
         # In some cases we don't want the nemesis to run during the "prepare" stage in order to be 100% sure that
         # all keys were written succesfully
         if self.params.get('nemesis_during_prepare'):
