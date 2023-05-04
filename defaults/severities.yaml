@@ -49,6 +49,7 @@ DatabaseLogEvent.COMPACTION_STOPPED: NORMAL
 DatabaseLogEvent.RPC_CONNECTION: WARNING
 DatabaseLogEvent.DATABASE_ERROR: ERROR
 DatabaseLogEvent.STACKTRACE: ERROR
+DatabaseLogEvent.RAFT_TRANSFER_SNAPSHOT_ERROR: WARNING
 IndexSpecialColumnErrorEvent: ERROR
 CassandraHarryEvent.failure: CRITICAL
 CassandraHarryEvent.error: ERROR
