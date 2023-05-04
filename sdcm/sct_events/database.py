@@ -45,6 +45,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     RUNTIME_ERROR: Type[LogEventProtocol]
     FILESYSTEM_ERROR: Type[LogEventProtocol]
     STACKTRACE: Type[LogEventProtocol]
+    RAFT_TRANSFER_SNAPSHOT_ERROR: Type[LogEventProtocol]
     DISK_ERROR: Type[LogEventProtocol]
     COMPACTION_STOPPED: Type[LogEventProtocol]
 
@@ -123,6 +124,10 @@ DatabaseLogEvent.add_subevent_type("DISK_ERROR", severity=Severity.ERROR,
                                    regex=r"storage_service - .*due to I\/O errors.*Disk error: std::system_error")
 DatabaseLogEvent.add_subevent_type("STACKTRACE", severity=Severity.ERROR,
                                    regex="stacktrace")
+# scylladb/scylladb#12972
+DatabaseLogEvent.add_subevent_type("RAFT_TRANSFER_SNAPSHOT_ERROR", severity=Severity.WARNING,
+                                   regex=r"raft - \[[\w-]*\] Transferring snapshot to [\w-]* "
+                                         r"failed with: seastar::rpc::remote_verb_error \(connection is closed\)")
 
 # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
 DatabaseLogEvent.add_subevent_type("REACTOR_STALLED", mixin=ReactorStalledMixin, severity=Severity.DEBUG,
@@ -166,6 +171,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.FILESYSTEM_ERROR(),
     DatabaseLogEvent.DISK_ERROR(),
     DatabaseLogEvent.STACKTRACE(),
+    DatabaseLogEvent.RAFT_TRANSFER_SNAPSHOT_ERROR(),
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     DatabaseLogEvent.REACTOR_STALLED(),
