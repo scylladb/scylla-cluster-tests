@@ -42,7 +42,7 @@ from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any
 from urllib.parse import urlparse
 from unittest.mock import MagicMock, Mock
 from textwrap import dedent
-from contextlib import closing
+from contextlib import closing, contextmanager
 from functools import wraps, cached_property, lru_cache
 from collections import defaultdict, namedtuple
 import concurrent.futures
@@ -68,7 +68,7 @@ from prettytable import PrettyTable
 
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import CpuNotHighEnoughEvent
+from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType
 from sdcm.utils.ssh_agent import SSHAgent
@@ -3040,3 +3040,14 @@ def describering_parsing(describering_output):
                              re.findall(r'EndpointDetails\(host:([\d\.,]+), datacenter:([^,]+), rack:([^\)]+)\),?',
                                         found_attributes[0][4])]
     return result
+
+
+@contextmanager
+def SoftTimeoutContext(timeout: int, operation: str):  # pylint: disable=invalid-name
+    """Publish SoftTimeoutEvent with operation info in case of duration > timeout"""
+    start_time = time.time()
+    yield
+    duration = time.time() - start_time
+    if duration > timeout:
+        SoftTimeoutEvent(operation=operation, soft_timeout=timeout,
+                         duration=duration).publish_or_dump()
