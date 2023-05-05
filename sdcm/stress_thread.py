@@ -26,7 +26,7 @@ from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.cluster import BaseLoaderSet  # , BaseNode
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
-from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds
+from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
 from sdcm.utils.user_profile import get_profile_content
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
 from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
@@ -314,7 +314,10 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 hdr_logger_context:
             publisher.event_id = cs_stress_event.event_id
             try:
-                result = cmd_runner.run(cmd=node_cmd, timeout=self.timeout, log_file=log_file_name, retry=0)
+                # prolong timeout by 5% to avoid killing cassandra-stress process
+                hard_timeout = self.timeout + int(self.timeout * 0.05)
+                with SoftTimeoutContext(timeout=self.timeout, operation="cassandra-stress"):
+                    result = cmd_runner.run(cmd=node_cmd, timeout=hard_timeout, log_file=log_file_name, retry=0)
             except Exception as exc:  # pylint: disable=broad-except
                 cs_stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
                 cs_stress_event.add_error(errors=[format_stress_cmd_error(exc)])
@@ -391,5 +394,5 @@ def get_timeout_from_stress_cmd(stress_cmd: str) -> int | None:
     if timeout == 0:
         return None
     else:
-        # adding 10 minutes to timeout for general all others delays
-        return timeout + 600
+        # adding 15 minutes to timeout for general all others delays
+        return timeout + 900
