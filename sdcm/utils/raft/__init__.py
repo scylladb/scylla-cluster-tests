@@ -207,8 +207,12 @@ class NoRaft(RaftFeatureOperations):
 
 def get_raft_mode(node) -> Raft | NoRaft:
     with node.remote_scylla_yaml() as scylla_yaml:
-        node.log.debug("consistent_cluster_management : %s", scylla_yaml.consistent_cluster_management)
-        return Raft(node) if scylla_yaml.consistent_cluster_management else NoRaft(node)
+        if node.is_kubernetes():
+            consistent_cluster_management = scylla_yaml.get('consistent_cluster_management')
+        else:
+            consistent_cluster_management = scylla_yaml.consistent_cluster_management
+        node.log.debug("consistent_cluster_management : %s", consistent_cluster_management)
+        return Raft(node) if consistent_cluster_management else NoRaft(node)
 
 
 __all__ = ["get_raft_mode",
