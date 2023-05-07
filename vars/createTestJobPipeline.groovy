@@ -37,7 +37,7 @@ def call() {
             parameterizedCron (
                 '''
                     H 01 * * 0 %branch="scylla-master/releng-testing"
-                    H 01 * * 0 %branch="enterprise"
+                    H 01 * * 0 %branch="scylla-enterprise;is_enterprise=true"
                     H 01 * * 0 %branch="scylla-master"
                 '''
             )
