@@ -97,6 +97,7 @@ ANY_KUBERNETES_RESOURCE = Union[  # pylint: disable=invalid-name
     Resource, ResourceField, ResourceInstance, ResourceList, Subresource,
 ]
 NAMESPACE_CREATION_LOCK = Lock()
+NODE_INIT_LOCK = Lock()
 
 CERT_MANAGER_TEST_CONFIG = sct_abs_path("sdcm/k8s_configs/cert-manager-test.yaml")
 LOADER_POD_CONFIG_PATH = sct_abs_path("sdcm/k8s_configs/loaders/pod.yaml")
@@ -2282,7 +2283,9 @@ class PodCluster(cluster.BaseCluster):
                                       node_index=node_index,
                                       dc_idx=dc_idx,
                                       rack=rack)
-        node.init()
+        # NOTE: use lock to avoid hanging running in a multitenant setup
+        with NODE_INIT_LOCK:
+            node.init()
         return node
 
     def add_nodes(self,
