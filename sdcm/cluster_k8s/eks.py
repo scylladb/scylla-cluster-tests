@@ -16,6 +16,7 @@ import logging
 import time
 import pprint
 from textwrap import dedent
+from threading import Lock
 from typing import List, Dict, Literal, ParamSpec, TypeVar
 from functools import cached_property
 from collections.abc import Callable
@@ -50,6 +51,8 @@ R = TypeVar("R")  # pylint: disable=invalid-name
 
 # we didn't add configuration for all the rest 'io1', 'io2', 'gp2', 'sc1', 'st1'
 SUPPORTED_EBS_STORAGE_CLASSES = ['gp3', ]
+
+EC2_INSTANCE_UPDATE_LOCK = Lock()
 
 
 # pylint: disable=too-many-instance-attributes
@@ -445,32 +448,51 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         cmd = "get node --no-headers -o custom-columns=:.spec.providerID"
         return [name.split("/")[-1] for name in self.kubectl(cmd).stdout.split()]
 
-    def set_tags(self, instance_ids):
+    def set_tags(self, instance_ids, memo={}):  # pylint: disable=dangerous-default-value
+        if not instance_ids:
+            return
         if isinstance(instance_ids, str):
             instance_ids = [instance_ids]
-        boto3.client('ec2', region_name=self.region_name).create_tags(
-            Resources=instance_ids,
-            Tags=[{"Key": key, "Value": value} for key, value in self.tags.items()],
-        )
+        with EC2_INSTANCE_UPDATE_LOCK:
+            instance_ids = [instance_id for instance_id in instance_ids if instance_id not in memo]
+            if not instance_ids:
+                return
+            LOGGER.debug("Going to update tags of the following instances: %s", instance_ids)
+            boto3.client('ec2', region_name=self.region_name).create_tags(
+                Resources=instance_ids,
+                Tags=[{"Key": key, "Value": value} for key, value in self.tags.items()],
+            )
+            for instance_id in instance_ids:
+                memo[instance_id] = 'already_updated'
+            LOGGER.debug("Successfully updated tags for the following instances: %s", instance_ids)
 
     def set_tags_on_all_instances(self):
         # NOTE: EKS doesn't apply nodeGroup's tags to nodes.
         # So, we add it for each node explicitly.
         self.set_tags(self._get_all_instance_ids())
 
-    def set_security_groups(self, instance):
-        for network_interface in instance.network_interfaces:
-            security_groups = [g["GroupId"] for g in network_interface.groups]
-            # NOTE: Make API call only if it is needed
-            if self.ec2_security_group_ids[0][0] not in security_groups:
+    def set_security_groups(self, instance_id, memo={}):  # pylint: disable=dangerous-default-value
+        if not instance_id or instance_id in memo:
+            return
+        with EC2_INSTANCE_UPDATE_LOCK:
+            if instance_id in memo:
+                return
+            LOGGER.debug("Going to update security groups of the following instance: %s", instance_id)
+            instance = self.get_ec2_instance_by_id(instance_id)
+            for network_interface in instance.network_interfaces:
+                security_groups = [g["GroupId"] for g in network_interface.groups]
+                if self.ec2_security_group_ids[0][0] in security_groups:
+                    continue
                 security_groups.append(self.ec2_security_group_ids[0][0])
                 network_interface.modify_attribute(Groups=security_groups)
+            memo[instance_id] = 'already_updated'
+            LOGGER.debug("Successfully updated security groups for the following instance: %s", instance_id)
 
     def set_security_groups_on_all_instances(self):
         # NOTE: EKS doesn't apply nodeGroup's security groups to nodes
         # So, we add it for each network interface of a node explicitly.
         for instance_id in self._get_all_instance_ids():
-            self.set_security_groups(self.get_ec2_instance_by_id(instance_id))
+            self.set_security_groups(instance_id)
 
     def deploy_scylla_cluster(self, *args, **kwargs) -> None:  # pylint: disable=signature-differs
         super().deploy_scylla_cluster(*args, **kwargs)
@@ -645,8 +667,8 @@ class EksScyllaPodCluster(ScyllaPodCluster):
                                       rack=rack,
                                       enable_auto_bootstrap=enable_auto_bootstrap)
         for node in new_nodes:
-            self.k8s_cluster.set_security_groups(node.ec2_host)
-            self.k8s_cluster.set_tags(node.ec2_host.id)
+            self.k8s_cluster.set_security_groups(node.ec2_instance_id)
+            self.k8s_cluster.set_tags(node.ec2_instance_id)
         return new_nodes
 
 
