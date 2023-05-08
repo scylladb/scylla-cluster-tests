@@ -1441,6 +1441,7 @@ def create_test_release_jobs_enterprise(branch, username, password, sct_branch, 
     base_job_dir = f'{branch}'
     server = JenkinsPipelines(username=username, password=password, base_job_dir=base_job_dir,
                               sct_branch_name=sct_branch, sct_repo=sct_repo)
+    base_path = f'{server.base_sct_dir}/jenkins-pipelines'
 
     server.create_directory('SCT_Enterprise_Features', 'SCT Enterprise Features')
     for group_name, match, group_desc in [
@@ -1453,11 +1454,18 @@ def create_test_release_jobs_enterprise(branch, username, password, sct_branch, 
         current_dir = f'SCT_Enterprise_Features/{group_name}'
         server.create_directory(name=current_dir, display_name=group_desc)
 
-        for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/{match}.jenkinsfile'):
+        for jenkins_file in glob.glob(f'{base_path}/{match}.jenkinsfile'):
             server.create_pipeline_job(jenkins_file, current_dir)
 
-    server.create_pipeline_job(
-        f'{server.base_sct_dir}/jenkins-pipelines/longevity-in-memory-36gb-1d.jenkinsfile', 'SCT_Enterprise_Features')
+    for group_name, feature_dir, group_desc in (
+        ('Workload_Prioritization', 'workload-prioritization', 'Workload Prioritization'),
+        ('audit', 'audit', 'Audit')
+    ):
+        current_dir = f'SCT_Enterprise_Features/{group_name}'
+        server.create_directory(name=current_dir, display_name=group_desc)
+
+        for jenkins_file in glob.glob(f'{base_path}/{feature_dir}/*.jenkinsfile'):
+            server.create_pipeline_job(jenkins_file, current_dir)
 
 
 @cli.command("prepare-regions", help="Configure all required resources for SCT runs in selected cloud region")
