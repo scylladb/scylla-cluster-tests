@@ -6,7 +6,6 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 managerPipeline(
     params: params,
 
-    manager: true,
     backend: 'aws',
     test_name: 'mgmt_cli_test.MgmtCliTest.test_repair_intensity_feature_on_multiple_node',
     test_config: 'test-cases/manager/manager-repair-intensity-multiple-repaired-nodes.yaml',
