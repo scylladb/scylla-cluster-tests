@@ -106,7 +106,6 @@
 | **<a href="#user-content-nemesis_sequence_sleep_between_ops" name="nemesis_sequence_sleep_between_ops">nemesis_sequence_sleep_between_ops</a>**  | Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests | N/A | SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS
 | **<a href="#user-content-nemesis_during_prepare" name="nemesis_during_prepare">nemesis_during_prepare</a>**  | Run nemesis during prepare stage of the test | True | SCT_NEMESIS_DURING_PREPARE
 | **<a href="#user-content-nemesis_seed" name="nemesis_seed">nemesis_seed</a>**  | A seed number in order to repeat nemesis sequence as part of SisyphusMonkey | N/A | SCT_NEMESIS_SEED
-| **<a href="#user-content-cql_schema_seed" name="cql_schema_seed">cql_schema_seed</a>**  | A seed number in order to repeat CQL schema configuration | N/A | SCT_CQL_SCHEMA_SEED
 | **<a href="#user-content-nemesis_add_node_cnt" name="nemesis_add_node_cnt">nemesis_add_node_cnt</a>**  | Add/remove nodes during GrowShrinkCluster nemesis | 1 | SCT_NEMESIS_ADD_NODE_CNT
 | **<a href="#user-content-cluster_target_size" name="cluster_target_size">cluster_target_size</a>**  | Used for scale test: max size of the cluster | N/A | SCT_CLUSTER_TARGET_SIZE
 | **<a href="#user-content-space_node_threshold" name="space_node_threshold">space_node_threshold</a>**  | Space node threshold before starting nemesis (bytes)<br>The default value is 6GB (6x1024^3 bytes)<br>This value is supposed to reproduce<br>https://github.com/scylladb/scylla/issues/1140 | N/A | SCT_SPACE_NODE_THRESHOLD

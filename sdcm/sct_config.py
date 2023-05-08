@@ -561,9 +561,6 @@ class SCTConfiguration(dict):
              type=int, k8s_multitenancy_supported=True,
              help="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey"""),
 
-        dict(name="cql_schema_seed", env="SCT_CQL_SCHEMA_SEED", type=int,
-             help="""A seed number in order to repeat CQL schema configuration"""),
-
         dict(name="nemesis_add_node_cnt",
              env="SCT_NEMESIS_ADD_NODE_CNT",
              type=int, k8s_multitenancy_supported=True,
