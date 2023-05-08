@@ -4,7 +4,6 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 managerPipeline(
-    manager: true,
     backend: 'aws',
     region: '''["us-east-1", "us-west-2"]''',
     test_name: 'mgmt_cli_test.MgmtCliTest.test_manager_sanity',
