@@ -56,6 +56,8 @@ authenticator_user: cassandra
 authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
 
+print_kernel_callstack: true
+
 user_prefix: 'perf-ycsb-latency-nemesis'
 email_subject_postfix: 'YCSB workloads'
 store_perf_results: true
