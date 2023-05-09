@@ -111,9 +111,11 @@ class SstableLoadUtils:
 
     @classmethod
     def run_load_and_stream(cls, node, keyspace_name: str = 'keyspace1', table_name: str = 'standard1'):
-        system_log_follower = node.follow_system_log(
-            patterns=[cls.LOAD_AND_STREAM_DONE_EXPR.format(keyspace_name, table_name),
-                      cls.LOAD_AND_STREAM_RUN_EXPR])
+        start_log_follower = node.follow_system_log(
+            patterns=[cls.LOAD_AND_STREAM_RUN_EXPR])
+        done_log_follower = node.follow_system_log(
+            patterns=[cls.LOAD_AND_STREAM_DONE_EXPR.format(keyspace_name, table_name)])
+
         LOGGER.info("Running load and stream on the node %s for %s.%s'", node.name, keyspace_name, table_name)
 
         # `load_and_stream` parameter is not supported by nodetool yet. This is workaround
@@ -122,7 +124,7 @@ class SstableLoadUtils:
                        f'"Accept: application/json" "http://127.0.0.1:10000/storage_service/sstables/{keyspace_name}?' \
                        f'cf={table_name}&load_and_stream=true"'
         node.remoter.run(load_api_cmd)
-        return system_log_follower
+        return start_log_follower, done_log_follower
 
     @staticmethod
     def run_refresh(node, test_data: namedtuple) -> Iterable[str]:
@@ -224,7 +226,7 @@ class SstableLoadUtils:
             f'Load and stream status  on the node {node.name} is "{load_and_stream_status}". Expected "succeeded"'
 
     @classmethod
-    def validate_load_and_stream_status(cls, node, system_log_follower,
+    def validate_load_and_stream_status(cls, node, start_log_follower, done_log_follower,  # pylint: disable=too-many-arguments
                                         keyspace_name='keyspace1', table_name='standard1'):
         """
         Validate that load_and_stream was started and has been completed successfully.
@@ -238,10 +240,10 @@ class SstableLoadUtils:
         Starting with the Scylla 4.6 version the prefix becomes 'sstables_loader' instead of
         the 'storage_service' one.
         """
-        load_and_stream_status = cls.wait_for_load_and_stream_start(node, system_log_follower,
+        load_and_stream_status = cls.wait_for_load_and_stream_start(node, start_log_follower,
                                                                     keyspace_name, table_name)
         if load_and_stream_status == "n/a":
-            cls.wait_for_load_and_stream_finish(node, system_log_follower, keyspace_name, table_name)
+            cls.wait_for_load_and_stream_finish(node, done_log_follower, keyspace_name, table_name)
 
     @classmethod
     def get_load_test_data_inventory(cls, column_number: int, big_sstable: bool,
