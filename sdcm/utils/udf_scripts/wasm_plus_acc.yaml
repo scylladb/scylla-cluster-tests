@@ -1,10 +1,10 @@
 # UDF script: returns a tuple with the accumulator incremented by arg and counter incremented by 1
 
-name: 'xwasm_plus_acc'
+name: 'wasm_plus_acc'
 args: '(acc tuple<int, int>, arg int)'
 called_on_null_input_returns: 'NULL'
 return_type: 'tuple <int, int>'
-language: 'xwasm'
+language: 'wasm'
 script: |-
   (module
   (type (;0;) (func (param i64 i64) (result i64)))
@@ -146,6 +146,6 @@ script: |-
   (memory (;0;) 2)
   (global (;0;) i32 (i32.const 1024))
   (export "memory" (memory 0))
-  (export "xwasm_plus_acc" (func 0))
+  (export "wasm_plus_acc" (func 0))
   (export "_scylla_abi" (global 0))
   (data (;0;) (i32.const 1024) "\01\00\00\00"))

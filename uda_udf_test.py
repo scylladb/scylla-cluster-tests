@@ -85,12 +85,12 @@ class UDAUDFTest(ClusterTester):
                            query=f"SELECT {self.KEYSPACE_NAME}.lua_var_length_counter(c7_text) AS result "
                                  f"FROM {self.KEYSPACE_NAME}.{self.CF_NAME} LIMIT 1",
                            verifier_func=lambda c2, c3, c7, query_response: len(c7) == query_response.result),
-            UDVerification(name="xwasm_plus",
-                           query=f"SELECT {self.KEYSPACE_NAME}.xwasm_plus(c2_int, c3_int) AS result "
+            UDVerification(name="wasm_plus",
+                           query=f"SELECT {self.KEYSPACE_NAME}.wasm_plus(c2_int, c3_int) AS result "
                                  f"FROM {self.KEYSPACE_NAME}.{self.CF_NAME} LIMIT 1",
                            verifier_func=lambda c2, c3, c7, query_response: c2 + c3 == query_response.result),
-            UDVerification(name="xwasm_div",
-                           query=f"SELECT {self.KEYSPACE_NAME}.xwasm_div(c2_int, c3_int) AS result "
+            UDVerification(name="wasm_div",
+                           query=f"SELECT {self.KEYSPACE_NAME}.wasm_div(c2_int, c3_int) AS result "
                                  f"FROM {self.KEYSPACE_NAME}.{self.CF_NAME} LIMIT 1",
                            verifier_func=lambda c2, c3, c7, query_response: c2 // c3 == query_response.result)
         ]

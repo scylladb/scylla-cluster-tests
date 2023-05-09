@@ -85,19 +85,19 @@ class TestUDA(TestCase):
 
     def test_load_uda_from_yaml(self):
         expected_create_string = "CREATE AGGREGATE testing.my_uda(int) " \
-                                 "SFUNC xwasm_plus " \
+                                 "SFUNC wasm_plus " \
                                  "STYPE int " \
-                                 "REDUCEFUNC xwasm_plus " \
-                                 "FINALFUNC xwasm_simple_return_int " \
+                                 "REDUCEFUNC wasm_plus " \
+                                 "FINALFUNC wasm_simple_return_int " \
                                  "INITCOND (0, 0);"
 
         data = {
             "name": "my_uda",
             "args": "int",
             "return_type": "int",
-            "accumulator_udf_name": "xwasm_plus",
-            "reduce_udf_name": "xwasm_plus",
-            "final_udf_name": "xwasm_simple_return_int",
+            "accumulator_udf_name": "wasm_plus",
+            "reduce_udf_name": "wasm_plus",
+            "final_udf_name": "wasm_simple_return_int",
             "initial_condition": "(0, 0)"
         }
 
