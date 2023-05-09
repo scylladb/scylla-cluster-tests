@@ -1,10 +1,10 @@
 # UDF script: UDF function for a final UDA function - takes state tuple and returns a float from the division of the state tuples integers
 
-name: 'xwasm_div_fin'
+name: 'wasm_div_fin'
 args: '(acc tuple<int, int>)'
 called_on_null_input_returns: 'NULL'
 return_type: 'float'
-language: 'xwasm'
+language: 'wasm'
 script: |-
   (module
   (type (;0;) (func (param i64) (result i64)))
@@ -102,6 +102,6 @@ script: |-
   (memory (;0;) 2)
   (global (;0;) i32 (i32.const 1024))
   (export "memory" (memory 0))
-  (export "xwasm_div_fin" (func 0))
+  (export "wasm_div_fin" (func 0))
   (export "_scylla_abi" (global 0))
   (data (;0;) (i32.const 1024) "\01\00\00\00"))

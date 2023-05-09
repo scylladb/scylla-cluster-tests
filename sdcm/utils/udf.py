@@ -45,7 +45,7 @@ class UDF(BaseModel):
     args: str
     called_on_null_input_returns: str
     return_type: str
-    language: Literal["lua", "xwasm"]
+    language: Literal["lua", "wasm"]
     script: str
 
     def get_create_query(self, ks: str, create_or_replace: bool = True) -> str:

@@ -27,12 +27,12 @@ class TestUDF(TestCase):
         "script": "return #var"
     }
 
-    MOCK_XWASM_UDF_VALS = {
-        "name": 'xwasm_plus',
+    MOCK_WASM_UDF_VALS = {
+        "name": 'wasm_plus',
         "args": '(input1 int, input2 int)',
         "called_on_null_input_returns": 'NULL',
         "return_type": 'int',
-        "language": 'xwasm',
+        "language": 'wasm',
         "script": r"""(module
 (type (;0;) (func))
 (type (;1;) (func (param i32 i32) (result i32)))
@@ -52,7 +52,7 @@ class TestUDF(TestCase):
 (global (;6;) i32 (i32.const 1))
 (export "memory" (memory 0))
 (export "__wasm_call_ctors" (func $__wasm_call_ctors))
-(export "xwasm_plus" (func $plus))
+(export "wasm_plus" (func $plus))
 (export "__dso_handle" (global 1))
 (export "__data_end" (global 2))
 (export "__global_base" (global 3))
@@ -115,10 +115,10 @@ class TestUDF(TestCase):
         for key, value in expected_vals.items():
             self.assertEqual(value, getattr(udf, key), f"Did not find expected value for {key} in the udf class.")
 
-    def test_loading_udfs_with_xwasm_scripts(self):
-        expected_vals = self.MOCK_XWASM_UDF_VALS.copy()
+    def test_loading_udfs_with_wasm_scripts(self):
+        expected_vals = self.MOCK_WASM_UDF_VALS.copy()
 
-        udf_yaml_filename = "./sdcm/utils/udf_scripts/xwasm_plus.yaml"
+        udf_yaml_filename = "./sdcm/utils/udf_scripts/wasm_plus.yaml"
         udf = UDF.from_yaml(udf_yaml_filename)
 
         self.assertIsNotNone(udf)

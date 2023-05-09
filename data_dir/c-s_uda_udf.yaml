@@ -65,9 +65,9 @@ queries:
   lua_var_length_counter:
     cql: "SELECT ks.lua_var_length_counter(c7_text) AS result FROM ks.uda_udf LIMIT 10"
     fields: samerow
-  xwasm_plus:
-    cql: "SELECT ks.xwasm_plus(c2_int, c3_int) AS result FROM ks.uda_udf LIMIT 10"
+  wasm_plus:
+    cql: "SELECT ks.wasm_plus(c2_int, c3_int) AS result FROM ks.uda_udf LIMIT 10"
     fields: samerow
-  xwasm_div:
-    cql: "SELECT ks.xwasm_div(c2_int, c3_int) AS result FROM ks.uda_udf LIMIT 10"
+  wasm_div:
+    cql: "SELECT ks.wasm_div(c2_int, c3_int) AS result FROM ks.uda_udf LIMIT 10"
     fields: samerow
