@@ -3,7 +3,7 @@ test_duration: 240
 stress_cmd: "cassandra-stress write cl=QUORUM n=4000000 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=2,us-west-2scylla_node_west=1)' -mode cql3 native -rate threads=200 -pop seq=400000000..600000000"
 stress_read_cmd: "cassandra-stress read cl=QUORUM n=4000000 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=2,us-west-2scylla_node_west=1)' -mode cql3 native -rate threads=200 -pop seq=400000000..600000000"
 
-instance_type_db: 'i3.large'
+instance_type_db: 'i4i.large'
 instance_type_loader: 'c5.large'
 
 region_name: 'us-east-1 us-west-2'
