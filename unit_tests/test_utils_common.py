@@ -212,7 +212,8 @@ class TestSstableLoadUtils(unittest.TestCase):
                 f"Expected {case['expected_result']} elements, got {len(map_files_to_node)}"
 
     def test_load_and_stream_status(self):
-        patterns = [SstableLoadUtils.LOAD_AND_STREAM_DONE_EXPR.format('keyspace1', 'standard1'),
-                    SstableLoadUtils.LOAD_AND_STREAM_RUN_EXPR]
-        system_log_follower = self.node.follow_system_log(start_from_beginning=True, patterns=patterns)
-        SstableLoadUtils.validate_load_and_stream_status(self.node, system_log_follower)
+        system_log_follower = self.node.follow_system_log(start_from_beginning=True, patterns=[
+                                                          SstableLoadUtils.LOAD_AND_STREAM_RUN_EXPR])
+        done_log_follower = self.node.follow_system_log(start_from_beginning=True, patterns=[
+            SstableLoadUtils.LOAD_AND_STREAM_DONE_EXPR.format('keyspace1', 'standard1')])
+        SstableLoadUtils.validate_load_and_stream_status(self.node, system_log_follower, done_log_follower)
