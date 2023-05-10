@@ -310,6 +310,16 @@ class Setup:
                sudo sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config
                sudo systemctl restart sshd
                ''')
+        post_boot_script += dedent("""
+        if (( $(ssh -V 2>&1 | tr -d "[:alpha:][:blank:][:punct:]" | cut -c-2) >= 88 )); then
+            sudo systemctl stop sshd || true
+            sudo sed -i "s/#PubkeyAuthentication \(.*\)$/PubkeyAuthentication yes/" /etc/ssh/sshd_config || true
+            sudo sed -i -e "\\$aPubkeyAcceptedAlgorithms +ssh-rsa" /etc/ssh/sshd_config || true
+            sudo sed -i -e "\\$aHostKeyAlgorithms +ssh-rsa" /etc/ssh/sshd_config || true
+            sudo systemctl restart sshd || true
+        fi
+        """)
+
         if cls.RSYSLOG_ADDRESS:
 
             if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
