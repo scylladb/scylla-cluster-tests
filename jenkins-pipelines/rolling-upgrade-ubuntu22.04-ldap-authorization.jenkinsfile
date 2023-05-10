@@ -6,10 +6,10 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 rollingUpgradePipeline(
     backend: 'gce',
     base_versions: '',  // auto mode
-    linux_distro: 'ubuntu-bionic',
-    gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1804-lts',
+    linux_distro: 'ubuntu-focal',
+    gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts',
 
     test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
-    test_config: 'test-cases/upgrades/rolling-upgrade.yaml',
+    test_config: '''["test-cases/upgrades/rolling-upgrade.yaml", "configurations/ldap-authorization.yaml"]''',
     internode_compression: 'all'
 )
