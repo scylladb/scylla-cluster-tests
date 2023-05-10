@@ -98,7 +98,7 @@ hydra run-test artifacts_test --backend aws --config test-cases/artifacts/amazon
 
 ## Ubuntu 18.04 LTS (bionic)
 ```sh
-hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu1804.yaml
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu2204.yaml
 ```
 
 ## Ubuntu 20.04 LTS (focal)
