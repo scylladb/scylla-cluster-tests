@@ -39,6 +39,7 @@ class Distro(enum.Enum):
     UBUNTU16 = ("ubuntu", "16.04")
     UBUNTU18 = ("ubuntu", "18.04")
     UBUNTU20 = ("ubuntu", "20.04")
+    UBUNTU22 = ("ubuntu", "22.04")
 
     @classmethod
     def _missing_(cls, value):
@@ -139,6 +140,10 @@ class Distro(enum.Enum):
     @property
     def is_ubuntu20(self):
         return self == self.UBUNTU20
+
+    @property
+    def is_ubuntu22(self):
+        return self == self.UBUNTU22
 
     @property
     def is_ubuntu(self):
