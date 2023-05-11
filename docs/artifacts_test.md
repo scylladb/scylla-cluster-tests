@@ -96,7 +96,7 @@ hydra run-test artifacts_test --backend aws --config test-cases/artifacts/oel76.
 hydra run-test artifacts_test --backend aws --config test-cases/artifacts/amazon2.yaml
 ```
 
-## Ubuntu 18.04 LTS (bionic)
+## Ubuntu 22.04 LTS (jammy)
 ```sh
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu2204.yaml
 ```
