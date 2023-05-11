@@ -85,12 +85,20 @@ class LocalLoaderSetDummy(BaseCluster):
     def is_kubernetes():
         return False
 
+    @staticmethod
+    def replace_dc_placeholders_with_dc_names(cmd):
+        datacenter_names = ['datacenter1']
+        for idx, dc in enumerate(datacenter_names):
+            cmd = cmd.replace(f"<dc{idx}>", dc)
+        return cmd
+
 
 class LocalScyllaClusterDummy(BaseScyllaCluster):
     # pylint: disable=super-init-not-called
     def __init__(self):
         self.name = "LocalScyllaClusterDummy"
         self.params = {}
+        self.datacenter_names = ["datacenter1"]
 
     @staticmethod
     def get_db_auth():

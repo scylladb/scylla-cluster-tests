@@ -140,10 +140,14 @@ class LoaderUtilsMixin:
         for cmd in cmds:
             # pylint: disable=no-member
             with self.db_cluster.cql_connection_patient(node) as session:
+                self.log.debug("Execute cql command: %s", cmd)
                 session.execute(cmd)
 
     def _pre_create_keyspace(self):
         cmds = self.params.get('pre_create_keyspace')
+        if not isinstance(cmds, list):
+            cmds = [cmds]
+        cmds = [self.db_cluster.replace_dc_placeholders_with_dc_names(cmd) for cmd in cmds]
         self._run_cql_commands(cmds)
 
     def run_post_prepare_cql_cmds(self):

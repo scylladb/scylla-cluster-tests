@@ -3200,16 +3200,6 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             grouped_by_region[node.region].append(node)
         return grouped_by_region
 
-    def get_datacenter_name_per_region(self, db_nodes=None):
-        datacenter_name_per_region = {}
-        for region, nodes in self.nodes_by_region(nodes=db_nodes).items():
-            if status := nodes[0].get_nodes_status():
-                datacenter_name_per_region[region] = status[nodes[0]]['dc']
-            else:
-                LOGGER.error("Failed to get nodes status from node %s", nodes[0])
-
-        return datacenter_name_per_region
-
     def send_file(self, src, dst, verbose=False):
         for loader in self.nodes:
             loader.remoter.send_files(src=src, dst=dst, verbose=verbose)
@@ -4116,6 +4106,27 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node_info["load"] = node_info["load"].replace(" ", "")
                 status[dc_name][node_ip] = node_info
         return status
+
+    def get_datacenter_name_per_region(self, db_nodes=None):
+        datacenter_name_per_region = {}
+        for region, nodes in self.nodes_by_region(nodes=db_nodes).items():  # pylint: disable=no-member
+            if status := nodes[0].get_nodes_status():
+                datacenter_name_per_region[region] = status[nodes[0]]['dc']
+            else:
+                LOGGER.error("Failed to get nodes status from node %s", nodes[0])
+
+        return datacenter_name_per_region
+
+    @cached_property
+    def datacenter_names(self):
+        datacenter_name_per_region = self.get_datacenter_name_per_region()
+        return [datacenter_name_per_region[region] for region in self.datacenter]  # pylint: disable=no-member
+
+    def replace_dc_placeholders_with_dc_names(self, cmd):
+        """replaces all <dcX> placeholders in cmd with datacenter names."""
+        for idx, dc in enumerate(self.datacenter_names):
+            cmd = cmd.replace(f"<dc{idx}>", dc)
+        return cmd
 
     @staticmethod
     def get_nodetool_info(node, **kwargs):

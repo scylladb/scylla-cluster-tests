@@ -1,6 +1,6 @@
 test_duration: 100
 
-stress_cmd: cassandra-stress write cl=QUORUM duration=20m -schema 'replication(strategy=NetworkTopologyStrategy,us-east1scylla_node_east=3,us-west1scylla_node_west=3)' -mode cql3 native -rate threads=1000 -pop seq=1..100000000000
+stress_cmd: cassandra-stress write cl=QUORUM duration=20m -schema 'replication(strategy=NetworkTopologyStrategy,<dc0>=3,<dc1>=3)' -mode cql3 native -rate threads=1000 -pop seq=1..100000000000
 
 ip_ssh_connections: 'public'
 intra_node_comm_public: true

@@ -100,9 +100,9 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         self.stop_test_on_failure = stop_test_on_failure
         self.compaction_strategy = compaction_strategy
 
-    def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):  # pylint: disable=too-many-branches
+    def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):  # pylint: disable=too-many-branches,too-many-locals
         stress_cmd = self.stress_cmd
-
+        db_cluster = self.node_list[0].parent_cluster
         if "no-warmup" not in stress_cmd:
             # add no-warmup to stress_cmd if it's not there. See issue #5767
             stress_cmd = re.sub(r'(cassandra-stress [\w]+)', r'\1 no-warmup', stress_cmd)
@@ -115,6 +115,14 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             keyspace_name = profile['keyspace']
             self.profile = cs_profile
             self.keyspace_name = keyspace_name
+
+        # replace <dcX> placeholders
+        profile_with_replaced_placeholders = f"/tmp/{os.path.basename(self.profile)}"
+        with open(self.profile, encoding="utf-8") as profile_file, open(profile_with_replaced_placeholders, encoding="utf-8",
+                                                                        mode="w") as new_profile:
+            for line in profile_file.readlines():
+                new_profile.write(db_cluster.replace_dc_placeholders_with_dc_names(line))
+        self.profile = profile_with_replaced_placeholders
 
         if self.keyspace_name:
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(self.keyspace_name))
@@ -132,14 +140,14 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             stress_cmd += \
                 " -transport 'truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra'"
 
-        if (connection_bundle_file := self.node_list[0].parent_cluster.connection_bundle_file) and '-node' not in stress_cmd:
+        if (connection_bundle_file := db_cluster.connection_bundle_file) and '-node' not in stress_cmd:
             stress_cmd += f" -cloudconf file={Path('/tmp') / connection_bundle_file.name}"
         elif self.node_list and '-node' not in stress_cmd:
             stress_cmd += " -node "
             if self.loader_set.test_config.MULTI_REGION:
                 # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
                 # not for loader nodes. So call next function for DB nodes
-                datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
+                datacenter_name_per_region = db_cluster.get_datacenter_name_per_region(db_nodes=self.node_list)
                 if loader_dc := datacenter_name_per_region.get(loader.region):
                     stress_cmd += f"datacenter={loader_dc} "
                 else:
@@ -150,6 +158,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             stress_cmd += ",".join(node_ip_list)
         if 'skip-unsupported-columns' in self._get_available_suboptions(cmd_runner, '-errors'):
             stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns'])
+        stress_cmd = db_cluster.replace_dc_placeholders_with_dc_names(stress_cmd)
         return stress_cmd
 
     @staticmethod

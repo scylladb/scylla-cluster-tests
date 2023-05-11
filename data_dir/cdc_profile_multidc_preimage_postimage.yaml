@@ -2,7 +2,7 @@ keyspace: cdc_test
 
 keyspace_definition: |
 
-  CREATE KEYSPACE IF NOT EXISTS cdc_test WITH replication = {'class': 'NetworkTopologyStrategy', 'eu-westscylla_node_west': 3, 'us-eastscylla_node_east': 2}  AND durable_writes = true;
+  CREATE KEYSPACE IF NOT EXISTS cdc_test WITH replication = {'class': 'NetworkTopologyStrategy', '<dc0>': 3, '<dc1>': 2}  AND durable_writes = true;
 
 table: test_table_preimage_postimage
 

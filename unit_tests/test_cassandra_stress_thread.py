@@ -27,7 +27,7 @@ def test_01_cassandra_stress(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy()
 
     cmd = (
-        """cassandra-stress write cl=ONE duration=1m -schema 'replication(factor=1) """
+        """cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,<dc0>=1) """
         """compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native """
         """-rate threads=10 -pop seq=1..10000000 -log interval=5"""
     )
