@@ -1666,12 +1666,7 @@ class SCTConfiguration(dict):
                     gce_image = get_branched_gce_images(scylla_version=scylla_version)[0]
                 else:
                     # gce_image.name format examples: scylla-4-3-6 or scylla-enterprise-2021-1-2
-                    scylla_version_substr = f"scylla-{scylla_version.replace('.', '-')}"
-                    for gce_image in get_scylla_gce_images_versions():
-                        if gce_image.name.replace("-enterprise", "").startswith(scylla_version_substr):
-                            break
-                    else:
-                        raise ValueError(f"GCE images for {scylla_version=} not found")
+                    gce_image = get_scylla_gce_images_versions(version=scylla_version)[0]
                 self.log.debug("Found GCE image %s for scylla_version='%s'", gce_image.name, scylla_version)
                 self["gce_image_db"] = gce_image.extra["selfLink"]
             elif not self.get("azure_image_db") and self.get("cluster_backend") == "azure":
