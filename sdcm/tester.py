@@ -122,6 +122,7 @@ from sdcm.keystore import KeyStore
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes, CSWorkloadTypes, make_cs_range_histogram_summary, \
     make_cs_range_histogram_summary_by_interval
+from sdcm.utils.replication_strategy_utils import NetworkTopologyReplicationStrategy
 from sdcm.utils.raft.common import validate_raft_on_nodes
 
 
@@ -865,19 +866,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # TODO: move this skip to siren-tools when possible
             self.log.warning("Skipping this function due this job run from Siren cloud!")
             return
-        # change RF of system_auth
-        system_auth_rf = self.params.get('system_auth_rf')
-        if system_auth_rf > 1 and not self.test_config.REUSE_CLUSTER:
-            self.log.info('change RF of system_auth to %s', system_auth_rf)
-            node = db_cluster.nodes[0]
-            credentials = db_cluster.get_db_auth()
-            username, password = credentials if credentials else (None, None)
-            with db_cluster.cql_connection_patient(node, user=username, password=password) as session:
-                session.execute("ALTER KEYSPACE system_auth WITH replication = "
-                                "{'class': 'org.apache.cassandra.locator.SimpleStrategy', "
-                                "'replication_factor': %s};" % system_auth_rf)
-            self.log.info('repair system_auth keyspace ...')
-            node.run_nodetool(sub_cmd="repair", args="-- system_auth")
+        node = self.db_cluster.nodes[0]
+        nodes_by_region = self.db_cluster.nodes_by_region()
+        datacenters = {}
+        for region in nodes_by_region:
+            dc_name = self.db_cluster.get_nodetool_info(nodes_by_region[region][0])['Data Center']
+            datacenters.update({dc_name: len(nodes_by_region[region])})
+        self.log.debug("Number of nodes by datacenter %s", datacenters)
+        NetworkTopologyReplicationStrategy(**datacenters).apply(node, "system_auth")
+        res = node.run_cqlsh('DESC KEYSPACE system_auth',
+                             num_retry_on_failure=3)
+        self.log.debug("system_auth description: %s", res.stdout)
+        self.log.info('repair system_auth keyspace ...')
+        for node in self.db_cluster.nodes:
+            node.run_nodetool(sub_cmd="repair system_auth")
+        self.log.info('repair system_auth keyspace done')
 
     @cache
     def pre_create_alternator_tables(self):
