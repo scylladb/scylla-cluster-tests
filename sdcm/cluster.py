@@ -3831,7 +3831,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node = self.nodes[0]
             node.wait_ssh_up()
             seed_nodes_ips = [node.ip_address]
-
+        elif seeds_selector == "all":
+            seed_nodes_ips = [node.ip_address for node in self.nodes]
         elif (seeds_selector == 'reflector'
                 or self.test_config.REUSE_CLUSTER
                 or self.params.get('db_type') == 'cloud_scylla'):
