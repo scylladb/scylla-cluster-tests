@@ -783,7 +783,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         try:
             sct_config.SCTConfiguration()
         except ValueError as exp:
-            assert str(exp) == "Config fullscan params validarion errors:\n\tfield 'mode' must be one of " \
+            assert str(exp) == "Config params validation errors:\n\tfield 'mode' must be one of " \
                 "'('random', 'table', 'partition', 'aggregate', 'table_and_aggregate')' " \
                 "but got 'agggregate'\n\t" \
                 "field 'ks_cf' must be an instance of <class 'str'>, but got '1'\n\t" \

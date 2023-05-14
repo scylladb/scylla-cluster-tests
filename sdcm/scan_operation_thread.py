@@ -8,105 +8,24 @@ import threading
 import time
 import traceback
 from abc import abstractmethod
-from dataclasses import dataclass, field, fields
 from string import Template
-from typing import Optional, Type, NamedTuple, Literal, get_type_hints, get_origin, TYPE_CHECKING
+from typing import Optional, Type, NamedTuple, TYPE_CHECKING
 from cassandra import ConsistencyLevel, OperationTimedOut, ReadTimeout
 from cassandra.cluster import ResponseFuture, ResultSet  # pylint: disable=no-name-in-module
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
-from prettytable import PrettyTable
-from sdcm import wait
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import FullScanEvent, FullPartitionScanReversedOrderEvent, FullPartitionScanEvent, \
     FullScanAggregateEvent
 from sdcm.utils.common import get_table_clustering_order, get_partition_keys
+from sdcm.utils.operations_thread import OperationThreadStats, OneOperationStat, OperationThread, ThreadParams
 
 if TYPE_CHECKING:
-    from sdcm.cluster import BaseScyllaCluster, BaseCluster, BaseNode
+    from sdcm.cluster import BaseNode
 
 ERROR_SUBSTRINGS = ("timed out", "unpack requires", "timeout", 'Host has been marked down or removed')
 BYPASS_CACHE_VALUES = [" BYPASS CACHE", ""]
 LOCAL_CMD_RUNNER = LocalCmdRunner()
-
-
-# pylint: disable=too-many-instance-attributes
-@dataclass
-class ConfigFullScanParams:
-    mode: Literal['random', 'table', 'partition', 'aggregate', 'table_and_aggregate']
-    ks_cf: str = "random"
-    interval: int = 10
-    page_size: int = 10000
-    pk_name: str = 'pk'
-    ck_name: str = 'ck'
-    data_column_name: str = 'v'
-    validate_data: bool = False
-    include_data_column: bool = False
-    rows_count: int = 5000
-    full_scan_operation_limit: int = 300  # timeout for SELECT * statement, 5 min by default
-    full_scan_aggregates_operation_limit: int = 60*30  # timeout for SELECT count(* statement 30 min by default
-
-    def __post_init__(self):
-        types = get_type_hints(ConfigFullScanParams)
-        errors = []
-        for item in fields(ConfigFullScanParams):
-            expected_type = types[item.name]
-            value = getattr(self, item.name)
-            if get_origin(expected_type) is Literal:
-                if not value in expected_type.__args__:
-                    errors.append(
-                        f"field '{item.name}' must be one of '{expected_type.__args__}' but got '{value}'")
-            elif not isinstance(value, expected_type):
-                errors.append(f"field '{item.name}' must be an instance of {expected_type}, but got '{value}'")
-        if errors:
-            errors = '\n\t'.join(errors)
-            raise ValueError(f"Config fullscan params validarion errors:\n\t{errors}")
-
-
-@dataclass
-class FullScanParams(ConfigFullScanParams):
-    db_cluster: [BaseScyllaCluster, BaseCluster] = None
-    termination_event: threading.Event = None
-    fullscan_user: str = None
-    fullscan_user_password: str = None
-    duration: int = None
-
-
-@dataclass
-class FullScanStats:
-    """
-    Keeps track of stats for multiple fullscan operations.
-    """
-    number_of_rows_read: int = 0
-    read_pages: int = 0
-    scans_counter: int = 0
-    time_elapsed: int = 0
-    total_scan_time: int = 0
-    stats: list[FullScanOperationStat] = field(default_factory=list)
-
-    def get_stats_pretty_table(self) -> PrettyTable | None:
-        if not self.stats:
-            return None
-
-        pretty_table = PrettyTable(field_names=[field.name for field in fields(self.stats[0])])
-        for stat in self.stats:
-            pretty_table.add_row([stat.op_type, stat.duration, "\n".join(stat.exceptions), stat.nemesis_at_start,
-                                  stat.nemesis_at_end, stat.success, stat.cmd])
-        return pretty_table
-
-
-@dataclass
-class FullScanOperationStat:
-    """
-    Keeps track of stats for a single fullscan operation.
-    """
-    op_type: str = None
-    duration: float = None
-    exceptions: list = field(default_factory=list)
-    nemesis_at_start: str = None
-    nemesis_at_end: str = None
-    success: bool = None
-    cmd: str = None
 
 
 class FullScanCommand(NamedTuple):
@@ -125,7 +44,7 @@ class FullscanException(Exception):
 
 
 # pylint: disable=too-many-instance-attributes
-class ScanOperationThread:
+class ScanOperationThread(OperationThread):
     """
     Runs fullscan operations according to the parameters specified in the test
     config yaml files. Has 4 main modes:
@@ -135,7 +54,7 @@ class ScanOperationThread:
     - partition: uses only FullPartitionScanOperation
     - aggregate: uses only FullScanAggregatesOperation
 
-    Check FullScanParams class for parameters to tweak.
+    Check ThreadParams class for parameters to tweak.
 
     Note: the seeded random generator is shared between the thread class and
     the operations instances. So if the operations queue is  Op1, Op2, Op3],
@@ -144,28 +63,15 @@ class ScanOperationThread:
     also replicable.
     """
 
-    def __init__(self, fullscan_params: FullScanParams, thread_name: str = ""):
-        self.fullscan_params = fullscan_params
-        self.fullscan_stats = FullScanStats()
-        self.log = logging.getLogger(self.__class__.__name__)
-        nemesis_seed = self.fullscan_params.db_cluster.params.get("nemesis_seed")
-        self.generator = random.Random(int(nemesis_seed)) if nemesis_seed else random.Random()
-        self._thread = threading.Thread(daemon=True, name=f"{self.__class__.__name__}_{thread_name}", target=self.run)
-        self.termination_event = fullscan_params.termination_event
-
-        # create different scan operations objects
-        scan_operation_params = {
-            'generator': self.generator,
-            'fullscan_params': self.fullscan_params,
-            'fullscan_stats': self.fullscan_stats}
-
-        full_scan_operation = FullScanOperation(**scan_operation_params)
-        full_partition_scan_operation = FullPartitionScanOperation(**scan_operation_params)
-        full_scan_aggregates_operation = FullScanAggregatesOperation(**scan_operation_params)
+    def __init__(self, thread_params: ThreadParams, thread_name: str = ""):
+        super().__init__(thread_params, thread_name)
+        full_scan_operation = FullScanOperation(**self.operation_params)
+        full_partition_scan_operation = FullPartitionScanOperation(**self.operation_params)
+        full_scan_aggregates_operation = FullScanAggregatesOperation(**self.operation_params)
 
         # create mapping for different scan operations objects,
         # please see usage in get_next_scan_operation()
-        self.scan_operation_instance_map = {
+        self.operation_instance_map = {
             "table_and_aggregate": lambda: self.generator.choice(
                 [full_scan_operation, full_scan_aggregates_operation]),
             "random": lambda: self.generator.choice(
@@ -175,73 +81,25 @@ class ScanOperationThread:
             "aggregate": lambda: full_scan_aggregates_operation
         }
 
-    def get_next_scan_operation(self):
-        '''
-        Returns scan operation object depends on 'mode' - Literal['random', 'table', 'partition', 'aggregate']
-        Returns: FullscanOperationBase
-        '''
-        return self.scan_operation_instance_map[self.fullscan_params.mode]()
-
-    def _run_next_scan_operation(self):
-        self.fullscan_stats.read_pages = self.generator.choice([100, 1000, 0])
-        try:
-            scan_op = self.get_next_scan_operation()
-            self.log.debug("Going to run fullscan operation %s", scan_op.__class__.__name__)
-            scan_op.run_scan_operation()
-
-            self.log.debug("Fullscan operations queue depleted.")
-
-        except Exception as exc:  # pylint: disable=broad-except
-            self.log.error(traceback.format_exc())
-            self.log.error("Encountered exception while performing a fullscan operation:\n%s", exc)
-
-        self.log.debug("Fullscan stats:\n%s", self.fullscan_stats.get_stats_pretty_table())
-
-    def run(self):
-        end_time = time.time() + self.fullscan_params.duration
-        self._wait_until_user_table_exists()
-        while time.time() < end_time and not self.termination_event.is_set():
-            self._run_next_scan_operation()
-            time.sleep(self.fullscan_params.interval)
-        # summary for Jenkins. may not log because nobody wait the thread.
-        # Fullscan stats logs with debug level in each loop
-        self.log.debug("Fullscan stats:\n%s", self.fullscan_stats.get_stats_pretty_table())
-
-    def start(self):
-        self._thread.start()
-
-    def join(self, timeout=None):
-        return self._thread.join(timeout)
-
-    def _wait_until_user_table_exists(self, timeout_min: int = 20):
-        text = f'Waiting until {self.fullscan_params.ks_cf} user table exists'
-        db_node = random.choice(self.fullscan_params.db_cluster.nodes)
-
-        if self.fullscan_params.ks_cf.lower() == 'random':
-            wait.wait_for(func=lambda: len(self.fullscan_params.db_cluster.get_non_system_ks_cf_list(db_node)) > 0,
-                          step=60, text=text, timeout=60 * timeout_min, throw_exc=False)
-            self.fullscan_params.ks_cf = self.fullscan_params.db_cluster.get_non_system_ks_cf_list(db_node)[0]
-        else:
-            wait.wait_for(func=lambda: self.fullscan_params.ks_cf in (
-                self.fullscan_params.db_cluster.get_non_system_ks_cf_list(db_node)
-            ), step=60, text=text, timeout=60 * timeout_min, throw_exc=False)
-
 
 class FullscanOperationBase:
-    def __init__(self, generator: random.Random, fullscan_params: FullScanParams, fullscan_stats: FullScanStats,
+    def __init__(self, generator: random.Random, thread_params: ThreadParams, thread_stats: OperationThreadStats,
                  scan_event: Type[FullScanEvent] | Type[FullPartitionScanEvent]
                  | Type[FullPartitionScanReversedOrderEvent] | Type[FullScanAggregateEvent]):
         """
         Base class for performing fullscan operations.
         """
         self.log = logging.getLogger(self.__class__.__name__)
-        self.fullscan_params = fullscan_params
-        self.fullscan_stats = fullscan_stats
+        self.log.info("FullscanOperationBase starts")
+        self.fullscan_params = thread_params
+        self.fullscan_stats = thread_stats
         self.scan_event = scan_event
+        self.log.info("FullscanOperationBase scan_event: %s", self.scan_event)
         self.termination_event = self.fullscan_params.termination_event
         self.generator = generator
         self.db_node = self._get_random_node()
         self.current_operation_stat = None
+        self.log.info("FullscanOperationBase init finished")
 
     def _get_random_node(self) -> BaseNode:
         return self.generator.choice(self.fullscan_params.db_cluster.nodes)
@@ -264,14 +122,14 @@ class FullscanOperationBase:
 
     def run_scan_event(self, cmd: str,
                        scan_event: Type[FullScanEvent | FullPartitionScanEvent
-                                        | FullPartitionScanReversedOrderEvent] = None) -> FullScanOperationStat:
+                                        | FullPartitionScanReversedOrderEvent] = None) -> OneOperationStat:
         scan_event = scan_event or self.scan_event
         cmd = cmd or self.randomly_form_cql_statement()
         with scan_event(node=self.db_node.name, ks_cf=self.fullscan_params.ks_cf, message=f"Will run command {cmd}",
-                        user=self.fullscan_params.fullscan_user,
-                        password=self.fullscan_params.fullscan_user_password) as scan_op_event:
+                        user=self.fullscan_params.user,
+                        password=self.fullscan_params.user_password) as scan_op_event:
 
-            self.current_operation_stat = FullScanOperationStat(
+            self.current_operation_stat = OneOperationStat(
                 op_type=scan_op_event.__class__.__name__,
                 nemesis_at_start=self.db_node.running_nemesis,
                 cmd=cmd
@@ -280,8 +138,8 @@ class FullscanOperationBase:
             with self.fullscan_params.db_cluster.cql_connection_patient(
                     node=self.db_node,
                     connect_timeout=300,
-                    user=self.fullscan_params.fullscan_user,
-                    password=self.fullscan_params.fullscan_user_password) as session:
+                    user=self.fullscan_params.user,
+                    password=self.fullscan_params.user_password) as session:
                 try:
                     scan_op_event.message = ''
                     start_time = time.time()
@@ -316,7 +174,7 @@ class FullscanOperationBase:
     def update_stats(self, new_stat):
         self.fullscan_stats.stats.append(new_stat)
 
-    def run_scan_operation(self, cmd: str = None) -> FullScanOperationStat:
+    def run_scan_operation(self, cmd: str = None) -> OneOperationStat:
         return self.run_scan_event(cmd=cmd or self.randomly_form_cql_statement(), scan_event=self.scan_event)
 
     def fetch_result_pages(self, result, read_pages):
@@ -547,7 +405,7 @@ class FullPartitionScanOperation(FullscanOperationBase):
 
         normal_query, reversed_query = queries
 
-        full_partition_op_stat = FullScanOperationStat(
+        full_partition_op_stat = OneOperationStat(
             op_type=self.__class__.__name__,
             nemesis_at_start=self.db_node.running_nemesis,
             cmd=str(queries)
