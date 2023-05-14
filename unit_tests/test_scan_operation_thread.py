@@ -12,14 +12,16 @@ from threading import Event
 from unittest.mock import MagicMock, patch
 import pytest
 from cassandra import OperationTimedOut, ReadTimeout
+
+# from sdcm.utils.operations_thread import ThreadParams
 from unit_tests.test_cluster import DummyDbCluster, DummyNode
-from sdcm.scan_operation_thread import ScanOperationThread, FullScanParams
+from sdcm.scan_operation_thread import ScanOperationThread, ThreadParams
 
 
 DEFAULT_PARAMS = {
     'termination_event': Event(),
-    'fullscan_user': 'sla_role_name',
-    'fullscan_user_password': 'sla_role_password',
+    'user': 'sla_role_name',
+    'user_password': 'sla_role_password',
     'duration': 10,
     'interval': 0,
     'validate_data': True
@@ -94,14 +96,14 @@ def cluster(node):  # pylint: disable=redefined-outer-name
 
 @pytest.mark.parametrize("mode", ['table', 'partition', 'aggregate'])
 def test_scan_positive(mode, events, cluster):  # pylint: disable=redefined-outer-name
-    default_params = FullScanParams(
+    default_params = ThreadParams(
         db_cluster=cluster,
         ks_cf='a.b',
         mode=mode,
         **DEFAULT_PARAMS
     )
     with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
-        ScanOperationThread(default_params)._run_next_scan_operation()  # pylint: disable=protected-access
+        ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
     all_events = get_event_log_file(events)
     assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
     assert "Severity.NORMAL" in all_events[1] and "period_type=end" in all_events[1]
@@ -136,7 +138,7 @@ def test_scan_negative_operation_timed_out(mode, severity, timeout, execute_mock
         connection = ExecuteOperationTimedOutMockCqlConnectionPatient()
     db_cluster = DBCluster(connection, [node], {})
     node.parent_cluster = db_cluster
-    default_params = FullScanParams(
+    default_params = ThreadParams(
         db_cluster=db_cluster,
         ks_cf='a.b',
         mode=mode,
@@ -145,7 +147,7 @@ def test_scan_negative_operation_timed_out(mode, severity, timeout, execute_mock
         **DEFAULT_PARAMS
     )
     with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
-        ScanOperationThread(default_params)._run_next_scan_operation()  # pylint: disable=protected-access
+        ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
     all_events = get_event_log_file(events)
     assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
     assert f"Severity.{severity}" in all_events[1] and "period_type=end" in all_events[1]
@@ -175,7 +177,7 @@ def test_scan_negative_read_timedout(execute_mock, expected_message, events, nod
     connection = execute_mock()
     db_cluster = DBCluster(connection, [node], {})
     node.parent_cluster = db_cluster
-    default_params = FullScanParams(
+    default_params = ThreadParams(
         db_cluster=db_cluster,
         ks_cf='a.b',
         mode='aggregate',
@@ -184,7 +186,7 @@ def test_scan_negative_read_timedout(execute_mock, expected_message, events, nod
         **DEFAULT_PARAMS
     )
     with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
-        ScanOperationThread(default_params)._run_next_scan_operation()  # pylint: disable=protected-access
+        ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
     all_events = get_event_log_file(events)
     assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
     assert "Severity.ERROR" in all_events[1] and "period_type=end" in all_events[1]
@@ -223,14 +225,14 @@ def test_scan_negative_exception(mode, severity, running_nemesis, execute_mock, 
         connection = ExecuteExceptionMockCqlConnectionPatient()
     db_cluster = DBCluster(connection, [node], {})
     node.parent_cluster = db_cluster
-    default_params = FullScanParams(
+    default_params = ThreadParams(
         db_cluster=db_cluster,
         ks_cf='a.b',
         mode=mode,
         ** DEFAULT_PARAMS
     )
     with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
-        ScanOperationThread(default_params)._run_next_scan_operation()  # pylint: disable=protected-access
+        ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
     all_events = get_event_log_file(events)
     assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
     assert f"Severity.{severity}" in all_events[1] and "period_type=end" in all_events[1]

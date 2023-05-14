@@ -41,6 +41,7 @@ from sdcm.utils.common import (
     get_scylla_gce_images_versions,
     convert_name_to_ami_if_needed,
 )
+from sdcm.utils.operations_thread import ConfigParams
 from sdcm.utils.version_utils import (
     get_branch_version,
     get_branch_version_for_multiple_repositories,
@@ -50,7 +51,6 @@ from sdcm.utils.version_utils import (
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import get_gce_image_tags
-from sdcm.scan_operation_thread import ConfigFullScanParams
 
 
 def _str(value: str) -> str:
@@ -1772,7 +1772,7 @@ class SCTConfiguration(dict):
                 raise ValueError(f"run_fullscan parameter must be non empty list, but got: {run_fullscan_params}")
             for param in run_fullscan_params:
                 try:
-                    ConfigFullScanParams(**json.loads(param))
+                    ConfigParams(**json.loads(param))
                 except json.decoder.JSONDecodeError as exp:
                     raise ValueError(
                         f"each item of run_fullscan list: {run_fullscan_params}, "

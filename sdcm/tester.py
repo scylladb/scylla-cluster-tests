@@ -59,7 +59,7 @@ from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import provisioner_factory
-from sdcm.scan_operation_thread import FullScanParams, ScanOperationThread
+from sdcm.scan_operation_thread import ScanOperationThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.cassandra_harry_thread import CassandraHarryThread
@@ -93,6 +93,7 @@ from sdcm.stress_thread import CassandraStressThread, get_timeout_from_stress_cm
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
 from sdcm.utils.net import get_my_ip, get_sct_runner_ip
+from sdcm.utils.operations_thread import ThreadParams
 from sdcm.utils.threads_and_processes_alive import gather_live_processes_and_dump_to_file, \
     gather_live_threads_and_dump_to_file
 from sdcm.utils.version_utils import get_relocatable_pkg_url
@@ -2106,7 +2107,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return stats
 
     @staticmethod
-    def run_fullscan_thread(fullscan_params: FullScanParams, thread_name: str):
+    def run_fullscan_thread(fullscan_params: ThreadParams, thread_name: str):
         """Run thread of cql command select *
 
         Calculate test duration and timeout interval between
@@ -2118,11 +2119,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             fullscan_params: FullScanParams object with params relevant for starting
             the ScanOperationThread
         """
-        ScanOperationThread(
-            thread_name=thread_name,
-            fullscan_params=fullscan_params
-
-        ).start()
+        ScanOperationThread(thread_params=fullscan_params, thread_name=thread_name).start()
 
     def run_tombstone_gc_verification_thread(self, duration=None, interval=600, propagation_delay_in_seconds=3600, **kwargs):
         """Run a thread of tombstones gc verification.
