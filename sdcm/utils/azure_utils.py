@@ -23,6 +23,8 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachine
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import ResourceManagementClient
+from azure.storage.blob import BlobServiceClient
+from azure.core.credentials import AzureNamedKeyCredential
 from azure.mgmt.subscription import SubscriptionClient
 from azure.mgmt.resourcegraph import ResourceGraphClient
 from azure.mgmt.resourcegraph.models import QueryRequestOptions, QueryRequest
@@ -70,6 +72,14 @@ class AzureService(metaclass=Singleton):
         return KeyStore().get_azure_credentials()
 
     @cached_property
+    def blob_credentials(self) -> dict[str, str]:
+        return KeyStore().get_backup_azure_blob_credentials()
+
+    @cached_property
+    def blob_account_url(self) -> str:
+        return f"https://{self.blob_credentials['account']}.blob.core.windows.net/"
+
+    @cached_property
     def subscription_id(self) -> str:
         return self.azure_credentials["subscription_id"]
 
@@ -92,6 +102,12 @@ class AzureService(metaclass=Singleton):
     @cached_property
     def resource(self) -> ResourceManagementClient:
         return ResourceManagementClient(credential=self.credential, subscription_id=self.subscription_id)
+
+    @cached_property
+    def blob(self) -> BlobServiceClient:
+        return BlobServiceClient(account_url=self.blob_account_url,
+                                 credential=AzureNamedKeyCredential(name=self.blob_credentials['account'],
+                                                                    key=self.blob_credentials['key']))
 
     @cached_property
     def subscription(self) -> SubscriptionClient:
