@@ -3833,15 +3833,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             seed_nodes_ips = [node.ip_address]
         elif seeds_selector == "all":
             seed_nodes_ips = [node.ip_address for node in self.nodes]
-        elif (seeds_selector == 'reflector'
-                or self.test_config.REUSE_CLUSTER
-                or self.params.get('db_type') == 'cloud_scylla'):
+        elif self.test_config.REUSE_CLUSTER or self.params.get('db_type') == 'cloud_scylla':
             node = self.nodes[0]
             node.wait_ssh_up()
-            # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
-            # In this case we want to ignore it and wait, when reflector will select real node and update scylla.yaml
-            seed_nodes_ips = wait.wait_for(self.get_seed_selected_by_reflector,
-                                           step=10, text='Waiting for seed is selected by reflector',
+            seed_nodes_ips = wait.wait_for(self.read_seed_info_from_scylla_yaml,
+                                           step=10, text='Waiting for seed read from scylla yaml',
                                            timeout=wait_for_timeout, throw_exc=True)
         else:
             if seeds_selector == 'random':
@@ -4520,10 +4516,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.restart_binary_protocol(verify_up=verify_up)
             self.log.debug("Restarted native transport on %s", node.name)
 
-    def get_seed_selected_by_reflector(self, node=None):
-        """
-        Check if reflector updated the scylla.yaml with selected seed IP
-        """
+    def read_seed_info_from_scylla_yaml(self, node=None):
         if not node:
             node = self.nodes[0]
 

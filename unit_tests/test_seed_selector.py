@@ -4,8 +4,6 @@ import logging
 import shutil
 import os.path
 
-from tenacity import RetryError
-
 import sdcm.cluster
 from sdcm.test_config import TestConfig
 from unit_tests.dummy_remote import DummyRemote
@@ -78,15 +76,6 @@ class TestSeedSelector(unittest.TestCase):
         self.assertTrue(self.cluster.seed_nodes_ips == [self.cluster.nodes[0].ip_address,
                                                         self.cluster.nodes[1].ip_address])
 
-    def test_reflector_seed(self):
-        self.setup_cluster(nodes_number=3)
-        self.cluster.set_test_params(seeds_selector='reflector', seeds_num=1, db_type='scylla')
-        sdcm.cluster.SCYLLA_YAML_PATH = os.path.join(os.path.dirname(__file__), 'test_data', 'scylla.yaml')
-        self.cluster.set_seeds()
-        self.assertTrue(self.cluster.seed_nodes == [self.cluster.nodes[1]])
-        self.assertTrue(self.cluster.non_seed_nodes == [self.cluster.nodes[0], self.cluster.nodes[2]])
-        self.assertTrue(self.cluster.seed_nodes_ips == [self.cluster.nodes[1].ip_address])
-
     def test_reuse_cluster_seed(self):
         self.setup_cluster(nodes_number=3)
         self.cluster.set_test_params(seeds_selector='first', seeds_num=2, db_type='scylla')
@@ -112,12 +101,3 @@ class TestSeedSelector(unittest.TestCase):
         self.assertTrue(self.cluster.seed_nodes == [self.cluster.nodes[0]])
         self.assertTrue(self.cluster.non_seed_nodes == [])
         self.assertTrue(self.cluster.seed_nodes_ips == [self.cluster.nodes[0].ip_address])
-
-    def test_reflector_node_not_exists(self):
-        self.setup_cluster(nodes_number=1)
-        self.cluster.set_test_params(seeds_selector='reflector', seeds_num=1, db_type='scylla')
-        sdcm.cluster.SCYLLA_YAML_PATH = os.path.join(os.path.dirname(__file__), 'test_data', 'scylla.yaml')
-        self.assertRaisesRegex(RetryError,
-                               r'Waiting for seed is selected by reflector',
-                               self.cluster.set_seeds,
-                               wait_for_timeout=5)

@@ -71,7 +71,7 @@
 | **<a href="#user-content-reuse_cluster" name="reuse_cluster">reuse_cluster</a>**  | If reuse_cluster is set it should hold test_id of the cluster that will be reused.<br>`reuse_cluster: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71` | N/A | SCT_REUSE_CLUSTER
 | **<a href="#user-content-test_id" name="test_id">test_id</a>**  | test id to filter by | N/A | SCT_TEST_ID
 | **<a href="#user-content-db_nodes_shards_selection" name="db_nodes_shards_selection">db_nodes_shards_selection</a>**  | How to select number of shards of Scylla. Expected values: default/random.<br>Default value: 'default'.<br>In case of random option - Scylla will start with different (random) shards on every node of the cluster | default | SCT_NODES_SHARDS_SELECTION
-| **<a href="#user-content-seeds_selector" name="seeds_selector">seeds_selector</a>**  | How to select the seeds. Expected values: reflector/random/first | first | SCT_SEEDS_SELECTOR
+| **<a href="#user-content-seeds_selector" name="seeds_selector">seeds_selector</a>**  | How to select the seeds. Expected values: random/first/all | all | SCT_SEEDS_SELECTOR
 | **<a href="#user-content-seeds_num" name="seeds_num">seeds_num</a>**  | Number of seeds to select | 1 | SCT_SEEDS_NUM
 | **<a href="#user-content-send_email" name="send_email">send_email</a>**  | If true would send email out of the performance regression test | N/A | SCT_SEND_EMAIL
 | **<a href="#user-content-email_recipients" name="email_recipients">email_recipients</a>**  | list of email of send the performance regression test to | ['qa@scylladb.com'] | SCT_EMAIL_RECIPIENTS
