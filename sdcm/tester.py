@@ -118,14 +118,13 @@ from sdcm.send_email import build_reporter, read_email_data_from_file, get_runni
 from sdcm.utils import alternator
 from sdcm.utils.profiler import ProfilerFactory
 from sdcm.remote import RemoteCmdRunnerBase
-from sdcm.utils.gce_utils import get_gce_services
+from sdcm.utils.gce_utils import get_gce_compute_instances_client
 from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes, CSWorkloadTypes, make_cs_range_histogram_summary, \
     make_cs_range_histogram_summary_by_interval
 from sdcm.utils.raft.common import validate_raft_on_nodes
-
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
@@ -1019,10 +1018,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         user_prefix = self.params.get('user_prefix')
 
-        services = get_gce_services(self.params.get('gce_datacenter').split())
-        assert len(services) in (1, len(db_info['n_nodes']),)
-        gce_datacenter, services = list(services.keys()), list(services.values())
-        TEST_LOG.info("Using GCE AZs: %s", gce_datacenter)
+        gce_service = get_gce_compute_instances_client()
+        gce_datacenter = self.params.get('gce_datacenter').split()
+        TEST_LOG.info("Using GCE regions/datacenters: %s", gce_datacenter)
 
         user_credentials = self.params.get('user_credentials_path')
         self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
@@ -1064,7 +1062,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                gce_image_size=db_info['disk_size'],
                                                gce_n_local_ssd=db_info['n_local_ssd'],
                                                gce_instance_type=db_info['type'],
-                                               services=services,
+                                               gce_service=gce_service,
                                                n_nodes=db_info['n_nodes'],
                                                add_disks=cluster_additional_disks,
                                                service_accounts=service_accounts,
@@ -1076,7 +1074,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     gce_image_size=loader_info['disk_size'],
                                     gce_n_local_ssd=loader_info['n_local_ssd'],
                                     gce_instance_type=loader_info['type'],
-                                    service=services[:1],
+                                    gce_service=gce_service,
                                     n_nodes=loader_info['n_nodes'],
                                     add_disks=loader_additional_disks,
                                     **common_params)
@@ -1088,7 +1086,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                           gce_image_size=monitor_info['disk_size'],
                                           gce_n_local_ssd=monitor_info['n_local_ssd'],
                                           gce_instance_type=monitor_info['type'],
-                                          service=services[:1],
+                                          gce_service=gce_service,
                                           n_nodes=monitor_info['n_nodes'],
                                           add_disks=monitor_additional_disks,
                                           targets=dict(db_cluster=self.db_cluster,
@@ -1497,22 +1495,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         gce_datacenters = self.params.get('gce_datacenter')
         if isinstance(gce_datacenters, str):
             gce_datacenters = gce_datacenters.split()
-        services = get_gce_services(gce_datacenters)
-        assert len(services) == 1, "Doesn't support multi DC setup for `k8s-gke' backend"
+        gce_service = get_gce_compute_instances_client()
+        assert len(gce_datacenters) == 1, "Doesn't support multi DC setup for `k8s-gke' backend"
 
-        services, gce_datacenter = list(services.values()), list(services.keys())
         self.k8s_cluster = gke.GkeCluster(
             gke_cluster_version=self.params.get("gke_cluster_version"),
             gke_k8s_release_channel=self.params.get("gke_k8s_release_channel"),
             gce_disk_size=self.params.get("root_disk_size_db"),
             gce_disk_type=self.params.get("gce_root_disk_type_db"),
             gce_network=self.params.get("gce_network"),
-            services=services,
+            gce_service=gce_service,
             user_prefix=self.params.get("user_prefix"),
             gce_instance_type=self.params.get('k8s_instance_type_auxiliary'),
             n_nodes=self.params.get('k8s_n_auxiliary_nodes'),
             params=self.params,
-            gce_datacenter=gce_datacenter,
+            gce_datacenter=gce_datacenters,
         )
         self.k8s_cluster.deploy()
 
@@ -1614,8 +1611,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     gce_network=self.params.get("gce_network"),
                     gce_instance_type=self.params.get("gce_instance_type_monitor"),
                     gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
-                    gce_datacenter=gce_datacenter,
-                    service=services[:1],
+                    gce_datacenter=gce_datacenters,
+                    gce_service=gce_service,
                     credentials=self.credentials,
                     user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
                     n_nodes=self.params.get('n_monitor_nodes'),

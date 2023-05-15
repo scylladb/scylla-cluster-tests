@@ -3247,7 +3247,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def node_setup(self, node, verbose=False, timeout=3600):
         raise NotImplementedError("Derived class must implement 'node_setup' method!")
 
-    def public_ips(self, public_ip=True):
+    def get_node_ips_param(self, public_ip=True):
         raise NotImplementedError("Derived class must implement 'get_node_ips_param' method!")
 
     def wait_for_init(self):

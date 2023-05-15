@@ -17,7 +17,6 @@ from __future__ import annotations
 import logging
 import string
 import tempfile
-import time
 import datetime
 from contextlib import suppress
 from enum import Enum
@@ -34,9 +33,8 @@ from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFound
 from azure.mgmt.compute.models import GalleryImageVersion
 from azure.mgmt.compute.v2021_07_01.models import VirtualMachine
 from azure.mgmt.resource.resources.v2021_04_01.models import TagsPatchResource, TagsPatchOperation
-
-from libcloud.common.google import ResourceNotFoundError as GoogleResourceNotFoundError
-from libcloud.compute.base import Node
+import google.api_core.exceptions
+from google.cloud import compute_v1
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import Instance
 
@@ -47,7 +45,17 @@ from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
 from sdcm.utils.common import list_instances_aws, aws_tags_to_dict, list_instances_gce, gce_meta_to_dict
 from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
 from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.gce_utils import get_gce_service, SUPPORTED_PROJECTS
+from sdcm.utils.gce_utils import (
+    SUPPORTED_PROJECTS,
+    get_gce_compute_images_client,
+    get_gce_compute_instances_client,
+    create_instance,
+    disk_from_image,
+    wait_for_extended_operation,
+    random_zone,
+    gce_set_labels,
+    gce_public_addresses,
+)
 from sdcm.utils.azure_utils import AzureService, list_instances_azure
 from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
 from sdcm.utils.context_managers import environment
@@ -85,7 +93,7 @@ class SctRunnerInfo:  # pylint: disable=too-many-instance-attributes
     sct_runner_class: Type[SctRunner] = field(repr=False)
     cloud_service_instance: EC2Client | AzureService | None = field(repr=False)
     region_az: str
-    instance: VirtualMachine | Node | Any = field(repr=False)
+    instance: VirtualMachine | compute_v1.Instance | Any = field(repr=False)
     instance_name: str
     public_ips: list[str]
     test_id: str | None = None
@@ -641,7 +649,7 @@ class AwsSctRunner(SctRunner):
         LOGGER.info("Updated SCT Runner %s with tags: %s successfully.", cloud_instance_name, tags_to_create)
 
 
-class GceSctRunner(SctRunner):
+class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
     """Provision and configure the SCT runner on GCE."""
 
     CLOUD_PROVIDER = "gce"
@@ -655,16 +663,23 @@ class GceSctRunner(SctRunner):
     SCT_NETWORK = "qa-vpc"
 
     def __init__(self, region_name: str, availability_zone: str):
+        availability_zone = random_zone(region_name)
         super().__init__(region_name=region_name, availability_zone=availability_zone)
-        self.gce_service = get_gce_service(region=region_name)
-        self.gce_service_source = get_gce_service(region=self.SOURCE_IMAGE_REGION)
-        self.project_name = self.gce_service.ex_get_project().name
+        self.gce_region = region_name
+        self.gce_source_region = self.SOURCE_IMAGE_REGION
+        self.images_client, info = get_gce_compute_images_client()
+        self.project_name = info['project_id']
+        self.instances_client, _ = get_gce_compute_instances_client()
         self._instance_name = None
 
     def region_az(self, region_name: str, availability_zone: str) -> str:
         if availability_zone:
             return f"{region_name}-{availability_zone}"
         return region_name
+
+    @cached_property
+    def zone(self) -> str:
+        return self.region_az(region_name=self.region_name, availability_zone=self.availability_zone)
 
     @property
     def instance_name(self) -> str:
@@ -675,8 +690,10 @@ class GceSctRunner(SctRunner):
         self._instance_name = new_name
 
     @property
-    def instance(self) -> Node:
-        return self.gce_service.ex_get_node(self.instance_name, zone=self.availability_zone)
+    def instance(self) -> compute_v1.Instance:
+        return self.instances_client.get(project=self.project_name,
+                                         zone=self.zone,
+                                         instance=self.instance_name)
 
     @cached_property
     def image_name(self) -> str:
@@ -687,23 +704,21 @@ class GceSctRunner(SctRunner):
         return KeyStore().get_gce_ssh_key_pair()  # scylla-test
 
     def _image(self, image_type: ImageType = ImageType.SOURCE) -> Any:
-        if image_type == ImageType.SOURCE:
-            gce_service = self.gce_service_source
-        elif image_type == ImageType.GENERAL:
-            gce_service = self.gce_service
-        else:
-            raise ValueError(f"Unknown Image type: {image_type}")
         try:
-            return gce_service.ex_get_image(self.image_name)
-        except GoogleResourceNotFoundError:
+            return self.images_client.get(image=self.image_name, project=self.project_name)
+        except google.api_core.exceptions.NotFound:
             return None
 
     @staticmethod
     def set_tags(sct_runner_info: SctRunnerInfo,
                  tags: dict):
         LOGGER.info("Setting SCT runner labels to: %s", tags)
-        gce_service = get_gce_service(sct_runner_info.region_az)
-        gce_service.ex_set_node_labels(node=sct_runner_info.instance, labels=tags)
+        instances_client, info = get_gce_compute_instances_client()
+        gce_set_labels(instances_client=instances_client,
+                       instance=sct_runner_info.instance,
+                       new_labels=tags,
+                       project=info['project_id'],
+                       zone=sct_runner_info.region_az)
         LOGGER.info("SCT runner tags set to: %s", tags)
 
     @staticmethod
@@ -720,66 +735,59 @@ class GceSctRunner(SctRunner):
                          region_az: str = "",
                          test_duration: Optional[int] = None) -> Any:
         LOGGER.info("Creating instance...")
-        if region_az.startswith(self.SOURCE_IMAGE_REGION):
-            gce_service = self.gce_service_source
-        else:
-            gce_service = self.gce_service
-        instance = gce_service.create_node(
-            name=instance_name,
-            size=instance_type,
-            image=base_image,
-            ex_network=self.SCT_NETWORK,
-            ex_tags="keep-alive",
-            ex_disks_gce_struct=[{
-                "type": "PERSISTENT",
-                "deviceName": f"{instance_name}-root-pd-ssd",
-                "initializeParams": {
-                    "diskName": f"{instance_name}-root-pd-ssd",
-                    "diskType": f"projects/{self.project_name}/zones/{gce_service.zone.name}/diskTypes/pd-ssd",
-                    "diskSizeGb": root_disk_size_gb or self.instance_root_disk_size(test_duration),
-                    "sourceImage": base_image,
-                },
-                "boot": True,
-                "autoDelete": True,
-            }],
-            ex_metadata=tags | {
-                "launch_time": get_current_datetime_formatted(),
-                "block-project-ssh-keys": "true",
-                "ssh-keys": f"{self.LOGIN_USER}:{self.key_pair.public_key.decode()}",
-            },
-            # NOTE: following is needed for the possibility to use the K8S/GKE APIs
-            ex_service_accounts=[{
-                'email': KeyStore().get_gcp_credentials()['client_email'],
-                'scopes': ['cloud-platform'],
-            }],
-        )
-        time.sleep(30)  # wait until the public IPs are available.
+        disks = [disk_from_image(disk_type=f"projects/{self.project_name}/zones/{region_az}/diskTypes/pd-ssd",
+                                 disk_size_gb=root_disk_size_gb or self.instance_root_disk_size(test_duration),
+                                 boot=True,
+                                 source_image=base_image,
+                                 auto_delete=True)]
 
-        LOGGER.info("Got public IP: %s", instance.public_ips[0])
+        instance = create_instance(project_id=self.project_name, zone=region_az,
+                                   machine_type=self.instance_type(test_duration),
+                                   instance_name=instance_name,
+                                   network_name=self.SCT_NETWORK,
+                                   disks=disks,
+                                   external_access=True,
+                                   metadata=tags | {
+                                       "launch_time": get_current_datetime_formatted(),
+                                       "block-project-ssh-keys": "true",
+                                       "ssh-keys": f"{self.LOGIN_USER}:{self.key_pair.public_key.decode()}",
+                                   },
+                                   network_tags=["keep-alive"],
+                                   service_accounts=[{
+                                       'email': KeyStore().get_gcp_credentials()['client_email'],
+                                       'scopes': ['https://www.googleapis.com/auth/cloud-platform'],
+                                   }],)
+        LOGGER.info("Got public IP: %s", self.get_instance_public_ip(instance))
         self.instance_name = instance_name
 
         return instance
 
     def _stop_image_builder_instance(self, instance: Any) -> None:
-        self.gce_service_source.ex_stop_node(node=instance)
+        self.instances_client.stop(instance=instance.name, project=self.project_name, zone=self.zone)
 
     def _terminate_image_builder_instance(self, instance: Any) -> None:
-        self.gce_service_source.destroy_node(instance)
+        self.instances_client.delete(instance=instance.name, project=self.project_name, zone=self.zone)
 
     def _get_instance_id(self) -> Any:
         return self.instance.name
 
     def get_instance_public_ip(self, instance: Any) -> str:
-        return instance.public_ips[0]
+        return gce_public_addresses(instance)[0]
 
     def _create_image(self, instance: Any) -> Any:
-        return self.gce_service_source.ex_create_image(
-            name=self.image_name,
-            volume=self.gce_service_source.ex_get_volume(f"{instance.name}-root-pd-ssd"),
-            description=self.IMAGE_DESCRIPTION,
-            family=self.FAMILY,
-            ex_labels=self.tags_to_labels(tags=self.image_tags),
-        )
+        images_client, _ = get_gce_compute_images_client()
+
+        image = compute_v1.Image()
+        image.name = self.image_name
+        image.source_disk = instance.disks[0].source
+        image.description = self.IMAGE_DESCRIPTION
+        image.family = self.FAMILY
+        image.labels = self.tags_to_labels(tags=self.image_tags)
+
+        operation = images_client.insert(project=self.project_name, image_resource=image)
+        wait_for_extended_operation(operation, "Wait for image creation")
+
+        return images_client.get(project=self.project_name, image=self.image_name)
 
     def _get_image_id(self, image: Any) -> Any:
         return image.id
@@ -790,7 +798,7 @@ class GceSctRunner(SctRunner):
     def _get_base_image(self, image: Optional[Any] = None) -> Any:
         if image is None:
             image = self.image
-        return image.extra['selfLink']
+        return image.self_link
 
     @classmethod
     def list_sct_runners(cls, verbose: bool = True) -> list[SctRunnerInfo]:
@@ -818,7 +826,7 @@ class GceSctRunner(SctRunner):
                 region_az=region,
                 instance=instance,
                 instance_name=instance.name,
-                public_ips=instance.network_interfaces[0].access_configs[0].nat_i_p,
+                public_ips=gce_public_addresses(instance),
                 test_id=tags.get("TestId"),
                 launch_time=launch_time,
                 keep=tags.get("keep"),
