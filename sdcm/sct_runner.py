@@ -800,8 +800,8 @@ class GceSctRunner(SctRunner):
             with environment(SCT_GCE_PROJECT=project):
                 instances += list_instances_gce(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=verbose)
         for instance in instances:
-            tags = gce_meta_to_dict(instance.extra["metadata"])
-            region = instance.extra["zone"].name
+            tags = gce_meta_to_dict(instance.metadata)
+            region = instance.zone.split('/')[-1]
             if launch_time := tags.get("launch_time"):
                 try:
                     launch_time = datetime_from_formatted(date_string=launch_time)
@@ -809,7 +809,7 @@ class GceSctRunner(SctRunner):
                     LOGGER.warning("Value of `launch_time' tag is invalid: %s", exc)
                     launch_time = None
             if not launch_time:
-                create_time = instance.extra["creationTimestamp"]
+                create_time = instance.creation_timestamp
                 LOGGER.info("`launch_time' tag is empty or invalid, fallback to creation time: %s", create_time)
                 launch_time = datetime.datetime.fromisoformat(create_time)
             sct_runners.append(SctRunnerInfo(
@@ -818,7 +818,7 @@ class GceSctRunner(SctRunner):
                 region_az=region,
                 instance=instance,
                 instance_name=instance.name,
-                public_ips=instance.public_ips,
+                public_ips=instance.network_interfaces[0].access_configs[0].nat_i_p,
                 test_id=tags.get("TestId"),
                 launch_time=launch_time,
                 keep=tags.get("keep"),

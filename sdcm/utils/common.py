@@ -43,7 +43,7 @@ from urllib.parse import urlparse
 from unittest.mock import MagicMock, Mock
 from textwrap import dedent
 from contextlib import closing, contextmanager
-from functools import wraps, cached_property, lru_cache
+from functools import wraps, cached_property, lru_cache, singledispatch
 from collections import defaultdict, namedtuple
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -58,11 +58,9 @@ from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Image as EC2Image
 import docker  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
-import libcloud.storage.providers
-import libcloud.storage.types
-from libcloud.compute.base import Node as GCENode, NodeImage as GCEImage
-from libcloud.compute.providers import get_driver
-from libcloud.compute.types import Provider
+from google.cloud.storage import Blob as GceBlob
+from google.cloud.compute_v1.types import Metadata as GceMetadata, Instance as GceInstance
+from google.cloud.compute_v1 import ListImagesRequest, Image as GceImage
 from packaging.version import Version
 from prettytable import PrettyTable
 
@@ -80,6 +78,13 @@ from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.gce_utils import GcloudContainerMixin
 from sdcm.remote import LocalCmdRunner
 from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.utils.gce_utils import (
+    get_gce_compute_instances_client,
+    get_gce_compute_images_client,
+    get_gce_compute_addresses_client,
+    get_gce_compute_regions_client,
+    get_gce_storage_client,
+)
 from sdcm.utils.context_managers import environment
 
 
@@ -1133,23 +1138,31 @@ def clean_cloudformation_stacks_aws(tags_dict, regions=None, dry_run=False):
                     LOGGER.debug("Failed with: %s", str(ex))
 
 
-def get_gce_driver():
-    # avoid cyclic dependency issues, since too many things import utils.py
-
-    gcp_credentials = KeyStore().get_gcp_credentials()
-    gce_driver = get_driver(Provider.GCE)
-
-    return gce_driver(gcp_credentials["client_email"],
-                      gcp_credentials["private_key"], project=gcp_credentials["project_id"])
-
-
 def get_all_gce_regions():
-    compute_engine = get_gce_driver()
-    all_gce_regions = [region_obj.name for region_obj in compute_engine.region_list]
+    region_client, info = get_gce_compute_regions_client()
+    all_gce_regions = [region_obj.name for region_obj in region_client.list(project=info['project_id'])]
     return all_gce_regions
 
 
+@singledispatch
 def gce_meta_to_dict(metadata):
+    raise NotImplementedError(f"{type(metadata)=} isn't supported")
+
+
+@gce_meta_to_dict.register
+def _(metadata: GceMetadata):
+    meta_dict = {}
+    data = metadata.items
+    if data:
+        for item in data:
+            key = item.key
+            if key:  # sometimes key is empty string
+                meta_dict[key] = item.value
+    return meta_dict
+
+
+@gce_meta_to_dict.register
+def _(metadata: dict):
     meta_dict = {}
     data = metadata.get("items")
     if data:
@@ -1160,10 +1173,10 @@ def gce_meta_to_dict(metadata):
     return meta_dict
 
 
-def filter_gce_by_tags(tags_dict, instances):
+def filter_gce_by_tags(tags_dict, instances: list[GceInstance]) -> list[GceInstance]:
     filtered_instances = []
     for instance in instances:
-        tags = gce_meta_to_dict(instance.extra['metadata'])
+        tags = gce_meta_to_dict(instance.metadata)
         for tag_k, tag_v in tags_dict.items():
             if tag_k not in tags or (tags[tag_k] not in tag_v if isinstance(tag_v, list) else tags[tag_k] != tag_v):
                 break
@@ -1174,43 +1187,43 @@ def filter_gce_by_tags(tags_dict, instances):
 
 def list_instances_gce(tags_dict: Optional[dict] = None,
                        running: bool = False,
-                       verbose: bool = False) -> list[GCENode]:
+                       verbose: bool = False) -> list[GceInstance]:
     """List all instances with specific tags GCE."""
 
-    compute_engine = get_gce_driver()
-
+    instances_client, info = get_gce_compute_instances_client()
     if verbose:
         LOGGER.info("Going to get all instances from GCE")
-    all_gce_instances = compute_engine.list_nodes()
-    # filter instances by tags since libcloud list_nodes() doesn't offer any filtering
+    all_gce_instances = instances_client.aggregated_list(project=info['project_id'])
+    # filter instances by tags since google doesn't offer any filtering
+    all_instances = []
+    for _, response in all_gce_instances:
+        if response.instances:
+            all_instances.extend(response.instances)
     if tags_dict:
-        instances = filter_gce_by_tags(tags_dict=tags_dict, instances=all_gce_instances)
+        instances = filter_gce_by_tags(tags_dict=tags_dict, instances=all_instances)
     else:
-        instances = all_gce_instances
+        instances = all_instances
 
     if running:
-        # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.types.NodeState
-        instances = [i for i in instances if i.state == 'running']
+        instances = [i for i in instances if i.status == 'RUNNING']
     else:
-        instances = [i for i in instances if not i.state == 'terminated']
+        instances = [i for i in instances if not i.status == 'TERMINATED']
     if verbose:
         LOGGER.info("Done. Found total of %s instances.", len(instances))
     return instances
 
 
-def list_static_ips_gce(region_name="all", group_by_region=False, verbose=False):
-    compute_engine = get_gce_driver()
+def list_static_ips_gce(verbose=False):
+    addresses_client, info = get_gce_compute_addresses_client()
     if verbose:
         LOGGER.info("Getting all GCE static IPs...")
-    all_static_ips = compute_engine.ex_list_addresses(region_name)
+    all_static_ips = []
+    for _, response in list(addresses_client.aggregated_list(project=info['project_id'])):
+        if response.addresses:
+            all_static_ips.extend(response.addresses)
+
     if verbose:
         LOGGER.info("Found total %s GCE static IPs.", len(all_static_ips))
-
-    if group_by_region:
-        ips_grouped_by_region = defaultdict(list)
-        for ip in all_static_ips:
-            ips_grouped_by_region[ip.region.name].append(ip)
-        return ips_grouped_by_region
     return all_static_ips
 
 
@@ -1220,9 +1233,9 @@ class GkeCluster:
         self.cleaner = cleaner
 
     @cached_property
-    def extra(self) -> dict:
+    def metadata(self) -> dict:
         metadata = self.cluster_info["nodeConfig"]["metadata"].items()
-        return {"metadata": {"items": [{"key": key, "value": value} for key, value in metadata], }, }
+        return {"items": [{"key": key, "value": value} for key, value in metadata], }
 
     @cached_property
     def name(self) -> str:
@@ -1237,9 +1250,11 @@ class GkeCluster:
 
 
 class GkeCleaner(GcloudContainerMixin):
-    name = f"gke-cleaner-{uuid.uuid4()!s:.8}"
     _containers = {}
     tags = {}
+
+    def __init__(self):
+        self.name = f"gke-cleaner-{uuid.uuid4()!s:.8}"
 
     def list_gke_clusters(self) -> list:
         try:
@@ -1294,9 +1309,9 @@ class EksCluster(EksClusterCleanupMixin):
         self.body = self.eks_client.describe_cluster(name=name)['cluster']
 
     @cached_property
-    def extra(self) -> dict:
+    def metadata(self) -> dict:
         metadata = self.body['tags'].items()
-        return {"metadata": {"items": [{"key": key, "value": value} for key, value in metadata], }, }
+        return {"items": [{"key": key, "value": value} for key, value in metadata], }
 
     @cached_property
     def create_time(self):
@@ -1364,7 +1379,7 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
         LOGGER.info("There are no GCE instances to remove in the %s project", os.environ.get("SCT_GCE_PROJECT"))
         return
 
-    def delete_instance(instance_with_tags: tuple[GCENode, dict]):
+    def delete_instance(instance_with_tags: tuple[GceInstance, dict]):
         instance, tags_dict = instance_with_tags
         LOGGER.info("Going to delete: %s (%s project)", instance.name, os.environ.get("SCT_GCE_PROJECT"))
         try:
@@ -1374,13 +1389,16 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
             argus_client = MagicMock()
 
         if not dry_run:
-            # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.base.Node.destroy
-            res = instance.destroy()
+            instances_client, info = get_gce_compute_instances_client()
+            res = instances_client.delete(instance=instance.name,
+                                          project=info['project_id'],
+                                          zone=instance.zone.split('/')[-1])
+            res.done()
             terminate_resource_in_argus(client=argus_client, resource_name=instance.name)
             LOGGER.info("%s deleted=%s", instance.name, res)
 
     ParallelObject(map(lambda i: (i, tags_dict), gce_instances_to_clean),
-                   timeout=60).run(delete_instance, ignore_exceptions=True)
+                   timeout=60).run(delete_instance, ignore_exceptions=False)
 
 
 def clean_instances_azure(tags_dict: dict, regions=None, dry_run=False):
@@ -1512,37 +1530,27 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
     return _SCYLLA_AMI_CACHE[region_name]
 
 
-_SCYLLA_GCE_IMAGE_CACHE: list[GCEImage] = []
+@lru_cache
+def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None) -> list[GceImage]:
+    # Server-side resource filtering described in Google SDK reference docs:
+    #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
+    #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
+    # or you can see brief explanation here:
+    #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
+    filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
 
-
-def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None) -> list[GCEImage]:
-    if not _SCYLLA_GCE_IMAGE_CACHE:
-        # Server-side resource filtering described in Google SDK reference docs:
-        #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
-        #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
-        # or you can see brief explanation here:
-        #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-        filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
-
-        if version and version != "all":
-            filters += f"(name eq 'scylla(db)?(-enterprise)?-{version.replace('.', '-')}"
-            if 'rc' not in version:
-                filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
-            else:
-                filters += "')"
-
-        compute_engine = get_gce_driver()
-        _SCYLLA_GCE_IMAGE_CACHE.extend(sorted(
-            itertools.chain.from_iterable(
-                compute_engine.ex_list(
-                    list_fn=compute_engine.list_images,
-                    ex_project=project,
-                ).filter(filters)
-            ),
-            key=lambda x: x.extra["creationTimestamp"],
-            reverse=True,
-        ))
-    return _SCYLLA_GCE_IMAGE_CACHE
+    if version and version != "all":
+        filters += f"(name eq 'scylla(db)?(-enterprise)?-{version.replace('.', '-')}"
+        if 'rc' not in version:
+            filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
+        else:
+            filters += "')"
+    images_client, _ = get_gce_compute_images_client()
+    return sorted(
+        images_client.list(ListImagesRequest(filter=filters, project=project)),
+        key=lambda x: x.creation_timestamp,
+        reverse=True,
+    )
 
 
 _S3_SCYLLA_REPOS_CACHE = defaultdict(dict)
@@ -1942,7 +1950,7 @@ def get_ami_images_versioned(region_name: str, arch: AwsArchType, version: str) 
 
 
 def get_gce_images_versioned(version: str = None) -> list[list[str]]:
-    return [["GCE", image.name, image.extra["selfLink"], image.extra["creationTimestamp"]]
+    return [["GCE", image.name, image.self_link, image.creation_timestamp]
             for image in get_scylla_gce_images_versions(version=version)]
 
 
@@ -1962,11 +1970,11 @@ def get_gce_images(branch: str, arch: AwsArchType) -> list:
         rows.append([
             "GCE",
             image.name,
-            image.extra["selfLink"],
-            image.extra["creationTimestamp"],
-            image.extra["labels"].get("build-id") or image.name.rsplit("-build-", maxsplit=1)[-1],
-            image.extra["labels"].get("arch"),
-            image.extra["labels"].get("scylla_version")
+            image.self_link,
+            image.creation_timestamp,
+            image.labels.get("build-id") or image.name.rsplit("-build-", maxsplit=1)[-1],
+            image.labels.get("arch"),
+            image.labels.get("scylla_version")
         ])
 
     return rows
@@ -1984,7 +1992,7 @@ def create_pretty_table(rows: list[str] | list[list[str]], field_names: list[str
 def get_branched_gce_images(
         scylla_version: str,
         project: str = SCYLLA_GCE_IMAGES_PROJECT,
-        arch: AwsArchType = None) -> list[GCEImage]:
+        arch: AwsArchType = None) -> list[GceImage]:
     branch, build_id = scylla_version.split(":", 1)
 
     # Server-side resource filtering described in Google SDK reference docs:
@@ -2002,15 +2010,10 @@ def get_branched_gce_images(
         filters += f"(labels.arch eq {arch.replace('_', '-')})"
 
     LOGGER.info("Looking for GCE images match [%s]", scylla_version)
-    compute_engine = get_gce_driver()
+    images_client, _ = get_gce_compute_images_client()
     images = sorted(
-        itertools.chain.from_iterable(
-            compute_engine.ex_list(
-                list_fn=compute_engine.list_images,
-                ex_project=project,
-            ).filter(filters)
-        ),
-        key=lambda x: x.extra["creationTimestamp"],
+        images_client.list(ListImagesRequest(filter=filters, project=project)),
+        key=lambda x: x.creation_timestamp,
         reverse=True,
     )
 
@@ -2187,21 +2190,15 @@ def gce_download_dir(bucket, path, target):
     :param target: the local directory to download the files to.
     """
 
-    gcp_credentials = KeyStore().get_gcp_credentials()
-    gce_driver = libcloud.storage.providers.get_driver(libcloud.storage.types.Provider.GOOGLE_STORAGE)
-
-    driver = gce_driver(gcp_credentials["client_email"],
-                        gcp_credentials["private_key"],
-                        project=gcp_credentials["project_id"])
+    storage_client, _ = get_gce_storage_client()
 
     if not path.endswith('/'):
         path += '/'
     if path.startswith('/'):
         path = path[1:]
-
-    container = driver.get_container(container_name=bucket)
-    dir_listing = driver.list_container_objects(container, ex_prefix=path)
-    for obj in dir_listing:
+    blobs = storage_client.list_blobs(bucket_or_name=bucket, prefix=path)
+    for obj in blobs:
+        obj: GceBlob
         if obj.name in [".", "..", path]:
             continue
         rel_path = obj.name[len(path):]
@@ -2210,7 +2207,7 @@ def gce_download_dir(bucket, path, target):
         local_file_dir = os.path.dirname(local_file_path)
         os.makedirs(local_file_dir, exist_ok=True)
         LOGGER.info("Downloading %s from gcp to %s", obj.name, local_file_path)
-        obj.download(destination_path=local_file_path, overwrite_existing=True)
+        obj.download_to_filename(filename=local_file_path)
 
 
 def download_dir_from_cloud(url):

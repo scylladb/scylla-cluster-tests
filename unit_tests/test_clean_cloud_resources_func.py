@@ -96,10 +96,13 @@ class CleanInstancesGceTest(unittest.TestCase):
 
     def test_destroy(self):  # pylint: disable=no-self-use
         instance = MagicMock()
-        with patch("sdcm.utils.common.list_instances_gce", return_value=[instance, ]) as list_instances_gce:
+        with patch("sdcm.utils.common.list_instances_gce",
+                   return_value=[instance, ]) as list_instances_gce, \
+                patch('sdcm.utils.common.get_gce_compute_instances_client',
+                      return_value=(instance, dict(project_id='test'))):
             clean_instances_gce({"TestId": 1111, })
         list_instances_gce.assert_called_with(tags_dict={"TestId": 1111, })
-        instance.destroy.assert_called_once_with()
+        instance.delete.assert_called_once_with(instance=instance.name, project='test', zone=unittest.mock.ANY)
 
 
 class CleanResourcesDockerTest(unittest.TestCase):

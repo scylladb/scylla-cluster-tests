@@ -101,7 +101,7 @@ from sdcm.send_email import get_running_instances_for_email_report, read_email_d
     send_perf_email
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
 from sdcm.utils.aws_utils import AwsArchType
-from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
+from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
 from sdcm.utils.es_index import create_index, get_mapping
@@ -440,7 +440,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         gke_table.align = "l"
         gke_table.sortby = 'CreateTime'
         for cluster in gke_clusters:
-            tags = gce_meta_to_dict(cluster.extra['metadata'])
+            tags = gce_meta_to_dict(cluster.metadata)
             gke_table.add_row([cluster.name,
                                cluster.zone,
                                tags.get('TestId', 'N/A') if tags else "N/A",
@@ -460,14 +460,15 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
                 gce_table.align = "l"
                 gce_table.sortby = 'LaunchTime'
                 for instance in gce_instances:
-                    tags = gce_meta_to_dict(instance.extra['metadata'])
-                    public_ips = ", ".join(instance.public_ips) if None not in instance.public_ips else "N/A"
+                    tags = gce_meta_to_dict(instance.metadata)
+                    public_ips = gce_public_addresses(instance)
+                    public_ips = ", ".join(public_ips) if None not in public_ips else "N/A"
                     gce_table.add_row([instance.name,
-                                       instance.extra["zone"].name,
-                                       public_ips if get_all_running else instance.state,
+                                       instance.zone.split('/')[-1],
+                                       public_ips if get_all_running else instance.status,
                                        tags.get('TestId', 'N/A') if tags else "N/A",
                                        tags.get('RunByUser', 'N/A') if tags else "N/A",
-                                       instance.extra['creationTimestamp'],
+                                       instance.creation_timestamp,
                                        ])
                 click.echo(gce_table.get_string(title="Resources used on GCE"))
             else:
@@ -480,7 +481,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         eks_table.align = "l"
         eks_table.sortby = 'CreateTime'
         for cluster in eks_clusters:
-            tags = gce_meta_to_dict(cluster.extra['metadata'])
+            tags = gce_meta_to_dict(cluster.metadata)
             eks_table.add_row([cluster.name,
                                tags.get('TestId', 'N/A') if tags else "N/A",
                                cluster.region_name,

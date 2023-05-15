@@ -67,12 +67,12 @@ class TestDownloadDir(unittest.TestCase):
                 self.name = name
 
             @staticmethod
-            def download(destination_path, overwrite_existing, *_, **__):
-                Path(destination_path).touch(exist_ok=overwrite_existing)
+            def download_to_filename(filename, *_, **__):
+                Path(filename).touch(exist_ok=True)
 
         self.clear_cloud_downloaded_path(sct_update_db_packages)
         test_file_names = ["sct_test/", "sct_test/bentsi.txt", "sct_test/charybdis.fs"]
-        with unittest.mock.patch("libcloud.storage.drivers.google_storage.GoogleStorageDriver.list_container_objects",
+        with unittest.mock.patch("google.cloud.storage.Client.list_blobs",
                                  return_value=[FakeObject(name=fname) for fname in test_file_names]):
             update_db_packages = download_dir_from_cloud(sct_update_db_packages)
         for fname in test_file_names:

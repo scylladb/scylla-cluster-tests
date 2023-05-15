@@ -428,8 +428,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         resolved_image_link = 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/' \
                               'scylla-4-7-dev-0-20220113-8bcd23fa0-1-build-359'
-        image = namedtuple("Image", "name extra")(name='scylla-4-7-dev-0-20220113-8bcd23fa0-1-build-359',
-                                                  extra=dict(selfLink=resolved_image_link))
+        image = namedtuple("Image", "name self_link")(name='scylla-4-7-dev-0-20220113-8bcd23fa0-1-build-359',
+                                                      self_link=resolved_image_link)
 
         with unittest.mock.patch.object(sct_config, 'get_branched_gce_images', return_value=[image], clear=True):
             conf = sct_config.SCTConfiguration()
