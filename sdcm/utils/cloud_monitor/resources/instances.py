@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from boto3 import client as boto3_client
 from azure.mgmt.compute.models import VirtualMachine
+from google.cloud.compute_v1.types import Instance as GceInstance
 
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.cloud_monitor.common import InstanceLifecycle, NA
@@ -64,21 +65,21 @@ class AWSInstance(CloudInstance):
 class GCEInstance(CloudInstance):
     pricing = GCEPricing()
 
-    def __init__(self, instance):
-        tags = gce_meta_to_dict(instance.extra['metadata'])
-        is_preemptible = instance.extra["scheduling"]["preemptible"]
+    def __init__(self, instance: GceInstance):
+        tags = gce_meta_to_dict(instance.metadata)
+        is_preemptible = instance.scheduling.preemptible
         super().__init__(
             cloud="gce",
             name=instance.name,
             instance_id=instance.id,
-            region_az=instance.extra["zone"].name,
-            state=str(instance.state),
+            region_az=instance.zone.split('/')[-1],
+            state=str(instance.status.lower()),
             lifecycle=InstanceLifecycle.SPOT if is_preemptible else InstanceLifecycle.ON_DEMAND,
-            instance_type=instance.size,
+            instance_type=instance.machine_type.split('/')[-1],
             owner=tags.get("RunByUser", NA) if tags else NA,
-            create_time=datetime.fromisoformat(instance.extra['creationTimestamp']),
+            create_time=datetime.fromisoformat(instance.creation_timestamp),
             keep=self.get_keep_alive_gce_instance(instance),
-            project=instance.driver.project
+            project=instance.self_link.split('/')[6]
         )
 
     @property
@@ -86,14 +87,14 @@ class GCEInstance(CloudInstance):
         return self.region_az[:-2]
 
     @staticmethod
-    def get_keep_alive_gce_instance(instance):
+    def get_keep_alive_gce_instance(instance: GceInstance):
         # same logic as in cloud instance stopper
         # checking labels
-        labels = instance.extra["labels"]
+        labels = instance.labels
         if labels:
             return labels.get("keep", labels.get("keep-alive", ""))
         # checking tags
-        tags = instance.extra["tags"]
+        tags = instance.tags.items
         if tags:
             return "alive" if 'alive' in tags or 'keep-alive' in tags or 'keep' in tags else ""
         return ""

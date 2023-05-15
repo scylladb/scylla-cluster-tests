@@ -1,5 +1,5 @@
 from logging import getLogger
-from libcloud.compute.drivers.gce import GCEAddress
+from google.cloud import compute_v1
 
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.cloud_monitor.common import NA
@@ -43,13 +43,13 @@ class AwsElasticIP(StaticIP):  # pylint: disable=too-few-public-methods
 
 
 class GceStaticIP(StaticIP):  # pylint: disable=too-few-public-methods
-    def __init__(self, static_ip: GCEAddress):
-        used_by = static_ip.extra.get("users")
+    def __init__(self, static_ip: compute_v1.Address):
+        used_by = static_ip.users
         super().__init__(
             cloud="gce",
             name=static_ip.name,
             address=static_ip.address,
-            region=static_ip.region if isinstance(static_ip.region, str) else static_ip.region.name,
+            region=static_ip.region,
             used_by=used_by[0].rsplit("/", maxsplit=1)[-1] if used_by else NA,
             owner=NA  # currently unsupported, maybe we can store it in description in future
         )

@@ -21,6 +21,7 @@ import time
 from google.oauth2 import service_account
 from google.cloud import compute_v1
 from google.cloud.compute_v1 import Image
+from google.cloud import storage
 from googleapiclient.discovery import build
 from libcloud.compute.providers import Provider, get_driver
 
@@ -60,6 +61,36 @@ def append_zone(region: str) -> str:
     return f"{region}-{random.choice(availability_zones)}"
 
 
+def get_gce_compute_instances_client() -> tuple[compute_v1.InstancesClient, dict]:
+    info = KeyStore().get_gcp_credentials()
+    credentials = service_account.Credentials.from_service_account_info(info)
+    return compute_v1.InstancesClient(credentials=credentials), info
+
+
+def get_gce_compute_images_client() -> tuple[compute_v1.ImagesClient, dict]:
+    info = KeyStore().get_gcp_credentials()
+    credentials = service_account.Credentials.from_service_account_info(info)
+    return compute_v1.ImagesClient(credentials=credentials), info
+
+
+def get_gce_compute_addresses_client() -> tuple[compute_v1.AddressesClient, dict]:
+    info = KeyStore().get_gcp_credentials()
+    credentials = service_account.Credentials.from_service_account_info(info)
+    return compute_v1.AddressesClient(credentials=credentials), info
+
+
+def get_gce_compute_regions_client() -> tuple[compute_v1.RegionsClient, dict]:
+    info = KeyStore().get_gcp_credentials()
+    credentials = service_account.Credentials.from_service_account_info(info)
+    return compute_v1.RegionsClient(credentials=credentials), info
+
+
+def get_gce_storage_client() -> tuple[storage.Client, dict]:
+    info = KeyStore().get_gcp_credentials()
+    credentials = service_account.Credentials.from_service_account_info(info)
+    return storage.Client(credentials=credentials), info
+
+
 def _get_gce_service(credentials: dict, datacenter: str) -> GceDriver:
     return GceDriver(user_id=credentials["client_email"],
                      key=credentials["private_key"],
@@ -67,14 +98,28 @@ def _get_gce_service(credentials: dict, datacenter: str) -> GceDriver:
                      project=credentials["project_id"])
 
 
-def get_gce_services(regions: list) -> dict:
-    credentials = KeyStore().get_gcp_credentials()
-    return {region_az: _get_gce_service(credentials, region_az) for region_az in map(append_zone, regions)}
-
-
 def get_gce_service(region: str) -> GceDriver:
     credentials = KeyStore().get_gcp_credentials()
     return _get_gce_service(credentials, append_zone(region))
+
+
+def gce_public_addresses(instance: compute_v1.Instance) -> list[str]:
+    addresses = []
+
+    for interface in instance.network_interfaces:
+        for config in interface.access_configs:
+            addresses.append(str(config.nat_i_p))
+
+    return addresses
+
+
+def gce_private_addresses(instance: compute_v1.Instance) -> list[str]:
+    addresses = []
+
+    for interface in instance.network_interfaces:
+        addresses.append(str(interface.network_i_p))
+
+    return addresses
 
 
 GCE_IMAGE_URL_REGEX = re.compile(

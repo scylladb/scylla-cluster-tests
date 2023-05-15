@@ -29,6 +29,7 @@ import jinja2
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.common import list_instances_gce, list_instances_aws, list_resources_docker, format_timestamp
+from sdcm.utils.gce_utils import gce_public_addresses
 
 LOGGER = logging.getLogger(__name__)
 
@@ -646,13 +647,13 @@ def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
                               region])
     instances = list_instances_gce(tags_dict=tags, running=True)
     for instance in instances:
-        public_ips = instance.public_ips
+        public_ips = gce_public_addresses(instance)
         if ip_filter not in public_ips:
             nodes.append([instance.name,
-                          ", ".join(public_ips) if None not in instance.public_ips else "N/A",
-                          instance.state,
+                          ", ".join(public_ips) if public_ips else "N/A",
+                          instance.status.lower(),
                           "gce",
-                          instance.extra["zone"].name])
+                          instance.zone.split('/')[-1]])
     resources = list_resources_docker(tags_dict=tags, running=True, group_as_builder=True)
     for builder_name, containers in resources.get("containers", {}).items():
         for container in containers:
