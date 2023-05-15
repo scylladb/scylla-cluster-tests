@@ -19,12 +19,19 @@ from collections.abc import Callable
 
 import yaml
 import tenacity
+from google.cloud import compute_v1
 
 from sdcm import sct_abs_path, cluster
 from sdcm.wait import exponential_retry
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
-from sdcm.utils.gce_utils import GcloudContextManager
+from sdcm.utils.gce_utils import (
+    GcloudContextManager,
+    get_gce_compute_instances_client,
+    wait_for_extended_operation,
+    gce_public_addresses,
+    gce_private_addresses,
+)
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
 from sdcm.cluster_gce import MonitorSetGCE
@@ -173,7 +180,7 @@ class GkeCluster(KubernetesCluster):
                  gce_disk_size,
                  gce_disk_type,
                  gce_network,
-                 services,
+                 gce_service: tuple[compute_v1.InstancesClient, dict],
                  gce_instance_type='n1-standard-2',
                  user_prefix=None,
                  params=None,
@@ -191,11 +198,11 @@ class GkeCluster(KubernetesCluster):
         self.gce_disk_type = gce_disk_type
         self.gce_disk_size = gce_disk_size
         self.gce_network = gce_network
-        self.gce_services = services
+        self.gce_service, info = gce_service
         self.gce_instance_type = gce_instance_type
         self.n_nodes = n_nodes
-        self.gce_project = services[0].project
-        self.gce_user = services[0].key
+        self.gce_project = info['project_id']
+        self.gce_user = info['client_email']
 
         dc_parts = gce_datacenter[0].split("-")[:3]
         self.gce_region = "-".join(dc_parts[:2])
@@ -384,7 +391,7 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer):
     @property
     def gce_node_ips(self):
         gce_node = self.k8s_node
-        return gce_node.public_ips, gce_node.private_ips
+        return gce_public_addresses(gce_node), gce_private_addresses(gce_node)
 
     @cached_property
     def hydra_dest_ip(self) -> str:
@@ -400,7 +407,10 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer):
 
     @property
     def k8s_node(self):
-        return self.parent_cluster.k8s_cluster.gce_services[0].ex_get_node(name=self.node_name)
+        k8s_cluster = self.parent_cluster.k8s_cluster
+        return k8s_cluster.gce_service.get(project=k8s_cluster.gce_project,
+                                           zone=k8s_cluster.gce_zone,
+                                           instance=self.node_name)
 
     def terminate_k8s_host(self):
         self.log.info('terminate_k8s_host: GCE instance of kubernetes node will be terminated, '
@@ -415,7 +425,11 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer):
 
     def _destroy(self):
         if self.k8s_node:
-            self.k8s_node.destroy()
+            instances_client, _ = get_gce_compute_instances_client()
+            operation = instances_client.delete(instance=self.k8s_node.name,
+                                                project=self.parent_cluster.k8s_cluster.gce_project,
+                                                zone=self.parent_cluster.k8s_cluster.gce_zone)
+            wait_for_extended_operation(operation, "wait for k8s_node deletion")
 
     def _instance_wait_safe(self, instance_method: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
         try:
@@ -493,17 +507,17 @@ class MonitorSetGKE(MonitorSetGCE):
             tags_dict={'MonitorId': self.monitor_id, 'NodeType': self.node_type})
         instances_by_zone = self._get_instances_by_prefix(dc_idx)
         instances = []
-        attr_name = 'public_ips' if self._node_public_ips else 'private_ips'
+        ip_addresses = gce_public_addresses if self._node_public_ips else gce_private_addresses
         for node_zone in instances_by_zone:
             # Filter nodes by zone and by ip addresses
-            if not getattr(node_zone, attr_name):
+            if not ip_addresses(node_zone):
                 continue
             for node_nodetype in instances_by_nodetype:
-                if node_zone.uuid == node_nodetype.uuid:
+                if node_zone.id == node_nodetype.id:
                     instances.append(node_zone)
 
         def sort_by_index(node):
-            metadata = gce_meta_to_dict(node.extra['metadata'])
+            metadata = gce_meta_to_dict(node.metadata)
             return metadata.get('NodeIndex', 0)
 
         instances = sorted(instances, key=sort_by_index)

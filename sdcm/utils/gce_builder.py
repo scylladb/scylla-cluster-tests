@@ -180,7 +180,7 @@ class GceBuilder:
         disk = compute_v1.AttachedDisk()
         initialize_params = compute_v1.AttachedDiskInitializeParams()
         initialize_params.source_image = (
-            self.runner.image.extra.get('selfLink')
+            self.runner.image.self_link
         )
         initialize_params.disk_type = 'pd-standard'
         initialize_params.disk_size_gb = 80
