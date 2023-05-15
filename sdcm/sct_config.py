@@ -436,8 +436,8 @@ class SCTConfiguration(dict):
              """),
 
         dict(name="seeds_selector", env="SCT_SEEDS_SELECTOR", type=str,
-             choices=['reflector', 'random', 'first', 'all'],
-             help="""How to select the seeds. Expected values: reflector/random/first/all"""),
+             choices=['random', 'first', 'all'],
+             help="""How to select the seeds. Expected values: random/first/all"""),
 
         dict(name="seeds_num", env="SCT_SEEDS_NUM", type=int,
              help="""Number of seeds to select"""),
