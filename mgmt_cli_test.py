@@ -25,8 +25,6 @@ from datetime import datetime
 
 import boto3
 
-import libcloud.storage.types
-import libcloud.storage.providers
 import yaml
 from invoke import exceptions
 from pkg_resources import parse_version
@@ -46,7 +44,8 @@ from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.group_common_events import ignore_no_space_errors
-from sdcm.keystore import KeyStore
+from sdcm.utils.gce_utils import get_gce_storage_client
+from sdcm.utils.azure_utils import AzureService
 
 
 class BackupFunctionsMixIn(LoaderUtilsMixin):
@@ -638,14 +637,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     @staticmethod
     def _get_all_snapshot_files_gce(cluster_id, bucket_name):
         file_set = set()
-        gcp_credentials = KeyStore().get_gcp_credentials()
-        gce_driver = libcloud.storage.providers.get_driver(libcloud.storage.types.Provider.GOOGLE_STORAGE)
-        driver = gce_driver(gcp_credentials["client_email"],
-                            gcp_credentials["private_key"],
-                            project=gcp_credentials["project_id"])
-        container = driver.get_container(container_name=bucket_name)
-        dir_listing = driver.list_container_objects(container, ex_prefix=f'backup/sst/cluster/{cluster_id}')
-        for listing_object in dir_listing:
+        storage_client, _ = get_gce_storage_client()
+        blobs = storage_client.list_blobs(bucket_or_name=bucket_name, prefix=f'backup/sst/cluster/{cluster_id}')
+        for listing_object in blobs:
             file_set.add(listing_object.name)
         # Unlike S3, if no files match the prefix, no error will occur
         return file_set
@@ -653,11 +647,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     @staticmethod
     def _get_all_snapshot_files_azure(cluster_id, bucket_name):
         file_set = set()
-        credentials = KeyStore().get_backup_azure_blob_credentials()
-        azure_driver_object = libcloud.storage.providers.get_driver(libcloud.storage.types.Provider.AZURE_BLOBS)
-        driver = azure_driver_object(key=credentials["account"], secret=credentials["key"])
-        container = driver.get_container(container_name=bucket_name)
-        dir_listing = driver.list_container_objects(container, ex_prefix=f'backup/sst/cluster/{cluster_id}')
+        azure_service = AzureService()
+        container_client = azure_service.blob.get_container_client(container=bucket_name)
+        dir_listing = container_client.list_blobs(name_starts_with=f'backup/sst/cluster/{cluster_id}')
         for listing_object in dir_listing:
             file_set.add(listing_object.name)
         return file_set
