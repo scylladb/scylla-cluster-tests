@@ -91,11 +91,19 @@
                              {% with status = stat.status, percent = stat.percent,
                                     percent_abs = stat.percent|replace('%', '')|int %}
                                 {% if status == 'Regression' and percent_abs > 4 %}
-                                    <span class="red fbold">-{{ percent }}</span>
+                                    {% if "latency" in stat_name %}
+                                        <span class="green fbold">-{{ percent }}</span>
+                                    {% else %}
+                                        <span class="red fbold">-{{ percent }}</span>
+                                    {% endif %}
                                 {% elif status == 'Regression' and percent_abs <= 4 %}
                                     <span class="black fbold">-{{ percent }}</span>
                                 {% elif status == 'Progress' and percent_abs > 4 %}
-                                    <span class="green fbold">+{{ percent }}</span>
+                                    {% if "latency" in stat_name %}
+                                        <span class="red fbold">+{{ percent }}</span>
+                                    {% else %}
+                                        <span class="green fbold">+{{ percent }}</span>
+                                    {% endif %}
                                 {% elif status == 'Progress' and percent_abs <= 4 %}
                                     <span class="black fbold">+{{ percent }}</span>
                                 {% else %}
@@ -150,11 +158,19 @@
                 {% with status = stat.status, percent = stat.percent,
                    percent_abs = stat.percent|replace('%', '')|int %}
                     {% if status == 'Regression' and percent_abs > 4 %}
-                        <span class="red fbold">-{{ percent }}</span>
+                        {% if "latency" in stat_name %}
+                            <span class="green fbold">-{{ percent }}</span>
+                        {% else %}
+                            <span class="red fbold">-{{ percent }}</span>
+                        {% endif %}
                     {% elif status == 'Regression' and percent_abs <= 4 %}
                         <span class="black fbold">-{{ percent }}</span>
                     {% elif status == 'Progress' and percent_abs > 4 %}
-                        <span class="green fbold">+{{ percent }}</span>
+                        {% if "latency" in stat_name %}
+                            <span class="red fbold">+{{ percent }}</span>
+                        {% else %}
+                            <span class="green fbold">+{{ percent }}</span>
+                        {% endif %}
                     {% elif status == 'Progress' and percent_abs <= 4 %}
                         <span class="black fbold">+{{ percent }}</span>
                     {% else %}
