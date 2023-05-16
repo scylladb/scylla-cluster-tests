@@ -494,9 +494,6 @@ class SCTConfiguration(dict):
         dict(name="sla", env="SCT_SLA", type=boolean,
              help="run SLA nemeses if the test is SLA only"),
 
-        dict(name="system_auth_rf", env="SCT_SYSTEM_AUTH_RF", type=int,
-             help="Replication factor will be set to system_auth"),
-
         dict(name="service_level_shares", env="SCT_SERVICE_LEVEL_SHARES", type=list,
              help="List if service level shares - how many server levels to create and test. Uses in SLA test."
                   "list of int, like: [100, 200]"),
