@@ -12,7 +12,6 @@ n_loaders: 1
 instance_type_db: 'i3.large'
 n_monitor_nodes: 1
 n_db_nodes: 3
-system_auth_rf: 0
 
 nemesis_class_name: NonDisruptiveMonkey
 nemesis_interval: 1
