@@ -16,4 +16,3 @@ nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'centos'
 test_duration: 60
 user_prefix: 'artifacts-gce-image-pd'
-system_auth_rf: 1

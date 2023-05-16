@@ -11,4 +11,3 @@ instance_type_db: 'i3.large'
 instance_type_loader: 'c5.4xlarge'
 instance_type_monitor: 't3.small'
 user_prefix: 'overload_admission_control'
-system_auth_rf: 1
