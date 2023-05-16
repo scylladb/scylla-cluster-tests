@@ -24,7 +24,6 @@ db_nodes_shards_selection: 'default'
 scylla_linux_distro: 'ubuntu-focal'
 scylla_linux_distro_loader: 'centos'
 ssh_transport: 'libssh2'
-system_auth_rf: 3
 
 monitor_branch: 'branch-4.3'
 
