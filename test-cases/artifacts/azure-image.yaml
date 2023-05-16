@@ -16,7 +16,6 @@ n_monitor_nodes: 0
 nemesis_class_name: 'NoOpMonkey'
 test_duration: 60
 user_prefix: 'artifacts-azure-image'
-system_auth_rf: 1
 
 # since running from runner in AWS, we need the address to be publicly available
 intra_node_comm_public: true
