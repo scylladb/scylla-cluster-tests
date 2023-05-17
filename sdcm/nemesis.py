@@ -5322,6 +5322,7 @@ class RandomInterruptionNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
     run_with_gemini = False
+    kubernetes = True
 
     def disrupt(self):
         self.disrupt_network_random_interruptions()
@@ -5331,6 +5332,7 @@ class BlockNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
     run_with_gemini = False
+    kubernetes = True
 
     def disrupt(self):
         self.disrupt_network_block()

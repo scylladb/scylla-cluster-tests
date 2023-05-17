@@ -16,14 +16,14 @@
   - run_with_gemini = False
   - limited = True
   - topology_changes = True
+- disrupt_add_remove_mv:
+  - disruptive = True
+  - schema_changes = True
+  - free_tier_set = True
 - disrupt_corrupt_then_scrub:
   - disruptive = False
 - disrupt_create_index:
   - disruptive = False
-  - schema_changes = True
-  - free_tier_set = True
-- disrupt_add_remove_mv:
-  - disruptive = True
   - schema_changes = True
   - free_tier_set = True
 - disrupt_decommission_streaming_err:
@@ -91,6 +91,9 @@
   - disruptive = False
   - kubernetes = True
   - limited = True
+- disrupt_maximum_allowed_sls_with_max_shares_during_load:
+  - disruptive = False
+  - sla = True
 - disrupt_memory_stress:
   - disruptive = True
   - free_tier_set = True
@@ -118,10 +121,12 @@
   - disruptive = True
   - networking = True
   - run_with_gemini = False
+  - kubernetes = True
 - disrupt_network_random_interruptions:
   - disruptive = True
   - networking = True
   - run_with_gemini = False
+  - kubernetes = True
 - disrupt_network_reject_node_exporter:
   - disruptive = True
   - networking = True
@@ -181,6 +186,7 @@
   - topology_changes = True
 - disrupt_remove_service_level_while_load:
   - disruptive = True
+  - sla = True
 - disrupt_repair_streaming_err:
   - disruptive = True
 - disrupt_replace_scylla_node_on_kubernetes:
@@ -222,9 +228,6 @@
   - disruptive = True
   - networking = False
   - run_with_gemini = False
-- disrupt_seven_sl_with_max_shares_during_load:
-  - disruptive = False
-  - sla = True
 - disrupt_show_toppartitions:
   - disruptive = False
   - kubernetes = True

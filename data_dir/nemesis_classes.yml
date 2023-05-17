@@ -1,6 +1,7 @@
 - AbortRepairMonkey
 - AddDropColumnMonkey
 - AddRemoveDcNemesis
+- AddRemoveMvNemesis
 - AddRemoveRackNemesis
 - BlockNetworkMonkey
 - CDCStressorMonkey
@@ -10,7 +11,6 @@
 - CorruptThenRepairMonkey
 - CorruptThenScrubMonkey
 - CreateIndexNemesis
-- AddRemoveMvNemesis
 - DecommissionMonkey
 - DecommissionSeedNode
 - DecommissionStreamingErrMonkey
@@ -54,9 +54,9 @@
 - SlaDecreaseSharesDuringLoad
 - SlaIncreaseSharesByAttachAnotherSlDuringLoad
 - SlaIncreaseSharesDuringLoad
+- SlaMaximumAllowedSlsWithMaxSharesDuringLoad
 - SlaReplaceUsingDetachDuringLoad
 - SlaReplaceUsingDropDuringLoad
-- SlaSevenSlWithMaxSharesDuringLoad
 - SnapshotOperations
 - SoftRebootNodeMonkey
 - SslHotReloadingNemesis
