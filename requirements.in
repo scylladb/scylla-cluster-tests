@@ -30,7 +30,7 @@ mysql-connector-python==8.0.26
 docker==4.4.4  # can't use >=5 because of tcconfig==0.26.0
 python-jenkins==1.7.0
 ssh2-python==1.0.0
-argus-alm==0.10.2
+argus-alm==0.11.1
 parameterized==0.8.1
 pylint==2.11.1  # Needed for pre-commit hooks
 autopep8==1.5.7  # Needed for pre-commit hooks
