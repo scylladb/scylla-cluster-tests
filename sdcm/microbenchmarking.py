@@ -43,6 +43,8 @@ setup_stdout_logger()
 LOGGER = logging.getLogger("microbenchmarking")
 LOGGER.setLevel(logging.DEBUG)
 
+MICROBENCHMARK_INDEX_NAME = 'microbenchmarkingv2'
+
 
 @contextlib.contextmanager
 def chdir(dirname=None):
@@ -80,7 +82,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
     submetrics = {'frag/s': ['mad f/s', 'max f/s', 'min f/s']}
 
     def __init__(self, email_recipients, db_version=None):
-        super().__init__(es_index="microbenchmarking", es_doc_type="microbenchmark", email_recipients=email_recipients,
+        super().__init__(es_index=MICROBENCHMARK_INDEX_NAME, es_doc_type="microbenchmark", email_recipients=email_recipients,
                          email_template_fp="results_microbenchmark.html", query_limit=10000, logger=LOGGER)
         self.hostname = socket.gethostname()
         self._run_date_pattern = "%Y-%m-%d_%H:%M:%S"
