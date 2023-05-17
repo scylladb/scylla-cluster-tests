@@ -123,6 +123,19 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
+                                        stage('Create Argus Test Run') {
+                                            catchError(stageResult: 'FAILURE') {
+                                                script {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            timeout(time: 5, unit: 'MINUTES') {
+                                                                createArgusTestRun(params)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                         stage("Run SCT Test (${instance_type})") {
                                             // Timeout for the test itself
                                             timeout(time: pipelineParams.timeout.time, unit: 'MINUTES') {
@@ -240,6 +253,19 @@ def call(Map pipelineParams) {
                                                     dir('scylla-cluster-tests') {
                                                         timeout(time: 10, unit: 'MINUTES') {
                                                             runSendEmail(params, currentBuild)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        stage('Finish Argus Test Run') {
+                                            catchError(stageResult: 'FAILURE') {
+                                                script {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            timeout(time: 5, unit: 'MINUTES') {
+                                                                finishArgusTestRun(params, currentBuild)
+                                                            }
                                                         }
                                                     }
                                                 }
