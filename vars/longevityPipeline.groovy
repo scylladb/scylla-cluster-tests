@@ -171,6 +171,21 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Create Argus Test Run') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        createArgusTestRun(params)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Get test duration') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
@@ -309,6 +324,21 @@ def call(Map pipelineParams) {
                                 dir('scylla-cluster-tests') {
                                     cleanSctRunners(params, currentBuild)
                                     completed_stages['clean_sct_runner'] = true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Finish Argus Test Run') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        finishArgusTestRun(params, currentBuild)
+                                    }
                                 }
                             }
                         }

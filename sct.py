@@ -36,6 +36,8 @@ import click
 import yaml
 from prettytable import PrettyTable
 from argus.client.sct.types import LogLink
+from argus.client.base import ArgusClientError
+from argus.backend.util.enums import TestStatus
 
 import sct_ssh
 from sdcm.localhost import LocalHost
@@ -48,6 +50,8 @@ from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_conf
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners, \
     update_sct_runner_tags
+from sdcm.utils.ci_tools import get_job_name, get_job_url
+from sdcm.utils.git import get_git_commit_id
 from sdcm.utils.argus import get_argus_client
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
@@ -80,7 +84,7 @@ from sdcm.utils.common import (
     search_test_id_in_latest
 )
 from sdcm.utils.nemesis import NemesisJobGenerator
-from sdcm.utils.net import get_sct_runner_ip
+from sdcm.utils.net import get_sct_runner_ip, get_my_ip
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login
 from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
@@ -1667,6 +1671,53 @@ def configure_jenkins_builders(cloud_provider, regions):
             GceBuilder.configure_in_all_region(regions=regions)
         case 'azure':
             raise NotImplementedError("configure_jenkins_builders doesn't support Azure yet")
+
+
+@cli.command("create-argus-test-run", help="Initialize an argus test run.")
+def create_argus_test_run():
+    try:
+        params = SCTConfiguration()
+        test_config = get_test_config()
+        if not params.get('test_id'):
+            LOGGER.error("test_id is not set")
+            return
+        test_config.set_test_id(params.get('test_id'))
+        test_config.init_argus_client(params)
+        test_config.argus_client().submit_sct_run(
+            job_name=get_job_name(),
+            job_url=get_job_url(),
+            started_by=get_username(),
+            commit_id=get_git_commit_id(),
+            runner_public_ip=get_sct_runner_ip(),
+            runner_private_ip=get_my_ip(),
+            sct_config=params,
+        )
+        LOGGER.info("Initialized Argus TestRun with test id %s", get_test_config().argus_client().run_id)
+    except ArgusClientError:
+        LOGGER.error("Failed to submit data to Argus", exc_info=True)
+
+
+@cli.command("finish-argus-test-run", help="Finish argus test run if it is not finished by SCT.")
+@click.option("-s", "--jenkins-status", type=str, help="jenkins build status", required=True)
+def finish_argus_test_run(jenkins_status):
+    try:
+        params = SCTConfiguration()
+        test_config = get_test_config()
+        if not params.get('test_id'):
+            LOGGER.error("test_id is not set")
+            return
+        test_config.set_test_id(params.get('test_id'))
+        test_config.init_argus_client(params)
+        status = test_config.argus_client().get_status()
+        if status in [TestStatus.PASSED, TestStatus.FAILED]:
+            LOGGER.info("Argus TestRun already finished with status %s", status.value)
+            return
+        new_status = TestStatus.FAILED
+        if jenkins_status == "ABORTED":
+            new_status = TestStatus.ABORTED
+        test_config.argus_client().set_sct_run_status(new_status)
+    except ArgusClientError:
+        LOGGER.error("Failed to submit data to Argus", exc_info=True)
 
 
 cli.add_command(sct_ssh.ssh)
