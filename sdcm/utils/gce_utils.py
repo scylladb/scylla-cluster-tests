@@ -25,7 +25,6 @@ from google.cloud.compute_v1 import Image
 from google.cloud import storage
 from google.api_core.extended_operation import ExtendedOperation
 from googleapiclient.discovery import build
-from libcloud.compute.providers import Provider, get_driver
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
@@ -35,8 +34,6 @@ from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:367.0.0"
 
 LOGGER = logging.getLogger(__name__)
-
-GceDriver = get_driver(Provider.GCE)  # pylint: disable=invalid-name
 
 # The keys are the region name, the value is the available zones, which will be used for random.choice()
 SUPPORTED_REGIONS = {

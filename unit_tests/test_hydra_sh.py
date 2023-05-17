@@ -14,10 +14,9 @@ from sdcm.remote import LocalCmdRunner
 
 
 class HydraTestCaseTmpDir:
-    def __init__(self, home_dir: str, aws_creds: bool, gce_creds: bool):
+    def __init__(self, home_dir: str, aws_creds: bool):
         self.home_dir = home_dir
         self.aws_creds = aws_creds
-        self.gce_creds = gce_creds
 
     @staticmethod
     def _touch_file(file_path: str):
@@ -34,10 +33,6 @@ class HydraTestCaseTmpDir:
     def aws_token_path(self):
         return os.path.join(self.aws_token_dir_path, 'credentials')
 
-    @cached_property
-    def gcloud_token_path(self):
-        return os.path.join(self.home_dir, '.google_libcloud_auth.skilled-adapter-452')
-
     def setup(self):
         if not os.path.exists(self.home_dir):
             os.makedirs(self.home_dir)
@@ -45,8 +40,6 @@ class HydraTestCaseTmpDir:
             if not os.path.exists(self.aws_token_dir_path):
                 os.makedirs(self.aws_token_dir_path)
             self._touch_file(self.aws_token_path)
-        if self.gce_creds:
-            self._touch_file(self.gcloud_token_path)
 
     def teardown(self):
         with contextlib.suppress(Exception):
@@ -91,12 +84,11 @@ class LongevityPipelineTest:
     test_id = '11111111-1111-1111-1111-111111111111'
     runner_arg = '--execute-on-runner 1.1.1.1 '
 
-    def __init__(self, backend: str, runner: bool, aws_creds: bool, gce_creds: bool):
+    def __init__(self, backend: str, runner: bool, aws_creds: bool):
         self.home_dir = tempfile.mkdtemp()
         self.backend = backend
         self.runner = runner
         self.aws_creds = aws_creds
-        self.gce_creds = gce_creds
         self.home_dir_postfix = ''
 
     def set_test_home_dir_postfix(self, postfix: str):
@@ -130,10 +122,6 @@ class LongevityPipelineTest:
             self.pattern_rsync_aws_token,
             self.pattern_rsync_sct_dir,
         )
-        if 'gce' not in self.backend:
-            return expected
-        # Should sync gcloud token if backend is gcloud
-        expected += (self.pattern_gcloud_token_sync,)
         return expected
 
     def not_expected(self, runner: bool):
@@ -146,15 +134,7 @@ class LongevityPipelineTest:
                 'rsync -ar -e ssh -o StrictHostKeyChecking=no --delete ',
             )
 
-        if self.is_gce_or_gke:
-            return not_expected
-        # Should not sync gcloud token if backend is not gcloud
-        return not_expected + (self.pattern_gcloud_token_sync,)
-
-    @cached_property
-    def pattern_gcloud_token_sync(self):  # pylint: disable=no-self-use
-        return "rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete " \
-               "~/.google_libcloud_auth.skilled-adapter-452 ubuntu@1.1.1.1:/home/ubuntu/"
+        return not_expected
 
     @cached_property
     def pattern_remove_known_key(self):  # pylint: disable=no-self-use
@@ -171,7 +151,7 @@ class LongevityPipelineTest:
 
     @cached_property
     def step_name_prefix(self):
-        return f'{self.backend}_{self.runner}_{self.aws_creds}_{self.gce_creds}'
+        return f'{self.backend}_{self.runner}_{self.aws_creds}'
 
     @cached_property
     def show_conf_cmd(self):
@@ -284,8 +264,7 @@ class LongevityPipelineTest:
     def test_tmp_dir(self) -> HydraTestCaseTmpDir:
         return HydraTestCaseTmpDir(
             home_dir=self.test_home_dir,
-            aws_creds=self.aws_creds,
-            gce_creds=self.gce_creds)
+            aws_creds=self.aws_creds)
 
     @property
     def test_case_show_conf(self):
@@ -434,12 +413,12 @@ class TestHydraSh(unittest.TestCase):
         return errors
 
     @parameterized.expand(
-        LongevityPipelineTest(backend='aws', runner=False, aws_creds=True, gce_creds=True).hydra_test_cases +
-        LongevityPipelineTest(backend='aws', runner=True, aws_creds=True, gce_creds=True).hydra_test_cases +
-        LongevityPipelineTest(backend='gce', runner=False, aws_creds=True, gce_creds=True).hydra_test_cases +
-        LongevityPipelineTest(backend='gce', runner=True, aws_creds=True, gce_creds=True).hydra_test_cases +
-        LongevityPipelineTest(backend='gce-siren', runner=False, aws_creds=True, gce_creds=True).hydra_test_cases +
-        LongevityPipelineTest(backend='gce-siren', runner=True, aws_creds=True, gce_creds=True).hydra_test_cases
+        LongevityPipelineTest(backend='aws', runner=False, aws_creds=True).hydra_test_cases +
+        LongevityPipelineTest(backend='aws', runner=True, aws_creds=True).hydra_test_cases +
+        LongevityPipelineTest(backend='gce', runner=False, aws_creds=True).hydra_test_cases +
+        LongevityPipelineTest(backend='gce', runner=True, aws_creds=True).hydra_test_cases +
+        LongevityPipelineTest(backend='gce-siren', runner=False, aws_creds=True).hydra_test_cases +
+        LongevityPipelineTest(backend='gce-siren', runner=True, aws_creds=True).hydra_test_cases
     )
     def test_run_test(self, test_case_params: HydraTestCaseParams, tmp_dir: HydraTestCaseTmpDir):
         with tmp_dir, self.environ():

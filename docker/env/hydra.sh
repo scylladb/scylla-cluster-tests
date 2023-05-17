@@ -340,20 +340,6 @@ if [[ -n "$RUNNER_IP" ]]; then
         echo "AWS_* environment variables found and will passed to Hydra container."
     fi
 
-    # Only copy GCE credential for GCE backend
-    if [[ "${SCT_CLUSTER_BACKEND}" =~ "gce" || "${SCT_CLUSTER_BACKEND}" =~ "gke" ]]; then
-        if [ -f ~/.google_libcloud_auth.skilled-adapter-452 ]; then
-            echo "GCE credentials file found. Syncing to SCT Runner..."
-            if [ -z "$HYDRA_DRY_RUN" ]; then
-                rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ~/.google_libcloud_auth.skilled-adapter-452 ubuntu@${RUNNER_IP}:/home/ubuntu/
-            else
-                echo "rsync -ar -e 'ssh -o StrictHostKeyChecking=no' --delete ~/.google_libcloud_auth.skilled-adapter-452 ubuntu@${RUNNER_IP}:/home/ubuntu/"
-            fi
-        else
-            echo "GCE backend is used, but no gcloud token found !!!"
-        fi
-    fi
-
     SCT_DIR="/home/ubuntu/scylla-cluster-tests"
     HOST_NAME="ip-${RUNNER_IP//./-}"
     USER_ID=1000:1000
