@@ -1100,13 +1100,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @log_run_info
     def wait_till_tasks_threads_are_stopped(self, timeout: float = 120):
         await_bucket = []
-        if self._spot_monitoring_thread:
+        if self._spot_monitoring_thread and self._spot_monitoring_thread.is_alive():
             await_bucket.append(self._spot_monitoring_thread)
-        if self._db_log_reader_thread:
+        if self._db_log_reader_thread and self._db_log_reader_thread.is_alive():
             await_bucket.append(self._db_log_reader_thread)
-        if self._alert_manager:
+        if self._alert_manager and self._alert_manager.is_alive():
             await_bucket.append(self._alert_manager)
-        if self._decoding_backtraces_thread:
+        if self._decoding_backtraces_thread and self._decoding_backtraces_thread.is_alive():
             await_bucket.append(self._decoding_backtraces_thread)
         end_time = time.perf_counter() + timeout
         while await_bucket and end_time > time.perf_counter():
