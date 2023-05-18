@@ -802,6 +802,20 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         self.assertIn("should be divisible by number of availability zones", str(context.exception))
 
+    def test_29_number_of_nodes_per_az_may_not_be_divisable_by_number_of_az_on_k8s(self):
+        os.environ['SCT_N_DB_NODES'] = '3'
+        os.environ['SCT_REGION_NAME'] = 'eu-north-1'
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'b,c'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-eks'
+        os.environ['SCT_SCYLLA_VERSION'] = "5.2.0"
+        os.environ['SCT_K8S_SCYLLA_OPERATOR_HELM_REPO'] = (
+            'https://storage.googleapis.com/scylla-operator-charts/latest')
+        os.environ['SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION'] = 'latest'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        self.assertEqual(conf.get('n_db_nodes'), 3)
+        self.assertEqual(conf.get('availability_zone'), 'b,c')
+
 
 if __name__ == "__main__":
     unittest.main()
