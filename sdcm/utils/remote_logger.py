@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import time
+import socket
 import logging
 import subprocess
 from abc import abstractmethod, ABCMeta
@@ -343,10 +344,19 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
         self._thread.start()
 
     def stop(self, timeout=None):
+        if not self._thread.is_alive():
+            self._log.info("Logger for pod %s is already stopped. Ignoring.", self._pod_name)
+            return
         self._log.info("Stopping logger for pod %s", self._pod_name)
         self._termination_event.set()
         if self._stream:
-            self._stream.close()
+            # NOTE: Use 'socket' lib to close the logs watcher forcibly.
+            #       It is needed because the 'self._stream.close()' will wait
+            #       until the 'self.READ_REQUEST_TIMEOUT' ends and so in each of the pod threads
+            #       which get closed serially.
+            sock_obj = socket.fromfd(self._stream.fileno(), socket.AF_INET, socket.SOCK_STREAM)
+            sock_obj.shutdown(socket.SHUT_RDWR)
+            sock_obj.close()
         self._thread.join(timeout)
         self._file_object.close()
 
@@ -457,6 +467,8 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
                 self._log.debug("Stream from pod %s logs has been closed, "
                                 "waiting for %s seconds and trying to reconnect",
                                 self._pod_name, self.RECONNECT_DELAY)
+                if self._termination_event.is_set():
+                    return
                 time.sleep(self.RECONNECT_DELAY)
                 self._open_stream()
             except (MaxRetryError, ProtocolError, ReadTimeoutError, TimeoutError, AttributeError) as exc:
