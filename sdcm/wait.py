@@ -16,6 +16,7 @@ Wait functions appropriate for tests that have high timing variance.
 """
 import time
 import logging
+from contextlib import contextmanager
 from typing import TypeVar, cast
 from collections.abc import Callable
 
@@ -124,3 +125,26 @@ def exponential_retry(func: Callable[[], R],
     )
 
     return cast(R, retry(func))
+
+
+@contextmanager
+def wait_for_log_lines(node, start_line_patterns, end_line_patterns, start_timeout=60, end_timeout=120):
+    """Waits for given lines patterns to appear in node logs despite exception raised"""
+    start_follower = node.follow_system_log(patterns=start_line_patterns)
+    end_follower = node.follow_system_log(patterns=end_line_patterns)
+    start_time = time.time()
+    try:
+        yield
+    finally:
+        started = any(start_follower)
+        while not started and (time.time() - start_time < start_timeout):
+            started = any(start_follower)
+        if not started:
+            raise TimeoutError(
+                f"timeout occurred while waiting for start log line ({start_line_patterns} on node: {node.name}")
+        ended = any(end_follower)
+        while not ended and (time.time() - start_time < end_timeout):
+            ended = any(end_follower)
+        if not ended:
+            raise TimeoutError(
+                f"timeout occurred while waiting for end log line ({start_line_patterns} on node: {node.name}")
