@@ -2450,8 +2450,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 return True
             return False
 
-    @retrying(n=4, sleep_time=5, message='Fetch all rows', raise_on_exceeded=False)
-    def fetch_all_rows(self, session, default_fetch_size, statement, verbose=True):
+    def fetch_all_rows(self, session, default_fetch_size, statement, retries: int = 4, timeout: int = None,
+                       raise_on_exceeded: bool = False, verbose=True):
         """
         ******* Caution *******
         All data from table will be read to the memory
@@ -2461,9 +2461,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.debug("Fetch all rows by statement: %s", statement)
         session.default_fetch_size = default_fetch_size
         session.default_consistency_level = ConsistencyLevel.QUORUM
-        result = session.execute_async(statement)
-        fetcher = PageFetcher(result).request_all()
-        current_rows = fetcher.all_data()
+
+        @retrying(n=retries, sleep_time=5, message='Fetch all rows', raise_on_exceeded=raise_on_exceeded)
+        def _fetch_rows() -> list:
+            result = session.execute_async(statement)
+            fetcher = PageFetcher(result).request_all() if not timeout else \
+                PageFetcher(result).request_all(timeout=timeout)
+            return fetcher.all_data()
+
+        current_rows = _fetch_rows()
         if verbose and current_rows:
             dataset_size = sum(sys.getsizeof(e) for e in current_rows[0]) * len(current_rows)
             self.log.debug("Size of fetched rows: %s bytes", dataset_size)
@@ -2540,20 +2546,22 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug('All rows have been copied from %s to %s', src_table, dest_table)
         return True
 
-    def collect_partitions_info(self, table_name, primary_key_column, save_into_file_name):
+    def collect_partitions_info(self, table_name, primary_key_column, save_into_file_name) -> dict | None:  # pylint: disable=too-many-locals
         # Get and save how many rows in each partition.
         # It may be used for validation data in the end of test
         if not (table_name or primary_key_column):
             self.log.warning('Can\'t collect partitions data. Missed "table name" or "primary key column" info')
             return {}
 
+        error_message = "Failed to collect partition info. Error details: {}"
         try:
             with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0],
                                                         connect_timeout=600) as session:
                 session.default_consistency_level = ConsistencyLevel.QUORUM
                 pk_list = get_partition_keys(ks_cf=table_name, session=session, pk_name=primary_key_column)
         except Exception as exc:  # pylint: disable=broad-except
-            self.log.error("Failed to collect partition info. Error details: %s", str(exc))
+            TestFrameworkEvent(source=self.__class__.__name__, message=error_message.format(exc),
+                               severity=Severity.ERROR).publish()
             return None
 
         # Collect data about partitions' rows amount.
@@ -2567,11 +2575,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 try:
                     with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0],
                                                                 connect_timeout=600) as session:
-                        session.default_consistency_level = ConsistencyLevel.QUORUM
-                        result = session.execute(count_pk_rows_cmd)
-                        pk_rows_num_result = result.current_rows[0].count
+                        pk_rows_num_query_result = self.fetch_all_rows(session=session, default_fetch_size=3000,
+                                                                       statement=count_pk_rows_cmd, retries=1, timeout=600,
+                                                                       raise_on_exceeded=True)
+                        pk_rows_num_result = pk_rows_num_query_result[0].count
                 except Exception as exc:  # pylint: disable=broad-except
-                    self.log.error("Failed to collect partition info. Error details: %s", str(exc))
+                    TestFrameworkEvent(source=self.__class__.__name__, message=error_message.format(exc),
+                                       severity=Severity.ERROR).publish()
                     return None
 
                 self.log.debug('Count result: %s', pk_rows_num_result)
