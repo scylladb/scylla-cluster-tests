@@ -65,10 +65,12 @@ class MicroBenchmarkingResultsAnalyzerMock(MicroBenchmarkingResultsAnalyzer):
 
 class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
     def setUp(self):
-        self.mbra = MicroBenchmarkingResultsAnalyzerMock(email_recipients=('alex.bykov@scylladb.com', ))
+        self.mbra = MicroBenchmarkingResultsAnalyzerMock(email_recipients=(
+            'alex.bykov@scylladb.com', ), es_index="microbenchmarking")
         self.mbra.hostname = 'godzilla.cloudius-systems.com'
         self.cwd = os.path.join(os.path.dirname(__file__), '..', 'sdcm')
         self.mbra.test_run_date = "2019-06-27_11:39:40"
+        self.es_index = "microbenchmarking"
 
     @staticmethod
     def get_result_obj(path):
@@ -271,7 +273,8 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
                                '--results-path', result_path,
                                '--email-recipients', 'alex.bykov@scylladb.com',
                                '--report-path', html_report,
-                               '--hostname', self.mbra.hostname],
+                               '--hostname', self.mbra.hostname,
+                               "--es-index", self.es_index],
                               cwd=self.cwd,
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE) as ps:

@@ -81,8 +81,10 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
     lower_better = ('avg aio',)
     submetrics = {'frag/s': ['mad f/s', 'max f/s', 'min f/s']}
 
-    def __init__(self, email_recipients, db_version=None):
-        super().__init__(es_index=MICROBENCHMARK_INDEX_NAME, es_doc_type="microbenchmark", email_recipients=email_recipients,
+    def __init__(self, email_recipients, db_version=None, es_index=None):
+        if not es_index:
+            es_index = MICROBENCHMARK_INDEX_NAME
+        super().__init__(es_index=es_index, es_doc_type="microbenchmark", email_recipients=email_recipients,
                          email_template_fp="results_microbenchmark.html", query_limit=10000, logger=LOGGER)
         self.hostname = socket.gethostname()
         self._run_date_pattern = "%Y-%m-%d_%H:%M:%S"
@@ -508,7 +510,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
 
 def main(args):
     if args.mode == 'exclude':
-        mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=None, db_version=args.db_version)
+        mbra = MicroBenchmarkingResultsAnalyzer(
+            email_recipients=None, db_version=args.db_version, es_index=args.es_index)
         if args.testrun_id:
             mbra.exclude_test_run(args.testrun_id)
         if args.test_id:
@@ -518,7 +521,8 @@ def main(args):
         if args.commit_id:
             mbra.exclude_testrun_by_commit_id(args.commit_id)
     if args.mode == 'check':
-        mbra = MicroBenchmarkingResultsAnalyzer(email_recipients=args.email_recipients.split(","))
+        mbra = MicroBenchmarkingResultsAnalyzer(
+            email_recipients=args.email_recipients.split(","), es_index=args.es_index)
         results = mbra.get_results(results_path=args.results_path, update_db=args.update_db)
         if results:
             if args.hostname:
@@ -553,6 +557,8 @@ def parse_args():
     exclude.add_argument('--db-version', action='store', default='',
                          help='Exclude test results for scylla version',
                          required=True)
+    exclude.add_argument('--es-index', action="store", default='',
+                         help="ES Index for excluding results")
 
     check = subparser.add_parser('check', help='Upload and analyze test result')
     check.add_argument("--update-db", action="store_true", default=False,
@@ -565,6 +571,8 @@ def parse_args():
                        help="Save HTML generated results report to the file path before sending by email")
     check.add_argument("--hostname", action="store", default="",
                        help="Run check regression for host with hostname")
+    check.add_argument("--es-index", action="store", default="",
+                       help="ES index name where previous results are stored")
 
     return parser.parse_args()
 
