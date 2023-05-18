@@ -3782,9 +3782,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.remoter.sudo('snap install stress-ng')
         else:
             raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
-        self.log.info('Try to allocate 120% available memory, the allocated memory will be swaped out')
-        self.target_node.remoter.run(
-            "stress-ng --vm-bytes $(awk '/MemAvailable/{printf \"%d\\n\", $2 * 1.2;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
 
         self.log.info('Try to allocate 90% total memory, the allocated memory will be swaped out')
         self.target_node.remoter.run(
