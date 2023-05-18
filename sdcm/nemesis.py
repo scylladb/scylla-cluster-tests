@@ -113,7 +113,7 @@ from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException
-from sdcm.wait import wait_for
+from sdcm.wait import wait_for, wait_for_log_lines
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
     get_gc_mode, GcMode
 from test_lib.cql_types import CQLTypeBuilder
@@ -4020,7 +4020,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     strategy.replication_factors.update({new_dc_name: 1})
                     replication_strategy_setter(**{keyspace: strategy})
                 InfoEvent(message='execute rebuild on new datacenter').publish()
-                new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", retry=0)
+                with wait_for_log_lines(node=new_node, start_line_patterns=["rebuild.*started with keyspaces="],
+                                        end_line_patterns=["rebuild.*finished with keyspaces="],
+                                        start_timeout=60, end_timeout=600):
+                    new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", retry=0)
                 InfoEvent(message='Running full cluster repair on each node').publish()
                 for cluster_node in self.cluster.nodes:
                     cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
