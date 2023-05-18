@@ -71,7 +71,7 @@ pipeline {
         }
     }
     parameters {
-        string(defaultValue: "5.0.5",
+        string(defaultValue: "5.2.0",
                description: 'the scylla version to use for the provision tests',
                name: 'scylla_version')
     }
