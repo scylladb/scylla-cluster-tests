@@ -388,6 +388,8 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
             self.stop_k8s_software()
             self.start_k8s_software()
         self.create_kubectl_config()
+        if self.test_config.REUSE_CLUSTER:
+            return
         self.on_deploy_completed()
 
 
