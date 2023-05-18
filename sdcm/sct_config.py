@@ -2058,6 +2058,8 @@ class SCTConfiguration(dict):
             "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
 
     def _validate_number_of_db_nodes_divides_by_az_number(self):
+        if self.get("cluster_backend").startswith("k8s"):
+            return
         az_count = len(self.get('availability_zone').split(',')) if self.get('availability_zone') else 1
         for nodes_num in [int(i) for i in str(self.get('n_db_nodes')).split(' ')]:
             assert nodes_num % az_count == 0, \
