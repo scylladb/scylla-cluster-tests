@@ -1,10 +1,10 @@
-test_duration: 1200
+test_duration: 1700
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..162500000",
                     "cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=162500000..325000000",
                     "cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=325000000..487500000",
                     "cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=487500000..650000000"]
 
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=800m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=250 fixed=20332/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,9750000)' "
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=1600m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=250 fixed=20332/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,9750000)' "
 stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=800m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=250 fixed=10310/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,9750000)' "
 stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=250 fixed=8750/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,6500000)' "
 
