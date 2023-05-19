@@ -34,10 +34,29 @@ class TestReplicationStrategies:
         assert str(strategy) == "{'class': 'NetworkTopologyStrategy', 'DC1': 2, 'DC2': 8}"
 
 
+class Cluster:  # pylint: disable=unused-argument,too-few-public-methods
+    class Session:
+        @staticmethod
+        def execute(cql):
+            if 'some error' in cql:
+                raise AttributeError("found some error")
+            print(cql)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    @staticmethod
+    def cql_connection_patient(node):
+        return Cluster.Session()
+
+
 class Node():  # pylint: disable=too-few-public-methods
 
     def __init__(self):
-        pass
+        self.parent_cluster = Cluster()
 
     def run_cqlsh(self, cql):  # pylint: disable=no-self-use
         if 'some error' in cql:
