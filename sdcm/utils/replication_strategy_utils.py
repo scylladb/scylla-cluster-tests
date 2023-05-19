@@ -26,7 +26,8 @@ class ReplicationStrategy:  # pylint: disable=too-few-public-methods
 
     def apply(self, node: BaseNode, keyspace: str):
         cql = f"ALTER KEYSPACE {keyspace} WITH replication = {self}"
-        node.run_cqlsh(cql)
+        with node.parent_cluster.cql_connection_patient(node) as session:
+            session.execute(cql)
 
 
 class SimpleReplicationStrategy(ReplicationStrategy):
