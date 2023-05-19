@@ -85,6 +85,20 @@ class TestDownloadDir(unittest.TestCase):
         assert update_db_packages is None
 
 
+class Remoter:  # pylint: disable=too-few-public-methods
+    def __init__(self, system_log):
+        self.system_log = system_log
+
+    def run(self, *args, **kwargs):  # pylint: disable=unused-argument
+        lines = ["[shard 11] sstables_loader - load_and_stream: started ops_uuid=a2661989-6836-418f-aa67-2c5466499848, process [0-1] out",
+                 "[shard  2] sstables_loader - Done loading new SSTables for keyspace=keyspace1, table=standard1, load_and_stream=true, "
+                 "primary_replica_only=false, status=succeeded"
+                 ]
+        for line in lines:
+            with open(self.system_log, 'a', encoding="utf-8") as file:
+                file.write(f"{line}\n")
+
+
 class DummyNode(BaseNode):  # pylint: disable=abstract-method
     _system_log = None
     is_enterprise = False
@@ -93,6 +107,7 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     def init(self):
         super().init()
         self.remoter.stop()
+        self.remoter = Remoter(self.system_log)
 
     def _get_private_ip_address(self) -> str:
         return '127.0.0.1'
@@ -211,9 +226,6 @@ class TestSstableLoadUtils(unittest.TestCase):
             assert len(map_files_to_node) == case["expected_result"], \
                 f"Expected {case['expected_result']} elements, got {len(map_files_to_node)}"
 
-    def test_load_and_stream_status(self):
-        system_log_follower = self.node.follow_system_log(start_from_beginning=True, patterns=[
-                                                          SstableLoadUtils.LOAD_AND_STREAM_RUN_EXPR])
-        done_log_follower = self.node.follow_system_log(start_from_beginning=True, patterns=[
-            SstableLoadUtils.LOAD_AND_STREAM_DONE_EXPR.format('keyspace1', 'standard1')])
-        SstableLoadUtils.validate_load_and_stream_status(self.node, system_log_follower, done_log_follower)
+    def test_load_and_stream_waits_for_log_lines(self):
+        self.node.remoter = Remoter(self.node.system_log)
+        SstableLoadUtils.run_load_and_stream(self.node, timeout=1)

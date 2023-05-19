@@ -1567,8 +1567,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                                                         test_data=test_data)
             for sstables_info, load_on_node in map_files_to_node:
                 SstableLoadUtils.upload_sstables(load_on_node, test_data=sstables_info, table_name="standard1")
-                start_log_follower, done_log_follower = SstableLoadUtils.run_load_and_stream(load_on_node)
-                SstableLoadUtils.validate_load_and_stream_status(load_on_node, start_log_follower, done_log_follower)
+                SstableLoadUtils.run_load_and_stream(load_on_node)
 
     # pylint: disable=too-many-statements
     def disrupt_nodetool_refresh(self, big_sstable: bool = False):

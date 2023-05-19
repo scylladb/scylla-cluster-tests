@@ -10,7 +10,7 @@ from sdcm.utils.common import remote_get_file, LOGGER, RemoteTemporaryFolder
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.sstable.load_inventory import (TestDataInventory, BIG_SSTABLE_COLUMN_1_DATA, COLUMN_1_DATA,
                                                MULTI_NODE_DATA, BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA)
-
+from sdcm.wait import wait_for_log_lines
 
 LOCAL_CMD_RUNNER = LocalCmdRunner()
 
@@ -110,21 +110,19 @@ class SstableLoadUtils:
         node.remoter.sudo(f'rm -f {table_folder}/upload/manifest.json')
 
     @classmethod
-    def run_load_and_stream(cls, node, keyspace_name: str = 'keyspace1', table_name: str = 'standard1'):
-        start_log_follower = node.follow_system_log(
-            patterns=[cls.LOAD_AND_STREAM_RUN_EXPR])
-        done_log_follower = node.follow_system_log(
-            patterns=[cls.LOAD_AND_STREAM_DONE_EXPR.format(keyspace_name, table_name)])
+    def run_load_and_stream(cls, node, keyspace_name: str = 'keyspace1', table_name: str = 'standard1', timeout=300):
+        """runs load and stream using API request and waits for it to finish"""
+        with wait_for_log_lines(node, start_line_patterns=[cls.LOAD_AND_STREAM_RUN_EXPR],
+                                end_line_patterns=[cls.LOAD_AND_STREAM_DONE_EXPR.format(keyspace_name, table_name)],
+                                start_timeout=60, end_timeout=timeout):
+            LOGGER.info("Running load and stream on the node %s for %s.%s'", node.name, keyspace_name, table_name)
 
-        LOGGER.info("Running load and stream on the node %s for %s.%s'", node.name, keyspace_name, table_name)
-
-        # `load_and_stream` parameter is not supported by nodetool yet. This is workaround
-        # https://github.com/scylladb/scylla-tools-java/issues/253
-        load_api_cmd = 'curl -X POST --header "Content-Type: application/json" --header ' \
-                       f'"Accept: application/json" "http://127.0.0.1:10000/storage_service/sstables/{keyspace_name}?' \
-                       f'cf={table_name}&load_and_stream=true"'
-        node.remoter.run(load_api_cmd)
-        return start_log_follower, done_log_follower
+            # `load_and_stream` parameter is not supported by nodetool yet. This is workaround
+            # https://github.com/scylladb/scylla-tools-java/issues/253
+            load_api_cmd = 'curl -X POST --header "Content-Type: application/json" --header ' \
+                           f'"Accept: application/json" "http://127.0.0.1:10000/storage_service/sstables/{keyspace_name}?' \
+                           f'cf={table_name}&load_and_stream=true"'
+            node.remoter.run(load_api_cmd)
 
     @staticmethod
     def run_refresh(node, test_data: namedtuple) -> Iterable[str]:
@@ -178,72 +176,6 @@ class SstableLoadUtils:
                 # The file path have to include "upload" folder
                 assert '/upload/' in one_file, \
                     f"Loaded file was resharded not in 'upload' folder on the node {node.name}"
-
-    @classmethod
-    @timeout_decor(
-        timeout=60,
-        allowed_exceptions=(AssertionError,),
-        message="Waiting for load_and_stream completion message to appear in logs")
-    def wait_for_load_and_stream_start(cls, node, system_log_follower,
-                                       keyspace_name='keyspace1', table_name='standard1'):
-        load_and_stream_messages = list(system_log_follower)
-        assert load_and_stream_messages, f"Load and stream wasn't run on the node {node.name}"
-        LOGGER.debug("Found load_and_stream messages: %s", load_and_stream_messages)
-
-        load_and_stream_started = False
-        load_and_stream_status = "n/a"
-        for line in load_and_stream_messages:
-            if not load_and_stream_started and re.findall(cls.LOAD_AND_STREAM_RUN_EXPR, line):
-                load_and_stream_started = True
-
-            load_and_stream_done = re.search(cls.LOAD_AND_STREAM_DONE_EXPR.format(keyspace_name, table_name), line)
-            if load_and_stream_done:
-                load_and_stream_status = load_and_stream_done.groups()[0]
-                break
-
-        assert load_and_stream_started, f'Load and stream has not been run on the node {node.name}'
-        return load_and_stream_status
-
-    @classmethod
-    @timeout_decor(
-        timeout=60,
-        allowed_exceptions=(AssertionError,),
-        message="Waiting for load_and_stream completion message to appear in logs")
-    def wait_for_load_and_stream_finish(cls, node, system_log_follower,
-                                        keyspace_name='keyspace1', table_name='standard1'):
-        load_and_stream_messages = list(system_log_follower)
-        assert load_and_stream_messages, f"Load and stream wasn't finished on the node {node.name}"
-        LOGGER.debug("Found load_and_stream messages: %s", load_and_stream_messages)
-
-        load_and_stream_status = "n/a"
-        for line in load_and_stream_messages:
-            load_and_stream_done = re.search(cls.LOAD_AND_STREAM_DONE_EXPR.format(keyspace_name, table_name), line)
-            if load_and_stream_done:
-                load_and_stream_status = load_and_stream_done.groups()[0]
-                break
-
-        assert load_and_stream_status == 'succeeded', \
-            f'Load and stream status  on the node {node.name} is "{load_and_stream_status}". Expected "succeeded"'
-
-    @classmethod
-    def validate_load_and_stream_status(cls, node, start_log_follower, done_log_follower,  # pylint: disable=too-many-arguments
-                                        keyspace_name='keyspace1', table_name='standard1'):
-        """
-        Validate that load_and_stream was started and has been completed successfully.
-        Search for a messages like:
-            storage_service - load_and_stream: ops_uuid=c06c76bb-d178-4e9c-87ff-90df7b80bd5e, ks=keyspace1,
-             table=standard1, target_node=10.0.3.31, num_partitions_sent=45721, num_bytes_sent=24140688
-
-            storage_service - Done loading new SSTables for keyspace=keyspace1, table=standard1, load_and_stream=true,
-            primary_replica_only=false, status=succeeded
-
-        Starting with the Scylla 4.6 version the prefix becomes 'sstables_loader' instead of
-        the 'storage_service' one.
-        """
-        load_and_stream_status = cls.wait_for_load_and_stream_start(node, start_log_follower,
-                                                                    keyspace_name, table_name)
-        if load_and_stream_status == "n/a":
-            cls.wait_for_load_and_stream_finish(node, done_log_follower, keyspace_name, table_name)
 
     @classmethod
     def get_load_test_data_inventory(cls, column_number: int, big_sstable: bool,
