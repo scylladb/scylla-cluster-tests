@@ -9,3 +9,4 @@ nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'ubuntu'
 test_duration: 60
 user_prefix: 'artifacts-docker'
+system_auth_rf: 1

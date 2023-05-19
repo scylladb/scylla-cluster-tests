@@ -88,6 +88,7 @@
 | **<a href="#user-content-authenticator_user" name="authenticator_user">authenticator_user</a>**  | the username if PasswordAuthenticator is used | N/A | SCT_AUTHENTICATOR_USER
 | **<a href="#user-content-authenticator_password" name="authenticator_password">authenticator_password</a>**  | the password if PasswordAuthenticator is used | N/A | SCT_AUTHENTICATOR_PASSWORD
 | **<a href="#user-content-authorizer" name="authorizer">authorizer</a>**  | which authorizer scylla will use AllowAllAuthorizer/CassandraAuthorizer | N/A | SCT_AUTHORIZER
+| **<a href="#user-content-system_auth_rf" name="system_auth_rf">system_auth_rf</a>**  | Replication factor will be set to system_auth | 3 | SCT_SYSTEM_AUTH_RF
 | **<a href="#user-content-service_level_shares" name="service_level_shares">service_level_shares</a>**  | List if service level shares - how many server levels to create and test. Uses in SLA test.list of int, like: [100, 200] | [1000] | SCT_SERVICE_LEVEL_SHARES
 | **<a href="#user-content-alternator_port" name="alternator_port">alternator_port</a>**  | Port to configure for alternator in scylla.yaml | N/A | SCT_ALTERNATOR_PORT
 | **<a href="#user-content-dynamodb_primarykey_type" name="dynamodb_primarykey_type">dynamodb_primarykey_type</a>**  | Type of dynamodb table to create with range key or not, can be:<br>HASH,HASH_AND_RANGE | HASH | SCT_DYNAMODB_PRIMARYKEY_TYPE

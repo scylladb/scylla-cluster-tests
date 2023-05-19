@@ -17,4 +17,5 @@ user_prefix: 'PR-provision-docker'
 
 use_mgmt: false
 
+system_auth_rf: 0
 monitor_swap_size: 0
