@@ -283,18 +283,19 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
     else:
         os.environ['SCT_CLUSTER_BACKEND'] = backend
 
+    config = SCTConfiguration()
     if post_behavior:
         click.echo(f"Use {logdir} as a logdir")
-        clean_func = partial(clean_resources_according_post_behavior, config=SCTConfiguration(), logdir=logdir)
+        clean_func = partial(clean_resources_according_post_behavior, config=config, logdir=logdir)
     else:
-        clean_func = clean_cloud_resources
+        clean_func = partial(clean_cloud_resources, config=config)
 
     if dry_run:
         click.echo("Make a dry-run")
 
     for param in params:
         clean_func(param, dry_run=dry_run)
-        click.echo(f"Resources for {param} have cleaned")
+        click.echo(f"Cleanup for the {param} resources has been finished")
 
 
 @cli.command('list-resources', help='list tagged instances in cloud (AWS/GCE/Azure)')
