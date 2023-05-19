@@ -16,4 +16,5 @@ scylla_linux_distro: 'centos'
 scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-3.3.repo'
 test_duration: 60
 user_prefix: 'artifacts-centos8-selinux'
+system_auth_rf: 1
 append_scylla_setup_args: '--no-selinux-setup'
