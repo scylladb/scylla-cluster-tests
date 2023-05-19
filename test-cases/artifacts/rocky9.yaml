@@ -15,5 +15,6 @@ nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'centos'
 test_duration: 60
 user_prefix: 'artifacts-rocky9'
+system_auth_rf: 1
 
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
