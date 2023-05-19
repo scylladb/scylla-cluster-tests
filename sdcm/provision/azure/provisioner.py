@@ -82,13 +82,18 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             return ""
 
     @classmethod
-    def discover_regions(cls, test_id: str = "", azure_service: AzureService = AzureService(), **kwargs) -> List["AzureProvisioner"]:
+    def discover_regions(cls, test_id: str = "", regions: list = None,
+                         azure_service: AzureService = AzureService(), **kwargs) -> List["AzureProvisioner"]:
         # pylint: disable=arguments-differ,unused-argument
         """Discovers provisioners for in each region for given test id.
 
         If test_id is not provided, it discovers all related to SCT provisioners."""
-        all_resource_groups: List[ResourceGroup] = [rg for rg in azure_service.resource.resource_groups.list()
-                                                    if rg.name.startswith("SCT-")]
+
+        all_resource_groups: List[ResourceGroup] = [
+            rg
+            for rg in azure_service.resource.resource_groups.list()
+            if rg.name.startswith("SCT-") and (rg.location in regions if regions else True)
+        ]
         if test_id:
             provisioner_params = [(test_id, rg.location, cls._get_az_from_name(rg), azure_service)
                                   for rg in all_resource_groups if test_id in rg.name]

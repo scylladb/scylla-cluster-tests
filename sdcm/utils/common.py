@@ -80,7 +80,6 @@ from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.gce_utils import GcloudContainerMixin
 from sdcm.remote import LocalCmdRunner
 from sdcm.remote import RemoteCmdRunnerBase
-from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
 from sdcm.utils.context_managers import environment
 
 
@@ -535,35 +534,51 @@ class ParallelObjectException(Exception):
         return ex_str
 
 
-def clean_cloud_resources(tags_dict, dry_run=False):
+def clean_cloud_resources(tags_dict, config=None, dry_run=False):  # pylint: disable=inconsistent-return-statements,too-many-branches
     """
-    Remove all instances with specific tags from both AWS/GCE
+    Clean up cloud resources created in various cloud platforms.
 
-    :param tags_dict: a dict of the tag to select the instances,e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param config: instance of the 'SCTConfiguration' class
+    :param tags_dict: key-value pairs used for filtering
+    :param dry_run: boolean value which defines whether we should really cleanup resources or not
     :return: None
     """
     if "TestId" not in tags_dict and "RunByUser" not in tags_dict:
         LOGGER.error("Can't clean cloud resources, TestId or RunByUser is missing")
         return False
 
-    clean_instances_aws(tags_dict, dry_run=dry_run)
-    clean_elastic_ips_aws(tags_dict, dry_run=dry_run)
-    clean_test_security_groups(tags_dict, dry_run=dry_run)
+    cluster_backend = config.get("cluster_backend") or ''
+    aws_regions = config.region_names
+    gce_projects = [config.get("gce_project") or 'gcp-sct-project-1']
 
-    if "NodeType" not in tags_dict or tags_dict.get("NodeType") == "k8s":
-        clean_clusters_eks(tags_dict, dry_run=dry_run)
-        clean_load_balancers_aws(tags_dict, dry_run=dry_run)
-        clean_cloudformation_stacks_aws(tags_dict, dry_run=dry_run)
-        for project in SUPPORTED_PROJECTS:
+    if cluster_backend.startswith("k8s-local"):
+        LOGGER.info("No remote resources are expected in the local K8S setups. Skipping.")
+        return
+    if cluster_backend in ('k8s-eks', ''):
+        clean_clusters_eks(tags_dict, regions=aws_regions, dry_run=dry_run)
+        clean_load_balancers_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+        clean_cloudformation_stacks_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+    if cluster_backend in ('k8s-gke', ''):
+        for project in gce_projects:
             with environment(SCT_GCE_PROJECT=project):
                 clean_clusters_gke(tags_dict, dry_run=dry_run)
-                clean_orphaned_gke_disks(dry_run=dry_run)
+                clean_orphaned_gke_disks(tags_dict, dry_run=dry_run)
 
-    for project in SUPPORTED_PROJECTS:
-        with environment(SCT_GCE_PROJECT=project):
-            clean_instances_gce(tags_dict, dry_run=dry_run)
-    clean_instances_azure(tags_dict, dry_run=dry_run)
-    clean_resources_docker(tags_dict, dry_run=dry_run)
+    if cluster_backend in ('aws', 'k8s-eks', ''):
+        clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+        clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+        clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
+    if cluster_backend in ('gce', 'k8s-gke', ''):
+        for project in gce_projects:
+            with environment(SCT_GCE_PROJECT=project):
+                clean_instances_gce(tags_dict, dry_run=dry_run)
+    if cluster_backend in ('azure', ''):
+        azure_regions = config.get("azure_region_name") or []
+        if isinstance(azure_regions, str):
+            azure_regions = [region for azure_region in azure_regions for region in azure_region.split(" ")]
+        clean_instances_azure(tags_dict, regions=azure_regions, dry_run=dry_run)
+    if cluster_backend in ('docker', ''):
+        clean_resources_docker(tags_dict, dry_run=dry_run)
     return True
 
 
@@ -627,7 +642,9 @@ def list_resources_docker(tags_dict: Optional[dict] = None,
     current_container_id = docker_current_container_id()
 
     if tags_dict:
-        filters["label"] = [f"{key}={value}" for key, value in tags_dict.items()]
+        filters["label"] = []
+        for key, value in tags_dict.items():
+            filters["label"].append(key if key == "NodeType" else f"{key}={value}")
 
     containers = {}
     images = {}
@@ -635,6 +652,13 @@ def list_resources_docker(tags_dict: Optional[dict] = None,
     def get_containers(builder_name: str, docker_client: docker.DockerClient) -> None:
         log.info("%s: scan for Docker containers", builder_name)
         containers_list = docker_client.containers.list(filters=filters, sparse=True)
+        if node_type_values := tags_dict.get("NodeType"):
+            filtered_containers_list = []
+            for container in containers_list:
+                container.reload()
+                if container.labels.get("NodeType") in node_type_values:
+                    filtered_containers_list.append(container)
+            containers_list = filtered_containers_list
         if current_container_id:
             containers_list = [container for container in containers_list if container.id != current_container_id]
         if running:
@@ -715,7 +739,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
     """
     list all instances with specific tags AWS
 
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param tags_dict: key-value pairs used for filtering
     :param region_name: name of the region to list
     :param running: get all running instances
     :param group_as_region: if True the results would be grouped into regions
@@ -734,7 +758,9 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         client: EC2Client = boto3.client('ec2', region_name=region)
         custom_filter = []
         if tags_dict:
-            custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
+            custom_filter = [{'Name': 'tag:{}'.format(key),
+                              'Values': value if isinstance(value, list) else [value]}
+                             for key, value in tags_dict.items()]
         response = client.describe_instances(Filters=custom_filter)
         instances[region] = [instance for reservation in response['Reservations'] for instance in reservation[
             'Instances']]
@@ -767,11 +793,17 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
     return instances
 
 
-def clean_instances_aws(tags_dict: dict, dry_run=False):
+def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
     """Remove all instances with specific tags in AWS."""
     # pylint: disable=too-many-locals,import-outside-toplevel
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
-    aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
+    if regions:
+        aws_instances = {}
+        for region in regions:
+            aws_instances |= list_instances_aws(
+                tags_dict=tags_dict, region_name=region, group_as_region=True)
+    else:
+        aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
     try:
         argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
     except ArgusError as exc:
@@ -802,7 +834,7 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
     """
     list all elastic ips with specific tags AWS
 
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param tags_dict: key-value pairs used for filtering
     :param region_name: name of the region to list
     :param group_as_region: if True the results would be grouped into regions
     :param verbose: if True will log progress information
@@ -819,13 +851,16 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
         client: EC2Client = boto3.client('ec2', region_name=region)
         custom_filter = []
         if tags_dict:
-            custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
+            custom_filter = [{'Name': 'tag:{}'.format(key),
+                              'Values': value if isinstance(value, list) else [value]}
+                             for key, value in tags_dict.items()]
         response = client.describe_addresses(Filters=custom_filter)
         elastic_ips[region] = response['Addresses']
         if verbose:
             LOGGER.info("%s: done [%s/%s]", region, len(list(elastic_ips.keys())), len(aws_regions))
 
-    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(get_elastic_ips, ignore_exceptions=True)
+    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)).run(
+        get_elastic_ips, ignore_exceptions=True)
 
     if not group_as_region:
         elastic_ips = list(itertools.chain(*list(elastic_ips.values())))  # flatten the list of lists
@@ -837,15 +872,22 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
     return elastic_ips
 
 
-def clean_elastic_ips_aws(tags_dict, dry_run=False):
+def clean_elastic_ips_aws(tags_dict, regions=None, dry_run=False):
     """
     Remove all elastic ips with specific tags AWS
 
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param tags_dict: key-value pairs used for filtering
+    :param regions: list of the AWS regions to consider
     :return: None
     """
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
-    aws_instances = list_elastic_ips_aws(tags_dict=tags_dict, group_as_region=True)
+    if regions:
+        aws_instances = {}
+        for region in regions:
+            aws_instances |= list_elastic_ips_aws(
+                tags_dict=tags_dict, region_name=region, group_as_region=True)
+    else:
+        aws_instances = list_elastic_ips_aws(tags_dict=tags_dict, group_as_region=True)
 
     for region, eip_list in aws_instances.items():
         if not eip_list:
@@ -868,7 +910,7 @@ def list_test_security_groups(tags_dict=None, region_name=None, group_as_region=
     """
     list all security groups with specific tags AWS
 
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param tags_dict: key-value pairs used for filtering
     :param region_name: name of the region to list
     :param group_as_region: if True the results would be grouped into regions
     :param verbose: if True will log progress information
@@ -883,7 +925,8 @@ def list_test_security_groups(tags_dict=None, region_name=None, group_as_region=
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
         client: EC2Client = boto3.client('ec2', region_name=region)
-        custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]}
+        custom_filter = [{'Name': 'tag:{}'.format(key),
+                          'Values': value if isinstance(value, list) else [value]}
                          for key, value in tags_dict.items() if key != 'NodeType']
         response = client.describe_security_groups(Filters=custom_filter)
         security_groups[region] = response['SecurityGroups']
@@ -903,15 +946,22 @@ def list_test_security_groups(tags_dict=None, region_name=None, group_as_region=
     return security_groups
 
 
-def clean_test_security_groups(tags_dict, dry_run=False):
+def clean_test_security_groups(tags_dict, regions=None, dry_run=False):
     """
     Remove all security groups with specific tags AWS
 
-    :param tags_dict: a dict of the tag to select the groups, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param tags_dict: key-value pairs used for filtering
+    :param regions: list of the AWS regions to consider
     :return: None
     """
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
-    aws_instances = list_test_security_groups(tags_dict=tags_dict, group_as_region=True)
+    if regions:
+        aws_instances = {}
+        for region in regions:
+            aws_instances |= list_test_security_groups(
+                tags_dict=tags_dict, region_name=region, group_as_region=True)
+    else:
+        aws_instances = list_test_security_groups(tags_dict=tags_dict, group_as_region=True)
 
     for region, sg_list in aws_instances.items():
         if not sg_list:
@@ -929,19 +979,19 @@ def clean_test_security_groups(tags_dict, dry_run=False):
                     LOGGER.debug("Failed with: %s", str(ex))
 
 
-def list_load_balancers_aws(tags_dict=None, region_name=None, group_as_region=False, verbose=False):
+def list_load_balancers_aws(tags_dict=None, regions=None, group_as_region=False, verbose=False):
     """
     list all load balancers with specific tags AWS
 
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
-    :param region_name: name of the region to list
+    :param tags_dict: key-value pairs used for filtering
+    :param regions: list of the AWS regions to consider
     :param group_as_region: if True the results would be grouped into regions
     :param verbose: if True will log progress information
 
     :return: load balancers dict where region is a key
     """
     load_balancers = {}
-    aws_regions = [region_name] if region_name else all_aws_regions()
+    aws_regions = regions or all_aws_regions()
 
     def get_load_balancers(region):
         if verbose:
@@ -973,21 +1023,22 @@ def list_load_balancers_aws(tags_dict=None, region_name=None, group_as_region=Fa
     return load_balancers
 
 
-def clean_load_balancers_aws(tags_dict, dry_run=False):
+def clean_load_balancers_aws(tags_dict, regions=None, dry_run=False):
     """
     Remove all load balancers with specific tags AWS
 
-    :param tags_dict: a dict of the tag to select the groups, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param tags_dict: key-value pairs used for filtering
+    :param regions: list of the AWS regions to consider
     :param dry_run: if True, wouldn't delete any resource
     :return: None
     """
 
     # don't if `post_behavior_k8s_cluster` was set to not destroy
-    if "NodeType" in tags_dict and tags_dict.get("NodeType") != "k8s":
+    if "NodeType" in tags_dict and "k8s" not in tags_dict.get("NodeType"):
         return
 
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
-    elbs_per_region = list_load_balancers_aws(tags_dict=tags_dict, group_as_region=True)
+    elbs_per_region = list_load_balancers_aws(tags_dict=tags_dict, regions=regions, group_as_region=True)
 
     for region, elb_list in elbs_per_region.items():
         if not elb_list:
@@ -1005,19 +1056,19 @@ def clean_load_balancers_aws(tags_dict, dry_run=False):
                     LOGGER.debug("Failed with: %s", str(ex))
 
 
-def list_cloudformation_stacks_aws(tags_dict=None, region_name=None, group_as_region=False, verbose=False):
+def list_cloudformation_stacks_aws(tags_dict=None, regions=None, group_as_region=False, verbose=False):
     """
     list all cloudformation stacks with specific tags AWS
 
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
-    :param region_name: name of the region to list
+    :param tags_dict: key-value pairs used for filtering
+    :param regions: list of the AWS regions to consider
     :param group_as_region: if True the results would be grouped into regions
     :param verbose: if True will log progress information
 
     :return: cloudformation staacks dict where region is a key
     """
     cloudformation_stacks = {}
-    aws_regions = [region_name] if region_name else all_aws_regions()
+    aws_regions = regions or all_aws_regions()
 
     def get_stacks(region):
         if verbose:
@@ -1049,21 +1100,22 @@ def list_cloudformation_stacks_aws(tags_dict=None, region_name=None, group_as_re
     return cloudformation_stacks
 
 
-def clean_cloudformation_stacks_aws(tags_dict, dry_run=False):
+def clean_cloudformation_stacks_aws(tags_dict, regions=None, dry_run=False):
     """
     Remove all cloudformation stacks with specific tags AWS
 
-    :param tags_dict: a dict of the tag to select the groups, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param tags_dict: key-value pairs used for filtering
+    :param regions: list of the AWS regions to consider
     :param dry_run: if True, wouldn't delete any resource
     :return: None
     """
 
     # don't if `post_behavior_k8s_cluster` was set to not destroy
-    if "NodeType" in tags_dict and tags_dict.get("NodeType") != "k8s":
+    if "NodeType" in tags_dict and "k8s" not in tags_dict.get("NodeType"):
         return
 
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
-    stacks_per_region = list_cloudformation_stacks_aws(tags_dict=tags_dict, group_as_region=True)
+    stacks_per_region = list_cloudformation_stacks_aws(tags_dict=tags_dict, regions=regions, group_as_region=True)
 
     for region, stacks_list in stacks_per_region.items():
         if not stacks_list:
@@ -1112,8 +1164,10 @@ def filter_gce_by_tags(tags_dict, instances):
     filtered_instances = []
     for instance in instances:
         tags = gce_meta_to_dict(instance.extra['metadata'])
-        found_keys = set(k for k in tags_dict if k in tags and tags_dict[k] == tags[k])
-        if found_keys == set(tags_dict.keys()):
+        for tag_k, tag_v in tags_dict.items():
+            if tag_k not in tags or (tags[tag_k] not in tag_v if isinstance(tag_v, list) else tags[tag_k] != tag_v):
+                break
+        else:
             filtered_instances.append(instance)
     return filtered_instances
 
@@ -1249,7 +1303,8 @@ class EksCluster(EksClusterCleanupMixin):
         return self.body['createdAt']
 
 
-def list_clusters_eks(tags_dict: Optional[dict] = None, verbose: bool = False) -> List[EksCluster]:
+def list_clusters_eks(tags_dict: Optional[dict] = None, regions: list = None,
+                      verbose: bool = False) -> List[EksCluster]:
     class EksCleaner:
         name = f"eks-cleaner-{uuid.uuid4()!s:.8}"
         _containers = {}
@@ -1261,11 +1316,11 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, verbose: bool = False) -
 
         def list_clusters(self) -> list:  # pylint: disable=no-self-use
             eks_clusters = []
-            for aws_region in all_aws_regions():
+            for aws_region in regions or all_aws_regions():
                 try:
                     cluster_names = boto3.client('eks', region_name=aws_region).list_clusters()['clusters']
                 except Exception as exc:  # pylint: disable=broad-except
-                    LOGGER.error("Failed to get list of clusters on EKS: %s", exc)
+                    LOGGER.error("Failed to get list of EKS clusters in the '%s' region: %s", aws_region, exc)
                     return []
                 for cluster_name in cluster_names:
                     try:
@@ -1280,7 +1335,7 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, verbose: bool = False) -
         clusters = filter_k8s_clusters_by_tags(tags_dict, clusters)
 
     if verbose:
-        LOGGER.info("Done. Found total of %s GKE clusters.", len(clusters))
+        LOGGER.info("Done. Found total of %s EKS clusters.", len(clusters))
 
     return clusters
 
@@ -1288,7 +1343,7 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, verbose: bool = False) -
 def filter_k8s_clusters_by_tags(tags_dict: dict,
                                 clusters: list[Union["EksCluster", "GkeCluster"]]) -> list[
         Union["EksCluster", "GkeCluster"]]:
-    if "NodeType" in tags_dict and tags_dict.get("NodeType") != "k8s":
+    if "NodeType" in tags_dict and "k8s" not in tags_dict.get("NodeType"):
         return []
 
     return filter_gce_by_tags(tags_dict={k: v for k, v in tags_dict.items() if k != 'NodeType'},
@@ -1299,19 +1354,19 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
     """
     Remove all instances with specific tags GCE
 
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param tags_dict: key-value pairs used for filtering
     :return: None
     """
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     gce_instances_to_clean = list_instances_gce(tags_dict=tags_dict)
 
     if not gce_instances_to_clean:
-        LOGGER.info("There are no instances to remove in GCE")
+        LOGGER.info("There are no GCE instances to remove in the %s project", os.environ.get("SCT_GCE_PROJECT"))
         return
 
     def delete_instance(instance_with_tags: tuple[GCENode, dict]):
         instance, tags_dict = instance_with_tags
-        LOGGER.info("Going to delete: %s", instance.name)
+        LOGGER.info("Going to delete: %s (%s project)", instance.name, os.environ.get("SCT_GCE_PROJECT"))
         try:
             argus_client = get_argus_client(run_id=tags_dict.get("TestId"))
         except ArgusError as exc:
@@ -1328,11 +1383,11 @@ def clean_instances_gce(tags_dict: dict, dry_run=False):
                    timeout=60).run(delete_instance, ignore_exceptions=True)
 
 
-def clean_instances_azure(tags_dict: dict, dry_run=False):
+def clean_instances_azure(tags_dict: dict, regions=None, dry_run=False):
     """
     Cleans instances by tags.
 
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param tags_dict: key-value pairs used for filtering
     :return: None
     """
     assert tags_dict, "Running clean instances without tags would remove all SCT related resources in all regions"
@@ -1341,10 +1396,17 @@ def clean_instances_azure(tags_dict: dict, dry_run=False):
     except ArgusError as exc:
         LOGGER.warning("Unable to initialize Argus: %s", exc.message)
         argus_client = MagicMock()
-    provisioners = AzureProvisioner.discover_regions(tags_dict.get("TestId", ""))
+    provisioners = AzureProvisioner.discover_regions(tags_dict.get("TestId", ""), regions=regions)
     for provisioner in provisioners:
         all_instances = provisioner.list_instances()
-        instances_to_clean = [instance for instance in all_instances if tags_dict.items() <= instance.tags.items()]
+        instances_to_clean = []
+        for instance in all_instances:
+            tags = instance.tags
+            for tag_k, tag_v in tags_dict.items():
+                if tag_k not in tags or (tags[tag_k] not in tag_v if isinstance(tag_v, list) else tags[tag_k] != tag_v):
+                    break
+            else:
+                instances_to_clean.append(instance)
         if len(all_instances) == len(instances_to_clean):
             LOGGER.info("Cleaning everything for test id: %s in region: %s",
                         provisioner.test_id, provisioner.region)
@@ -1361,16 +1423,19 @@ def clean_instances_azure(tags_dict: dict, dry_run=False):
 
 
 def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
+    if "NodeType" in tags_dict and "k8s" not in tags_dict.get("NodeType"):
+        return
     assert tags_dict, "tags_dict not provided (can't clean all clusters)"
     gke_clusters_to_clean = list_clusters_gke(tags_dict=tags_dict)
 
     if not gke_clusters_to_clean:
-        LOGGER.info("There are no clusters to remove in GKE")
+        LOGGER.info("There are no GKE clusters to remove in the %s project", os.environ.get("SCT_GCE_PROJECT"))
         return
 
     def delete_cluster(cluster):
-        LOGGER.info("Going to delete: %s", cluster.name)
         if not dry_run:
+            LOGGER.info("Going to delete %s GKE cluster from the %s project",
+                        cluster.name, os.environ.get("SCT_GCE_PROJECT"))
             try:
                 res = cluster.destroy()
                 LOGGER.info("%s deleted=%s", cluster.name, res)
@@ -1380,31 +1445,36 @@ def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
     ParallelObject(gke_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
 
-def clean_orphaned_gke_disks(dry_run: bool = False) -> None:
+def clean_orphaned_gke_disks(tags_dict: dict, dry_run: bool = False) -> None:
+    if "NodeType" in tags_dict and "k8s" not in tags_dict.get("NodeType"):
+        return
     try:
         gke_cleaner = GkeCleaner()
         orphaned_disks = gke_cleaner.list_orphaned_gke_disks()
-        LOGGER.info("Found following orphaned GKE disks: %s", orphaned_disks)
+        LOGGER.info("Found following orphaned GKE disks in the %s project: %s",
+                    os.environ.get("SCT_GCE_PROJECT"), orphaned_disks)
         if not dry_run:
             for zone, disk_names in orphaned_disks.items():
                 gke_cleaner.clean_disks(disk_names=disk_names, zone=zone)
-                LOGGER.info("Deleted following orphaned GKE disks in the '%s' zone: %s",
-                            zone, disk_names)
+                LOGGER.info("Deleted following orphaned GKE disks in the '%s' zone (%s project): %s",
+                            zone, os.environ.get("SCT_GCE_PROJECT"), disk_names)
     except Exception as exc:  # pylint: disable=broad-except
         LOGGER.error(exc)
 
 
-def clean_clusters_eks(tags_dict: dict, dry_run: bool = False) -> None:
+def clean_clusters_eks(tags_dict: dict, regions: list = None, dry_run: bool = False) -> None:
+    if "NodeType" in tags_dict and "k8s" not in tags_dict.get("NodeType"):
+        return
     assert tags_dict, "tags_dict not provided (can't clean all clusters)"
-    eks_clusters_to_clean = list_clusters_eks(tags_dict=tags_dict)
+    eks_clusters_to_clean = list_clusters_eks(tags_dict=tags_dict, regions=regions)
 
     if not eks_clusters_to_clean:
-        LOGGER.info("There are no clusters to remove in EKS")
+        LOGGER.info("There are no EKS clusters to remove in %s region(s)" % ','.join(regions) or 'all')
         return
 
     def delete_cluster(cluster):
-        LOGGER.info("Going to delete: %s", cluster.name)
         if not dry_run:
+            LOGGER.info("Going to delete: %s", cluster.name)
             try:
                 res = cluster.destroy()
                 LOGGER.info("%s deleted=%s", cluster.name, res)
@@ -2352,29 +2422,32 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
     actions_per_type = get_post_behavior_actions(config)
     LOGGER.debug(actions_per_type)
 
-    # Define 'KUBECONFIG' env var that is needed in some cases on K8S backends
-    testrun_dir = get_testrun_dir(test_id=params.get('TestId'), base_dir=logdir)
-    kubeconfig_dir = Path(testrun_dir) if testrun_dir else Path(logdir)
-    os.environ['KUBECONFIG'] = str(kubeconfig_dir / ".kube/config")
+    if (config.get("cluster_backend") or "").startswith("k8s"):
+        # Define 'KUBECONFIG' env var that is needed in some cases on K8S backends
+        testrun_dir = get_testrun_dir(test_id=params.get('TestId'), base_dir=logdir)
+        kubeconfig_dir = Path(testrun_dir) if testrun_dir else Path(logdir)
+        os.environ['KUBECONFIG'] = str(kubeconfig_dir / ".kube/config")
 
+    node_types_to_cleanup = []
     for cluster_nodes_type, action_type in actions_per_type.items():
         if action_type["action"] == "keep":
             LOGGER.info("Post behavior %s for %s. Keep resources running", action_type["action"], cluster_nodes_type)
         elif action_type["action"] == "destroy":
-            LOGGER.info("Post behavior %s for %s. Clean resources", action_type["action"], cluster_nodes_type)
+            LOGGER.info("Post behavior %s for %s. Schedule cleanup", action_type["action"], cluster_nodes_type)
             for node_type in action_type["node_types"]:
-                clean_cloud_resources(params | {"NodeType": node_type}, dry_run=dry_run)
+                node_types_to_cleanup.append(node_type)
             continue
         elif action_type["action"] == "keep-on-failure" and not critical_events:
-            LOGGER.info("Post behavior %s for %s. Test run Successful. Clean resources",
+            LOGGER.info("Post behavior %s for %s. No critical events found. Schedule cleanup.",
                         action_type["action"], cluster_nodes_type)
             for node_type in action_type["node_types"]:
-                clean_cloud_resources(params | {"NodeType": node_type}, dry_run=dry_run)
+                node_types_to_cleanup.append(node_type)
             continue
         else:
             LOGGER.info("Post behavior %s for %s. Test run Failed. Keep resources running",
                         action_type["action"], cluster_nodes_type)
             continue
+    clean_cloud_resources(params | {"NodeType": node_types_to_cleanup}, config=config, dry_run=dry_run)
 
 
 def search_test_id_in_latest(logdir):

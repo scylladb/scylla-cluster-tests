@@ -14,9 +14,11 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.common import \
     clean_cloud_resources, \
     clean_instances_aws, clean_elastic_ips_aws, clean_clusters_gke, clean_instances_gce, clean_resources_docker
+from sdcm.utils.context_managers import environment
 
 
 SCT_RUNNER_AWS = {
@@ -137,6 +139,8 @@ class CleanCloudResourcesTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        with environment(SCT_CLUSTER_BACKEND="aws", SCT_REGION_NAME='eu-north-1 eu-west-1'):
+            cls.config = SCTConfiguration()
         if not cls.integration:
             for func in cls.functions_to_patch:
                 patch(func).start()
@@ -147,32 +151,32 @@ class CleanCloudResourcesTest(unittest.TestCase):
 
     def test_no_tag_testid_and_runbyuser(self):
         params = {}
-        res = clean_cloud_resources(params)
+        res = clean_cloud_resources(params, self.config)
         self.assertFalse(res)
 
     def test_other_tags_and_no_testid_and_runbyuser(self):
         params = {"NodeType": "scylla-db"}
-        res = clean_cloud_resources(params)
+        res = clean_cloud_resources(params, self.config)
         self.assertFalse(res)
 
     def test_tag_testid_only(self):
         params = {"RunByUser": "test"}
-        res = clean_cloud_resources(params)
+        res = clean_cloud_resources(params, self.config)
         self.assertTrue(res)
 
     def test_tag_runbyuser_only(self):
         params = {"TestId": "1111"}
-        res = clean_cloud_resources(params)
+        res = clean_cloud_resources(params, self.config)
         self.assertTrue(res)
 
     def test_tags_testid_and_runbyuser(self):
         params = {"RunByUser": "test", "TestId": "1111"}
-        res = clean_cloud_resources(params)
+        res = clean_cloud_resources(params, self.config)
         self.assertTrue(res)
 
     def test_tags_testid_and_runbyuser_with_other(self):
         params = {"RunByUser": "test",
                   "TestId": "1111",
                   "NodeType": "monitor"}
-        res = clean_cloud_resources(params)
+        res = clean_cloud_resources(params, self.config)
         self.assertTrue(res)
