@@ -24,7 +24,7 @@ from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndP
 logger = logging.getLogger(__name__)
 
 
-class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
+class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
     class Config:  # pylint: disable=too-few-public-methods
         extra = Extra.allow
@@ -333,6 +333,11 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
     system_info_encryption: dict = None  # None
     kmip_hosts: dict = None  # None
     kms_hosts: dict = None  # None
+
+    audit: str = None  # None
+    audit_categories: str = None  # None
+    audit_tables: str = None  # None
+    audit_keyspaces: str = None  # None
 
     def dict(  # pylint: disable=arguments-differ
         self,
