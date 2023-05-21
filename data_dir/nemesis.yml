@@ -273,6 +273,10 @@
 - disrupt_terminate_kubernetes_host_then_replace_scylla_node:
   - disruptive = True
   - kubernetes = True
+- disrupt_toggle_audit:
+  - disruptive = True
+  - schema_changes = True
+  - free_tier_set = True
 - disrupt_toggle_cdc_feature_properties_on_table:
   - disruptive = False
   - schema_changes = True

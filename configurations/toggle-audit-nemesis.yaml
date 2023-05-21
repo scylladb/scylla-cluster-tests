@@ -1,0 +1,3 @@
+nemesis_class_name: 'ToggleAuditNemesis'
+append_scylla_yaml: |
+  audit: "none"
