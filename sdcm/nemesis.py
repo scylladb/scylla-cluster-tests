@@ -110,6 +110,7 @@ from sdcm.utils.nemesis_utils.indexes import get_random_column_name, create_inde
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
+from sdcm.utils.system_schema.audit import AuditSystemSchema, TableColumns, NotFoundMatchedRowsInAuditLog
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException
@@ -185,6 +186,11 @@ class CdcStreamsWasNotUpdated(Exception):
 
 class NemesisSubTestFailure(Exception):
     """ raised if nemesis got error from sub test
+    """
+
+
+class AuditLogTestFailure(Exception):
+    """ raised if nemesis got error from audit log validation
     """
 
 
@@ -4319,6 +4325,106 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         finally:
             self.unset_current_running_nemesis(cql_query_executor_node)
 
+    def change_audit_config(self, audit_config: dict):
+        InfoEvent(f"Set audit configuration: {audit_config}").publish()
+        self.cluster.configuring_audit(**audit_config)
+        actual_audit_config = self.target_node.audit_config()
+        if audit_config != actual_audit_config:
+            raise ValueError(
+                f"Expected audit configuration is {audit_config}, but actually it is {actual_audit_config}")
+
+    @staticmethod
+    def get_current_time_as_timeuuid(session):
+        result = session.execute("select now() as now_timeuuid from audit.audit_log limit 1")
+        return result.one().now_timeuuid
+
+    def validate_audit_rows(self, audit_log, session, keyspace_name, category, start_read_audit_log_from_event_time, operation=None,
+                            limit_rows=None):
+        self.log.debug("Read audit log from event time: %s", start_read_audit_log_from_event_time)
+        time.sleep(60)
+        try:
+            audit_log.audit_log_filter(session=session,
+                                       start_from_event_time=start_read_audit_log_from_event_time,
+                                       filter_columns=TableColumns(category=category,
+                                                                   operation=operation,
+                                                                   keyspace_name=keyspace_name),
+                                       limit_rows=limit_rows)
+        except NotFoundMatchedRowsInAuditLog as error:
+            return str(error)
+
+        return ""
+
+    def disrupt_toggle_auditing_state(self):
+        if not self.target_node.is_enterprise:
+            raise UnsupportedNemesis("Auditing feature is only supported by Scylla Enterprise")
+
+        preserved_audit_config = self.target_node.audit_config()
+
+        if not (test_ks_cf_list := self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)):
+            raise UnsupportedNemesis("Not found non-system keyspaces")
+
+        keyspaces_for_audit = [ks_cf.split(".")[0] for ks_cf in test_ks_cf_list]
+
+        self.change_audit_config(audit_config={"audit": "table", "audit_categories": "DCL,DDL,AUTH,ADMIN,DML,QUERY",
+                                               "audit_keyspaces": ",".join(keyspaces_for_audit), "audit_tables": None})
+
+        audit_log = AuditSystemSchema(tester=self.tester)
+        keyspace_name = keyspaces_for_audit[0]
+        errors = []
+        with self.cluster.cql_connection_patient(node=self.target_node) as session:
+            # Step 1 - validate DML operations on the main test keyspace
+            start_read_audit_log_from_event_time = self.get_current_time_as_timeuuid(session=session)
+            # Wait for inserts into audit.audit_log
+            time.sleep(30)
+            errors.append(self.validate_audit_rows(audit_log=audit_log, session=session, keyspace_name=keyspace_name,
+                                                   start_read_audit_log_from_event_time=start_read_audit_log_from_event_time,
+                                                   category="DML", limit_rows=100))
+
+            table_name = "audit_cf"
+            self.change_audit_config(audit_config={"audit": "table", "audit_categories": "AUTH,DDL,DCL,ADMIN",
+                                                   "audit_keyspaces": keyspace_name, "audit_tables": f"{keyspace_name}.{table_name}"})
+
+            # Step 2 - validate DDL operation - create table
+            start_read_audit_log_from_event_time = self.get_current_time_as_timeuuid(session=session)
+            InfoEvent(f"Create table: {keyspace_name}.{table_name}").publish()
+            query = f"CREATE TABLE IF NOT EXISTS {keyspace_name}.{table_name} (id int PRIMARY KEY, value timestamp)"
+            session.execute(query)
+            self.cluster.wait_for_schema_agreement()
+
+            errors.append(self.validate_audit_rows(audit_log=audit_log, session=session, keyspace_name=keyspace_name,
+                                                   start_read_audit_log_from_event_time=start_read_audit_log_from_event_time,
+                                                   category="DDL", operation=query, limit_rows=10))
+
+            # Step 3 - validate DDL operation - alter table
+            InfoEvent(f"Alter table {keyspace_name}.{table_name}").publish()
+            start_read_audit_log_from_event_time = self.get_current_time_as_timeuuid(session=session)
+            query = f"ALTER TABLE {keyspace_name}.{table_name} WITH read_repair_chance = 0.0"
+            session.execute(query)
+            self.cluster.wait_for_schema_agreement()
+            errors.append(self.validate_audit_rows(audit_log=audit_log, session=session, keyspace_name=keyspace_name,
+                                                   start_read_audit_log_from_event_time=start_read_audit_log_from_event_time,
+                                                   category="DDL", operation=query))
+
+            # Step 4 - validate DDL operation - drop table
+            InfoEvent(f"Drop table {keyspace_name}.{table_name}").publish()
+            start_read_audit_log_from_event_time = self.get_current_time_as_timeuuid(session=session)
+            query = f"DROP TABLE {keyspace_name}.{table_name}"
+            session.execute(query)
+            self.cluster.wait_for_schema_agreement()
+            errors.append(self.validate_audit_rows(audit_log=audit_log, session=session, keyspace_name=keyspace_name,
+                                                   start_read_audit_log_from_event_time=start_read_audit_log_from_event_time,
+                                                   category="DDL", operation=query))
+
+        # TODO: if authenticator - create an user, connect..
+        # if not self.cluster.params.get('authenticator'):
+        #     self.log.debug("DCL and AUTH categories can't work without authenticator")
+
+        # Revert changes in  audit configuration to original
+        self.change_audit_config(audit_config=preserved_audit_config)
+
+        if errors:
+            raise AuditLogTestFailure("\n".join(errors))
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
     """
@@ -5717,3 +5823,12 @@ class AddRemoveMvNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_add_remove_mv()
+
+
+class ToggleAuditingStateNemesis(Nemesis):
+    disruptive = True
+    schema_changes = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_toggle_auditing_state()
