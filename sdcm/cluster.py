@@ -747,6 +747,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def scylla_pkg(self):
         return 'scylla-enterprise' if self.is_enterprise else 'scylla'
 
+    def audit_config(self):
+        with self.remote_scylla_yaml() as scylla_yaml:
+            if scylla_yaml.audit is None:
+                return None
+
+            return {"audit": scylla_yaml.audit, "audit_categories": scylla_yaml.audit_categories,
+                    "audit_keyspaces": scylla_yaml.audit_keyspaces, "audit_tables": scylla_yaml.audit_tables}
+
     def file_exists(self, file_path: str) -> Optional[bool]:
         try:
             return self.remoter.sudo(f"test -e '{file_path}'", ignore_status=True).ok
@@ -892,6 +900,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @property
     def is_spot(self):
         return False
+
+    def configuring_audit(self, audit, audit_categories, audit_tables, audit_keyspaces):
+        with self.remote_scylla_yaml() as scylla_yaml:
+            scylla_yaml.audit = audit
+            scylla_yaml.audit_categories = audit_categories
+            scylla_yaml.audit_tables = audit_tables
+            scylla_yaml.audit_keyspaces = audit_keyspaces
+
+        self.restart_scylla()
 
     def check_spot_termination(self):
         """Check if a spot instance termination was initiated by the cloud.
@@ -4697,6 +4714,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         self.log.info("DB nodes CPU modes: %s", results)
         return results
+
+    def configuring_audit(self, audit=None, audit_categories=None, audit_tables=None, audit_keyspaces=None):
+        for node in self.nodes:
+            node.configuring_audit(audit=audit, audit_categories=audit_categories, audit_tables=audit_tables,
+                                   audit_keyspaces=audit_keyspaces)
 
 
 class BaseLoaderSet():
