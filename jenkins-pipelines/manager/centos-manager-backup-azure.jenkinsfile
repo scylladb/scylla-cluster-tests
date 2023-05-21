@@ -10,8 +10,9 @@ managerPipeline(
     test_name: 'mgmt_cli_test.MgmtCliTest.test_backup_feature',
     test_config: 'test-cases/manager/manager-regression-azure.yaml',
     scylla_version: '',
-    azure_image_db: '/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/Microsoft.Compute/images/ScyllaDB-5.0.2-0.20220807.299122e78-1-build-28',
-    // scylla 5.0.2
+    azure_image_db: '/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/Microsoft.Compute/images/scylla-5.2.1-x86_64-2023-05-09T03-57-04',
+    // scylla 5.2.1
+    // TODO: Advance to the latest enterprise once new builds will be created
 
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
