@@ -11,6 +11,9 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i3.4xlarge'
 azure_instance_type_db: 'Standard_L16s_v3'
+gce_instance_type_db: 'n1-highmem-32'
+
+use_preinstalled_scylla: true
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_selector: ['limited']
