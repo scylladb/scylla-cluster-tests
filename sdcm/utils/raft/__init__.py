@@ -2,6 +2,7 @@ import contextlib
 import logging
 
 from typing import Protocol
+from collections import namedtuple
 
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
@@ -37,7 +38,10 @@ class RaftFeatureOperations(Protocol):
     def clean_group0_garbage(self, raise_exception: bool = False) -> None:
         ...
 
-    def diff_token_ring_group0_members(self) -> list[str]:
+    def get_diff_group0_token_ring_members(self) -> list[str]:
+        ...
+
+    def is_cluster_topology_consistent(self) -> bool:
         ...
 
 
@@ -92,21 +96,22 @@ class Raft(RaftFeatureOperations):
         # Add host id which cann't vote after decommission was aborted because it is fast rebooted / terminated")
         return [member['host_id'] for member in self.get_group0_members() if not member['voter']]
 
-    def diff_token_ring_group0_members(self) -> list[str]:
-        LOGGER.debug("Compare token ring and group0 members")
+    def get_diff_group0_token_ring_members(self) -> list[str]:
+        LOGGER.debug("Get diff group0 from token ring")
         group0_members = self.get_group0_members()
         group0_members_ids = {member["host_id"] for member in group0_members}
         token_ring_members = self._node.get_token_ring_members()
         token_ring_member_ids = {member["host_id"] for member in token_ring_members}
         LOGGER.debug("Token rings members ids: %s", token_ring_member_ids)
         LOGGER.debug("Group0 members ids: %s", group0_members_ids)
+
         diff = list(group0_members_ids - token_ring_member_ids)
         LOGGER.debug("Group0 differs from token ring: %s", diff)
         return diff
 
     def clean_group0_garbage(self, raise_exception: bool = False) -> None:
         LOGGER.debug("Clean group0 non-voter's members")
-        host_ids = self.diff_token_ring_group0_members()
+        host_ids = self.get_diff_group0_token_ring_members()
         if not host_ids:
             LOGGER.debug("Node could return to token ring but not yet bootstrap")
             host_ids = self.get_group0_non_voters()
@@ -124,7 +129,7 @@ class Raft(RaftFeatureOperations):
             if not host_ids:
                 break
 
-        if missing_host_ids := self.diff_token_ring_group0_members():
+        if missing_host_ids := self.get_diff_group0_token_ring_members():
             token_ring_members = self._node.get_token_ring_members()
             group0_members = self.get_group0_members()
             error_msg = f"Token ring {token_ring_members} and group0 {group0_members} are differs on: {missing_host_ids}"
@@ -142,6 +147,19 @@ class Raft(RaftFeatureOperations):
                 "leaving token ring",
                 "left token ring",
                 "Finished token ring movement"]
+
+    @staticmethod
+    def get_log_pattern_for_bootstrap_abort() -> list[str]:
+        return ["Starting to bootstrap",
+                "setup_group0: joining group 0",
+                "setup_group0: successfully joined group 0",
+                "setup_group0: the cluster is ready to use Raft. Finishing",
+                "entering BOOTSTRAP mode",
+                "storage_service - Bootstrap completed!",
+                "finish_setup_after_join: becoming a voter in the group 0 configuration",
+                "raft_group0 - finish_setup_after_join: group 0 ID present, loading server info",
+                "became a group 0 voter",
+                ]
 
     @staticmethod
     def get_severity_change_filters_scylla_start_failed(timeout: int | None = None) -> tuple:
@@ -168,6 +186,18 @@ class Raft(RaftFeatureOperations):
                                         extra_time_to_expiration=timeout)
         )
 
+    def is_cluster_topology_consistent(self) -> bool:
+        group0_ids = [member["host_id"] for member in self.get_group0_members()]
+        LOGGER.debug("Group0 member ids %s", group0_ids)
+        token_ring_ids = [member["host_id"] for member in self._node.get_token_ring_members()]
+        LOGGER.debug("Token ring member ids: %s", token_ring_ids)
+        diff = set(group0_ids) - set(token_ring_ids) or set(token_ring_ids) - set(group0_ids)
+        LOGGER.debug("Difference between group0 and token ring: %s", diff)
+        num_of_nodes = len(self._node.parent_cluster.nodes)
+        LOGGER.debug("Number of nodes in sct cluster %s", num_of_nodes)
+
+        return not diff and len(group0_ids) == len(token_ring_ids) == num_of_nodes
+
 
 class NoRaft(RaftFeatureOperations):
     def __init__(self, node: "BaseNode") -> None:
@@ -193,7 +223,7 @@ class NoRaft(RaftFeatureOperations):
     def clean_group0_garbage(self, raise_exception: bool = False) -> None:
         return
 
-    def diff_token_ring_group0_members(self) -> list[str]:
+    def get_diff_group0_token_ring_members(self) -> list[str]:
         return []
 
     @staticmethod
@@ -201,8 +231,20 @@ class NoRaft(RaftFeatureOperations):
         return ["DECOMMISSIONING: unbootstrap starts"]
 
     @staticmethod
+    def get_log_pattern_for_bootstrap_abort() -> list[str]:
+        return ["entering BOOTSTRAP mode"]
+
+    @staticmethod
     def get_severity_change_filters_scylla_start_failed(timeout: int = None) -> tuple:
         return (contextlib.nullcontext(),)
+
+    def is_cluster_topology_consistent(self) -> bool:
+        token_ring_ids = [member["host_id"] for member in self._node.get_token_ring_members()]
+        LOGGER.debug("Token ring member ids: %s", token_ring_ids)
+        num_of_nodes = len(self._node.parent_cluster.nodes)
+        LOGGER.debug("Number of nodes in sct cluster %s", num_of_nodes)
+
+        return len(token_ring_ids) == num_of_nodes
 
 
 def get_raft_mode(node) -> Raft | NoRaft:

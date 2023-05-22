@@ -36,6 +36,7 @@ from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from types import MethodType  # pylint: disable=no-name-in-module
+from multiprocessing import Process
 
 from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
@@ -202,6 +203,11 @@ class NemesisSubTestFailure(Exception):
 class AuditLogTestFailure(Exception):
     """ raised if nemesis got error from audit log validation
     """
+
+
+class BootstrapStreamErrorFailure(Exception):  # pylint: disable=too-few-public-methods
+    """ raised if node was not boostrapped after bootstrap
+    streaming was aborted """
 
 
 class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -3345,7 +3351,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if exit_status != 0:
                 self.log.error(f"nodetool removenode command exited with status {exit_status}")
                 # check difference between group0 and token ring,
-                garbage_host_ids = verification_node.raft.diff_token_ring_group0_members()
+                garbage_host_ids = verification_node.raft.get_diff_group0_token_ring_members()
                 self.log.debug("Difference between token ring and group0 is %s", garbage_host_ids)
                 if garbage_host_ids:
                     # if difference found, clean garbage and continue
@@ -4712,6 +4718,134 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         if errors:
             raise AuditLogTestFailure("\n".join(errors))
+
+    def disrupt_bootstrap_streaming_error(self):
+        """Abort bootstrap procces at different point
+
+        During bootstrap new node stream data from token ring
+        If bootstrap is aborted, according to Failed topology
+        changes manual, the process could be restarted and node
+        should be added to cluster successfully. Nemesis terminate
+        the bootstrap streaming base on found log messages and then
+        remove ghost group0 members and restart bootstrap.
+
+        If node was not added anyway, clean it from cluster
+        and return the cluster to initial state(by num of nodes)
+        """
+        new_node: BaseNode = self.cluster.add_nodes(
+            count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=self.target_node.rack)[0]
+        self.monitoring_set.reconfigure_scylla_monitoring()
+        self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
+
+        def start_bootstrap(new_node: BaseNode, timeout=3600):
+            bootstrap_process = Process(target=self.cluster.node_setup,
+                                        name=f"Bootstraping_{new_node.name}",
+                                        kwargs={"node": new_node, "verbose": True, "timeout": int(timeout)},
+                                        daemon=True)
+            try:
+                self.log.info("Start node %s setup and bootstrapp", new_node.name)
+                bootstrap_log_follower = new_node.follow_system_log(patterns=['init - Startup failed',
+                                                                              'init - Startup interrupted',
+                                                                              'initialization completed'])
+                bootstrap_process.start()
+                log_messages = wait_for(func=lambda: list(bootstrap_log_follower),
+                                        text='Waiting for bootstap aborting or finishing', step=5, timeout=timeout)
+
+                if log_messages and ('init - Startup failed' in log_messages[0] or 'init - Startup interrupted' in log_messages[0]):
+                    self.log.debug("Bootstrap node %s was aborted", new_node.name)
+                    raise NodeSetupFailed(node=new_node, error_msg=log_messages[0])
+
+                if new_node.db_up() and new_node.jmx_up():
+                    self.log.info("Node %s bootstrapped succesfull", new_node.name)
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.warning("Node bootstrap was aborted with error: %s", exc)
+            finally:
+                self.log.debug("Stop node bootstrap process")
+                bootstrap_process.join(60)
+                bootstrap_process.terminate()
+                self.log.debug("Node bootstrap process stopped")
+
+        trigger = partial(
+            start_bootstrap, new_node=new_node)
+
+        terminate_patterns = self.target_node.raft.get_log_pattern_for_bootstrap_abort()
+
+        self.use_nemesis_seed()
+        terminate_pattern = random.choice(terminate_patterns)
+        self.log.info("Stop bootsrap process after log message: '%s'", terminate_pattern)
+
+        log_follower = new_node.follow_system_log(patterns=[terminate_pattern])
+
+        watcher = partial(
+            self._call_disrupt_func_after_expression_logged,
+            log_follower=log_follower,
+            disrupt_func=new_node.stop_scylla,
+            disrupt_func_kwargs={},
+            delay=0
+        )
+
+        with EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                         event_class=DatabaseLogEvent,
+                                         regex=".*init - Startup failed.*",
+                                         extra_time_to_expiration=30), \
+                adaptive_timeout(operation=Operations.NEW_NODE, node=self.target_node, timeout=3600) as bootstrap_timeout:
+            ParallelObject(objects=[trigger, watcher], timeout=bootstrap_timeout).call_objects(ignore_exceptions=True)
+
+        host_id_searcher = new_node.follow_system_log(patterns=['Setting local host id to'])
+
+        def clean_unbootstrapped_node():
+            new_node_host_ids = []
+            if found_stings := list(host_id_searcher):
+                for line in found_stings:
+                    new_node_host_id = line.split(" ")[-1].strip()
+                    self.log.info("Node %s has host id: %s in log", new_node.name, new_node_host_id)
+                    new_node_host_ids.append(new_node_host_id)
+            self.log.debug("New host was not properly bootstrapped. Terminate it")
+            self._terminate_cluster_node(new_node)
+            self.log.info("Sleep for gossiper updater")
+            time.sleep(60)
+            self.target_node.raft.clean_group0_garbage(raise_exception=True)
+            if new_node_host_ids:
+                for host_id in new_node_host_ids:
+                    self.target_node.run_nodetool(
+                        f"removenode {host_id}", ignore_status=True, retry=3, warning_event_on_exception=True)
+
+            assert self.target_node.raft.is_cluster_topology_consistent(), \
+                "Group0, Token Ring and number of node in cluster are differs. Check logs"
+            self.cluster.check_nodes_up_and_normal()
+            self.log.info("Failed bootstrapped node removed. Cluster is in initial state")
+
+        if not new_node.db_up():
+            try:
+                if self.target_node.raft.get_diff_group0_token_ring_members():
+                    self.target_node.raft.clean_group0_garbage(raise_exception=True)
+                    self.log.debug("Clean old scylla data and restart scylla service")
+                    new_node.clean_scylla_data()
+                with adaptive_timeout(operation=Operations.NEW_NODE, node=self.target_node, timeout=3600) as bootstrap_timeout:
+                    new_node.start_scylla_server(verify_up_timeout=bootstrap_timeout)
+                    new_node.start_scylla_jmx()
+
+                self.cluster.check_nodes_up_and_normal(nodes=[new_node], verification_node=self.target_node)
+            except Exception as exc:  # pylint: disable=broad-except
+                err_message = f"Node {new_node.name} was not bootstrapped upon abort after log line {terminate_pattern}"
+                self.log.error("Scylla service restart failed: %s", exc)
+                self.log.error(err_message)
+
+                clean_unbootstrapped_node()
+                raise BootstrapStreamErrorFailure(err_message) from exc
+
+        if new_node.db_up() and not self.target_node.raft.is_cluster_topology_consistent():
+            LOGGER.error("New host was not properly bootstrapped. Terminate it")
+            clean_unbootstrapped_node()
+            self.log.info("Failed bootstrapped node removed. Cluster is in initial state")
+            return
+
+        if new_node.db_up() and self.target_node.raft.is_cluster_topology_consistent():
+            self.log.info("Wait 5 minutes with new topology")
+            time.sleep(300)
+
+            self.log.info("Decommission added new node")
+            self.cluster.decommission(new_node)
 
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
@@ -6138,3 +6272,12 @@ class ToggleAuditNemesisSyslog(Nemesis):
 
     def disrupt(self):
         self.disrupt_toggle_audit_syslog()
+
+
+class BootstrapStreamingErrorNemesis(Nemesis):
+
+    disruptive = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.disrupt_bootstrap_streaming_error()
