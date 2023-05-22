@@ -121,7 +121,7 @@ def drop_index(session, ks, index_name) -> None:
     InfoEvent(message=f"Starting dropping index: {ks}.{index_name}").publish()
     with EventsFilter(
             event_class=DatabaseLogEvent.DATABASE_ERROR,
-            regex="Error applying view update",
+            regex=".*view - Error applying view update to.*",
             extra_time_to_expiration=180,  # errors can happen only within few minutes after index drop scylladb/#12977
     ):
         session.execute(f'DROP INDEX {ks}.{index_name}')
