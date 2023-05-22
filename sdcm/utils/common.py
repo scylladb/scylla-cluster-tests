@@ -68,7 +68,8 @@ from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
-from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType
+from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType, get_scylla_images_ec2_client
+
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
@@ -91,7 +92,7 @@ from sdcm.utils.context_managers import environment
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
-SCYLLA_AMI_OWNER_ID = "797456418907"
+SCYLLA_AMI_OWNER_ID_LIST = ["797456418907", "158855661827"]
 SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
 
 
@@ -1516,14 +1517,19 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
         return _SCYLLA_AMI_CACHE[region_name]
 
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
-    _SCYLLA_AMI_CACHE[region_name] = sorted(
-        ec2_resource.images.filter(
-            Owners=[SCYLLA_AMI_OWNER_ID, ],
+    images = []
+    for client, owner in zip((ec2_resource, get_scylla_images_ec2_client(region_name=region_name)),
+                             SCYLLA_AMI_OWNER_ID_LIST):
+        images += client.images.filter(
+            Owners=[owner],
             Filters=[
                 {'Name': 'name', 'Values': [name_filter]},
                 {'Name': 'architecture', 'Values': [arch]},
             ],
-        ),
+        )
+
+    _SCYLLA_AMI_CACHE[region_name] = sorted(
+        images,
         key=lambda x: x.creation_date,
         reverse=True,
     )
@@ -1864,13 +1870,20 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
 
     LOGGER.info("Looking for AMIs match [%s]", scylla_version)
     ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
-    if build_id not in ("latest", "all",):
-        images = [
-            ec2_resource.images.filter(Filters=filters + [{'Name': 'tag:build-id', 'Values': [build_id, ], }]),
-            ec2_resource.images.filter(Filters=filters + [{'Name': 'tag:build_id', 'Values': [build_id, ], }]),
-        ]
-    else:
-        images = [ec2_resource.images.filter(Filters=filters), ]
+    images = []
+
+    for client, owner in zip((ec2_resource, get_scylla_images_ec2_client(region_name=region_name)),
+                             SCYLLA_AMI_OWNER_ID_LIST):
+        if build_id not in ("latest", "all",):
+            images += [
+                client.images.filter(Owners=[owner],
+                                     Filters=filters + [{'Name': 'tag:build-id', 'Values': [build_id, ], }]),
+                client.images.filter(Owners=[owner],
+                                     Filters=filters + [{'Name': 'tag:build_id', 'Values': [build_id, ], }]),
+            ]
+        else:
+            images += [client.images.filter(Owners=[owner], Filters=filters), ]
+
     images = sorted(itertools.chain.from_iterable(images), key=lambda x: x.creation_date, reverse=True)
     images = [image for image in images if not (image.name.startswith('debug-') or '-debug-' in image.name)]
 
@@ -2028,8 +2041,7 @@ def get_branched_gce_images(
 def ami_built_by_scylla(ami_id: str, region_name: str) -> bool:
     ec2_resource = boto3.resource("ec2", region_name=region_name)
     image = ec2_resource.Image(ami_id)
-    image.load()
-    return image.owner_id == SCYLLA_AMI_OWNER_ID
+    return image.owner_id in SCYLLA_AMI_OWNER_ID_LIST
 
 
 @lru_cache()
