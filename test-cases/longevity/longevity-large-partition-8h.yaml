@@ -42,6 +42,7 @@ round_robin: true
 
 instance_type_db: 'i3.2xlarge'
 azure_instance_type_db: 'Standard_L8s_v3'
+gce_instance_type_db: 'n1-highmem-32'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '015'
@@ -52,3 +53,5 @@ user_prefix: 'longevity-large-partitions-8h'
 space_node_threshold: 644245094
 
 run_fullscan: ['{"mode": "partition", "ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 5555, "validate_data": true}']
+
+use_preinstalled_scylla: true
