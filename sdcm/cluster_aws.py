@@ -436,6 +436,11 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             else:
                 ec2_user_data = post_boot_script
 
+        # Replace user_data json with post_boot_script content if preinstalled scylla is not used.
+        # This supports applying user-data for non-scylla AMI, as in the case of Ubuntu-22 ARM.
+        if not self.params.get("use_preinstalled_scylla"):
+            ec2_user_data = post_boot_script
+
         if cluster.Setup.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx)
         else:
