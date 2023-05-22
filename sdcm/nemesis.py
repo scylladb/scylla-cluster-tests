@@ -75,7 +75,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
-from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors, ignore_no_space_errors,
+from sdcm.sct_events.group_common_events import (ignore_abort_requested_errors, ignore_alternator_client_errors, ignore_no_space_errors,
                                                  ignore_scrub_invalid_errors, ignore_view_error_gate_closed_exception,
                                                  ignore_stream_mutation_fragments_errors,
                                                  ignore_ycsb_connection_refused, decorate_with_context,
@@ -1216,6 +1216,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return new_node
 
     @decorate_with_context(ignore_ycsb_connection_refused)
+    @decorate_with_context(ignore_abort_requested_errors)
     def _terminate_cluster_node(self, node):
         self.cluster.terminate_node(node)
         self.monitoring_set.reconfigure_scylla_monitoring()
