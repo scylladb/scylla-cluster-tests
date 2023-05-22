@@ -49,8 +49,8 @@ class SnitchTest(ClusterTester):
     def check_nodetool_status_output_gce(self):
         result = self.db_cluster.nodes[0].get_nodes_status()
         all_datacenters = {result[node]["dc"] for node in result.keys()}
-        assert 'us-east1scylla_node_east' in all_datacenters
-        assert 'us-west1scylla_node_west' in all_datacenters
+        assert 'us-east1us_east1' in all_datacenters
+        assert 'us-west1us_west1' in all_datacenters
 
     def check_nodetool_status_output_aws(self):
         pass  # TODO: Add aws snitch test option
