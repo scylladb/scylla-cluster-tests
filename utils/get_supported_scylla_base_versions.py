@@ -15,7 +15,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 # We support to migrate from specific OSS version to enterprise
-supported_src_oss = {'2023.2': '5.3', '2023.1': '5.2', '2022.2': '5.1', '2022.1': '5.0', '2021.1': '4.3'}
+supported_src_oss = {'2021.1': '4.3', '2022.1': '5.0', '2022.2': '5.1', '2023.1': '5.2', '2023.2': '5.3'}
 # If new support distro shared repo with others, we need to assign the start support versions. eg: centos8
 start_support_versions = {'centos-8': {'scylla': '4.1', 'enterprise': '2021.1'}}
 
