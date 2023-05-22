@@ -67,10 +67,8 @@ from prettytable import PrettyTable
 
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
-from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
-from sdcm.utils.aws_kms import AwsKms
-from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType, get_scylla_images_ec2_resource
+from sdcm.sct_events.system import CpuNotHighEnoughEvent
+from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType, get_scylla_images_ec2_client
 
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
@@ -1659,7 +1657,7 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
 
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
     images = []
-    for client, owner in zip((ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)),
+    for client, owner in zip((ec2_resource, get_scylla_images_ec2_client(region_name=region_name)),
                              SCYLLA_AMI_OWNER_ID_LIST):
         images += client.images.filter(
             Owners=[owner],
@@ -1668,32 +1666,10 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
                 {'Name': 'architecture', 'Values': [arch]},
             ],
         )
-    images = sorted(images, key=lambda x: x.creation_date, reverse=True)
-    images = [image for image in images if image.tags and 'debug' not in {
-        i['Key']: i['Value'] for i in image.tags}.get('Name', '')]
 
-    return images
-
-
-@lru_cache
-def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None) -> list[GceImage]:
-    # Server-side resource filtering described in Google SDK reference docs:
-    #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
-    #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
-    # or you can see brief explanation here:
-    #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-    filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
-
-    if version and version != "all":
-        filters += f"(name eq 'scylla(db)?(-enterprise)?-{version.replace('.', '-')}"
-        if 'rc' not in version:
-            filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
-        else:
-            filters += "')"
-    images_client, _ = get_gce_compute_images_client()
-    return sorted(
-        images_client.list(ListImagesRequest(filter=filters, project=project)),
-        key=lambda x: x.creation_timestamp,
+    _SCYLLA_AMI_CACHE[region_name] = sorted(
+        images,
+        key=lambda x: x.creation_date,
         reverse=True,
     )
 
@@ -1895,7 +1871,7 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
     ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
     images = []
 
-    for client, owner in zip((ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)),
+    for client, owner in zip((ec2_resource, get_scylla_images_ec2_client(region_name=region_name)),
                              SCYLLA_AMI_OWNER_ID_LIST):
         if build_id not in ("latest", "all",):
             images += [
@@ -2063,11 +2039,9 @@ def get_branched_gce_images(
 
 @lru_cache()
 def ami_built_by_scylla(ami_id: str, region_name: str) -> bool:
-    all_tags = get_ami_tags(ami_id, region_name)
-    if owner_id := all_tags.get('owner_id'):
-        return owner_id in SCYLLA_AMI_OWNER_ID_LIST
-    else:
-        return False
+    ec2_resource = boto3.resource("ec2", region_name=region_name)
+    image = ec2_resource.Image(ami_id)
+    return image.owner_id in SCYLLA_AMI_OWNER_ID_LIST
 
 
 @lru_cache()

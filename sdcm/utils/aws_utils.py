@@ -19,8 +19,7 @@ from typing import List, Dict
 
 import boto3
 from botocore.exceptions import ClientError
-from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
-from mypy_boto3_ec2.literals import ArchitectureTypeType
+from mypy_boto3_ec2 import EC2ServiceResource
 
 from sdcm.provision.network_configuration import ssh_connection_ip_type, network_interfaces_count
 from sdcm.utils.decorators import retrying
@@ -421,19 +420,13 @@ def ec2_ami_get_root_device_name(image_id, region):
     return None
 
 
-@functools.cache
-def get_arch_from_instance_type(instance_type: str, region_name: str) -> AwsArchType:
-    client: EC2Client = boto3.client('ec2', region_name=region_name)
-    instance_type_info = client.describe_instance_types(InstanceTypes=[instance_type])
-    arch = 'x86_64'
-    try:
-        arch = instance_type_info['InstanceTypes'][0].get('ProcessorInfo', {}).get('SupportedArchitectures')[0]
-    except (IndexError, KeyError):
-        pass
-    return arch
+def get_arch_from_instance_type(instance_type: str) -> AwsArchType:
+    if any((prefix in instance_type for prefix in ARM_ARCH_PREFIXES)):
+        return 'arm64'
+    return 'x86_64'
 
 
-def get_scylla_images_ec2_resource(region_name: str) -> EC2ServiceResource:
+def get_scylla_images_ec2_client(region_name: str) -> EC2ServiceResource:
     session = boto3.Session()
     sts = session.client("sts")
     role_info = KeyStore().get_json('aws_images_role.json')
@@ -447,30 +440,3 @@ def get_scylla_images_ec2_resource(region_name: str) -> EC2ServiceResource:
                                 aws_session_token=response['Credentials']['SessionToken'])
 
     return new_session.resource("ec2", region_name=region_name)
-
-
-def get_ssm_ami(parameter: str, region_name) -> str:
-    """
-    get AMIs from SSM parameters
-
-    examples:
-    - '/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id'
-    - '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
-
-    Ref: https://discourse.ubuntu.com/t/finding-ubuntu-images-with-the-aws-ssm-parameter-store/15507
-    """
-    client = boto3.client('ssm', region_name=region_name)
-    value = client.get_parameter(Name=parameter)
-    return value['Parameter']['Value']
-
-
-def is_using_aws_mock() -> bool:
-    """
-    check if the aws mock host is available or not
-    """
-
-    try:
-        socket.gethostbyname("aws-mock.itself")
-        return True
-    except socket.gaierror:
-        return False
