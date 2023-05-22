@@ -18,11 +18,13 @@ from typing import List, Dict, Literal
 
 import boto3
 from botocore.exceptions import ClientError
+from mypy_boto3_ec2 import EC2ServiceResource
 
 from sdcm.utils.decorators import retrying
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.wait import wait_for
 from sdcm.test_config import TestConfig
+from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
 ARM_ARCH_PREFIXES = ('im4', 'is4', 'a1.', 'inf', 'm6', 'c6', 'r6', 'm7', 'c7', 'r7')
@@ -332,3 +334,19 @@ def get_arch_from_instance_type(instance_type: str) -> AwsArchType:
     if any((prefix in instance_type for prefix in ARM_ARCH_PREFIXES)):
         return 'arm64'
     return 'x86_64'
+
+
+def get_scylla_images_ec2_client(region_name: str) -> EC2ServiceResource:
+    session = boto3.Session()
+    sts = session.client("sts")
+    role_info = KeyStore().get_json('aws_images_role.json')
+    response = sts.assume_role(
+        RoleArn=role_info['role_arn'],
+        RoleSessionName=role_info['role_session_name'],
+    )
+
+    new_session = boto3.Session(aws_access_key_id=response['Credentials']['AccessKeyId'],
+                                aws_secret_access_key=response['Credentials']['SecretAccessKey'],
+                                aws_session_token=response['Credentials']['SessionToken'])
+
+    return new_session.resource("ec2", region_name=region_name)
