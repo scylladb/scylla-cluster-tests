@@ -33,6 +33,12 @@ class TestReplicationStrategies:
         assert isinstance(strategy, NetworkTopologyReplicationStrategy)
         assert str(strategy) == "{'class': 'NetworkTopologyStrategy', 'DC1': 2, 'DC2': 8}"
 
+    def test_can_create_network_topology_replication_strategy_from_string_with_replication_factor(self):  # pylint: disable=no-self-use
+        strategy = ReplicationStrategy.from_string(
+            "REPLICATION = { 'class' : 'NetworkTopologyStrategy', 'replication_factor' : 2,}")
+        assert isinstance(strategy, NetworkTopologyReplicationStrategy)
+        assert str(strategy) == "{'class': 'NetworkTopologyStrategy', 'replication_factor': 2}"
+
 
 class Cluster:  # pylint: disable=unused-argument,too-few-public-methods
     class Session:

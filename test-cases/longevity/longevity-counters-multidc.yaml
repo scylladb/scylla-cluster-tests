@@ -1,6 +1,6 @@
 test_duration: 500
 
-pre_create_keyspace: "CREATE KEYSPACE scylla_bench WITH replication = {'class': 'NetworkTopologyStrategy', 'us-eastscylla_node_east': '3', 'us-west-2scylla_node_west': '3', 'eu-westscylla_node_west': '3'};"
+pre_create_keyspace: "CREATE KEYSPACE scylla_bench WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'};"
 stress_cmd:      "scylla-bench -workload=uniform -mode=counter_update -replication-factor=3 -partition-count=1000 -clustering-row-count=10 -concurrency 1024 -duration 360m -validate-data"
 stress_read_cmd: "scylla-bench -workload=uniform -mode=counter_read   -replication-factor=3 -partition-count=1000 -clustering-row-count=10 -concurrency 512 -duration 360m -validate-data"
 
