@@ -151,7 +151,7 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
                     stress_num = origin_stress_num
 
                 threads = (best_result["total_threads"] // (len(self.loaders.nodes) * stress_num)) - threads_step
-                threads = 10 * round(threads / 10)
+                threads = 10 * round(threads / 10) or start_threads
                 decrease_loaders_num = False
 
             if current_result["op rate"] < best_result["op rate"] / 2:
