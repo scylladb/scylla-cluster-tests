@@ -283,7 +283,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             best_results = {nemesis: {} for nemesis in test_doc["_source"]["latency_during_ops"].keys()}
 
             def sort_results_by_versions(results: list[Any]):
-                """ filter unrelevant results and build dict for sorting
+                """ filter not relevant results and build dict for sorting
 
                 Filter out from search results any document, which doesn't have
                 relevant data: version info, statistics for steady state,
@@ -307,6 +307,10 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                         nemesis_stat = latency_during_ops_stats.get(nemesis)
                         results_per_nemesis_by_version[nemesis].setdefault(scylla_version, [])
                         self._calculate_cycles_average(nemesis_stat)
+                        # if calculated average stat for nemesis is empty or 0, don't add it to version results
+                        if not nemesis_stat["hdr_summary_average"] \
+                           or not nemesis_stat["average_time_operation_in_sec"]:
+                            continue
                         nemesis_stat.update({"version": full_version_info})
                         nemesis_stat.update({"Steady State": latency_during_ops_stats["Steady State"]})
                         results_per_nemesis_by_version[nemesis][scylla_version].append(nemesis_stat)
@@ -336,7 +340,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     def _compare_current_best_results_average(self, current_result, best_result):
         """compare results between current and best results
 
-        Calculate difference in percentage between curent test
+        Calculate difference in percentage between current test
         and best per version for each nemesis nemesis and
         update with new keys best_result dict:
         # expected structure:
@@ -358,6 +362,12 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                                         }}}
 
         """
+        def _calculate_relative_change_magnitude(current_value, best_value):
+            if not best_value:
+                return "N/A"
+            else:
+                return round(((current_value - best_value) / best_value) * 100, 2)
+
         try:
             for nemesis in current_result:
                 if nemesis in ["Steady State", "summary"]:
@@ -372,14 +382,12 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                         diff = best.setdefault('hdr_summary_diff', {})
                         diff.update({workload: {perc: 0 for perc in self.percentiles}})
                         for perc in self.percentiles:
-                            current_value = current_result[nemesis]['hdr_summary_average'][workload][perc]
-                            best_version_value = best['hdr_summary_average'][workload][perc]
-                            diff[workload][perc] = round(
-                                ((current_value - best_version_value) / best_version_value) * 100, 2)
-                    current_duration_value = current_result[nemesis]['average_time_operation_in_sec']
-                    best_duration_value = best['average_time_operation_in_sec']
-                    best['average_time_operation_in_sec_diff'] = round(
-                        ((current_duration_value - best_duration_value) / best_duration_value) * 100, 2)
+                            diff[workload][perc] = _calculate_relative_change_magnitude(
+                                current_result[nemesis]['hdr_summary_average'][workload][perc],
+                                best['hdr_summary_average'][workload][perc])
+                    best['average_time_operation_in_sec_diff'] = _calculate_relative_change_magnitude(
+                        current_result[nemesis]['average_time_operation_in_sec'],
+                        best['average_time_operation_in_sec'])
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.error("Compare results failed: %s", exc)
 
