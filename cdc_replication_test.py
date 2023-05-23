@@ -362,7 +362,7 @@ class CDCReplicationTest(ClusterTester):
         replica_node = self.cs_db_cluster.nodes[0]
         with self.cs_db_cluster.cql_connection_patient(node=replica_node) as sess:
             sess.execute(f"create keyspace if not exists {self.KS_NAME}"
-                         " with replication = {'class': 'SimpleStrategy', 'replication_factor': 1}")
+                         " with replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 1}")
             for stmt in ut_ddls + table_ddls:
                 sess.execute(stmt)
 

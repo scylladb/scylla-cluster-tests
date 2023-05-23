@@ -2,7 +2,7 @@ from collections import namedtuple
 import pytest
 
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
-    SimpleReplicationStrategy, NetworkTopologyReplicationStrategy, ReplicationStrategy
+    SimpleReplicationStrategy, NetworkTopologyReplicationStrategy, ReplicationStrategy, LocalReplicationStrategy
 
 
 class TestReplicationStrategies:
@@ -14,6 +14,14 @@ class TestReplicationStrategies:
     def test_can_create_network_topology_replication_strategy(self):  # pylint: disable=no-self-use
         strategy = NetworkTopologyReplicationStrategy(dc1=3, dc2=8)
         assert str(strategy) == "{'class': 'NetworkTopologyStrategy', 'dc1': 3, 'dc2': 8}"
+
+    def test_can_create_network_topology_replication_strategy_with_default_rf(self):  # pylint: disable=no-self-use
+        strategy = NetworkTopologyReplicationStrategy(2, dc1=3, dc2=8)
+        assert str(strategy) == "{'class': 'NetworkTopologyStrategy', 'replication_factor': 2, 'dc1': 3, 'dc2': 8}"
+
+    def test_can_create_network_topology_replication_strategy_only_with_default_rf(self):  # pylint: disable=no-self-use
+        strategy = NetworkTopologyReplicationStrategy(3)
+        assert str(strategy) == "{'class': 'NetworkTopologyStrategy', 'replication_factor': 3}"
 
     def test_can_create_simple_replication_strategy_from_string(self):  # pylint: disable=no-self-use
         strategy = ReplicationStrategy.from_string(
@@ -38,6 +46,14 @@ class TestReplicationStrategies:
             "REPLICATION = { 'class' : 'NetworkTopologyStrategy', 'replication_factor' : 2,}")
         assert isinstance(strategy, NetworkTopologyReplicationStrategy)
         assert str(strategy) == "{'class': 'NetworkTopologyStrategy', 'replication_factor': 2}"
+
+    def test_cannot_create_network_topology_replication_strategy_without_replication_factor(self):  # pylint: disable=no-self-use
+        with pytest.raises(ValueError):
+            NetworkTopologyReplicationStrategy()
+
+    def test_can_create_local_replication_strategy(self):  # pylint: disable=no-self-use
+        strategy = LocalReplicationStrategy()
+        assert str(strategy) == "{'class': 'LocalStrategy'}"
 
 
 class Cluster:  # pylint: disable=unused-argument,too-few-public-methods

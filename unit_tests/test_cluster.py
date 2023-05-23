@@ -622,7 +622,8 @@ def test_get_any_ks_cf_list(docker_scylla, params):
     cluster.params = params
 
     with cluster.cql_connection_patient(docker_scylla) as session:
-        session.execute("CREATE KEYSPACE mview WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}")
+        session.execute(
+            "CREATE KEYSPACE mview WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 1}")
         session.execute(
             "CREATE TABLE mview.users (username text, first_name text, last_name text, password text, email text, "
             "last_access timeuuid, PRIMARY KEY(username))")

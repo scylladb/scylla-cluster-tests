@@ -19,7 +19,7 @@ nemesis_interval: 5
 
 extra_network_interface: True
 
-gemini_cmd: "gemini --duration 30m --warmup 0s -c 4 -m write --non-interactive --cql-features basic --max-mutation-retries 100 --max-mutation-retries-backoff 100ms --replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '3'}\" --table-options \"cdc = {'enabled': true, 'ttl': 0}\" --use-server-timestamps --test-host-selection-policy token-aware"
+gemini_cmd: "gemini --duration 30m --warmup 0s -c 4 -m write --non-interactive --cql-features basic --max-mutation-retries 100 --max-mutation-retries-backoff 100ms --replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}\" --table-options \"cdc = {'enabled': true, 'ttl': 0}\" --use-server-timestamps --test-host-selection-policy token-aware"
 
 
 # Required by SCT, although not used:

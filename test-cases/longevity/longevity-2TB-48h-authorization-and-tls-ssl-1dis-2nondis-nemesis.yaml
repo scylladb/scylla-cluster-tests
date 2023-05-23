@@ -11,7 +11,7 @@ stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=2460m -mode cql3 nat
 
 pre_create_schema: True
 pre_create_keyspace: [
-    "CREATE KEYSPACE mview WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};",
+    "CREATE KEYSPACE mview WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};",
     "CREATE TABLE mview.users (username text, first_name text, last_name text, password text, email text, last_access timeuuid, PRIMARY KEY(username));",
     "CREATE MATERIALIZED VIEW mview.users_by_first_name AS SELECT * FROM mview.users WHERE first_name IS NOT NULL and username IS NOT NULL PRIMARY KEY (first_name, username);",
     "CREATE MATERIALIZED VIEW mview.users_by_last_name AS SELECT * FROM mview.users WHERE last_name IS NOT NULL and username IS NOT NULL PRIMARY KEY (last_name, username);"

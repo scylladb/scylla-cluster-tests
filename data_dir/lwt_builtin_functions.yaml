@@ -6,7 +6,7 @@ keyspace: lwt_builtin_function_test
 
 # The CQL for creating a keyspace (optional if it already exists)
 keyspace_definition: |
-  CREATE KEYSPACE IF NOT EXISTS lwt_builtin_function_test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+  CREATE KEYSPACE IF NOT EXISTS lwt_builtin_function_test WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};
 
 # Table name
 table: blogposts

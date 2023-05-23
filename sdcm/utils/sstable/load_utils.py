@@ -201,7 +201,7 @@ class SstableLoadUtils:
         return []
 
     @classmethod
-    def create_keyspace(cls, node, keyspace_name: str = "keyspace1", strategy: str = 'SimpleStrategy',
+    def create_keyspace(cls, node, keyspace_name: str = "keyspace1", strategy: str = 'NetworkTopologyStrategy',
                         replication_factor: int = 1):
         node.run_cqlsh("""
                 CREATE KEYSPACE %s WITH replication = {'class': '%s',

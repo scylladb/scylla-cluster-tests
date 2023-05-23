@@ -7,7 +7,7 @@ keyspace: keyspace_complex
 
 # The CQL for creating a keyspace (optional if it already exists)
 keyspace_definition: |
-  CREATE KEYSPACE IF NOT EXISTS keyspace_complex WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+  CREATE KEYSPACE IF NOT EXISTS keyspace_complex WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};
 
 # Table name
 table: user_with_ck

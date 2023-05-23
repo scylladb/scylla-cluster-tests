@@ -301,7 +301,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     """
     CLUSTER_NAME = "mgr_cluster1"
     LOCALSTRATEGY_KEYSPACE_NAME = "localstrategy_keyspace"
-    SIMPLESTRATEGY_KEYSPACE_NAME = "simplestrategy_keyspace"
+    NETWORKSTRATEGY_KEYSPACE_NAME = "networkstrategy_keyspace"
 
     def test_mgmt_repair_nemesis(self):
         """
@@ -350,10 +350,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             dcs_names.add(data_center)
         return dcs_names
 
-    def _create_keyspace_and_basic_table(self, keyspace_name, strategy, table_name="example_table",
+    def _create_keyspace_and_basic_table(self, keyspace_name, table_name="example_table",
                                          replication_factor=1):
         self.log.info("creating keyspace {}".format(keyspace_name))
-        keyspace_existence = self.create_keyspace(keyspace_name, replication_factor, strategy)
+        keyspace_existence = self.create_keyspace(keyspace_name, replication_factor)
         assert keyspace_existence, "keyspace creation failed"
         # Keyspaces without tables won't appear in the repair, so the must have one
         self.log.info("creating the table {} in the keyspace {}".format(table_name, keyspace_name))
@@ -535,7 +535,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             for keyspace in range(num_ks):
                 session.execute(f"CREATE KEYSPACE IF NOT EXISTS ks00{keyspace} "
-                                "WITH replication={'class':'SimpleStrategy', 'replication_factor':1}")
+                                "WITH replication={'class':'NetworkTopologyStrategy', 'replication_factor':1}")
                 for table in range(num_table):
                     session.execute(f'CREATE COLUMNFAMILY IF NOT EXISTS ks00{keyspace}.table00{table} '
                                     '(key varchar, c varchar, v varchar, PRIMARY KEY(key, c))')
@@ -880,8 +880,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        self._create_keyspace_and_basic_table(self.SIMPLESTRATEGY_KEYSPACE_NAME, "SimpleStrategy", replication_factor=2)
-        self._create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, "LocalStrategy")
+        self._create_keyspace_and_basic_table(self.NETWORKSTRATEGY_KEYSPACE_NAME, replication_factor=2)
+        self._create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, replication_factor=0)
         repair_task = mgr_cluster.create_repair_task()
         task_final_status = repair_task.wait_and_get_final_status(timeout=7200)
         assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(repair_task.id,
@@ -890,7 +890,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.log.debug("sctool version is : {}".format(manager_tool.sctool.version))
 
         expected_keyspaces_to_be_repaired = ["system_auth", "system_distributed", "system_traces",  # pylint: disable=invalid-name
-                                             self.SIMPLESTRATEGY_KEYSPACE_NAME]
+                                             self.NETWORKSTRATEGY_KEYSPACE_NAME]
         per_keyspace_progress = repair_task.per_keyspace_progress
         self.log.info("Looking in the repair output for all of the required keyspaces")
         for keyspace_name in expected_keyspaces_to_be_repaired:

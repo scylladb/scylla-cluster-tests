@@ -193,7 +193,7 @@ class LdapUtilsMixin:
             with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], user=username,
                                                         password=LDAP_PASSWORD) as session:
                 session.execute(
-                    """ CREATE KEYSPACE IF NOT EXISTS test_no_permission WITH replication = {'class': 'SimpleStrategy',
+                    """ CREATE KEYSPACE IF NOT EXISTS test_no_permission WITH replication = {'class': 'NetworkTopologyStrategy',
                     'replication_factor': 1} """)
                 session.execute(""" DROP KEYSPACE IF EXISTS test_no_permission """)
             raise ValueError('DID NOT RAISE')
@@ -211,12 +211,12 @@ class LdapUtilsMixin:
         with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], user=username,
                                                     password=LDAP_PASSWORD) as session:
             session.execute(
-                """ CREATE KEYSPACE IF NOT EXISTS test_permission_ks WITH replication = {'class': 'SimpleStrategy',
+                """ CREATE KEYSPACE IF NOT EXISTS test_permission_ks WITH replication = {'class': 'NetworkTopologyStrategy',
                 'replication_factor': 1} """)
             session.execute(""" DROP KEYSPACE IF EXISTS test_permission_ks """)
 
             session.execute(
-                f""" CREATE KEYSPACE IF NOT EXISTS {keyspace} WITH replication = {{'class': 'SimpleStrategy',
+                f""" CREATE KEYSPACE IF NOT EXISTS {keyspace} WITH replication = {{'class': 'NetworkTopologyStrategy',
                 'replication_factor': 3}} """)
             session.execute(
                 f""" CREATE TABLE IF NOT EXISTS {keyspace}.info (key varchar, c varchar, v varchar, PRIMARY KEY(key, c)) """)
