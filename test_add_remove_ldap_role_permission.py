@@ -45,7 +45,7 @@ class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
         superuser_role = 'superuser_role'
         new_test_user = 'new_test_user'
         ldap_keyspace = 'customer_ldap'
-        self.log.debug("Create new user in Scylla")
+        InfoEvent(message="Create new user in Scylla").publish()
         self.create_role_in_scylla(node=node, role_name=new_test_user, is_superuser=False,
                                    is_login=True)
         if self.params.get('prepare_saslauthd'):
@@ -56,16 +56,16 @@ class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
                     f""" CREATE KEYSPACE IF NOT EXISTS {ldap_keyspace} WITH replication = {{'class': 'SimpleStrategy',
                     'replication_factor': 1}} """)
 
-        self.log.debug("Create a new super-user role in Scylla")
+        InfoEvent(message="Create a new super-user role in Scylla").publish()
         self.create_role_in_scylla(node=node, role_name=superuser_role, is_superuser=True,
                                    is_login=False)
         self.db_cluster.wait_for_schema_agreement()
-        self.log.debug("Create a new super-user role in Ldap, associated with the new user")
+        InfoEvent(message="Create a new super-user role in Ldap, associated with the new user").publish()
 
         self.create_role_in_ldap(ldap_role_name=superuser_role, unique_members=[new_test_user, LDAP_USERS[1]])
 
         self.wait_for_user_roles_update(are_roles_expected=True, username=new_test_user)
-        self.log.debug("Create keyspace and table where authorized")
+        InfoEvent(message="Create keyspace and table where authorized").publish()
         self.wait_verify_user_permissions(username=new_test_user, keyspace=ldap_keyspace)
 
         # Run a stress while new user permissions are removed
@@ -73,9 +73,9 @@ class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
                                f" replication(factor=3)' -mode cql3 native user={new_test_user} password={LDAP_PASSWORD}" \
                                " -rate threads=2 -pop seq=1..1002003 -log interval=5"
         stress_queue.append(self.run_stress_thread(stress_cmd=new_test_user_stress, round_robin=True))
-        self.log.debug("Let stress of new user run for few minutes before removing permissions")
+        InfoEvent(message="Let stress of new user run for few minutes before removing permissions").publish()
         time.sleep(120)
-        self.log.debug("Remove authorization and verify unauthorized user")
+        InfoEvent(message="Remove authorization and verify unauthorized user").publish()
         self.modify_ldap_role_delete_member(ldap_role_name=superuser_role, member_name=new_test_user)
         self.wait_for_user_roles_update(are_roles_expected=False, username=new_test_user)
         self.wait_verify_user_no_permissions(username=new_test_user)
