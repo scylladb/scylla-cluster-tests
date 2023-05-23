@@ -1,4 +1,4 @@
-prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20900 -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20900 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 
 stress_cmd: ["cassandra-stress read cl=LOCAL_QUORUM duration=20m -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
              "cassandra-stress write cl=LOCAL_QUORUM duration=20m -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"

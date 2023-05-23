@@ -3,7 +3,7 @@
 keyspace: keyspace1
 
 keyspace_definition: |
-  CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'eu-west1scylla_node_west1': 3,'eu-west2scylla_node_west2': 3}
+  CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3}
 
 table: standard2
 
