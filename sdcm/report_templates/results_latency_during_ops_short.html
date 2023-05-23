@@ -75,7 +75,7 @@
                             <th rowspan="2"> Scylla build </th>
                             {% set lat_type_list = ['percentile_90', 'percentile_99'] %}
                             {% set lat_color_list = ['color_90', 'color_99'] %}
-                            {% set colspan = lat_type_list | length %}
+                            {% set colspan = workloads | length %}
                             {% for lat_type in lat_type_list %}
                                 <th colspan="{{ colspan }}">Latency {{ lat_type }}</th>
                                 <th colspan="{{ colspan }}">Steady State {{lat_type}}</th>
@@ -100,7 +100,8 @@
                                 <td> current build </td>
                                 {% for perc in lat_type_list %}
                                         {% for workload in workloads  %}
-                                            <td style="text-align: right; color: {{ cycle['hdr_summary'][workload]['color'][perc] }};"> {{ cycle['hdr_summary'][workload][perc] }} </td>
+                                            {% set color = cycle['hdr_summary'][workload]['color'][perc] %}
+                                            <td style="text-align: right;"><span style="color: {{ color }};"> {{ cycle['hdr_summary'][workload][perc] }}</span></td>
                                         {% endfor %}
                                         {% for workload in workloads  %}
                                             <td style="text-align: right;"> {{ stats["Steady State"]["hdr_summary"][workload][perc] }} </td>
