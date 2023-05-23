@@ -24,7 +24,8 @@ if [[ -n "$(docker images scylladb/hydra:${VERSION} -q)" ]]; then
 else
     echo "Hydra image with version $VERSION not found locally. Building..."
     cd "${DOCKER_ENV_DIR}"
-    pip-compile ${SCT_DIR}/requirements.in --allow-unsafe --generate-hashes > ${SCT_DIR}/${PY_PREREQS_FILE}
+    REQUIREMENTS_IN=$(realpath --relative-to=${DOCKER_ENV_DIR} ${SCT_DIR}/requirements.in)
+    pip-compile $REQUIREMENTS_IN --allow-unsafe --generate-hashes --resolver=backtracking > ${SCT_DIR}/${PY_PREREQS_FILE}
     cp -f ${SCT_DIR}/${PY_PREREQS_FILE} .
     docker build --network=host -t scylladb/hydra:${VERSION} .
     rm -f ${PY_PREREQS_FILE}
