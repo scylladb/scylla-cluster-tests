@@ -58,7 +58,7 @@ def create_cql_ks_and_table(docker_scylla):
     cluster_driver = Cluster([node_ip], port=port)
     session = cluster_driver.connect()
     session.execute(
-        """create keyspace ycsb WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor': 1 };"""
+        """create keyspace ycsb WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 };"""
     )
     session.execute(
         """CREATE TABLE ycsb.usertable (

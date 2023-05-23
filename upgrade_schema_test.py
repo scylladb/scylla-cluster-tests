@@ -274,7 +274,7 @@ class UpgradeSchemaTest(ClusterTester):
         except NotFoundException:
             pass
         thrift_client.system_add_keyspace(
-            KsDef(ks_name, 'org.apache.cassandra.locator.SimpleStrategy', {'replication_factor': '1'}, cf_defs=[]))
+            KsDef(ks_name, 'org.apache.cassandra.locator.NetworkTopologyStrategy', {'replication_factor': '1'}, cf_defs=[]))
         thrift_client.set_keyspace(ks_name)
         cql_client.set_keyspace(ks_name)
 

@@ -45,15 +45,29 @@ class NetworkTopologyReplicationStrategy(ReplicationStrategy):
 
     class_: str = 'NetworkTopologyStrategy'
 
-    def __init__(self, **replication_factors: int):
-        self.replication_factors = replication_factors
+    def __init__(self, default_rf: int | None = None, **replication_factors: int):
+        if default_rf is not None:
+            self.replication_factors = {"replication_factor": default_rf}
+        else:
+            self.replication_factors = {}
+        self.replication_factors.update(**replication_factors)
+        if not self.replication_factors:
+            raise ValueError("At least one replication factor should be provided or default_rf should be set")
 
     def __str__(self):
         factors = ', '.join([f"'{key}': {value}" for key, value in self.replication_factors.items()])
         return f"{{'class': '{self.class_}', {factors}}}"
 
 
-replication_strategies = [SimpleReplicationStrategy, NetworkTopologyReplicationStrategy]
+class LocalReplicationStrategy(ReplicationStrategy):
+
+    class_: str = 'LocalStrategy'
+
+    def __str__(self):
+        return f"{{'class': '{self.class_}'}}"
+
+
+replication_strategies = [SimpleReplicationStrategy, NetworkTopologyReplicationStrategy, LocalReplicationStrategy]
 
 
 class temporary_replication_strategy_setter(ContextDecorator):  # pylint: disable=invalid-name

@@ -94,6 +94,7 @@ from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
 from sdcm.utils.net import get_my_ip, get_sct_runner_ip
 from sdcm.utils.operations_thread import ThreadParams
+from sdcm.utils.replication_strategy_utils import LocalReplicationStrategy, NetworkTopologyReplicationStrategy
 from sdcm.utils.threads_and_processes_alive import gather_live_processes_and_dump_to_file, \
     gather_live_threads_and_dump_to_file
 from sdcm.utils.version_utils import get_relocatable_pkg_url
@@ -123,7 +124,6 @@ from sdcm.keystore import KeyStore
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes, CSWorkloadTypes, make_cs_range_histogram_summary, \
     make_cs_range_histogram_summary_by_interval
-from sdcm.utils.replication_strategy_utils import NetworkTopologyReplicationStrategy
 from sdcm.utils.raft.common import validate_raft_on_nodes
 
 
@@ -2207,39 +2207,28 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                             session=session, keyspace_name=keyspace_name, throw_exc=False)
         return does_keyspace_exist
 
-    def create_keyspace(self, keyspace_name, replication_factor, replication_strategy=None):
+    def create_keyspace(self, keyspace_name, replication_factor):
         """
-        The default of replication_strategy depends on the type of the replication_factor:
-            If it's int, the default of replication_strategy will be 'SimpleStrategy'
-            If it's dict, the default of replication_strategy will be 'NetworkTopologyStrategy'
-
-        In the case of NetworkTopologyStrategy, replication_factor should be a dict that contains the name of
-        every dc that the keyspace should be replicated to as keys, and the replication factor of each of those dc
-        as values, like so:
+        If replication_factor is int, the all DC's will have the same replication factor, if 0, use LocalReplicationStrategy
+        If replication_factor is dict, the keys are the DC's names and the values are the replication factor for each DC
+        e.g.
         {"dc_name1": 4, "dc_name2": 6, "<dc_name>": <int>...}
         """
 
-        query = 'CREATE KEYSPACE IF NOT EXISTS %s WITH replication={%s}'
         execution_node, validation_node = self.db_cluster.nodes[0], self.db_cluster.nodes[-1]
         with self.db_cluster.cql_connection_patient(execution_node) as session:
             if isinstance(replication_factor, int):
-                execution_result = session.execute(
-                    query % (keyspace_name, "'class':'{}', 'replication_factor':{}".format(
-                        replication_strategy if replication_strategy else "SimpleStrategy",
-                        replication_factor)))
-
+                if replication_factor == 0:
+                    replication_strategy = LocalReplicationStrategy()
+                else:
+                    NetworkTopologyReplicationStrategy(default_rf=replication_factor)
             else:
-                assert replication_factor, "At least one datacenter/replication_factor pair is needed"
-                options = ', '.join(["'{}':{}".format(dc_name, dc_specific_replication_factor) for
-                                     dc_name, dc_specific_replication_factor in replication_factor.items()])
-                execution_result = session.execute(
-                    query % (keyspace_name, "'class':'{}', {}".format(
-                        replication_strategy if replication_strategy else "NetworkTopologyStrategy",
-                        options)))
+                replication_strategy = NetworkTopologyReplicationStrategy(**replication_factor)
 
+            execution_result = session.execute('CREATE KEYSPACE IF NOT EXISTS %s WITH replication=%s'
+                                               % (keyspace_name, str(replication_strategy)))
         if execution_result:
             self.log.debug("keyspace creation result: {}".format(execution_result.response_future))
-
         with self.db_cluster.cql_connection_patient(validation_node) as session:
             does_keyspace_exist = self.wait_validate_keyspace_existence(session, keyspace_name)
         return does_keyspace_exist

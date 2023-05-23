@@ -35,7 +35,7 @@ def test_01_gemini_thread(request, docker_scylla, params):
     test_cluster = DBCluster([docker_scylla])
     cmd = (
         "gemini -d --duration 1m --warmup 0s -c 5 -m write --non-interactive --cql-features basic --max-mutation-retries 100 "
-        "--max-mutation-retries-backoff 100ms --replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '1'}\" "
+        "--max-mutation-retries-backoff 100ms --replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\" "
         "--table-options \"cdc = {'enabled': true, 'ttl': 0}\" --use-server-timestamps"
     )
     gemini_thread = GeminiStressThread(

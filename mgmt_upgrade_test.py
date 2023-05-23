@@ -31,7 +31,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
     def create_simple_table(self, table_name, keyspace_name="ks1"):
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             session.execute(f"""CREATE KEYSPACE IF NOT EXISTS {keyspace_name}
-                WITH replication = {{'class': 'SimpleStrategy', 'replication_factor': '3'}};""")
+                WITH replication = {{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}};""")
             session.execute(f"""CREATE table IF NOT EXISTS {keyspace_name}.{table_name} (
                                 key varchar PRIMARY KEY,
                                 c1 text,

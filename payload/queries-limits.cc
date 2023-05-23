@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
     }
     cass_future_free(future);
 
-    auto statement = cass_statement_new("CREATE KEYSPACE ks WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };", 0);
+    auto statement = cass_statement_new("CREATE KEYSPACE ks WITH REPLICATION = { 'class' : 'NetworkTopologyStrategy', 'replication_factor' : 1 };", 0);
     future = cass_session_execute(session, statement);
     if (cass_future_error_code(future) != CASS_OK) {
         std::cout << "Unable to create keyspace" << std::endl;

@@ -1034,7 +1034,7 @@ class FillDatabaseData(ClusterTester):
             'name': 'no_range_ghost_test',
             'create_tables': ["CREATE TABLE no_range_ghost_test (k int PRIMARY KEY, v int)",
                               "CREATE KEYSPACE ks_no_range_ghost_test with replication = "
-                              "{ 'class' : 'SimpleStrategy', 'replication_factor' : 1 };",
+                              "{ 'class' : 'NetworkTopologyStrategy', 'replication_factor' : 1 };",
                               """CREATE COLUMNFAMILY ks_no_range_ghost_test.users (
                                                                               KEY varchar PRIMARY KEY,
                                                                               password varchar,
@@ -3064,7 +3064,7 @@ class FillDatabaseData(ClusterTester):
 
             session.execute("""
                 CREATE KEYSPACE IF NOT EXISTS truncate_ks
-                WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
+                WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND durable_writes = true;
                 """)
             session.set_keyspace("truncate_ks")
 
@@ -3347,11 +3347,11 @@ class FillDatabaseData(ClusterTester):
             session.default_consistency_level = ConsistencyLevel.QUORUM
             session.execute("""
                 CREATE KEYSPACE IF NOT EXISTS scylla_bench
-                WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
+                WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND durable_writes = true;
                 """)
             session.execute(f"""
                 CREATE KEYSPACE IF NOT EXISTS {self.base_ks}
-                WITH replication = {{'class': 'SimpleStrategy', 'replication_factor': '3'}} AND durable_writes = true;
+                WITH replication = {{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}} AND durable_writes = true;
                 """)
             session.set_keyspace(self.base_ks)
 

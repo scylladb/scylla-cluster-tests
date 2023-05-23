@@ -1,6 +1,6 @@
 keyspace: keyspace1
 keyspace_definition: |
-  CREATE KEYSPACE keyspace1 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+  CREATE KEYSPACE keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 1};
 table: standard3
 table_definition: |
   CREATE TABLE standard3 (

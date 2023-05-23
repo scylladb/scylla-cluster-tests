@@ -10,7 +10,7 @@ Requires JDK8.
 For keyspace `ycsb`, table `usertable`:
 
     cqlsh> create keyspace ycsb
-        WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor': 3 };
+        WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 3 };
     cqlsh> USE ycsb;
     cqlsh> create table usertable (
         y_id varchar primary key,

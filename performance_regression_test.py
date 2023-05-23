@@ -470,7 +470,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         node = self.db_cluster.nodes[0]
         with self.db_cluster.cql_connection_patient(node) as session:
             session.execute("""
-                CREATE KEYSPACE scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}
+                CREATE KEYSPACE scylla_bench WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3}
                 AND durable_writes = true;
             """)
             session.execute("""

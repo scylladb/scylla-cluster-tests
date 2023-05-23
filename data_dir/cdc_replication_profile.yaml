@@ -2,7 +2,7 @@ keyspace: ks1
 
 keyspace_definition: |
 
-  CREATE KEYSPACE IF NOT EXISTS ks1 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
+  CREATE KEYSPACE IF NOT EXISTS ks1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND durable_writes = true;
 
 table: table1
 

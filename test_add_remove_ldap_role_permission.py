@@ -53,7 +53,7 @@ class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
         with pytest.raises(Unauthorized, match="has no CREATE permission"):
             with self.db_cluster.cql_connection_patient(node=node, user=new_test_user, password=LDAP_PASSWORD) as session:
                 session.execute(
-                    f""" CREATE KEYSPACE IF NOT EXISTS {ldap_keyspace} WITH replication = {{'class': 'SimpleStrategy',
+                    f""" CREATE KEYSPACE IF NOT EXISTS {ldap_keyspace} WITH replication = {{'class': 'NetworkTopologyStrategy',
                     'replication_factor': 1}} """)
 
         InfoEvent(message="Create a new super-user role in Scylla").publish()

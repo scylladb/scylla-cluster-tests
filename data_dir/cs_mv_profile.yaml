@@ -2,7 +2,7 @@ keyspace: mview
 
 keyspace_definition: |
 
-  CREATE KEYSPACE mview WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+  CREATE KEYSPACE mview WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};
 
 table: users
 
