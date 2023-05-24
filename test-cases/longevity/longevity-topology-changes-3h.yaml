@@ -19,6 +19,9 @@ n_loaders: 2
 n_monitor_nodes: 1
 
 instance_type_db: 'i4i.8xlarge'
+gce_instance_type_db: 'n2-highmem-32'
+gce_n_local_ssd_disk_db: 16
+
 round_robin: true
 
 nemesis_class_name: 'SisyphusMonkey'
@@ -34,3 +37,5 @@ user_prefix: 'longevity-topologychanges-asymetric-shards-3h'
 space_node_threshold: 64424
 
 db_nodes_shards_selection: "random"
+
+use_preinstalled_scylla: true

@@ -7,5 +7,6 @@ longevityPipeline(
     backend: 'gce',
     region: 'us-east1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-1TB-5days-authorization-and-tls-ssl.yaml'
+    test_config: 'test-cases/longevity/longevity-mv-si-4days.yaml'
+
 )

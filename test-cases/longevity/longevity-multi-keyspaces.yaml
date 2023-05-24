@@ -21,6 +21,9 @@ n_loaders: 10
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.8xlarge'
+gce_instance_type_db: 'n2-highmem-64'
+gce_n_local_ssd_disk_db: 16
+
 root_disk_size_db: 60 # twice as as default, cause each keyspace generate lots of logs
 instance_type_loader: 'c5.4xlarge'
 root_disk_size_monitor: 100
@@ -31,3 +34,5 @@ user_prefix: 'longevity-1000-keyspaces'
 # TODO: remove when https://github.com/scylladb/scylla-tools-java/issues/175 resolved
 stop_test_on_stress_failure: false
 use_prepared_loaders: true
+
+use_preinstalled_scylla: true
