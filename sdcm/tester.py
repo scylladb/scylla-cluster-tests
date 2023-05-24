@@ -28,7 +28,6 @@ from uuid import uuid4
 from functools import wraps, cached_property, cache
 import threading
 import signal
-import sys
 import json
 
 import botocore
@@ -71,9 +70,9 @@ from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_netwo
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import format_timestamp, wait_ami_available, update_certificates, \
-    download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
-    rows_to_list, make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, \
-    change_default_password, get_partition_keys
+    download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, rows_to_list, \
+    make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, change_default_password
+from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.git import get_git_commit_id
@@ -369,6 +368,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.params.get("use_ldap"):
             self._init_ldap()
 
+        self.partitions_attrs: PartitionsValidationAttributes | None = self._init_data_validation()
         # Cover multi-tenant configuration. Prevent event device double initiate
         start_events_device(log_dir=self.logdir,
                             _registry=getattr(self, "_registry", None) or self.events_processes_registry)
@@ -547,6 +547,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.test_config.argus_client().submit_sct_logs(logs_to_save)
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error saving logs to Argus", exc_info=True)
+
+    def _init_data_validation(self):
+        if data_validation := self.params.get('data_validation'):
+            data_validation_params = yaml.safe_load(data_validation)
+            return PartitionsValidationAttributes(tester=self, **data_validation_params)
+        return None
 
     def _init_ldap(self):
         self.params['are_ldap_users_on_scylla'] = False
@@ -2522,31 +2528,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 return True
             return False
 
-    def fetch_all_rows(self, session, default_fetch_size, statement, retries: int = 4, timeout: int = None,
-                       raise_on_exceeded: bool = False, verbose=True):
-        """
-        ******* Caution *******
-        All data from table will be read to the memory
-        BE SURE that the builder has enough memory and your dataset will be less then 2Gb.
-        """
-        if verbose:
-            self.log.debug("Fetch all rows by statement: %s", statement)
-        session.default_fetch_size = default_fetch_size
-        session.default_consistency_level = ConsistencyLevel.QUORUM
-
-        @retrying(n=retries, sleep_time=5, message='Fetch all rows', raise_on_exceeded=raise_on_exceeded)
-        def _fetch_rows() -> list:
-            result = session.execute_async(statement)
-            fetcher = PageFetcher(result).request_all() if not timeout else \
-                PageFetcher(result).request_all(timeout=timeout)
-            return fetcher.all_data()
-
-        current_rows = _fetch_rows()
-        if verbose and current_rows:
-            dataset_size = sum(sys.getsizeof(e) for e in current_rows[0]) * len(current_rows)
-            self.log.debug("Size of fetched rows: %s bytes", dataset_size)
-        return current_rows
-
     def copy_data_between_tables(self, node, src_keyspace, src_table, dest_keyspace,
                                  # pylint: disable=too-many-arguments,too-many-locals
                                  dest_table, columns_list=None):
@@ -2565,7 +2546,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             columns = result.column_names
 
             # Fetch all rows from view / table
-            source_table_rows = self.fetch_all_rows(session=session, default_fetch_size=5000, statement=statement)
+            source_table_rows = fetch_all_rows(session=session, default_fetch_size=5000, statement=statement)
             if not source_table_rows:
                 self.log.error("Can't copy data from %s. Fetch all rows failed, see error above", src_table)
                 return False
@@ -2617,51 +2598,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     return False
         self.log.debug('All rows have been copied from %s to %s', src_table, dest_table)
         return True
-
-    def collect_partitions_info(self, table_name, primary_key_column, save_into_file_name) -> dict | None:  # pylint: disable=too-many-locals
-        # Get and save how many rows in each partition.
-        # It may be used for validation data in the end of test
-        if not (table_name or primary_key_column):
-            self.log.warning('Can\'t collect partitions data. Missed "table name" or "primary key column" info')
-            return {}
-
-        error_message = "Failed to collect partition info. Error details: {}"
-        try:
-            with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0],
-                                                        connect_timeout=600) as session:
-                session.default_consistency_level = ConsistencyLevel.QUORUM
-                pk_list = get_partition_keys(ks_cf=table_name, session=session, pk_name=primary_key_column)
-        except Exception as exc:  # pylint: disable=broad-except
-            TestFrameworkEvent(source=self.__class__.__name__, message=error_message.format(exc),
-                               severity=Severity.ERROR).publish()
-            return None
-
-        # Collect data about partitions' rows amount.
-        partitions = {}
-        partitions_stats_file = os.path.join(self.logdir, save_into_file_name)
-        with open(partitions_stats_file, 'a', encoding="utf-8") as stats_file:
-            for i in pk_list:
-                self.log.debug("Next PK: {}".format(i))
-                count_pk_rows_cmd = f'select count(*) from {table_name} where {primary_key_column} = {i}' \
-                                    ' using timeout 5m'
-                try:
-                    with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0],
-                                                                connect_timeout=600) as session:
-                        pk_rows_num_query_result = self.fetch_all_rows(session=session, default_fetch_size=3000,
-                                                                       statement=count_pk_rows_cmd, retries=1, timeout=600,
-                                                                       raise_on_exceeded=True)
-                        pk_rows_num_result = pk_rows_num_query_result[0].count
-                except Exception as exc:  # pylint: disable=broad-except
-                    TestFrameworkEvent(source=self.__class__.__name__, message=error_message.format(exc),
-                                       severity=Severity.ERROR).publish()
-                    return None
-
-                self.log.debug('Count result: %s', pk_rows_num_result)
-                partitions[i] = pk_rows_num_result
-                stats_file.write('{i}:{rows}, '.format(i=i, rows=partitions[i]))
-        self.log.info('File with partitions row data: {}'.format(partitions_stats_file))
-
-        return partitions
 
     def get_tables_id_of_keyspace(self, session, keyspace_name):
         query = "SELECT id FROM system_schema.tables WHERE keyspace_name='{}' ".format(keyspace_name)

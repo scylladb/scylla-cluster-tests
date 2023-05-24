@@ -140,6 +140,7 @@ from typing import NamedTuple, Optional
 
 from sdcm.sct_events import Severity
 from sdcm.test_config import TestConfig
+from sdcm.utils.database_query_utils import fetch_all_rows
 
 from sdcm.utils.user_profile import get_profile_content
 from sdcm.sct_events.health import DataValidatorEvent
@@ -405,9 +406,8 @@ class LongevityDataValidator:
         pk_name = self.base_table_partition_keys[0]
         with self.longevity_self_object.db_cluster.cql_connection_patient(
                 self.longevity_self_object.db_cluster.nodes[0], keyspace=self.keyspace_name) as session:
-            rows_before_deletion = self.longevity_self_object.fetch_all_rows(
-                session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-                statement=f"SELECT {pk_name} FROM {self.view_name_for_deletion_data}")
+            rows_before_deletion = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
+                                                  statement=f"SELECT {pk_name} FROM {self.view_name_for_deletion_data}")
             if rows_before_deletion:
                 self.rows_before_deletion = len(rows_before_deletion)
                 LOGGER.debug("%s rows for deletion", self.rows_before_deletion)
@@ -431,10 +431,9 @@ class LongevityDataValidator:
         if not during_nemesis:
             LOGGER.debug('Verify immutable rows')
 
-        actual_result = self.longevity_self_object.fetch_all_rows(
-            session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-            statement=f"SELECT * FROM {self.view_name_for_not_updated_data}",
-            verbose=not during_nemesis)
+        actual_result = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
+                                       statement=f"SELECT * FROM {self.view_name_for_not_updated_data}",
+                                       verbose=not during_nemesis)
         if not actual_result:
             DataValidatorEvent.ImmutableRowsValidator(
                 severity=Severity.WARNING,
@@ -444,10 +443,9 @@ class LongevityDataValidator:
             ).publish()
             return
 
-        expected_result = self.longevity_self_object.fetch_all_rows(
-            session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-            statement=f"SELECT * FROM {self.expected_data_table_name}",
-            verbose=not during_nemesis)
+        expected_result = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
+                                         statement=f"SELECT * FROM {self.expected_data_table_name}",
+                                         verbose=not during_nemesis)
         if not expected_result:
             DataValidatorEvent.ImmutableRowsValidator(
                 severity=Severity.WARNING,
@@ -508,10 +506,9 @@ class LongevityDataValidator:
         # views_set[3] - do perform validation for the view or not
         partition_keys = ', '.join(self.base_table_partition_keys)
 
-        before_update_rows = self.longevity_self_object.fetch_all_rows(
-            session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-            statement=f"SELECT {partition_keys} FROM {views_set[0]}",
-            verbose=not during_nemesis)
+        before_update_rows = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
+                                            statement=f"SELECT {partition_keys} FROM {views_set[0]}",
+                                            verbose=not during_nemesis)
         if not before_update_rows:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.WARNING,
@@ -520,10 +517,9 @@ class LongevityDataValidator:
             ).publish()
             return None
 
-        after_update_rows = self.longevity_self_object.fetch_all_rows(
-            session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-            statement=f"SELECT {partition_keys} FROM {views_set[1]}",
-            verbose=not during_nemesis)
+        after_update_rows = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
+                                           statement=f"SELECT {partition_keys} FROM {views_set[1]}",
+                                           verbose=not during_nemesis)
         if not after_update_rows:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.WARNING,
@@ -532,10 +528,9 @@ class LongevityDataValidator:
             ).publish()
             return None
 
-        expected_rows = self.longevity_self_object.fetch_all_rows(
-            session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
-            statement=f"SELECT {partition_keys} FROM {views_set[2]}",
-            verbose=not during_nemesis)
+        expected_rows = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
+                                       statement=f"SELECT {partition_keys} FROM {views_set[2]}",
+                                       verbose=not during_nemesis)
         if not expected_rows:
             DataValidatorEvent.UpdatedRowsValidator(
                 severity=Severity.WARNING,
@@ -769,11 +764,9 @@ class LongevityDataValidator:
         if not during_nemesis:
             LOGGER.debug('Verify deleted rows')
 
-        actual_result = self.longevity_self_object.fetch_all_rows(session=session,
-                                                                  default_fetch_size=self.DEFAULT_FETCH_SIZE,
-                                                                  statement=f"SELECT {pk_name} FROM "
-                                                                            f"{self.view_name_for_deletion_data}",
-                                                                  verbose=not during_nemesis)
+        actual_result = fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
+                                       statement=f"SELECT {pk_name} FROM "
+                                                 f"{self.view_name_for_deletion_data}", verbose=not during_nemesis)
         if actual_result is None:
             DataValidatorEvent.DeletedRowsValidator(
                 severity=Severity.ERROR,

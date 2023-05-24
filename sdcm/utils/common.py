@@ -3033,43 +3033,6 @@ def clear_out_all_exit_hooks():
     threading._threading_atexits.clear()  # pylint: disable=protected-access
 
 
-def get_partition_keys(ks_cf: str, session, pk_name: str = 'pk', limit: int = None) -> List[str]:
-    """
-    Return list of partitions from a requested table
-    :param session:
-    :param ks_cf:
-    :param limit:
-    :param pk_name:
-    :return:
-    """
-    cmd = f'select distinct {pk_name} from {ks_cf}'
-    if limit:
-        cmd += f' limit {limit}'
-    cql_result = session.execute(cmd)
-    pks_list = [getattr(row, pk_name) for row in cql_result.current_rows]
-    return pks_list
-
-
-def get_table_clustering_order(ks_cf: str, ck_name: str, session) -> str:
-    """
-    Return list of partitions from a requested table
-    :param ck_name:
-    :param session:
-    :param ks_cf:
-    :return: clustering-order string - ASC/DESC
-
-    Example query: SELECT clustering_order from system_schema.columns WHERE keyspace_name = 'scylla_bench'
-    and table_name = 'test' and column_name = 'ck'
-    """
-    keyspace, table = ks_cf.split('.')
-    cmd = f"SELECT clustering_order from system_schema.columns WHERE keyspace_name = '{keyspace}' " \
-          f"and table_name = '{table}' and column_name = '{ck_name}'"
-    cql_result = session.execute(cmd)
-    clustering_order = cql_result.current_rows[0].clustering_order
-    LOGGER.info('Retrieved a clustering-order of: %s for table %s', clustering_order, ks_cf)
-    return clustering_order
-
-
 def validate_if_scylla_load_high_enough(start_time, wait_cpu_utilization, prometheus_stats,
                                         event_severity=Severity.ERROR, instance=None):
     end_time = int(time.time())

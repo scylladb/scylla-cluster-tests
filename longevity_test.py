@@ -128,17 +128,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             InfoEvent(message=f"Growing cluster finished, new cluster size is {node_cnt}").publish()
 
         # Collect data about partitions and their rows amount
-        validate_partitions = self.params.get('validate_partitions')
-        table_name, primary_key_column, partitions_dict_before = '', '', {}
-        if validate_partitions:
-            table_name = self.params.get('table_name')
-            primary_key_column = self.params.get('primary_key_column')
-            self.log.debug('Save partitions info before reads')
-            partitions_dict_before = self.collect_partitions_info(table_name=table_name,
-                                                                  primary_key_column=primary_key_column,
-                                                                  save_into_file_name='partitions_rows_before.log')
-            if partitions_dict_before is None:
-                validate_partitions = False
+        if self.partitions_attrs and self.partitions_attrs.validate_partitions:
+            self.partitions_attrs.collect_initial_partitions_info()
 
         stress_cmd = self.params.get('stress_cmd')
         self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
@@ -174,14 +165,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         for stress in stress_queue:
             self.verify_stress_thread(cs_thread_pool=stress)
 
-        if (stress_read_cmd or stress_cmd) and validate_partitions:
-            self.log.debug('Save partitions info after reads')
-            partitions_dict_after = self.collect_partitions_info(table_name=table_name,
-                                                                 primary_key_column=primary_key_column,
-                                                                 save_into_file_name='partitions_rows_after.log')
-            if partitions_dict_after is not None:
-                self.assertEqual(partitions_dict_before, partitions_dict_after,
-                                 msg='Row amount in partitions is not same before and after running of nemesis')
+        if self.partitions_attrs and self.partitions_attrs.validate_partitions:
+            self.partitions_attrs.validate_rows_per_partitions(ignore_limit_rows_number=True)
 
     def test_batch_custom_time(self):
         """

@@ -31,6 +31,7 @@ from cassandra import ConsistencyLevel
 from cassandra.protocol import ProtocolException  # pylint: disable=no-name-in-module
 
 from sdcm.tester import ClusterTester
+from sdcm.utils.database_query_utils import fetch_all_rows
 from sdcm.utils.decorators import retrying
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
 from sdcm.utils.version_utils import ComparableScyllaVersion
@@ -3387,7 +3388,7 @@ class FillDatabaseData(ClusterTester):
                 assert f'Query "{statement}" returned no entries'
             self.log.info('running now fetch_all_rows')
             full_res = self.rows_to_list(
-                self.fetch_all_rows(session=session, default_fetch_size=100, statement=statement))
+                fetch_all_rows(session=session, default_fetch_size=100, statement=statement))
             if not full_res:
                 assert f'Paged query "{statement}" returned no value'
             self.log.info('will now compare results from session.execute and fetch_all_rows')

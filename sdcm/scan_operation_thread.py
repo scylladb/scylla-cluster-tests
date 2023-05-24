@@ -16,7 +16,7 @@ from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import FullScanEvent, FullPartitionScanReversedOrderEvent, FullPartitionScanEvent, \
     FullScanAggregateEvent
-from sdcm.utils.common import get_table_clustering_order, get_partition_keys
+from sdcm.utils.database_query_utils import get_table_clustering_order, get_partition_keys
 from sdcm.utils.operations_thread import OperationThreadStats, OneOperationStat, OperationThread, ThreadParams
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.test_config import TestConfig

@@ -1,7 +1,5 @@
 test_duration: 600
 
-max_partitions_in_test_table: 400
-partition_range_with_data_validation: 0-100
 prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=5555                       -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data" ,
                      "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=5555 -partition-offset=101 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s",
                      "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=5555 -partition-offset=201 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s",
@@ -61,3 +59,12 @@ space_node_threshold: 644245094
 run_fullscan: ['{"mode": "partition", "ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 5555, "validate_data": true}']
 
 use_preinstalled_scylla: true
+# To validate rows in partitions: collect data about partitions and their rows amount
+# before and after running nemesis and compare it
+data_validation: |
+  validate_partitions: true
+  table_name: "scylla_bench.test"
+  primary_key_column: "pk"
+  max_partitions_in_test_table: 400
+  partition_range_with_data_validation: 0-100
+  limit_rows_number: 10000
