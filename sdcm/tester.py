@@ -512,8 +512,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             last_events = get_events_grouped_by_category(
                 limit=last_events_limit, _registry=self.events_processes_registry)
             events_sorted = []
+            events_summary = get_logger_event_summary()
             for severity, messages in last_events.items():
-                event_category = EventsInfo(severity=severity, total_events=len(messages), messages=messages)
+                event_category = EventsInfo(
+                    severity=severity, total_events=events_summary.get(severity, 0), messages=messages)
                 events_sorted.append(event_category)
             self.test_config.argus_client().submit_events(events_sorted)
         except Exception:  # pylint: disable=broad-except
