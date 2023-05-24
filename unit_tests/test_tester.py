@@ -85,6 +85,9 @@ class ClusterTesterForTests(ClusterTester):
     def update_certificates():
         pass
 
+    def argus_finalize_test_run(self):
+        pass
+
     @property
     def elasticsearch(self):  # pylint: disable=invalid-overridden-method
         return None
