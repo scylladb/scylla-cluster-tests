@@ -38,7 +38,8 @@ n_db_nodes: 4
 # Instance types
 instance_type_db: 'i3.4xlarge'
 azure_instance_type_db: 'Standard_L16s_v3'
-gce_instance_type_db: 'n1-highmem-32'
+gce_instance_type_db: 'n2-highmem-32'
+gce_n_local_ssd_disk_db: 16
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '007'
