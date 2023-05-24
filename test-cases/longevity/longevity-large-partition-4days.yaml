@@ -1,6 +1,5 @@
 test_duration: 6480
 
-
 prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=6 -clustering-row-count=10000000 -clustering-row-size=2048 -concurrency=8 -rows-per-request=2000 -timeout=180s -connection-count 8 -retry-number=3 -retry-interval=40s -consistency-level=all",
                      "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=6 -clustering-row-count=10000000 -partition-offset=6 -clustering-row-size=2048 -concurrency=8 -rows-per-request=2000 -timeout=180s -connection-count 8 -retry-number=3 -retry-interval=40s -consistency-level=all",
                      "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=7 -clustering-row-count=10000000 -partition-offset=12 -clustering-row-size=2048 -concurrency=8 -rows-per-request=2000 -timeout=180s -connection-count 8 -retry-number=3 -retry-interval=40s -consistency-level=all",
@@ -39,9 +38,13 @@ space_node_threshold: 644245094
 
 # To validate rows in partitions: collect data about partitions and their rows amount
 # before and after running nemesis and compare it
-validate_partitions: true
-table_name: "scylla_bench.test"
-primary_key_column: "pk"
+data_validation: |
+  validate_partitions: true
+  table_name: "scylla_bench.test"
+  primary_key_column: "pk"
+  max_partitions_in_test_table: 60
+  partition_range_with_data_validation: 0-50
+  limit_rows_number: 20000
 
 # TODO: uncomment the fullscan part when following bug gets fixed:
 #       https://github.com/scylladb/scylla-cluster-tests/issues/6056

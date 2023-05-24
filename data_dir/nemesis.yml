@@ -36,14 +36,17 @@
   - disruptive = False
   - kubernetes = True
   - free_tier_set = True
+  - delete_rows = True
 - disrupt_delete_by_rows_range:
   - disruptive = False
   - kubernetes = True
   - free_tier_set = True
+  - delete_rows = True
 - disrupt_delete_overlapping_row_ranges:
   - disruptive = False
   - kubernetes = True
   - free_tier_set = True
+  - delete_rows = True
 - disrupt_destroy_data_then_rebuild:
   - disruptive = True
   - kubernetes = True

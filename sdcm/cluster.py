@@ -4257,6 +4257,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 return
 
             self.check_nodes_running_nemesis_count()
+            if partitions_attrs := self.test_config.tester_obj().partitions_attrs:
+                partitions_attrs.validate_rows_per_partitions()
             chc_event.message = "Cluster health check finished"
 
     def check_nodes_running_nemesis_count(self):

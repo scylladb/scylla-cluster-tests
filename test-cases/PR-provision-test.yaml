@@ -1,5 +1,11 @@
 test_duration: 60
-max_partitions_in_test_table: 10
+data_validation: |
+  validate_partitions: false
+  table_name: "scylla_bench.test"
+  primary_key_column: "pk"
+  max_partitions_in_test_table: 10
+  partition_range_with_data_validation: 0-10
+
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5",
              "cassandra-stress counter_write cl=QUORUM duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=TimeWindowCompactionStrategy)' -mode cql3 native -rate threads=5 -pop seq=1..10000000"
              ]

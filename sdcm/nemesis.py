@@ -180,6 +180,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     config_changes: bool = False
     free_tier_set: bool = False     # nemesis should be run in FreeTierNemesisSet
     manager_operation: bool = False  # flag that signals that the nemesis uses scylla manager
+    delete_rows: bool = False  # A flag denotes a nemesis deletes partitions/rows, generating tombstones.
 
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, **kwargs):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(self, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
@@ -2085,11 +2086,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if 'scylla_bench' not in test_keyspaces:
             raise UnsupportedNemesis("This nemesis can run on scylla_bench test only")
 
-        max_partitions_in_test_table = self.cluster.params.get('max_partitions_in_test_table')
-
-        if not max_partitions_in_test_table:
+        if not self.tester.partitions_attrs.max_partitions_in_test_table:
             raise UnsupportedNemesis(
-                'This nemesis expects mandatory "max_partitions_in_test_table" parameter to be set')
+                'This nemesis expects "max_partitions_in_test_table" sub-parameter of data_validation to be set')
 
     # pylint: disable=too-many-locals
     def choose_partitions_for_delete(self, partitions_amount, ks_cf, with_clustering_key_data=False,
@@ -2106,23 +2105,20 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         # In the large partition tests part of partitions are used for data validation. We do not want to delete a data in those partitions
         # to prevent scylla-bench command failure
-        max_partitions_in_test_table = self.cluster.params.get('max_partitions_in_test_table')
-        partition_range_with_data_validation = self.cluster.params.get('partition_range_with_data_validation')
 
-        if partition_range_with_data_validation and '-' in partition_range_with_data_validation:
-            partition_range_splitted = partition_range_with_data_validation.split('-')
-            start_range = int(partition_range_splitted[0])
-            end_range = int(partition_range_splitted[1])
-            exclude_partitions.extend(i for i in range(start_range, end_range))
-            if partitions_amount == max_partitions_in_test_table:
-                partitions_amount -= end_range - start_range
+        if partitions_attrs := self.tester.partitions_attrs:
+            if partitions_attrs.partition_range_with_data_validation:
+                exclude_partitions.extend(
+                    i for i in range(partitions_attrs.partition_start_range, partitions_attrs.partition_end_range))
+                if partitions_amount == partitions_attrs.max_partitions_in_test_table:
+                    partitions_amount -= partitions_attrs.partition_end_range - partitions_attrs.partition_start_range
         self.log.debug(f"Partitions amount for delete : {partitions_amount}")
 
         partitions_for_delete = defaultdict(list)
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
             session.default_consistency_level = ConsistencyLevel.ONE
 
-            for partition_key in [i * 2 + 50 for i in range(max_partitions_in_test_table)]:
+            for partition_key in [i * 2 + 50 for i in range(self.tester.partitions_attrs.max_partitions_in_test_table)]:
                 if len(partitions_for_delete) == partitions_amount:
                     break
 
@@ -2213,7 +2209,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug('Delete by range - half of partition')
 
         # Select half of partitions because we need available partitions in the next step: delete_range_in_few_partitions module
-        partitions_amount = self.cluster.params.get('max_partitions_in_test_table') / 2
+        partitions_amount = self.tester.partitions_attrs.max_partitions_in_test_table / 2
         self.log.debug('delete_half_partition.partitions_amount: %s', partitions_amount)
         partitions_for_delete = self.choose_partitions_for_delete(partitions_amount=partitions_amount,
                                                                   ks_cf=ks_cf,
@@ -2230,7 +2226,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def delete_by_range_using_timestamp(self, ks_cf: str):
         self.log.debug('Delete by range - using timestamp')
 
-        partitions_for_delete = self.choose_partitions_for_delete(self.cluster.params.get('max_partitions_in_test_table'), ks_cf,
+        partitions_for_delete = self.choose_partitions_for_delete(self.tester.partitions_attrs.max_partitions_in_test_table, ks_cf,
                                                                   with_clustering_key_data=False)
         if not partitions_for_delete:
             message = "Unable to find partitions to delete"
@@ -2256,7 +2252,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug('Delete same range in the few partitions')
 
         partitions_for_exclude = list(partitions_for_exclude_dict.keys())
-        partitions_for_delete = self.choose_partitions_for_delete(self.cluster.params.get('max_partitions_in_test_table'), ks_cf,
+        partitions_for_delete = self.choose_partitions_for_delete(self.tester.partitions_attrs.max_partitions_in_test_table, ks_cf,
                                                                   with_clustering_key_data=True,
                                                                   exclude_partitions=partitions_for_exclude)
         if not partitions_for_delete:
@@ -2308,7 +2304,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         self.verify_initial_inputs_for_delete_nemesis()
         ks_cf = 'scylla_bench.test'
-        partitions_for_delete = self.choose_partitions_for_delete(self.cluster.params.get('max_partitions_in_test_table'), ks_cf,
+        partitions_for_delete = self.choose_partitions_for_delete(self.tester.partitions_attrs.max_partitions_in_test_table, ks_cf,
                                                                   with_clustering_key_data=True)
         if not partitions_for_delete:
             self.log.error('No partitions for delete found!')
@@ -5399,6 +5395,7 @@ class DeleteByPartitionsMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     free_tier_set = True
+    delete_rows = True
 
     def disrupt(self):
         self.disrupt_delete_10_full_partitions()
@@ -5408,6 +5405,7 @@ class DeleteByRowsRangeMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     free_tier_set = True
+    delete_rows = True
 
     def disrupt(self):
         self.disrupt_delete_by_rows_range()
@@ -5417,6 +5415,7 @@ class DeleteOverlappingRowRangesMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     free_tier_set = True
+    delete_rows = True
 
     def disrupt(self):
         self.disrupt_delete_overlapping_row_ranges()
