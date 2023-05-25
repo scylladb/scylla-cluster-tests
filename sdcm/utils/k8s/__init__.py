@@ -323,11 +323,12 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
     @classmethod
     def apply_file(cls, kluster, config_path, namespace=None,  # pylint: disable=too-many-locals,too-many-branches
                    timeout=KUBECTL_TIMEOUT, environ=None, envsubst=True,
-                   modifiers: List[Callable] = None):
+                   modifiers: List[Callable] = None, server_side=False):
         if environ:
             environ_str = (' '.join([f'{name}="{value}"' for name, value in environ.items()])) + ' '
         else:
             environ_str = ''
+        server_side_arg = "--server-side" if server_side else ""
 
         config_paths = []
         if os.path.isdir(config_path):
@@ -362,7 +363,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                 @retrying(n=0, sleep_time=5, timeout=timeout, allowed_exceptions=RuntimeError)
                 def run_kubectl(file_name):
                     try:
-                        cls.kubectl(kluster, "apply", "-f", file_name,
+                        cls.kubectl(kluster, "apply", server_side_arg, "-f", file_name,
                                     namespace=namespace, timeout=timeout)
                     except invoke.exceptions.UnexpectedExit as exc:
                         if 'did you specify the right host or port' in exc.result.stderr:
