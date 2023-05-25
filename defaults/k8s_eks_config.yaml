@@ -16,7 +16,7 @@ eks_nodegroup_role_arn: 'arn:aws:iam::797456418907:role/helm-test-worker-nodes-N
 # NOTE: https://docs.aws.amazon.com/eks/latest/userguide/managing-vpc-cni.html
 eks_vpc_cni_version: 'v1.12.6-eksbuild.1'
 
-scylla_version: '4.5.3'
+scylla_version: '5.2.1'
 scylla_mgmt_agent_version: '3.0.0'
 k8s_cert_manager_version: '1.8.0'
 
@@ -66,4 +66,4 @@ backup_bucket_location: 'minio-bucket'
 #       It will allow to test 'serverless' feature against any stable Scylla release
 #       with old 'cassandra-stress' binary.
 stress_image:
-  cassandra-stress: 'scylladb/scylla-nightly:5.2.0-rc0-0.20230119.34ab98e1be2e'
+  cassandra-stress: 'scylladb/scylla:5.2.1'

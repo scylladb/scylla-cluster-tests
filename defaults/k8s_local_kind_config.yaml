@@ -4,7 +4,7 @@ mini_k8s_version: '0.17.0'
 n_db_nodes: 4
 k8s_n_scylla_pods_per_cluster: 3
 
-scylla_version: '4.6.3'
+scylla_version: '5.2.1'
 scylla_mgmt_agent_version: '3.0.0'
 mgmt_docker_image: 'scylladb/scylla-manager:3.0.0'
 
@@ -48,4 +48,4 @@ backup_bucket_location: 'minio-bucket'
 #       It will allow to test 'serverless' feature against any stable Scylla release
 #       with old 'cassandra-stress' binary.
 stress_image:
-  cassandra-stress: 'scylladb/scylla-nightly:5.2.0-rc0-0.20230119.34ab98e1be2e'
+  cassandra-stress: 'scylladb/scylla:5.2.1'
