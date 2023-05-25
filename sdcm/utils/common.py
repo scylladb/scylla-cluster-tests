@@ -2667,7 +2667,7 @@ class PageFetcher:
         """
         return self.pages[page_num - 1].data
 
-    def all_data(self):
+    def all_data(self, return_row_as_dict=False):
         """
         Returns all retrieved data flattened into a single list (instead of separated into Page objects).
 
@@ -2676,6 +2676,9 @@ class PageFetcher:
         all_pages_combined = []
         for page in self.pages:
             all_pages_combined.extend(page.data[:])
+
+        if return_row_as_dict:
+            return [row._asdict() for row in all_pages_combined]
 
         return all_pages_combined
 

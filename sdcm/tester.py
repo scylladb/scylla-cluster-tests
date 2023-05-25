@@ -2503,7 +2503,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return False
 
     def fetch_all_rows(self, session, default_fetch_size, statement, retries: int = 4, timeout: int = None,
-                       raise_on_exceeded: bool = False, verbose=True):
+                       raise_on_exceeded: bool = False, verbose=True, return_row_as_dict=False):
         """
         ******* Caution *******
         All data from table will be read to the memory
@@ -2519,7 +2519,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             result = session.execute_async(statement)
             fetcher = PageFetcher(result).request_all() if not timeout else \
                 PageFetcher(result).request_all(timeout=timeout)
-            return fetcher.all_data()
+            return fetcher.all_data(return_row_as_dict=return_row_as_dict)
 
         current_rows = _fetch_rows()
         if verbose and current_rows:
