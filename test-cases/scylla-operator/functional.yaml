@@ -18,8 +18,8 @@ k8s_cert_manager_version: '1.8.0'
 # Possible values for the 'k8s_scylla_operator_helm_repo' option are following:
 # - https://storage.googleapis.com/scylla-operator-charts/latest
 # - https://storage.googleapis.com/scylla-operator-charts/stable
-k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/stable'
-k8s_scylla_operator_chart_version: 'v1.8.0'
+k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'
+k8s_scylla_operator_chart_version: 'latest'
 # NOTE: If 'k8s_scylla_operator_docker_image' option is not set
 # then the one from helm chart will be used.
 k8s_scylla_operator_docker_image: ''
