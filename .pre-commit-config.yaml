@@ -16,10 +16,15 @@ repos:
                 tests/.*|
                 data_dir/scylla\.yaml|
                 sdcm/k8s_configs/minio/templates/.*|
+                sdcm/k8s_configs/monitoring/prometheus-operator/.*|
                 sdcm/k8s_configs/provisioner/templates/.*|
                 sdcm/k8s_configs/eks/storageclass.yaml
             )$
     -   id: check-added-large-files
+        exclude: >
+            (?x)^(
+                sdcm/k8s_configs/monitoring/prometheus-operator/.*
+            )$
     -   id: check-json
     -   id: detect-aws-credentials
     -   id: detect-private-key
