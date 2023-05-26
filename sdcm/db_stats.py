@@ -201,10 +201,12 @@ def get_cdcreader_cmd_params(cmd):
 
 
 class PrometheusDBStats:
-    def __init__(self, host, port=9090, alternator=None):
+    def __init__(self, host, port=9090, protocol='http', alternator=None):
         self.host = host
         self.port = port
-        self.range_query_url = "http://{}:{}/api/v1/query_range?query=".format(normalize_ipv6_url(host), port)
+        self.protocol = protocol
+        self.range_query_url = "{}://{}:{}/api/v1/query_range?query=".format(
+            protocol, normalize_ipv6_url(host), port)
         self.config = self.get_configuration()
         self.alternator = alternator
 
@@ -212,13 +214,15 @@ class PrometheusDBStats:
     def scylla_scrape_interval(self):
         return int(self.config["scrape_configs"]["scylla"]["scrape_interval"][:-1])
 
-    @staticmethod
     @retrying(n=5, sleep_time=7, allowed_exceptions=(requests.ConnectionError, requests.HTTPError))
-    def request(url, post=False):
+    def request(self, url, post=False):
+        kwargs = {}
+        if self.protocol == 'https':
+            kwargs['verify'] = False
         if post:
-            response = requests.post(url)
+            response = requests.post(url, **kwargs)
         else:
-            response = requests.get(url)
+            response = requests.get(url, **kwargs)
         response.raise_for_status()
 
         result = json.loads(response.content)
@@ -230,7 +234,8 @@ class PrometheusDBStats:
         return None
 
     def get_configuration(self):
-        result = self.request(url="http://{}:{}/api/v1/status/config".format(normalize_ipv6_url(self.host), self.port))
+        result = self.request(url="{}://{}:{}/api/v1/status/config".format(
+            self.protocol, normalize_ipv6_url(self.host), self.port))
         configs = yaml.safe_load(result["data"]["yaml"])
         LOGGER.debug("Parsed Prometheus configs: %s", configs)
         new_scrape_configs = {}
@@ -250,7 +255,7 @@ class PrometheusDBStats:
                   values: [[linux_timestamp1, value1], [linux_timestamp2, value2]...[linux_timestampN, valueN]]
                  }
         """
-        url = "http://{}:{}/api/v1/query_range?query=".format(normalize_ipv6_url(self.host), self.port)
+        url = "{}://{}:{}/api/v1/query_range?query=".format(self.protocol, normalize_ipv6_url(self.host), self.port)
         if not scrap_metrics_step:
             scrap_metrics_step = self.scylla_scrape_interval
         _query = "{url}{query}&start={start}&end={end}&step={scrap_metrics_step}".format(
