@@ -895,6 +895,8 @@ class SCTConfiguration(dict):
                   "in a searate retryable API call not having resource reservations)."),
         dict(name="k8s_instance_type_auxiliary", env="SCT_K8S_INSTANCE_TYPE_AUXILIARY", type=str,
              help="Instance type for the nodes of the K8S auxiliary/default node pool."),
+        dict(name="k8s_instance_type_monitor", env="SCT_K8S_INSTANCE_TYPE_MONITOR", type=str,
+             help="Instance type for the nodes of the K8S monitoring node pool."),
 
         dict(name="mini_k8s_version", env="SCT_MINI_K8S_VERSION", type=str,
              help=""),
@@ -920,6 +922,9 @@ class SCTConfiguration(dict):
 
         dict(name="k8s_n_auxiliary_nodes", env="SCT_K8S_N_AUXILIARY_NODES", type=int,
              help="Number of nodes in auxiliary pool"),
+        dict(name="k8s_n_monitor_nodes", env="SCT_K8S_N_MONITOR_NODES", type=int,
+             help="Number of nodes in monitoring pool that will be used for scylla-operator's "
+                  "deployed monitoring pods."),
 
         # docker config options
         dict(name="mgmt_docker_image", env="SCT_MGMT_DOCKER_IMAGE", type=str,

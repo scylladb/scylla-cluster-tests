@@ -52,7 +52,7 @@ from sdcm.cluster import DeadNode, ClusterNodesNotReady
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.test_config import TestConfig
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.remote import NETWORK_EXCEPTIONS
+from sdcm.remote import LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm.remote.kubernetes_cmd_runner import (
     KubernetesCmdRunner,
     KubernetesPodRunner,
@@ -64,6 +64,7 @@ from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils import properties
 import sdcm.utils.sstable.load_inventory as datasets
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.common import download_from_github, shorten_cluster_name, walk_thru_data
 from sdcm.utils.k8s import (
     add_pool_node_affinity,
@@ -105,12 +106,8 @@ LOADER_STS_CONFIG_PATH = sct_abs_path("sdcm/k8s_configs/loaders/sts.yaml")
 LOCAL_PROVISIONER_FILE = sct_abs_path("sdcm/k8s_configs/static-local-volume-provisioner.yaml")
 LOCAL_MINIO_DIR = sct_abs_path("sdcm/k8s_configs/minio")
 INGRESS_CONTROLLER_CONFIG_PATH = sct_abs_path("sdcm/k8s_configs/ingress-controller")
-
-SCYLLA_MANAGER_SERVICE_MONITOR_CONFIG_PATH = sct_abs_path(
-    "sdcm/k8s_configs/monitoring/scylla-manager-service-monitor.yaml")
-SCYLLA_SERVICE_MONITOR_CONFIG_PATH = sct_abs_path(
-    "sdcm/k8s_configs/monitoring/scylla-service-monitor.yaml")
-KUBE_PROMETHEUS_STACK_CHART_VALUES_PATH = sct_abs_path("sdcm/k8s_configs/monitoring/values.yaml")
+PROMETHEUS_OPERATOR_CONFIG_PATH = sct_abs_path("sdcm/k8s_configs/monitoring/prometheus-operator")
+SCYLLA_MONITORING_CONFIG_PATH = sct_abs_path("sdcm/k8s_configs/monitoring/scylladbmonitoring-template.yaml")
 
 SCYLLA_API_VERSION = "scylla.scylladb.com/v1"
 SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
@@ -119,6 +116,7 @@ SCYLLA_OPERATOR_NAMESPACE = "scylla-operator"
 SCYLLA_MANAGER_NAMESPACE = "scylla-manager"
 SCYLLA_NAMESPACE = "scylla"
 INGRESS_CONTROLLER_NAMESPACE = "haproxy-controller"
+PROMETHEUS_OPERATOR_NAMESPACE = "prometheus-operator"
 LOADER_NAMESPACE = "sct-loaders"
 MINIO_NAMESPACE = "minio"
 SCYLLA_CONFIG_NAME = "scylla-config"
@@ -1252,6 +1250,123 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 namespace=namespace,
             )
 
+    @cached_property
+    def _affinity_modifiers_for_monitoring_resources(self):
+        node_pool = self.pools.get(self.MONITORING_POOL_NAME)
+        if not node_pool:
+            LOGGER.warning(
+                "'Monitoring' node pool was not found."
+                " Will schedule 'monitoring' resources creation in the 'Auxiliary' one.")
+            node_pool = self.pools.get(self.AUXILIARY_POOL_NAME)
+        affinity_modifiers = node_pool.affinity_modifiers if node_pool else None
+        if not affinity_modifiers:
+            LOGGER.warning(
+                "'Auxiliary' node pool was not found."
+                " Will schedule 'monitoring' resources creation without affinity rules.")
+        return affinity_modifiers
+
+    @log_run_info
+    def deploy_prometheus_operator(self) -> None:
+        LOGGER.info("Deploy Prometheus operator")
+        if not self.params.get('reuse_cluster'):
+            # NOTE: apply configs on the 'server' side to avoid following error:
+            #         The CustomResourceDefinition "prometheuses.monitoring.coreos.com" is invalid:\
+            #           metadata.annotations: Too long: must have at most 262144 bytes
+            self.apply_file(PROMETHEUS_OPERATOR_CONFIG_PATH,
+                            namespace=PROMETHEUS_OPERATOR_NAMESPACE,
+                            modifiers=self._affinity_modifiers_for_monitoring_resources,
+                            envsubst=False, server_side=True)
+            time.sleep(3)
+        self.kubectl("rollout status deployment prometheus-operator", namespace=PROMETHEUS_OPERATOR_NAMESPACE)
+
+    def deploy_scylla_cluster_monitoring(self, cluster_name: str, namespace: str,
+                                         monitoring_type: str = "Platform") -> None:
+        LOGGER.info("Deploy 'ScyllaDBMonitoring' (type: %s) for the '%s' Scylla cluster in the '%s' namespace",
+                    monitoring_type, cluster_name, namespace)
+        self.apply_file(
+            SCYLLA_MONITORING_CONFIG_PATH,
+            modifiers=self._affinity_modifiers_for_monitoring_resources,
+            environ={
+                "SCT_SCYLLA_CLUSTER_NAME": cluster_name,
+                "SCT_SCYLLA_CLUSTER_NAMESPACE": namespace,
+                "SCT_SCYLLA_CLUSTER_MONITORING_TYPE": monitoring_type,
+            })
+        for condition in ("Progressing=False", "Degraded=False", "Available=True"):
+            self.kubectl_wait(f"--for='condition={condition}' scylladbmonitoring {cluster_name}",
+                              namespace=namespace, timeout=600)
+        self.kubectl(f"rollout status sts prometheus-{cluster_name}", namespace=namespace)
+        self.kubectl(f"rollout status deployment {cluster_name}-grafana", namespace=namespace)
+
+    def delete_scylla_cluster_monitoring(self, namespace: str) -> None:
+        self.kubectl("delete --all --wait=true ScyllaDBMonitoring", namespace=namespace, ignore_status=True)
+        time.sleep(1)
+
+    def get_grafana_ip(self, cluster_name: str, namespace: str) -> str:
+        if self.cluster_backend in ("k8s-eks", "k8s-gke"):
+            cmd = (f"get pod -l scylla-operator.scylladb.com/deployment-name={cluster_name}-grafana"
+                   " --no-headers -o custom-columns=:.status.podIP")
+        else:
+            cmd = f"get svc {cluster_name}-grafana --no-headers -o custom-columns=:.spec.clusterIP"
+        return self.kubectl(cmd, namespace=namespace).stdout.strip()
+
+    @property
+    def grafana_port(self) -> int:
+        return 3000
+
+    def get_prometheus_ip(self, cluster_name: str, namespace: str) -> str:
+        if self.cluster_backend in ("k8s-eks", "k8s-gke"):
+            cmd = f"get pod -l prometheus={cluster_name} --no-headers -o custom-columns=:.status.podIP"
+        else:
+            cmd = f"get svc {cluster_name}-prometheus --no-headers -o custom-columns=:.spec.clusterIP"
+        return self.kubectl(cmd, namespace=namespace).stdout.strip()
+
+    @property
+    def prometheus_port(self) -> int:
+        return 9090
+
+    def register_sct_grafana_dashboard(self, cluster_name: str, namespace: str) -> str:  # pylint: disable=too-many-locals
+        # TODO: make it work for EKS by using ingress LB IP when it is enabled
+        sct_dashboard_file = sct_abs_path("data_dir/scylla-dash-per-server-nemesis.master.json")
+        sct_dashboard_file_data_str = ""
+        with open(sct_dashboard_file, encoding="utf-8") as sct_dashboard_file_obj:
+            dashboard_config = yaml.safe_load(sct_dashboard_file_obj)
+            dashboard_config["dashboard"]["title"] = dashboard_config["dashboard"]["title"].replace(
+                "$test_name", f"{get_test_name()}--{cluster_name}")
+            sct_dashboard_file_data_str = json.dumps(dashboard_config)
+        grafana_dn = f"{cluster_name}-grafana.{namespace}.svc.cluster.local"
+        grafana_ip = self.get_grafana_ip(cluster_name=cluster_name, namespace=namespace)
+        grafana_user = base64.b64decode(self.kubectl(
+            f"get secret/{cluster_name}-grafana-admin-credentials --template='{{{{ index .data \"username\" }}}}'",
+            namespace=namespace).stdout.strip()).decode('utf-8')
+        grafana_password = base64.b64decode(self.kubectl(
+            f"get secret/{cluster_name}-grafana-admin-credentials --template='{{{{ index .data \"password\" }}}}'",
+            namespace=namespace).stdout.strip()).decode('utf-8')
+        grafana_cert = base64.b64decode(self.kubectl(
+            f"get secret/{cluster_name}-grafana-serving-ca --template='{{{{ index .data \"tls.crt\" }}}}'",
+            namespace=namespace).stdout.strip()).decode('utf-8')
+        with NamedTemporaryFile(mode='w') as grafana_cert_obj, NamedTemporaryFile(mode='w') as sct_dashboard_obj:
+            grafana_cert_obj.write(grafana_cert)
+            grafana_cert_obj.flush()
+            sct_dashboard_obj.write(sct_dashboard_file_data_str)
+            sct_dashboard_obj.flush()
+            upload_result = LOCALRUNNER.run(
+                f"curl --fail -o /dev/null -w '%{{http_code}}'"
+                f" -L 'https://{grafana_dn}:{self.grafana_port}/api/dashboards/db'"
+                f" --resolve '{grafana_dn}:{self.grafana_port}:{grafana_ip}'"
+                f" --cacert {grafana_cert_obj.name}"
+                f" --user '{grafana_user}:{grafana_password}'"
+                f" -d @{sct_dashboard_obj.name} -H 'Content-Type: application/json'"
+            ).stdout.strip()
+        if upload_result != "200":
+            LOGGER.warning(
+                "Error uploading SCT dashboard '%s' to the grafana in the '%s' namespace: %s",
+                sct_dashboard_file, namespace, upload_result)
+        else:
+            LOGGER.info(
+                "SCT dashboard '%s' uploaded successfully to the grafana in the '%s' namespace",
+                sct_dashboard_file, namespace)
+        return upload_result
+
     @log_run_info
     def deploy_loaders_cluster(self,
                                node_pool: CloudK8sNodePool = None,
@@ -1271,150 +1386,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.calculated_loader_memory_limit = memory_limit = convert_memory_units_to_k8s_value(
             memory_limit)
         self.calculated_loader_affinity_modifiers = affinity_modifiers
-
-    @log_run_info
-    def deploy_monitoring_cluster(self, namespace: str = "monitoring",
-                                  is_manager_deployed: bool = False,
-                                  node_pool: CloudK8sNodePool = None) -> None:
-        """
-        This procedure comes from scylla-operator repo:
-        https://github.com/scylladb/scylla-operator/blob/master/docs/source/generic.md#setting-up-monitoring
-
-        If it fails please consider reporting and fixing issue in scylla-operator repo too
-        """
-        if self.params.get('reuse_cluster'):
-            LOGGER.info("Reusing existing monitoring cluster")
-            self.check_k8s_monitoring_cluster_health(namespace=namespace)
-            return
-
-        LOGGER.info("Create and initialize a monitoring cluster")
-        with TemporaryDirectory() as tmp_dir_name:
-            scylla_monitoring_dir = os.path.join(tmp_dir_name, 'scylla-monitoring')
-            LOGGER.info("Download scylla-monitoring sources")
-            download_from_github(
-                repo='scylladb/scylla-monitoring',
-                tag='scylla-monitoring-3.6.0',
-                dst_dir=scylla_monitoring_dir)
-
-            with open(KUBE_PROMETHEUS_STACK_CHART_VALUES_PATH, "rb") as values_stream:
-                values_data = yaml.safe_load(values_stream)
-                # NOTE: we need to unset all the tags because latest chart version may be
-                # incompatible with old versions of apps.
-                # for example 'prometheus-operator' v0.48.0 compatible with
-                # 'kube-prometheus-stack' v16.1.2+
-                for values_key in values_data.keys():
-                    values_data[values_key].get("image", {}).pop("tag", "")
-            monitoring_affinity_rules = {}
-            if node_pool:
-                self.deploy_node_pool(node_pool)
-                monitoring_affinity_rules = get_helm_pool_affinity_values(
-                    node_pool.pool_label_name, node_pool.name)
-
-            helm_values = HelmValues(values_data)
-            helm_values.set('nodeExporter.enabled', False)
-            helm_values.set('alertmanager.alertmanagerSpec', monitoring_affinity_rules)
-            helm_values.set('prometheusOperator', monitoring_affinity_rules)
-            helm_values.set('prometheus', {
-                'prometheusSpec': {
-                    'affinity': monitoring_affinity_rules.get('affinity', {}),
-                    # NOTE: set following values the same as in SCT (standalone) monitoring
-                    'scrapeInterval': '20s',
-                    'scrapeTimeout': '15s',
-                },
-                'service': {
-                    # NOTE: required for out-of-K8S-cluster access
-                    # nodeIp:30090 will redirect traffic to prometheusPod:9090
-                    'type': 'NodePort',
-                    'nodePort': self.k8s_prometheus_external_port,
-                },
-            })
-            helm_values.set('grafana', {
-                'affinity': monitoring_affinity_rules.get('affinity', {}),
-                'service': {
-                    # NOTE: required for out-of-K8S-cluster access
-                    # k8sMonitoringNodeIp:30000 (30 thousands) will redirect traffic to
-                    # grafanaPod:3000 (3 thousands).
-                    'type': 'NodePort',
-                    'nodePort': self.k8s_grafana_external_port,
-                    'port': self.k8s_grafana_external_port,
-                },
-                'grafana.ini': {
-                    'users': {'viewers_can_edit': True},
-                    'auth': {'disable_login_form': True, 'disable_signout_menu': True},
-                    'auth.anonymous': {'enabled': True, 'org_role': 'Editor'},
-                },
-            })
-            LOGGER.debug("Monitoring helm chart values are following: %s", helm_values.as_dict())
-
-            repo_name = "prometheus-community"
-            source_chart_name = f"{repo_name}/kube-prometheus-stack"
-            LOGGER.info("Install %s helm chart", source_chart_name)
-            self.kubectl(f'create namespace {namespace}', ignore_status=True)
-            self.helm(f'repo add {repo_name} https://prometheus-community.github.io/helm-charts')
-            self.helm('repo update')
-            LOGGER.debug(self.helm_install(
-                target_chart_name="monitoring",
-                source_chart_name=source_chart_name,
-                use_devel=False,
-                values=helm_values,
-                namespace=namespace,
-            ))
-
-            LOGGER.info("Install scylla-monitoring dashboards and monitoring services for scylla")
-            self.apply_file(SCYLLA_SERVICE_MONITOR_CONFIG_PATH)
-            self.kubectl(
-                f'create configmap scylla-dashboards --from-file={scylla_monitoring_dir}/grafana/build/ver_4.3',
-                namespace=namespace)
-            self.kubectl(
-                "patch configmap scylla-dashboards -p '{\"metadata\":{\"labels\":{\"grafana_dashboard\": \"1\"}}}'",
-                namespace=namespace)
-
-            if is_manager_deployed:
-                LOGGER.info("Install monitoring services for scylla-manager")
-                self.apply_file(SCYLLA_MANAGER_SERVICE_MONITOR_CONFIG_PATH)
-                self.kubectl(
-                    f'create configmap scylla-manager-dashboards '
-                    f'--from-file={scylla_monitoring_dir}/grafana/build/manager_2.2',
-                    namespace=namespace)
-                self.kubectl(
-                    "patch configmap scylla-manager-dashboards "
-                    "-p '{\"metadata\":{\"labels\":{\"grafana_dashboard\": \"1\"}}}'",
-                    namespace=namespace)
-        self.check_k8s_monitoring_cluster_health(namespace=namespace)
-        LOGGER.info("K8S Prometheus is available at %s:%s",
-                    self.k8s_monitoring_node_ip, self.k8s_prometheus_external_port)
-        LOGGER.info("K8S Grafana is available at %s:%s",
-                    self.k8s_monitoring_node_ip, self.k8s_grafana_external_port)
-
-    @property
-    def k8s_monitoring_node_ip(self):
-        for ip_type in ("ExternalIP", "InternalIP"):
-            cmd = (
-                f"get node --no-headers "
-                f"-l {self.POOL_LABEL_NAME}={self.MONITORING_POOL_NAME} "
-                "-o jsonpath='{.items[*].status.addresses[?(@.type==\"" + ip_type + "\")].address}'"
-            )
-            if ip := self.kubectl(cmd, namespace="monitoring").stdout.strip():
-                return ip
-        # Must not be reached but exists for safety of code logic
-        return "no_ip_detected"
-
-    @property
-    def k8s_prometheus_external_port(self) -> int:
-        # NOTE: '30090' is node's port that redirects traffic to pod's port 9090
-        return 30090
-
-    @property
-    def k8s_grafana_external_port(self) -> int:
-        # NOTE: '30000' is node's port that redirects traffic to pod's port 3000
-        return 30000
-
-    def check_k8s_monitoring_cluster_health(self, namespace: str):
-        LOGGER.info("Check the monitoring cluster")
-        self.kubectl_wait("--all --for=condition=Ready pod", timeout=900, namespace=namespace)
-
-        self.kubectl("get statefulset", namespace=namespace)
-        self.kubectl("get pods", namespace=namespace)
 
     @log_run_info
     def gather_k8s_logs(self) -> None:  # pylint: disable=too-many-locals,too-many-branches
@@ -2851,26 +2822,28 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
     def check_cluster_health(self):
         if self.params.get('k8s_deploy_monitoring'):
-            self._check_kubernetes_monitoring_health()
+            self.check_kubernetes_monitoring_health()
         super().check_cluster_health()
 
-    def _check_kubernetes_monitoring_health(self):
+    def check_kubernetes_monitoring_health(self) -> bool:
+        # TODO: add grafana checks
+        # TODO: make prometheus check be secure
         self.log.debug('Check kubernetes monitoring health')
         with ClusterHealthValidatorEvent() as kmh_event:
             try:
-                PrometheusDBStats(
-                    host=self.k8s_cluster.k8s_monitoring_node_ip,
-                    port=self.k8s_cluster.k8s_prometheus_external_port,
-                )
+                prometheus_ip = self.k8s_cluster.get_prometheus_ip(
+                    cluster_name=self.scylla_cluster_name, namespace=self.namespace)
+                PrometheusDBStats(host=prometheus_ip, port=self.k8s_cluster.prometheus_port, protocol='https')
+                kmh_event.message = "Kubernetes monitoring health checks have successfully been finished"
+                return True
             except Exception as exc:  # pylint: disable=broad-except
                 ClusterHealthValidatorEvent.MonitoringStatus(
-                    error=f'Failed to connect to kubernetes prometheus server at '
-                          f'{self.k8s_cluster.k8s_monitoring_node_ip}:'
-                          f'{self.k8s_cluster.k8s_prometheus_external_port},'
-                          f' due to the: \n'
+                    error=f'Failed to connect to K8S prometheus server (namespace={self.namespace}) at '
+                          f'{prometheus_ip}:{self.k8s_cluster.prometheus_port}, due to the: \n'
                           ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
                 ).publish()
-            kmh_event.message = "Kubernetes monitoring health check finished"
+                kmh_event.message = "Kubernetes monitoring health checks have failed"
+                return False
 
     def restart_scylla(self, nodes=None, random_order=False):
         # TODO: add support for the "nodes" param to have compatible logic with

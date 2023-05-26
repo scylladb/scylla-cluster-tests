@@ -1046,11 +1046,18 @@ def get_pool_affinity_modifiers(pool_label_name, pool_name):
                 pool_label_name,
                 pool_name)
 
+    def add_scylla_cluster_monitoring_pool_affinity(obj):
+        if obj['kind'] == 'ScyllaDBMonitoring':
+            node_affinity = add_pool_node_affinity({}, pool_label_name, pool_name)
+            obj['spec']['components']['prometheus']['placement'] = node_affinity
+            obj['spec']['components']['grafana']['placement'] = node_affinity
+
     return [
         add_pod_owner_pool_affinity,
         add_pod_pool_affinity,
         add_scylla_cluster_pool_affinity,
         add_node_config_pool_affinity,
+        add_scylla_cluster_monitoring_pool_affinity,
     ]
 
 

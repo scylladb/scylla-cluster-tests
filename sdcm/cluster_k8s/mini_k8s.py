@@ -524,29 +524,18 @@ class LocalKindCluster(LocalMinimalClusterBase):
               containerPath: {DST_APISERVER_AUDIT_POLICY}
               readOnly: true
 
-          - role: worker
-            labels:
-              {POOL_LABEL_NAME}: {self.AUXILIARY_POOL_NAME}
-          - role: worker
-            labels:
-              {POOL_LABEL_NAME}: {self.AUXILIARY_POOL_NAME}
         """
-        scylla_node_definition = f"""
+        for node_pool_type, node_num in (
+                (self.AUXILIARY_POOL_NAME, self.params.get("k8s_n_auxiliary_nodes") or 2),
+                (self.SCYLLA_POOL_NAME, self.params.get("n_db_nodes")),
+                (self.LOADER_POOL_NAME, self.params.get("n_loaders")),
+                (self.MONITORING_POOL_NAME, self.params.get("k8s_n_monitor_nodes"))):
+            for _ in range(node_num):
+                script_start_part += f"""
           - role: worker
             labels:
-              {POOL_LABEL_NAME}: {self.SCYLLA_POOL_NAME}
-        """
-        for _ in range(self.params.get("n_db_nodes")):
-            script_start_part += scylla_node_definition
-
-        loader_node_definition = f"""
-          - role: worker
-            labels:
-              {POOL_LABEL_NAME}: {self.LOADER_POOL_NAME}
-        """
-        for _ in range(self.params.get("n_loaders")):
-            script_start_part += loader_node_definition
-
+              {POOL_LABEL_NAME}: {node_pool_type}
+                """
         script_end_part = """
         EndOfSpec
         /var/tmp/kind delete cluster || true

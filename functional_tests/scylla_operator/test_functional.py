@@ -154,6 +154,43 @@ def test_rolling_restart_cluster(db_cluster):
             f"iotune was run after reboot on {pod_name_and_status['name']}"
 
 
+def _scylla_cluster_monitoring_ckecks(db_cluster: ScyllaPodCluster, monitoring_type: str):
+    k8s_cluster, cluster_name, namespace = db_cluster.k8s_cluster, db_cluster.name, db_cluster.namespace
+
+    # NOTE: deploy prometheus operator if absent
+    k8s_cluster.deploy_prometheus_operator()
+
+    # NOTE: remove existing ScyllaDBMonitoring if exists
+    k8s_cluster.delete_scylla_cluster_monitoring(namespace=namespace)
+    try:
+        # NOTE: deploy ScyllaDBMonitoring of the requested type
+        k8s_cluster.deploy_scylla_cluster_monitoring(
+            cluster_name=cluster_name, namespace=namespace, monitoring_type=monitoring_type)
+
+        # NOTE: add SCT dashboard to the Grafana service
+        api_call_return_code = k8s_cluster.register_sct_grafana_dashboard(
+            cluster_name=cluster_name, namespace=namespace)
+        assert api_call_return_code == '200', "SCT dashboard upload failed"
+
+        is_passed = db_cluster.check_kubernetes_monitoring_health()
+        assert is_passed, "K8S monitoring health checks have failed"
+
+        # TODO: add tmp DB member and check the prometheus config for presence of that new tmp DB member
+    finally:
+        # NOTE: remove monitoring
+        k8s_cluster.delete_scylla_cluster_monitoring(namespace=namespace)
+
+
+@pytest.mark.required_operator("v1.9.0")
+def test_scylla_cluster_monitoring_type_saas(db_cluster: ScyllaPodCluster):
+    _scylla_cluster_monitoring_ckecks(db_cluster=db_cluster, monitoring_type="SaaS")
+
+
+@pytest.mark.required_operator("v1.9.0")
+def test_scylla_cluster_monitoring_type_platform(db_cluster: ScyllaPodCluster):
+    _scylla_cluster_monitoring_ckecks(db_cluster=db_cluster, monitoring_type="Platform")
+
+
 # NOTE: Scylla manager versions notes:
 #       - '2.6.3' is broken: https://github.com/scylladb/scylla-manager/issues/3156
 #       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147

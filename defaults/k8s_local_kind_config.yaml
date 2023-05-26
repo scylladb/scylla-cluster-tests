@@ -31,7 +31,10 @@ k8s_use_chaos_mesh: true
 
 # NOTE: if we do not specify 'k8s_n_loader_pods_per_cluster' then value of the 'n_loaders' is used
 n_loaders: 1
-n_monitor_nodes: 1
+
+n_monitor_nodes: 0
+k8s_n_monitor_nodes: 1
+k8s_deploy_monitoring: false
 
 user_credentials_path: '~/.ssh/scylla-test'
 use_preinstalled_scylla: true
