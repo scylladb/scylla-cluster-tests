@@ -2437,6 +2437,10 @@ class PodCluster(cluster.BaseCluster):
         """
         return count * self.PodContainerClass.pod_readiness_timeout
 
+    @property
+    def pod_selector(self):
+        return ''
+
     @cached_property
     def get_nodes_readiness_delay(self) -> Union[float, int]:
         return self.PodContainerClass.pod_readiness_delay
@@ -2446,6 +2450,7 @@ class PodCluster(cluster.BaseCluster):
             kluster=self.k8s_cluster,
             total_pods=total_pods,
             readiness_timeout=readiness_timeout or self.get_nodes_reboot_timeout(pods_to_wait),
+            selector=self.pod_selector,
             namespace=self.namespace
         )
 
@@ -2454,6 +2459,7 @@ class PodCluster(cluster.BaseCluster):
             kluster=self.k8s_cluster,
             total_pods=total_pods,
             timeout=self.get_nodes_reboot_timeout(pods_to_wait),
+            selector=self.pod_selector,
             namespace=self.namespace
         )
 
@@ -2524,6 +2530,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         # NOTE: scylla args get appended in K8S differently than in the VM case.
         #       So, we simulate 'empty args' to make the common logic work.
         return ""
+
+    @property
+    def pod_selector(self):
+        return 'app=scylla'
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=None, sleep_time=None,
                                      timeout=None):  # pylint: disable=too-many-arguments
@@ -2967,6 +2977,10 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                             node_pool=node_pool,
                             add_nodes=add_nodes,
                             )
+
+    @property
+    def pod_selector(self):
+        return 'loader-name'
 
     def node_setup(self,
                    node: BasePodContainer,
