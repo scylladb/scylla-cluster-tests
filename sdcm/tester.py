@@ -1360,6 +1360,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             params=self.params,
         )
         self.k8s_cluster.deploy()
+
+        auxiliary_pool = mini_k8s.MinimalK8SNodePool(
+            k8s_cluster=self.k8s_cluster,
+            name=self.k8s_cluster.AUXILIARY_POOL_NAME,
+            num_nodes=self.params.get("k8s_n_auxiliary_nodes") or 2,
+            image_type="fake-image-type",
+            instance_type="fake-instance-type")
+        self.k8s_cluster.deploy_node_pool(auxiliary_pool, wait_till_ready=False)
         for namespace in ('kube-system', 'local-path-storage'):
             self.k8s_cluster.set_nodeselector_for_deployments(
                 pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME, namespace=namespace)
@@ -1394,6 +1402,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
 
+        n_monitor_nodes = self.params.get("k8s_n_monitor_nodes") or self.params.get("n_monitor_nodes")
+        if n_monitor_nodes:
+            monitor_pool = mini_k8s.MinimalK8SNodePool(
+                k8s_cluster=self.k8s_cluster,
+                name=self.k8s_cluster.MONITORING_POOL_NAME,
+                num_nodes=n_monitor_nodes,
+                image_type="fake-image-type",
+                instance_type="fake-instance-type")
+            self.k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=True)
+            self.k8s_cluster.deploy_prometheus_operator()
+
         self.db_cluster = mini_k8s.LocalMinimalScyllaPodCluster(
             k8s_cluster=self.k8s_cluster,
             scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
@@ -1403,11 +1422,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             node_pool=scylla_pool,
             add_nodes=False,
         )
-
-        if self.params.get('k8s_deploy_monitoring'):
-            self.k8s_cluster.deploy_monitoring_cluster(
-                is_manager_deployed=self.params.get('use_mgmt')
-            )
 
         if self.params.get("n_loaders"):
             self.loaders = cluster_k8s.LoaderPodCluster(
@@ -1422,6 +1436,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self._add_and_wait_for_cluster_nodes_in_parallel([self.db_cluster, self.loaders])
 
+        # Deploy optional K8S-based monitoring
+        if self.params.get('k8s_deploy_monitoring'):
+            for db_cluster in self.db_clusters_multitenant or [self.db_cluster]:
+                cluster_name, namespace = db_cluster.scylla_cluster_name, db_cluster.namespace
+                self.k8s_cluster.deploy_scylla_cluster_monitoring(cluster_name=cluster_name, namespace=namespace)
+                self.k8s_cluster.register_sct_grafana_dashboard(cluster_name=cluster_name, namespace=namespace)
+
+        # Deploy main VM-based monitoring
         if self.params.get("n_monitor_nodes") > 0:
             self.monitors = cluster_docker.MonitorSetDocker(
                 n_nodes=self.params.get("n_monitor_nodes"),
@@ -1451,7 +1473,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             func=_add_and_wait_for_cluster_nodes,
             unpack_objects=True, ignore_exceptions=False)
 
-    def get_cluster_k8s_gke(self):
+    def get_cluster_k8s_gke(self):  # pylint: disable=too-many-branches
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
         gce_datacenters = self.params.get('gce_datacenter')
@@ -1505,8 +1527,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 local_ssd_count=self.params.get("gce_n_local_ssd_disk_monitor"),
                 disk_size=self.params.get("root_disk_size_monitor"),
                 disk_type=self.params.get("gce_root_disk_type_monitor"),
-                instance_type=self.params.get("gce_instance_type_monitor"),
-                num_nodes=1,
+                instance_type=self.params.get(
+                    "k8s_instance_type_monitor") or self.params.get("gce_instance_type_monitor"),
+                num_nodes=self.params.get("k8s_n_monitor_nodes") or self.params.get("n_monitor_nodes"),
                 k8s_cluster=self.k8s_cluster)
             self.k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)
 
@@ -1536,12 +1559,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             ))
         self.db_cluster = self.db_clusters_multitenant[0]
 
-        if self.params.get('k8s_deploy_monitoring'):
-            self.k8s_cluster.deploy_monitoring_cluster(
-                is_manager_deployed=self.params.get('use_mgmt'),
-                node_pool=monitor_pool
-            )
-
         if self.params.get("n_loaders"):
             for i in range(self.k8s_cluster.tenants_number):
                 self.loaders_multitenant.append(cluster_k8s.LoaderPodCluster(
@@ -1559,6 +1576,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self._add_and_wait_for_cluster_nodes_in_parallel(
             self.db_clusters_multitenant + self.loaders_multitenant)
 
+        # Deploy optional K8S-based monitoring
+        if self.params.get('k8s_deploy_monitoring'):
+            self.k8s_cluster.deploy_prometheus_operator()
+            for db_cluster in self.db_clusters_multitenant:
+                cluster_name, namespace = db_cluster.scylla_cluster_name, db_cluster.namespace
+                self.k8s_cluster.deploy_scylla_cluster_monitoring(cluster_name=cluster_name, namespace=namespace)
+                self.k8s_cluster.register_sct_grafana_dashboard(cluster_name=cluster_name, namespace=namespace)
+
+        # Deploy main VM-based monitoring
         if self.params.get("n_monitor_nodes") > 0:
             for i in range(self.k8s_cluster.tenants_number):
                 self.log.debug("Create monitor for the DB cluster №%s", i + 1)
@@ -1668,8 +1694,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.params.get('k8s_deploy_monitoring'):
             monitor_pool = eks.EksNodePool(
                 name=self.k8s_cluster.MONITORING_POOL_NAME,
-                num_nodes=1,
-                instance_type=self.params.get("instance_type_monitor"),
+                num_nodes=self.params.get("k8s_n_monitor_nodes") or self.params.get("n_monitor_nodes"),
+                instance_type=self.params.get(
+                    "k8s_instance_type_monitor") or self.params.get("instance_type_monitor"),
                 role_arn=self.params.get('eks_nodegroup_role_arn'),
                 disk_size=self.params.get('root_disk_size_monitor'),
                 k8s_cluster=self.k8s_cluster
@@ -1699,12 +1726,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             ))
         self.db_cluster = self.db_clusters_multitenant[0]
 
-        if self.params.get('k8s_deploy_monitoring'):
-            self.k8s_cluster.deploy_monitoring_cluster(
-                is_manager_deployed=self.params.get('use_mgmt'),
-                node_pool=monitor_pool
-            )
-
         if self.params.get("n_loaders"):
             for i in range(self.k8s_cluster.tenants_number):
                 self.loaders_multitenant.append(cluster_k8s.LoaderPodCluster(
@@ -1722,6 +1743,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self._add_and_wait_for_cluster_nodes_in_parallel(
             self.db_clusters_multitenant + self.loaders_multitenant)
 
+        # Deploy optional K8S-based monitoring
+        if self.params.get('k8s_deploy_monitoring'):
+            self.k8s_cluster.deploy_prometheus_operator()
+            for db_cluster in self.db_clusters_multitenant:
+                cluster_name, namespace = db_cluster.scylla_cluster_name, db_cluster.namespace
+                self.k8s_cluster.deploy_scylla_cluster_monitoring(cluster_name=cluster_name, namespace=namespace)
+                self.k8s_cluster.register_sct_grafana_dashboard(cluster_name=cluster_name, namespace=namespace)
+
+        # Deploy main VM-based monitoring
         if monitor_info['n_nodes']:
             base_user_prefix = common_params["user_prefix"]
             for i in range(self.k8s_cluster.tenants_number):

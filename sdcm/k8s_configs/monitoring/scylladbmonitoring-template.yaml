@@ -1,0 +1,33 @@
+apiVersion: scylla.scylladb.com/v1alpha1
+kind: ScyllaDBMonitoring
+metadata:
+  name: ${SCT_SCYLLA_CLUSTER_NAME}
+  namespace: ${SCT_SCYLLA_CLUSTER_NAMESPACE}
+spec:
+  type: ${SCT_SCYLLA_CLUSTER_MONITORING_TYPE}
+  endpointsSelector:
+    matchLabels:
+      app.kubernetes.io/name: scylla
+      scylla-operator.scylladb.com/scylla-service-type: identity
+      scylla/cluster: ${SCT_SCYLLA_CLUSTER_NAME}
+  components:
+    prometheus:
+      placement:
+        nodeAffinity: {}  # Will be set by the SCT
+      storage:
+        volumeClaimTemplate:
+          spec:
+            resources:
+              requests:
+                storage: 1Gi
+    grafana:
+      placement:
+        nodeAffinity: {}  # Will be set by the SCT
+      exposeOptions:
+        webInterface:
+          ingress:
+            ingressClassName: haproxy
+            dnsDomains:
+            - ${SCT_SCYLLA_CLUSTER_NAME}-grafana.${SCT_SCYLLA_CLUSTER_NAMESPACE}.svc.cluster.local
+            annotations:
+              haproxy-ingress.github.io/ssl-passthrough: "true"

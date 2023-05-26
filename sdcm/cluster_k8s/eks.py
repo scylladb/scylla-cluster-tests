@@ -502,11 +502,6 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         self.set_security_groups_on_all_instances()
         self.set_tags_on_all_instances()
 
-    def deploy_monitoring_cluster(self, *args, **kwargs) -> None:  # pylint: disable=signature-differs
-        super().deploy_monitoring_cluster(*args, **kwargs)
-        self.set_security_groups_on_all_instances()
-        self.set_tags_on_all_instances()
-
     def upgrade_kubernetes_platform(self, pod_objects: list[cluster.BaseNode],
                                     use_additional_scylla_nodepool: bool) -> (str, CloudK8sNodePool):
         upgrade_version = f"1.{int(self.eks_cluster_version.split('.')[1]) + 1}"

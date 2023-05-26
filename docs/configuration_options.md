@@ -202,6 +202,7 @@
 | **<a href="#user-content-k8s_n_loader_pods_per_cluster" name="k8s_n_loader_pods_per_cluster">k8s_n_loader_pods_per_cluster</a>**  | Number of loader pods per loader cluster. | N/A | SCT_K8S_N_LOADER_PODS_PER_CLUSTER
 | **<a href="#user-content-k8s_loader_run_type" name="k8s_loader_run_type">k8s_loader_run_type</a>**  | Defines how the loader pods must run. It may be either 'static' (default, run stress command on the constantly existing idle pod having reserved resources, perf-oriented) or 'dynamic' (run stress commad in a separate pod as main thread and get logs in a searate retryable API call not having resource reservations). | dynamic | SCT_K8S_LOADER_RUN_TYPE
 | **<a href="#user-content-k8s_instance_type_auxiliary" name="k8s_instance_type_auxiliary">k8s_instance_type_auxiliary</a>**  | Instance type for the nodes of the K8S auxiliary/default node pool. | N/A | SCT_K8S_INSTANCE_TYPE_AUXILIARY
+| **<a href="#user-content-k8s_instance_type_monitor" name="k8s_instance_type_monitor">k8s_instance_type_monitor</a>**  | Instance type for the nodes of the K8S monitoring node pool. | N/A | SCT_K8S_INSTANCE_TYPE_MONITOR
 | **<a href="#user-content-mini_k8s_version" name="mini_k8s_version">mini_k8s_version</a>**  |  | N/A | SCT_MINI_K8S_VERSION
 | **<a href="#user-content-k8s_cert_manager_version" name="k8s_cert_manager_version">k8s_cert_manager_version</a>**  |  | N/A | SCT_K8S_CERT_MANAGER_VERSION
 | **<a href="#user-content-k8s_minio_storage_size" name="k8s_minio_storage_size">k8s_minio_storage_size</a>**  |  | 10Gi | SCT_K8S_MINIO_STORAGE_SIZE
@@ -211,6 +212,7 @@
 | **<a href="#user-content-k8s_connection_bundle_file" name="k8s_connection_bundle_file">k8s_connection_bundle_file</a>**  | Serverless configuration bundle file | N/A | SCT_K8S_CONNECTION_BUNDLE_FILE
 | **<a href="#user-content-k8s_use_chaos_mesh" name="k8s_use_chaos_mesh">k8s_use_chaos_mesh</a>**  | enables chaos-mesh for k8s testing | N/A | SCT_K8S_USE_CHAOS_MESH
 | **<a href="#user-content-k8s_n_auxiliary_nodes" name="k8s_n_auxiliary_nodes">k8s_n_auxiliary_nodes</a>**  | Number of of nodes in auxiliary pool | N/A | SCT_K8S_N_AUXILIARY_NODES
+| **<a href="#user-content-k8s_n_monitor_nodes" name="k8s_n_monitor_nodes">k8s_n_monitor_nodes</a>**  | Number of nodes in monitoring pool that will be used for scylla-operator's deployed monitoring pods. | N/A | SCT_K8S_N_MONITOR_NODES
 | **<a href="#user-content-mgmt_docker_image" name="mgmt_docker_image">mgmt_docker_image</a>**  | Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' | N/A | SCT_MGMT_DOCKER_IMAGE
 | **<a href="#user-content-docker_image" name="docker_image">docker_image</a>**  | Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version | N/A | SCT_DOCKER_IMAGE
 | **<a href="#user-content-db_nodes_private_ip" name="db_nodes_private_ip">db_nodes_private_ip</a>**  |  | N/A | SCT_DB_NODES_PRIVATE_IP
