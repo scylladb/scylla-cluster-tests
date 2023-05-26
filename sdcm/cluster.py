@@ -556,13 +556,20 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # or
             #   'CPUSET="--cpuset 1-7,9-15,17-23,25-31 "'
             # And so on...
-            grep_result = self.remoter.run('grep "^CPUSET" /etc/scylla.d/cpuset.conf')
+            cpuset_file_lines = self.remoter.run("cat /etc/scylla.d/cpuset.conf").stdout
         except Exception as exc:  # pylint: disable=broad-except
             self.log.error(f"Failed to get CPUSET. Error: {exc}")
             return ''
 
-        scylla_cpu_set = re.findall(r'(\d+)-(\d+)|(\d+)', grep_result.stdout)
-        self.log.debug(f"CPUSET on node {self.name}: {grep_result}")
+        for cpuset_file_line in cpuset_file_lines.split("\n"):
+            if not cpuset_file_line.startswith("CPUSET="):
+                continue
+            scylla_cpu_set = re.findall(r'(\d+)-(\d+)|(\d+)', cpuset_file_line)
+            self.log.debug(f"CPUSET on node {self.name}: {cpuset_file_line}")
+            break
+        else:
+            self.log.debug("Didn't find the 'CPUSET' configuration.")
+            return ''
         core_counter = 0
         for range_or_singular in scylla_cpu_set:
             # Output of finding is of the following structure:

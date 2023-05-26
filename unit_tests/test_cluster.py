@@ -568,7 +568,7 @@ class TestNodetoolStatus(unittest.TestCase):
                           }
 
 
-@pytest.mark.parametrize("grep_results,expected_core_number", (
+@pytest.mark.parametrize("cat_results,expected_core_number", (
     ("1", 1), ("2", 1), ("9", 1), ("10", 1), ("11", 1),
 
     ("1-7", 7), ("2-7", 6), ("1-6", 6), ("2-6", 5),
@@ -596,7 +596,7 @@ class TestNodetoolStatus(unittest.TestCase):
     ("1,9-15,17,25-31", 16),
     ("1-7,9,17-23,25", 16),
 ))
-def test_base_node_cpuset(grep_results, expected_core_number):
+def test_base_node_cpuset(cat_results, expected_core_number):
     dummy_node = DummyNode(
         name='dummy_node',
         parent_cluster=None,
@@ -604,15 +604,39 @@ def test_base_node_cpuset(grep_results, expected_core_number):
         ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
     )
     dummy_node.init()
-    grep_results_obj = type("FakeGrepResults", (), {"stdout": f'CPUSET="--cpuset {grep_results} "'})
+    cat_results_obj = type("FakeGrepResults", (), {
+        "stdout": f'#\n# some comment\nCPUSET="--cpuset {cat_results} "'
+    })
     dummy_node.remoter = type("FakeRemoter", (), {
-        "run": (lambda *args, **kwargs: grep_results_obj),
+        "run": (lambda *args, **kwargs: cat_results_obj),
     })
 
     cpuset_value = dummy_node.cpuset
 
     assert isinstance(cpuset_value, int)
     assert cpuset_value == expected_core_number
+
+
+@pytest.mark.parametrize("cat_results", (
+    "",
+    "# one comment-line file",
+    "# first comment line\n# second comment line",
+    "# first comment line\n# second comment linei\n # third comment line",
+    "# CPUSET=\"--cpuset 1-7,9-15,17-23,31' \"",
+))
+def test_base_node_cpuset_not_configured(cat_results):
+    dummy_node = DummyNode(
+        name='dummy_node',
+        parent_cluster=None,
+        base_logdir=tempfile.mkdtemp(),
+        ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
+    )
+    dummy_node.init()
+    cat_results_obj = type("FakeCatResults", (), {"stdout": cat_results})
+    dummy_node.remoter = type("FakeRemoter", (), {
+        "run": (lambda *args, **kwargs: cat_results_obj),
+    })
+    assert dummy_node.cpuset == ""
 
 
 @pytest.mark.integration
