@@ -1,0 +1,179 @@
+{
+  "aws":
+  {
+    "x86_64": {
+      "2": {
+        "get-cpu-mask": "0x00000003",
+        "get-irq-cpu-mask": "0x00000003",
+        "dump-options-file": {"cpu_mask": "0x00000003", "irq_cpu_mask": "0x00000003"}
+      },
+      "4": {
+        "get-cpu-mask": "0x0000000f",
+        "get-irq-cpu-mask": "0x0000000f",
+        "dump-options-file": {"cpu_mask": "0x0000000f", "irq_cpu_mask": "0x0000000f"}
+      },
+      "8": {
+        "get-cpu-mask": "0x000000fe",
+        "get-irq-cpu-mask": "0x00000001",
+        "dump-options-file": {"cpu_mask": "0x000000ff", "irq_cpu_mask": "0x00000001"}
+      },
+      "12": {
+        "get-cpu-mask": "0x00000fbe",
+        "get-irq-cpu-mask": "0x00000041",
+        "dump-options-file": {"cpu_mask": "0x00000fff", "irq_cpu_mask": "0x00000041"}
+      },
+      "16": {
+        "get-cpu-mask": "0x0000fefe",
+        "get-irq-cpu-mask": "0x00000101",
+        "dump-options-file": {"cpu_mask": "0x0000ffff", "irq_cpu_mask": "0x00000101"}
+      },
+      "24": {
+        "get-cpu-mask": "0x00ffeffe",
+        "get-irq-cpu-mask": "0x00001001",
+        "dump-options-file": {"cpu_mask": "0x00ffffff", "irq_cpu_mask": "0x00001001"}
+      },
+      "32": {
+        "get-cpu-mask": "0xfffefffe",
+        "get-irq-cpu-mask": "0x00010001",
+        "dump-options-file": {"cpu_mask": "0xffffffff", "irq_cpu_mask": "0x00010001"}
+      },
+      "48": {
+        "get-cpu-mask": "0x0000ffff,0xfcfffffc",
+        "get-irq-cpu-mask": "0x03000003",
+        "dump-options-file": {"cpu_mask": "0x0000ffff,0xffffffff", "irq_cpu_mask": "0x03000003"}
+      },
+      "64": {
+        "get-cpu-mask": "0xfffffffc,0xfffffffc",
+        "get-irq-cpu-mask": "0x00000003,0x00000003",
+        "dump-options-file": {"cpu_mask": "0xffffffff,0xffffffff", "irq_cpu_mask": "0x00000003,0x00000003"}
+      },
+      "96": {
+        "get-cpu-mask": "0xfffffcff,0xfffcffff,0xfcfffffc",
+        "get-irq-cpu-mask": "0x00000300,0x00030000,0x03000003",
+        "dump-options-file": {"cpu_mask": "0xffffffff,0xffffffff,0xffffffff", "irq_cpu_mask": "0x00000300,0x00030000,0x03000003"}
+      },
+      "128": {
+        "get-cpu-mask": "0xfffffffc,0xfffffffc,0xfffffffc,0xfffffffc",
+        "get-irq-cpu-mask": "0x00000003,0x00000003,0x00000003,0x00000003",
+        "dump-options-file": {"cpu_mask": "0xffffffff,0xffffffff,0xffffffff,0xffffffff", "irq_cpu_mask": "0x00000003,0x00000003,0x00000003,0x00000003"}
+      }
+    },
+    "aarch64": {
+      "4": {
+        "get-cpu-mask": "0x0000000f",
+        "get-irq-cpu-mask": "0x0000000f",
+        "dump-options-file": {"cpu_mask": "0x0000000f", "irq_cpu_mask": "0x0000000f"}
+      },
+      "8": {
+        "get-cpu-mask": "0x000000fe",
+        "get-irq-cpu-mask": "0x00000001",
+        "dump-options-file": {"cpu_mask": "0x000000ff", "irq_cpu_mask": "0x00000001"}
+      },
+      "16": {
+        "get-cpu-mask": "0x0000fffe",
+        "get-irq-cpu-mask": "0x00000001",
+        "dump-options-file": {"cpu_mask": "0x0000ffff", "irq_cpu_mask": "0x00000001"}
+      },
+      "32": {
+        "get-cpu-mask": "0xfffffffc",
+        "get-irq-cpu-mask": "0x00000003",
+        "dump-options-file": {"cpu_mask": "0xffffffff", "irq_cpu_mask": "0x00000001"}
+      },
+      "64": {
+        "get-cpu-mask": "0xffffffff,0xfffffff0",
+        "get-irq-cpu-mask": "0x0000000f",
+        "dump-options-file": {"cpu_mask": "0xffffffff,0xffffffff", "irq_cpu_mask": "0x0000000f"}
+      }
+    }
+  },
+  "gce":
+  {
+    "x86_64": {
+      "2": {
+        "get-cpu-mask": "0x00000003",
+        "get-irq-cpu-mask": "0x00000003",
+        "dump-options-file": {"cpu_mask": "0x00000003", "irq_cpu_mask": "0x00000003"}
+      },
+      "4": {
+        "get-cpu-mask": "0x0000000f",
+        "get-irq-cpu-mask": "0x0000000f",
+        "dump-options-file": {"cpu_mask": "0x0000000f", "irq_cpu_mask": "0x0000000f"}
+      },
+      "8": {
+        "get-cpu-mask": "0x000000fe",
+        "get-irq-cpu-mask": "0x00000001",
+        "dump-options-file": {"cpu_mask": "0x000000ff", "irq_cpu_mask": "0x00000001"}
+      },
+      "16": {
+        "get-cpu-mask": "0x0000fefe",
+        "get-irq-cpu-mask": "0x00000101",
+        "dump-options-file": {"cpu_mask": "0x0000ffff", "irq_cpu_mask": "0x00000101"}
+      },
+      "32": {
+        "get-cpu-mask": "0xfffefffe",
+        "get-irq-cpu-mask": "0x00010001",
+        "dump-options-file": {"cpu_mask": "0xffffffff", "irq_cpu_mask": "0x00010001"}
+      },
+      "48": {
+        "get-cpu-mask": "0x0000ffef,0xfeffeffe",
+        "get-irq-cpu-mask": "0x00000010,0x01001001",
+        "dump-options-file": {"cpu_mask": "0x0000ffff,0xffffffff", "irq_cpu_mask": "0x00000010,0x01001001"}
+      },
+      "64": {
+        "get-cpu-mask": "0xfffefffe,0xfffefffe",
+        "get-irq-cpu-mask": "0x00010001,0x00010001",
+        "dump-options-file": {"cpu_mask": "0xffffffff,0xffffffff", "irq_cpu_mask": "0x00010001,0x00010001"}
+      },
+      "80": {
+        "get-cpu-mask": "0x0000ffff,0xcffffcff,0xffcffffc",
+        "get-irq-cpu-mask": "0x30000300,0x00300003",
+        "dump-options-file": {"cpu_mask": "0x0000ffff,0xffffffff,0xffffffff", "irq_cpu_mask": "0x30000300,0x00300003"}
+      },
+      "96": {
+        "get-cpu-mask": "0xfffffcff,0xfffcffff,0xfcfffffc",
+        "get-irq-cpu-mask": "0x00000300,0x00030000,0x03000003",
+        "dump-options-file": {"cpu_mask": "0xffffffff,0xffffffff,0xffffffff", "irq_cpu_mask": "0x00000300,0x00030000,0x03000003"}
+      },
+      "128": {
+        "get-cpu-mask": "0xfffffffc,0xfffffffc,0xfffffffc,0xfffffffc",
+        "get-irq-cpu-mask": "0x00000003,0x00000003,0x00000003,0x00000003",
+        "dump-options-file": {"cpu_mask": "0xffffffff,0xffffffff,0xffffffff,0xffffffff", "irq_cpu_mask": "0x00000003,0x00000003,0x00000003,0x00000003"}
+      }
+    }
+  },
+  "azure":
+  {
+    "x86_64": {
+      "8": {
+        "get-cpu-mask": "0x000000fe",
+        "get-irq-cpu-mask": "0x00000001",
+        "dump-options-file": {"cpu_mask": "0x000000ff", "irq_cpu_mask": "0x00000001"}
+      },
+      "16": {
+        "get-cpu-mask": "0x0000fffc",
+        "get-irq-cpu-mask": "0x00000003",
+        "dump-options-file": {"cpu_mask": "0x0000ffff", "irq_cpu_mask": "0x00000003"}
+      },
+      "32": {
+        "get-cpu-mask": "0xfffffffc",
+        "get-irq-cpu-mask": "0x00000003",
+        "dump-options-file": {"cpu_mask": "0xffffffff", "irq_cpu_mask": "0x00000003"}
+      },
+      "48": {
+        "get-cpu-mask": "0x0000ffff,0xfffffff0",
+        "get-irq-cpu-mask": "0x0000000f",
+        "dump-options-file": {"cpu_mask": "0x0000ffff,0xffffffff", "irq_cpu_mask": "0x0000000f"}
+      },
+      "64": {
+        "get-cpu-mask": "0xfffffffc,0xfffffffc",
+        "get-irq-cpu-mask": "0x00000003,0x00000003",
+        "dump-options-file": {"cpu_mask": "0xffffffff,0xffffffff", "irq_cpu_mask": "0x00000003,0x00000003"}
+      },
+      "80": {
+        "get-cpu-mask": "0x0000ffff,0xfffff0ff,0xfffffff0",
+        "get-irq-cpu-mask": "0x00000f00,0x0000000f",
+        "dump-options-file": {"cpu_mask": "0x0000ffff,0xffffffff,0xffffffff", "irq_cpu_mask": "0x00000f00,0x0000000f"}
+      }
+    }
+  }
+}
