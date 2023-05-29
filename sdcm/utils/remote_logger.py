@@ -467,6 +467,7 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
                 self._log.debug("Stream from pod %s logs has been closed, "
                                 "waiting for %s seconds and trying to reconnect",
                                 self._pod_name, self.RECONNECT_DELAY)
+                self._stream = None
                 if self._termination_event.is_set():
                     return
                 time.sleep(self.RECONNECT_DELAY)
