@@ -616,8 +616,11 @@ class TestStatsMixin(Stats):
         setup_details['packages_updated'] = bool(new_scylla_packages and os.listdir(new_scylla_packages))
         setup_details['cpu_platform'] = 'UNKNOWN'
         if is_gce and self.db_cluster:
-            setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get(  # pylint: disable=protected-access
-                'cpuPlatform', 'UNKNOWN')
+            if hasattr(self.db_cluster.nodes[0]._instance, "cpu_platform"):  # pylint: disable=protected-access
+                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.cpu_platform  # pylint: disable=protected-access
+            else:
+                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get(  # pylint: disable=protected-access
+                    'cpuPlatform', 'UNKNOWN')
 
         setup_details['db_cluster_node_details'] = {}
         setup_details['sysctl_output'] = []

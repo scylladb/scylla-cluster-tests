@@ -16,12 +16,25 @@ stress_step_duration: '15m'
 max_deviation: 5 # 5% relative difference
 n_stress_process: 1
 
+#AWS
 instance_type_db: 'i2.2xlarge'
 instance_type_loader: 'c4.2xlarge'
 instance_type_monitor: 't3.small'
-
-user_prefix: 'perf-search'
 space_node_threshold: 644245094
+# tests are running on aws. The loader uses the shard-aware driver
+ami_id_loader: 'scylla-qa-loader-ami-v19'
+#--------
+#GCE
+gce_instance_type_db: 'n2-highmem-8'
+gce_root_disk_type_db: 'pd-ssd'
+gce_n_local_ssd_disk_db: 8
+gce_instance_type_loader: 'c3-highcpu-8'
+gce_root_disk_type_loader: 'pd-ssd'
+root_disk_size_loader: 50
+gce_instance_type_monitor: 'n2-highmem-8'
+#------
+user_prefix: 'perf-search'
+
 
 backtrace_decoding: false
 
@@ -30,6 +43,5 @@ send_email: true
 email_recipients: ['scylla-perf-results@scylladb.com']
 
 store_perf_results: false
-# tests are running on aws. The loader uses the shard-aware driver
-ami_id_loader: 'scylla-qa-loader-ami-v19'
+
 enable_argus: false
