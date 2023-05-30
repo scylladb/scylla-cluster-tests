@@ -235,11 +235,11 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
         LOGGER.debug("ES QUERY: %s", query)
         test_results = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
-            index="latency-during-ops-mixed",
-            doc_type='test_stats',
+            index=self._es_index,
+            doc_type=self._es_doc_type,
             q=query,
             filter_path=filter_path,
-            size=1000)
+            size=self._limit)
         if not test_results:
             self.log.warning("No results found for query: %s", query)
             return []
