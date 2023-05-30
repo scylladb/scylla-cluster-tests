@@ -155,7 +155,8 @@ def test_rolling_restart_cluster(db_cluster):
 
 
 def _scylla_cluster_monitoring_ckecks(db_cluster: ScyllaPodCluster, monitoring_type: str):
-    k8s_cluster, cluster_name, namespace = db_cluster.k8s_cluster, db_cluster.name, db_cluster.namespace
+    k8s_cluster = db_cluster.k8s_cluster
+    cluster_name, namespace = db_cluster.scylla_cluster_name, db_cluster.namespace
 
     # NOTE: deploy prometheus operator if absent
     k8s_cluster.deploy_prometheus_operator()
