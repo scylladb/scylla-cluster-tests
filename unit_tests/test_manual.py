@@ -249,12 +249,12 @@ class TestStressThread(BaseSCTEventsTest):
     def test_01(self):  # pylint: disable=no-self-use
         start_metrics_server()
         cstress = CassandraStressThread(LoaderSetDummy(), timeout=60, node_list=[DbNode()], stress_num=1,
-                                        stress_cmd="cassandra-stress write cl=ONE duration=3m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)'"
+                                        stress_cmd="cassandra-stress write cl=ONE duration=3m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)'"
                                         " -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5")
 
         cstress1 = CassandraStressThread(LoaderSetDummy(), timeout=60, node_list=[DbNode()],
                                          stress_num=1,
-                                         stress_cmd="cassandra-stress write cl=ONE duration=3m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)'"
+                                         stress_cmd="cassandra-stress write cl=ONE duration=3m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)'"
                                          " -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5")
 
         cstress.run()

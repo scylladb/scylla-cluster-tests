@@ -30,9 +30,11 @@ class SlaPerUserTest(LongevityTest):
     Test SLA per user feature using cassandra-stress.
     """
 
-    STRESS_WRITE_CMD = 'cassandra-stress write cl=QUORUM n={n} -schema \'replication(factor=3)\' ' \
+    STRESS_WRITE_CMD = 'cassandra-stress write cl=QUORUM n={n} -schema' \
+                       ' \'replication(strategy=NetworkTopologyStrategy,replication_factor=3)\' ' \
                        '-mode cql3 native user={user} password={password} -rate threads={threads}'
-    STRESS_WRITE_DURATION_CMD = 'cassandra-stress write cl=ALL duration={duration} -schema \'replication(factor=3)\' ' \
+    STRESS_WRITE_DURATION_CMD = 'cassandra-stress write cl=ALL duration={duration}' \
+                                ' -schema \'replication(strategy=NetworkTopologyStrategy,replication_factor=3)\' ' \
         '-mode cql3 native user={user} password={password} -rate threads={threads} ' \
         'throttle=10000/s -pop seq={pop}'
     STRESS_READ_CMD = 'cassandra-stress read cl=ALL duration={duration} -mode cql3 native user={user} ' \

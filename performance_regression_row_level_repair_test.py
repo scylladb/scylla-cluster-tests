@@ -209,7 +209,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         :return:
         """
         base_distinct_write_cmd = "cassandra-stress write no-warmup cl=ONE n=1000000 " \
-                                  "-schema 'replication(factor=3)' -mode cql3 native " \
+                                  "-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native " \
                                   "-rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)'"
         sequence_current_index = BILLION
         sequence_range = MILLION
@@ -343,9 +343,11 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         :return:
         """
         background_stress_cmds = [
-            "cassandra-stress write no-warmup cl=QUORUM duration=140m -schema 'replication(factor=3)' "
+            "cassandra-stress write no-warmup cl=QUORUM duration=140m"
+            " -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' "
             "-mode cql3 native -rate threads=25 -col 'size=FIXED(1024) n=FIXED(1)'",
-            "cassandra-stress read no-warmup cl=QUORUM duration=140m -schema 'replication(factor=3)' "
+            "cassandra-stress read no-warmup cl=QUORUM duration=140m"
+            " -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' "
             "-mode cql3 native -rate threads=6 -col 'size=FIXED(1024) n=FIXED(1)'"]
 
         node1 = self.db_cluster.nodes[-1]

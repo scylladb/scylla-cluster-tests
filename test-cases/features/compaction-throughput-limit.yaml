@@ -1,6 +1,6 @@
 test_duration: 240
 
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM n=20000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..20000000 -col 'n=FIXED(10) size=FIXED(256)' -log interval=5"
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM n=20000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..20000000 -col 'n=FIXED(10) size=FIXED(256)' -log interval=5"
 
 n_db_nodes: 3
 n_loaders: 1

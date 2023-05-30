@@ -5,9 +5,9 @@ nemesis_during_prepare: false
 
 # NOTE: We should have big enough data in DB to make resharding long more than 2 minutes
 #       to exceed the liveness probe timeout making sure it doesn't panic
-prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=35123456 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=60 -pop seq=1..35123456 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=35123456 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=60 -pop seq=1..35123456 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 throttle=5000/s -pop seq=1..10000000 -log interval=5"
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 throttle=5000/s -pop seq=1..10000000 -log interval=5"
              ]
 n_db_nodes: 3
 k8s_n_scylla_pods_per_cluster: 3

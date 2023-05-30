@@ -2,7 +2,7 @@
 # and time for clear table between subtest
 test_duration: 500
 
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
 stress_cdclog_reader_cmd: "cdc-stressor -duration 70m -stream-query-round-duration 30s"
 store_cdclog_reader_stats_in_es: false
 stress_cdc_log_reader_batching_enable: true

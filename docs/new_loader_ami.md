@@ -11,7 +11,7 @@ This docs show how to create new loader AMI on AWS
         sudo yum install scylla-enterprise-tools scylla-enterprise-tools-core -y
         # verify it works:
         cassandra-stress version
-        cassandra-stress write cl=QUORUM n=1 -schema 'replication(factor=1) compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native -rate threads=1 -pop seq=1..1
+        cassandra-stress write cl=QUORUM n=1 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native -rate threads=1 -pop seq=1..1
         # it should fail with NoHostAvailableException (unless you provide valid node)
         ```
 2. create image in AWS console

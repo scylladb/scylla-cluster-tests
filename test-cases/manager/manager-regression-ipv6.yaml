@@ -1,6 +1,6 @@
 test_duration: 120
 
-stress_cmd: "cassandra-stress write cl=QUORUM n=4000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=200 -pop seq=400000000..600000000"
+stress_cmd: "cassandra-stress write cl=QUORUM n=4000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=200 -pop seq=400000000..600000000"
 
 instance_type_db: 'i3.large'
 instance_type_loader: 'c5.large'

@@ -4,10 +4,10 @@
 test_duration: 800
 
 prepare_write_cmd:  [
-    "cassandra-stress write cl=QUORUM n=10485760 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..10485760 -col 'n=FIXED(1) size=FIXED(1024)' -log interval=5",
+    "cassandra-stress write cl=QUORUM n=10485760 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..10485760 -col 'n=FIXED(1) size=FIXED(1024)' -log interval=5",
 ]
 stress_cmd: [
-    "cassandra-stress write cl=QUORUM duration=720m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=3000/s -pop seq=1..10485760 -col 'n=FIXED(1) size=FIXED(1024)' -log interval=5",
+    "cassandra-stress write cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=3000/s -pop seq=1..10485760 -col 'n=FIXED(1) size=FIXED(1024)' -log interval=5",
 ]
 max_events_severities: ['CassandraStressLogEvent.TooManyHintsInFlight=WARNING']
 

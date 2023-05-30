@@ -1,12 +1,12 @@
 test_duration: 1200
 
 prepare_write_cmd: [
-    "cassandra-stress write cl=QUORUM n=73242192 -schema 'replication(factor=3)' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..73242192 -mode cql3 native -rate threads=200 -log interval=5",
-    "cassandra-stress write cl=QUORUM n=73242192 -schema 'replication(factor=3)' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=73242193..146484384 -mode cql3 native -rate threads=200 -log interval=5",
-    "cassandra-stress write cl=QUORUM n=73242192 -schema 'replication(factor=3)' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=146484385..219726576 -mode cql3 native -rate threads=200 -log interval=5",
-    "cassandra-stress write cl=QUORUM n=73242192 -schema 'replication(factor=3)' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=219726577..292968768 -mode cql3 native -rate threads=200 -log interval=5",
+    "cassandra-stress write cl=QUORUM n=73242192 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..73242192 -mode cql3 native -rate threads=200 -log interval=5",
+    "cassandra-stress write cl=QUORUM n=73242192 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=73242193..146484384 -mode cql3 native -rate threads=200 -log interval=5",
+    "cassandra-stress write cl=QUORUM n=73242192 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=146484385..219726576 -mode cql3 native -rate threads=200 -log interval=5",
+    "cassandra-stress write cl=QUORUM n=73242192 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=219726577..292968768 -mode cql3 native -rate threads=200 -log interval=5",
 ]
-stress_read_cmd: "cassandra-stress read cl=QUORUM duration=400m -schema 'replication(factor=3)' -col 'size=FIXED(1024) n=FIXED(1)' -mode cql3 native -rate threads=125 throttle=<THROTTLE_PLACE_HOLDER>/s -log interval=5"
+stress_read_cmd: "cassandra-stress read cl=QUORUM duration=400m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -col 'size=FIXED(1024) n=FIXED(1)' -mode cql3 native -rate threads=125 throttle=<THROTTLE_PLACE_HOLDER>/s -log interval=5"
 round_robin: true
 
 hinted_handoff: 'disabled'  # Turned off so it would not interfere with the creation of missing rows and with the repair

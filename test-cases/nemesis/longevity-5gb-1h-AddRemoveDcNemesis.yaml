@@ -1,9 +1,9 @@
 test_duration: 90
 
-prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=5048570 -schema 'replication(factor=3)' -mode cql3 native -rate threads=80 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=5048570 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=80 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
 
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=40 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5",
-             "cassandra-stress read  cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=40 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=40 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=40 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
              ]
 
 n_db_nodes: 3

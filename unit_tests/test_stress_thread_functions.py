@@ -30,7 +30,8 @@ def test_duration_str_to_seconds_function(duration, seconds):
 
 
 @pytest.mark.parametrize("stress_cmd, timeout", (
-    ("cassandra-stress counter_write cl=QUORUM duration=20m -schema 'replication(factor=3)' no-warmup", 1200 + 900),
+    ("cassandra-stress counter_write cl=QUORUM duration=20m"
+     " -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' no-warmup", 1200 + 900),
     ("scylla-bench -workload=uniform -concurrency 64 -duration 1h -validate-data", 3600 + 900),
     ("scylla-bench -partition-count=20000 -duration=250s", 250 + 900),
     ("gemini -d --duration 10m --warmup 10s -c 5 -m write", 610 + 900),

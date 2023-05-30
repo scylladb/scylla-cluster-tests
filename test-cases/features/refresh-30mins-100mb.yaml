@@ -1,8 +1,8 @@
 # TODO: need to qualify
 test_duration: 45
 
-prepare_stress_cmd: cassandra-stress write no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5
-stress_cmd: cassandra-stress write no-warmup cl=QUORUM duration=20m -schema 'replication(factor=3)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5
+prepare_stress_cmd: cassandra-stress write no-warmup cl=QUORUM n=10000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5
+stress_cmd: cassandra-stress write no-warmup cl=QUORUM duration=20m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5
 
 n_db_nodes: 2
 n_loaders: 1

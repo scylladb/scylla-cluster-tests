@@ -390,7 +390,8 @@ class StopCompactionTestICS(ClusterTester):
         self.node = self.db_cluster.nodes[0]
         self.storage_service_client = StorageServiceClient(self.node)
         # insert ~10GB of data
-        populate_data_cmd = "cassandra-stress write cl=ONE n=2097152 -schema 'replication(factor=1) " \
+        populate_data_cmd = "cassandra-stress write cl=ONE n=2097152" \
+                            " -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) " \
                             "compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native " \
                             "-rate threads=80 -pop seq=1..2097152 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
         prepare = self.run_stress_thread(stress_cmd=populate_data_cmd, round_robin=True)
@@ -403,7 +404,7 @@ class StopCompactionTestICS(ClusterTester):
             tester_obj=self,
             termination_event=self.db_cluster.nemesis_termination_event)
         compaction_nemesis.disrupt()
-        verify_cmd = "cassandra-stress read cl=ONE -schema 'replication(factor=1) " \
+        verify_cmd = "cassandra-stress read cl=ONE -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) " \
                      "compaction(strategy=IncrementalCompactionStrategy)' -mode cql3 native" \
                      " -rate threads=40 -pop seq=1..2097152 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 

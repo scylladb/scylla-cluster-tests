@@ -1,5 +1,5 @@
 test_duration: 300
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 throttle=5000/s -pop seq=1..10000000 -log interval=5"
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 throttle=5000/s -pop seq=1..10000000 -log interval=5"
              ]
 n_db_nodes: 3
 k8s_n_scylla_pods_per_cluster: 3

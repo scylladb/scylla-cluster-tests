@@ -3,11 +3,11 @@ test_duration: 1580
 
 
 
-prepare_write_cmd: "cassandra-stress write no-warmup cl=ALL n=$ROW_NUMBER -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=$SEQUENCE"
+prepare_write_cmd: "cassandra-stress write no-warmup cl=ALL n=$ROW_NUMBER -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=$SEQUENCE"
 
-stress_cmd_m: ["cassandra-stress mixed 'ratio(write=1,read=1)' no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=$threads throttle=$throttle/s' -pop 'dist=$DIST_PARAMS' "]
-stress_cmd_w: ["cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=$threads throttle=$throttle/s' -pop 'dist=$DIST_PARAMS' "]
-stress_cmd_r: ["cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=$threads throttle=$throttle/s' -pop 'dist=$DIST_PARAMS' "]
+stress_cmd_m: ["cassandra-stress mixed 'ratio(write=1,read=1)' no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=$threads throttle=$throttle/s' -pop 'dist=$DIST_PARAMS' "]
+stress_cmd_w: ["cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=$threads throttle=$throttle/s' -pop 'dist=$DIST_PARAMS' "]
+stress_cmd_r: ["cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=$threads throttle=$throttle/s' -pop 'dist=$DIST_PARAMS' "]
 
 compaction_strategy: "LeveledCompactionStrategy"
 

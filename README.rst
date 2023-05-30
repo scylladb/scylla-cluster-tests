@@ -303,7 +303,7 @@ dumping a lot of information in the test main log. That includes:
    are properly set up, you'll see it clearly separated from the initial flurry
    of Node init information::
 
-    15:47:55 INFO | [54.193.84.90] Running '/usr/bin/ssh -a -x  -o ControlPath=/var/tmp/ssh-masterTQ3hZu/socket -o StrictHostKeyChecking=no -o UserKnownHostsFile=/var/tmp/tmpOjFA9Q -o BatchMode=yes -o ConnectTimeout=300 -o ServerAliveInterval=300 -l centos -p 22 -i /var/tmp/lmr-longevity-test-8b95682d.pem 54.193.84.90 "cassandra-stress write cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=4 -node 172.31.18.109"'
+    15:47:55 INFO | [54.193.84.90] Running '/usr/bin/ssh -a -x  -o ControlPath=/var/tmp/ssh-masterTQ3hZu/socket -o StrictHostKeyChecking=no -o UserKnownHostsFile=/var/tmp/tmpOjFA9Q -o BatchMode=yes -o ConnectTimeout=300 -o ServerAliveInterval=300 -l centos -p 22 -i /var/tmp/lmr-longevity-test-8b95682d.pem 54.193.84.90 "cassandra-stress write cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=4 -node 172.31.18.109"'
     15:48:02 DEBUG| [54.193.84.90] [stdout] INFO  17:48:01 Found Netty's native epoll transport in the classpath, using it
     15:48:03 DEBUG| [54.193.84.90] [stdout] INFO  17:48:03 Using data-center name 'datacenter1' for DCAwareRoundRobinPolicy (if this is incorrect, please provide the correct datacenter name with DCAwareRoundRobinPolicy constructor)
     15:48:03 DEBUG| [54.193.84.90] [stdout] INFO  17:48:03 New Cassandra host /172.31.18.109:9042 added
