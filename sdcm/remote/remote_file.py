@@ -23,10 +23,27 @@ from sdcm import wait
 
 
 LOGGER = logging.getLogger(__name__)
+# The below set of SECURED_PARAMETERS should include relevant password-parameter-names,
+# to be masked by asterisks when printed to log.
+SECURED_PARAMETERS = {'ldap_bind_passwd'}
 
 
 def read_to_stringio(fobj):
     return StringIO(fobj.read())
+
+
+def secured_masked_content(parameters_content: str) -> str:
+    yaml_content = {}
+    out = yaml.safe_load(parameters_content)
+    if isinstance(out, dict):
+        yaml_content.update(out)
+    if not yaml_content:
+        LOGGER.warning("Got an invalid parameters-content. cannot mask any value.")
+        return ''
+    for key, value in yaml_content.items():
+        if key in SECURED_PARAMETERS:
+            yaml_content[key] = '*' * len(value)
+    return yaml.safe_dump(yaml_content)
 
 
 # pylint: disable=too-many-locals,too-many-arguments
@@ -60,7 +77,7 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
         with open(local_tempfile, "w", encoding="utf-8") as fobj:
             fobj.write(content)
 
-        LOGGER.debug("New content of `%s':\n%s", remote_path, content)
+        LOGGER.debug("New content of `%s':\n%s", remote_path, secured_masked_content(parameters_content=content))
 
         remote_tempfile = remoter.run("mktemp").stdout.strip()
         remote_tempfile_move_cmd = f"mv '{remote_tempfile}' '{remote_path}'"
