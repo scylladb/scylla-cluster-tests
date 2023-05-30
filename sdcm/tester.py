@@ -2953,7 +2953,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         base_cmd = "cassandra-stress write cl=QUORUM "
         if read:
             base_cmd = "cassandra-stress read cl=ONE "
-        stress_fixed_params = f" -schema 'replication(factor={replication_factor}) " \
+        stress_fixed_params = f" -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor={replication_factor}) " \
                               "compaction(strategy=LeveledCompactionStrategy)' " \
                               "-mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' "
         stress_keys = "n="

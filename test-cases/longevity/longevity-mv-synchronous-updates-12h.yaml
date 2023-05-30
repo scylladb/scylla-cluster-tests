@@ -1,9 +1,9 @@
 test_duration: 780
-prepare_write_cmd: ["cassandra-stress write cl=ALL n=104857600  -schema 'replication(factor=3)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..104857600 -log interval=15",
+prepare_write_cmd: ["cassandra-stress write cl=ALL n=104857600  -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..104857600 -log interval=15",
                     "cassandra-stress user profile=/tmp/mv_synchronous_updates.yaml ops'(insert=25)' cl=QUORUM n=20000000 -mode cql3 native -rate threads=100",
                     "cassandra-stress user profile=/tmp/mv_synchronous_updates_lwt.yaml ops'(insert=25)' cl=QUORUM n=10000000 -mode cql3 native -rate threads=100"
                    ]
-stress_read_cmd: ["cassandra-stress mixed cl=QUORUM duration=690m  -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..104857600 -log interval=15",
+stress_read_cmd: ["cassandra-stress mixed cl=QUORUM duration=690m  -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..104857600 -log interval=15",
                   "cassandra-stress user profile=/tmp/mv_synchronous_updates.yaml ops'(select_base=3,select_mv=3,select_mv_2=3,url_column_update=1,row_delete=1)' cl=QUORUM duration=690m -mode cql3 native -rate threads=50",
                   "cassandra-stress user profile=/tmp/mv_synchronous_updates.yaml ops'(select_base=3,select_mv=3,select_mv_2=3,url_column_update=1,row_delete=1)' cl=QUORUM duration=690m -mode cql3 native -rate threads=50",
                   "cassandra-stress user profile=/tmp/mv_synchronous_updates.yaml ops'(select_base=3,select_mv=3,select_mv_2=3,url_column_update=1,row_delete=1)' cl=QUORUM duration=690m -mode cql3 native -rate threads=50",

@@ -6,11 +6,13 @@ class HintedHandoffTest(ClusterTester):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.stress_write_cmd = "cassandra-stress write no-warmup cl=ONE n=100123123 -schema 'replication(factor=3)' " \
+        self.stress_write_cmd = "cassandra-stress write no-warmup cl=ONE n=100123123 " \
+                                "-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' " \
                                 "-mode cql3 native -rate 'threads=20 throttle=16000/s' " \
                                 "-col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..100123123 -log interval=15"
 
-        self.stress_read_cmd = "cassandra-stress read no-warmup cl=ONE n=100123123 -schema 'replication(factor=3)' " \
+        self.stress_read_cmd = "cassandra-stress read no-warmup cl=ONE n=100123123 " \
+                               "-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' " \
                                "-mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)'" \
                                " -pop seq=1..100123123 -log interval=15"
 

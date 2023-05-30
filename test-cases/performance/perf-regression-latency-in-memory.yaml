@@ -2,12 +2,12 @@
 
 test_duration: 300
 
-prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=9000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..9000000",
-                    "cassandra-stress write no-warmup cl=ALL n=9000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=9000001..18000000",
-                    "cassandra-stress write no-warmup cl=ALL n=9000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=18000001..27000000",
-                    "cassandra-stress write no-warmup cl=ALL n=9000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=27000001..36000000"]
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=9000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..9000000",
+                    "cassandra-stress write no-warmup cl=ALL n=9000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=9000001..18000000",
+                    "cassandra-stress write no-warmup cl=ALL n=9000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=18000001..27000000",
+                    "cassandra-stress write no-warmup cl=ALL n=9000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=27000001..36000000"]
 
-stress_cmd_r: "cassandra-stress read no-warmup  cl=ONE duration=50m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=10 throttle=30000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'seq=1..36000000'"
+stress_cmd_r: "cassandra-stress read no-warmup  cl=ONE duration=50m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=10 throttle=30000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'seq=1..36000000'"
 
 n_db_nodes: 3
 n_loaders: 4

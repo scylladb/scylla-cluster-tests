@@ -1,11 +1,11 @@
 test_duration: 5020
-prepare_write_cmd: ["cassandra-stress write cl=ALL n=275050075 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..275050075",
-                    "cassandra-stress write cl=ALL n=275050075 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=275050076..550100150",
-                    "cassandra-stress write cl=ALL n=275050075 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=550100151..825150225",
-                    "cassandra-stress write cl=ALL n=275050075 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=825150226..1100200300"]
+prepare_write_cmd: ["cassandra-stress write cl=ALL n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..275050075",
+                    "cassandra-stress write cl=ALL n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=275050076..550100150",
+                    "cassandra-stress write cl=ALL n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=550100151..825150225",
+                    "cassandra-stress write cl=ALL n=275050075 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=825150226..1100200300"]
 
-stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=4140m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..550100150 -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
-             "cassandra-stress mixed cl=QUORUM duration=4140m -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=550100151..1100200300 -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=4140m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..550100150 -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+             "cassandra-stress mixed cl=QUORUM duration=4140m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=550100151..1100200300 -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
              "cassandra-stress read cl=QUORUM duration=4140m -mode cql3 native -rate threads=10 -pop seq=1..550100150 -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
              "cassandra-stress read cl=QUORUM duration=4140m -mode cql3 native -rate threads=10 -pop seq=550100151..1100200300 -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'"]
 

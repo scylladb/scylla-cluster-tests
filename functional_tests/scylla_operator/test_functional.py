@@ -816,7 +816,7 @@ def test_cloud_bundle_connectivity_cassandra_stress(tester):
     assert tester.db_cluster.connection_bundle_file, "cloud bundle wasn't found"
 
     cmd = (
-        """cassandra-stress write cl=ONE duration=1m -schema 'replication(factor=1) """
+        """cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) """
         """compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native """
         """-rate threads=10 -pop seq=1..10000000 -log interval=5"""
     )

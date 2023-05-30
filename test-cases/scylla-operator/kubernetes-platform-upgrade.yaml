@@ -4,17 +4,17 @@ test_duration: 360
 root_disk_size_runner: 120
 
 prepare_write_cmd: [
-    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000",
-    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..20000000",
-    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=20000001..30000000",
-    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=30000001..40000000"
+    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000",
+    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..20000000",
+    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=20000001..30000000",
+    "cassandra-stress write no-warmup cl=ALL    n=10000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=30000001..40000000"
 ]
-stress_during_entire_upgrade: "cassandra-stress read no-warmup cl=QUORUM duration=90m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=100 throttle=10000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..40000000,30000000,15000000)' -log interval=5"
+stress_during_entire_upgrade: "cassandra-stress read no-warmup cl=QUORUM duration=90m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=100 throttle=10000/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..40000000,30000000,15000000)' -log interval=5"
 stress_cmd_r: [
-    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=30000001..40000000 -log interval=5",
-    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=20000001..30000000 -log interval=5",
-    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..20000000 -log interval=5",
-    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000 -log interval=5"
+    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=30000001..40000000 -log interval=5",
+    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=20000001..30000000 -log interval=5",
+    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..20000000 -log interval=5",
+    "cassandra-stress read  no-warmup cl=QUORUM n=10000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..10000000 -log interval=5"
 ]
 round_robin: true
 

@@ -1,8 +1,8 @@
 test_duration: 300
 
 # workloads
-stress_cmd_r: cassandra-stress read no-warmup cl=QUORUM n=2010020 -schema 'keyspace=keyspace_entire_test replication(factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..2010020 -log interval=5
-stress_cmd_w: cassandra-stress write no-warmup cl=QUORUM n=2010020 -schema 'keyspace=keyspace_entire_test replication(factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..2010020 -log interval=5
+stress_cmd_r: cassandra-stress read no-warmup cl=QUORUM n=2010020 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..2010020 -log interval=5
+stress_cmd_w: cassandra-stress write no-warmup cl=QUORUM n=2010020 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..2010020 -log interval=5
 
 n_db_nodes: 3
 k8s_n_scylla_pods_per_cluster: 3

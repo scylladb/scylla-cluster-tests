@@ -1,5 +1,5 @@
 instance_type_db: 'i3en.2xlarge'
 
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=600m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=80 throttle=9000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "
-stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=600m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=80 throttle=8000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "
-stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=600m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=80 throttle=7000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=600m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=80 throttle=9000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "
+stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=600m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=80 throttle=8000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=600m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=80 throttle=7000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "

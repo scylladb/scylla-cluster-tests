@@ -66,7 +66,7 @@ class GrowClusterTest(ClusterTester):
         threads = self.params.get('cassandra_stress_threads')
 
         return ("cassandra-stress %s cl=QUORUM duration=%sm "
-                "-schema 'replication(factor=3)' -col 'size=FIXED(2) n=FIXED(1)' "
+                "-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -col 'size=FIXED(2) n=FIXED(1)' "
                 "-mode cql3 native -rate threads=%s "
                 "-pop seq=1..%s -node %s" %
                 (mode, duration, threads, population_size, ip))

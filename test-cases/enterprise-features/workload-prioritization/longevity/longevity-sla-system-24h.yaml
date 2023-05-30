@@ -1,10 +1,10 @@
 test_duration: 1500
 
-prepare_write_cmd:  ["cassandra-stress write cl=QUORUM n=500000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=600 -pop seq=1..500000000 -log interval=5"]
+prepare_write_cmd:  ["cassandra-stress write cl=QUORUM n=500000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=600 -pop seq=1..500000000 -log interval=5"]
 
 # This is the main stress thread that will run with default role (cassandra)
-stress_cmd: ["cassandra-stress read cl=QUORUM duration=1380m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..250000000 -log interval=5 -errors retries=50",
-             "cassandra-stress read cl=QUORUM duration=1380m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=250000001..500000000 -log interval=5 -errors retries=50"
+stress_cmd: ["cassandra-stress read cl=QUORUM duration=1380m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..250000000 -log interval=5 -errors retries=50",
+             "cassandra-stress read cl=QUORUM duration=1380m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=250000001..500000000 -log interval=5 -errors retries=50"
              ]
 
 n_db_nodes: 5

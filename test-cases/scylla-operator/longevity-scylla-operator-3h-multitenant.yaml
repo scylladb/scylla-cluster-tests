@@ -1,12 +1,12 @@
 test_duration: 300
 prepare_write_cmd:  [
-    "cassandra-stress write cl=QUORUM n=5485760 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..5485760 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-    "cassandra-stress write cl=QUORUM n=5485760 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=5485761..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+    "cassandra-stress write cl=QUORUM n=5485760 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..5485760 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+    "cassandra-stress write cl=QUORUM n=5485760 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=5485761..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
 ]
 
 stress_cmd: [
-    "cassandra-stress write cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=2500/s -pop seq=1..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-    "cassandra-stress read  cl=QUORUM duration=150m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=2500/s -pop seq=1..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+    "cassandra-stress write cl=QUORUM duration=150m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=2500/s -pop seq=1..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+    "cassandra-stress read  cl=QUORUM duration=150m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 throttle=2500/s -pop seq=1..10971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 ]
 round_robin: true
 

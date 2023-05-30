@@ -1,7 +1,7 @@
 test_duration: 5000
-prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..100000000"]
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..100000000"]
 
-stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=4320m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  -rate threads=100 -pop seq=1..100000000 -log interval=5",
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=4320m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  -rate threads=100 -pop seq=1..100000000 -log interval=5",
              "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=4320m -mode cql3 native -rate threads=20"]
 
 stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=4320m -mode cql3 native  -rate threads=50 -pop seq=1..100000000 -log interval=5"]

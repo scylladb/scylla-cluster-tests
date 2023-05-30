@@ -20,11 +20,11 @@ prepare_write_cmd:
     -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true
     -p insertstart=3495250 -p insertcount=3495250 -p table=usertable_no_lwt
 
-  - cassandra-stress write cl=QUORUM n=6990500 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..6990500 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5
+  - cassandra-stress write cl=QUORUM n=6990500 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..6990500 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5
 
 stress_cmd: [
-  "cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=20 -pop seq=1..6990500 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-  "cassandra-stress read  cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=20 -pop seq=1..6990500 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+  "cassandra-stress write cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=20 -pop seq=1..6990500 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+  "cassandra-stress read  cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=20 -pop seq=1..6990500 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
   # with lwt table
   "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true -p maxexecutiontime=10800",
   # no lwt table

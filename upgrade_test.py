@@ -430,7 +430,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.verify_db_data()
 
         InfoEvent(message='Starting c-s write workload to pupulate 10M paritions').publish()
-        # YAML: stress_cmd: cassandra-stress write cl=QUORUM n=10000000 -schema 'replication(factor=3)'
+        # YAML: stress_cmd: cassandra-stress write cl=QUORUM n=10000000
+        # -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
         # -mode cql3 native -rate threads=1000 -pop seq=1..10000000
         stress_cmd = self._cs_add_node_flag(self.params.get('stress_cmd'))
         self.run_stress_thread(stress_cmd=stress_cmd)
@@ -440,7 +441,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         time.sleep(600)
 
         InfoEvent(message='Starting c-s read workload for 60m').publish()
-        # YAML: stress_cmd_1: cassandra-stress read cl=QUORUM duration=60m -schema 'replication(factor=3)'
+        # YAML: stress_cmd_1: cassandra-stress read cl=QUORUM duration=60m
+        # -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)'
         # -mode cql3 native -rate threads=100 -pop seq=1..10000000
         stress_cmd_1 = self._cs_add_node_flag(self.params.get('stress_cmd_1'))
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_1)
