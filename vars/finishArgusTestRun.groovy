@@ -11,7 +11,7 @@ def call(Map params, RunWrapper currentBuild) {
     echo "Finishing Argus test run ..."
 
     export SCT_CLUSTER_BACKEND="${params.backend}"
-    export SCT_CONFIG_FILES="${test_config}"
+    export SCT_CONFIG_FILES=${test_config}
 
     ./docker/env/hydra.sh finish-argus-test-run --jenkins-status "${test_status}"
 
