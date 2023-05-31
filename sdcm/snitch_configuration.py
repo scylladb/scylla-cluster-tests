@@ -12,17 +12,16 @@
 # Copyright (c) 2023 ScyllaDB
 
 import re
-from typing import List, Type
+from typing import List
 
 
 class SnitchConfig:  # pylint: disable=too-few-public-methods
-    """Keeps all snitch-related settings and function to apply them"""
-    SNITCH_NAME = ""
+    """Keeps all cassandra-rackdc.properties settings and function to apply them"""
 
     def __init__(self, node: "sdcm.cluster.BaseNode", datacenters: List[str]):
         self._node = node
         self._is_multi_dc = len(datacenters) > 1
-        self._rack = node.rack
+        self._rack = f"RACK{node.rack}"
         self._datacenter = datacenters[node.dc_idx]
         self._dc_prefix = self._get_dc_prefix()
         self._dc_suffix = self._get_dc_suffix()
@@ -44,47 +43,19 @@ class SnitchConfig:  # pylint: disable=too-few-public-methods
         else:
             return ""
 
-    def apply(self) -> bool:
+    def apply(self) -> None:
         """
         Apply snitch configuration to the node (only in cassandra-rackdc.properties, scylla.yaml must be updated separately.).
 
         Returns `True` if require Scylla restart to make the effect.
         """
-        requires_restart = False
-        properties = {name: str(getattr(self, name)).lower() for name in dir(self)
-                      if isinstance(getattr(self.__class__, name, None), property)}
+        properties = {
+            'dc': self._datacenter,
+            'rack': self._rack,
+            'prefer_local': 'true',
+        }
+        if self._dc_suffix:
+            properties['dc_suffix'] = self._dc_suffix
+
         with self._node.remote_cassandra_rackdc_properties() as properties_file:
-            if properties:
-                requires_restart = True
             properties_file.update(**properties)
-        return requires_restart
-
-
-class GossipingPropertyFileSnitchConfig(SnitchConfig):
-
-    @property
-    def dc(self) -> str:
-        return f"{self._dc_prefix}{self._dc_suffix}"
-
-    @property
-    def rack(self) -> str:
-        return f"RACK{self._rack}"
-
-    @property
-    def prefer_local(self) -> bool:
-        return True
-
-
-class Ec2SnitchConfig(SnitchConfig):
-
-    @property
-    def dc_suffix(self):
-        return self._dc_suffix
-
-
-def get_snitch_config_class(params: dict) -> Type[SnitchConfig]:
-    if params.get('simulated_racks') > 1:
-        return GossipingPropertyFileSnitchConfig
-    if params.get('cluster_backend') == 'aws':
-        return Ec2SnitchConfig
-    return SnitchConfig  # default, basically doing nothing

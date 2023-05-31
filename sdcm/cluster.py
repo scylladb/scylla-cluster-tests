@@ -71,7 +71,7 @@ from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml
 from sdcm import wait, mgmt
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
-from sdcm.snitch_configuration import get_snitch_config_class
+from sdcm.snitch_configuration import SnitchConfig
 from sdcm.utils import properties
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
@@ -4364,8 +4364,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             if self.test_config.BACKTRACE_DECODING:
                 node.install_scylla_debuginfo()
 
-            snitch_config = get_snitch_config_class(self.params)
-            snitch_config(node=node, datacenters=self.datacenter).apply()  # pylint: disable=no-member
+            if self.test_config.MULTI_REGION or self.params.get('simulated_racks') > 1:
+                SnitchConfig(node=node, datacenters=self.datacenter).apply()  # pylint: disable=no-member
             node.config_setup(append_scylla_args=self.get_scylla_args())
 
             self._scylla_post_install(node, install_scylla, nic_devname)
