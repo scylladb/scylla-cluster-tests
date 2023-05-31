@@ -7,6 +7,6 @@ longevityPipeline(
     backend: 'azure',
     region: 'eastus',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/nemesis/longevity-5gb-1h-RandomInterruptionNetworkMonkey.yaml'
-
+    test_config: 'test-cases/nemesis/longevity-5gb-1h-RandomInterruptionNetworkMonkey.yaml',
+    ip_ssh_connections: 'public'
 )
