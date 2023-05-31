@@ -19,6 +19,7 @@ instance_type_loader: 'c5.large'
 azure_instance_type_loader: 'Standard_F2s_v2'
 
 extra_network_interface: true
+ip_ssh_connections: 'public'  # need to use public IPs because extra NIC is in the same subnet as default one.
 
 nemesis_class_name: 'BlockNetworkMonkey'
 nemesis_interval: 3
