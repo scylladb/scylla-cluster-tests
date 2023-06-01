@@ -2949,7 +2949,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
 
     @property
     def pod_selector(self):
-        return 'loader-name'
+        return 'loader-cluster-name'
 
     def node_setup(self,
                    node: BasePodContainer,
