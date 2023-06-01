@@ -11,7 +11,9 @@
 #
 # Copyright (c) 2023 ScyllaDB
 import logging
+import time
 import uuid
+from datetime import datetime
 from functools import cached_property
 import re
 from typing import Any
@@ -172,7 +174,6 @@ class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
     def __init__(self):
         try:
             self._es = ES()
-            self._test_id = TestConfig.test_id()
             self._index = "sct-adaptive-timeouts"
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.warning("Couldn't initialize ESAdaptiveTimeoutStore: %s", exc)
@@ -182,7 +183,8 @@ class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
     def store(self, metrics: dict[str, Any], operation: str, duration: float, timeout: float,
               timeout_occurred: bool):
         body = metrics
-        body["test_id"] = self._test_id
+        body["test_id"] = TestConfig.test_id()
+        body["end_time"] = datetime.utcfromtimestamp(time.time())
         body["operation"] = operation
         body["duration"] = duration
         body["timeout"] = timeout
