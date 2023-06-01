@@ -595,7 +595,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_20_user_data_format_version_aws_2(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-07d54ca4e98347364'  # run image which isn't scylla
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-08396399fcc3968ff'  # run image which isn't scylla
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()

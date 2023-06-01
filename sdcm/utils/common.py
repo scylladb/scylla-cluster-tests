@@ -1728,6 +1728,7 @@ def get_branched_gce_images(
 def ami_built_by_scylla(ami_id: str, region_name: str) -> bool:
     ec2_resource = boto3.resource("ec2", region_name=region_name)
     image = ec2_resource.Image(ami_id)
+    image.load()
     return image.owner_id == SCYLLA_AMI_OWNER_ID
 
 
