@@ -13,6 +13,9 @@ max_events_severities: ['CassandraStressLogEvent.TooManyHintsInFlight=WARNING']
 
 k8s_tenants_num: 14
 
+# NOTE: K8S Scylla nodes have 3.5Tb disk size
+k8s_scylla_disk_gi: 249
+
 # NOTE: we disable second type of monitoring - K8S based one. It is redundant while we use standalone ones.
 k8s_deploy_monitoring: false
 
