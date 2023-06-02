@@ -74,7 +74,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
     @property
     def gemini_result_file(self):
         if not self._gemini_result_file:
-            self._gemini_result_file = os.path.join("/gemini", "gemini_result_{}.log".format(uuid.uuid4()))
+            self._gemini_result_file = os.path.join("/", "gemini_result_{}.log".format(uuid.uuid4()))
         return self._gemini_result_file
 
     def _generate_gemini_command(self):
@@ -85,7 +85,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
         oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips()) if self.oracle_cluster else None
 
-        cmd = "{} --test-cluster={} --outfile {} --seed {} --request-timeout {}s --connect-timeout {}s ".format(
+        cmd = "./{} --test-cluster={} --outfile {} --seed {} --request-timeout {}s --connect-timeout {}s ".format(
             self.stress_cmd.strip(),
             test_nodes,
             self.gemini_result_file,
@@ -106,7 +106,8 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
         docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host')
+                                                extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker}'
+                                                                  f' --network=host --entrypoint=""')
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
