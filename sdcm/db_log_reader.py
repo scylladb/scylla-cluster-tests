@@ -172,7 +172,10 @@ class DbLogReader(Process):
             backtraces = list(filter(self.filter_backtraces, backtraces))
 
         for backtrace in backtraces:
-            if self._decoding_queue and backtrace["event"].raw_backtrace:
+            if not (self._decoding_queue and backtrace["event"].raw_backtrace):
+                backtrace["event"].publish()
+                continue
+            try:
                 scylla_debug_info = self.get_scylla_debuginfo_file()
                 LOGGER.debug("Debug info file %s", scylla_debug_info)
                 self._decoding_queue.put({
@@ -180,8 +183,9 @@ class DbLogReader(Process):
                     "debug_file": scylla_debug_info,
                     "event": backtrace["event"],
                 })
-            else:
+            except Exception:  # pylint: disable=broad-except
                 backtrace["event"].publish()
+                raise
 
     @raise_event_on_failure
     def run(self):
