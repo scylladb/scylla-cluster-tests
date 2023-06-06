@@ -557,27 +557,30 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         except Exception:  # pylint: disable=broad-except
             return str(self.__class__)
 
-    def _kill_scylla_daemon(self):
+    def _kill_scylla_daemon(self, node: BaseNode, clean_scylla_data=False):
         with EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                          event_class=CassandraStressLogEvent,
                                          regex=".*Connection reset by peer.*",
                                          extra_time_to_expiration=30):
-            self.log.info('Kill all scylla processes in %s', self.target_node)
-            self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
+            self.log.info('Kill all scylla processes in %s', node)
+            node.remoter.sudo("pkill -9 scylla", ignore_status=True)
 
             # Wait for the process to be down before waiting for service to be restarted
-            self.target_node.wait_db_down(check_interval=2)
+            node.wait_db_down(check_interval=2)
+
+            if clean_scylla_data:
+                node.clean_scylla_data()
 
             # Let's wait for the target Node to have their services re-started
             self.log.info('Waiting scylla services to be restarted after we killed them...')
-            self.target_node.wait_db_up(timeout=14400)
+            node.wait_db_up(timeout=14400)
             if self.cluster.params.get('use_mgmt'):
                 # Workaround for https://github.com/scylladb/scylla-manager/issues/2813
                 # When scylla take too long time to bring api port up
                 #  scylla-manager-agent fails to start and never go up
-                self.target_node.start_service(service_name='scylla-manager-agent', timeout=600, ignore_status=True)
+                node.start_service(service_name='scylla-manager-agent', timeout=600, ignore_status=True)
             self.log.info('Waiting JMX services to be restarted after we killed them...')
-            self.target_node.wait_jmx_up()
+            node.wait_jmx_up()
         self.cluster.wait_for_schema_agreement()
 
     def disrupt_stop_wait_start_scylla_server(self, sleep_time=300):  # pylint: disable=invalid-name
@@ -1523,7 +1526,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.cluster.update_seed_provider()
 
     def disrupt_kill_scylla(self):
-        self._kill_scylla_daemon()
+        self._kill_scylla_daemon(self.target_node)
 
     def disrupt_no_corrupt_repair(self):
         # prepare test tables and fill test data
@@ -3503,13 +3506,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
             log_follower=log_follower,
-            disrupt_func=self.reboot_node,
-            disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
+            disrupt_func=self._kill_scylla_daemon,
+            disrupt_func_kwargs={"node": self.target_node, "clean_scylla_data": True},
             delay=0
         )
         timeout = 1200
-        if self.cluster.params.get('cluster_backend') == 'azure':
-            timeout += 1200  # Azure reboot can take up to 20min to initiate
 
         with contextlib.ExitStack() as stack:
             for expected_start_failed_context in self.target_node.raft.get_severity_change_filters_scylla_start_failed(timeout):
