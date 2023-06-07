@@ -26,7 +26,7 @@ k8s_enable_performance_tuning: true
 k8s_loader_cluster_name: 'sct-loaders'
 k8s_scylla_cluster_name: 'sct-cluster'
 k8s_scylla_datacenter: 'us-east1-b'
-k8s_scylla_disk_gi: 500
+k8s_scylla_disk_gi: 3490
 # NOTE: use any of the following pairs:
 #   'k8s_scylla_disk_class=local-raid-disks'   and 'k8s_local_volume_provisioner_type=static'
 #   'k8s_scylla_disk_class=scylladb-local-xfs' and 'k8s_local_volume_provisioner_type=dynamic'
