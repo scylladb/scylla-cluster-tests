@@ -30,30 +30,6 @@
         {% endfor %}
         </ul>
     </div>
-    <h1>Prometheus stats</h1>
-    <table id="results_table">
-        {% set metrics=("min", "avg", "max", "stdev") %}
-        <tr>
-            <th> Sub test </th>
-            <th> Stat </th>
-            {% for metric in metrics %}
-                <th>{{ metric }}</th>
-            {% endfor %}
-        </tr>
-        {% for sub_type in prometheus_stats.keys() %}
-            {% for stat_name in prometheus_stats[sub_type].keys() %}
-                {% if prometheus_stats[sub_type].get(stat_name) %}
-                <tr>
-                    <td> {{sub_type}} </td>
-                    <td>{{ stat_name }} - [{{ prometheus_stats_units[stat_name] }}]</td>
-                    {% for metric in metrics %}
-                        <td>{{ "%.1f" % prometheus_stats[sub_type][stat_name][metric] }} </td>
-                    {% endfor %}
-                </tr>
-                {% endif %}
-            {% endfor %}
-        {% endfor %}
-    </table>
 
     {% if cs_raw_cmd %}
     <h1>Cassandra-stress stats comparison</h1>
@@ -191,5 +167,30 @@
         {% endfor %}
     </table>
     {% endfor %}
+
+    <h1>Prometheus stats</h1>
+    <table id="results_table">
+        {% set metrics=("min", "avg", "max", "stdev") %}
+        <tr>
+            <th> Sub test </th>
+            <th> Stat </th>
+            {% for metric in metrics %}
+                <th>{{ metric }}</th>
+            {% endfor %}
+        </tr>
+        {% for sub_type in prometheus_stats.keys() %}
+            {% for stat_name in prometheus_stats[sub_type].keys() %}
+                {% if prometheus_stats[sub_type].get(stat_name) %}
+                <tr>
+                    <td> {{sub_type}} </td>
+                    <td>{{ stat_name }} - [{{ prometheus_stats_units[stat_name] }}]</td>
+                    {% for metric in metrics %}
+                        <td>{{ "%.1f" % prometheus_stats[sub_type][stat_name][metric] }} </td>
+                    {% endfor %}
+                </tr>
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    </table>
 
 {% endblock %}

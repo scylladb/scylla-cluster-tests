@@ -36,25 +36,6 @@
         {% endfor %}
         </ul>
     </div>
-    <h1>Prometheus stats</h1>
-    {% set metrics=("min", "avg", "max", "stdev") %}
-    {% for stat_name in prometheus_stats.keys() %}
-    {% if prometheus_stats.get(stat_name) %}
-    <h2>{{ stat_name }} - [{{ prometheus_stats_units[stat_name] }}]</h2>
-    <table id="results_table">
-        <tr>
-            {% for metric in metrics %}
-            <th>{{ metric }}</th>
-            {% endfor %}
-        </tr>
-        <tr>
-            {% for metric in metrics %}
-            <td>{{ "%.1f" % prometheus_stats[stat_name][metric] }} </td>
-            {% endfor %}
-        </tr>
-    </table>
-    {% endif %}
-    {% endfor %}
 
     {% if cs_raw_cmd %}
     <h1>Cassandra-stress stats comparison</h1>
@@ -175,4 +156,25 @@
             </table>
         </div>
     {% endif %}
+
+    <h1>Prometheus stats</h1>
+    {% set metrics=("min", "avg", "max", "stdev") %}
+    {% for stat_name in prometheus_stats.keys() %}
+    {% if prometheus_stats.get(stat_name) %}
+    <h2>{{ stat_name }} - [{{ prometheus_stats_units[stat_name] }}]</h2>
+    <table id="results_table">
+        <tr>
+            {% for metric in metrics %}
+            <th>{{ metric }}</th>
+            {% endfor %}
+        </tr>
+        <tr>
+            {% for metric in metrics %}
+            <td>{{ "%.1f" % prometheus_stats[stat_name][metric] }} </td>
+            {% endfor %}
+        </tr>
+    </table>
+    {% endif %}
+    {% endfor %}
+
 {% endblock %}
