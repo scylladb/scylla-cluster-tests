@@ -33,4 +33,6 @@ class PerfSimpleQueryTest(ClusterTester):
                 specific_tested_stats={"perf_simple_query_result": json.loads(output)},
                 doc_id_with_timestamp=True)
             if self.create_stats:
-                PerfSimpleQueryAnalyzer(self._test_index, self._es_doc_type).check_regression(self._test_id)
+                is_gce = self.params.get('cluster_backend') == 'gce'
+                PerfSimpleQueryAnalyzer(self._test_index, self._es_doc_type).check_regression(
+                    self._test_id, is_gce=is_gce)

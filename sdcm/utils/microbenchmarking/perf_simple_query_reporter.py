@@ -47,7 +47,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
         keys.sort(reverse=True)
         return [results[key] for key in keys]
 
-    def check_regression(self, test_id, mad_deviation_limit=0.02, regression_limit=0.05):  # pylint: disable=too-many-locals,too-many-statements
+    def check_regression(self, test_id, mad_deviation_limit=0.02, regression_limit=0.05, is_gce=False):  # pylint: disable=too-many-locals,too-many-statements
         doc = self.get_test_by_id(test_id)
         if not doc:
             self.log.error('Cannot find test by id: {}!'.format(test_id))
@@ -130,9 +130,8 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
             scylla_date_results_table.append(make_table_line_for_render(result))
         test_stats_for_render = {'test_version':  test_stats['versions']['scylla-server']}
         test_stats_for_render.update({key: round(val, 2) for key, val in test_stats["stats"].items()})
-
-        subject = "perf_simple_query Microbenchmark - Regression - %s" % test_stats['versions']['scylla-server'][
-            'run_date_time']
+        subject = (f"{self._get_email_tags(doc,is_gce)} perf_simple_query Microbenchmark - Regression - "
+                   f"{test_stats['versions']['scylla-server']['run_date_time']}")
         for_render = {
             "reporter": "PerfSimpleQuery",
             "subject": subject,

@@ -107,6 +107,11 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
                 [(setup_param.replace('gce_', ''), test_doc['_source']['setup_details'].get(setup_param))])
         return setup_details
 
+    @staticmethod
+    def _get_email_tags(test_doc, is_gce):
+        setup_details = BaseResultsAnalyzer._get_setup_details(test_doc, is_gce)
+        return f"[{setup_details['cluster_backend']}][{setup_details['instance_type_db']}]"
+
     def _test_version(self, test_doc):
         if test_doc['_source'].get('versions'):
             for value in ('scylla-server', 'scylla-enterprise-server'):
@@ -421,8 +426,8 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         config_files = ' '.join(doc["_source"]["setup_details"]["config_files"])
         dataset_size = re.search(r'(\d{3}gb)', config_files).group() or 'unknown size'
 
-        subject = f'Performance Regression Compare Results (latency during operations {dataset_size}) -' \
-                  f' {test_name} - {test_version} - {str(test_start_time)}'
+        subject = f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results (latency during operations' \
+                  f' {dataset_size}) - {test_name} - {test_version} - {str(test_start_time)}'
         best_results_per_nemesis = self._get_best_per_nemesis_for_each_version(doc, is_gce)
         self._compare_current_best_results_average(data, best_results_per_nemesis)
 
@@ -837,7 +842,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.LongevityTest.test_custom_time
         except IndexError:
             test_name = full_test_name
-        subject = f'Performance Regression Compare Results - {test_name} - {test_version}'
+        subject = f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results - {test_name} - {test_version}'
         if email_subject_postfix:
             subject += f' - {email_subject_postfix}'
         subject += f' - {str(test_start_time)}'
@@ -1060,9 +1065,11 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         self.log.debug(PP.pformat(results))
         test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.LongevityTest.test_custom_time
         if ycsb:
-            subject = f'(Alternator) Performance Regression - {test_name} - {test_version} - {str(test_start_time)}'
+            subject = f'{self._get_email_tags(doc, is_gce)} (Alternator) Performance Regression - {test_name} - {test_version} - ' \
+                      f'{str(test_start_time)}'
         else:
-            subject = f'Performance Regression Compare Results - {test_name} - {test_version} - {str(test_start_time)}'
+            subject = f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results - {test_name}' \
+                      f' - {test_version} - {str(test_start_time)}'
 
         template = 'results_performance_baseline.html'
         email_data = {'email_body': results,
