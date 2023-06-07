@@ -1,6 +1,9 @@
 test_duration: 600
 user_prefix: 'perf-regression-latency-7-clients'
 
+# NOTE: K8S Scylla nodes have 3.5Tb disk size
+k8s_scylla_disk_gi: 498
+
 # NOTE: deploy 28 K8S nodes of the 'loader' type and then create 4 loader pod per DB cluster
 n_loaders: 28
 k8s_n_loader_pods_per_cluster: 4

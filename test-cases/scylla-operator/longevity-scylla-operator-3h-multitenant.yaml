@@ -17,6 +17,8 @@ k8s_deploy_monitoring: false
 
 n_db_nodes: 4
 k8s_n_scylla_pods_per_cluster: 3
+# NOTE: K8S Scylla nodes have 3.5Tb disk size
+k8s_scylla_disk_gi: 1745
 
 n_monitor_nodes: 1
 
