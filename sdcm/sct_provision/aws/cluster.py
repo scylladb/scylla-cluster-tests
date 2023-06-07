@@ -248,7 +248,7 @@ class DBCluster(ClusterBase):
 class OracleDBCluster(ClusterBase):
     _NODE_TYPE = 'oracle-db'
     _NODE_PREFIX = 'oracle'
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
+    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db_oracle'
     _NODE_NUM_PARAM_NAME = 'n_test_oracle_db_nodes'
     _INSTANCE_PARAMS_BUILDER = OracleScyllaInstanceParamsBuilder
 
