@@ -2218,7 +2218,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 if replication_factor == 0:
                     replication_strategy = LocalReplicationStrategy()
                 else:
-                    NetworkTopologyReplicationStrategy(default_rf=replication_factor)
+                    replication_strategy = NetworkTopologyReplicationStrategy(default_rf=replication_factor)
             else:
                 replication_strategy = NetworkTopologyReplicationStrategy(**replication_factor)
 
