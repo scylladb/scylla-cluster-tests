@@ -369,6 +369,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.generate_load_and_wait_for_results()
         with self.subTest('Basic Backup Test'):
             self.test_basic_backup()
+        with self.subTest('Restore Backup Test'):
+            self.test_restore_backup_with_task()
         with self.subTest('Repair Multiple Keyspace Types'):
             self.test_repair_multiple_keyspace_types()
         with self.subTest('Mgmt Cluster CRUD'):
