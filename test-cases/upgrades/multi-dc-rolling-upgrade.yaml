@@ -20,8 +20,6 @@ authenticator: 'PasswordAuthenticator'
 authenticator_user: 'cassandra'
 authenticator_password: 'cassandra'
 
-recover_system_tables: true
-
 internode_compression: 'all'
 
 use_mgmt: false
