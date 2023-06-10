@@ -1,0 +1,34 @@
+test_duration: 300
+
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
+prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=30000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
+stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=460 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+stress_multiplier_w: 4
+stress_multiplier_r: 1
+stress_multiplier_m: 2
+
+# NOTE: following is needed for the K8S case
+k8s_loader_run_type: 'static'
+
+n_db_nodes: 3
+n_loaders: 6
+n_monitor_nodes: 1
+
+instance_type_db: 'i4i.2xlarge'
+instance_type_loader: 'c5.2xlarge'
+instance_type_monitor: 't3.small'
+
+user_prefix: 'perf-regression-i4i'
+space_node_threshold: 644245094
+
+backtrace_decoding: false
+print_kernel_callstack: true
+
+store_perf_results: true
+use_mgmt: false
+send_email: true
+email_recipients: ['scylla-perf-results@scylladb.com']
+
+custom_es_index: 'performancestatsv2'
+use_hdr_cs_histogram: true
