@@ -3123,7 +3123,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.added_password_suffix = False
         self.node_benchmark_manager = ScyllaClusterBenchmarkManager()
         self.racks_count = simulated_racks if (simulated_racks := self.params.get("simulated_racks")) else len(
-            self.params.get("availability_zone").split(","))
+            self.params.get("availability_zone").split(",")) if self.params.get("availability_zone") else 1
 
         if self.test_config.REUSE_CLUSTER:
             # get_node_ips_param should be defined in child
