@@ -2592,6 +2592,28 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
             content_type=JSON_PATCH_TYPE
         )
 
+    def remove_scylla_cluster_value(self, path: str, element_name: str):
+        element_list = self.get_scylla_cluster_value(path) or []
+        found_index = None
+        for index, item in enumerate(element_list):
+            if item.get("name") == element_name:
+                found_index = index
+                break
+        else:
+            raise ValueError(f"{element_name} wasn't found in {path}")
+
+        self._k8s_scylla_cluster_api.patch(
+            body=[
+                {
+                    "op": "remove",
+                    "path": f"{path}/{found_index}",
+                }
+            ],
+            name=self.scylla_cluster_name,
+            namespace=self.namespace,
+            content_type=JSON_PATCH_TYPE
+        )
+
     @property
     def scylla_restart_required(self) -> bool:
         return self.k8s_cluster.scylla_restart_required

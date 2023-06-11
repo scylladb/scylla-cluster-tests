@@ -21,6 +21,7 @@ from sdcm.mgmt.cli import (
     ManagerCluster,
     RepairTask,
     ScyllaManagerTool,
+    ManagerTask,
 )
 from sdcm.mgmt.common import TaskStatus
 from sdcm.wait import wait_for
@@ -387,8 +388,13 @@ class OperatorManagerCluster(ManagerCluster):
     def update(self, name=None, host=None, client_encrypt=None):
         raise NotImplementedError()
 
-    def delete_task(self, task_id):
-        raise NotImplementedError()
+    def delete_task(self, task: ManagerTask) -> None:
+        LOGGER.debug("deleting task [%s - %s]", task.__class__.__name__, task.id)
+        name = task.id.split('/')[-1]
+        if isinstance(task, RepairTask):
+            self.scylla_cluster.remove_scylla_cluster_value('/spec/repairs', element_name=name)
+        if isinstance(task, BackupTask):
+            self.scylla_cluster.remove_scylla_cluster_value('/spec/backups', element_name=name)
 
 
 class ScyllaManagerToolOperator(ScyllaManagerTool):

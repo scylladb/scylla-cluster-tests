@@ -706,7 +706,8 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE, SSL_USER_KEY_FILE)
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
-    def delete_task(self, task_id):
+    def delete_task(self, task: ManagerTask):
+        task_id = task.id
         if self.sctool.is_v3_cli:
             cmd = "stop --delete {} -c {}".format(task_id, self.id)
         else:
@@ -719,7 +720,7 @@ class ManagerCluster(ScyllaManagerBase):
         repair_tasks_list = self.repair_task_list
         if repair_tasks_list:
             automatic_repair_task = repair_tasks_list[0]
-            self.delete_task(automatic_repair_task.id)
+            self.delete_task(automatic_repair_task)
 
     @property
     def _cluster_list(self):

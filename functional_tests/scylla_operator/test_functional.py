@@ -218,6 +218,8 @@ def test_mgmt_repair(db_cluster, manager_version):
     assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
         mgr_task.id, str(mgr_task.status))
 
+    mgr_cluster.delete_task(task=mgr_task)
+
 
 # NOTE: Scylla manager versions notes:
 #       - '2.6.3' is broken: https://github.com/scylladb/scylla-manager/issues/3156
@@ -245,6 +247,8 @@ def test_mgmt_backup(db_cluster, manager_version):
     assert mgr_task, "Failed to create backup task"
     status = mgr_task.wait_and_get_final_status(timeout=7200, step=5, only_final=True)
     assert TaskStatus.DONE == status
+
+    mgr_cluster.delete_task(task=mgr_task)
 
 
 def test_drain_kubernetes_node_then_replace_scylla_node(db_cluster):

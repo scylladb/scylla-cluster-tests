@@ -2619,9 +2619,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         deleted_tasks = []
         existing_backup_tasks = mgr_cluster.backup_task_list
         for backup_task in existing_backup_tasks:
-            if backup_task.status in [TaskStatus.NEW, TaskStatus.RUNNING, TaskStatus.STARTING]:
+            if backup_task.status in [TaskStatus.NEW, TaskStatus.RUNNING, TaskStatus.STARTING, TaskStatus.ERROR]:
                 deleted_tasks.append(backup_task.id)
-                mgr_cluster.delete_task(backup_task.id)
+                mgr_cluster.delete_task(backup_task)
         if deleted_tasks:
             self.log.warning("Deleted the following backup tasks before the nemesis starts: %s",
                              ", ".join(deleted_tasks))
