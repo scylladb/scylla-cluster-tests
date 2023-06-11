@@ -19,8 +19,8 @@ k8s_n_auxiliary_nodes: 2
 k8s_instance_type_auxiliary: 'n1-standard-2'
 
 scylla_version: '5.2.1'
-scylla_mgmt_agent_version: '3.0.0'
-mgmt_docker_image: 'scylladb/scylla-manager:3.0.0'
+scylla_mgmt_agent_version: '3.1.0'
+mgmt_docker_image: 'scylladb/scylla-manager:3.1.0'
 
 # NOTE: If 'k8s_scylla_operator_docker_image' not set then the one from helm chart will be used.
 # To test nightly builds define it like this: 'scylladb/scylla-operator:nightly'
