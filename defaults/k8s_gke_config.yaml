@@ -1,5 +1,5 @@
 instance_provision: 'on_demand'
-gce_datacenter: 'us-east1-b'
+gce_datacenter: 'us-east1'
 gce_network: 'qa-vpc'
 gce_image_username: 'scylla-test'
 
