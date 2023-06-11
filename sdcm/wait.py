@@ -27,6 +27,10 @@ LOGGER = logging.getLogger("sdcm.wait")
 R = TypeVar("R")  # pylint: disable=invalid-name
 
 
+class WaitForTimeoutError(Exception):
+    pass
+
+
 def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
     """
     Wrapper function to wait with timeout option.
@@ -72,7 +76,7 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
             LOGGER.error("last error: %r", ex)
         if throw_exc:
             if hasattr(ex, 'last_attempt') and not ex.last_attempt._result:  # pylint: disable=protected-access,no-member
-                raise tenacity.RetryError(err) from ex
+                raise WaitForTimeoutError(err) from ex
             raise
 
     return res
