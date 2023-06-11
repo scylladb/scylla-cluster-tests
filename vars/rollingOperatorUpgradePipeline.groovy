@@ -19,7 +19,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('region', '')}",
                description: 'Supported: us-east-1 | eu-west-1 | eu-west-2 | eu-north-1 | eu-central-1 | us-west-2 | random (randomly select region)',
                name: 'region')
-            string(defaultValue: "a",
+            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
                description: 'Availability zone',
                name: 'availability_zone')
             string(defaultValue: "${pipelineParams.get('base_versions', '')}",
