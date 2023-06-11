@@ -63,3 +63,11 @@ class BootstrapStreamErrorFailure(Exception):  # pylint: disable=too-few-public-
 
 class KillNemesis(BaseException):
     """Exception that would be raised, when a nemesis thread is killed at teardown of the test"""
+
+
+class WaitForTimeoutError(Exception):
+    """Exception that would be raised timeout exceeded in wait.wait_for function"""
+
+
+class ExitByEventError(Exception):
+    """Exception that would be raised if wait.wait_for stopped by event"""

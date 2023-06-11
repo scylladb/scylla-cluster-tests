@@ -22,17 +22,14 @@ from collections.abc import Callable
 
 import tenacity
 
+from sdcm.exceptions import WaitForTimeoutError, ExitByEventError
 
 LOGGER = logging.getLogger("sdcm.wait")
 
 R = TypeVar("R")  # pylint: disable=invalid-name
 
 
-class WaitForTimeoutError(Exception):
-    pass
-
-
-def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
+def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, stop_event=None, **kwargs):  # pylint: disable=too-many-arguments
     """
     Wrapper function to wait with timeout option.
 
@@ -42,6 +39,7 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
     :param timeout: Timeout in seconds
     :param throw_exc: Raise exception if timeout expired, but disrupt_func result is not True
     :param kwargs: Keyword arguments to disrupt_func
+    :param stop_event: instance of threading.Event class to stop retrying
     :return: Return value of disrupt_func.
     """
     if not timeout:
@@ -57,11 +55,14 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
             retry_state.attempt_number,
             retry_state.outcome._exception or retry_state.outcome._result,
         )
+    stops = [tenacity.stop_after_delay(timeout)]
+    if stop_event:
+        stops.append(tenacity.stop.stop_when_event_set(stop_event))
 
     try:
         retry = tenacity.Retrying(
             reraise=throw_exc,
-            stop=tenacity.stop_after_delay(timeout),
+            stop=tenacity.stop_any(*stops),
             wait=tenacity.wait_fixed(step),
             before_sleep=retry_logger,
             retry=(tenacity.retry_if_result(lambda value: not value) | tenacity.retry_if_exception_type())
@@ -70,6 +71,11 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
 
     except Exception as ex:  # pylint: disable=broad-except
         err = f"Wait for: {text or func.__name__}: timeout - {timeout} seconds - expired"
+        raising_exc = WaitForTimeoutError(err)
+        if stop_event and stop_event.is_set():
+            err = f": {text or func.__name__}: stopped by Event"
+            raising_exc = ExitByEventError(err)
+
         LOGGER.error(err)
         if hasattr(ex, 'last_attempt') and ex.last_attempt.exception() is not None:  # pylint: disable=no-member
             LOGGER.error("last error: %r", ex.last_attempt.exception())  # pylint: disable=no-member
@@ -77,7 +83,7 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
             LOGGER.error("last error: %r", ex)
         if throw_exc:
             if hasattr(ex, 'last_attempt') and not ex.last_attempt._result:  # pylint: disable=protected-access,no-member
-                raise WaitForTimeoutError(err) from ex
+                raise raising_exc from ex
             raise
 
     return res
