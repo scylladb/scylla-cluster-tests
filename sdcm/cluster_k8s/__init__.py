@@ -2214,7 +2214,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
             scylla_disk_path = "/mnt/raid-disks/disk0/"
             namespace = "default"
         else:
-            pods_selector = "app.kubernetes.io/instance=local-csi-driver"
+            pods_selector = "app.kubernetes.io/name=local-csi-driver"
             scylla_disk_path = "/mnt/persistent-volumes"
             namespace = "local-csi-driver"
         podnames = self.parent_cluster.k8s_cluster.kubectl(
