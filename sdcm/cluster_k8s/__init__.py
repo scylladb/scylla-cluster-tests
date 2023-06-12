@@ -720,6 +720,20 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                              '"value": "--feature-gates=AutomaticTLSCertificates=true" }]\' ')
                 self.kubectl(patch_cmd, namespace=SCYLLA_OPERATOR_NAMESPACE)
 
+            if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
+                    self._scylla_operator_chart_version.split("-")[0]) >= "1.9.0":
+                # around 10 keys that need to be cached per cluster
+                crypto_key_buffer_size = self.params.get('k8s_tenants_num') * 10
+                for flag in (f"--crypto-key-buffer-size-min={crypto_key_buffer_size}",
+                             f"--crypto-key-buffer-size-max={crypto_key_buffer_size}"):
+                    patch_obj = [{
+                        "op": "add",
+                        "path": "/spec/template/spec/containers/0/args/-",
+                        "value": flag
+                    }]
+                    patch_cmd = f"patch deployment scylla-operator --type=json -p='{json.dumps(patch_obj)}'"
+                    self.kubectl(patch_cmd, namespace=SCYLLA_OPERATOR_NAMESPACE)
+
             KubernetesOps.wait_for_pods_readiness(
                 kluster=self,
                 total_pods=lambda pods: pods > 0,
