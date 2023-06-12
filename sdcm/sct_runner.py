@@ -837,7 +837,12 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
 
     @staticmethod
     def terminate_sct_runner_instance(sct_runner_info: SctRunnerInfo) -> None:
-        sct_runner_info.instance.destroy()
+        instance = sct_runner_info.instance
+        instances_client, info = get_gce_compute_instances_client()
+        res = instances_client.delete(instance=instance.name,
+                                      project=info['project_id'],
+                                      zone=instance.zone.split('/')[-1])
+        res.done()
 
 
 class AzureSctRunner(SctRunner):
