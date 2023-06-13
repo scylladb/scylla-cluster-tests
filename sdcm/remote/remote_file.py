@@ -32,7 +32,7 @@ def read_to_stringio(fobj):
 # pylint: disable=too-many-locals,too-many-arguments
 @contextlib.contextmanager
 def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer=read_to_stringio, sudo=False,
-                preserve_ownership=True, preserve_permissions=True):
+                preserve_ownership=True, preserve_permissions=True, log_change=True):
     filename = os.path.basename(remote_path)
     local_tempfile = os.path.join(tempfile.mkdtemp(prefix='sct'), filename)
     if preserve_ownership:
@@ -60,7 +60,8 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
         with open(local_tempfile, "w", encoding="utf-8") as fobj:
             fobj.write(content)
 
-        LOGGER.debug("New content of `%s':\n%s", remote_path, content)
+        if log_change:
+            LOGGER.debug("New content of `%s':\n%s", remote_path, content)
 
         remote_tempfile = remoter.run("mktemp").stdout.strip()
         remote_tempfile_move_cmd = f"mv '{remote_tempfile}' '{remote_path}'"
