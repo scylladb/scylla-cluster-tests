@@ -1604,6 +1604,24 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                               verbose=True, ignore_status=True)
             self.install_package("p11-kit")
 
+            # Hack to get credentials into place, until we can use instance profiles and roles
+            # TODO: remove when https://github.com/scylladb/scylla-enterprise/pull/3032 is finalized
+            self.remoter.run(shell_script_cmd("""
+                mkdir -p /home/scyllaadm/.aws
+                touch /home/scyllaadm/.aws/credentials
+                """), verbose=True, ignore_status=False)
+
+            with remote_file(remoter=self.remoter, remote_path='/home/scyllaadm/.aws/credentials',
+                             log_change=False) as fobj:
+                fobj.write(KeyStore().get_file_contents('kms_user_credentials').decode())
+
+            self.remoter.sudo(shell_script_cmd("""
+                mkdir -p /home/scylla/.aws
+                mv /home/scyllaadm/.aws/credentials /home/scylla/.aws/credentials
+                chown -R scylla /home/scylla/.aws
+                echo 'HOME=/home/scylla' > /etc/scylla.d/kms_hack.conf
+                """), verbose=True, ignore_status=False)
+
         self.process_scylla_args(append_scylla_args)
 
         if debug_install:
