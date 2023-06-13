@@ -1595,6 +1595,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.parent_cluster.proposed_scylla_yaml,
                 self.proposed_scylla_yaml
             )
+            is_kms = bool(scylla_yml.kms_hosts)
+
+        if is_kms:
+            # Hack for overriding issue https://github.com/scylladb/scylla-enterprise/issues/2792
+            # TODO: should be remove once a proper fix is implemented
+            self.remoter.sudo("find /opt/scylladb/ -iname *libp11-kit.so* | sudo xargs rm",
+                              verbose=True, ignore_status=True)
+            self.install_package("p11-kit")
 
         self.process_scylla_args(append_scylla_args)
 
