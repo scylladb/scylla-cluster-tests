@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import string
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -14,6 +14,9 @@
 # Copyright (c) 2018 ScyllaDB
 
 import time
+
+import yaml
+from cassandra import AlreadyExists, InvalidRequest
 
 from sdcm.tester import ClusterTester
 
@@ -31,10 +34,79 @@ class GeminiTest(ClusterTester):
         'errors': {}
     }
 
+    def _pre_create_templated_user_schema(self, batch_start=None, batch_end=None, cs_user_profiles=None):
+        # pylint: disable=too-many-locals
+        user_profile_table_count = self.params.get(  # pylint: disable=invalid-name
+            'user_profile_table_count') or 0
+        cs_user_profiles = cs_user_profiles or self.params.get('cs_user_profiles')
+        # read user-profile
+        for profile_file in cs_user_profiles:
+            with open(profile_file, encoding="utf-8") as fobj:
+                profile_yaml = yaml.safe_load(fobj)
+            keyspace_definition = profile_yaml['keyspace_definition']
+            keyspace_name = profile_yaml['keyspace']
+            table_template = string.Template(profile_yaml['table_definition'])
+
+            with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+                # since we are using connection while nemesis is running (and we have more then 5000 tables in this
+                # use case), we need a bigger timeout here to keep the following CQL commands from failing
+                session.default_timeout = 60.0 * 5
+                try:
+                    session.execute(keyspace_definition)
+                except AlreadyExists:
+                    self.log.debug("keyspace [{}] exists".format(keyspace_name))
+                self._pre_create_advanced_user_schema(profile_file=profile_file)
+
+                if batch_start is not None and batch_end is not None:
+                    table_range = range(batch_start, batch_end)
+                else:
+                    table_range = range(user_profile_table_count)
+                self.log.debug('Pre Creating Schema for c-s with {} user tables'.format(user_profile_table_count))
+                for i in table_range:
+                    table_name = 'table{}'.format(i)
+                    query = table_template.substitute(table_name=table_name)
+                    try:
+                        session.execute(query)
+                    except AlreadyExists:
+                        self.log.debug('table [{}] exists'.format(table_name))
+                    self.log.debug('{} Created'.format(table_name))
+
+                    for definition in profile_yaml.get('extra_definitions', []):
+                        query = string.Template(definition).substitute(table_name=table_name)
+                        try:
+                            session.execute(query)
+                        except (AlreadyExists, InvalidRequest) as exc:
+                            self.log.debug('extra definition for [{}] exists [{}]'.format(table_name, str(exc)))
+
+    def _pre_create_advanced_user_schema(self, profile_file: str):
+        """
+        Search a user-profile file.
+        Look for a commented line containing "advanced_schema_file"
+        If found - open the file found and run commands for its definitions, like UDT.
+        """
+        with open(profile_file, encoding="utf-8") as fobj:
+            content = fobj.readlines()
+        advanced_schema_file = [line.lstrip('#').strip() for line in content if
+                                line.find('advanced_schema_file:') > 0]
+        # Looking for a line of: # advanced_schema_file: scylla-qa-internal/custom_d1/advanced_schema_file.yaml
+        if advanced_schema_file:
+            advanced_schema_file = advanced_schema_file[0].split()[1]
+        with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+            with open(advanced_schema_file, encoding="utf-8") as fobj:
+                advanced_schema_yaml = yaml.safe_load(fobj)
+            udt_definition = advanced_schema_yaml['udt_definition']
+            for cql_cmd in udt_definition.strip().splitlines():
+                try:
+                    session.execute(cql_cmd)
+                except AlreadyExists as error:
+                    self.log.debug("Type already exists: %s", error)
+
     def test_random_load(self):
         """
         Run gemini tool
         """
+        if prepare_cs_user_profiles := self.params.get('prepare_cs_user_profiles'):
+            self._pre_create_templated_user_schema(cs_user_profiles=prepare_cs_user_profiles)
         cmd = self.params.get('gemini_cmd')
 
         self.log.debug('Start gemini benchmark')
