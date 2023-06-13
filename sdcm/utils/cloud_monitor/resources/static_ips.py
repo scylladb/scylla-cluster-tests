@@ -109,4 +109,4 @@ class StaticIPs(CloudResources):
     def get_all(self):
         self.get_aws_elastic_ips()
         self.get_gce_static_ips()
-        self.get_azure_static_ips()
+        # self.get_azure_static_ips()

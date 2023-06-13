@@ -161,4 +161,4 @@ class CloudInstances(CloudResources):
         LOGGER.info("Getting all cloud instances...")
         self.get_aws_instances()
         self.get_gce_instances()
-        self.get_azure_instances()
+        # self.get_azure_instances()

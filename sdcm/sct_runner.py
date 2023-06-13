@@ -1204,7 +1204,8 @@ def list_sct_runners(backend: str = None, test_runner_ip: str = None, verbose: b
     elif "azure" in (backend or ""):
         sct_runner_classes = (AzureSctRunner, )
     else:
-        sct_runner_classes = (AwsSctRunner, GceSctRunner, AzureSctRunner, )
+        # sct_runner_classes = (AwsSctRunner, GceSctRunner, AzureSctRunner, )
+        sct_runner_classes = (AwsSctRunner, GceSctRunner, )
     sct_runners = chain.from_iterable(cls.list_sct_runners(verbose=False) for cls in sct_runner_classes)
 
     if test_runner_ip:
