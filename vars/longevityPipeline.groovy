@@ -338,6 +338,7 @@ def call(Map pipelineParams) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: 5, unit: 'MINUTES') {
                                         finishArgusTestRun(params, currentBuild)
+                                        completed_stages['report_to_argus'] = true
                                     }
                                 }
                             }
@@ -383,6 +384,19 @@ def call(Map pipelineParams) {
                                     dir('scylla-cluster-tests') {
                                         timeout(time: 10, unit: 'MINUTES') {
                                             runSendEmail(params, currentBuild)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!completed_stages['report_to_argus']) {
+                        catchError {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        timeout(time: 5, unit: 'MINUTES') {
+                                            finishArgusTestRun(params, currentBuild)
                                         }
                                     }
                                 }
