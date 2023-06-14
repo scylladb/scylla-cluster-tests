@@ -70,7 +70,7 @@ from prettytable import PrettyTable
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent
-from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType, get_scylla_images_ec2_client
+from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType, get_scylla_images_ec2_resource
 
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
@@ -1416,7 +1416,7 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
 
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
     images = []
-    for client, owner in zip((ec2_resource, get_scylla_images_ec2_client(region_name=region_name)),
+    for client, owner in zip((ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)),
                              SCYLLA_AMI_OWNER_ID_LIST):
         images += client.images.filter(
             Owners=[owner],
@@ -1773,7 +1773,7 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
     ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
     images = []
 
-    for client, owner in zip((ec2_resource, get_scylla_images_ec2_client(region_name=region_name)),
+    for client, owner in zip((ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)),
                              SCYLLA_AMI_OWNER_ID_LIST):
         if build_id not in ("latest", "all",):
             images += [
@@ -1959,12 +1959,19 @@ def get_ami_tags(ami_id, region_name):
     :param region_name: the region to look AMIs in
     :return: dict of tags
     """
-    ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
-    test_image = ec2_resource.Image(ami_id)
-    if test_image.tags:
-        return {i['Key']: i['Value'] for i in test_image.tags}
+    scylla_images_ec2_resource = get_scylla_images_ec2_resource(region_name=region_name)
+    new_test_image = scylla_images_ec2_resource.Image(ami_id)
+    new_test_image.reload()
+    if new_test_image and new_test_image.meta.data:
+        return {i['Key']: i['Value'] for i in new_test_image.tags}
     else:
-        return {}
+        ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
+        test_image = ec2_resource.Image(ami_id)
+        test_image.reload()
+        if test_image and test_image.tags and test_image.meta.data:
+            return {i['Key']: i['Value'] for i in test_image.tags}
+        else:
+            return {}
 
 
 def tag_ami(ami_id, tags_dict, region_name):

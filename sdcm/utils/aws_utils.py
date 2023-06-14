@@ -336,7 +336,7 @@ def get_arch_from_instance_type(instance_type: str) -> AwsArchType:
     return 'x86_64'
 
 
-def get_scylla_images_ec2_client(region_name: str) -> EC2ServiceResource:
+def get_scylla_images_ec2_resource(region_name: str) -> EC2ServiceResource:
     session = boto3.Session()
     sts = session.client("sts")
     role_info = KeyStore().get_json('aws_images_role.json')
