@@ -4293,8 +4293,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     raise UnsupportedNemesis(
                         'A supported column for creating MV is not found. nemesis can\'t run')
                 column = f'"{column}"'
-                self.log.info("Stopping Scylla on node %s", self.target_node.name)
-                self.target_node.stop_scylla()
+                if self.cluster.nemesis_count == 1:
+                    self.log.info("Stopping Scylla on node %s", self.target_node.name)
+                    self.target_node.stop_scylla()
                 InfoEvent(message=f'Create a materialized-view for table {ks_name}.{base_table_name}').publish()
                 try:
                     with EventsFilter(event_class=DatabaseLogEvent,
@@ -4308,9 +4309,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     self.target_node.start_scylla()
                     raise
                 try:
-                    self.log.info("Starting Scylla on node %s", self.target_node.name)
-                    self.target_node.start_scylla()
-                    self.target_node.run_nodetool(sub_cmd="repair -pr")
+                    if self.cluster.nemesis_count == 1:
+                        self.log.info("Starting Scylla on node %s", self.target_node.name)
+                        self.target_node.start_scylla()
+                        self.target_node.run_nodetool(sub_cmd="repair -pr")
                     wait_for_view_to_be_built(self.target_node, ks_name, view_name, timeout=7200)
                     session.execute(SimpleStatement(f'SELECT * FROM {ks_name}.{view_name} limit 1', fetch_size=10))
                     sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
