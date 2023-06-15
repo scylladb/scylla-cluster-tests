@@ -857,7 +857,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         # Rollback all nodes that where upgraded (not necessarily in the same order)
         random.shuffle(upgraded_nodes)
-        InfoEvent(message='Upgraded Nodes to be rollback are: %s' % upgraded_nodes).publish()
+        InfoEvent(message='Upgraded Nodes to be rollback are: %s' %
+                  ", ".join(node.name for node in upgraded_nodes)).publish()
         for node in upgraded_nodes:
             self._start_and_wait_for_node_rollback(node, step=next(step))
 
