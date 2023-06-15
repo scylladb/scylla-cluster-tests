@@ -167,7 +167,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # We assume that if update_db_packages is not empty we install packages from there.
         # In this case we don't use upgrade based on new_scylla_repo(ignored sudo yum update scylla...)
         result = node.remoter.run('scylla --version')
-        self.orig_ver = result.stdout
+        self.orig_ver = result.stdout.strip()
 
         if upgrade_node_packages:
             # update_scylla_packages
@@ -246,7 +246,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         node.start_scylla_server(verify_up_timeout=500)
         self.db_cluster.get_db_nodes_cpu_mode()
         result = node.remoter.run('scylla --version')
-        new_ver = result.stdout
+        new_ver = result.stdout.strip()
         assert self.orig_ver != new_ver, "scylla-server version isn't changed"
         self.new_ver = new_ver
         self._update_argus_upgraded_version(node, new_ver)
@@ -261,7 +261,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         InfoEvent(message='Rollbacking a Node').publish()
         result = node.remoter.run('scylla --version')
-        orig_ver = result.stdout
+        orig_ver = result.stdout.strip()
         # flush all memtables to SSTables
         node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
         # backup the data
@@ -332,7 +332,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         node.run_scylla_sysconfig_setup()
         node.start_scylla_server(verify_up_timeout=500)
         result = node.remoter.run('scylla --version')
-        new_ver = result.stdout
+        new_ver = result.stdout.strip()
         InfoEvent(message='original scylla-server version is %s, latest: %s' % (orig_ver, new_ver)).publish()
         assert orig_ver != new_ver, "scylla-server version isn't changed"
 
