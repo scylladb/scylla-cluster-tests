@@ -590,6 +590,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
+    @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_stop_start_scylla_server(self):  # pylint: disable=invalid-name
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
@@ -1115,6 +1116,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # try to save the node
         self.repair_nodetool_rebuild()
 
+    @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_nodetool_drain(self):
         result = self.target_node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
         self.target_node.run_nodetool("status", ignore_status=True, verbose=True,
@@ -1524,6 +1526,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 new_node.set_seed_flag(True)
                 self.cluster.update_seed_provider()
 
+    @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_kill_scylla(self):
         self._kill_scylla_daemon()
 
