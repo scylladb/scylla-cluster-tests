@@ -93,3 +93,35 @@ hydra run-test ....
 # while test running your metrics api would be exposed for example:
 # http://fruch.ngrok.io
 ```
+
+## How can I connect to test machines in AWS ?
+
+```bash
+# option 1 - with hydra ssh wrapper command
+
+# list all the machine this user create, and let you choose one to connect:
+hydra ssh --user `whoami`
+
+# connect with name of the machine
+hydra ssh perf-test-db-node-3
+
+# connect to specific test machines by test_id
+hydra ssh --test-id 123456
+
+# option 2 - open the ports publicly, and connect with key
+hydra attach-test-sg --user `whoami`
+
+? Select machine:  (Use arrow keys to move, <space> to select, <a> to toggle, <i> to invert)
+ » ● sct-runner-1.6-instance-3dc7fd08 - 52.211.133.49 10.4.3.84 - eu-west-1
+   ● sct-runner-1.6-instance-e60d9d6b - 3.252.145.58 10.4.1.201 - eu-west-1
+   ● sct-runner-1.6-instance-6f4e6365 - 3.252.203.249 10.4.3.133 - eu-west-1
+   ● None - 44.200.18.106 10.12.2.222 - us-east-1
+   ● sct-runner-1.6-instance-d1df7c5f - 3.232.134.209 10.12.2.167 - us-east-1
+   ● sct-runner-1.6-instance-e596851f - 44.192.58.53 10.12.3.16 - us-east-1
+   ● sct-runner-1.6-instance-607c5973 - 3.236.43.235 10.12.2.11 - us-east-1
+   ● sct-runner-1.6-instance-988e89c7 - 44.192.128.164 10.12.1.184 - us-east-1
+
+# select which machine you want to expose publicly, and a SG would be attached to them
+ssh -i ~/.ssh/scylla-qa-ec2 ubuntu@44.192.58.53
+# keep in mind the user name and key, can be different between backend or between tests
+```
