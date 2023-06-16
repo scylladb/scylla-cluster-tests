@@ -16,9 +16,9 @@ table_definition: |
       c2 blob,
       c3 blob,
       c4 blob,
-      PRIMARY KEY (key, key2)
-      WITH compaction = {'class': 'LeveledCompactionStrategy'}
-  );
+      PRIMARY KEY (key, key2))
+      WITH compaction = {'class': 'LeveledCompactionStrategy'};
+
 extra_definitions:
   - CREATE MATERIALIZED VIEW keyspace1.sort_by_c1 AS SELECT key, c1 FROM keyspace1.standard2 WHERE c1 IS NOT NULL and key IS NOT NULL and key2 IS NOT NULL PRIMARY KEY (c1, key, key2)
   - CREATE MATERIALIZED VIEW keyspace1.sort_by_c4 AS SELECT key, c4 FROM keyspace1.standard2 WHERE c4 IS NOT NULL and key IS NOT NULL and key2 IS NOT NULL PRIMARY KEY (c4, key, key2)
