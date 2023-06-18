@@ -14,6 +14,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 # pylint: disable=too-many-lines
+import traceback
 from itertools import zip_longest, chain, count as itertools_count
 import json
 from pathlib import Path
@@ -28,6 +29,7 @@ from argus.client.sct.types import Package
 from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.fill_db_data import FillDatabaseData
+from sdcm.sct_events import Severity
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.version_utils import get_node_supported_sstable_versions
 from sdcm.sct_events.system import InfoEvent
@@ -46,7 +48,13 @@ def truncate_entries(func):
     def inner(self, *args, **kwargs):
         node = args[0]
         with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
-            self.cql_truncate_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+            InfoEvent(message="Start truncate simple tables").publish()
+            try:
+                self.cql_truncate_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
+                InfoEvent(message="Finish truncate simple tables").publish()
+            except Exception as details:  # pylint: disable=broad-except
+                InfoEvent(message=f"Failed truncate simple tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
+                          severity=Severity.ERROR).publish()
             self.validate_truncated_entries_for_table(session=session, system_truncated=True)
 
         func_result = func(self, *args, **kwargs)
@@ -114,14 +122,19 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     expected_sstable_format_version = 'mc'
 
     def read_data_from_truncated_tables(self, session):
-        session.execute("USE truncate_ks")
         truncate_query = 'SELECT COUNT(*) FROM {}'
         tables_name = self.get_tables_name_of_keyspace(session=session, keyspace_name='truncate_ks')
         for table_name in tables_name:
-            count = self.rows_to_list(session.execute(truncate_query.format(table_name)))
-            self.assertEqual(str(count[0][0]), '0',
-                             msg='Expected that there is no data in the table truncate_ks.{}, but found {} rows'
-                             .format(table_name, count[0][0]))
+            InfoEvent(message="Start read data from truncated tables").publish()
+            try:
+                count = self.rows_to_list(session.execute(truncate_query.format(table_name)))
+                self.assertEqual(str(count[0][0]), '0',
+                                 msg='Expected that there is no data in the table truncate_ks.{}, but found {} rows'
+                                 .format(table_name, count[0][0]))
+                InfoEvent(message="Finish read data from truncated tables").publish()
+            except Exception as details:  # pylint: disable=broad-except
+                InfoEvent(message=f"Failed read data from truncated tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
+                          severity=Severity.ERROR).publish()
 
     def validate_truncated_entries_for_table(self, session, system_truncated=False):  # pylint: disable=invalid-name
         tables_id = self.get_tables_id_of_keyspace(session=session, keyspace_name='truncate_ks')
