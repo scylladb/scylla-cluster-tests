@@ -7,3 +7,5 @@ append_scylla_yaml: |
       kms_test:
           master_key: 'alias/kms_encryption_test'
           aws_region: 'us-east-1'
+
+append_scylla_args: '--logger-log-level kms=trace'
