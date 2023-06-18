@@ -131,6 +131,6 @@ def drop_materialized_view(session, ks, view_name) -> None:
     LOGGER.info('start dropping MV: %s.%s', ks, view_name)
     with EventsFilter(
             event_class=DatabaseLogEvent.DATABASE_ERROR,
-            regex="Error applying view update",
+            regex=".*Error applying view update.*",
             extra_time_to_expiration=180):
         session.execute(f'DROP MATERIALIZED VIEW {ks}.{view_name}')
