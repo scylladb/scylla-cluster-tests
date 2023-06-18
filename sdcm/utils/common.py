@@ -1264,7 +1264,7 @@ class GkeCleaner(GcloudContainerMixin):
             LOGGER.error("`gcloud container clusters list --format json' failed to run: %s", exc)
         else:
             try:
-                return [GkeCluster(info, self) for info in json.loads(output)]
+                return [GkeCluster(info, GkeCleaner()) for info in json.loads(output)]
             except json.JSONDecodeError as exc:
                 LOGGER.error(
                     "Unable to parse output of `gcloud container clusters list --format json': %s",
