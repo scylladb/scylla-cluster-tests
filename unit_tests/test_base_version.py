@@ -17,11 +17,11 @@ import unittest
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module, import-error
 
 
-def general_test(scylla_repo='', linux_distro=''):
+def general_test(scylla_repo='', linux_distro='', cloud_provider=None):
     scylla_version = None
 
     version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, scylla_version)
-    version_detector.set_start_support_version()
+    version_detector.set_start_support_version(cloud_provider)
     _, version_list = version_detector.get_version_list()
     return version_list
 
@@ -35,6 +35,24 @@ class TestBaseVersion(unittest.TestCase):
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
         self.assertEqual(version_list, ['5.3'])
+
+    def test_ubuntu_22_azure_5_3(self):
+        scylla_repo = self.url_base + '/branch-5.3/deb/unified/2023-05-23T22:36:08Z/scylladb-5.3/scylla.list'
+        linux_distro = 'ubuntu-jammy'
+        cloud_provider = 'azure'
+        version_list = general_test(scylla_repo, linux_distro, cloud_provider)
+        self.assertEqual(version_list, ['5.2'])
+
+    def test_ubuntu_22_azure_2023_1(self):
+        scylla_repo = self.url_base +\
+            '-enterprise/enterprise-2023.1/deb/unified/2023-05-17T23:03:35Z/scylladb-2023.1/scylla.list'
+        linux_distro = 'ubuntu-jammy'
+        cloud_provider = 'azure'
+        version_list = general_test(scylla_repo, linux_distro, cloud_provider)
+        # TODO: add 2023.1 to the list below:
+        # once 2023.1 will be released, it will appear in the list below, but as it is not only on an RC,
+        # it was filtered out during `self.filter_rc_only_version(ent_base_version)`
+        self.assertEqual(version_list, ['5.2'])
 
     def test_4_5_with_centos8(self):
         scylla_repo = self.url_base + '/branch-4.5/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
