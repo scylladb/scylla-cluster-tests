@@ -18,6 +18,7 @@ LOGGER = logging.getLogger(__name__)
 supported_src_oss = {'2021.1': '4.3', '2022.1': '5.0', '2022.2': '5.1', '2023.1': '5.2', '2023.2': '5.3'}
 # If new support distro shared repo with others, we need to assign the start support versions. eg: centos8
 start_support_versions = {'centos-8': {'scylla': '4.1', 'enterprise': '2021.1'}}
+start_support_cloud_provider = {'azure': {'scylla': '5.2', 'enterprise': '2023.1'}}
 
 
 class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
@@ -52,7 +53,7 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
         LOGGER.info("Scylla product and major version used for upgrade versions listing: %s, %s", product, version)
         return product, scylla_version
 
-    def set_start_support_version(self) -> None:
+    def set_start_support_version(self, cloud_provider: str = None) -> None:
         """
         We can't detect the support versions for this distro, which shares the repo with others, eg: centos8
         so we need to assign the start support versions for it.
@@ -65,8 +66,12 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
                     f"We can't detect the support versions for this distro, which shares the repo with {self.dist_type}.")
             self.oss_start_support_version = versions_dict['scylla']
             self.ent_start_support_version = versions_dict['enterprise']
-            LOGGER.info("Support start versions set: oss=%s enterprise=%s", self.oss_start_support_version,
-                        self.ent_start_support_version)
+        backend_dict = start_support_cloud_provider.get(cloud_provider, None)
+        if backend_dict:
+            self.oss_start_support_version = backend_dict['scylla']
+            self.ent_start_support_version = backend_dict['enterprise']
+        LOGGER.info("Support start versions set: oss=%s enterprise=%s", self.oss_start_support_version,
+                    self.ent_start_support_version)
 
     def get_supported_scylla_base_versions(self, supported_versions) -> list:  # pylint: disable=too-many-branches
         """

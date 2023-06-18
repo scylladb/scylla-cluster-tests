@@ -688,7 +688,8 @@ def list_repos(dist_type, dist_version):
               help='Scylla repo')
 @click.option('-d', '--linux-distro', type=str, help='Linux Distribution type')
 @click.option('-o', '--only-print-versions', type=bool, default=False, required=False, help='')
-def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions):  # pylint: disable=too-many-locals
+@cloud_provider_option(default="aws", required=False, help="Cloud provided to query. Defaults to aws.")
+def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions, cloud_provider):  # pylint: disable=too-many-locals
     """
     Upgrade test try to upgrade from multiple supported base versions, this command is used to
     get the base versions according to the scylla repo and distro type, then we don't need to hardcode
@@ -710,7 +711,7 @@ def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_pri
 
     # We can't detect the support versions for this distro, which shares the repo with others, eg: centos8
     # so we need to assign the start support versions for it.
-    version_detector.set_start_support_version()
+    version_detector.set_start_support_version(cloud_provider)
 
     supported_versions, version_list = version_detector.get_version_list()
     click.echo(f'Supported Versions: {supported_versions}')
