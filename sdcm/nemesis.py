@@ -1009,12 +1009,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 continue
             file_name = os.path.basename(one_file)
             # The file name like: /var/lib/scylla/data/scylla_bench/test-f60e4f30c98f11e98d46000000000002/mc-220-big-Data.db
-            # For corruption we need to remove all files that their names are started from "mc-220-" (MC format)
+            # or /var/lib/scylla/data/scylla_bench/test-f60e4f30c98f11e98d46000000000002/mc-3g6x_0sic_4r1eo23d0mkrb3fs2l-big-Data.db
+            # For corruption we need to remove all files that their names are started from "mc-220-" or "mc-3g6x_0sic_4r1eo23d0mkrb3fs2l-"
+            # (MC format)
             # Old format: "system-truncated-ka-" (system-truncated-ka-7-Data.db)
-            # Search for "<digit>-" substring
+            # Search for these prefixes
 
             try:
-                file_name_template = re.search(r"(.*-\d+)-", file_name).group(1)
+                file_name_template = re.search(r"([^-]+-[^-]+)-", file_name).group(1)
             except Exception as error:  # pylint: disable=broad-except
                 self.log.debug('File name "{file_name}" is not as expected for Scylla data files. '
                                'Search files for "{ks_cf_for_destroy}" table'.format(file_name=file_name,
