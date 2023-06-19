@@ -391,7 +391,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.error("Compare results failed: %s", exc)
 
-    def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, reactor_stalls_stats=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-arguments
         doc = self.get_test_by_id(test_id)
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.LongevityTest.test_custom_time
@@ -446,6 +446,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             job_url=doc['_source']['test_details'].get('job_url', ""),
             node_benchmarks=node_benchmarks,
             best_stat_per_version=best_results_per_nemesis,
+            reactor_stalls_stats=reactor_stalls_stats
         )
         attachment_file = [
             self.save_html_to_file(results,
@@ -683,7 +684,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
     # pylint: disable=too-many-arguments
     def check_regression(self, test_id, is_gce=False, email_subject_postfix=None,
                          use_wide_query=False, lastyear=False,
-                         node_benchmarks=None):
+                         node_benchmarks=None,
+                         reactor_stalls_stats=None):
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -830,6 +832,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             "events_summary": events_summary,
             "last_events": last_events,
             "node_benchmarks": node_benchmarks,
+            "reactor_stall_stats": reactor_stalls_stats
         }
         self.log.debug('Regression analysis:')
         self.log.debug(PP.pformat(results))

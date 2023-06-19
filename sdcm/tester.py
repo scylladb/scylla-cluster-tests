@@ -89,6 +89,7 @@ from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEven
 from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
 from sdcm.sct_events.grafana import start_posting_grafana_annotations
+from sdcm.sct_events.events_device import EVENTS_LOG_DIR, RAW_EVENTS_LOG
 from sdcm.stress_thread import CassandraStressThread, get_timeout_from_stress_cmd
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
@@ -125,6 +126,7 @@ from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes, CSWorkloadTypes, make_cs_range_histogram_summary, \
     make_cs_range_histogram_summary_by_interval
 from sdcm.utils.raft.common import validate_raft_on_nodes
+from sdcm.reactor_stall_decoder import count_reactor_stalls_per_operation
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
@@ -3109,8 +3111,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.debug('collected latency values are: %s', latency_results)
             self.update({"latency_during_ops": latency_results})
             self.update_test_details()
+            reactor_stalls_stats = count_reactor_stalls_per_operation(
+                self.logdir, os.path.join(self.logdir, EVENTS_LOG_DIR, RAW_EVENTS_LOG))
             results_analyzer.check_regression(test_id=self._test_id, data=latency_results,
-                                              node_benchmarks=benchmarks_results)
+                                              node_benchmarks=benchmarks_results,
+                                              reactor_stalls_stats=reactor_stalls_stats)
 
     def check_regression(self):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,

@@ -212,5 +212,19 @@
             </table>
         </div>
     {% endif %}
+    {% if reactor_stalls_stats %}
+        {% for operation, data in reactor_stalls_stats.items() %}
+            <div>
+                <span style="font-weight: bold;">{{ operation }} :</span>
+                {% set counts = 0 %}
+                <li>
+                    {% for ms, number in data.items() %}
+                        <ul>less or equal {{ ms }} ms: {{ number }}</ul>
+                    {% endfor %}
+                </li>
+                <span>Total: {{ data.values()|sum() }}</span>
+            </div>
+        {% endfor %}
+    {% endif %}
 
 {% endblock %}
