@@ -14,6 +14,7 @@
 """ This module keeps utilities that help to extract schema definition and stress commands from user profile """
 from __future__ import absolute_import, annotations
 
+import json
 import os
 import re
 
@@ -137,3 +138,15 @@ def replace_scylla_qa_internal_path(stress_cmd: str, loader_path: str):
     stress_cmd = re.sub(r"profile=scylla-qa-internal\/\S*",
                         f" profile={loader_path} ", stress_cmd)
     return stress_cmd
+
+
+def get_json_file_content(json_file_path: str) -> dict:
+    """
+    Getting a content of a json file
+    :return: a dict with json data
+    """
+    if not os.path.exists(json_file_path):
+        raise FileNotFoundError('json file {} not found'.format(json_file_path))
+    with open(json_file_path, encoding="utf-8") as json_stream:
+        json_content = json.load(json_stream)
+    return json_content
