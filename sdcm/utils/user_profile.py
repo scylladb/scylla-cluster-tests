@@ -14,6 +14,7 @@
 """ This module keeps utilities that help to extract schema definition and stress commands from user profile """
 from __future__ import absolute_import, annotations
 
+import json
 import os
 import re
 
@@ -128,3 +129,15 @@ def get_profile_content(stress_cmd):
     with open(cs_profile, encoding="utf-8") as yaml_stream:
         profile = yaml.safe_load(yaml_stream)
     return cs_profile, profile
+
+
+def get_json_file_content(json_file_path: str) -> dict:
+    """
+    Getting a content of a json file
+    :return: a dict with json data
+    """
+    if not os.path.exists(json_file_path):
+        raise FileNotFoundError('json file {} not found'.format(json_file_path))
+    with open(json_file_path, encoding="utf-8") as json_stream:
+        json_content = json.load(json_stream)
+    return json_content

@@ -13,6 +13,8 @@
 
 import logging
 import os
+import re
+import tempfile
 import uuid
 import random
 import json
@@ -23,7 +25,7 @@ from sdcm.utils.common import FileFollowerThread
 from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
-
+from sdcm.utils.user_profile import get_json_file_content
 
 LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +63,7 @@ class GeminiEventsPublisher(FileFollowerThread):
 class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.gemini"
+    SCHEMA_REGEX = r'--schema (.*\.json)'
 
     def __init__(self, test_cluster, oracle_cluster, loaders, stress_cmd, timeout=None, params=None):  # pylint: disable=too-many-arguments
         super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
@@ -70,12 +73,32 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         self.gemini_commands = []
         self.gemini_request_timeout = 180
         self.gemini_connect_timeout = 120
+        self.docker = None
 
     @property
     def gemini_result_file(self):
         if not self._gemini_result_file:
             self._gemini_result_file = os.path.join("/", "gemini_result_{}.log".format(uuid.uuid4()))
         return self._gemini_result_file
+
+    def _update_schema_file_path_and_stress_cmd(self) -> str:
+        """
+        If Gemini command uses '--schema' parameter:
+          1. copy the schema file from runner to loader /tmp directory.
+          2. Update this new path in the gemini cmd string.
+        """
+        stress_cmd = self.stress_cmd.strip()
+        if gemini_schema := re.search(self.SCHEMA_REGEX, stress_cmd):
+            gemini_schema_file_path = gemini_schema.group(1)
+            schema_content = get_json_file_content(json_file_path=gemini_schema_file_path)
+            gemini_schema_file_name = os.path.basename(gemini_schema_file_path)
+            dest_path = os.path.join('/tmp', gemini_schema_file_name)
+            with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
+                json.dump(schema_content, tmp_file)
+                tmp_file.flush()
+                self.docker.send_files(tmp_file.name, dest_path)
+            stress_cmd = re.sub(self.SCHEMA_REGEX, f"--schema {dest_path}", stress_cmd)
+        return stress_cmd
 
     def _generate_gemini_command(self):
         seed = self.params.get('gemini_seed')
@@ -84,9 +107,9 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             seed = random.randint(1, 100)
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
         oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips()) if self.oracle_cluster else None
-
+        stress_cmd = self._update_schema_file_path_and_stress_cmd()
         cmd = "./{} --test-cluster={} --outfile {} --seed {} --request-timeout {}s --connect-timeout {}s ".format(
-            self.stress_cmd.strip(),
+            stress_cmd,
             test_nodes,
             self.gemini_result_file,
             seed,
@@ -105,9 +128,9 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker}'
-                                                                  f' --network=host --entrypoint=""')
+        self.docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
+                                                     extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker}'
+                                                                       f' --network=host --entrypoint=""')
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
@@ -122,12 +145,12 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             try:
                 publisher.event_id = gemini_stress_event.event_id
                 gemini_stress_event.log_file_name = log_file_name
-                result = docker.run(cmd=gemini_cmd,
-                                    timeout=self.timeout,
-                                    ignore_status=False,
-                                    log_file=log_file_name,
-                                    retry=0,
-                                    )
+                result = self.docker.run(cmd=gemini_cmd,
+                                         timeout=self.timeout,
+                                         ignore_status=False,
+                                         log_file=log_file_name,
+                                         retry=0,
+                                         )
                 # sleep to gather all latest log messages
                 time.sleep(5)
             except Exception as details:  # pylint: disable=broad-except
@@ -142,11 +165,11 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                     gemini_stress_event.add_result(result=result)
                     gemini_stress_event.severity = Severity.WARNING
 
-            local_gemini_result_file = os.path.join(docker.node.logdir, os.path.basename(self.gemini_result_file))
-            results_copied = docker.receive_files(src=self.gemini_result_file, dst=local_gemini_result_file)
+            local_gemini_result_file = os.path.join(self.docker.node.logdir, os.path.basename(self.gemini_result_file))
+            results_copied = self.docker.receive_files(src=self.gemini_result_file, dst=local_gemini_result_file)
             assert results_copied, "gemini results aren't available, did gemini even run ?"
 
-        return docker, result, local_gemini_result_file
+        return self.docker, result, local_gemini_result_file
 
     def get_gemini_results(self):
         parsed_results = []
