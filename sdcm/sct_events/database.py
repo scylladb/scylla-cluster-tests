@@ -123,7 +123,7 @@ DatabaseLogEvent.add_subevent_type("FILESYSTEM_ERROR", severity=Severity.ERROR,
 DatabaseLogEvent.add_subevent_type("DISK_ERROR", severity=Severity.ERROR,
                                    regex=r"storage_service - .*due to I\/O errors.*Disk error: std::system_error")
 DatabaseLogEvent.add_subevent_type("STACKTRACE", severity=Severity.ERROR,
-                                   regex="stacktrace")
+                                   regex=r'^(?!.*libabsl).*stacktrace')
 # scylladb/scylladb#12972
 DatabaseLogEvent.add_subevent_type("RAFT_TRANSFER_SNAPSHOT_ERROR", severity=Severity.WARNING,
                                    regex=r"raft - \[[\w-]*\] Transferring snapshot to [\w-]* "
