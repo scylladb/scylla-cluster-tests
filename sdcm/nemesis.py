@@ -1561,7 +1561,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 thread.result()
 
     def disrupt_major_compaction(self):
-        with adaptive_timeout(Operations.MAJOR_COMPACT, self.target_node, timeout=7200):
+        with adaptive_timeout(Operations.MAJOR_COMPACT, self.target_node, timeout=8000):
             self.target_node.run_nodetool("compact")
 
     def disrupt_load_and_stream(self):
