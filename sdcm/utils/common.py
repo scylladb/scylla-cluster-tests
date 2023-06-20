@@ -1909,7 +1909,7 @@ def get_ami_images(branch: str, region: str, arch: AwsArchType) -> list:
     for ami in amis:
         tags = {i['Key']: i['Value'] for i in ami.tags}
         rows.append(["AWS", ami.name, ami.image_id, ami.creation_date, tags.get("Name"), tags.get(
-            'build-id', tags.get("build_id"))[:6], tags.get('arch'), tags.get('ScyllaVersion'), ami.owner_id])
+            'build-id', tags.get("build_id"))[:6], tags.get('arch'), tags.get('ScyllaVersion')])
 
     return rows
 
