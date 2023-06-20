@@ -205,10 +205,11 @@ def wait_until_task_finishes_return_details(task, wait=True, timeout=1000, step=
                                              identifier=latest_run_id)
     duration = task.sctool.get_table_value(parsed_table=task_history, column_name="duration",
                                            identifier=latest_run_id)
-    if task.sctool.is_v3_cli:
-        next_run_time = time_diff_string_to_datetime(time_diff_string=task.next_run)
+    next_run_time = task.next_run
+    if next_run_time.startswith("in "):
+        next_run_time = time_diff_string_to_datetime(time_diff_string=next_run_time)  # in 23h59m49s
     else:
-        next_run_time = time_string_to_datetime(task.next_run)
+        next_run_time = time_string_to_datetime(next_run_time)  # 14 Jun 23 15:41:00 UTC
     if task.sctool.is_v3_cli:
         end_time = time_diff_string_to_datetime(time_diff_string=duration, base_time_string=start_time)
     else:
