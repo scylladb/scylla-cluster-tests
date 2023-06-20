@@ -578,16 +578,15 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
 @click.option('-a', '--arch',
               type=click.Choice(AwsArchType.__args__),
               default='x86_64',
-              help="architecture of the AMI (default: x86_64)")  # pylint: disable=too-many-locals
+              help="architecture of the AMI (default: x86_64)")
 def list_images(cloud_provider: str, branch: str, version: str, region: str, arch: AwsArchType):
     add_file_logger()
     version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
     version_fields_with_tag_name = version_fields + ["NameTag"]
     #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
     branch_specific_fields = ["BuildId", "Arch", "ScyllaVersion"]
-    account_field = ["OwnerId"]
     branch_fields = version_fields + branch_specific_fields
-    branch_fields_with_tag_name = version_fields_with_tag_name + branch_specific_fields + account_field
+    branch_fields_with_tag_name = version_fields_with_tag_name + branch_specific_fields
     if version and branch:
         click.echo("Use --version or --branch, not both.")
         return
