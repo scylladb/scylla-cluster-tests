@@ -1,4 +1,4 @@
-ami_id_monitor: 'ami-07d02ee1eeb0c996c'  # Debian buster image - debian-10-amd64-20210208-542
+ami_id_monitor: 'ami-074f8bbb689b1c1a0'  # Debian buster image - debian-10-amd64-20230601-1398
 ami_monitor_user: 'admin'
 
 manager_scylla_backend_version: '2021'  # Notice: Uses 2021.1, while other (newer deb) use 2022, since we support both
