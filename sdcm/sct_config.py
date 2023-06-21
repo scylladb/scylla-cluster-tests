@@ -947,7 +947,13 @@ class SCTConfiguration(dict):
 
         # LongevityTest
         dict(name="stress_multiplier", env="SCT_STRESS_MULTIPLIER", type=int,
-             help=""),
+             help="Number of cassandra-stress processes"),
+        dict(name="stress_multiplier_w", env="SCT_STRESS_MULTIPLIER_W", type=int,
+             help="Number of cassandra-stress processes for write workload"),
+        dict(name="stress_multiplier_r", env="SCT_STRESS_MULTIPLIER_R", type=int,
+             help="Number of cassandra-stress processes for read workload"),
+        dict(name="stress_multiplier_m", env="SCT_STRESS_MULTIPLIER_M", type=int,
+             help="Number of cassandra-stress processes for mixed workload"),
         dict(name="run_fullscan", env="SCT_RUN_FULLSCAN", type=list,
              help=""),
         dict(name="run_full_partition_scan", env="SCT_run_full_partition_scan", type=str,
