@@ -237,9 +237,7 @@
 | **<a href="#user-content-stress_multiplier_w" name="stress_multiplier_w">stress_multiplier_w</a>**  | Number of cassandra-stress processes for write workload | 1 | SCT_STRESS_MULTIPLIER_W
 | **<a href="#user-content-stress_multiplier_r" name="stress_multiplier_r">stress_multiplier_r</a>**  | Number of cassandra-stress processes for read workload | 1 | SCT_STRESS_MULTIPLIER_R
 | **<a href="#user-content-stress_multiplier_m" name="stress_multiplier_m">stress_multiplier_m</a>**  | Number of cassandra-stress processes for mixed workload | 1 | SCT_STRESS_MULTIPLIER_M
-| **<a href="#user-content-run_fullscan" name="run_fullscan">run_fullscan</a>**  |  | N/A | SCT_RUN_FULLSCAN
-| **<a href="#user-content-run_full_partition_scan" name="run_full_partition_scan">run_full_partition_scan</a>**  | Runs a background thread that issues reversed-queries on a table random partition by an interval | N/A | SCT_run_full_partition_scan
-| **<a href="#user-content-run_tombstone_gc_verification" name="run_tombstone_gc_verification">run_tombstone_gc_verification</a>**  | Runs a background thread that verifies Tombstones GC on a table by an interval | N/A | SCT_RUN_TOMBSTONE_GC_VERIFICATION
+| **<a href="#user-content-run_fullscan" name="run_fullscan">run_fullscan</a>**  | A list of dictionaries describing the parameters for the fullscan operations to be run. Each dictionary describes a separate thread to be spawned. Possible modes include: "table" for regular full table scans, "partition" for fullscans targeting partitions, "aggregate" for aggregate operations and "random" for a random selection of the former modes. | N/A | SCT_RUN_FULLSCAN
 | **<a href="#user-content-keyspace_num" name="keyspace_num">keyspace_num</a>**  |  | 1 | SCT_KEYSPACE_NUM
 | **<a href="#user-content-round_robin" name="round_robin">round_robin</a>**  |  | N/A | SCT_ROUND_ROBIN
 | **<a href="#user-content-batch_size" name="batch_size">batch_size</a>**  |  | 1 | SCT_BATCH_SIZE
