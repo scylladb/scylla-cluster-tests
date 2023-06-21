@@ -53,14 +53,13 @@
     {% endif %}
 </h3>
 
-{% for table in [[last_results_table, collect_last_results_count],[scylla_date_results_table, collect_last_scylla_date_count]] %}
-<h2> {{ table[1] }} </h2>
+<h2> {{ collect_last_scylla_date_count }} </h2>
 <table id="results_table">
     <tr>
-        {% for key, result in table[0][0].items() %}
+        {% for key, result in scylla_date_results_table[0].items() %}
         {% if "_within_limits" not in key and "_diff" not in key %}
         {% if key=="test_version" %}
-        {% for key, result in table[0][0]["test_version"].items() %}
+        {% for key, result in scylla_date_results_table[0]["test_version"].items() %}
         <th>{{ key }}</th>
         {% endfor %}
         {% else %}
@@ -70,32 +69,31 @@
         {% endfor %}
 
     </tr>
-    {% for line in table[0] %}
+    {% for line in scylla_date_results_table %}
     <tr>
         {% for key, result in line.items() %}
-        {% if key=="test_version" %}
-        {% for key, result in result.items() %}
-        <td>{{ result }}</td>
-        {% endfor %}
-        {% elif "is_"+key+"_within_limits" in line %}
-        {% if line["is_"+key+"_within_limits"] %}
-        {% if line[key+"_diff"] > 0 %}
-        <td>{{ result }}(<span class="green fbold">{{ line[key+"_diff"] }}%</span>)</td>
-        {% else %}
-        <td>{{ result }}({{ line[key+"_diff"] }}%)</td>
-        {% endif %}
-        {% else %}
-        <td>{{ result }}(<span class="red fbold">{{  line[key+"_diff"] }}%</span>)</td>
-        {% endif %}
-        {% elif "_within_limits" not in key and "_diff" not in key %}
-        <td>{{ result }}</td>
-        {% endif %}
+            {% if key=="test_version" %}
+                {% for key, result in result.items() %}
+                    <td>{{ result }}</td>
+                {% endfor %}
+            {% elif "is_"+key+"_within_limits" in line %}
+                {% if line["is_"+key+"_within_limits"] %}
+                    {% if line[key+"_diff"] > 5 %}
+                        <td>{{ result }}(<span class="green fbold">{{ line[key+"_diff"] }}%</span>)</td>
+                    {% else %}
+                        <td>{{ result }}({{ line[key+"_diff"] }}%)</td>
+                    {% endif %}
+                {% else %}
+                    <td>{{ result }}(<span class="red fbold">{{  line[key+"_diff"] }}%</span>)</td>
+                {% endif %}
+            {% elif "_within_limits" not in key and "_diff" not in key %}
+                <td>{{ result }}</td>
+            {% endif %}
         {% endfor %}
 
     </tr>
     {% endfor %}
 </table>
-{% endfor %}
 
 
 {% endblock %}
