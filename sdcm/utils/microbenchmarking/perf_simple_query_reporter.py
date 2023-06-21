@@ -24,7 +24,6 @@ def keys_exists(element, *keys):
 
 class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
 
-    collect_last_results_count = 10
     collect_last_scylla_date_count = 10
 
     def __init__(self, es_index, es_doc_type):
@@ -92,12 +91,8 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
 
         sorted_results = self.get_sorted_results_as_list(sorted_results)
 
-        filtered_results = []
         filtered_by_scylla_date = {}
         for row in sorted_results:
-            if len(filtered_results) < self.collect_last_results_count:
-                filtered_results.append(row)
-
             date = row["versions"]["scylla-server"]['date']
             median_tps = row["results"]["perf_simple_query_result"]["stats"]["median tps"]
             if len(filtered_by_scylla_date.keys()) < self.collect_last_scylla_date_count:
@@ -106,8 +101,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
                             "median tps"]:
                     filtered_by_scylla_date[date] = row
 
-            if len(filtered_results) >= self.collect_last_results_count and len(
-                    filtered_by_scylla_date.keys()) >= self.collect_last_scylla_date_count:
+            if len(filtered_by_scylla_date.keys()) >= self.collect_last_scylla_date_count:
                 break
 
         def make_table_line_for_render(data):
@@ -127,10 +121,6 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
             table_line["mad tps"] = round(table_line["mad tps"], 2)
             return table_line
 
-        last_results_table = []
-        for result in filtered_results:
-            last_results_table.append(make_table_line_for_render(result))
-
         scylla_date_results_table = []
         for date, result in filtered_by_scylla_date.items():
             scylla_date_results_table.append(make_table_line_for_render(result))
@@ -144,11 +134,9 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
             "subject": subject,
             "testrun_id": test_details['test_id'],
             "test_stats": test_stats_for_render,
-            "last_results_table": last_results_table,
             "scylla_date_results_table": scylla_date_results_table,
             "job_url": test_details['job_url'],
             "test_version": test_stats['versions']['scylla-server'],
-            "collect_last_results_count": f"last {self.collect_last_results_count} test runs results",
             "collect_last_scylla_date_count": f"last {self.collect_last_scylla_date_count} Scylla builds dates results",
             "deviation_diff": deviation_diff,
             "is_deviation_within_limits": is_deviation_within_limits
