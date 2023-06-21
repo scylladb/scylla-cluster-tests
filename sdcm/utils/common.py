@@ -1962,13 +1962,13 @@ def get_ami_tags(ami_id, region_name):
     scylla_images_ec2_resource = get_scylla_images_ec2_resource(region_name=region_name)
     new_test_image = scylla_images_ec2_resource.Image(ami_id)
     new_test_image.reload()
-    if new_test_image and new_test_image.meta.data:
+    if new_test_image and new_test_image.meta.data and new_test_image.tags:
         return {i['Key']: i['Value'] for i in new_test_image.tags}
     else:
         ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
         test_image = ec2_resource.Image(ami_id)
         test_image.reload()
-        if test_image and test_image.tags and test_image.meta.data:
+        if test_image and test_image.meta.data and test_image.tags:
             return {i['Key']: i['Value'] for i in test_image.tags}
         else:
             return {}
