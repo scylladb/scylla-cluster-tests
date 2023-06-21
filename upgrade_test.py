@@ -190,7 +190,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             # replace the packages
             node.remoter.run(r'rpm -qa scylla\*')
             # flush all memtables to SSTables
-            node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
+            node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True, retry=0)
             node.run_nodetool("snapshot")
             node.stop_scylla_server()
             # update *development* packages
@@ -209,7 +209,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             assert new_scylla_repo.startswith('http')
             node.download_scylla_repo(new_scylla_repo)
             # flush all memtables to SSTables
-            node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
+            node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True, retry=0)
             node.run_nodetool("snapshot")
             node.stop_scylla_server(verify_down=False)
 
@@ -276,7 +276,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout.strip()
         # flush all memtables to SSTables
-        node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True)
+        node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True, retry=0)
         # backup the data
         node.run_nodetool("snapshot")
         node.stop_scylla_server(verify_down=False)
