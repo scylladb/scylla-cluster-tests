@@ -119,6 +119,9 @@ append_scylla_args_oracle: '--enable-cache false'
 
 # cassandra-stress defaults
 stress_multiplier: 1
+stress_multiplier_w: 1
+stress_multiplier_r: 1
+stress_multiplier_m: 1
 keyspace_num: 1
 cs_user_profiles: []
 cs_duration: '50m'
