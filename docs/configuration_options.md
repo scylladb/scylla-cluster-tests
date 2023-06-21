@@ -224,7 +224,10 @@
 | **<a href="#user-content-cassandra_stress_population_size" name="cassandra_stress_population_size">cassandra_stress_population_size</a>**  |  | 1000000 | SCT_CASSANDRA_STRESS_POPULATION_SIZE
 | **<a href="#user-content-cassandra_stress_threads" name="cassandra_stress_threads">cassandra_stress_threads</a>**  |  | 1000 | SCT_CASSANDRA_STRESS_THREADS
 | **<a href="#user-content-add_node_cnt" name="add_node_cnt">add_node_cnt</a>**  |  | 1 | SCT_ADD_NODE_CNT
-| **<a href="#user-content-stress_multiplier" name="stress_multiplier">stress_multiplier</a>**  |  | 1 | SCT_STRESS_MULTIPLIER
+| **<a href="#user-content-stress_multiplier" name="stress_multiplier">stress_multiplier</a>**  | Number of cassandra-stress processes | 1 | SCT_STRESS_MULTIPLIER
+| **<a href="#user-content-stress_multiplier_w" name="stress_multiplier_w">stress_multiplier_w</a>**  | Number of cassandra-stress processes for write workload | 1 | SCT_STRESS_MULTIPLIER_W
+| **<a href="#user-content-stress_multiplier_r" name="stress_multiplier_r">stress_multiplier_r</a>**  | Number of cassandra-stress processes for read workload | 1 | SCT_STRESS_MULTIPLIER_R
+| **<a href="#user-content-stress_multiplier_m" name="stress_multiplier_m">stress_multiplier_m</a>**  | Number of cassandra-stress processes for mixed workload | 1 | SCT_STRESS_MULTIPLIER_M
 | **<a href="#user-content-run_fullscan" name="run_fullscan">run_fullscan</a>**  | A list of dictionaries describing the parameters for the fullscan operations to be run. Each dictionary describes a separate thread to be spawned. Possible modes include: "table" for regular full table scans, "partition" for fullscans targeting partitions, "aggregate" for aggregate operations and "random" for a random selection of the former modes. | N/A | SCT_RUN_FULLSCAN
 | **<a href="#user-content-keyspace_num" name="keyspace_num">keyspace_num</a>**  |  | 1 | SCT_KEYSPACE_NUM
 | **<a href="#user-content-round_robin" name="round_robin">round_robin</a>**  |  | N/A | SCT_ROUND_ROBIN
