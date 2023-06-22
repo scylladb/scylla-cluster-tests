@@ -2039,9 +2039,11 @@ def get_branched_gce_images(
 
 @lru_cache()
 def ami_built_by_scylla(ami_id: str, region_name: str) -> bool:
-    ec2_resource = boto3.resource("ec2", region_name=region_name)
-    image = ec2_resource.Image(ami_id)
-    return image.owner_id in SCYLLA_AMI_OWNER_ID_LIST
+    all_tags = get_ami_tags(ami_id, region_name)
+    if owner_id := all_tags.get('owner_id'):
+        return owner_id in SCYLLA_AMI_OWNER_ID_LIST
+    else:
+        return False
 
 
 @lru_cache()
@@ -2057,13 +2059,17 @@ def get_ami_tags(ami_id, region_name):
     new_test_image = scylla_images_ec2_resource.Image(ami_id)
     new_test_image.reload()
     if new_test_image and new_test_image.meta.data and new_test_image.tags:
-        return {i['Key']: i['Value'] for i in new_test_image.tags}
+        res = {i['Key']: i['Value'] for i in new_test_image.tags}
+        res['owner_id'] = new_test_image.owner_id
+        return res
     else:
         ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
         test_image = ec2_resource.Image(ami_id)
         test_image.reload()
         if test_image and test_image.meta.data and test_image.tags:
-            return {i['Key']: i['Value'] for i in test_image.tags}
+            res = {i['Key']: i['Value'] for i in test_image.tags}
+            res['owner_id'] = test_image.owner_id
+            return res
         else:
             return {}
 
