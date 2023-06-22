@@ -959,7 +959,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                     f"The restore task is supposed to fail, since node {target_node} lacks the disk space to download" \
                     f"the snapshot files"
                 full_progress_string = restore_task.progress_string()
-                assert "not enough disk space" in full_progress_string, \
+                assert "not enough disk space" in str(full_progress_string), \
                     f"The restore failed as expected when one of the nodes was out of disk space, but with an ill " \
                     f"fitting error message: {full_progress_string}"
             finally:
