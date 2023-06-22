@@ -1760,6 +1760,7 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
     filters = [
         {"Name": "tag:branch", "Values": [branch, ], },
         {"Name": "architecture", "Values": [arch, ], },
+        {"Name": "tag:build_mode", "Values": ["release", ], },
     ]
 
     LOGGER.info("Looking for AMIs match [%s]", scylla_version)

@@ -2127,6 +2127,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return scylla_version
 
     @optional_cached_property
+    def scylla_build_mode(self) -> Optional[str]:
+        result = self.remoter.run(f"{self.add_install_prefix('/usr/bin/scylla')} --build-mode", ignore_status=True)
+        if result.ok:
+            return result.stdout.strip()
+        self.log.debug("Unable to get ScyllaDB build-mode using `%s':\n%s\n%s",
+                       result.command, result.stdout, result.stderr)
+        return None
+
+    @optional_cached_property
     def scylla_version(self) -> Optional[str]:
         if scylla_version := self.scylla_version_detailed:
             if match := SCYLLA_VERSION_RE.match(scylla_version):
