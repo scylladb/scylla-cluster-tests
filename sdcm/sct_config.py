@@ -1671,7 +1671,8 @@ class SCTConfiguration(dict):
                                 break
                         else:
                             raise ValueError(f"AMIs for {scylla_version=} not found in {region}")
-                    self.log.debug("Found AMI %s for scylla_version='%s' in %s", ami.image_id, scylla_version, region)
+                    self.log.debug("Found AMI %s(%s) for scylla_version='%s' in %s",
+                                   ami.name, ami.image_id, scylla_version, region)
                     ami_list.append(ami)
                 self['ami_id_db_scylla'] = " ".join(ami.image_id for ami in ami_list)
             elif not self.get("gce_image_db") and self.get("cluster_backend") == "gce":

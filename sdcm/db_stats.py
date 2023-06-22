@@ -31,7 +31,7 @@ import requests
 
 from sdcm.es import ES
 from sdcm.test_config import TestConfig
-from sdcm.utils.common import normalize_ipv6_url
+from sdcm.utils.common import normalize_ipv6_url, get_ami_tags
 from sdcm.utils.git import get_git_commit_id
 from sdcm.utils.decorators import retrying
 from sdcm.sct_events.system import ElasticsearchEvent
@@ -582,6 +582,9 @@ class TestStatsMixin(Stats):
         except Exception as ex:  # pylint: disable=broad-except
             LOGGER.error('Failed getting scylla versions: %s', ex)
 
+        # append Scylla build mode in scylla_versions
+        versions['scylla-server']['build_mode'] = node.scylla_build_mode
+
         return versions
 
     def get_setup_details(self):
@@ -605,6 +608,14 @@ class TestStatsMixin(Stats):
                     setup_details['n_db_nodes'] = sum([int(i) for i in value.split()])
                 else:
                     setup_details[key] = value
+
+        if self.params.get('cluster_backend') == 'aws':
+            setup_details["ami_tags_db_scylla"] = []
+            region_names = self.params.region_names
+            ami_list = self.params.get('ami_id_db_scylla').split()
+            for ami_id, region_name in zip(ami_list, region_names):
+                tags = get_ami_tags(ami_id, region_name)
+                setup_details["ami_tags_db_scylla"].append(tags)
 
         new_scylla_packages = self.params.get('update_db_packages')
         setup_details['packages_updated'] = bool(new_scylla_packages and os.listdir(new_scylla_packages))
