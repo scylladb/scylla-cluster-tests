@@ -841,6 +841,9 @@ class TestStatsMixin(Stats):
 
             setup_details["db_cluster_node_details"] = {
                 "cpu_model": output("awk -F: '/^model name/{print $2; exit}' /proc/cpuinfo"),
+                "cpu_mhz": output("awk -F: '/^cpu MHz/{print $2; exit}' /proc/cpuinfo"),
+                "cache_size": output("awk -F: '/^cache size/{print $2; exit}' /proc/cpuinfo"),
+                "flags": output("awk -F: '/^flags/{print $2; exit}' /proc/cpuinfo"),
                 "sys_info": output("uname -a"),
             }
             if scylla_conf and "scylla_args" not in setup_details:
