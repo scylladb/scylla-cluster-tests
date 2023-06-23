@@ -795,6 +795,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             namespace=SCYLLA_OPERATOR_NAMESPACE,
             values=values,
         ))
+        if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
+                self._scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
+            patch_cmd = ('patch deployment scylla-operator --type=json -p=\'[{"op": "add",'
+                         '"path": "/spec/template/spec/containers/0/args/-", '
+                         '"value": "--feature-gates=AutomaticTLSCertificates=true" }]\' ')
+            self.kubectl(patch_cmd, namespace=SCYLLA_OPERATOR_NAMESPACE)
         time.sleep(5)
         self.kubectl("rollout status deployment scylla-operator",
                      namespace=SCYLLA_OPERATOR_NAMESPACE)
