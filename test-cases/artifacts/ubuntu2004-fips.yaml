@@ -1,0 +1,22 @@
+ami_id_db_scylla: 'ubuntu-pro-fips-server/images/hvm-ssd/ubuntu-focal-20.04-amd64-pro-fips-server-20221121-7bc828d1-c072-4d33-a989-fbad50380cfb'  # 'ami-03cf7ddd346310b5f'
+root_disk_size_db: 50
+backtrace_decoding: false
+cluster_backend: 'aws'
+instance_type_db: 'i3.large'
+instance_provision: "spot"
+instance_provision_fallback_on_demand: true
+logs_transport: 'ssh'
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+region_name: 'us-east-1'
+scylla_linux_distro: 'ubuntu-focal'
+use_preinstalled_scylla: false
+ami_db_scylla_user: 'ubuntu'
+client_encrypt: true
+server_encrypt: true
+internode_encryption: 'all'
+test_duration: 60
+user_prefix: 'artifacts-ubuntu2004-fips'
+aws_fallback_to_next_availability_zone: true
