@@ -22,9 +22,3 @@ nemesis_add_node_cnt: 3
 
 server_encrypt: true
 internode_encryption: 'dc'
-
-use_legacy_cluster_init: false
-
-# pin s-b version to mitigate https://github.com/scylladb/scylla-bench/issues/114
-stress_image:
-  scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.3'
