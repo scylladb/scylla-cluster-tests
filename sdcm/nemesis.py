@@ -3854,9 +3854,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug(f"Found next tables with enabled cdc feature: {ks_tables_with_cdc}")
 
         if not ks_tables_with_cdc:
-            self.log.warning("CDC is not enabled on any table. Skipping")
-            UnsupportedNemesis("CDC is not enabled on any table. Skipping")
-            return
+            raise UnsupportedNemesis("CDC is not enabled on any table. Skipping")
 
         ks, table = random.choice(ks_tables_with_cdc).split(".")
 
