@@ -140,3 +140,42 @@ def test_03_cassandra_stress_multi_region(request, docker_scylla, params):
 
     assert "latency 99th percentile" in output[0]
     assert float(output[0]["latency 99th percentile"]) > 0
+
+
+def test_04_cassandra_stress_multiplier_in_command(request, docker_scylla, params):
+    loader_set = LocalLoaderSetDummy()
+    loader_set.test_config.set_multi_region(True)
+    request.addfinalizer(lambda: loader_set.test_config.set_multi_region(False))
+    cmd = (
+        """cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) """
+        """compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native """
+        """-rate threads=10 -pop seq=1..10000000 -log interval=5"""
+        """ -- stress-multiplier=3"""
+    )
+
+    cs_thread = CassandraStressThread(
+        loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params
+    )
+
+    def cleanup_thread():
+        cs_thread.kill()
+
+    request.addfinalizer(cleanup_thread)
+
+    assert cs_thread.stress_cmd == (
+        """cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) """
+        """compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native """
+        """-rate threads=10 -pop seq=1..10000000 -log interval=5"""
+    )
+
+    assert cs_thread.stress_num == 3
+    cs_thread.run()
+    assert len(cs_thread.results_futures) == 3
+
+    output = cs_thread.get_results()
+    for res in output:
+        assert "latency mean" in res
+        assert float(res["latency mean"]) > 0
+
+        assert "latency 99th percentile" in res
+        assert float(res["latency 99th percentile"]) > 0

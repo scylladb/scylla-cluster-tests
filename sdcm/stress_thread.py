@@ -99,6 +99,17 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         self.client_encrypt = client_encrypt
         self.stop_test_on_failure = stop_test_on_failure
         self.compaction_strategy = compaction_strategy
+        self._init_advanced_stress_cmd_parameters()
+
+    def _init_advanced_stress_cmd_parameters(self):
+        splitted_stress_cmd = self.stress_cmd.split(" -- ")
+        if len(splitted_stress_cmd) < 2:
+            self.stress_cmd = splitted_stress_cmd[0].strip()
+            return
+        self.stress_cmd = splitted_stress_cmd[0].strip()
+        parameters = splitted_stress_cmd[1].strip()
+        if match := re.search(r"stress-multiplier=(\d+)", parameters):
+            self.stress_num = int(match.group(1))
 
     def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):  # pylint: disable=too-many-branches
         stress_cmd = self.stress_cmd
