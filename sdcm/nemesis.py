@@ -69,7 +69,6 @@ from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
-from sdcm.remote import shell_script_cmd
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -3944,8 +3943,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
                                                      parameters=[{"seeds": self.tester.db_cluster.seed_nodes_ips}])]
-        new_node.remoter.sudo(shell_script_cmd(
-            "echo dc_suffix=_nemesis_dc >> /etc/scylla/cassandra-rackdc.properties"))
+            if scylla_yml.endpoint_snitch.endswith("GossipingPropertyFileSnitch"):
+                rackdc_value = {"dc": "add_remove_nemesis_dc"}
+            else:
+                rackdc_value = {"dc_suffix": "_nemesis_dc"}
+        with new_node.remote_cassandra_rackdc_properties() as properties_file:
+            properties_file.update(**rackdc_value)
         self.cluster.wait_for_init(node_list=[new_node], timeout=900,
                                    check_node_health=False)
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
