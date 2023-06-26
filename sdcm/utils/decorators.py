@@ -20,6 +20,9 @@ import os
 
 from functools import wraps, partial, cached_property
 from typing import Optional, Callable
+from sdcm.sct_events.database import DatabaseLogEvent
+
+from sdcm.sct_events.event_counter import EventCounterContextManager
 
 
 LOGGER = logging.getLogger(__name__)
@@ -168,7 +171,12 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
         def wrapped(*args, **kwargs):  # pylint: disable=too-many-branches, too-many-locals
             start = time.time()
             start_node_list = args[0].cluster.nodes[:]
-            res = func(*args, **kwargs)
+            reactor_stall_stats = {}
+            with EventCounterContextManager(name=func.__name__,
+                                            event_type=(DatabaseLogEvent.REACTOR_STALLED, )) as counter:
+
+                res = func(*args, **kwargs)
+                reactor_stall_stats = counter.get_stats().copy()
             end_node_list = args[0].cluster.nodes[:]
             all_nodes_list = list(set(start_node_list + end_node_list))
             end = time.time()
@@ -210,6 +218,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             result["hdr_summary"] = args[0].tester.get_cs_range_histogram(stress_operation=workload,
                                                                           start_time=start,
                                                                           end_time=end)
+            result["reactor_stalls_stats"] = reactor_stall_stats
 
             if "steady" in func.__name__.lower():
                 if 'Steady State' not in latency_results:
