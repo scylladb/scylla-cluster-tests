@@ -31,9 +31,3 @@ jobs:
         days-before-pr-close: 5
         stale-issue-label: 'no-issue-activity'
         stale-pr-label: 'no-pr-activity'
-        
-        
-        
-          
-          
-          
