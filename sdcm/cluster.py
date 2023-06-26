@@ -1932,11 +1932,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
                 self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
             elif self.distro.is_ubuntu:
-                install_prereqs = dedent("""
-                    export DEBIAN_FRONTEND=noninteractive
-                    apt-get install software-properties-common -y
-                """)
-                self.remoter.run('sudo bash -cxe "%s"' % install_prereqs)
+                self.install_package(package_name="software-properties-common")
             elif self.is_debian8():
                 self.remoter.run("sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
                 self.remoter.run(
