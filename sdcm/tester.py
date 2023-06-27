@@ -911,7 +911,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             db_cluster = self.db_cluster
         # No need to change system tables when running via scylla-cloud
         # Also, when running a Alternator via scylla-cloud, we don't have CQL access to the cluster
-        if self.params.get('db_type') == 'cloud_scylla':
+        if self.params.get('db_type') == 'cloud_scylla' or self.params.get("cluster_backend") == "baremetal":
             # TODO: move this skip to siren-tools when possible
             self.log.warning("Skipping this function due this job run from Siren cloud!")
             return
@@ -1370,29 +1370,33 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def get_cluster_baremetal(self):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
-
+        baremetal_info: cluster_baremetal.BareMetalCredentials = KeyStore(
+        ).get_baremetal_config(self.params.get("s3_baremetal_config"))
         user_credentials = self.params.get('user_credentials_path')
         self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
         params = dict(
-            n_nodes=[self.params.get('n_db_nodes')],
-            public_ips=self.params.get('db_nodes_public_ip'),
-            private_ips=self.params.get('db_nodes_private_ip'),
+            n_nodes=len(baremetal_info['db_nodes']['node_list']),
+            public_ips=[n['public_ip'] for n in baremetal_info['db_nodes']['node_list']],
+            private_ips=[n['private_ip'] for n in baremetal_info['db_nodes']['node_list']],
             user_prefix=self.params.get('user_prefix'),
             credentials=self.credentials,
+            ssh_username=baremetal_info['db_nodes']['username'],
             params=self.params,
-            targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
         )
         self.db_cluster = cluster_baremetal.ScyllaPhysicalCluster(**params)
 
-        params['n_nodes'] = int(self.params.get('n_loaders'))
-        params['public_ips'] = self.params.get('loaders_public_ip')
-        params['private_ips'] = self.params.get('loaders_private_ip')
+        params['n_nodes'] = len(baremetal_info['loader_nodes']['node_list'])
+        params['public_ips'] = [n['public_ip'] for n in baremetal_info['loader_nodes']['node_list']]
+        params['private_ips'] = [n['private_ip'] for n in baremetal_info['loader_nodes']['node_list']]
+        params['ssh_username'] = baremetal_info['loader_nodes']['username']
         self.loaders = cluster_baremetal.LoaderSetPhysical(**params)
 
-        params['n_nodes'] = self.params.get('n_monitor_nodes')
-        params['public_ips'] = self.params.get('monitor_nodes_public_ip')
-        params['private_ips'] = self.params.get('monitor_nodes_private_ip')
-        self.monitors = cluster_baremetal.MonitorSetPhysical(**params)
+        params['n_nodes'] = len(baremetal_info['monitor_nodes']['node_list'])
+        params['public_ips'] = [n['public_ip'] for n in baremetal_info['monitor_nodes']['node_list']]
+        params['private_ips'] = [n['private_ip'] for n in baremetal_info['monitor_nodes']['node_list']]
+        params['ssh_username'] = baremetal_info['monitor_nodes']['username']
+        self.monitors = cluster_baremetal.MonitorSetPhysical(**params,
+                                                             targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),)
 
     def get_cluster_k8s_local_kind_cluster(self):
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))

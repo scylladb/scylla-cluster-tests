@@ -1,0 +1,56 @@
+test_duration: 90
+
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=312500 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..312500",
+                    "cassandra-stress write no-warmup cl=ALL n=312500 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=312501..625000",
+                    "cassandra-stress write no-warmup cl=ALL n=312500 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=625001..937500",
+                    "cassandra-stress write no-warmup cl=ALL n=312500 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=10 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=937501..1250000"]
+
+
+stress_cmd_w: "cassandra-stress write no-warmup cl=ALL n=1250000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=4 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..1250000"
+stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=4 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..1250000,625001,1250000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=4 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..1250000,625001,1250000)' "
+stress_multiplier: 1
+instance_type_db: 'i3.2xlarge'
+
+cluster_backend: baremetal
+user_credentials_path: '~/.ssh/scylla-qa-ec2'
+
+use_preinstalled_scylla: false
+run_db_node_benchmarks: false
+ssh_transport: fabric
+ip_ssh_connections: public
+
+use_mgmt: false
+s3_baremetal_config: baremetal_config_example
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+db_nodes_public_ip: []
+db_nodes_private_ip: []
+
+monitor_nodes_public_ip: []
+monitor_nodes_private_ip: []
+
+loaders_public_ip: []
+loaders_private_ip: []
+
+user_prefix: 'perf-throughput-disk-and-cache'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5'
+backtrace_decoding: false
+print_kernel_callstack: true
+
+
+store_perf_results: true
+send_email: true
+email_recipients: ['scylla-perf-results@scylladb.com']
+
+email_subject_postfix: 'disk and cache'
+custom_es_index: 'performancestatsv2'
+
+use_hdr_cs_histogram: true

@@ -152,6 +152,8 @@ def install_syslogng_service():
         SYSLOG_NG_INSTALLED=""
         if yum --help 2>/dev/null 1>&2 ; then
             if rpm -q syslog-ng ; then
+                rm /etc/syslog-ng/syslog-ng.conf  # Make sure we have default syslog-ng.conf
+                yum reinstall -y syslog-ng
                 SYSLOG_NG_INSTALLED=1
             else
                 for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
@@ -170,6 +172,9 @@ def install_syslogng_service():
             fi
         elif apt-get --help 2>/dev/null 1>&2 ; then
             if dpkg-query --show syslog-ng ; then
+                rm /etc/syslog-ng/syslog-ng.conf  # Make sure we have default syslog-ng.conf
+                apt-get purge --autoremove -y syslog-ng
+                DPKG_FORCE=confmiss apt-get --reinstall -y install syslog-ng
                 SYSLOG_NG_INSTALLED=1
             else
                 cat /etc/apt/sources.list

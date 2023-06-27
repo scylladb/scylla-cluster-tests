@@ -8,7 +8,8 @@ def call(String backend) {
         'aws-siren': 'aws',
         'gce-siren': 'gce',
         'azure': 'azure',
-        'docker': 'aws'
+        'docker': 'aws',
+        'baremetal': 'aws'
         ]
     if (!backend) {
         return backend
