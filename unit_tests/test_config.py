@@ -132,6 +132,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_DB_NODES_PRIVATE_IP'] = '["1.2.3.4", "1.2.3.5"]'
         os.environ['SCT_DB_NODES_PUBLIC_IP'] = '["1.2.3.4", "1.2.3.5"]'
         os.environ['SCT_USE_PREINSTALLED_SCYLLA'] = 'true'
+        os.environ['SCT_S3_BAREMETAL_CONFIG'] = "some_config"
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 

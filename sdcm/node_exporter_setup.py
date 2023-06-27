@@ -9,10 +9,16 @@ class NodeExporterSetup:  # pylint: disable=too-few-public-methods
     def install(node):
         node.install_package('wget')
         node.remoter.sudo(shell_script_cmd(f"""
-            useradd -rs /bin/false node_exporter
+            if ! id node_exporter > /dev/null 2>&1; then
+                useradd -rs /bin/false node_exporter
+            fi
             wget https://github.com/prometheus/node_exporter/releases/download/v{NODE_EXPORTER_VERSION}/node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
             tar -xzvf node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
             mv node_exporter-{NODE_EXPORTER_VERSION}.linux-amd64/node_exporter /usr/local/bin
+
+            if [ -e /etc/systemd/system/node_exporter.service ]; then
+                rm /etc/systemd/system/node_exporter.service
+            fi
 
             cat <<EOM >> /etc/systemd/system/node_exporter.service
             [Unit]

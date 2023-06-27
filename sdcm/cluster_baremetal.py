@@ -1,5 +1,7 @@
 import logging
-from typing import Optional
+from typing import Optional, TypedDict
+
+from invoke import UnexpectedExit
 
 from sdcm import cluster
 
@@ -10,6 +12,22 @@ LOADER_NAME = 'loader-node'
 MONITOR_NAME = 'monitor-node'
 
 
+class NodeInfo(TypedDict):
+    public_ip: str
+    private_ip: str
+
+
+class NodeCredentialInformation(TypedDict):
+    username: str
+    node_list: list[NodeInfo]
+
+
+class BareMetalCredentials(TypedDict):
+    db_nodes: NodeCredentialInformation
+    loader_nodes: NodeCredentialInformation
+    monitor_nodes: NodeCredentialInformation
+
+
 class NodeIpsNotConfiguredError(Exception):
     pass
 
@@ -17,9 +35,11 @@ class NodeIpsNotConfiguredError(Exception):
 class PhysicalMachineNode(cluster.BaseNode):
     log = LOGGER
 
-    def __init__(self, name, parent_cluster, public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):  # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments
+    def __init__(self, name, parent_cluster: 'PhysicalMachineCluster',
+                 public_ip, private_ip, credentials, base_logdir=None, node_prefix=None):
         ssh_login_info = {'hostname': None,
-                          'user': credentials.name,
+                          'user': getattr(parent_cluster, "ssh_username", credentials.name),
                           'key_file': credentials.key_file}
         self._public_ip = public_ip
         self._private_ip = private_ip
@@ -37,6 +57,21 @@ class PhysicalMachineNode(cluster.BaseNode):
     def _get_public_ip_address(self) -> Optional[str]:
         return self._public_ip
 
+    @property
+    def region(self):
+        return "baremetal"
+
+    def scylla_setup(self, disks, devname: str):
+        try:
+            super().scylla_setup(disks, devname)
+        except UnexpectedExit as exc:
+            # Covering for case when scylla-setup script has already been run. If the command is scylla_setup
+            # and there's "already" in the stdout of that command, we can skip this method safely as nics and disks
+            # were already configured on this node.
+            if "scylla_setup" in exc.result.command and "already" in exc.streams_for_display()[0].lower():
+                return
+            raise exc
+
     def _get_private_ip_address(self) -> Optional[str]:
         return self._private_ip
 
@@ -45,17 +80,6 @@ class PhysicalMachineNode(cluster.BaseNode):
         # since not using hostname anywhere
         # self.remoter.run('sudo hostnamectl set-hostname {}'.format(self.name))
         pass
-
-    def detect_disks(self, nvme=True):  # pylint: disable=unused-argument
-        """
-        Detect local disks
-        """
-        min_size = 50 * 1024 * 1024 * 1024  # 50gb
-        result = self.remoter.run('lsblk -nbo KNAME,SIZE,MOUNTPOINT -s -d')
-        lines = [line.split() for line in result.stdout.splitlines()]
-        disks = ['/dev/{}'.format(l[0]) for l in lines if l and int(l[1]) > min_size and len(l) == 2]
-        assert disks, 'Failed to find disks!'
-        return disks
 
     def reboot(self, hard=True, verify_ssh=True):
         raise NotImplementedError("reboot not implemented")
@@ -74,12 +98,17 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
         self.nodes = []
         self.credentials = kwargs.pop('credentials')
         n_nodes = kwargs.get('n_nodes')
-        self._node_public_ips = kwargs.get('public_ips', None) or []
-        self._node_private_ips = kwargs.get('private_ips', None) or []
+        self._node_public_ips = kwargs.pop('public_ips', None) or []
+        self._node_private_ips = kwargs.pop('private_ips', None) or []
         node_cnt = n_nodes[0] if isinstance(n_nodes, list) else n_nodes
         if len(self._node_public_ips) < node_cnt or len(self._node_private_ips) < node_cnt:
             raise NodeIpsNotConfiguredError('Physical hosts IPs are not configured!')
         super().__init__(**kwargs)
+
+    @property
+    def ssh_username(self) -> str:
+        # pylint: disable=no-member
+        return self._ssh_username
 
     def _create_node(self, name, public_ip, private_ip):
         node = PhysicalMachineNode(name,
@@ -105,6 +134,8 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
 
     def __init__(self, **kwargs):
         user_prefix = kwargs.pop('user_prefix')
+        if username := kwargs.pop('ssh_username', None):
+            self._ssh_username = username
         kwargs.update(dict(
             cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'db-cluster'),
             node_prefix=cluster.prepend_user_prefix(user_prefix, 'db-node'),
@@ -112,27 +143,22 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
         ))
         super().__init__(**kwargs)
 
-    def node_setup(self, node, verbose=False, timeout=3600):
-        """
-        Configure scylla.yaml on cluster nodes.
-        We have to modify scylla.yaml on our own because we are not on AWS,
-        where there are auto config scripts in place.
-        """
-        # self._node_setup(node, verbose)
 
-
-class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):  # pylint: disable=abstract-method
+class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):  # pylint: disable=abstract-method
 
     def __init__(self, **kwargs):
         user_prefix = kwargs.pop('user_prefix')
+        if username := kwargs.pop('ssh_username', None):
+            self._ssh_username = username
         kwargs.update(dict(
             cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'loader-set'),
             node_prefix=cluster.prepend_user_prefix(user_prefix, 'loader-node'),
             node_type='loader'
         ))
-        super().__init__(**kwargs)
+        cluster.BaseLoaderSet.__init__(self, kwargs["params"])
+        PhysicalMachineCluster.__init__(self, **kwargs)
 
-    @classmethod
+    @ classmethod
     def _get_node_ips_param(cls, ip_type='public'):
         return cluster.BaseLoaderSet.get_node_ips_param(ip_type)
 
@@ -141,6 +167,8 @@ class MonitorSetPhysical(cluster.BaseMonitorSet, PhysicalMachineCluster):
 
     def __init__(self, **kwargs):
         user_prefix = kwargs.pop('user_prefix')
+        if username := kwargs.pop('ssh_username', None):
+            self._ssh_username = username
         kwargs.update(dict(
             cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'monitor-set'),
             node_prefix=cluster.prepend_user_prefix(user_prefix, 'monitor-node'),
@@ -149,4 +177,5 @@ class MonitorSetPhysical(cluster.BaseMonitorSet, PhysicalMachineCluster):
         cluster.BaseMonitorSet.__init__(self,
                                         targets=kwargs["targets"],
                                         params=kwargs["params"])
+        kwargs.pop("targets")
         PhysicalMachineCluster.__init__(self, **kwargs)

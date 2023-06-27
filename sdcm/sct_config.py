@@ -957,6 +957,9 @@ class SCTConfiguration(dict):
 
         # baremetal config options
 
+        dict(name="s3_baremetal_config", env="SCT_S3_BAREMETAL_CONFIG", type=str,
+             help=""),
+
         dict(name="db_nodes_private_ip", env="SCT_DB_NODES_PRIVATE_IP", type=str_or_list_or_eval,
              help=""),
 
@@ -1523,7 +1526,7 @@ class SCTConfiguration(dict):
 
         'docker': ['user_credentials_path', 'scylla_version'],
 
-        'baremetal': ['db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path'],
+        'baremetal': ['s3_baremetal_config', 'db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path'],
 
         'aws-siren': ["user_prefix", "instance_type_loader", "region_name", "cloud_credentials_path",
                       "nemesis_filter_seeds"],

@@ -101,6 +101,9 @@ class KeyStore:  # pylint: disable=too-many-public-methods
     def get_argus_rest_credentials(self):
         return self.get_json("argus_rest_credentials.json")
 
+    def get_baremetal_config(self, config_name: str):
+        return self.get_json(f"{config_name}.json")
+
 
 def pub_key_from_private_key_file(key_file):
     try:
