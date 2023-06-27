@@ -13,7 +13,6 @@ n_monitor_nodes: 0
 nemesis_class_name: 'NoOpMonkey'
 region_name: 'eu-west-1'
 scylla_linux_distro: 'centos'
-scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-3.3.repo'
 test_duration: 60
 use_preinstalled_scylla: false
 user_prefix: 'artifacts-oel81'
