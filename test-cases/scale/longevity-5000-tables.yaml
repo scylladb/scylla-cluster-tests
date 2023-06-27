@@ -28,12 +28,5 @@ nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '404'
 nemesis_interval: 60
 
-
-# TODO: enable back coredump on bad_alloc
-# scylla/issues/4764 was blocking progress into the production issues we were trying to reproduce
-# so we temporary removed the default `--abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc`
-# once the issue would be solved we can enable it back.
-append_scylla_args: '--blocked-reactor-notify-ms 500'
-
 # TODO: remove when https://github.com/scylladb/scylla-tools-java/issues/175 resolved
 stop_test_on_stress_failure: false

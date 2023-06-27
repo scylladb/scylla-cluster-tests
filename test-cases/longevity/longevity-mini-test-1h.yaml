@@ -13,4 +13,4 @@ nemesis_interval: 1
 user_prefix: 'longevity-mini-test'
 space_node_threshold: 6442
 
-append_scylla_args: '--memory 4G'
+append_scylla_args: '--memory 4G --blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1'

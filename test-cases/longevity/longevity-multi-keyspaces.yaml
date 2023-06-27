@@ -28,9 +28,6 @@ root_disk_size_runner: 120
 
 user_prefix: 'longevity-1000-keyspaces'
 
-# disables coredump on bad alloc temporary cause of https://github.com/scylladb/scylla/issues/4951
-append_scylla_args: '--blocked-reactor-notify-ms 500'
-
 # TODO: remove when https://github.com/scylladb/scylla-tools-java/issues/175 resolved
 stop_test_on_stress_failure: false
 use_prepared_loaders: true
