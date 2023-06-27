@@ -22,10 +22,6 @@ user_prefix: 'kubernetes-scylla-upgrade'
 #authenticator_user: 'cassandra'
 #authenticator_password: 'cassandra'
 
-# Does not work due to the lack of support, could be anabled after - https://github.com/scylladb/scylla-cluster-tests/issues/2747
-#append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1'
-
-
 # those are needed to be give by the job, via environment variable
 # for the base version
 # SCT_SCYLLA_VERSION=3.0 or SCT_SCYLLA_REPO=
