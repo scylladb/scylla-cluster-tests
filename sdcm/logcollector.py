@@ -28,7 +28,7 @@ from functools import cached_property
 import requests
 
 import sdcm.monitorstack.ui as monitoring_ui
-from sdcm.paths import SCYLLA_YAML_PATH
+from sdcm.paths import SCYLLA_YAML_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH
 from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.utils.common import (
@@ -796,6 +796,8 @@ class ScyllaLogCollector(LogCollector):
                                command='sudo cat /proc/kallsyms'),
                     CommandLog(name='systemctl.status',
                                command='sudo systemctl status --all --full --no-pager'),
+                    CommandLog(name='scylla-manager-agent.yaml',
+                               command=f'cat {SCYLLA_MANAGER_AGENT_YAML_PATH}')
                     ]
     cluster_log_type = "db-cluster"
     cluster_dir_prefix = "db-cluster"
