@@ -151,4 +151,4 @@ def wait_for_log_lines(node, start_line_patterns, end_line_patterns, start_timeo
             ended = any(end_follower)
         if not ended:
             raise TimeoutError(
-                f"timeout occurred while waiting for end log line ({start_line_patterns} on node: {node.name}")
+                f"timeout occurred while waiting for end log line ({end_line_patterns} on node: {node.name}")
