@@ -1,0 +1,29 @@
+apiVersion: scylla.scylladb.com/v1alpha1
+kind: NodeConfig
+metadata:
+  name: scylla-layout-nodes-tuning
+  labels:
+    app: scylla-node-config
+spec:
+  localDiskSetup:
+    filesystems:
+      - type: xfs
+        device: /dev/md/nvmes
+    mounts:
+      - device: /dev/md/nvmes
+        mountPoint: /mnt/persistent-volumes
+        unsupportedOptions:
+        - prjquota
+    raids:
+      - type: RAID0
+        name: nvmes
+        RAID0:
+          devices:
+            modelRegex: "Amazon EC2 NVMe Instance Storage"
+            nameRegex: "/dev/nvme\\d+n\\d+$"
+  placement:
+    nodeSelector: {}
+    # NOTE: 'affinity' will be updated in the code
+    affinity: {}
+  # TODO: make 'disableOptimizations' depend on the 'k8s_enable_performance_tuning' SCT config option
+  disableOptimizations: false

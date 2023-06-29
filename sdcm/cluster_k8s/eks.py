@@ -226,6 +226,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
     POOL_LABEL_NAME = 'eks.amazonaws.com/nodegroup'
     IS_NODE_TUNING_SUPPORTED = True
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/eks/scylla-node-prepare.yaml")
+    NODE_CONFIG_CRD_FILE = sct_abs_path("sdcm/k8s_configs/eks/node-config-crd.yaml")
     STORAGE_CLASS_FILE = sct_abs_path("sdcm/k8s_configs/eks/storageclass.yaml")
     pools: Dict[str, EksNodePool]
     short_cluster_name: str

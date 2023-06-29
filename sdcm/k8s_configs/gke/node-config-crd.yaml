@@ -19,10 +19,16 @@ spec:
         name: nvmes
         RAID0:
           devices:
-            modelRegex: "Amazon EC2 NVMe Instance Storage"
-            nameRegex: "/dev/nvme\\d+n\\d+$"
+            modelRegex: "nvme_card"
+            nameRegex: "^/dev/nvme\\d+n\\d+$"
   placement:
     nodeSelector: {}
     # NOTE: 'affinity' will be updated in the code
     affinity: {}
+    tolerations:
+    - effect: NoSchedule
+      key: role
+      operator: Equal
+      value: scylla-clusters
+  # TODO: make 'disableOptimizations' depend on the 'k8s_enable_performance_tuning' SCT config option
   disableOptimizations: false

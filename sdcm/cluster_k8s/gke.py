@@ -91,7 +91,7 @@ class GkeNodePool(CloudK8sNodePool):
     @property
     def _deploy_cmd(self) -> str:
         # NOTE: '/tmp/system_config.yaml' file gets created on the gcloud container start up.
-        cmd = [f"beta container --project {self.gce_project} node-pools create {self.name}",
+        cmd = [f"container --project {self.gce_project} node-pools create {self.name}",
                f"--region {self.gce_region}",
                f"--node-locations {self.gce_zone}",
                f"--cluster {self.k8s_cluster.short_cluster_name}",
@@ -109,10 +109,7 @@ class GkeNodePool(CloudK8sNodePool):
         if self.disk_size:
             cmd.append(f"--disk-size {self.disk_size}")
         if self.local_ssd_count:
-            # NOTE: Commands to be used:
-            # Stable API: --local-ssd-count 3
-            # Beta API  : --ephemeral-storage="local-ssd-count=3"
-            cmd.append(f"--ephemeral-storage=\"local-ssd-count={self.local_ssd_count}\"")
+            cmd.append(f"--local-nvme-ssd-block count=\"{self.local_ssd_count}\"")
         if self.taints:
             cmd.append(f"--node-taints {' '.join(self.taints)}")
         if self.tags:
@@ -133,7 +130,7 @@ class GkeNodePool(CloudK8sNodePool):
 
     def undeploy(self):
         self.k8s_cluster.gcloud.run(
-            f"beta container --project {self.gce_project} node-pools delete {self.name} "
+            f"container --project {self.gce_project} node-pools delete {self.name} "
             f"--cluster {self.k8s_cluster.short_cluster_name} "
             f"--region {self.gce_region} --quiet")
 
@@ -179,6 +176,7 @@ class GkeCluster(KubernetesCluster):
     POOL_LABEL_NAME = 'cloud.google.com/gke-nodepool'
     IS_NODE_TUNING_SUPPORTED = True
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/gke/scylla-node-prepare.yaml")
+    NODE_CONFIG_CRD_FILE = sct_abs_path("sdcm/k8s_configs/gke/node-config-crd.yaml")
     TOKEN_UPDATE_NEEDED = False
     pools: Dict[str, GkeNodePool]
 
@@ -263,6 +261,8 @@ class GkeCluster(KubernetesCluster):
             allowed_labels_on_scylla_node.extend(self.perf_pods_labels)
         if self.params.get('k8s_use_chaos_mesh'):
             allowed_labels_on_scylla_node.append(('app.kubernetes.io/component', 'chaos-daemon'))
+        if self.params.get("k8s_local_volume_provisioner_type") != 'static':
+            allowed_labels_on_scylla_node.append(('app.kubernetes.io/name', 'local-csi-driver'))
         return allowed_labels_on_scylla_node
 
     def __str__(self):

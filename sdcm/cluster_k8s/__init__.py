@@ -149,7 +149,7 @@ OPERATOR_CONTAINERS_RESOURCES = {
 # Above numbers are "explicit" reservations. So, reserve a bit more for other common pods.
 COMMON_CONTAINERS_RESOURCES = {
     'cpu': 0.5131,
-    'memory': 0.51,
+    'memory': 0.81,
 }
 
 SCYLLA_MANAGER_AGENT_RESOURCES = {
@@ -278,6 +278,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     POOL_LABEL_NAME: str = None
     IS_NODE_TUNING_SUPPORTED: bool = False
     NODE_PREPARE_FILE = None
+    NODE_CONFIG_CRD_FILE = None
     TOKEN_UPDATE_NEEDED = True
 
     api_call_rate_limiter: Optional[ApiCallRateLimiter] = None
@@ -1090,7 +1091,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             if obj["kind"] != "DaemonSet":
                 return
             for container_data in obj["spec"]["template"]["spec"]["containers"]:
-                if container_data["name"] in ("pv-setup", "node-setup"):
+                if container_data["name"] in ("pv-setup", "node-setup", "xfs-formatter"):
                     # NOTE: disable custom node- and pv- setups using dynamic volume provisioner
                     container_data["command"] = ["/bin/bash", "-c", "--"]
                     container_data["args"] = ["while true; do sleep 3600; done"]
@@ -1121,8 +1122,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                          for affinity_modifier in current_pool.affinity_modifiers]
             if self.params.get("k8s_local_volume_provisioner_type") == 'static':
                 modifiers.append(node_config_remove_local_disk_setup)
-            self.apply_file(
-                "sdcm/k8s_configs/node-config-crd.yaml", modifiers=modifiers, envsubst=False)
+            self.apply_file(self.NODE_CONFIG_CRD_FILE, modifiers=modifiers, envsubst=False)
             time.sleep(30)
 
         if self.params.get("k8s_local_volume_provisioner_type") == 'static':
