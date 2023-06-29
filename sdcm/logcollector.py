@@ -31,7 +31,7 @@ from functools import cached_property
 import requests
 
 import sdcm.monitorstack.ui as monitoring_ui
-from sdcm.paths import SCYLLA_YAML_PATH, SCYLLA_PROPERTIES_PATH
+from sdcm.paths import SCYLLA_YAML_PATH, SCYLLA_PROPERTIES_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH
 from sdcm.provision import provisioner_factory
 from sdcm.provision.provisioner import ProvisionerError
 from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
@@ -808,7 +808,9 @@ class ScyllaLogCollector(LogCollector):
                     CommandLog(name='systemctl.status',
                                command='sudo systemctl status --all --full --no-pager'),
                     CommandLog(name='cassandra-rackdc.properties',
-                               command=f'cat {SCYLLA_PROPERTIES_PATH}')
+                               command=f'cat {SCYLLA_PROPERTIES_PATH}'),
+                    CommandLog(name='scylla-manager-agent.yaml',
+                               command=f'cat {SCYLLA_MANAGER_AGENT_YAML_PATH}')
                     ]
     cluster_log_type = "db-cluster"
     cluster_dir_prefix = "db-cluster"
