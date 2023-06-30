@@ -39,8 +39,7 @@ def createRunConfiguration(String backend) {
 }
 
 def runSendEmail(){
-    sh """
-    #!/bin/bash
+    sh """#!/bin/bash
 
     set -xe
     env
@@ -53,8 +52,7 @@ def runSendEmail(){
 }
 
 def runRestoreMonitoringStack(){
-    sh """
-    #!/bin/bash
+    sh """#!/bin/bash
 
     set -xe
     env
