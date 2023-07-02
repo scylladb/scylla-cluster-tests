@@ -17,6 +17,8 @@ from typing import List, Dict, ParamSpec, TypeVar
 from functools import cached_property
 from collections.abc import Callable
 
+import tempfile
+import json
 import yaml
 import tenacity
 from google.cloud import compute_v1
@@ -35,6 +37,8 @@ from sdcm.utils.gce_utils import (
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
 from sdcm.cluster_gce import MonitorSetGCE
+from sdcm.keystore import KeyStore
+from sdcm.remote import LOCALRUNNER
 
 
 GKE_API_CALL_RATE_LIMIT = 5  # ops/s
@@ -165,12 +169,17 @@ class GcloudTokenUpdateThread(TokenUpdateThread):
         return self._gcloud.run(f'config config-helper --min-expiry={self._token_min_duration * 60} --format=json')
 
 
+class GcloudException(Exception):
+    ...
+
+
 # pylint: disable=too-many-instance-attributes
 class GkeCluster(KubernetesCluster):
     AUXILIARY_POOL_NAME = 'default-pool'  # This is default pool that is deployed with the cluster
     POOL_LABEL_NAME = 'cloud.google.com/gke-nodepool'
     IS_NODE_TUNING_SUPPORTED = True
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/gke/scylla-node-prepare.yaml")
+    TOKEN_UPDATE_NEEDED = False
     pools: Dict[str, GkeNodePool]
 
     # pylint: disable=too-many-arguments
@@ -210,6 +219,7 @@ class GkeCluster(KubernetesCluster):
         self.gce_zone += dc_parts[2] if len(dc_parts) == 3 else 'b'
 
         self.gke_cluster_created = False
+        self._authenticate_in_gcloud()
         self.api_call_rate_limiter = ApiCallRateLimiter(
             rate_limit=GKE_API_CALL_RATE_LIMIT,
             queue_size=GKE_API_CALL_QUEUE_SIZE,
@@ -217,6 +227,20 @@ class GkeCluster(KubernetesCluster):
             urllib_backoff_factor=GKE_URLLIB_BACKOFF_FACTOR,
         )
         self.api_call_rate_limiter.start()
+
+    @staticmethod
+    def _authenticate_in_gcloud():
+        credentials = KeyStore().get_gcp_credentials()
+        with tempfile.NamedTemporaryFile(mode='w+', delete=True, encoding='utf-8') as tmp_gcloud_creds_file:
+            tmp_gcloud_creds_file.write(json.dumps(credentials))
+            tmp_gcloud_creds_file.flush()
+            auth_cmd = (
+                f"gcloud auth activate-service-account {credentials['client_email']}"
+                f" --key-file {tmp_gcloud_creds_file.name} --project {credentials['project_id']}"
+            )
+            auth_result = LOCALRUNNER.run(auth_cmd)
+            if auth_result.exited:
+                raise GcloudException(auth_result.stdout.strip())
 
     @cached_property
     def allowed_labels_on_scylla_node(self) -> list:

@@ -278,6 +278,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     POOL_LABEL_NAME: str = None
     IS_NODE_TUNING_SUPPORTED: bool = False
     NODE_PREPARE_FILE = None
+    TOKEN_UPDATE_NEEDED = True
 
     api_call_rate_limiter: Optional[ApiCallRateLimiter] = None
 
@@ -1594,9 +1595,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
          that is kept update by token update thread
         """
         self.create_kubectl_config()
-        self.start_token_update_thread()
-        KubernetesOps.patch_kube_config(self.kubectl_token_path)
-        wait_for(self.check_if_token_is_valid, timeout=120, throw_exc=True)
+        if self.TOKEN_UPDATE_NEEDED:
+            self.start_token_update_thread()
+            KubernetesOps.patch_kube_config(self.kubectl_token_path)
+            wait_for(self.check_if_token_is_valid, timeout=120, throw_exc=True)
         self.start_scylla_pods_ip_change_tracker_thread()
 
     def check_if_token_is_valid(self) -> bool:

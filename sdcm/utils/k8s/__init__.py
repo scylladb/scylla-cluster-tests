@@ -519,6 +519,10 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                                         field_selector=field_selector, timeout_seconds=timeout)
 
 
+class HelmException(Exception):
+    ...
+
+
 class HelmContainerMixin:
     def helm_container_run_args(self) -> dict:
         kube_config_path = os.environ.get('KUBECONFIG', '~/.kube/config')
@@ -543,7 +547,7 @@ class HelmContainerMixin:
     def _helm_container(self) -> Container:
         return ContainerManager.run_container(self, "helm")
 
-    def helm(self, kluster, *command: str, namespace: Optional[str] = None, values: 'HelmValues' = None, prepend_command=None) -> str:
+    def helm(self, kluster, *command: str, namespace: Optional[str] = None, values: 'HelmValues' = None, prepend_command=None) -> str:  # pylint: disable=no-self-use
         cmd = ["helm", ]
         if prepend_command:
             if isinstance(prepend_command, list):
@@ -568,10 +572,11 @@ class HelmContainerMixin:
 
         LOGGER.debug("Execute `%s'", cmd)
         try:
-            res = self._helm_container.exec_run(["sh", "-c", cmd])
-            if res.exit_code:
-                raise DockerException(f"{self._helm_container}: {res.output.decode('utf-8')}")
-            return res.output.decode("utf-8")
+            result = LOCALRUNNER.run(cmd)
+            output = result.stdout.strip()
+            if result.exited:
+                raise HelmException(f"helm: {output}")
+            return output
         finally:
             if values_file:
                 values_file.close()
