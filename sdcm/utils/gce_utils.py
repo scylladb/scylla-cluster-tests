@@ -31,7 +31,7 @@ from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 
 
 # NOTE: we cannot use neither 'slim' nor 'alpine' versions because we need the 'beta' component be installed.
-GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:367.0.0"
+GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:437.0.1"
 
 LOGGER = logging.getLogger(__name__)
 

@@ -3,7 +3,7 @@ gce_datacenter: 'us-east1'
 gce_network: 'qa-vpc'
 gce_image_username: 'scylla-test'
 
-gke_cluster_version: '1.25'
+gke_cluster_version: '1.27'
 gke_k8s_release_channel: ''
 
 gce_instance_type_db: 'n1-standard-8'

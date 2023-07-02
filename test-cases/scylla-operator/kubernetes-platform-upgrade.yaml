@@ -34,3 +34,6 @@ k8s_scylla_operator_docker_image: ''  # default value from the Helm chart will b
 
 use_mgmt: false
 user_prefix: 'kubernetes-platform-upgrade'
+
+# NOTE: it must be 1 version lower than available in cloud platforms
+eks_cluster_version: '1.26'

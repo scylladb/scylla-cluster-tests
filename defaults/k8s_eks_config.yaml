@@ -9,7 +9,7 @@ availability_zone: 'a,b'
 instance_provision: 'on_demand'
 instance_type_db: 'i3.4xlarge'
 
-eks_cluster_version: '1.25'
+eks_cluster_version: '1.27'
 eks_role_arn: 'arn:aws:iam::797456418907:role/eksServicePolicy'
 eks_service_ipv4_cidr: '172.20.0.0/16'
 eks_nodegroup_role_arn: 'arn:aws:iam::797456418907:role/helm-test-worker-nodes-NodeInstanceRole-6ACHDYEKNN3I'
