@@ -31,6 +31,7 @@ k8s_n_auxiliary_nodes: 3
 nemesis_class_name: ['FreeTierSetMonkey', 'K8sSetMonkey']
 nemesis_interval: [5, 6]
 nemesis_seed: ['385', '543']
+nemesis_during_prepare: false
 space_node_threshold: [64424, 64423]
 
 user_prefix: 'longevity-scylla-operator-3h-multitenant'
