@@ -1692,7 +1692,7 @@ def create_argus_test_run():
         if not params.get('test_id'):
             LOGGER.error("test_id is not set")
             return
-        test_config.set_test_id(params.get('test_id'))
+        test_config.set_test_id_only(params.get('test_id'))
         test_config.init_argus_client(params)
         test_config.argus_client().submit_sct_run(
             job_name=get_job_name(),
@@ -1715,7 +1715,7 @@ def finish_argus_test_run(jenkins_status):
         if not params.get('test_id'):
             LOGGER.error("test_id is not set")
             return
-        test_config.set_test_id(params.get('test_id'))
+        test_config.set_test_id_only(params.get('test_id'))
         test_config.init_argus_client(params)
         status = test_config.argus_client().get_status()
         if status in [TestStatus.PASSED, TestStatus.FAILED]:
