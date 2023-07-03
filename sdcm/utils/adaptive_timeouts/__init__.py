@@ -39,6 +39,7 @@ class Operations(Enum):
     DECOMMISSION = ("decommission", _get_decommission_timeout, ())
     NEW_NODE = ("new_node", _get_soft_timeout, ("timeout",))
     CREATE_INDEX = ("create_index", _get_soft_timeout, ("timeout",))
+    CREATE_MV = ("create_mv", _get_soft_timeout, ("timeout",))
     MAJOR_COMPACT = ("major_compact", _get_soft_timeout, ("timeout",))
     REPAIR = ("repair", _get_soft_timeout, ("timeout",))
     REBUILD = ("rebuild", _get_soft_timeout, ("timeout",))
