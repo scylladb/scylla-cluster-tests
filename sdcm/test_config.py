@@ -98,6 +98,13 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             latest_symlink = os.path.join(base, "latest")
             if os.path.islink(latest_symlink):
                 os.remove(latest_symlink)
+
+                @retrying(n=10, sleep_time=0.5, allowed_exceptions=(AssertionError,))
+                def wait_for_removed():
+                    if os.path.islink(latest_symlink):
+                        raise AssertionError(f"symlink {latest_symlink} is not removed")
+
+                wait_for_removed()
             os.symlink(os.path.relpath(logdir, base), latest_symlink)
             LOGGER.info("Symlink `%s' updated to `%s'", latest_symlink, logdir)
         return logdir
