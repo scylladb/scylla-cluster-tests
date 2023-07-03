@@ -43,7 +43,7 @@ from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.sct_events.group_common_events import ignore_no_space_errors
+from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_stream_mutation_fragments_errors
 from sdcm.utils.gce_utils import get_gce_storage_client
 from sdcm.utils.azure_utils import AzureService
 
@@ -946,7 +946,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         target_node = self.db_cluster.nodes[1]
-        with ignore_no_space_errors(node=target_node):
+        with ignore_no_space_errors(node=target_node), ignore_stream_mutation_fragments_errors():
             try:
                 reach_enospc_on_node(target_node=target_node)
 
