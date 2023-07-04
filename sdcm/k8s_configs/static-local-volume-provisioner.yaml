@@ -58,9 +58,6 @@ data:
        namePattern: pv-
        hostDir: "/mnt/raid-disks/disk0/"
        mountDir: "/mnt/raid-disks/disk0/"
-       blockCleanerCommand:
-         - /scripts/shred.sh
-         - 2
 ---
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
