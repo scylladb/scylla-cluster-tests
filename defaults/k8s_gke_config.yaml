@@ -40,9 +40,9 @@ k8s_scylla_datacenter: 'us-east1-b'
 k8s_scylla_rack: 'us-east1'
 k8s_scylla_cluster_name: 'sct-cluster'
 k8s_scylla_disk_gi: 1100
-# NOTE: use only the following pair of options:
+# NOTE: use any of the following pairs:
+#   'k8s_scylla_disk_class=local-raid-disks'   and 'k8s_local_volume_provisioner_type=static'
 #   'k8s_scylla_disk_class=scylladb-local-xfs' and 'k8s_local_volume_provisioner_type=dynamic'
-#   The pair of options that defines the old 'static' way fails using latest K8S.
 k8s_scylla_disk_class: 'scylladb-local-xfs'
 k8s_local_volume_provisioner_type: 'dynamic'
 

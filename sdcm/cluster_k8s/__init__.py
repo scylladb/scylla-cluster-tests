@@ -1091,7 +1091,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             if obj["kind"] != "DaemonSet":
                 return
             for container_data in obj["spec"]["template"]["spec"]["containers"]:
-                if container_data["name"] in ("pv-setup", "node-setup", "xfs-formatter"):
+                if container_data["name"] in ("pv-setup", "node-setup"):
                     # NOTE: disable custom node- and pv- setups using dynamic volume provisioner
                     container_data["command"] = ["/bin/bash", "-c", "--"]
                     container_data["args"] = ["while true; do sleep 3600; done"]

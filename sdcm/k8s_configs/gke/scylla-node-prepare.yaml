@@ -34,19 +34,18 @@ subjects:
   name: pv-setup
   namespace: default
 ---
-# Daemonset that converts ephemeral-storage to xfs
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: xfs-formatter
+  name: node-setup
 spec:
   selector:
     matchLabels:
-      app: xfs-formatter
+      app: node-setup
   template:
     metadata:
       labels:
-        app: xfs-formatter
+        app: node-setup
     spec:
       hostPID: true
       serviceAccountName: pv-setup
@@ -56,76 +55,53 @@ spec:
         value: scylla-clusters
         effect: NoSchedule
       containers:
-      - name: xfs-formatter
-        # NOTE: sha256:8948 .. fb5c33 was built on Dec 29 2021
-        #       which includes following operator PR with required changes:
-        #           https://github.com/scylladb/scylla-operator/pull/770
-        image: docker.io/scylladb/scylla-operator@sha256:894836496e1ea8f7ea9dd4e1aa55cbd6e3aa382cfdeebc474dad96a29dfb5c33
+      # NOTE: the 'node-setup' container's script was taken from the following place:
+      #       https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/local-ssd#run-local-volume-static-provisioner
+      #       https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner/blob/be7c6372/examples/gke-daemonset-raid-disks.yaml
+      - name: node-setup
+        image: gcr.io/google-containers/startup-script:v1
         securityContext:
           privileged: true
-        command:
-        - "/bin/bash"
-        - "-euExo"
-        - "pipefail"
-        - "-O"
-        - "inherit_errexit"
-        - "-c"
-        - |
-          cp -r /usr/local/lib/scylla-operator/gke/xfs-formatter /host/var/lib/
+        env:
+          - name: STARTUP_SCRIPT
+            value: |
+              set -o errexit
+              set -o nounset
+              set -o pipefail
 
-          if [[ ! -d /host/usr/local/lib/systemd ]]; then
-            mkdir /host/usr/local/lib/systemd
-          fi
+              devices=()
+              for ssd in /dev/disk/by-id/google-local-ssd-block*; do
+                if [ -e "${ssd}" ]; then
+                  devices+=("${ssd}")
+                fi
+              done
+              if [ "${#devices[@]}" -eq 0 ]; then
+                echo "No Local NVMe SSD disks found."
+                exit 0
+              fi
 
-          if [[ ! -d /host/usr/local/lib/systemd/system ]]; then
-            mkdir /host/usr/local/lib/systemd/system
-          fi
+              seen_arrays=(/dev/md/*)
+              device=${seen_arrays[0]}
+              echo "Setting RAID array with Local SSDs on device ${device}"
+              if [ ! -e "$device" ]; then
+                device="/dev/md/0"
+                echo "y" | mdadm --create "${device}" --level=0 --force --raid-devices=${#devices[@]} "${devices[@]}"
+              fi
 
-          cp -r /usr/local/lib/scylla-operator/gke/systemd/. /host/usr/local/lib/systemd/system
+              if ! tune2fs -l "${device}" ; then
+                echo "Formatting '${device}'"
+                mkfs.xfs "${device}"
+              fi
 
-          if [[ ! -d /host/usr/local/lib/systemd/system/kube-node-configuration.service.d ]]; then
-            mkdir /host/usr/local/lib/systemd/system/kube-node-configuration.service.d
-          fi
-
-          cat<<-EOF > /host/usr/local/lib/systemd/system/kube-node-configuration.service.d/10-path.conf
-            [Service]
-            Environment="PATH=/var/lib/xfs-formatter/bin:$( chroot /host /bin/bash -c 'echo "${PATH}"' )"
-          EOF
-
-          if [[ ! -d /host/mnt/raid-disks ]]; then
-            mkdir /host/mnt/raid-disks
-          fi
-
-          if [[ ! -d /host/mnt/raid-disks/disk0 ]]; then
-            mkdir /host/mnt/raid-disks/disk0
-          fi
-          chmod a+w /host/mnt/raid-disks/disk0
-
-          chroot /host /bin/bash -euxo pipefail -O inherit_errexit -c '
-              systemctl daemon-reload
-              systemctl enable --now mnt-raid\\x2ddisks-disk0.mount
-              systemctl start xfs-formatter.service
-              journalctl -xeu xfs-formatter -f
-              '
+              mountpoint=/mnt/raid-disks/disk0
+              mkdir -p "${mountpoint}"
+              echo "Mounting '${device}' at '${mountpoint}'"
+              mount -o discard,defaults "${device}" "${mountpoint}"
+              chmod a+w "${mountpoint}"
         volumeMounts:
-        - name: hostfs
-          mountPath: /host
-          mountPropagation: Bidirectional
-        readinessProbe:
-          exec:
-            command:
-              - "chroot"
-              - "/host"
-              - "/bin/bash"
-              - "-euExo"
-              - "pipefail"
-              - "-O"
-              - "inherit_errexit"
-              - "-c"
-              - |
-                xfs_info "$( { grep -E '/mnt/raid-disks/disk0($| )' /proc/mounts || test $? = 1; } | sed -E -e 's/([^ ]+) .+/\1/' )"
-          initialDelaySeconds: 10
-          periodSeconds: 10
+          - name: hostfs
+            mountPath: /mnt/hostfs
+            mountPropagation: Bidirectional
       - name: pv-setup
         image: bitnami/kubectl:1.21.4
         imagePullPolicy: Always
@@ -163,7 +139,7 @@ spec:
 
             # Create directories for each Scylla cluster on each K8S node which will host PVs
             while true; do
-              if [[ -z $(mount | grep  "/dev/md127") ]]; then
+              if [[ -z $(mount | grep  "/dev/md0") ]]; then
                 sleep 5;
                 continue
               fi

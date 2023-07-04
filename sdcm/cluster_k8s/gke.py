@@ -243,7 +243,7 @@ class GkeCluster(KubernetesCluster):
     @cached_property
     def allowed_labels_on_scylla_node(self) -> list:
         allowed_labels_on_scylla_node = [
-            ('app', 'xfs-formatter'),
+            ('app', 'node-setup'),
             ('app', 'static-local-volume-provisioner'),
             ('k8s-app', 'fluentbit-gke'),
             ('k8s-app', 'gke-metrics-agent'),
