@@ -359,7 +359,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             node.remoter.sudo(
                 f"cp {main_dir / filename} {main_dir / subdir / filename}")
 
-            node.run_nodetool(sub_cmd="upgradesstables", args="-a")
+            node.run_nodetool(sub_cmd="upgradesstables")
         if queue:
             queue.put(upgradesstables_available)
             queue.task_done()
