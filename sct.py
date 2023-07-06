@@ -1533,8 +1533,9 @@ def create_runner_image(cloud_provider, region, availability_zone):
               help="Is the runner for restore monitor purpose or not")
 @click.option("-rt", "--restored-test-id", required=False, type=str,
               help="Test ID of the test that the runner is created for restore monitor")
+@click.option("-p", "--address-pool", required=False, type=str, help="ElasticIP pool to use")
 def create_runner_instance(cloud_provider, region, availability_zone, instance_type, root_disk_size_gb,
-                           test_id, test_name, duration, restore_monitor=False, restored_test_id=""):
+                           test_id, test_name, duration, restore_monitor=False, restored_test_id="", address_pool=None):
     # pylint: disable=too-many-locals
 
     if cloud_provider == "aws":
@@ -1558,6 +1559,7 @@ def create_runner_instance(cloud_provider, region, availability_zone, instance_t
         test_duration=duration,
         restore_monitor=restore_monitor,
         restored_test_id=restored_test_id,
+        address_pool=address_pool,
     )
     if not instance:
         sys.exit(1)

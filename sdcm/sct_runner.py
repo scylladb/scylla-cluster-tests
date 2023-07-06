@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import string
+import random
 import tempfile
 import datetime
 from contextlib import suppress
@@ -47,6 +48,7 @@ from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_d
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_utils import (
     SUPPORTED_PROJECTS,
+    get_gce_compute_addresses_client,
     get_gce_compute_images_client,
     get_gce_compute_instances_client,
     create_instance,
@@ -284,7 +286,8 @@ class SctRunner(ABC):
                          instance_name: str,
                          root_disk_size_gb: int = 0,
                          region_az: str = "",
-                         test_duration: Optional[int] = None) -> Any:
+                         test_duration: int | None = None,
+                         address_pool: str | None = None) -> Any:
         ...
 
     @staticmethod
@@ -377,9 +380,15 @@ class SctRunner(ABC):
     def _get_base_image(self, image: Optional[Any] = None) -> Any:
         ...
 
-    def create_instance(self, test_id: str, test_name: str, test_duration: int,  # pylint: disable=too-many-arguments
-                        instance_type: str = "",  root_disk_size_gb: int = 0,
-                        restore_monitor: bool = False, restored_test_id: str = "") -> Any:
+    def create_instance(self,  # pylint: disable=too-many-arguments
+                        test_id: str,
+                        test_name: str,
+                        test_duration: int,
+                        instance_type: str = "",
+                        root_disk_size_gb: int = 0,
+                        restore_monitor: bool = False,
+                        restored_test_id: str = "",
+                        address_pool: str | None = None) -> Any:
         LOGGER.info("Creating SCT Runner instance...")
         image = self.image
         if not image:
@@ -412,6 +421,7 @@ class SctRunner(ABC):
                 availability_zone=self.availability_zone,
             ),
             test_duration=test_duration,
+            address_pool=address_pool,
         )
 
     @classmethod
@@ -496,7 +506,8 @@ class AwsSctRunner(SctRunner):
                          instance_name: str,
                          root_disk_size_gb: int = 0,
                          region_az: str = "",
-                         test_duration: Optional[int] = None) -> Any:
+                         test_duration: int | None = None,
+                         address_pool: str | None = None) -> Any:
         if region_az.startswith(self.SOURCE_IMAGE_REGION):
             aws_region: AwsRegion = self.aws_region_source
         else:
@@ -515,7 +526,7 @@ class AwsSctRunner(SctRunner):
             KeyName=aws_region.SCT_KEY_PAIR_NAME,
             NetworkInterfaces=[{
                 "DeviceIndex": 0,
-                "AssociatePublicIpAddress": True,
+                "AssociatePublicIpAddress": not address_pool,
                 "SubnetId": subnet.subnet_id,
                 "Groups": [aws_region.sct_security_group.group_id,
                            aws_region.sct_ssh_security_group.group_id],
@@ -538,6 +549,22 @@ class AwsSctRunner(SctRunner):
 
         LOGGER.info("Instance created. Waiting until it becomes running... ")
         instance.wait_until_running()
+
+        if address_pool:
+            LOGGER.info("Associating an EIP from `%s' pool...", address_pool)
+            unassigned_addresses = [
+                addr for addr in aws_region.resource.vpc_addresses.filter(
+                    Filters=[{"Name": "tag:sct-runner-pool", "Values": [address_pool]}]
+                ) if not addr.instance_id
+            ]
+            if not unassigned_addresses:
+                raise Exception(f"There are no unassigned EIPs in `{address_pool}' pool")
+            aws_region.client.associate_address(
+                AllocationId=random.choice(unassigned_addresses).allocation_id,
+                InstanceId=instance.instance_id,
+                AllowReassociation=False,
+            )
+            instance = aws_region.resource.Instance(id=instance.instance_id)
 
         LOGGER.info("Instance `%s' is running. Waiting for public IP...", instance.instance_id)
         ec2_instance_wait_public_ip(instance=instance)
@@ -733,7 +760,8 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
                          instance_name: str,
                          root_disk_size_gb: int = 0,
                          region_az: str = "",
-                         test_duration: Optional[int] = None) -> Any:
+                         test_duration: int | None = None,
+                         address_pool: str | None = None) -> Any:
         LOGGER.info("Creating instance...")
         disks = [disk_from_image(disk_type=f"projects/{self.project_name}/zones/{region_az}/diskTypes/pd-ssd",
                                  disk_size_gb=root_disk_size_gb or self.instance_root_disk_size(test_duration),
@@ -741,12 +769,29 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
                                  source_image=base_image,
                                  auto_delete=True)]
 
+        if address_pool:
+            LOGGER.info("Use External IP address from `%s' pool...", address_pool)
+            addresses_client, info = get_gce_compute_addresses_client()
+            unassigned_addresses = list(
+                addresses_client.list(request=compute_v1.ListAddressesRequest(
+                    project=info["project_id"],
+                    region=region_az.rsplit("-", maxsplit=1)[0],
+                    filter=f"labels.sct-runner-pool={address_pool} AND status=RESERVED",
+                ))
+            )
+            if not unassigned_addresses:
+                raise Exception(f"There are no unassigned External IP addresses in `{address_pool}' pool")
+            external_ipv4 = random.choice(unassigned_addresses).address
+        else:
+            external_ipv4 = None
+
         instance = create_instance(project_id=self.project_name, zone=region_az,
                                    machine_type=instance_type,
                                    instance_name=instance_name,
                                    network_name=self.SCT_NETWORK,
                                    disks=disks,
                                    external_access=True,
+                                   external_ipv4=external_ipv4,
                                    metadata=tags | {
                                        "launch_time": get_current_datetime_formatted(),
                                        "block-project-ssh-keys": "true",
@@ -909,7 +954,11 @@ class AzureSctRunner(SctRunner):
                          instance_name: str,
                          root_disk_size_gb: int = 0,
                          region_az: str = "",
-                         test_duration: Optional[int] = None) -> Any:
+                         test_duration: int | None = None,
+                         address_pool: str | None = None) -> Any:
+        if address_pool:
+            raise NotImplementedError("--address-pool is not implement for Azure yet")
+
         if base_image is self.BASE_IMAGE:
             azure_region = self.azure_region_source
             additional_kwargs = {
