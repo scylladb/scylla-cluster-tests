@@ -55,6 +55,7 @@ DST_APISERVER_AUDIT_LOG = "/var/log/kubernetes/kube-apiserver-audit.log"
 
 CNI_CALICO_CONFIG = sct_abs_path("sdcm/k8s_configs/cni-calico.yaml")
 CNI_CALICO_VERSION = "v3.24.5"
+HELM_VERSION = "v3.12.1"
 LOGGER = logging.getLogger(__name__)
 POOL_LABEL_NAME = 'minimal-k8s-nodepool'
 
@@ -128,6 +129,11 @@ class MinimalK8SOps:
             sysctl --system
             """)
         node.remoter.sudo(f'bash -cxe "{script}"')
+        node.remoter.sudo(
+            'bash -cxe \"helm version'
+            f' || curl --silent --location "https://get.helm.sh/helm-{HELM_VERSION}-linux-amd64.tar.gz"'
+            '  | tar xz -C /tmp && mv /tmp/linux-amd64/helm /usr/local/bin'
+            '\"')
 
         # NOTE: if running in Hydra then it must have '/dev' mount from host as 'rw'
         for i in range(7, 41):
