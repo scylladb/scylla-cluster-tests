@@ -288,7 +288,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         cmd = [KUBECTL_BIN, ]
         if sct_test_logdir := os.environ.get('_SCT_TEST_LOGDIR'):
             cmd.append(f"--cache-dir={Path(sct_test_logdir) / '.kube/http-cache'}")
-        if not ignore_k8s_server_url and kluster.k8s_server_url is not None:
+        if not ignore_k8s_server_url and getattr(kluster, "k8s_server_url", None) is not None:
             cmd.append(f"--server={kluster.k8s_server_url}")
         if namespace:
             cmd.append(f"--namespace={namespace}")
@@ -517,6 +517,92 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                                             field_selector=field_selector, timeout_seconds=timeout)
         return k8s.watch.Watch().stream(k8s_core_v1_api.list_namespaced_event, namespace=namespace,
                                         field_selector=field_selector, timeout_seconds=timeout)
+
+    @classmethod
+    def gather_k8s_logs(cls, logdir_path, kubectl=None) -> None:  # pylint: disable=too-many-locals,too-many-branches
+        # NOTE: reuse data where possible to minimize spent time due to API limiter restrictions
+        LOGGER.info("K8S-LOGS: starting logs gathering")
+        logdir = Path(logdir_path)
+        kubectl = kubectl or (lambda *args, **kwargs: KubernetesOps.kubectl(None, *args, **kwargs))
+        kubectl(f"version > {logdir / 'kubectl.version'} 2>&1", ignore_status=True)
+
+        # Gather cluster-scoped resources info
+        LOGGER.info("K8S-LOGS: gathering cluster scoped resources")
+        cluster_scope_dir = "cluster-scoped-resources"
+        os.makedirs(logdir / cluster_scope_dir, exist_ok=True)
+        for resource_type in kubectl(
+                "api-resources --namespaced=false --verbs=list -o name").stdout.split():
+            for output_format in ("yaml", "wide"):
+                logfile = logdir / cluster_scope_dir / f"{resource_type}.{output_format}"
+                kubectl(f"get {resource_type} -o {output_format} > {logfile}", ignore_status=True)
+        kubectl(f"describe nodes > {logdir / cluster_scope_dir / 'nodes.desc'}",
+                timeout=600, ignore_status=True)
+
+        # Read all the namespaces from already saved file
+        with open(logdir / cluster_scope_dir / "namespaces.wide", mode="r", encoding="utf-8") as namespaces_file:
+            # Reverse order of namespaces because preferred ones are there
+            namespaces = [n.split()[0] for n in namespaces_file.readlines()[1:]][::-1]
+
+        # Gather namespace-scoped resources info
+        LOGGER.info("K8S-LOGS: gathering namespace scoped resources. list of namespaces: %s",
+                    ', '.join(namespaces))
+        os.makedirs(logdir / "namespaces", exist_ok=True)
+        for resource_type in kubectl(
+                "api-resources --namespaced=true --verbs=get,list -o name").stdout.split():
+            LOGGER.info("K8S-LOGS: gathering '%s' resources", resource_type)
+            logfile = logdir / "namespaces" / f"{resource_type}.{output_format}"
+            resources_wide = kubectl(
+                f"get {resource_type} -A -o wide 2>&1 | tee {logfile}", ignore_status=True).stdout
+            if resource_type.startswith("events"):
+                # NOTE: skip both kinds on 'events' available in k8s
+                continue
+            for namespace in namespaces:
+                if not re.search(f"\n{namespace} ", resources_wide):
+                    # NOTE: move to the next namespace because such resources are absent here
+                    continue
+                LOGGER.info(
+                    "K8S-LOGS: gathering '%s' resources in the '%s' namespace",
+                    resource_type, namespace)
+                resource_dir = logdir / "namespaces" / namespace / resource_type
+                os.makedirs(resource_dir, exist_ok=True)
+                for res in resources_wide.split("\n"):
+                    if not re.match(f"{namespace} ", res):
+                        continue
+                    res = res.split()[1]
+                    logfile = resource_dir / f"{res}.yaml"
+                    res_stdout = kubectl(
+                        f"get {resource_type}/{res} -o yaml 2>&1 | tee {logfile}",
+                        namespace=namespace).stdout
+                    if resource_type != "pods":
+                        continue
+                    try:
+                        container_names = [
+                            c["name"] for c in yaml.safe_load(res_stdout)["spec"]["containers"]]
+                    except KeyError:
+                        # NOTE: pod could be in 'deleting' state during 'list' command
+                        # and be absent during 'get' command. So, just skip it.
+                        continue
+                    os.makedirs(resource_dir / res, exist_ok=True)
+                    for container_name in container_names:
+                        logfile = resource_dir / res / f"{container_name}"
+                        # NOTE: ignore status because it may fail when pod is not ready/running
+                        kubectl(f"logs pod/{res} -c={container_name} > {logfile}.log",
+                                namespace=namespace, ignore_status=True)
+                        kubectl(f"logs pod/{res} -c={container_name} --previous=true > "
+                                f"{logfile}-previous.log",
+                                namespace=namespace, ignore_status=True)
+
+                        # NOTE: pick up Scylla container-specific files
+                        if container_name != 'scylla':
+                            continue
+                        scylla_container_files_to_copy = (
+                            ('/var/lib/scylla/io_properties.yaml', logfile / 'io_properties.yaml'),
+                            ('/etc/scylla.d/', logfile / 'etc-scylla-d'),
+                            ('/etc/scylla/', logfile / 'etc-scylla'),
+                        )
+                        for src_path, dst_path in scylla_container_files_to_copy:
+                            kubectl(f"cp {res}:{src_path} {dst_path} -c {container_name}",
+                                    namespace=namespace, ignore_status=True)
 
 
 class HelmException(Exception):
