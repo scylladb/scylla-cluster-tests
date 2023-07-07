@@ -16,7 +16,7 @@ import os
 import threading
 
 from fabric import Connection, Config
-from paramiko import SSHException, RSAKey
+from paramiko import SSHException
 from paramiko.ssh_exception import NoValidConnectionsError, AuthenticationException
 from invoke.watchers import StreamWatcher
 from invoke.exceptions import UnexpectedExit, Failure
@@ -121,4 +121,6 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             config=self.ssh_config,
             connect_timeout=self.connect_timeout,
             connect_kwargs={
-                'pkey': RSAKey(filename=os.path.expanduser(self.key_file))} if self.key_file else None)
+                "key_filename": os.path.expanduser(self.key_file),
+            } if self.key_file else None,
+        )
