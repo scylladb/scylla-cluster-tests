@@ -1379,29 +1379,40 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             from cluster_cloud import get_manager_instance_by_cluster_id  # pylint: disable=import-outside-toplevel
         except ImportError:
             LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
-        else:
-            cloud_cluster_id = self.params.get("cloud_cluster_id")
-            if not cloud_cluster_id:
-                LOGGER.error("Cloud cluster id is not found. Probably the cluster has not been created")
-                return
+            return
 
-            try:
-                instance = get_manager_instance_by_cluster_id(cluster_id=cloud_cluster_id)
-                if not instance:
-                    raise ValueError(f"Cloud manager for the cluster {cloud_cluster_id} not found")
-            except Exception as exc:  # pylint: disable=broad-except
-                LOGGER.error("Failed to get cloud manager instance. Error: %s", exc)
-                return
+        cloud_cluster_id = self.params.get("cloud_cluster_id")
+        if not cloud_cluster_id:
+            LOGGER.error("Cloud cluster id is not found. Probably the cluster has not been created")
+            return
 
-            LOGGER.info("Manager instance: %s", instance)
-            ssh_login_info = {"hostname": instance["publicip"],
-                              "user": "support",
-                              "key_file": self.params.get("cloud_credentials_path")}
-            LOGGER.info("Manager instance ssh_login_info: %s", ssh_login_info)
-            self.siren_manager_set.append(CollectingNode(name=instance["externalid"],
-                                                         ssh_login_info=ssh_login_info,
-                                                         instance=instance,
-                                                         global_ip=instance["publicip"]))
+        try:
+            instance = get_manager_instance_by_cluster_id(cluster_id=cloud_cluster_id)
+            if not instance:
+                raise ValueError(f"Cloud manager for the cluster {cloud_cluster_id} not found")
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.error("Failed to get cloud manager instance. Error: %s", exc)
+            return
+
+        LOGGER.info("Manager instance: %s", instance)
+
+        ip_address = instance["privateip"] if instance["publicip"].startswith("proxy://") else instance["publicip"]
+        ssh_login_info = {
+            "hostname": ip_address,
+            "user": "centos",
+            "key_file": self.params.get("cloud_credentials_path"),
+        }
+
+        LOGGER.info("Manager instance ssh_login_info: %s", ssh_login_info)
+
+        self.siren_manager_set.append(
+            CollectingNode(
+                name=instance["externalid"],
+                ssh_login_info=ssh_login_info,
+                instance=instance,
+                global_ip=ip_address,
+            ),
+        )
 
     def get_aws_ip_address(self, instance):
         return instance['PublicIpAddress'] if self.params.get('ip_ssh_connections') == 'public' else instance['PrivateIpAddress']
