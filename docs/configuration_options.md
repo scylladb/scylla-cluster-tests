@@ -159,6 +159,7 @@
 | **<a href="#user-content-gce_n_local_ssd_disk_db" name="gce_n_local_ssd_disk_db">gce_n_local_ssd_disk_db</a>**  |  | N/A | SCT_GCE_N_LOCAL_SSD_DISK_DB
 | **<a href="#user-content-gce_pd_standard_disk_size_db" name="gce_pd_standard_disk_size_db">gce_pd_standard_disk_size_db</a>**  |  | N/A | SCT_GCE_PD_STANDARD_DISK_SIZE_DB
 | **<a href="#user-content-gce_pd_ssd_disk_size_db" name="gce_pd_ssd_disk_size_db">gce_pd_ssd_disk_size_db</a>**  |  | N/A | SCT_GCE_PD_SSD_DISK_SIZE_DB
+| **<a href="#user-content-gce_setup_hybrid_raid" name="gce_setup_hybrid_raid">gce_setup_hybrid_raid</a>**  |  | N/A | SCT_GCE_SETUP_HYBRID_RAID
 | **<a href="#user-content-gce_pd_ssd_disk_size_loader" name="gce_pd_ssd_disk_size_loader">gce_pd_ssd_disk_size_loader</a>**  |  | N/A | SCT_GCE_PD_SSD_DISK_SIZE_LOADER
 | **<a href="#user-content-gce_pd_ssd_disk_size_monitor" name="gce_pd_ssd_disk_size_monitor">gce_pd_ssd_disk_size_monitor</a>**  |  | N/A | SCT_GCE_SSD_DISK_SIZE_MONITOR
 | **<a href="#user-content-azure_region_name" name="azure_region_name">azure_region_name</a>**  | Supported: eastus | N/A | SCT_AZURE_REGION_NAME

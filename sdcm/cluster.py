@@ -4561,6 +4561,29 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     if result.ok:
                         self.log.info("Scylla_io_setup result: %s", result.stdout)
 
+                if self.params.get('gce_setup_hybrid_raid'):
+                    gce_n_local_ssd_disk_db = self.params.get('gce_n_local_ssd_disk_db')
+                    gce_pd_ssd_disk_size_db = self.params.get('gce_pd_ssd_disk_size_db')
+                    if not (gce_n_local_ssd_disk_db > 0 and gce_pd_ssd_disk_size_db > 0):
+                        msg = f"Hybrid RAID cannot be configured without NVMe ({gce_n_local_ssd_disk_db}) " \
+                              f"and PD-SSD ({gce_pd_ssd_disk_size_db})"
+                        raise ValueError(msg)
+                    # pylint: disable=anomalous-backslash-in-string
+                    hybrid_raid_setup_cmd = dedent("""
+                        mdadm --create --verbose --force --run /dev/md10 --level=1 --bitmap=none --raid-devices=2 /dev/sdb /dev/md0
+                        md10_uuid=$(sudo blkid /dev/md10 | grep -o 'UUID="[^"]*' | cut -d'"' -f2)
+                        echo "UUID=$md10_uuid /var/lib/scylla xfs defaults,noatime,nofail 0 0" | sudo tee -a /etc/fstab > /dev/null
+                        echo "UUID=$md10_uuid /var/lib/systemd/coredump xfs defaults,noatime,nofail 0 0" | sudo tee -a /etc/fstab > /dev/null
+                        sed -i "s/What=\/dev\/disk\/by-uuid\/[^ ]*/What=\/dev\/disk\/by-uuid\/$md10_uuid/" /etc/systemd/system/var-lib-scylla.mount
+                        mkfs.xfs -f -m crc=1 -d su=2048k,sw=512 -l version=2 -L HybridRAID /dev/md10
+                        systemctl daemon-reload
+                        systemctl restart var-lib-scylla.mount
+                        systemctl restart var-lib-systemd-coredump.mount
+                    """)
+                    result = node.remoter.run('sudo bash -cxe "%s"' % hybrid_raid_setup_cmd)
+                    if result.ok:
+                        self.log.info("Hybrid RAID setup result: %s", result.stdout)
+
                 node.start_scylla_server(verify_up=False)
 
             # code to increase java heap memory to scylla-jmx (because of #7609)
