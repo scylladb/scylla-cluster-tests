@@ -87,26 +87,15 @@ class BackupFunctionsMixIn:
         self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd(cmd))
 
     def install_gsutil_dependencies(self, node):
-        def is_dir_exists(path):
-            shell = dedent(f"""
-            if [ -d {path} ]
-            then
-                exit 0
-            else
-                exit 1
-            fi
+        if node.is_ubuntu() or node.is_debian():
+            cmd = dedent("""
+                echo 'deb https://packages.cloud.google.com/apt cloud-sdk main' | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+                curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+                sudo apt-get update && sudo apt-get install google-cloud-cli
             """)
-            result = node.remoter.sudo(shell, ignore_status=True)
-            return result.exited == 0
-
-        sdk_directory_path = '$HOME/google-cloud-sdk'
-        if not is_dir_exists(path=sdk_directory_path):
-            self._run_cmd_with_retry(executor=node.remoter.run, cmd=shell_script_cmd("""\
-                        curl https://sdk.cloud.google.com > install.sh
-                        bash install.sh --disable-prompts
-                    """))
         else:
-            self.log.info("gsutil dependencies are now pre-installed, no need to install them on {}".format(node))
+            raise NotImplementedError("At the moment, we only support debian installation")
+        self._run_cmd_with_retry(executor=node.remoter.run, cmd=shell_script_cmd(cmd))
 
     def install_azcopy_dependencies(self, node):
         self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd("""\
