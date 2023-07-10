@@ -23,7 +23,7 @@ gemini_cmd: "gemini -d --duration 3h --warmup 30m \
 --replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '3'}\" \
 --oracle-replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '1'}\""
 
-gemini_version: 'latest'
+gemini_version: '1.7.8'
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
 
 db_type: mixed_scylla
