@@ -9,6 +9,5 @@ umask 077
 aws s3 sync s3://${SSH_KEYS_BUCKET} ${SSH_KEYS_DIR} --exact-timestamps --exclude '*' \
   --include scylla-qa-ec2 \
   --include scylla-test \
-  --include support \
 || (echo "Please refer to https://github.com/scylladb/scylla-cluster-tests#setting-up-sct-environment to configure your aws-cli" && exit 1)
 echo "QA SSH keys obtained."
