@@ -48,5 +48,5 @@ gemini_cmd: "gemini -d --duration 2h \
 --replication-strategy \"{'class': 'SimpleStrategy', 'replication_factor': '3'}\" \
 --table-options \"cdc={'enabled': true}\" --test-username cassandra --test-password cassandra"
 gemini_seed: 66
-gemini_version: 'latest'
+gemini_version: '1.7.8'
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
