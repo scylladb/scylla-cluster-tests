@@ -68,6 +68,7 @@ from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
+from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType, get_scylla_images_ec2_resource
 
 from sdcm.utils.ssh_agent import SSHAgent
@@ -574,6 +575,8 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):  # pylint: dis
         clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
+        if cluster_backend == 'aws':
+            clean_aws_kms_alias(tags_dict, config.region_names)
     if cluster_backend in ('gce', 'k8s-gke', ''):
         for project in gce_projects:
             with environment(SCT_GCE_PROJECT=project):
@@ -983,6 +986,12 @@ def clean_test_security_groups(tags_dict, regions=None, dry_run=False):
                     LOGGER.debug("Done. Result: %s\n", response)
                 except Exception as ex:  # pylint: disable=broad-except
                     LOGGER.debug("Failed with: %s", str(ex))
+
+
+def clean_aws_kms_alias(tags_dict, region_names):
+    # NOTE: try to delete KMS key alias which could be created by the AWS-KMS nemesis
+    test_id = tags_dict.get("TestId", "TestIdNotFound")
+    AwsKms(region_names=region_names).delete_alias(f"alias/testid-{test_id}", tolerate_errors=True)
 
 
 def list_load_balancers_aws(tags_dict=None, regions=None, group_as_region=False, verbose=False):

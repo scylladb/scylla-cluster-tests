@@ -56,6 +56,9 @@
 - disrupt_drain_kubernetes_node_then_replace_scylla_node:
   - disruptive = True
   - kubernetes = True
+- disrupt_enable_disable_table_encryption_aws_kms_provider:
+  - disruptive = True
+  - kubernetes = False
 - disrupt_grow_shrink_cluster:
   - disruptive = True
   - kubernetes = True

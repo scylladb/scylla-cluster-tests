@@ -86,6 +86,7 @@ from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sla.sla_tests import SlaTests
+from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import (get_db_tables, generate_random_string,
@@ -3900,6 +3901,119 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info("Cluster shrink finished. Current number of nodes %s", num_of_nodes)
         InfoEvent(message=f'Cluster shrink finished. Current number of nodes {num_of_nodes}').publish()
 
+    # TODO: add support for the 'LocalFileSystemKeyProviderFactory' and 'KmipKeyProviderFactory' key providers
+    # TODO: add encryption for a table with large partitions?
+
+    def disrupt_enable_disable_table_encryption_aws_kms_provider(self):
+        if self.cluster.params.get("cluster_backend") != "aws":
+            raise UnsupportedNemesis("This nemesis is supported only on the AWS cluster backend")
+        if not self.cluster.nodes[0].is_enterprise:
+            raise UnsupportedNemesis("KMS+EaR feature is only supported by Scylla Enterprise")
+        self._enable_disable_table_encryption(additional_scylla_encryption_options={
+            'key_provider': 'KmsKeyProviderFactory'})
+
+    @scylla_versions(("2023.2.0-dev", None))
+    def _enable_disable_table_encryption(self, additional_scylla_encryption_options=None):
+        scylla_encryption_options = {'cipher_algorithm': 'AES/ECB/PKCS5Padding', 'secret_key_strength': 128}
+        scylla_encryption_options |= additional_scylla_encryption_options or {}
+        aws_kms, kms_key_alias_name = None, None
+        enable_kms_key_rotation = False
+
+        # Handle AWS KMS specific parts
+        if additional_scylla_encryption_options and additional_scylla_encryption_options.get(
+                'key_provider', 'N/A') == 'KmsKeyProviderFactory':
+            kms_host_name = "kms-host"
+            kms_key_alias_name = f"alias/testid-{self.cluster.test_config.test_id()}"
+            scylla_encryption_options |= {'kms_host': kms_host_name}
+            aws_kms = AwsKms(region_names=self.cluster.params.region_names)
+            aws_kms.create_alias(kms_key_alias_name)
+            for node in self.cluster.nodes:
+                is_restart_needed = False
+                with node.remote_scylla_yaml() as scylla_yml:
+                    if not scylla_yml.kms_hosts:
+                        scylla_yml.kms_hosts = {}
+                    if kms_host_name not in scylla_yml.kms_hosts:
+                        scylla_yml.kms_hosts[kms_host_name] = {
+                            'master_key': kms_key_alias_name,
+                            'aws_region': node.region,
+                            'aws_use_ec2_credentials': True,
+                        }
+                        is_restart_needed = True
+                if is_restart_needed:
+                    node.configure_kms()
+                    node.restart_scylla()
+
+        # Create table with encryption
+        keyspace_name, table_name = self.cluster.get_test_keyspaces()[0], 'tmp_encrypted_table'
+        self.log.info("Create '%s.%s' table with server encryption", keyspace_name, table_name)
+        with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_name) as session:
+            # NOTE: scylla-bench expects following table structure:
+            #       (pk bigint, ck bigint, v blob, PRIMARY KEY(pk, ck)) WITH compression = { }
+            create_table_query_cmd = (
+                f"CREATE TABLE IF NOT EXISTS {table_name}"
+                " (pk bigint, ck bigint, v blob, PRIMARY KEY (pk, ck))"
+                " WITH compression = { } AND read_repair_chance=0.0"
+                f" AND compaction = {{ 'class' : '{self.cluster.params.get('compaction_strategy')}' }}"
+                f" AND scylla_encryption_options = {scylla_encryption_options};")
+            session.execute(create_table_query_cmd)
+
+        def upgrade_sstables(nodes):
+            for node in nodes:
+                self.log.info("Upgradesstables on the '%s' node for the new encrypted table", node.name)
+                node.remoter.run(f'nodetool upgradesstables -a -- {keyspace_name} {table_name}', verbose=True)
+
+        try:
+            for i in range(2 if (aws_kms and kms_key_alias_name and enable_kms_key_rotation) else 1):
+                # Write data
+                write_cmd = (
+                    "scylla-bench -mode=write -workload=sequential -consistency-level=all -replication-factor=3"
+                    " -partition-count=50 -clustering-row-count=100 -clustering-row-size=uniform:50..150"
+                    f" -keyspace {keyspace_name} -table {table_name} -timeout=120s")
+                write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, stop_test_on_failure=False)
+                self.tester.verify_stress_thread(write_thread)
+                upgrade_sstables(self.cluster.nodes)
+
+                # Read data
+                read_cmd = (
+                    "scylla-bench -mode=read -workload=sequential -consistency-level=all"
+                    " -partition-count=50 -clustering-row-count=100 -timeout=60s -iterations=1 -validate-data"
+                    " -concurrency=10 -connection-count=10 -rows-per-request=10")
+                read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
+                self.tester.verify_stress_thread(read_thread)
+
+                # Rotate KMS key
+                if enable_kms_key_rotation and aws_kms and kms_key_alias_name and i == 0:
+                    aws_kms.rotate_kms_key(kms_key_alias_name)
+
+            # Disable encryption for the encrypted table
+            self.log.info("Disable encryption for the '%s.%s' table", keyspace_name, table_name)
+            with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_name) as session:
+                query = f"ALTER TABLE {table_name} WITH scylla_encryption_options = {{'key_provider': 'none'}};"
+                session.execute(query)
+            upgrade_sstables(self.cluster.nodes)
+
+            # ReRead data
+            read_thread2 = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
+            self.tester.verify_stress_thread(read_thread2)
+
+            # ReWrite some data making the sstables be rewritten
+            write_cmd = (
+                "scylla-bench -mode=write -workload=sequential -consistency-level=all -replication-factor=3"
+                " -partition-count=10 -clustering-row-count=100 -clustering-row-size=uniform:50..150"
+                f" -keyspace {keyspace_name} -table {table_name} -timeout=30s")
+            write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, stop_test_on_failure=False)
+            self.tester.verify_stress_thread(write_thread)
+            upgrade_sstables(self.cluster.nodes)
+
+            # ReRead data
+            read_thread3 = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
+            self.tester.verify_stress_thread(read_thread3)
+        finally:
+            # Delete table
+            self.log.info("Delete '%s.%s' table with server encryption", keyspace_name, table_name)
+            with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_name) as session:
+                session.execute(f"DROP TABLE {table_name};")
+
     def disrupt_hot_reloading_internode_certificate(self):
         """
         https://github.com/scylladb/scylla/issues/6067
@@ -4852,6 +4966,14 @@ class StopStartMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_stop_start_scylla_server()
+
+
+class EnableDisableTableEncryptionAwsKmsProviderMonkey(Nemesis):
+    disruptive = True
+    kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
+
+    def disrupt(self):
+        self.disrupt_enable_disable_table_encryption_aws_kms_provider()
 
 
 # Disabling this nemesis due to mulitple known issues like (https://github.com/scylladb/scylla/issues/5080).
