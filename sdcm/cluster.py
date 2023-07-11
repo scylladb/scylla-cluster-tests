@@ -2599,7 +2599,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             for dc, dc_status in statuses.items():
                 for node_ip, node_properties in dc_status.items():
                     if node := node_ip_map.get(node_ip):
-                        nodes_status[node] = {'status': node_properties['state'], 'dc': dc}
+                        nodes_status[node] = {'status': node_properties['state'],
+                                              'dc': dc, 'rack': node_properties['rack']}
                     else:
                         if node_ip:
                             LOGGER.error("Get nodes statuses. Failed to find a node in cluster by IP: %s", node_ip)
@@ -3184,6 +3185,14 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             grouped_by_region[node.region].append(node)
         return grouped_by_region
 
+    def nodes_by_racks_idx_and_regions(self, nodes: list[BaseNode] | None = None) -> dict[tuple[str, str], list[BaseNode]]:
+        """:returns {(region, rack): [list of nodes]}"""
+        nodes = nodes if nodes else self.nodes
+        grouped_by_racks = defaultdict(list)
+        for node in nodes:
+            grouped_by_racks[(str(node.region), str(node.rack))].append(node)
+        return grouped_by_racks
+
     def get_datacenter_name_per_region(self, db_nodes=None):
         datacenter_name_per_region = {}
         for region, nodes in self.nodes_by_region(nodes=db_nodes).items():
@@ -3193,6 +3202,16 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 LOGGER.error("Failed to get nodes status from node %s", nodes[0])
 
         return datacenter_name_per_region
+
+    def get_rack_names_per_datacenter_and_rack_idx(self, db_nodes: list[BaseNode] | None = None):
+        db_nodes = db_nodes if db_nodes else self.nodes
+        status = db_nodes[0].get_nodes_status()
+
+        rack_names_mapping = {}
+        for (region, rack), nodes in self.nodes_by_racks_idx_and_regions(nodes=db_nodes).items():
+            rack_names_mapping[(region, rack)] = status[nodes[0]]['rack']
+
+        return rack_names_mapping
 
     def send_file(self, src, dst, verbose=False):
         for loader in self.nodes:
