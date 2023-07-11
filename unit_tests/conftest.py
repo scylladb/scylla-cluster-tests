@@ -86,6 +86,7 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=to
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
                           command_line=f"--smp 1 {alternator_flags}",
                           extra_docker_opts=extra_docker_opts, docker_network=docker_network)
+    cluster.nodes = [scylla]
     DummyRemoter = collections.namedtuple('DummyRemoter', ['run', 'sudo'])
     scylla.remoter = DummyRemoter(run=scylla.run, sudo=scylla.run)
 
