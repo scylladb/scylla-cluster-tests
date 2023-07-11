@@ -85,7 +85,7 @@
             <th>Diff last</th>
             <th>Commit, Date</th>
         </tr>
-        {% for cmp_res in res_list %}
+        {% for cmp_res in res_list | sort(attribute="best.version_dst") %}
         {% set best_stat=cmp_res.best.res.get(stat_name) %}
         {% set last_stat=cmp_res.last.res.get(stat_name) %}
         <tr>
