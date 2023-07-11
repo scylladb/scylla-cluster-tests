@@ -151,7 +151,15 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                     LOGGER.error("Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
                                  loader.region, datacenter_name_per_region)
 
+            # if there are multiple rack/AZs configured, we'll try to configue c-s to pin to them
+            rack_names = self.loader_set.get_rack_names_per_datacenter_and_rack_idx(db_nodes=self.node_list)
+
+            if len(set(rack_names.values())) > 1 and 'rack' in self._get_available_suboptions(cmd_runner, '-node'):
+                if loader_rack := rack_names.get((str(loader.region), str(loader.rack))):
+                    stress_cmd += f"rack={loader_rack} "
+
             node_ip_list = [n.cql_address for n in self.node_list]
+
             stress_cmd += ",".join(node_ip_list)
         if 'skip-unsupported-columns' in self._get_available_suboptions(cmd_runner, '-errors'):
             stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns'])
