@@ -742,7 +742,7 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
                                  auto_delete=True)]
 
         instance = create_instance(project_id=self.project_name, zone=region_az,
-                                   machine_type=self.instance_type(test_duration),
+                                   machine_type=instance_type,
                                    instance_name=instance_name,
                                    network_name=self.SCT_NETWORK,
                                    disks=disks,
