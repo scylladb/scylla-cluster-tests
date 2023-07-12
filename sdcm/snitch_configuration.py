@@ -58,4 +58,6 @@ class SnitchConfig:  # pylint: disable=too-few-public-methods
             properties['dc_suffix'] = self._dc_suffix
 
         with self._node.remote_cassandra_rackdc_properties() as properties_file:
-            properties_file.update(**properties)
+            for key, value in properties.items():
+                # in case when property is already set (e.g. it is forced by AddRemoveDc nemesis), skip setting it
+                properties_file.setdefault(key, value)
