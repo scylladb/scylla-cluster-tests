@@ -4034,7 +4034,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
                                                      parameters=[{"seeds": self.tester.db_cluster.seed_nodes_ips}])]
-            if self.cluster.params.get("endpoint_snitch").endswith("GossipingPropertyFileSnitch"):
+            endpoint_snitch = self.cluster.params.get("endpoint_snitch") or ""
+            if endpoint_snitch.endswith("GossipingPropertyFileSnitch"):
                 rackdc_value = {"dc": "add_remove_nemesis_dc"}
             else:
                 rackdc_value = {"dc_suffix": "_nemesis_dc"}
