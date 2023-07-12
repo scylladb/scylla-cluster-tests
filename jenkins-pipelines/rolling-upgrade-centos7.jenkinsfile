@@ -10,6 +10,6 @@ rollingUpgradePipeline(
     gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7',
 
     test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
-    test_config: 'test-cases/upgrades/rolling-upgrade.yaml',
+    test_config: '''["test-cases/upgrades/rolling-upgrade.yaml", "configurations/gce/n2-highmem-8.yaml"]''',
     internode_compression: 'all'
 )
