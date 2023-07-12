@@ -7,6 +7,8 @@ import uuid
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestStepEvent
 from sdcm.sla.libs.sla_utils import SlaUtils
+from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.decorators import retrying
 from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
 from test_lib.sla import create_sla_auth, ServiceLevel, Role
 
@@ -17,8 +19,6 @@ class Steps(SlaUtils):
     # pylint: disable=too-many-arguments
     def run_stress_and_validate_scheduler_runtime_during_load(self, tester, read_cmds, prometheus_stats, read_roles,
                                                               stress_queue, sleep=600):
-        # Wait for server levels will be propagated to all nodes
-        time.sleep(15)
         # pylint: disable=not-context-manager
         with TestStepEvent(step="Run stress command and validate scheduler runtime during load") as wp_event:
             try:
@@ -51,7 +51,12 @@ class Steps(SlaUtils):
                                 f"during load") as wp_event:
             try:
                 service_level.alter(new_shares=new_shares)
+                # Wait for SL update is propagated to all nodes
+                with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=tester.db_cluster.nodes[0], timeout=15,
+                                      service_level_for_test_step="ALTER_SERVICE_LEVEL"):
+                    self.wait_for_service_level_propagated(cluster=tester.db_cluster, service_level=service_level)
                 start_time = time.time() + 60
+                # Let load to run before validation
                 time.sleep(sleep)
                 end_time = time.time()
                 self.validate_scheduler_runtime(start_time=start_time,
@@ -105,16 +110,21 @@ class Steps(SlaUtils):
                                                  # restart_scylla parameter is temporary - wWorkaround for issue
                                                  # https://github.com/scylladb/scylla-enterprise/issues/2572
                                                  restart_scylla=False):
+        @retrying(n=15, sleep_time=1, message="Wait for service level has been attached to the role",
+                  allowed_exceptions=(Exception, ValueError,))
+        def validate_role_service_level_attributes_against_db():
+            role_for_attach.validate_role_service_level_attributes_against_db()
+
         # pylint: disable=not-context-manager
         with TestStepEvent(step=f"Attach service level {new_service_level.name} with "
                                 f"{new_service_level.shares} shares to {role_for_attach.name}. "
                                 f"Validate scheduler runtime during load") as wp_event:
             try:
                 role_for_attach.attach_service_level(new_service_level)
+                role_for_attach.validate_role_service_level_attributes_against_db()
 
                 # Workaround for issue https://github.com/scylladb/scylla-enterprise/issues/2572
                 if restart_scylla:
-                    time.sleep(30)
                     nodes_for_restart = [node for node in tester.db_cluster.nodes if node.jmx_up() and node.db_up()
                                          and not node.running_nemesis]
                     tester.db_cluster.restart_binary_protocol(nodes=nodes_for_restart)
@@ -147,11 +157,14 @@ class SlaTests(Steps):
     def unique_subsrtr_for_name():
         return str(uuid.uuid1()).split("-", maxsplit=1)[0]
 
-    @staticmethod
-    def _create_sla_auth(session, shares: int, index: str, superuser: bool = True) -> Role:
+    # pylint: disable=too-many-arguments
+    def _create_sla_auth(self, session, db_cluster, shares: int, index: str, superuser: bool = True) -> Role:
         role = None
         try:
             role = create_sla_auth(session=session, shares=shares, index=index, superuser=superuser)
+            with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=db_cluster.nodes[0], timeout=15,
+                                  service_level_for_test_step="INITIAL_FOR_TEST"):
+                self.wait_for_service_level_propagated(cluster=db_cluster, service_level=role.attached_service_level)
             return role
         except Exception:  # pylint: disable=broad-except
             if role and role.attached_service_level:
@@ -159,6 +172,16 @@ class SlaTests(Steps):
             if role:
                 role.drop()
             raise
+
+    # pylint: disable=too-many-arguments
+    def _create_new_service_level(self, session, auth_entity_name_index, shares, db_cluster, service_level_for_test_step: str = None):
+        new_sl = ServiceLevel(session=session,
+                              name=SERVICE_LEVEL_NAME_TEMPLATE % ('50', auth_entity_name_index),
+                              shares=shares).create()
+        with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=db_cluster.nodes[0], timeout=15,
+                              service_level_for_test_step=service_level_for_test_step):
+            self.wait_for_service_level_propagated(cluster=db_cluster, service_level=new_sl)
+        return new_sl
 
     @staticmethod
     def verify_stress_threads(tester, stress_queue):
@@ -186,8 +209,10 @@ class SlaTests(Steps):
         with tester.db_cluster.cql_connection_patient(node=tester.db_cluster.nodes[0],
                                                       user=DEFAULT_USER,
                                                       password=DEFAULT_USER_PASSWORD) as session:
-            role_low = self._create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
-            role_high = self._create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            role_low = self._create_sla_auth(session=session, shares=low_share,
+                                             index=auth_entity_name_index, db_cluster=tester.db_cluster)
+            role_high = self._create_sla_auth(session=session, shares=high_share,
+                                              index=auth_entity_name_index, db_cluster=tester.db_cluster)
             kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
 
             # TODO: change stress_duration to 25. Now it is increased because of cluster rolling restart (workaround)
@@ -218,9 +243,11 @@ class SlaTests(Steps):
                                                                                read_roles=read_roles,
                                                                                stress_queue=stress_queue))
                 # Create new role and attach it instead of detached
-                new_sl = ServiceLevel(session=session,
-                                      name=SERVICE_LEVEL_NAME_TEMPLATE % ('800', auth_entity_name_index),
-                                      shares=800).create()
+                new_sl = self._create_new_service_level(session=session,
+                                                        auth_entity_name_index=auth_entity_name_index,
+                                                        shares=800,
+                                                        db_cluster=tester.db_cluster,
+                                                        service_level_for_test_step="NEW_FOR_REPLACE_EXISTING")
 
                 error_events.append(
                     self.attach_sl_and_validate_scheduler_runtime(tester=tester,
@@ -230,6 +257,7 @@ class SlaTests(Steps):
                                                                   prometheus_stats=prometheus_stats,
                                                                   sleep=600,
                                                                   restart_scylla=True))
+
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
@@ -249,8 +277,10 @@ class SlaTests(Steps):
         with tester.db_cluster.cql_connection_patient(node=tester.db_cluster.nodes[0],
                                                       user=DEFAULT_USER,
                                                       password=DEFAULT_USER_PASSWORD) as session:
-            role_low = self._create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
-            role_high = self._create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            role_low = self._create_sla_auth(session=session, shares=low_share,
+                                             index=auth_entity_name_index, db_cluster=tester.db_cluster)
+            role_high = self._create_sla_auth(session=session, shares=high_share,
+                                              index=auth_entity_name_index, db_cluster=tester.db_cluster)
             kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
 
             stress_duration = 25
@@ -300,8 +330,10 @@ class SlaTests(Steps):
         with tester.db_cluster.cql_connection_patient(node=tester.db_cluster.nodes[0],
                                                       user=DEFAULT_USER,
                                                       password=DEFAULT_USER_PASSWORD) as session:
-            role_low = self._create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
-            role_high = self._create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            role_low = self._create_sla_auth(session=session, shares=low_share,
+                                             index=auth_entity_name_index, db_cluster=tester.db_cluster)
+            role_high = self._create_sla_auth(session=session, shares=high_share,
+                                              index=auth_entity_name_index, db_cluster=tester.db_cluster)
             kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
 
             stress_duration = 25
@@ -352,8 +384,10 @@ class SlaTests(Steps):
         with tester.db_cluster.cql_connection_patient(node=tester.db_cluster.nodes[0],
                                                       user=DEFAULT_USER,
                                                       password=DEFAULT_USER_PASSWORD) as session:
-            role_low = self._create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
-            role_high = self._create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            role_low = self._create_sla_auth(session=session, shares=low_share,
+                                             index=auth_entity_name_index, db_cluster=tester.db_cluster)
+            role_high = self._create_sla_auth(session=session, shares=high_share,
+                                              index=auth_entity_name_index, db_cluster=tester.db_cluster)
             kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
 
             stress_duration = 35
@@ -392,9 +426,11 @@ class SlaTests(Steps):
                 self.refresh_role_in_list(role_to_refresh=role_high, read_roles=read_roles)
 
                 # Create new role and attach it instead of detached
-                new_sl = ServiceLevel(session=session,
-                                      name=SERVICE_LEVEL_NAME_TEMPLATE % ('50', auth_entity_name_index),
-                                      shares=50).create()
+                new_sl = self._create_new_service_level(session=session,
+                                                        auth_entity_name_index=auth_entity_name_index,
+                                                        shares=50,
+                                                        db_cluster=tester.db_cluster,
+                                                        service_level_for_test_step="NEW_AFTER_DETACH")
 
                 error_events.append(
                     self.attach_sl_and_validate_scheduler_runtime(tester=tester,
@@ -424,8 +460,10 @@ class SlaTests(Steps):
         with tester.db_cluster.cql_connection_patient(node=tester.db_cluster.nodes[0],
                                                       user=DEFAULT_USER,
                                                       password=DEFAULT_USER_PASSWORD) as session:
-            role_low = self._create_sla_auth(session=session, shares=low_share, index=auth_entity_name_index)
-            role_high = self._create_sla_auth(session=session, shares=high_share, index=auth_entity_name_index)
+            role_low = self._create_sla_auth(session=session, shares=low_share,
+                                             index=auth_entity_name_index, db_cluster=tester.db_cluster)
+            role_high = self._create_sla_auth(session=session, shares=high_share,
+                                              index=auth_entity_name_index, db_cluster=tester.db_cluster)
             kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
 
             # TODO: change stress_duration to 35. Now it is increased because of cluster rolling restart (workaround)
@@ -465,9 +503,11 @@ class SlaTests(Steps):
                 self.refresh_role_in_list(role_to_refresh=role_low, read_roles=read_roles)
 
                 # Create new role and attach it instead of dropped
-                new_sl = ServiceLevel(session=session,
-                                      name=SERVICE_LEVEL_NAME_TEMPLATE % ('800', auth_entity_name_index),
-                                      shares=800).create()
+                new_sl = self._create_new_service_level(session=session,
+                                                        auth_entity_name_index=auth_entity_name_index,
+                                                        shares=800,
+                                                        db_cluster=tester.db_cluster,
+                                                        service_level_for_test_step="NEW_AFTER_DROP")
 
                 error_events.append(
                     self.attach_sl_and_validate_scheduler_runtime(tester=tester,
@@ -502,8 +542,10 @@ class SlaTests(Steps):
             roles = []
             kwargs = {"-col": cassandra_stress_column_definition} if cassandra_stress_column_definition else {}
             for _ in range(service_levels_amount):
-                roles.append(self._create_sla_auth(session=session, shares=every_role_shares,
-                                                   index=self.unique_subsrtr_for_name()))
+                roles.append(self._create_sla_auth(session=session,
+                                                   shares=every_role_shares,
+                                                   index=self.unique_subsrtr_for_name(),
+                                                   db_cluster=tester.db_cluster))
                 read_cmds.append(self.define_read_cassandra_stress_command(role=roles[-1],
                                                                            load_type=self.MIXED_LOAD,
                                                                            c_s_workload_type=self.WORKLOAD_THROUGHPUT,
