@@ -39,7 +39,7 @@ n_monitor_nodes: 1
 
 round_robin: true
 
-instance_type_db: 'i3.2xlarge'
+instance_type_db: 'i4i.2xlarge'
 azure_instance_type_db: 'Standard_L8s_v3'
 gce_instance_type_db: 'n2-highmem-8'
 gce_n_local_ssd_disk_db: 8

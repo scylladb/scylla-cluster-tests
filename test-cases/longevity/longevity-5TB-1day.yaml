@@ -20,7 +20,7 @@ n_loaders: 4
 n_monitor_nodes: 1
 seeds_num: 2
 
-instance_type_db: 'i3.4xlarge'
+instance_type_db: 'i4i.4xlarge'
 gce_instance_type_db: 'n2-highmem-32'
 gce_n_local_ssd_disk_db: 24
 azure_instance_type_db: 'Standard_L16s_v3'

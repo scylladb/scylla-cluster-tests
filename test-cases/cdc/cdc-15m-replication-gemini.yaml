@@ -4,7 +4,7 @@ user_prefix: 'cdc-replication-gemini'
 db_type: mixed_scylla
 
 n_db_nodes: 3
-instance_type_db: 'i3.large'
+instance_type_db: 'i4i.large'
 
 n_test_oracle_db_nodes: 1
 instance_type_db_oracle: 'i3.large'

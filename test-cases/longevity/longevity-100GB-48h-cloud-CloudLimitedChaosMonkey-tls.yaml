@@ -9,7 +9,7 @@ n_db_nodes: 4
 n_loaders: 1
 n_monitor_nodes: 1
 
-instance_type_db: 'i3.large' # instance type is defined in the jenkins job (with default value in the jenkinsfile for the cloud longevity
+instance_type_db: 'i4i.large' # instance type is defined in the jenkins job (with default value in the jenkinsfile for the cloud longevity
 
 post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
