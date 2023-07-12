@@ -15,7 +15,3 @@ nemesis_interval: 15
 
 user_prefix: 'longevity-large-collections-12h'
 space_node_threshold: 64424
-
-# Disable hinted handoff to avoid a known issue:
-# https://github.com/scylladb/scylla/issues/4935
-hinted_handoff: 'disabled'
