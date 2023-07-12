@@ -1,0 +1,2 @@
+gce_instance_type_db: 'n2-highmem-64'
+gce_n_local_ssd_disk_db: 24
