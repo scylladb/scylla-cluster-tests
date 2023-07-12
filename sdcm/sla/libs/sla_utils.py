@@ -3,12 +3,22 @@ import logging
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.workload_prioritisation import WorkloadPrioritisationEvent
+from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices
+from sdcm.utils.decorators import retrying
 from test_lib.sla import Role
 
 LOGGER = logging.getLogger(__name__)
 
 
 class SchedulerRuntimeUnexpectedValue(Exception):
+    pass
+
+
+class SchedulerGroupNotFound(Exception):
+    pass
+
+
+class WrongServiceLevelShares(Exception):
     pass
 
 
@@ -375,3 +385,42 @@ class SlaUtils:
                         auth.drop()
                     except Exception as error:  # pylint: disable=broad-except
                         LOGGER.error("Failed to drop '%s'. Error: %s", auth.name, error)
+
+    @staticmethod
+    def get_scheduler_shares_per_group(node, scheduler_group_name: str = None) -> list:
+        node_info_service = NodeLoadInfoServices().get(node)
+        scheduler_groups = node_info_service.scylla_scheduler_shares()
+        # scheduler_groups example: {"sl:sl200": [200, 200], "sl:default": [1000, 1000]}
+        LOGGER.debug("Found scheduler groups: %s", scheduler_groups)
+        if scheduler_group_name is None:
+            return scheduler_groups
+
+        return scheduler_groups.get(scheduler_group_name)
+
+    @retrying(n=40, sleep_time=3, message="Wait for service level has been propagated to all nodes",
+              allowed_exceptions=(Exception, SchedulerGroupNotFound, WrongServiceLevelShares,))
+    def wait_for_service_level_propagated(self, cluster, service_level):
+        """Wait for service level has been propagated to all nodes"""
+        for node in cluster.nodes:
+            LOGGER.debug("Start wait for service level propagated for service_level %s on the node '%s'",
+                         service_level.name, node.name)
+            if not (scheduler_shares := self.get_scheduler_shares_per_group(
+                    node=node,
+                    scheduler_group_name=service_level.scheduler_group_name)):
+                raise SchedulerGroupNotFound(f"Scheduler groups for {service_level.name} service levels is not created on the "
+                                             f"node '{node.name}'")
+
+            if len(scheduler_shares) != node.scylla_shards:
+                raise WrongServiceLevelShares(f"Expected that scheduler group is created on every Scylla shard for {service_level.name} "
+                                              f"service level but actually it was created on {len(scheduler_shares)} shards: "
+                                              f"{scheduler_shares} on the node '{node.name}'")
+
+            if len(set(scheduler_shares)) > 1:
+                raise WrongServiceLevelShares(f"Expected same shares on every shard for {service_level.name} service level but "
+                                              f"actually the shares on the every shard are: {scheduler_shares} on the node '{node.name}'")
+
+            if scheduler_shares[0] != service_level.shares:
+                raise WrongServiceLevelShares(f"Expected {service_level.name} service level with '{service_level.shares}' shares "
+                                              f"but actually it is {scheduler_shares} shares on the node '{node.name}'")
+            LOGGER.debug("Finish wait for service level propagated for service_level %s on the node '%s'",
+                         service_level.name, node.name)
