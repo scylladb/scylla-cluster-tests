@@ -74,7 +74,7 @@ email_subject_postfix: ''
 
 collect_logs: false
 
-hinted_handoff: 'enabled'
+hinted_handoff: 'disabled'
 
 server_encrypt: false
 client_encrypt: false
