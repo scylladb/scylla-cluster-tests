@@ -13,4 +13,4 @@ instance_type_loader: 'c5.large'
 instance_type_monitor: 't2.small'
 
 db_type: scylla
-instance_type_db: 'i3.large'
+instance_type_db: 'i4i.large'

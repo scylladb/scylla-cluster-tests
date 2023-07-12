@@ -5,6 +5,6 @@ n_loaders: 1
 n_monitor_nodes: 1
 user_prefix: 'fruch-testing'
 db_type: scylla
-instance_type_db: 'i3.large'
+instance_type_db: 'i4i.large'
 ami_id_db_scylla: 'ami-06f919eb'
 stress_cmd: ["cassandra-stress user profile=/tmp/1232123123123123123.yaml ops'(insert=100)' no-warmup cl=ONE duration=10m -mode cql3 native -rate threads=3000 -errors ignore"]

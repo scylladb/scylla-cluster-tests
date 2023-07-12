@@ -14,7 +14,7 @@ n_db_nodes: 5
 n_loaders: 2
 n_monitor_nodes: 1
 
-instance_type_db: 'i3.4xlarge'
+instance_type_db: 'i4i.4xlarge'
 gce_instance_type_db: 'n2-highmem-32'
 gce_n_local_ssd_disk_db: 16
 

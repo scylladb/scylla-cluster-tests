@@ -5,7 +5,7 @@ n_db_nodes: 6
 n_loaders: 1
 n_monitor_nodes: 1
 
-instance_type_db: 'i3.large'
+instance_type_db: 'i4i.large'
 
 root_disk_size_loader: 80 # enlarge loader disk, cause of cassandra-harry operation.log that can't be disabled
 

@@ -7,7 +7,7 @@
 
 availability_zone: 'a,b'
 instance_provision: 'on_demand'
-instance_type_db: 'i3.4xlarge'
+instance_type_db: 'i4i.4xlarge'
 
 eks_cluster_version: '1.27'
 eks_role_arn: 'arn:aws:iam::797456418907:role/eksServicePolicy'
