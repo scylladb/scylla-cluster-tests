@@ -1,7 +1,9 @@
 import contextlib
 import logging
+import random
 
-from typing import Protocol
+from enum import Enum
+from typing import Protocol, NamedTuple, Mapping, Iterable
 from collections import namedtuple
 
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -16,8 +18,58 @@ class Group0MembersNotConsistentWithTokenRingMembersException(Exception):
     pass
 
 
+class LogPosition(Enum):
+    BEGIN = 0
+    END = 1
+
+
+class TopologyOperations(Enum):
+    DECOMMISSION = "decommission"
+    BOOTSTRAP = "bootstrap"
+
+
+class MessagePosition(NamedTuple):
+    log_message: str
+    position: LogPosition
+
+
+class MessageTimeout(NamedTuple):
+    log_message: str
+    timeout: int
+
+
+BACKEND_TIMEOUTS: dict[str, Mapping[LogPosition, int]] = {
+    "aws": {LogPosition.BEGIN: 300, LogPosition.END: 3600},
+    "gce": {LogPosition.BEGIN: 300, LogPosition.END: 3600},
+    "azure": {LogPosition.BEGIN: 1200, LogPosition.END: 7200},
+}
+
+ABORT_DECOMMISSION_LOG_PATTERNS: Iterable[MessagePosition] = [
+    MessagePosition("DECOMMISSIONING: unbootstrap starts", LogPosition.BEGIN),
+    MessagePosition("DECOMMISSIONING: unbootstrap done", LogPosition.END),
+    MessagePosition("becoming a group 0 non-voter", LogPosition.END),
+    MessagePosition("became a group 0 non-voter", LogPosition.END),
+    MessagePosition("leaving token ring", LogPosition.END),
+    MessagePosition("left token ring", LogPosition.END),
+    MessagePosition("Finished token ring movement", LogPosition.END)
+]
+
+ABORT_BOOTSTRAP_LOG_PATTERNS: Iterable[MessagePosition] = [
+    MessagePosition("Starting to bootstrap", LogPosition.BEGIN),
+    MessagePosition("setup_group0: joining group 0", LogPosition.BEGIN),
+    MessagePosition("setup_group0: successfully joined group 0", LogPosition.BEGIN),
+    MessagePosition("setup_group0: the cluster is ready to use Raft. Finishing", LogPosition.BEGIN),
+    MessagePosition("entering BOOTSTRAP mode", LogPosition.BEGIN),
+    MessagePosition("storage_service - Bootstrap completed", LogPosition.END),
+    MessagePosition("finish_setup_after_join: becoming a voter in the group 0 configuration", LogPosition.END),
+    MessagePosition("raft_group0 - finish_setup_after_join: group 0 ID present, loading server info", LogPosition.END),
+    MessagePosition("became a group 0 voter", LogPosition.END),
+]
+
+
 class RaftFeatureOperations(Protocol):
-    _node: 'BaseNode'
+    _node: "BaseNode"
+    TOPOLOGY_OPERATION_LOG_PATTERNS: dict[TopologyOperations, Iterable[MessagePosition]]
 
     @property
     def is_enabled(self) -> bool:
@@ -38,14 +90,30 @@ class RaftFeatureOperations(Protocol):
     def clean_group0_garbage(self, raise_exception: bool = False) -> None:
         ...
 
-    def get_diff_group0_token_ring_members(self) -> list[str]:
-        ...
+    def get_message_waiting_timeout(self, message_position: MessagePosition) -> MessageTimeout:
+        backend = self._node.parent_cluster.params["cluster_backend"]
+        if backend not in BACKEND_TIMEOUTS:
+            backend = "aws"
+        return MessageTimeout(message_position.log_message,
+                              BACKEND_TIMEOUTS[backend][message_position.position])
 
-    def is_cluster_topology_consistent(self) -> bool:
-        ...
+    def get_random_log_message(self, operation: TopologyOperations, seed: int | None = None):
+        random.seed(seed)
+        log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
+        log_pattern = random.choice(log_patterns)
+        return self.get_message_waiting_timeout(log_pattern)
+
+    def get_all_messages_timeouts(self, operation: TopologyOperations):
+        log_patterns = self.TOPOLOGY_OPERATION_LOG_PATTERNS.get(operation)
+        return list(map(self.get_message_waiting_timeout, log_patterns))
 
 
 class Raft(RaftFeatureOperations):
+    TOPOLOGY_OPERATION_LOG_PATTERNS: dict[TopologyOperations, Iterable[MessagePosition]] = {
+        TopologyOperations.DECOMMISSION: ABORT_DECOMMISSION_LOG_PATTERNS,
+        TopologyOperations.BOOTSTRAP: ABORT_BOOTSTRAP_LOG_PATTERNS,
+    }
+
     def __init__(self, node: "BaseNode") -> None:
         super().__init__()
         self._node = node
@@ -139,51 +207,44 @@ class Raft(RaftFeatureOperations):
         LOGGER.debug("Group0 cleaned")
 
     @staticmethod
-    def get_log_patterns_for_decommission_abort() -> list[str]:
-        return ["DECOMMISSIONING: unbootstrap starts",
-                "DECOMMISSIONING: unbootstrap done",
-                "becoming a group 0 non-voter",
-                "became a group 0 non-voter",
-                "leaving token ring",
-                "left token ring",
-                "Finished token ring movement"]
-
-    @staticmethod
-    def get_log_pattern_for_bootstrap_abort() -> list[str]:
-        return ["Starting to bootstrap",
-                "setup_group0: joining group 0",
-                "setup_group0: successfully joined group 0",
-                "setup_group0: the cluster is ready to use Raft. Finishing",
-                "entering BOOTSTRAP mode",
-                "storage_service - Bootstrap completed!",
-                "finish_setup_after_join: becoming a voter in the group 0 configuration",
-                "raft_group0 - finish_setup_after_join: group 0 ID present, loading server info",
-                "became a group 0 voter",
-                ]
-
-    @staticmethod
     def get_severity_change_filters_scylla_start_failed(timeout: int | None = None) -> tuple:
         return (
             EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                         event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                        regex=".*storage_service - decommission.*Operation failed",
+                                        regex=r".*storage_service - decommission.*Operation failed",
                                         extra_time_to_expiration=timeout),
             EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                         event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                        regex=".*This node was decommissioned and will not rejoin the ring",
-                                        extra_time_to_expiration=timeout),
-            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                        event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                        regex=".*Startup failed: std::runtime_error.*is removed from the cluster",
+                                        regex=r".*node_ops - decommission.*seastar::sleep_aborted",
                                         extra_time_to_expiration=timeout),
             EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                         event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                        regex=".*gossip - is_safe_for_restart.*status=LEFT",
+                                        regex=r".*This node was decommissioned and will not rejoin the ring",
                                         extra_time_to_expiration=timeout),
             EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                         event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                        regex=".*init - Startup failed: std::runtime_error.*already exists, cancelling join",
+                                        regex=r".*This node was decommissioned and will not rejoin the ring",
+                                        extra_time_to_expiration=timeout),
+            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                        event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                                        regex=r".*Startup failed: std::runtime_error.*is removed from the cluster",
+                                        extra_time_to_expiration=timeout),
+            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                        event_class=DatabaseLogEvent.DATABASE_ERROR,
+                                        regex=r".*gossip - is_safe_for_restart.*status=LEFT",
+                                        extra_time_to_expiration=timeout),
+            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                        event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                                        regex=r".*init - Startup failed: std::runtime_error.*already exists, cancelling join",
+                                        extra_time_to_expiration=timeout),
+            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                        event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                                        regex=r".*init - Startup failed: std::runtime_error.*repair_reason=bootstrap.*aborted_by_user=true",
                                         extra_time_to_expiration=timeout)
+
+
+
+
         )
 
     def is_cluster_topology_consistent(self) -> bool:
@@ -200,6 +261,14 @@ class Raft(RaftFeatureOperations):
 
 
 class NoRaft(RaftFeatureOperations):
+    TOPOLOGY_OPERATION_LOG_PATTERNS = {
+        TopologyOperations.DECOMMISSION: [
+            MessagePosition("DECOMMISSIONING: unbootstrap starts", LogPosition.BEGIN)],
+        TopologyOperations.BOOTSTRAP: [
+            MessagePosition("entering BOOTSTRAP mode", LogPosition.BEGIN)
+        ]
+    }
+
     def __init__(self, node: "BaseNode") -> None:
         super().__init__()
         self._node = node
@@ -225,14 +294,6 @@ class NoRaft(RaftFeatureOperations):
 
     def get_diff_group0_token_ring_members(self) -> list[str]:
         return []
-
-    @staticmethod
-    def get_log_patterns_for_decommission_abort() -> list[str]:
-        return ["DECOMMISSIONING: unbootstrap starts"]
-
-    @staticmethod
-    def get_log_pattern_for_bootstrap_abort() -> list[str]:
-        return ["entering BOOTSTRAP mode"]
 
     @staticmethod
     def get_severity_change_filters_scylla_start_failed(timeout: int = None) -> tuple:

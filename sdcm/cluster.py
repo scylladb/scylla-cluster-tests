@@ -4765,11 +4765,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             raise NodeStayInClusterAfterDecommission(error_msg)
 
         self.log.debug("Difference between token ring and group0 is %s", missing_host_ids)
-        if missing_host_ids:
+        if missing_host_ids and not decommission_done:
             # decommission was aborted after all data was streamed and node removed from
             # token ring but left in group0. we can safely removenode and terminate it
             # terminate node to be sure that it want return back to cluster,
             # because node was just rebooted and could cause unpredictable cluster state.
+            if verification_node.raft.is_cluster_topology_consistent():
+                error_msg = f"Decommissioned Node {node.name} was bootstrapped again"
+                LOGGER.warning(error_msg)
+                raise NodeStayInClusterAfterDecommission(error_msg)
+            node.stop_scylla(verify_down=False)
             LOGGER.debug("Terminate node %s", node.name)
             self.terminate_node(node)  # pylint: disable=no-member
             self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()

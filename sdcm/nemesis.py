@@ -119,7 +119,7 @@ from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
-from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException
+from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
 from sdcm.wait import wait_for, wait_for_log_lines
 from sdcm.exceptions import (
     KillNemesis,
@@ -3687,7 +3687,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             except Group0MembersNotConsistentWithTokenRingMembersException as exc:
                 self.log.error("Cluster state could be not predictable due to ghost members in raft group0: %s", exc)
                 raise
-
             except Exception as exc:  # pylint: disable=broad-except
                 self.log.error('Unexpected exception raised in checking decommission status: %s', exc)
 
@@ -3704,12 +3703,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             retry=0,
         )
 
-        terminate_patterns = self.target_node.raft.get_log_patterns_for_decommission_abort()
-        self.use_nemesis_seed()
-        terminate_pattern = random.choice(terminate_patterns)
-        self.log.debug("Reboot node after log message: '%s'", terminate_pattern)
+        terminate_pattern = self.target_node.raft.get_random_log_message(operation=TopologyOperations.DECOMMISSION,
+                                                                         seed=self.tester.params.get("nemesis_seed"))
+        self.log.debug("Reboot node after log message: '%s'", terminate_pattern.log_message)
 
-        log_follower = self.target_node.follow_system_log(patterns=[terminate_pattern])
+        log_follower = self.target_node.follow_system_log(patterns=[terminate_pattern.log_message])
 
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
@@ -3719,19 +3717,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             delay=0
         )
 
-        if terminate_pattern in ["became a group 0 non-voter", "leaving token ring", "left token ring",
-                                 "Finished token ring movement"]:
-            timeout = MAX_TIME_WAIT_FOR_DECOMMISSION
-        else:
-            timeout = 1200
-            if self.cluster.params.get('cluster_backend') == 'azure':
-                timeout += 1200  # Azure reboot can take up to 20min to initiate
-
         with contextlib.ExitStack() as stack:
-            for expected_start_failed_context in self.target_node.raft.get_severity_change_filters_scylla_start_failed(timeout):
+            for expected_start_failed_context in self.target_node.raft.get_severity_change_filters_scylla_start_failed(
+                    terminate_pattern.timeout):
                 stack.enter_context(expected_start_failed_context)
-
-            ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
+            with ignore_stream_mutation_fragments_errors():
+                ParallelObject(objects=[trigger, watcher], timeout=terminate_pattern.timeout).call_objects()
             if new_node := decommission_post_action():
                 new_node.wait_node_fully_start()
                 new_node.run_nodetool("rebuild", retry=0)
@@ -4818,13 +4809,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         trigger = partial(
             start_bootstrap, new_node=new_node)
 
-        terminate_patterns = self.target_node.raft.get_log_pattern_for_bootstrap_abort()
+        terminate_pattern = self.target_node.raft.get_random_log_message(operation=TopologyOperations.BOOTSTRAP,
+                                                                         seed=self.tester.params.get("nemesis_seed"))
 
-        self.use_nemesis_seed()
-        terminate_pattern = random.choice(terminate_patterns)
-        self.log.info("Stop bootsrap process after log message: '%s'", terminate_pattern)
+        self.log.info("Stop bootsrap process after log message: '%s'", terminate_pattern.log_message)
 
-        log_follower = new_node.follow_system_log(patterns=[terminate_pattern])
+        log_follower = new_node.follow_system_log(patterns=[terminate_pattern.log_message])
 
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
