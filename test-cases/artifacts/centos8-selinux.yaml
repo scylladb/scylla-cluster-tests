@@ -16,3 +16,4 @@ scylla_linux_distro: 'centos'
 test_duration: 60
 user_prefix: 'artifacts-centos8-selinux'
 append_scylla_setup_args: '--no-selinux-setup'
+use_preinstalled_scylla: false
