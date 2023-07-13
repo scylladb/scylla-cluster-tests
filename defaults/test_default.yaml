@@ -27,7 +27,7 @@ scylla_linux_distro: 'ubuntu-focal'
 scylla_linux_distro_loader: 'centos'
 ssh_transport: 'libssh2'
 
-monitor_branch: 'branch-4.4'
+monitor_branch: 'branch-4.5'
 
 space_node_threshold: 0
 
