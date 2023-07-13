@@ -24,6 +24,8 @@ internode_compression: 'all'
 
 use_mgmt: false
 
+use_preinstalled_scylla: false
+
 # those are needed to be give by the job, via environment variable
 # for the base version
 # SCT_SCYLLA_VERSION=3.0 or SCT_SCYLLA_REPO=
