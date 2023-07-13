@@ -227,6 +227,24 @@ def ignore_stream_mutation_fragments_errors():
             regex=r".*storage_service \- .*Operation failed",
             extra_time_to_expiration=30
         ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*node_ops - decommission.*Operation failed.*std::runtime_error.*aborted_by_user=true, failed_because=N\/A",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*node_ops - decommission.*Operation failed.*std::runtime_error.*failed_because=seastar::rpc::closed_error",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*node_ops - decommission.*Operation failed.*std::runtime_error.*seastar::abort_requested_exception",
+            extra_time_to_expiration=30
+        ))
         yield
 
 
