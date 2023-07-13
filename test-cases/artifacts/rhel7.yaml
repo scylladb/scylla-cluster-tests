@@ -15,3 +15,4 @@ nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'centos'
 test_duration: 60
 user_prefix: 'artifacts-rhel7'
+use_preinstalled_scylla: false
