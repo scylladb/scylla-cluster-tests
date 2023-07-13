@@ -394,13 +394,13 @@ google-api-core[grpc]==2.11.1 \
     #   google-cloud-compute
     #   google-cloud-core
     #   google-cloud-storage
-google-api-python-client==2.24.0 \
-    --hash=sha256:1c6267c7f018d86afc62dd8ec844a3e7189022a35ee239ed704cbda010888998 \
-    --hash=sha256:75edc13a5c6dd9ff6f47721162a845edc343b4987ee059842e9a7905ad62e917
+google-api-python-client==2.93.0 \
+    --hash=sha256:62ee28e96031a10a1c341f226a75ac6a4f16bdb1d888dc8222b2cdca133d0031 \
+    --hash=sha256:f34abb671afd488bd19d30721ea20fb30d3796ddd825d6f91f26d8c718a9f07d
     # via -r ../../requirements.in
-google-auth==2.21.0 \
-    --hash=sha256:b28e8048e57727e7cf0e5bd8e7276b212aef476654a09511354aa82753b45c66 \
-    --hash=sha256:da3f18d074fa0f5a7061d99b9af8cee3aa6189c987af7c1b07d94566b6b11268
+google-auth==2.22.0 \
+    --hash=sha256:164cba9af4e6e4e40c3a4f90a1a6c12ee56f14c0b4868d1ca91b32826ab334ce \
+    --hash=sha256:d61d1b40897407b574da67da1a833bdc10d5a11642566e506565d1b1a46ba873
     # via
     #   google-api-core
     #   google-api-python-client
@@ -412,17 +412,17 @@ google-auth-httplib2==0.1.0 \
     --hash=sha256:31e49c36c6b5643b57e82617cb3e021e3e1d2df9da63af67252c02fa9c1f4a10 \
     --hash=sha256:a07c39fd632becacd3f07718dfd6021bf396978f03ad3ce4321d060015cc30ac
     # via google-api-python-client
-google-cloud-compute==1.5.2 \
-    --hash=sha256:08c4249b3027f7f2079eaf8196cffc094c7adde335bddc04ea324d6d3107491b \
-    --hash=sha256:0f4a48475bd012dffb688c4ca34b83971bedf9fc12d83c42bab53f971307023a
+google-cloud-compute==1.13.0 \
+    --hash=sha256:0f75d6c09cc504e43f4eceb2a466de9e9eb6fca819ca8ffdcf098ca5b21c7dc1 \
+    --hash=sha256:93b72129c6443c898da5a060d2021bc2d11c2a57ef2fbb9306afbb5126a376b9
     # via -r ../../requirements.in
 google-cloud-core==2.3.3 \
     --hash=sha256:37b80273c8d7eee1ae816b3a20ae43585ea50506cb0e60f3cf5be5f87f1373cb \
     --hash=sha256:fbd11cad3e98a7e5b0343dc07cb1039a5ffd7a5bb96e1f1e27cee4bda4a90863
     # via google-cloud-storage
-google-cloud-storage==2.4.0 \
-    --hash=sha256:5fe26f1381b30e3cc328f46e13531ca8525458f870c1e303c616bdeb7b7f5c66 \
-    --hash=sha256:973e7f7d9afcd4805769b6ea9ac15ab9df7037530850374f1494b5a2c8f65b6b
+google-cloud-storage==2.10.0 \
+    --hash=sha256:934b31ead5f3994e5360f9ff5750982c5b6b11604dc072bc452c25965e076dc7 \
+    --hash=sha256:9433cf28801671de1c80434238fb1e7e4a1ba3087470e90f70c928ea77c2b9d7
     # via -r ../../requirements.in
 google-crc32c==1.5.0 \
     --hash=sha256:024894d9d3cfbc5943f8f230e23950cd4906b2fe004c72e29b209420a1e6b05a \
@@ -881,9 +881,9 @@ pathvalidate==3.0.0 \
     --hash=sha256:cfca1886f3cd8862b10bce18a87f4dc02d6418399e539ede2b010dc8588991ce \
     --hash=sha256:dcdb89f0bde6fd5eba6f2202a7863f657afbc810ef32f60e9258d58ede8155ac
     # via simplesqlite
-pbr==1.4.0 \
-    --hash=sha256:01e05c9397732fa27e4feabd77756c1da6070bc69b5c9584b02d07ecb8f6fde4 \
-    --hash=sha256:f080232fb6b208615b4c1854bf4277bb097d19c9ef89f94f203c1436fe600e92
+pbr==5.11.1 \
+    --hash=sha256:567f09558bae2b3ab53cb3c1e2e33e726ff3338e7bae3db5dc954b3a44eef12b \
+    --hash=sha256:aefc51675b0b533d56bb5fd1c8c6c0522fe31896679882e1c4c63d5e4a0fccb3
     # via
     #   -r ../../requirements.in
     #   hdrhistogram
@@ -1391,9 +1391,9 @@ typing-extensions==4.7.1 \
     #   azure-storage-blob
     #   boto3-stubs
     #   pydantic
-uritemplate==3.0.1 \
-    --hash=sha256:07620c3f3f8eed1f12600845892b0e036a2420acf513c53f7de0abd911a5894f \
-    --hash=sha256:5af8ad10cec94f215e3f48112de2022e1d5a37ed427fbd88652fa908f2ab7cae
+uritemplate==4.1.1 \
+    --hash=sha256:4346edfc5c3b79f694bccd6d6099a322bbeb628dbf2cd86eea55a456ce5124f0 \
+    --hash=sha256:830c08b8d99bdd312ea4ead05994a38e8936266f84b9a7878232db50b044e02e
     # via google-api-python-client
 urllib3==1.26.16 \
     --hash=sha256:8d36afa7616d8ab714608411b4a3b13e58f463aee519024578e062e141dce20f \
