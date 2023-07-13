@@ -1,5 +1,4 @@
 cluster_backend: 'gce'
-use_preinstalled_scylla: true
 backtrace_decoding: false
 gce_instance_type_db: 'n1-standard-2'
 gce_root_disk_type_db: 'pd-ssd'

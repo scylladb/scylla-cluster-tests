@@ -17,3 +17,4 @@ test_duration: 60
 user_prefix: 'artifacts-rocky9'
 
 user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
+use_preinstalled_scylla: false
