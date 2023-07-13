@@ -104,7 +104,7 @@ from sdcm.utils.k8s import (
 from sdcm.utils.k8s.chaos_mesh import MemoryStressExperiment, IOFaultChaosExperiment, DiskError, NetworkDelayExperiment, \
     NetworkPacketLossExperiment, NetworkCorruptExperiment, NetworkBandwidthLimitExperiment
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LdapServerType
-from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE_LEVEL_NAME_TEMPLATE
+from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD
 from sdcm.utils.nemesis_utils.indexes import get_random_column_name, create_index, \
     wait_for_index_to_be_built, verify_query_by_index_works, drop_index, get_column_names, \
     wait_for_view_to_be_built, drop_materialized_view, is_cf_a_view
@@ -1669,37 +1669,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         reach_enospc_on_node(target_node=node)
                     finally:
                         clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
-
-    def disrupt_remove_service_level_while_load(self):
-        # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
-        if not self.cluster.params.get('sla'):
-            raise UnsupportedNemesis("SLA nemesis can be run during SLA test only")
-
-        if not self.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("SLA feature is only supported by Scylla Enterprise")
-
-        if not self.cluster.params.get('authenticator'):
-            raise UnsupportedNemesis("SLA feature can't work without authenticator")
-
-        if not getattr(self.tester, "roles", None):
-            raise UnsupportedNemesis('This nemesis is supported with Service Level and role are pre-defined')
-
-        role = self.tester.roles[0]
-
-        with self.cluster.cql_connection_patient(node=self.cluster.nodes[0], user=DEFAULT_USER,
-                                                 password=DEFAULT_USER_PASSWORD) as session:
-            self.log.info("Drop service level %s", role.attached_service_level_name)
-            removed_shares = role.attached_service_level.shares
-            role.attached_service_level.session = session
-            role.session = session
-            try:
-                role.attached_service_level.drop(if_exists=False)
-                time.sleep(300)  # let load to run without service level for 5 minutes
-            finally:
-                role.attach_service_level(
-                    ServiceLevel(session=session,
-                                 name=SERVICE_LEVEL_NAME_TEMPLATE % (removed_shares, random.randint(0, 10)),
-                                 shares=removed_shares).create())
 
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
@@ -4796,14 +4765,6 @@ class RefreshBigMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_nodetool_refresh(big_sstable=True)
-
-
-class RemoveServiceLevelMonkey(Nemesis):
-    disruptive = True
-    sla = True
-
-    def disrupt(self):
-        self.disrupt_remove_service_level_while_load()
 
 
 class EnospcMonkey(Nemesis):

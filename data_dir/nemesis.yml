@@ -184,9 +184,6 @@
   - disruptive = True
   - kubernetes = False
   - topology_changes = True
-- disrupt_remove_service_level_while_load:
-  - disruptive = True
-  - sla = True
 - disrupt_repair_streaming_err:
   - disruptive = True
 - disrupt_replace_scylla_node_on_kubernetes:

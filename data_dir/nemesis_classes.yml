@@ -46,7 +46,6 @@
 - RefreshMonkey
 - RejectNodeExporterNetworkMonkey
 - RejectThriftNetworkMonkey
-- RemoveServiceLevelMonkey
 - RepairStreamingErrMonkey
 - ResetLocalSchemaMonkey
 - RollingRestartConfigChangeInternodeCompression
