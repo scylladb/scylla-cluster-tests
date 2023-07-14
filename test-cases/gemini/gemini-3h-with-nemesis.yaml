@@ -27,4 +27,4 @@ gemini_cmd: "gemini -d --duration 3h --warmup 30m \
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
 
 db_type: mixed_scylla
-instance_type_db_oracle: 'i3.8xlarge'
+instance_type_db_oracle: 'i4i.8xlarge'
