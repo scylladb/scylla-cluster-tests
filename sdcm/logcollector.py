@@ -31,7 +31,8 @@ from functools import cached_property
 import requests
 
 import sdcm.monitorstack.ui as monitoring_ui
-from sdcm.paths import SCYLLA_YAML_PATH, SCYLLA_PROPERTIES_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH
+from sdcm.paths import SCYLLA_YAML_PATH, SCYLLA_PROPERTIES_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH, \
+    SCYLLA_MANAGER_YAML_PATH
 from sdcm.provision import provisioner_factory
 from sdcm.provision.provisioner import ProvisionerError
 from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
@@ -896,6 +897,8 @@ class MonitorLogCollector(LogCollector):
                    command='docker logs --details -t agraf'),
         CommandLog(name='aalert.log',
                    command='docker logs --details -t aalert'),
+        CommandLog(name='scylla-manager.yaml',
+                   command=f'cat {SCYLLA_MANAGER_YAML_PATH}'),
         FileLog(name='scylla_manager.log',
                 command='sudo journalctl -u scylla-manager.service --no-tail',
                 search_locally=True),
