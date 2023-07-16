@@ -1428,6 +1428,9 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
                 {'Name': 'architecture', 'Values': [arch]},
             ],
         )
+    images = sorted(images, key=lambda x: x.creation_date, reverse=True)
+    images = [image for image in images if image.tags and 'debug' not in {
+        i['Key']: i['Value'] for i in image.tags}.get('Name', '')]
 
     return images
 
