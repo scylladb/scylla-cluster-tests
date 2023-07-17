@@ -30,7 +30,7 @@ from sdcm import wait
 from sdcm.mgmt.common import \
     TaskStatus, ScyllaManagerError, HostStatus, HostSsl, HostRestStatus, duration_to_timedelta, DEFAULT_TASK_TIMEOUT
 from sdcm.utils.distro import Distro
-
+from sdcm.wait import WaitForTimeoutError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -395,10 +395,14 @@ class ManagerTask:
 
     def wait_for_status(self, list_status, check_task_progress=True, timeout=3600, step=120):
         text = "Waiting until task: {} reaches status of: {}".format(self.id, list_status)
-        is_status_reached = wait.wait_for(func=self.is_status_in_list, step=step, throw_exc=True,
-                                          text=text, list_status=list_status, check_task_progress=check_task_progress,
-                                          timeout=timeout)
-        return is_status_reached
+        try:
+            return wait.wait_for(func=self.is_status_in_list, step=step, throw_exc=True,
+                                 text=text, list_status=list_status, check_task_progress=check_task_progress,
+                                 timeout=timeout)
+        except WaitForTimeoutError as ex:
+            raise WaitForTimeoutError(
+                "Failed on waiting until task: {} reaches status of {}: current task status {}: {}".format(
+                    self.id, list_status, self.status, str(ex))) from ex
 
     def wait_for_percentage(self, minimum_percentage, timeout=3600, step=10):
         text = f"Waiting until task: {self.id} reaches at least {minimum_percentage}% progress"
