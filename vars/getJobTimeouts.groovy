@@ -22,7 +22,7 @@ List<Integer> call(Map params, String region){
     """
     def testData = sh(script: cmd, returnStdout: true).trim()
     println(testData)
-    if (params.stress_duration == "") {
+    if (params.stress_duration == "" || params.stress_duration == null) {
         testData = testData =~ /test_duration: (\d+)/
         testDuration = testData[0][1].toInteger()
     } else {
