@@ -18,15 +18,21 @@ import re
 import string
 import tempfile
 import itertools
+import contextlib
 
 import yaml
 from cassandra import AlreadyExists, InvalidRequest
+from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
+from sdcm.sct_events.group_common_events import \
+    ignore_large_collection_warning, \
+    ignore_max_memory_for_unlimited_query_soft_limit
 from sdcm.tester import ClusterTester
 from sdcm.utils import loader_utils
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.operations_thread import ThreadParams
 from sdcm.sct_events.system import InfoEvent
+from sdcm.sct_events import Severity
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
 
 
@@ -34,6 +40,18 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     """
     Test a Scylla cluster stability over a time period.
     """
+
+    def __init__(self, *args, **kwargs):  # pylint: disable=too-many-statements,too-many-locals,too-many-branches
+        super().__init__(*args)
+
+        # This ignores large_data warning messages "Writing large collection" for large collections to prevent
+        # creating SCT Events from these warnings.
+        # During large collections test thousands of warnings are being created.
+        self.validate_large_collections = self.params.get('validate_large_collections')
+        if self.validate_large_collections:
+            self.stack = contextlib.ExitStack()
+            self.stack.enter_context(ignore_large_collection_warning())
+            self.stack.enter_context(ignore_max_memory_for_unlimited_query_soft_limit())
 
     default_params = {'timeout': 650000}
 
@@ -77,6 +95,23 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     def run_pre_create_keyspace(self):
         if self.params.get('pre_create_keyspace'):
             self._pre_create_keyspace()
+
+    def _run_validate_large_collections_in_system(self, node, table='table_with_large_collection'):
+        self.log.info("Verifying large collections in system tables on node: {}".format(node))
+        with self.db_cluster.cql_connection_exclusive(node=node) as session:
+            query = "SELECT * from system.large_cells WHERE keyspace_name='large_collection_test'" \
+                    f" AND table_name='{table}' ALLOW FILTERING"
+            statement = SimpleStatement(query, fetch_size=10)
+            data = list(session.execute(statement))
+            if not data:
+                InfoEvent("Did not find expected row in system.large_cells", severity=Severity.ERROR)
+
+    def _run_validate_large_collections_warning_in_logs(self, node):
+        self.log.info("Verifying warning for large collections in logs on node: {}".format(node))
+        msg = "Writing large collection"
+        res = list(node.follow_system_log(patterns=[msg], start_from_beginning=True))
+        if not res:
+            InfoEvent("Did not find expected log message warning: {}".format(msg), severity=Severity.ERROR)
 
     def test_custom_time(self):
         """
@@ -167,6 +202,12 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         if self.partitions_attrs and self.partitions_attrs.validate_partitions:
             self.partitions_attrs.validate_rows_per_partitions(ignore_limit_rows_number=True)
+
+        if (stress_read_cmd or stress_cmd) and self.validate_large_collections:
+            with ignore_large_collection_warning():
+                for node in self.db_cluster.nodes:
+                    self._run_validate_large_collections_in_system(node)
+                    self._run_validate_large_collections_warning_in_logs(node)
 
     def test_batch_custom_time(self):
         """

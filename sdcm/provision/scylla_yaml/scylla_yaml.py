@@ -338,6 +338,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     audit_tables: str = None  # None
     audit_keyspaces: str = None  # None
 
+    compaction_collection_items_count_warning_threshold: int = None  # None
+
     def dict(  # pylint: disable=arguments-differ
         self,
         *,
