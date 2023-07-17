@@ -28,7 +28,6 @@ import boto3
 import yaml
 from invoke import exceptions
 from pkg_resources import parse_version
-from tenacity import RetryError
 
 from sdcm import mgmt
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
@@ -1129,16 +1128,13 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                 f" task {suspendable_task.id} failed to reach status " \
                 f"{TaskStatus.DONE}, but instead stayed in {suspendable_task.status}"
         else:
-            try:
-                suspendable_task.wait_for_status(list_status=TaskStatus.all_statuses() - {TaskStatus.STOPPED},
-                                                 timeout=1200, step=10)
-            except RetryError:
-                self.log.debug("As expected, the task was continued after the resume. It specifically reached the "
-                               "{} status".format(suspendable_task.status))
-            else:
-                raise ScyllaManagerError(f"After the cluster was resumed (while resuming BEFORE the suspend duration "
-                                         f"has passed), task {suspendable_task.id} failed to stay in status "
-                                         f"{TaskStatus.STOPPED}, but instead reached {suspendable_task.status}")
+            assert suspendable_task.status == TaskStatus.STOPPED, \
+                "After the cluster was resumed (while resuming BEFORE the suspend duration "\
+                f"has passed), task {suspendable_task.id} failed to stay in status STOPPED"
+            time.sleep(suspension_duration + 5)
+            assert suspendable_task.status == TaskStatus.STOPPED, \
+                "After the cluster was resumed (while resuming BEFORE the suspend duration "\
+                f"has passed), task {suspendable_task.id} failed to stay in status STOPPED after suspension time ended"
         self.log.info('finishing test_suspend_with_on_resume_start_tasks_flag_{}'.format(test_name_filler))
 
     def test_suspend_and_resume_without_starting_tasks(self):
