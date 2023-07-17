@@ -233,4 +233,6 @@ use_dns_names: false
 
 use_placement_group: false
 
+validate_large_collections: false
+
 scylla_d_overrides_files: []

@@ -15,3 +15,6 @@ nemesis_interval: 15
 
 user_prefix: 'longevity-large-collections-12h'
 space_node_threshold: 64424
+
+validate_large_collections: true
+root_disk_size_runner: 150

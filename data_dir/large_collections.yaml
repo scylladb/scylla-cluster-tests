@@ -56,16 +56,22 @@ columnspec:
 # >>> math.sqrt(1 * 1024 * 1024)
 # 1024.0
 
+# gaussian(min..max,mean,stdev)
+# The large collections threshold is 10,000
+# Described here: https://github.com/scylladb/scylladb/commit/20bad62562268bed1a78a0f0466c62359565f0c0
+# gaussian(6000..12000,9000,1000) gives us 15% probability above the threshold (10,000)
+
+
   - name: nums_list
-    size: fixed(2)
-    population: uniform(1..10000)
+    size: gaussian(6000..12000,9000,1000)
+    population: uniform(1..100)
 
   - name: users_name
     size: fixed(5)
 
   - name: nums_set
-    size: fixed(100)
-    population: uniform(1..10000)
+    size: gaussian(6000..12000,9000,1250)
+    population: uniform(1..100)
 
   - name: names_set
     size: fixed(1024)

@@ -203,6 +203,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'commitlog_sync_period_in_ms': None,
                 'commitlog_total_space_in_mb': None,
                 'commitlog_use_o_dsync': None,
+                'compaction_collection_items_count_warning_threshold': None,
                 'compaction_enforce_min_threshold': None,
                 'compaction_large_cell_warning_threshold_mb': None,
                 'compaction_large_partition_warning_threshold_mb': None,

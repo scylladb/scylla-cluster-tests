@@ -1507,6 +1507,8 @@ class SCTConfiguration(dict):
         dict(name="use_dns_names", env="SCT_USE_DNS_NAMES", type=boolean,
              help="""Use dns names instead of ip addresses for nodes in cluster"""),
 
+        dict(name="validate_large_collections", env="SCT_VALIDATE_LARGE_COLLECTIONS", type=boolean,
+             help="Enable validation for large cells in system table and logs"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
