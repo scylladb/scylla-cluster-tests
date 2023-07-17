@@ -24,13 +24,14 @@ from distutils.version import LooseVersion
 
 import requests
 from invoke.exceptions import Failure as InvokeFailure
+from tenacity import RetryError
+
 from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 
 from sdcm import wait
 from sdcm.mgmt.common import \
     TaskStatus, ScyllaManagerError, HostStatus, HostSsl, HostRestStatus, duration_to_timedelta, DEFAULT_TASK_TIMEOUT
 from sdcm.utils.distro import Distro
-from sdcm.wait import WaitForTimeoutError
 
 LOGGER = logging.getLogger(__name__)
 
@@ -399,8 +400,8 @@ class ManagerTask:
             return wait.wait_for(func=self.is_status_in_list, step=step, throw_exc=True,
                                  text=text, list_status=list_status, check_task_progress=check_task_progress,
                                  timeout=timeout)
-        except WaitForTimeoutError as ex:
-            raise WaitForTimeoutError(
+        except RetryError as ex:
+            raise RetryError(
                 "Failed on waiting until task: {} reaches status of {}: current task status {}: {}".format(
                     self.id, list_status, self.status, str(ex))) from ex
 
