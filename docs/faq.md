@@ -125,3 +125,10 @@ hydra attach-test-sg --user `whoami`
 ssh -i ~/.ssh/scylla-qa-ec2 ubuntu@44.192.58.53
 # keep in mind the user name and key, can be different between backend or between tests
 ```
+
+## How can I clear monitoring stack create by `hydra investigate show-monitor`
+
+```bash
+# this would clear all of the dockers used by monitoring stack that are currently running
+docker rm -f -v $(docker ps --filter name=agraf\|aprom\|aalert -a -q)
+```
