@@ -635,7 +635,8 @@ class Client:  # pylint: disable=too-many-instance-attributes
         result.stderr = stderr.getvalue()
         if channel is not None:
             try:
-                self.session.eagain(channel.close, timeout=self.timings.channel_close_timeout)
+                with self.session.lock:
+                    channel.close()
             except Exception as exc:  # pylint: disable=broad-except
                 print(f'Failed to close channel due to the following error: {exc}')
             try:
