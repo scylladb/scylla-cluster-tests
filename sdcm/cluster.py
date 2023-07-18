@@ -2002,7 +2002,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         # Offline install does't provide openjdk-11, it has to be installed in advance
         # https://github.com/scylladb/scylla-jmx/issues/127
-        if self.is_rhel_like():
+        if self.distro.is_amazon2:
+            self.remoter.sudo(f'yum install -y {additional_pkgs}')
+            self.remoter.sudo('amazon-linux-extras install java-openjdk11')
+        elif self.distro.is_rhel_like:
             self.remoter.run(f'sudo yum install -y java-11-openjdk-headless {additional_pkgs}')
         elif self.distro.is_sles:
             raise Exception("Offline install on SLES isn't supported")
