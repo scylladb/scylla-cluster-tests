@@ -40,6 +40,7 @@ SUPPORTED_REGIONS = {
     # us-east1 zones: b, c, and d. Details: https://cloud.google.com/compute/docs/regions-zones#locations
     # Currently choose only zones c and d as zone b frequently fails allocating resources.
     'us-east1': 'cd',
+    'us-east4': 'abc',
     'us-west1': 'abc'}
 
 
