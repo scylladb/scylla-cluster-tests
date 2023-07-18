@@ -131,8 +131,8 @@ class MinimalK8SOps:
         node.remoter.sudo(f'bash -cxe "{script}"')
         node.remoter.sudo(
             'bash -cxe \"helm version'
-            f' || curl --silent --location "https://get.helm.sh/helm-{HELM_VERSION}-linux-amd64.tar.gz"'
-            '  | tar xz -C /tmp && mv /tmp/linux-amd64/helm /usr/local/bin'
+            f' || (curl --silent --location "https://get.helm.sh/helm-{HELM_VERSION}-linux-amd64.tar.gz"'
+            '  | tar xz -C /tmp && mv /tmp/linux-amd64/helm /usr/local/bin)'
             '\"')
 
         # NOTE: if running in Hydra then it must have '/dev' mount from host as 'rw'
