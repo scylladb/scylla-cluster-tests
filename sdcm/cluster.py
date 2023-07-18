@@ -43,7 +43,7 @@ import yaml
 import requests
 from paramiko import SSHException
 from tenacity import RetryError
-from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
+from invoke.exceptions import UnexpectedExit, Failure
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver  # pylint: disable=no-name-in-module
@@ -116,7 +116,7 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.monitorstack.ui import AlternatorDashboard
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3, \
-    save_kallsyms_map
+    save_kallsyms_map, collect_diagnostic_data
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, \
     LDAP_PORT, DEFAULT_PWD_SUFFIX
 from sdcm.utils.remote_logger import get_system_logging_thread
@@ -2411,12 +2411,27 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
 
-    @retrying(n=3, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS + (CommandTimedOut, ),
+    @retrying(n=3, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS,
               message="Failed to stop scylla.server, retrying...")
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
-        self.stop_service(service_name='scylla-server', timeout=timeout, ignore_status=ignore_status)
+        try:
+            self.stop_service(service_name='scylla-server', timeout=timeout, ignore_status=ignore_status)
+        except Exception as details:  # pylint: disable=broad-except
+            if isinstance(details, RetryableNetworkException):
+                details = details.original
+            if details.__class__.__name__.endswith("CommandTimedOut"):
+                LOGGER.error(
+                    "timeout during stopping scylla-server, collect diagnostic data and wait for systemd to kill it")
+                collect_diagnostic_data(self)
+                wait.wait_for(func=lambda:
+                              self._service_cmd(service_name="scylla-server", cmd='is-active',
+                                                timeout=timeout, ignore_status=True).stdout.strip() == "inactive",
+                              step=60, text="still waiting for scylla-server to stop", timeout=900, throw_exc=True)
+
+            else:
+                raise
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
@@ -2591,6 +2606,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     details = details.original
                 if coredump_on_timeout and details.__class__.__name__.endswith("CommandTimedOut"):
                     message = f"Generating a Scylla core dump by SIGQUIT due to a nodetool command '{sub_cmd}' timeout"
+                    collect_diagnostic_data(self)
                     self.generate_coredump_file(node_name=self.name, message=message)
 
                 nodetool_event.add_error([f"{error_message}{str(details)}"])
@@ -4370,7 +4386,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.install_package('python3')
 
         node.update_repo_cache()
-
+        node.install_package('lsof net-tools', wait_for_package_manager=False)
         install_scylla = True
 
         if self.params.get("use_preinstalled_scylla") and node.is_scylla_installed(raise_if_not_installed=True):

@@ -24,7 +24,7 @@ import tarfile
 import tempfile
 import traceback
 from collections import OrderedDict
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from pathlib import Path
 from functools import cached_property
 
@@ -790,6 +790,10 @@ class ScyllaLogCollector(LogCollector):
                                     "-u scylla-housekeeping-daily.service", search_locally=True),
                     FileLog(name='kallsyms_*',
                             search_locally=True),
+                    FileLog(name='lsof_*',
+                            search_locally=True),
+                    FileLog(name='netstat_*',
+                            search_locally=True),
                     CommandLog(name='cpu_info',
                                command='cat /proc/cpuinfo'),
                     CommandLog(name='mem_info',
@@ -842,6 +846,33 @@ def save_kallsyms_map(node):
             log_entity.collect(node, node.logdir, remote_node_dir)
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.error("Error occurred during collecting kallsyms on host: %s\n%s", node.name, details)
+
+
+def collect_diagnostic_data(node):
+    log_entities = [
+        # make names unique to avoid skipping
+        CommandLog(name=f'lsof_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}', command='sudo lsof'),
+        CommandLog(name=f'netstat_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}', command='sudo netstat -tanp'),
+    ]
+    collect_log_entities(node, log_entities)
+
+
+def collect_log_entities(node, log_entities: List[BaseLogEntity]):
+    """Collects diagnostics data from node - used during the test.
+
+    Log Entities should have unique names, otherwise won't be collected."""
+    LOGGER.info('Collecting diagnostics data from: %s', node.name)
+    if remote_node_dir := create_remote_storage_dir(node):
+        for log_entity in log_entities:
+            if os.path.exists(os.path.join(node.logdir, log_entity.name)):
+                LOGGER.debug("Diagnostic file '%s' already exists and not changed. Skipping collection.",
+                             log_entity.name)
+                continue
+            try:
+                log_entity.collect(node, node.logdir, remote_node_dir)
+                LOGGER.debug("Diagnostic file '%s' collected", log_entity.name)
+            except Exception as details:  # pylint: disable=broad-except
+                LOGGER.error("Error occurred during collecting diagnostics data on host: %s\n%s", node.name, details)
 
 
 class LoaderLogCollector(LogCollector):
