@@ -39,7 +39,8 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
     if len(version_bucket) == 1:
         if '.' in scylla_version:
             # Plain version, like 4.5.0
-            tags_to_search['scylla_version'] = lambda ver: ver and ver.replace("~", "-").startswith(scylla_version)
+            tags_to_search['scylla_version'] = lambda ver: ver and ver.replace("~", "-").startswith(scylla_version)\
+                and '-dev' not in ver
         else:
             # commit id
             tags_to_search['scylla_version'] = lambda ver: ver and scylla_version[:9] in ver
