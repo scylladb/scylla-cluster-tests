@@ -62,7 +62,7 @@ def test_user_data_builder_generates_valid_yaml_from_single_user_data_object():
 
     builder = UserDataBuilder(user_data_objects=[user_data_object_1])
     user_data_yaml = builder.build_user_data_yaml()
-    loaded_yaml = yaml.load(user_data_yaml)
+    loaded_yaml = yaml.safe_load(user_data_yaml)
 
     assert user_data_yaml.startswith("#cloud-config\n"), "user-data yaml must start with #cloud-config"
     assert loaded_yaml['packages'] == ['some-pkg-to-install']
@@ -83,7 +83,7 @@ def test_user_data_can_merge_user_data_objects_yaml():
 
     builder = UserDataBuilder(user_data_objects=[user_data_object_1, user_data_object_2, user_data_object_3])
     user_data_yaml = builder.build_user_data_yaml()
-    loaded_yaml = yaml.load(user_data_yaml)
+    loaded_yaml = yaml.safe_load(user_data_yaml)
 
     assert sorted(loaded_yaml['packages']) == sorted(
         ['some-pkg-to-install', 'another-pkg-to-install', 'pkg-from-empty'])
@@ -96,7 +96,7 @@ def test_user_data_can_merge_user_data_objects_yaml():
 def test_only_done_runcmd_in_yaml_when_no_user_data_objects():
     builder = UserDataBuilder(user_data_objects=[])
     user_data_yaml = builder.build_user_data_yaml()
-    loaded_yaml = yaml.load(user_data_yaml)
+    loaded_yaml = yaml.safe_load(user_data_yaml)
 
     assert not loaded_yaml["packages"]
     assert not loaded_yaml["write_files"]
@@ -106,7 +106,7 @@ def test_only_done_runcmd_in_yaml_when_no_user_data_objects():
 def test_only_done_runcmd_in_yaml_when_no_applicable_user_data_objects():
     builder = UserDataBuilder(user_data_objects=[NotApplicableUserDataObject()])
     user_data_yaml = builder.build_user_data_yaml()
-    loaded_yaml = yaml.load(user_data_yaml)
+    loaded_yaml = yaml.safe_load(user_data_yaml)
 
     assert not loaded_yaml["packages"]
     assert not loaded_yaml["write_files"]
