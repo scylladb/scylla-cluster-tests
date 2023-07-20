@@ -2706,7 +2706,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return free_space_size
 
         def choose_snapshot(snapshots_dict):
-            snapshot_groups_by_size = snapshots_dict["snapshots"]
+            snapshot_groups_by_size = snapshots_dict["snapshots_sizes"]
             total_partition_size = get_total_scylla_partition_size()
             all_snapshot_sizes = sorted(list(snapshot_groups_by_size.keys()), reverse=True)
             fitting_snapshot_sizes = [size for size in all_snapshot_sizes if total_partition_size / size >= 20]
@@ -2716,11 +2716,28 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 fitting_snapshot_sizes = [size for size in fitting_snapshot_sizes if size < 50]
             # The restore should not take more than 5% of the space total space in /var/lib/scylla
             assert fitting_snapshot_sizes, "There's not enough space for any snapshot restoration"
+
             self.use_nemesis_seed()
             chosen_snapshot_size = random.choice(fitting_snapshot_sizes)
-            snapshot_tag = random.choice(list(snapshot_groups_by_size[chosen_snapshot_size].keys()))
-            snapshot_info = snapshot_groups_by_size[chosen_snapshot_size][snapshot_tag]
+            snapshot_tag = random.choice(list(snapshot_groups_by_size[chosen_snapshot_size]["snapshots"].keys()))
+            snapshot_info = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"][snapshot_tag]
+            snapshot_info.update({"expected_timeout": snapshot_groups_by_size[chosen_snapshot_size]["expected_timeout"],
+                                  "number_of_rows": snapshot_groups_by_size[chosen_snapshot_size]["number_of_rows"]})
             return snapshot_tag, snapshot_info
+
+        def execute_data_validation_thread(command_template, keyspace_name, number_of_rows):
+            stress_queue = []
+            number_of_loaders = self.tester.params.get("n_loaders")
+            rows_per_loader = int(number_of_rows / number_of_loaders)
+            for loader_index in range(number_of_loaders):
+                stress_command = command_template.format(num_of_rows=rows_per_loader,
+                                                         keyspace_name=keyspace_name,
+                                                         sequence_start=rows_per_loader * loader_index + 1,
+                                                         sequence_end=rows_per_loader * (loader_index + 1))
+                read_thread = self.tester.run_stress_thread(stress_cmd=stress_command, round_robin=True,
+                                                            stop_test_on_failure=False)
+                stress_queue.append(read_thread)
+            return stress_queue
 
         if not (self.cluster.params.get('use_mgmt') or self.cluster.params.get('use_cloud_manager')):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
@@ -2753,10 +2770,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
             mgr_task.id, str(mgr_task.status))
 
-        stress_command = chosen_snapshot_info["confirmation_stress_command"]
-        read_thread = self.tester.run_stress_thread(stress_cmd=stress_command, round_robin=True,
-                                                    stop_test_on_failure=False)
-        self.tester.verify_stress_thread(cs_thread_pool=read_thread)
+        confirmation_stress_template = persistent_manager_snapshots_dict[cluster_backend]["confirmation_stress_template"]
+        stress_queue = execute_data_validation_thread(command_template=confirmation_stress_template,
+                                                      keyspace_name=chosen_snapshot_info["keyspace_name"],
+                                                      number_of_rows=chosen_snapshot_info["number_of_rows"])
+        for stress in stress_queue:
+            self.tester.verify_stress_thread(cs_thread_pool=stress)
 
     def _delete_existing_backups(self, mgr_cluster):
         deleted_tasks = []
