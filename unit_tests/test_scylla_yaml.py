@@ -429,8 +429,8 @@ class ScyllaYamlTest(unittest.TestCase):
         yaml1 = ScyllaYaml(cluster_name='cluster1', redis_keyspace_replication_strategy='NetworkTopologyStrategy')
         test_config_file = Path(__file__).parent / 'test_data' / 'scylla_yaml_update.yaml'
         with open(test_config_file, encoding="utf-8") as test_file:
-            test_config_file_yaml = yaml.load(test_file)
-            append_scylla_args_dict = yaml.load(test_config_file_yaml["append_scylla_yaml"])
+            test_config_file_yaml = yaml.safe_load(test_file)
+            append_scylla_args_dict = yaml.safe_load(test_config_file_yaml["append_scylla_yaml"])
         yaml1.update(append_scylla_args_dict)
         assert yaml1.enable_sstables_mc_format == append_scylla_args_dict["enable_sstables_mc_format"]
         assert yaml1.enable_sstables_md_format == append_scylla_args_dict["enable_sstables_md_format"]
