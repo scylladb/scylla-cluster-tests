@@ -78,7 +78,7 @@
                 {% endfor %}
             {% elif "is_"+key+"_within_limits" in line %}
                 {% if line["is_"+key+"_within_limits"] %}
-                    {% if line[key+"_diff"] > 5 %}
+                    {% if line[key+"_diff"] > 5 or ( ("_per_op" in key) and (line[key+"_diff"] < -5) ) %}
                         <td>{{ result }}(<span class="green fbold">{{ line[key+"_diff"] }}%</span>)</td>
                     {% else %}
                         <td>{{ result }}({{ line[key+"_diff"] }}%)</td>
