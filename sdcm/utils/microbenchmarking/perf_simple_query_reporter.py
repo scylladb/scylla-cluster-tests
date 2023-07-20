@@ -114,8 +114,12 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
                 if value > 0 and key != "mad tps":
                     diff = test_stats['stats'][key] / value
                     table_line["is_" + key + "_within_limits"] = False
-                    if diff > 1 - regression_limit:
-                        table_line["is_" + key + "_within_limits"] = True
+                    if "_per_op" in key:
+                        if diff < 1 + regression_limit:
+                            table_line["is_" + key + "_within_limits"] = True
+                    else:
+                        if diff > 1 - regression_limit:
+                            table_line["is_" + key + "_within_limits"] = True
                     table_line[key + "_diff"] = round((diff - 1) * 100, 2)
                     table_line[key] = round(table_line[key], 2)
             table_line["mad tps"] = round(table_line["mad tps"], 2)
