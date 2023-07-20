@@ -711,9 +711,6 @@ class SCTConfiguration(dict):
         dict(name="gce_network", env="SCT_GCE_NETWORK", type=str,
              help=""),
 
-        dict(name="gce_image", env="SCT_GCE_IMAGE", type=str,
-             help="GCE image to use for all node types: db, loader and monitor"),
-
         dict(name="gce_image_db", env="SCT_GCE_IMAGE_DB", type=str,
              help=""),
 

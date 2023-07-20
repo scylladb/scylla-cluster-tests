@@ -1037,12 +1037,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         user_credentials = self.params.get('user_credentials_path')
         self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
-        gce_image_db = self.params.get('gce_image_db').strip()
-        if not gce_image_db:
-            gce_image_db = self.params.get('gce_image').strip()
-        gce_image_monitor = self.params.get('gce_image_monitor').strip()
-        if not gce_image_monitor:
-            gce_image_monitor = self.params.get('gce_image').strip()
         cluster_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_db'),
                                     'pd-standard': self.params.get('gce_pd_standard_disk_size_db')}
 
@@ -1069,7 +1063,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 raise ImportError(f"cluster_cloud isn't installed. {CLUSTER_CLOUD_IMPORT_ERROR}")
             self.db_cluster = cluster_cloud.ScyllaCloudCluster(**params)
         else:
-            self.db_cluster = ScyllaGCECluster(gce_image=gce_image_db,
+            self.db_cluster = ScyllaGCECluster(gce_image=self.params.get('gce_image_db').strip(),
                                                gce_image_type=db_info['disk_type'],
                                                gce_image_size=db_info['disk_size'],
                                                gce_n_local_ssd=db_info['n_local_ssd'],
@@ -1093,7 +1087,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if monitor_info['n_nodes'] > 0:
             monitor_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_monitor')}
-            self.monitors = MonitorSetGCE(gce_image=gce_image_monitor,
+            self.monitors = MonitorSetGCE(gce_image=self.params.get('gce_image_monitor').strip(),
                                           gce_image_type=monitor_info['disk_type'],
                                           gce_image_size=monitor_info['disk_size'],
                                           gce_n_local_ssd=monitor_info['n_local_ssd'],

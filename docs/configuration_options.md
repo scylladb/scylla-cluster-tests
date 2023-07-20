@@ -146,7 +146,6 @@
 | **<a href="#user-content-gce_project" name="gce_project">gce_project</a>**  | gcp project name to use | N/A | SCT_GCE_PROJECT
 | **<a href="#user-content-gce_datacenter" name="gce_datacenter">gce_datacenter</a>**  | Supported: us-east1 - means that the zone will be selected automatically or you can mention the zone explicitly, for example: us-east1-b | N/A | SCT_GCE_DATACENTER
 | **<a href="#user-content-gce_network" name="gce_network">gce_network</a>**  |  | N/A | SCT_GCE_NETWORK
-| **<a href="#user-content-gce_image" name="gce_image">gce_image</a>**  | GCE image to use for all node types: db, loader and monitor | N/A | SCT_GCE_IMAGE
 | **<a href="#user-content-gce_image_db" name="gce_image_db">gce_image_db</a>**  |  | N/A | SCT_GCE_IMAGE_DB
 | **<a href="#user-content-gce_image_monitor" name="gce_image_monitor">gce_image_monitor</a>**  |  | N/A | SCT_GCE_IMAGE_MONITOR
 | **<a href="#user-content-gce_image_loader" name="gce_image_loader">gce_image_loader</a>**  |  | N/A | SCT_GCE_IMAGE_LOADER
