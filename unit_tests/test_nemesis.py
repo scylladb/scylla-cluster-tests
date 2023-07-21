@@ -230,7 +230,7 @@ class TestSisyphusMonkeyNemesisFilter:
             "disrupt_toggle_table_gc_mode",
             "disrupt_create_index",
             "disrupt_add_remove_mv",
-            "disrupt_toggle_audit"
+            "disrupt_toggle_audit_syslog"
         ]
 
     @pytest.fixture(autouse=True)
@@ -245,14 +245,14 @@ class TestSisyphusMonkeyNemesisFilter:
             "disrupt_rolling_restart_cluster",
             "disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back",
             "disrupt_resetlocalschema",
-            "disrupt_toggle_audit",
+            "disrupt_toggle_audit_syslog",
         ]
 
     @pytest.fixture(autouse=True)
     def expected_config_and_schema_changes_methods(self):
         return [
             "disrupt_toggle_cdc_feature_properties_on_table",
-            "disrupt_toggle_audit",
+            "disrupt_toggle_audit_syslog",
         ]
 
     def test_list_topology_changes_monkey(self, expected_topology_changes_methods):
