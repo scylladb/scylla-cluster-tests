@@ -44,7 +44,7 @@ from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectio
 from argus.backend.util.enums import NemesisStatus
 
 from sdcm import wait
-from sdcm.audit import Audit, AuditConfiguration
+from sdcm.audit import Audit, AuditConfiguration, AuditStore
 from sdcm.cluster import (
     BaseCluster,
     BaseNode,
@@ -2791,7 +2791,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         mgr_cluster = self.cluster.get_cluster_manager()
         mgr_task = mgr_cluster.create_repair_task()
         task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
-        assert task_final_status == TaskStatus.DONE,\
+        assert task_final_status == TaskStatus.DONE, \
             f'Task: {mgr_task.id} final status is: {str(mgr_task.status)}.\nTask progress string: ' \
             f'{mgr_task.progress_string(parse_table_res=False, is_verify_errorless_result=True).stdout}'
         self.log.info('Task: {} is done.'.format(mgr_task.id))
@@ -3258,7 +3258,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # verify node is removed by nodetool status
             removed_node_status = self.cluster.get_node_status_dictionary(
                 ip_address=node_to_remove.ip_address, verification_node=verification_node)
-            assert removed_node_status is None,\
+            assert removed_node_status is None, \
                 "Node was not removed properly (Node status:{})".format(removed_node_status)
 
             # add new node
@@ -4391,7 +4391,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         finally:
             self.unset_current_running_nemesis(cql_query_executor_node)
 
-    def disrupt_toggle_audit(self):
+    def disrupt_toggle_audit_syslog(self):
+        self._disrupt_toggle_audit(store="syslog")
+
+    def _disrupt_toggle_audit(self, store: AuditStore):
         """
             Enable audit log with all categories and user keyspaces (if audit already enabled, disable it and finish the Nemesis),
             verify audit log content,
@@ -4400,6 +4403,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         if not self.target_node.is_enterprise:
             raise UnsupportedNemesis("Auditing feature is only supported by Scylla Enterprise")
+
+        if store == "syslog" and self._is_it_on_kubernetes():
+            # generally syslog is not supported on K8S because of different log line format
+            raise UnsupportedNemesis("syslog store is not supported on Kubernetes scylladb/scylla-operator#1299")
 
         audit = Audit(self.cluster)
 
@@ -4411,7 +4418,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         keyspaces_for_audit = [audit_keyspace]
         InfoEvent(f"Enabling full audit for keyspaces: {keyspaces_for_audit}").publish()
         audit_config = AuditConfiguration(
-            store="table",
+            store=store,
             categories=["DCL", "DDL", "AUTH", "ADMIN", "DML", "QUERY"],
             keyspaces=keyspaces_for_audit,
             tables=[],
@@ -4420,7 +4427,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             audit.configure(audit_config)
             keyspace_name = keyspaces_for_audit[0]
             errors = []
-            audit_start = time.time()
+            audit_start = datetime.datetime.now()
             InfoEvent(message='Writing/Reading data from audited keyspace').publish()
             write_cmd = f"cassandra-stress write no-warmup cl=ALL n=1000 -schema" \
                         f" 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)" \
@@ -4437,14 +4444,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 stress_cmd=read_cmd, round_robin=True, stop_test_on_failure=False)
             self.tester.verify_stress_thread(cs_thread_pool=read_thread)
             InfoEvent(message='Verifying Audit table contents').publish()
-            rows = audit.get_audit_log(from_timestamp=audit_start, category="DML", limit_rows=1100)
+            rows = audit.get_audit_log(from_datetime=audit_start, category="DML", limit_rows=1500)
             # filter out USE keyspace rows due to https://github.com/scylladb/scylla-enterprise/issues/3169
             rows = [row for row in rows if not row.operation.startswith("USE")]
             if len(rows) != 1000:
                 errors.append(f"Audit log for DML contains {len(rows)} rows while should contain 1000 rows")
                 for row in rows:
                     LOGGER.error("DML audit log row: %s", row)
-            rows = audit.get_audit_log(from_timestamp=audit_start, category="QUERY", limit_rows=1100)
+            rows = audit.get_audit_log(from_datetime=audit_start, category="QUERY", limit_rows=1500)
             if len(rows) != 1000:
                 errors.append(f"Audit log for QUERY contains {len(rows)} rows while should contain 1000 rows")
                 for row in rows:
@@ -4460,28 +4467,28 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         audit_config.categories = ["DCL", "DDL", "AUTH", "ADMIN"]
         audit.configure(audit_config)
         table_name = "audit_cf"
-        audit_start = time.time()
+        audit_start = datetime.datetime.now()
         with self.cluster.cql_connection_patient(node=self.target_node) as session:
             query = f"CREATE TABLE IF NOT EXISTS {keyspace_name}.{table_name} (id int PRIMARY KEY, value timestamp)"
             session.execute(query)
             self.cluster.wait_for_schema_agreement()
-            audit_rows = audit.get_audit_log(from_timestamp=audit_start, category="DDL", operation=query, limit_rows=10)
+            audit_rows = audit.get_audit_log(from_datetime=audit_start, category="DDL", operation=query, limit_rows=10)
             if not audit_rows:
                 errors.append("Audit log is empty while should contain executed DDL (create table) operation")
 
-            audit_start = time.time()
+            audit_start = datetime.datetime.now()
             query = f"ALTER TABLE {keyspace_name}.{table_name} WITH read_repair_chance = 0.0"
             session.execute(query)
             self.cluster.wait_for_schema_agreement()
-            audit_rows = audit.get_audit_log(from_timestamp=audit_start, category="DDL", operation=query, limit_rows=10)
+            audit_rows = audit.get_audit_log(from_datetime=audit_start, category="DDL", operation=query, limit_rows=10)
             if not audit_rows:
                 errors.append("Audit log is empty while should contain executed DDL (alter table) operation")
 
-            audit_start = time.time()
+            audit_start = datetime.datetime.now()
             query = f"DROP TABLE {keyspace_name}.{table_name}"
-            session.execute(query)
+            session.execute(query, timeout=300)
             self.cluster.wait_for_schema_agreement()
-            audit_rows = audit.get_audit_log(from_timestamp=audit_start, category="DDL", operation=query, limit_rows=10)
+            audit_rows = audit.get_audit_log(from_datetime=audit_start, category="DDL", operation=query, limit_rows=10)
             if not audit_rows:
                 errors.append("Audit log is empty while should contain executed DDL (drop table) operation")
 
@@ -5886,11 +5893,11 @@ class AddRemoveMvNemesis(Nemesis):
         self.disrupt_add_remove_mv()
 
 
-class ToggleAuditNemesis(Nemesis):
+class ToggleAuditNemesisSyslog(Nemesis):
     disruptive = True
     schema_changes = True
     config_changes = True
     free_tier_set = True
 
     def disrupt(self):
-        self.disrupt_toggle_audit()
+        self.disrupt_toggle_audit_syslog()

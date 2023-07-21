@@ -12,9 +12,10 @@
 # Copyright (c) 2023 ScyllaDB
 import logging
 from dataclasses import dataclass
+from datetime import datetime, date
 from typing import Literal, Optional, List
 
-from cassandra.util import uuid_from_time  # pylint: disable=no-name-in-module
+from cassandra.util import uuid_from_time, datetime_from_uuid1  # pylint: disable=no-name-in-module
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent
@@ -42,6 +43,132 @@ class AuditConfiguration:
         return cls(store=store, categories=categories, tables=tables, keyspaces=keyspaces)
 
 
+@dataclass
+class AuditLogRow:  # pylint: disable=too-many-instance-attributes
+    date: date
+    node: str
+    event_time: datetime
+    category: AuditCategory
+    consistency: str
+    error: bool
+    keyspace_name: str
+    operation: str
+    source: str
+    table_name: str
+    username: str
+
+
+class AuditLogReader:  # pylint: disable=too-few-public-methods
+
+    def __init__(self, cluster):
+        self._cluster = cluster
+
+    def read(self, from_datetime: Optional[datetime] = None,
+             category: Optional[AuditCategory] = None,
+             operation: Optional[str] = None,
+             limit_rows: int = 1000
+             ) -> List[AuditLogRow]:
+        raise NotImplementedError()
+
+
+class TableAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
+
+    def read(self, from_datetime: Optional[datetime] = None,
+             category: Optional[AuditCategory] = None,
+             operation: Optional[str] = None,
+             limit_rows: int = 1000
+             ) -> List[AuditLogRow]:
+        """Return audit log rows based on the given filters."""
+        where_list = []
+        if from_datetime:
+            where_list.append(f"event_time > {uuid_from_time(from_datetime.timestamp())}")
+        if category:
+            where_list.append(f"category = '{category}'")
+        if operation:
+            where_list.append(f"operation = '{operation}'")
+
+        limit = f" limit {limit_rows}" if limit_rows else ""
+        where = " where " + " and ".join(where_list) + f"{limit} ALLOW FILTERING" if where_list else ""
+        LOGGER.debug("Audit query filter: %s", where)
+        with self._cluster.cql_connection_patient(node=self._cluster.nodes[0]) as session:
+            rows = list(session.execute(f"select * from audit.audit_log{where} using timeout 5m"))
+        rows = [AuditLogRow(date=row.date.date(),
+                            node=row.node,
+                            event_time=datetime_from_uuid1(row.event_time),
+                            category=row.category,
+                            consistency=row.consistency,
+                            error=row.error,
+                            keyspace_name=row.keyspace_name,
+                            operation=row.operation,
+                            source=row.source,
+                            table_name=row.table_name,
+                            username=row.username) for row in rows
+                ]
+        LOGGER.debug("Found %s audit log rows", len(rows))
+        return rows
+
+
+def get_audit_log_rows(node,  # pylint: disable=too-many-locals
+                       from_datetime: Optional[datetime] = None,
+                       category: Optional[AuditCategory] = None,
+                       operation: Optional[str] = None,
+                       limit_rows: int = 1000
+                       ) -> List[AuditLogRow]:
+    with node.open_system_log(on_datetime=from_datetime) as log_file:
+        found_rows = 0
+        for line in log_file:
+            if '!NOTICE' in line[:120] and 'scylla-audit' in line[:120]:
+                while line[-2] != '"':
+                    # read multiline audit log (must end with ")
+                    line += log_file.readline()
+                audit_data = line.split(': "', maxsplit=1)[-1]
+                try:
+                    node, cat, consistency, table, keyspace_name, opr, source, username, error = audit_data.split(
+                        '", "')
+                except ValueError:
+                    LOGGER.error("Failed to parse audit log line: %s", line)
+                    continue
+                if category and cat != category:
+                    continue
+                if operation and opr != operation:
+                    continue
+                event_time = datetime.fromisoformat(line.split(' ')[0]).replace(tzinfo=None)
+                event_date = event_time.date()
+                yield AuditLogRow(
+                    date=event_date,
+                    node=node,
+                    event_time=event_time,
+                    category=cat,
+                    consistency=consistency,
+                    error=error.strip()[-1] == 'true',
+                    keyspace_name=keyspace_name,
+                    operation=opr,
+                    source=source,
+                    table_name=table,
+                    username=username,
+                )
+                found_rows += 1
+                if found_rows >= limit_rows:
+                    break
+
+
+class SyslogAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
+
+    def read(self, from_datetime: Optional[datetime] = None, category: Optional[AuditCategory] = None,
+             operation: Optional[str] = None,
+             limit_rows: int = 1000) -> List:
+        """Return audit log rows from syslog based on the given filters."""
+        rows = []
+        for node in self._cluster.nodes:
+            rows += list(get_audit_log_rows(node,
+                                            from_datetime=from_datetime,
+                                            category=category,
+                                            operation=operation,
+                                            limit_rows=limit_rows))
+        LOGGER.debug("Found %s audit log rows", len(rows))
+        return rows
+
+
 class Audit:
     """Manage audit state and query audit log on Scylla cluster."""
 
@@ -66,34 +193,29 @@ class Audit:
         for node in self._cluster.nodes:
             LOGGER.debug("Configuring audit on node %s", node.name)
             with node.remote_scylla_yaml() as scylla_yaml:
-                scylla_yaml.audit = audit_configuration.store
-                scylla_yaml.audit_categories = ",".join(audit_configuration.categories)
-                scylla_yaml.audit_tables = ",".join(audit_configuration.tables)
-                scylla_yaml.audit_keyspaces = ",".join(audit_configuration.keyspaces)
+                scylla_yaml.update({
+                    'audit': audit_configuration.store,
+                    'audit_categories': ",".join(audit_configuration.categories),
+                    'audit_tables': ",".join(audit_configuration.tables),
+                    'audit_keyspaces': ",".join(audit_configuration.keyspaces)
+                })
         self._cluster.restart_scylla()
         LOGGER.debug("Audit configuration completed")
         self._configuration = audit_configuration
 
-    def get_audit_log(self, from_timestamp: Optional[float] = None, category: Optional[AuditCategory] = None,
+    def get_audit_log(self, from_datetime: Optional[datetime] = None, category: Optional[AuditCategory] = None,
                       operation: Optional[str] = None,
-                      limit_rows: int = None) -> List:
+                      limit_rows: int = 1000) -> List:
         """Return audit log rows based on the given filters."""
-        where_list = []
-        if from_timestamp:
-            where_list.append(f"event_time > {uuid_from_time(from_timestamp)}")
-        if category:
-            where_list.append(f"category = '{category}'")
-        if operation:
-            where_list.append(f"operation = '{operation}'")
-
-        limit = f" limit {limit_rows}" if limit_rows else ""
-        where = " where " + " and ".join(where_list) + f"{limit} ALLOW FILTERING" if where_list else ""
-        LOGGER.debug("Audit query filter: %s", where)
-        with self._cluster.cql_connection_patient(node=self._cluster.nodes[0]) as session:
-            rows = list(session.execute(f"select * from audit.audit_log{where} using timeout 5m"))
-        LOGGER.debug("Found %s audit log rows", len(rows))
-
-        return rows
+        reader: AuditLogReader
+        if not self.is_enabled():
+            LOGGER.warning("Audit is not enabled skipping query")
+            return []
+        if self._configuration.store == 'table':
+            reader = TableAuditLogReader(self._cluster)
+        else:
+            reader = SyslogAuditLogReader(self._cluster)
+        return reader.read(from_datetime=from_datetime, category=category, operation=operation, limit_rows=limit_rows)
 
     def is_enabled(self):
         return self._configuration.store != "none"
