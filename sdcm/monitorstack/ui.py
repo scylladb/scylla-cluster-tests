@@ -55,7 +55,7 @@ class Login:
 
 
 class Panel:
-    xpath_tmpl = """//header[contains(@*,'{name}') and contains(@class, 'panel-title-container')]"""
+    xpath_tmpl = """//h6[contains(@title,'{name}') and contains(@class, 'panel-title')]"""
 
     def __init__(self, name):
         self.name = name
