@@ -28,7 +28,7 @@ import itertools
 import json
 import ipaddress
 
-from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any
+from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr
 from datetime import datetime
 from textwrap import dedent
 from functools import cached_property, wraps
@@ -1423,6 +1423,41 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             elif isinstance(pattern, LogEvent):
                 regexps.append(re.compile(pattern.regex, flags=re.IGNORECASE))
         return stream.read_lines_filtered(*regexps)
+
+    @contextlib.contextmanager
+    def open_system_log(self, on_datetime: Optional[datetime] = None) -> IO[AnyStr]:
+        """Opens system log file and seeks to the given datetime."""
+        with open(self.system_log, 'r', encoding="utf-8") as log_file:
+            if not on_datetime:
+                yield log_file
+                return
+            else:
+                # ignore microseconds because log lines don't have them
+                on_datetime = on_datetime.replace(microsecond=0)
+            left, right = 0, log_file.seek(0, 2)
+            while left <= right:
+                mid = (left + right) // 2
+                log_file.seek(mid)
+                log_file.readline()  # skip line fragment
+                line = log_file.readline()
+                if not line:  # EOF
+                    right = mid - 1
+                    continue
+                while True:
+                    try:
+                        log_time = datetime.fromisoformat(line.split(' ')[0]).replace(tzinfo=None)
+                    except ValueError:
+                        # in case it gets to split line fragment
+                        line = log_file.readline()
+                        if not line:
+                            return
+                        continue
+                    break
+                if log_time < on_datetime:
+                    left = mid + 1
+                elif log_time >= on_datetime:
+                    right = mid - 1
+            yield log_file
 
     def start_decode_on_monitor_node_thread(self):
         self._decoding_backtraces_thread = threading.Thread(
