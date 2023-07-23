@@ -14,4 +14,3 @@ scylla_linux_distro: 'centos'
 test_duration: 60
 user_prefix: 'artifacts-ami'
 aws_fallback_to_next_availability_zone: true
-use_preinstalled_scylla: false

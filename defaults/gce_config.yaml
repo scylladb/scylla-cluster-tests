@@ -31,5 +31,3 @@ user_credentials_path: '~/.ssh/scylla-test'
 
 backup_bucket_location: 'manager-backup-tests-sct-project-1-us-east1'
 backup_bucket_backend: 'gcs'
-
-use_preinstalled_scylla: true
