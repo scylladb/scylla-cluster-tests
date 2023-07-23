@@ -19,4 +19,3 @@ scylla_apt_keys:
   - 'D0A112E067426AB2'  # ScyllaDB Package Signing Key 2022 <security@scylladb.com>
 test_duration: 60
 user_prefix: 'artifacts-ubuntu2004'
-use_preinstalled_scylla: false
