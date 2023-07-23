@@ -1598,11 +1598,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             is_kms = bool(scylla_yml.kms_hosts)
 
         if is_kms:
-            # Hack for overriding issue https://github.com/scylladb/scylla-enterprise/issues/2792
-            # TODO: should be remove once a proper fix is implemented
-            self.remoter.sudo("find /opt/scylladb/ -iname *libp11-kit.so* | sudo xargs rm",
-                              verbose=True, ignore_status=True)
-            self.install_package("p11-kit")
 
             # Hack to get credentials into place, until we can use instance profiles and roles
             # TODO: remove when https://github.com/scylladb/scylla-enterprise/pull/3032 is finalized
