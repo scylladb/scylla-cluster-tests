@@ -30,6 +30,12 @@ stress_cmd: [
              "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=300 -clustering-row-count=200000 -clustering-row-size=uniform:10..10240 -partition-offset=1001 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=90s",
              "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=300 -clustering-row-count=200000 -clustering-row-size=uniform:10..10240 -partition-offset=1301 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=90s",
              "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=400 -clustering-row-count=200000 -clustering-row-size=uniform:10..10240 -partition-offset=1601 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=90s",
+             # due to increasing of amount deleted rows/partitions (delete nemeses) we need to insert back the part (from 251 to 750 partitions) of the rows. Otherwise, the table may become empty after few deletions.
+             # Partition range from 751 to 10000 won't be re-written, remains as tombstones
+             # Also, the first 250 partitions (as defined in partition_range_with_data_validation) won't be deleted. So it is not needed to be re-written
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=250 -clustering-row-count=100000 -partition-offset=251 -clustering-row-size=uniform:3072..5120 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=90s -duration=6420m",
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=250 -clustering-row-count=100000 -partition-offset=501 -clustering-row-size=uniform:3072..5120 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=90s -duration=6420m",
+
              "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=15 -clustering-row-count=100000 -clustering-row-size=uniform:3072..5120 -concurrency=100 -connection-count=100 -rows-per-request=10 -consistency-level=quorum -timeout=90s -iterations 10 -validate-data",
              "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=15 -clustering-row-count=100000 -partition-offset=15 -clustering-row-size=uniform:3072..5120 -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations 10 -validate-data",
              "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=15 -clustering-row-count=100000 -partition-offset=31 -clustering-row-size=uniform:3072..5120 -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=90s -iterations 10 -validate-data",
@@ -52,7 +58,7 @@ stress_read_cmd: [
                   "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=1000 -clustering-row-count=200000 -clustering-row-size=uniform:10..10240 -rows-per-request=10 -consistency-level=quorum -timeout=90s -partition-offset=1001 -concurrency=100 -connection-count=100 -iterations=0 -duration=6420m"
                  ]
 
-post_prepare_cql_cmds: "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELECT * FROM scylla_bench.test where pk is not null and ck is not null PRIMARY KEY(pk, ck) with comment = 'TEST VIEW'"
+post_prepare_cql_cmds: "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELECT * FROM scylla_bench.test where ck IS NOT NULL AND v is not null PRIMARY KEY (v, pk, ck) with comment = 'TEST VIEW'"
 
 n_db_nodes: 5
 n_loaders: 4
@@ -63,6 +69,7 @@ round_robin: true
 instance_type_db: 'i3en.3xlarge'
 gce_instance_type_db: 'n2-highmem-16'
 gce_n_local_ssd_disk_db: 24
+instance_type_loader: 'c5n.4xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '016'
