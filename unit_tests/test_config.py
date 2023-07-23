@@ -391,8 +391,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_SCYLLA_REPO'] = centos_repo
         os.environ['SCT_NEW_SCYLLA_REPO'] = centos_repo
         os.environ['SCT_USER_PREFIX'] = 'testing'
-        os.environ[
-            'SCT_GCE_IMAGE_DB'] = 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
 
         with unittest.mock.patch.object(sct_config, 'get_branch_version', return_value='2019.1.1', clear=True):
             conf = sct_config.SCTConfiguration()

@@ -21,3 +21,5 @@ nemesis_during_prepare: false
 space_node_threshold: 64424
 
 user_prefix: 'longevity-lwt-3h'
+
+use_preinstalled_scylla: true
