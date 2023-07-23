@@ -14,6 +14,8 @@ stress_cmd: ["scylla-bench -workload=uniform -mode=read -select-order-by=desc -r
              "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=200 -clustering-row-count=50000 -partition-offset=801 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150"
 ]
 
+post_prepare_cql_cmds: "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELECT * FROM scylla_bench.test where ck is not NULL and token(pk) > -4570794944214759424 and token(pk) < 4621334552741592064 PRIMARY KEY (pk, ck) with comment = 'TEST VIEW'"
+
 n_db_nodes: 3
 n_loaders: 2
 n_monitor_nodes: 1
