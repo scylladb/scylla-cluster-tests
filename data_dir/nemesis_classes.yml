@@ -30,6 +30,7 @@
 - MgmtBackup
 - MgmtBackupSpecificKeyspaces
 - MgmtRepair
+- MgmtRestore
 - ModifyTableMonkey
 - MultipleHardRebootNodeMonkey
 - NemesisSequence
