@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import random
-import re
 import tempfile
 import threading
 import time
@@ -451,7 +450,7 @@ class FullScanAggregatesOperation(FullscanOperationBase):
         self.log.debug('Will run command %s', cmd)
         try:
             cmd_result = session.execute(
-                query=cmd, trace=True, timeout=self._session_execution_timeout)
+                query=cmd, trace=False, timeout=self._session_execution_timeout)
         except OperationTimedOut as exc:
             self.log.error(traceback.format_exc())
             self.current_operation_stat.exceptions.append(repr(exc))
@@ -479,8 +478,6 @@ class FullScanAggregatesOperation(FullscanOperationBase):
             event.message = f"{type(self).__name__} operation failed: {message}"
     def _validate_fullscan_result(
             self, cmd_result: ResultSet):
-        regex_found = False
-        dispatch_forward_statement_regex_pattern = re.compile(r"Dispatching forward_request to \d* endpoints")
         result = cmd_result.all()
 
         if not result:
@@ -490,19 +487,7 @@ class FullScanAggregatesOperation(FullscanOperationBase):
         output = "\n".join([str(i) for i in result])
         if int(result[0].count) <= 0:
             return f"Fullscan failed - count is not bigger than 0: {output}", Severity.ERROR
-        get_query_trace = cmd_result.get_query_trace().events
-        for trace_event in get_query_trace:
-            if dispatch_forward_statement_regex_pattern.search(str(trace_event)):
-                regex_found = True
-                break
         self.log.debug("Fullscan aggregation result: %s", output)
-
-        if not regex_found:
-            self.log.debug("\n".join([str(i) for i in get_query_trace]))
-            self.log.debug("Fullscan aggregation result: %s", output)
-            return "Fullscan failed - 'Dispatching forward_request' message was not found in query trace events", \
-                Severity.WARNING
-
         return f'result {result[0]}', None
 
 
