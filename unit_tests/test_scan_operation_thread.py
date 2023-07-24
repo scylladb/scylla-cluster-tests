@@ -15,7 +15,7 @@ from cassandra import OperationTimedOut, ReadTimeout
 
 # from sdcm.utils.operations_thread import ThreadParams
 from unit_tests.test_cluster import DummyDbCluster, DummyNode
-from sdcm.scan_operation_thread import ScanOperationThread, ThreadParams
+from sdcm.scan_operation_thread import ScanOperationThread, ThreadParams, PrometheusDBStats
 
 
 DEFAULT_PARAMS = {
@@ -91,6 +91,20 @@ class MockCqlConnectionPatient(MagicMock):
 def cluster(node):  # pylint: disable=redefined-outer-name
     db_cluster = DBCluster(MockCqlConnectionPatient(), [node], {})
     node.parent_cluster = db_cluster
+
+    def tester_obj():
+        class Monitors:
+            def __getattribute__(self, item):
+                if item not in "external_address":
+                    return self
+                else:
+                    return "test"
+
+            def __getitem__(self, item):
+                return self
+        return Monitors()
+
+    db_cluster.test_config.tester_obj = tester_obj
     return db_cluster
 
 
@@ -102,13 +116,15 @@ def test_scan_positive(mode, events, cluster):  # pylint: disable=redefined-oute
         mode=mode,
         **DEFAULT_PARAMS
     )
-    with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
-        ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
-    all_events = get_event_log_file(events)
-    assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
-    assert "Severity.NORMAL" in all_events[1] and "period_type=end" in all_events[1]
-    if mode == "aggregate":
-        assert "MockCqlConnectionPatient" in all_events[1]
+    with patch.object(PrometheusDBStats, '__init__', return_value=None):
+        with patch.object(PrometheusDBStats, 'query', return_value=[{'values': [[0, '1']]}]):
+            with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
+                ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
+            all_events = get_event_log_file(events)
+            assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
+            assert "Severity.NORMAL" in all_events[1] and "period_type=end" in all_events[1]
+            if mode == "aggregate":
+                assert "MockCqlConnectionPatient" in all_events[1]
 
 
 class ExecuteOperationTimedOutMockCqlConnectionPatient(MockCqlConnectionPatient):
