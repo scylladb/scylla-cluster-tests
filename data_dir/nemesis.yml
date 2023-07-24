@@ -107,6 +107,10 @@
   - disruptive = False
   - kubernetes = True
   - limited = True
+- disrupt_mgmt_restore:
+  - disruptive = True
+  - kubernetes = False
+  - limited = True
 - disrupt_modify_table:
   - disruptive = False
   - kubernetes = True
