@@ -38,7 +38,7 @@ class TenantMixin:  # pylint: disable=too-many-instance-attributes
         self._es_doc_type = "test_stats"
         self._stats = self._init_stats()
         self.test_config = test_config
-        self._duration = self.params.get(key='test_duration')
+        self._init_test_duration()
         self.create_stats = self.params.get(key='store_perf_results')
         self.status = "RUNNING"
         self.cluster_index = str(cluster_index)
