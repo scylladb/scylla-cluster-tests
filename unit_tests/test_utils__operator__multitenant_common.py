@@ -32,6 +32,9 @@ class FakeTestBase:
     def _init_test_timeout_thread(self):
         pass
 
+    def _init_test_duration(self):
+        pass
+
 
 class FakeLongevityTest(FakeTestBase):
     pass
