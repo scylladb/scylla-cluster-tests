@@ -1,6 +1,5 @@
 test_duration: 3000
 
-bench_run: true
 
 prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=50000 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150",
                      "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=50000 -partition-offset=101 -clustering-row-size=uniform:100..5120 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150",

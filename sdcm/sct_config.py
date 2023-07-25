@@ -465,13 +465,6 @@ class SCTConfiguration(dict):
              help="""Turn on sct profiling"""),
         dict(name="ssh_transport", env="SSH_TRANSPORT", type=str,
              help="""Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'"""),
-        # should be removed once stress commands would be refactored
-        dict(name="bench_run", env="SCT_BENCH_RUN", type=boolean,
-             help="""If true would kill the scylla-bench thread in the test teardown"""),
-
-        # should be removed once stress commands would be refactored
-        dict(name="fullscan", env="SCT_FULLSCAN", type=boolean,
-             help="""If true would kill the fullscan thread in the test teardown"""),
 
         # Scylla command line arguments options
         dict(name="experimental", env="SCT_EXPERIMENTAL", type=boolean,
