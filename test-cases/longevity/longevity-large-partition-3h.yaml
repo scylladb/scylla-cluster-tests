@@ -1,6 +1,5 @@
 test_duration: 210
 
-bench_run: true
 max_partitions_in_test_table: 400
 partition_range_with_data_validation: 0-100
 prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=5555                       -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data" ,
