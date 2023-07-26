@@ -1641,33 +1641,30 @@ class SCTConfiguration(dict):
                 self._replace_docker_image_latest_tag()
             elif not self.get('ami_id_db_scylla') and self.get('cluster_backend') == 'aws':
                 aws_arch = get_arch_from_instance_type(self.get('instance_type_db'))
-                # ami.name format examples: ScyllaDB 4.4.0 or ScyllaDB Enterprise 2019.1.1
-                scylla_version_substr = f" {scylla_version}"
                 ami_list = []
                 for region in region_names:
-                    if ':' in scylla_version:
-                        ami = get_branched_ami(scylla_version=scylla_version, region_name=region, arch=aws_arch)[0]
-                    else:
-                        for ami in get_scylla_ami_versions(region_name=region, arch=aws_arch):
-                            if scylla_version_substr in ami.name:
-                                break
+                    try:
+                        if ':' in scylla_version:
+                            ami = get_branched_ami(scylla_version=scylla_version, region_name=region, arch=aws_arch)[0]
                         else:
-                            raise ValueError(f"AMIs for {scylla_version=} not found in {region}")
+                            ami = get_scylla_ami_versions(version=scylla_version, region_name=region, arch=aws_arch)[0]
+                    except Exception as ex:
+                        raise ValueError(f"AMIs for scylla_version='{scylla_version}' not found in {region} "
+                                         f"arch={aws_arch}") from ex
                     self.log.debug("Found AMI %s(%s) for scylla_version='%s' in %s",
                                    ami.name, ami.image_id, scylla_version, region)
                     ami_list.append(ami)
                 self['ami_id_db_scylla'] = " ".join(ami.image_id for ami in ami_list)
             elif not self.get("gce_image_db") and self.get("cluster_backend") == "gce":
-                if ":" in scylla_version:
-                    gce_image = get_branched_gce_images(scylla_version=scylla_version)[0]
-                else:
-                    # gce_image.name format examples: scylla-4-3-6 or scylla-enterprise-2021-1-2
-                    scylla_version_substr = f"scylla-{scylla_version.replace('.', '-')}"
-                    for gce_image in get_scylla_gce_images_versions():
-                        if gce_image.name.replace("-enterprise", "").startswith(scylla_version_substr):
-                            break
+                try:
+                    if ":" in scylla_version:
+                        gce_image = get_branched_gce_images(scylla_version=scylla_version)[0]
                     else:
-                        raise ValueError(f"GCE images for {scylla_version=} not found")
+                        # gce_image.name format examples: scylla-4-3-6 or scylla-enterprise-2021-1-2
+                        gce_image = get_scylla_gce_images_versions(version=scylla_version)[0]
+                except Exception as ex:
+                    raise ValueError(f"GCE image for scylla_version='{scylla_version}' was not found") from ex
+
                 self.log.debug("Found GCE image %s for scylla_version='%s'", gce_image.name, scylla_version)
                 self["gce_image_db"] = gce_image.extra["selfLink"]
             elif not self.get("azure_image_db") and self.get("cluster_backend") == "azure":
@@ -1678,8 +1675,12 @@ class SCTConfiguration(dict):
                     azure_region_names = [self.get('azure_region_name')]
 
                 for region in azure_region_names:
-                    azure_image = azure_utils.get_scylla_images(scylla_version, region)[0]
-                    self.log.debug("Found AMI %s for scylla_version='%s' in %s",
+                    try:
+                        azure_image = azure_utils.get_scylla_images(scylla_version, region)[0]
+                    except Exception as ex:
+                        raise ValueError(
+                            f"Azure Image for scylla_version='{scylla_version}' not found in {region}") from ex
+                    self.log.debug("Found Azure Image %s for scylla_version='%s' in %s",
                                    azure_image.name, scylla_version, region)
                     scylla_azure_images.append(azure_image)
                 self["azure_image_db"] = " ".join(image.id for image in scylla_azure_images)
@@ -1708,20 +1709,21 @@ class SCTConfiguration(dict):
         # 6.1) handle oracle_scylla_version if exists
         if (oracle_scylla_version := self.get('oracle_scylla_version')) \
            and self.get("db_type") == "mixed_scylla":  # pylint: disable=too-many-nested-blocks
-            suffix = f" {oracle_scylla_version}"  # ami.name format example: ScyllaDB 4.4.0
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
                 aws_arch = get_arch_from_instance_type(self.get('instance_type_db'))
                 ami_list = []
                 for region in region_names:
-                    if ':' in oracle_scylla_version:
-                        ami = get_branched_ami(
-                            scylla_version=oracle_scylla_version, region_name=region, arch=aws_arch)[0]
-                    else:
-                        for ami in get_scylla_ami_versions(region_name=region, arch=aws_arch):
-                            if ami.name.endswith(suffix):
-                                break
+                    try:
+                        if ':' in oracle_scylla_version:
+                            ami = get_branched_ami(
+                                scylla_version=oracle_scylla_version, region_name=region, arch=aws_arch)[0]
                         else:
-                            raise ValueError(f"AMIs for {oracle_scylla_version=} not found in {region}")
+                            ami = get_scylla_ami_versions(version=oracle_scylla_version,
+                                                          region_name=region, arch=aws_arch)[0]
+                    except Exception as ex:
+                        raise ValueError(f"AMIs for oracle_scylla_version='{scylla_version}' not found in {region} "
+                                         f"arch={aws_arch}") from ex
+
                     self.log.debug("Found AMI %s for oracle_scylla_version='%s' in %s",
                                    ami.image_id, oracle_scylla_version, region)
                     ami_list.append(ami)
