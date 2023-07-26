@@ -1667,11 +1667,86 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
             ],
         )
 
-    _SCYLLA_AMI_CACHE[region_name] = sorted(
-        images,
-        key=lambda x: x.creation_date,
+    return images
+
+
+@lru_cache
+def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None) -> list[GCEImage]:
+    # Server-side resource filtering described in Google SDK reference docs:
+    #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
+    #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
+    # or you can see brief explanation here:
+    #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
+    filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
+
+    if version and version != "all":
+        filters += f"(name eq '.*scylla(-enterprise)?-{version.replace('.', '-')}.*')"
+
+    compute_engine = get_gce_driver()
+    return sorted(
+        itertools.chain.from_iterable(
+            compute_engine.ex_list(
+                list_fn=compute_engine.list_images,
+                ex_project=project,
+            ).filter(filters)
+        ),
+        key=lambda x: x.extra["creationTimestamp"],
         reverse=True,
     )
+
+
+_S3_SCYLLA_REPOS_CACHE = defaultdict(dict)
+
+
+def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
+    """
+    get the mapping from version prefixes to rpm .repo or deb .list files locations
+
+    :param dist_type: which distro to look up centos/ubuntu/debian
+    :param dist_version: family name of the distro version
+
+    :return: a mapping of versions prefixes to repos
+    :rtype: dict
+    """
+    if (dist_type, dist_version) in _S3_SCYLLA_REPOS_CACHE:
+        return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
+
+    s3_client: S3Client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
+    bucket = 'downloads.scylladb.com'
+
+    if dist_type == 'centos':
+        response = s3_client.list_objects(Bucket=bucket, Prefix='rpm/centos/', Delimiter='/')
+
+        for repo_file in response['Contents']:
+            filename = os.path.basename(repo_file['Key'])
+            # only if path look like 'rpm/centos/scylla-1.3.repo', we deem it formal one
+            if filename.startswith('scylla-') and filename.endswith('.repo'):
+                version_prefix = filename.replace('.repo', '').split('-')[-1]
+                _S3_SCYLLA_REPOS_CACHE[(
+                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(
+                    bucket=bucket,
+                    path=repo_file['Key'])
+
+    elif dist_type in ('ubuntu', 'debian'):
+        response = s3_client.list_objects(Bucket=bucket, Prefix='deb/{}/'.format(dist_type), Delimiter='/')
+        for repo_file in response['Contents']:
+            filename = os.path.basename(repo_file['Key'])
+
+            # only if path look like 'deb/debian/scylla-3.0-jessie.list', we deem it formal one
+            repo_regex = re.compile(r'\d+\.\d\.list')
+            if filename.startswith('scylla-') and (
+                    filename.endswith('-{}.list'.format(dist_version)) or
+                    repo_regex.search(filename)):
+                version_prefix = \
+                    filename.replace('-{}.list'.format(dist_version), '').replace('.list', '').split('-')[-1]
+                _S3_SCYLLA_REPOS_CACHE[(
+                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(
+                    bucket=bucket,
+                    path=repo_file['Key'])
+
+    else:
+        raise NotImplementedError("[{}] is not yet supported".format(dist_type))
+    return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
 
 
 ScyllaProduct = Literal['scylla', 'scylla-enterprise']
