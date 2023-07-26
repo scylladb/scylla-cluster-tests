@@ -2218,8 +2218,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         partitions_for_delete = self.choose_partitions_for_delete(10, ks_cf, with_clustering_key_data=True)
         if not partitions_for_delete:
-            self.log.error('Not found partitions for delete')
-            return partitions_for_delete
+            raise UnsupportedNemesis('Not found partitions for delete. Nemesis can not be run')
 
         queries = []
         for pkey, ckey in partitions_for_delete.items():
@@ -2258,8 +2257,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         partitions_for_delete = self.choose_partitions_for_delete(10, ks_cf, with_clustering_key_data=True,
                                                                   exclude_partitions=partitions_for_exclude)
         if not partitions_for_delete:
-            self.log.error('Not found partitions for delete')
-            return []
+            raise UnsupportedNemesis('Not found partitions for delete. Nemesis can not be run')
 
         # Choose same "ck" values that exists for all partitions
         # min_clustering_key - the biggest from min(ck) value for all selected partitions
@@ -2293,8 +2291,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         partitions_for_delete = self.choose_partitions_for_delete(10, ks_cf)
 
         if not partitions_for_delete:
-            self.log.error('Not found partitions for delete')
-            return
+            raise UnsupportedNemesis('Not found partitions for delete. Nemesis can not be run')
 
         queries = []
         for partition_key in partitions_for_delete.keys():
