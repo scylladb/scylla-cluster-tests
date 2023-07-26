@@ -288,12 +288,16 @@ class OperatorManagerCluster(ManagerCluster):
         )
         return wait_for(lambda: self.get_mgr_backup_task(so_task), step=2, timeout=300)
 
-    def _create_scylla_operator_repair_task(self, dc_list=None, keyspace=None, interval=None, num_retries=None,
-                                            fail_fast=None, intensity=None, parallel=None,
-                                            name=None) -> ScyllaOperatorRepairTask:
+    def _create_scylla_operator_repair_task(
+            self, dc_list=None, keyspace=None, interval=None, num_retries=None, fail_fast=None, intensity=None,
+            parallel=None, name=None, host_parallelism: int = None,  # pylint: disable=unused-argument
+    ) -> ScyllaOperatorRepairTask:
         if name is None:
             name = self._pick_original_name(
                 'default-repair-task-name', [so_task.name for so_task in self.operator_repair_tasks])
+
+        # TODO: When https://github.com/scylladb/scylla-operator/issues/1301 is fixed
+        #  let's populate `host_parallelism` to `ScyllaOperatorRepairTask`
         so_repair_task = ScyllaOperatorRepairTask(
             name=name,
             dc=dc_list,
@@ -311,17 +315,21 @@ class OperatorManagerCluster(ManagerCluster):
             raise
         return so_repair_task
 
-    def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments,arguments-differ
-                           keyspace=None, interval=None, num_retries=None, fail_fast=None,
-                           intensity=None, parallel=None, name=None) -> RepairTask:
+    def create_repair_task(
+            # pylint: disable=too-many-arguments
+            self, dc_list=None, keyspace=None, interval=None, num_retries=None, fail_fast=None,
+            intensity=None, parallel=None, cron=None, start_date=None, name: str = None,
+            host_parallelism: int = None) -> RepairTask:
         # NOTE: wait for the 'healthcheck' tasks be 'DONE' before starting the repair one.
         self.wait_for_healthchecks()
 
         # TBD: After https://github.com/scylladb/scylla-operator/issues/272 is solved,
         #   replace RepairTask with ScyllaOperatorRepairTask and move relate logic there
+
         so_task = self._create_scylla_operator_repair_task(dc_list=dc_list, keyspace=keyspace, interval=interval,
                                                            num_retries=num_retries, fail_fast=fail_fast,
-                                                           intensity=intensity, parallel=parallel, name=name)
+                                                           intensity=intensity, parallel=parallel, name=name,
+                                                           host_parallelism=host_parallelism)
         return wait_for(lambda: self.get_mgr_repair_task(so_task), step=2, timeout=300)
 
     def get_mgr_repair_task(self, so_repair_task: ScyllaOperatorRepairTask) -> Optional[RepairTask]:

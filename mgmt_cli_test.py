@@ -362,6 +362,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.test_restore_backup_with_task()
         with self.subTest('Repair Multiple Keyspace Types'):
             self.test_repair_multiple_keyspace_types()
+        if self._repair_host_parallelism_feature_exists:
+            with self.subTest('Repair Multiple Keyspace Types With Single Host Parallelism'):
+                self.test_repair_multiple_keyspace_types(host_parallelism=1)
         with self.subTest('Mgmt Cluster CRUD'):
             self.test_mgmt_cluster_crud()
         with self.subTest('Mgmt cluster Health Check'):
@@ -864,15 +867,23 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert manager_from_version[0] != manager_tool.sctool.version[0], "Manager version not changed after rollback."
         self.log.info('finishing test_manager_rollback_upgrade')
 
-    def test_repair_multiple_keyspace_types(self):  # pylint: disable=invalid-name
-        self.log.info('starting test_repair_multiple_keyspace_types')
+    @property
+    def _repair_host_parallelism_feature_exists(self) -> bool:
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        return manager_tool.feature('repair', 'single-host-parallelism')
+
+    def test_repair_multiple_keyspace_types(self, host_parallelism: int = None):  # pylint: disable=invalid-name
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        test_name = 'test_repair_multiple_keyspace_types with single-host-parallelism={}'.format(
+            host_parallelism) if host_parallelism is not None else 'test_repair_multiple_keyspace_types'
+
+        self.log.info('starting {}'.format(test_name))
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
         self._create_keyspace_and_basic_table(self.SIMPLESTRATEGY_KEYSPACE_NAME, "SimpleStrategy", replication_factor=2)
         self._create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, "LocalStrategy")
-        repair_task = mgr_cluster.create_repair_task()
+        repair_task = mgr_cluster.create_repair_task(host_parallelism=host_parallelism)
         task_final_status = repair_task.wait_and_get_final_status(timeout=7200)
         assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(repair_task.id,
                                                                                             str(repair_task.status))
@@ -897,7 +908,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.log.info("the sctool repair command was completed successfully")
 
         mgr_cluster.delete()  # remove cluster at the end of the test
-        self.log.info('finishing test_repair_multiple_keyspace_types')
+        self.log.info('finishing {}'.format(test_name))
 
     def test_enospc_during_backup(self):
         self.log.info('starting test_enospc_during_backup')

@@ -591,9 +591,12 @@ class ManagerCluster(ScyllaManagerBase):
         LOGGER.debug("Created task id is: {}".format(task_id))
         return BackupTask(task_id=task_id, cluster_id=self.id, manager_node=self.manager_node)
 
-    def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments
-                           keyspace=None, interval=None, num_retries=None, fail_fast=None,
-                           intensity=None, parallel=None, cron=None, start_date=None):
+    # pylint: disable=too-many-arguments,too-many-branches,too-many-locals
+    def create_repair_task(
+            self, dc_list=None, keyspace=None, interval=None, num_retries=None, fail_fast=None,
+            intensity=None, parallel=None, cron=None, start_date=None, name: str = None,
+            host_parallelism: int = None) -> RepairTask:
+
         # the interval string:
         # Amount of time after which a successfully completed task would be run again. Supported time units include:
         #
@@ -617,6 +620,10 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += f" --intensity {intensity}"
         if parallel is not None:
             cmd += f" --parallel {parallel}"
+        if host_parallelism is not None:
+            cmd += f" --single-host-parallelism {host_parallelism}"
+        if name is not None:
+            cmd += f" --name {name}"
         if start_date is not None:
             cmd += " --start-date {} ".format(start_date)
         # Since currently we support both manager 2.6 and 3.0, I left the start-date parameter in, even though it's
@@ -1024,6 +1031,9 @@ class ScyllaManagerTool(ScyllaManagerBase):
     def rollback_upgrade(self, scylla_mgmt_address):
         raise NotImplementedError
 
+    def feature(self, command: str, feature: str) -> bool:
+        return self.sctool.feature(command, feature)
+
 
 class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
 
@@ -1274,6 +1284,26 @@ class SCTool:
     def version(self):
         cmd = "version"
         return self.run(cmd=cmd, is_verify_errorless_result=True)
+
+    def feature(self, command: str, feature: str) -> bool:
+        # pylint: disable=line-too-long
+        # Command output:
+        # Usage:
+        #   sctool repair --cluster <id|name> [--intensity] [--parallel] [flags]
+        #   sctool repair [command]
+        #
+        # Available Commands:
+        #   control     Change parameters while a repair is running
+        #   update      Modify properties of the existing repair task
+        #
+        # Flags:
+        #   -c, --cluster name or ID                 The target cluster name or ID (envvar SCYLLA_MANAGER_CLUSTER).
+        #   --single-host-parallelism single-host-parallelism   Defines max parallelism per single host. Use this flag to ensure there will be no more than single-host-parallelism
+        #                                                          repair jobs executed on a single node at the same time. There is no limitation by default.
+        return "--{}".format(feature) in self.run(
+            cmd='{} -h'.format(command),
+            parse_table_res=False,
+            is_verify_errorless_result=True).stdout
 
     @property
     def client_version(self):
