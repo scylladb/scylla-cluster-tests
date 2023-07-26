@@ -25,6 +25,7 @@ space_node_threshold: 644245094
 ami_id_loader: 'scylla-qa-loader-ami-v19'
 #--------
 #GCE
+use_preinstalled_scylla: true
 gce_instance_type_db: 'n2-highmem-8'
 gce_root_disk_type_db: 'pd-ssd'
 gce_n_local_ssd_disk_db: 8
