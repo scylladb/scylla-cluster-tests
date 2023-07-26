@@ -1401,18 +1401,13 @@ def clean_clusters_eks(tags_dict: dict, dry_run: bool = False) -> None:
     ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
 
-_SCYLLA_AMI_CACHE: dict[str, list[EC2Image]] = defaultdict(list)
-
-
+@lru_cache
 def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', version: str = None) -> list[EC2Image]:
     """Get the list of all the formal scylla ami from specific region."""
     name_filter = "ScyllaDB *"
 
     if version and version != "all":
         name_filter = f"ScyllaDB *{version.replace('enterprise-', 'Enterprise ')}*"
-
-    if _SCYLLA_AMI_CACHE[region_name]:
-        return _SCYLLA_AMI_CACHE[region_name]
 
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
     images = []
@@ -1426,41 +1421,32 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
             ],
         )
 
-    _SCYLLA_AMI_CACHE[region_name] = sorted(
-        images,
-        key=lambda x: x.creation_date,
+    return images
+
+
+@lru_cache
+def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None) -> list[GCEImage]:
+    # Server-side resource filtering described in Google SDK reference docs:
+    #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
+    #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
+    # or you can see brief explanation here:
+    #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
+    filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
+
+    if version and version != "all":
+        filters += f"(name eq '.*scylla(-enterprise)?-{version.replace('.', '-')}.*')"
+
+    compute_engine = get_gce_driver()
+    return sorted(
+        itertools.chain.from_iterable(
+            compute_engine.ex_list(
+                list_fn=compute_engine.list_images,
+                ex_project=project,
+            ).filter(filters)
+        ),
+        key=lambda x: x.extra["creationTimestamp"],
         reverse=True,
     )
-    return _SCYLLA_AMI_CACHE[region_name]
-
-
-_SCYLLA_GCE_IMAGE_CACHE: list[GCEImage] = []
-
-
-def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None) -> list[GCEImage]:
-    if not _SCYLLA_GCE_IMAGE_CACHE:
-        # Server-side resource filtering described in Google SDK reference docs:
-        #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
-        #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
-        # or you can see brief explanation here:
-        #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-        filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
-
-        if version and version != "all":
-            filters += f"(name eq '.*scylla(-enterprise)?-{version.replace('.', '-')}.*')"
-
-        compute_engine = get_gce_driver()
-        _SCYLLA_GCE_IMAGE_CACHE.extend(sorted(
-            itertools.chain.from_iterable(
-                compute_engine.ex_list(
-                    list_fn=compute_engine.list_images,
-                    ex_project=project,
-                ).filter(filters)
-            ),
-            key=lambda x: x.extra["creationTimestamp"],
-            reverse=True,
-        ))
-    return _SCYLLA_GCE_IMAGE_CACHE
 
 
 _S3_SCYLLA_REPOS_CACHE = defaultdict(dict)
