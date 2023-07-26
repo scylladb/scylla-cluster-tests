@@ -23,6 +23,7 @@ instance_type_monitor: 't3.small'
 space_node_threshold: 644245094
 #------
 #GCE
+use_preinstalled_scylla: true
 gce_instance_type_db: 'n2-highmem-8'
 gce_root_disk_type_db: 'pd-ssd'
 gce_n_local_ssd_disk_db: 8
