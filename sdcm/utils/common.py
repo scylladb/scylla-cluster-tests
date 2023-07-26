@@ -1503,18 +1503,13 @@ def clean_clusters_eks(tags_dict: dict, regions: list = None, dry_run: bool = Fa
     ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
 
-_SCYLLA_AMI_CACHE: dict[str, list[EC2Image]] = defaultdict(list)
-
-
+@lru_cache
 def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', version: str = None) -> list[EC2Image]:
     """Get the list of all the formal scylla ami from specific region."""
     name_filter = "ScyllaDB *"
 
     if version and version != "all":
         name_filter = f"ScyllaDB *{version.replace('enterprise-', 'Enterprise ')}*"
-
-    if _SCYLLA_AMI_CACHE[region_name]:
-        return _SCYLLA_AMI_CACHE[region_name]
 
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
     images = []
@@ -1531,7 +1526,6 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
     images = [image for image in images if image.tags and 'debug' not in {
         i['Key']: i['Value'] for i in image.tags}.get('Name', '')]
 
-    _SCYLLA_AMI_CACHE[region_name] = images
     return images
 
 
