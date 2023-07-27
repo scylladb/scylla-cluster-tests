@@ -3544,27 +3544,33 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         return self.cql_connection_exclusive(**kwargs)
 
     def get_non_system_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
-                                  filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True) -> List[str]:
+                                  filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
+                                  filter_by_keyspace: list = None) -> List[str]:
         return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
                                        filter_out_mv=filter_out_mv, filter_empty_tables=filter_empty_tables,
-                                       filter_out_system=True, filter_out_cdc_log_tables=True)
+                                       filter_out_system=True, filter_out_cdc_log_tables=True, filter_by_keyspace=filter_by_keyspace)
 
     def get_any_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
                            filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
-                           filter_out_system=False, filter_out_cdc_log_tables=False) -> List[str]:
+                           filter_out_system=False, filter_out_cdc_log_tables=False,
+                           filter_by_keyspace: list = None) -> List[str]:
         regular_column_names = ["keyspace_name", "table_name"]
         materialized_view_column_names = ["keyspace_name", "view_name"]
         regular_table_names, materialized_view_table_names = set(), set()
+        where_clause = ""
+        if filter_by_keyspace:
+            where_clause = ", ".join([f"'{ks}'" for ks in filter_by_keyspace])
+            where_clause = f" WHERE keyspace_name in ({where_clause})"
 
         def execute_cmd(cql_session, entity_type):
             result = set()
             is_column_type = entity_type == "column"
             column_names = regular_column_names
             if is_column_type:
-                cmd = f"SELECT {column_names[0]}, {column_names[1]}, type FROM system_schema.columns"
+                cmd = f"SELECT {column_names[0]}, {column_names[1]}, type FROM system_schema.columns{where_clause}"
             elif entity_type == "view":
                 column_names = materialized_view_column_names
-                cmd = f"SELECT {column_names[0]}, {column_names[1]} FROM system_schema.views"
+                cmd = f"SELECT {column_names[0]}, {column_names[1]} FROM system_schema.views{where_clause}"
             else:
                 raise ValueError(f"The following value '{entity_type}' not supported")
 
