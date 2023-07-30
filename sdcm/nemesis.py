@@ -3602,13 +3602,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.disrupt_mgmt_repair_cli()
         InfoEvent(message='FinishEvent - Manager repair has finished').publish()
         time.sleep(sleep_time_between_ops)
+        InfoEvent(message='Starting grow disruption').publish()
+        self._grow_cluster(rack=None)
+        InfoEvent(message='Finished grow disruption').publish()
+        time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting terminate_and_replace disruption').publish()
         self.disrupt_terminate_and_replace_node()
         InfoEvent(message='Finished terminate_and_replace disruption').publish()
         time.sleep(sleep_time_between_ops)
-        InfoEvent(message='Starting grow_shrink disruption').publish()
-        self.disrupt_grow_shrink_cluster()
-        InfoEvent(message="Finished grow_shrink disruption").publish()
+        InfoEvent(message='Starting shrink disruption').publish()
+        self._shrink_cluster(rack=None)
+        InfoEvent(message='Starting shrink disruption').publish()
 
     def _k8s_disrupt_memory_stress(self):
         """Uses chaos-mesh experiment based on https://github.com/chaos-mesh/memStress"""
