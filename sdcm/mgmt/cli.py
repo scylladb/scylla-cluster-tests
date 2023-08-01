@@ -458,6 +458,10 @@ class HealthcheckTask(ManagerTask):
     def __init__(self, task_id, cluster_id, manager_node):
         ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
 
+    def progress_string(self, **kwargs):
+        # progress command does not support healthcheck tasks
+        return ""
+
 
 class BackupTask(ManagerTask):
     def __init__(self, task_id, cluster_id, manager_node):
