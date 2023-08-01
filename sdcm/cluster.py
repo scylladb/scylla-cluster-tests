@@ -1616,10 +1616,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 fobj.write(KeyStore().get_file_contents('kms_user_credentials').decode())
 
             self.remoter.sudo(shell_script_cmd("""
-                mkdir -p /home/scylla/.aws
-                mv /home/scyllaadm/.aws/credentials /home/scylla/.aws/credentials
-                chown -R scylla /home/scylla/.aws
-                echo 'HOME=/home/scylla' > /etc/scylla.d/kms_hack.conf
+                mkdir -p /var/lib/scylla/.aws
+                mv /home/scyllaadm/.aws/credentials /var/lib/scylla/.aws/credentials
+                chown -R scylla /var/lib/scylla/.aws
                 """), verbose=True, ignore_status=False)
 
         self.process_scylla_args(append_scylla_args)
