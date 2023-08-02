@@ -156,7 +156,71 @@ def call(Map pipelineParams) {
                                                     wrap([$class: 'BuildUser']) {
                                                         dir('scylla-cluster-tests') {
                                                             timeout(time: 5, unit: 'MINUTES') {
-                                                                createArgusTestRun(params)
+                                                                def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+                                                                def cloud_provider = getCloudProviderFromBackend(params.backend)
+                                                                sh """#!/bin/bash
+                                                                set -xe
+                                                                echo "Creating Argus test run ..."
+
+                                                                export SCT_CLUSTER_BACKEND=${params.backend}
+
+                                                                if [[ -n "${params.region ? params.region : ''}" ]] ; then
+                                                                    export SCT_REGION_NAME='${params.region}'
+                                                                fi
+                                                                if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
+                                                                    export SCT_GCE_DATACENTER=${params.gce_datacenter}
+                                                                fi
+
+                                                                export SCT_CONFIG_FILES=${test_config}
+                                                                export SCT_SCYLLA_VERSION=${base_version}
+                                                                export SCT_NEW_SCYLLA_REPO=${params.new_scylla_repo}
+
+                                                                if [[ ! -z "${params.azure_image_db}" ]]; then
+                                                                    export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
+                                                                fi
+                                                                if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
+                                                                    export SCT_AZURE_REGION_NAME=${params.azure_region_name}
+                                                                fi
+
+                                                                if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
+                                                                    export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                                                fi
+
+                                                                if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
+                                                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                                                fi
+                                                                if [[ -n "${params.post_behavior_loader_nodes ? params.post_behavior_loader_nodes : ''}" ]] ; then
+                                                                    export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                                                fi
+                                                                if [[ -n "${params.post_behavior_monitor_nodes ? params.post_behavior_monitor_nodes : ''}" ]] ; then
+                                                                    export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+                                                                fi
+                                                                if [[ -n "${params.post_behavior_k8s_cluster ? params.post_behavior_k8s_cluster : ''}" ]] ; then
+                                                                    export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
+                                                                fi
+                                                                if [[ ${pipelineParams.use_preinstalled_scylla} != null ]] ; then
+                                                                    export SCT_USE_PREINSTALLED_SCYLLA="${pipelineParams.use_preinstalled_scylla}"
+                                                                fi
+                                                                export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                                                export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
+                                                                export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
+                                                                if [[ ${pipelineParams.gce_image_db} != null ]] ; then
+                                                                    export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
+                                                                fi
+                                                                if [[ ${pipelineParams.disable_raft} != null ]] ; then
+                                                                    export SCT_DISABLE_RAFT=${pipelineParams.disable_raft}
+                                                                fi
+                                                                export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
+                                                                export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
+
+                                                                if [[ ${pipelineParams.internode_compression} != null ]] ; then
+                                                                    export SCT_INTERNODE_COMPRESSION=${pipelineParams.internode_compression}
+                                                                fi
+
+                                                                ./docker/env/hydra.sh create-argus-test-run
+
+                                                                echo " Argus test run created."
+                                                                """
                                                             }
                                                         }
                                                     }

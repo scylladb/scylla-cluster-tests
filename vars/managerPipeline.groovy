@@ -178,7 +178,87 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: 5, unit: 'MINUTES') {
-                                        createArgusTestRun(params)
+                                        // handle params which can be a json list
+                                        def region = initAwsRegionParam(params.region, builder.region)
+                                        def datacenter = groovy.json.JsonOutput.toJson(params.gce_datacenter)
+                                        def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+                                        def cloud_provider = params.backend.trim().toLowerCase()
+
+                                        sh """#!/bin/bash
+                                            set -xe
+                                            echo "Creating Argus test run ..."
+
+                                            export SCT_CLUSTER_BACKEND="${params.backend}"
+                                            export SCT_REGION_NAME=${region}
+                                            export SCT_GCE_DATACENTER=${datacenter}
+                                            if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
+                                                export SCT_AZURE_REGION_NAME=${params.azure_region_name}
+                                            fi
+                                            export SCT_CONFIG_FILES=${test_config}
+                                            export SCT_COLLECT_LOGS=false
+
+                                            if [[ -n "${params.backup_bucket_backend}" ]] ; then
+                                                export SCT_BACKUP_BUCKET_BACKEND="${params.backup_bucket_backend}"
+                                            fi
+
+                                            if [[ ! -z "${params.scylla_ami_id}" ]] ; then
+                                                export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
+                                            elif [[ ! -z "${params.scylla_version}" ]] ; then
+                                                export SCT_SCYLLA_VERSION="${params.scylla_version}"
+                                            elif [[ ! -z "${params.gce_image_db}" ]] ; then
+                                                export SCT_GCE_IMAGE_DB="${params.gce_image_db}"  #TODO: remove it once scylla_version supports gce image detection
+                                            elif [[ ! -z "${params.azure_image_db}" ]] ; then
+                                                export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"  #TODO: remove it once scylla_version supports azure image detection
+                                            elif [[ ! -z "${params.scylla_repo}" ]] ; then
+                                                export SCT_SCYLLA_REPO="${params.scylla_repo}"
+                                            else
+                                                echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_GCE_IMAGE_DB | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_AZURE_IMAGE_DB"
+                                                exit 1
+                                            fi
+                                            if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
+                                                export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+                                            fi
+                                            export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                            export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                            export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+                                            export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                            export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
+                                            export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
+
+                                            export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
+
+                                            if [[ ! -z "${params.scylla_mgmt_address}" ]] ; then
+                                                export SCT_SCYLLA_MGMT_ADDRESS="${params.scylla_mgmt_address}"
+                                            fi
+
+                                            if [[ ! -z "${params.manager_version}" ]] ; then
+                                                export SCT_MANAGER_VERSION="${params.manager_version}"
+                                            fi
+
+                                            if [[ ! -z "${params.target_manager_version}" ]] ; then
+                                                export SCT_TARGET_MANAGER_VERSION="${params.target_manager_version}"
+                                            fi
+
+                                            if [[ ! -z "${params.target_scylla_mgmt_server_address}" ]] ; then
+                                                export SCT_TARGET_SCYLLA_MGMT_SERVER_ADDRESS="${params.target_scylla_mgmt_server_address}"
+                                            fi
+
+                                            if [[ ! -z "${params.target_scylla_mgmt_agent_address}" ]] ; then
+                                                export SCT_TARGET_SCYLLA_MGMT_AGENT_ADDRESS="${params.target_scylla_mgmt_agent_address}"
+                                            fi
+
+                                            if [[ ! -z "${params.scylla_mgmt_agent_address}" ]] ; then
+                                                export SCT_SCYLLA_MGMT_AGENT_ADDRESS="${params.scylla_mgmt_agent_address}"
+                                            fi
+
+                                            if [[ ! -z "${params.scylla_mgmt_pkg}" ]] ; then
+                                                export SCT_SCYLLA_MGMT_PKG="${params.scylla_mgmt_pkg}"
+                                            fi
+
+                                            ./docker/env/hydra.sh create-argus-test-run
+
+                                            echo " Argus test run created."
+                                        """
                                     }
                                 }
                             }

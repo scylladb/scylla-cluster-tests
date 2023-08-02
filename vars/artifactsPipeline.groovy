@@ -123,19 +123,6 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
-                                        stage('Create Argus Test Run') {
-                                            catchError(stageResult: 'FAILURE') {
-                                                script {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            timeout(time: 5, unit: 'MINUTES') {
-                                                                createArgusTestRun(params)
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
                                         stage("Run SCT Test (${instance_type})") {
                                             // Timeout for the test itself
                                             timeout(time: pipelineParams.timeout.time, unit: 'MINUTES') {
@@ -147,6 +134,7 @@ def call(Map pipelineParams) {
                                                     rm -fv ./sct_runner_ip
 
                                                     export SCT_COLLECT_LOGS=false
+                                                    export SCT_CLUSTER_BACKEND="${params.backend}"
                                                     export SCT_CONFIG_FILES=${test_config}
 
                                                     if [[ ! -z "${params.scylla_ami_id}" ]]; then
@@ -217,6 +205,10 @@ def call(Map pipelineParams) {
                                                     export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
                                                     export SCT_INSTANCE_PROVISION="${params.provision_type}"
                                                     export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+
+                                                    echo "Creating Argus test run"
+                                                    ./docker/env/hydra.sh create-argus-test-run
+                                                    echo " Argus test run created."
 
                                                     echo "start test ......."
                                                     ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"

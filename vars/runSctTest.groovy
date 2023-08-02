@@ -1,5 +1,4 @@
 #!groovy
-
 def call(Map params, String region, functional_test = false, Map pipelineParams = [:]){
     // handle params which can be a json list
     def current_region = initAwsRegionParam(params.region, region)

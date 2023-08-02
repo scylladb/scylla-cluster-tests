@@ -115,7 +115,41 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: 5, unit: 'MINUTES') {
-                                        createArgusTestRun(params)
+                                        sh """#!/bin/bash
+                                            set -xe
+
+                                            echo "Creating Argus test run ..."
+                                            export SCT_CLUSTER_BACKEND="${params.backend}"
+                                            export SCT_CONFIG_FILES=${params.test_config}
+                                            export SCT_COLLECT_LOGS=false
+
+                                            if [[ ! -z "${params.scylla_version}" ]]; then
+                                                export SCT_SCYLLA_VERSION="${params.scylla_version}"
+                                            elif [[ ! -z "${params.scylla_repo}" ]]; then
+                                                export SCT_SCYLLA_REPO="${params.scylla_repo}"
+                                            else
+                                                echo "need to choose one of SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
+                                                exit 1
+                                            fi
+
+                                            if [[ -n "${params.jepsen_scylla_repo}" ]]; then
+                                                export SCT_JEPSEN_SCYLLA_REPO="${params.jepsen_scylla_repo}"
+                                            fi
+
+                                            if [[ -n "${params.jepsen_test_cmd}" ]]; then
+                                                export SCT_JEPSEN_TEST_CMD="${params.jepsen_test_cmd}"
+                                            fi
+
+                                            export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                            export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                            export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+                                            export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                            export SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND="${params.instance_provision_fallback_on_demand ? params.instance_provision_fallback_on_demand : ''}"
+
+                                            ./docker/env/hydra.sh create-argus-test-run
+
+                                            echo " Argus test run created."
+                                        """
                                     }
                                 }
                             }

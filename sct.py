@@ -1691,6 +1691,8 @@ def create_argus_test_run():
     try:
         params = SCTConfiguration()
         test_config = get_test_config()
+        LOGGER.info("Argus TestRun congig")
+        LOGGER.info(test_config)
         if not params.get('test_id'):
             LOGGER.error("test_id is not set")
             return
@@ -1704,6 +1706,7 @@ def create_argus_test_run():
             sct_config=params,
         )
         LOGGER.info("Initialized Argus TestRun with test id %s", get_test_config().argus_client().run_id)
+
     except ArgusClientError:
         LOGGER.error("Failed to submit data to Argus", exc_info=True)
 
