@@ -690,10 +690,11 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        repair_task = mgr_cluster.create_repair_task(fail_fast=True)
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.ssl == HostSsl.OFF, "Not all hosts ssl is 'OFF'"
+
+        healthcheck_task = mgr_cluster.get_healthcheck_task()
 
         with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, line="failed to do checksum for"), \
                 DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to do checksum for"), \
@@ -703,15 +704,17 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                 DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="get_repair_meta: repair_meta_id"):
 
             self.db_cluster.enable_client_encrypt()
+            time.sleep(30)  # Make sure healthcheck task is triggered
 
-            repair_task.wait_for_status(list_status=[TaskStatus.ERROR, TaskStatus.ERROR_FINAL], step=5, timeout=240)
+            # Scylla-manager should pick up client encryption setting automatically
+            healthcheck_task.wait_for_status(list_status=[TaskStatus.DONE], step=5, timeout=240)
 
         mgr_cluster.update(client_encrypt=True)
-        repair_task.start()
+        time.sleep(30)  # Make sure healthcheck task is triggered
+        healthcheck_task.wait_for_status(list_status=[TaskStatus.DONE], step=5, timeout=240)
         sleep = 40
         self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
         time.sleep(sleep)
-        healthcheck_task = mgr_cluster.get_healthcheck_task()
         self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
