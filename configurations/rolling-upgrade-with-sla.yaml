@@ -1,5 +1,5 @@
 # workloads
-stress_before_upgrade: "cassandra-stress write cl=QUORUM n=60000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..60000000 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+stress_before_upgrade: "cassandra-stress write cl=ALL n=60000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1000 -pop seq=1..60000000 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 stress_during_entire_upgrade: [ "cassandra-stress read cl=QUORUM duration=70m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native <sla credentials 0> -rate threads=200 -pop seq=1..30000000 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
                                 "cassandra-stress read  cl=QUORUM duration=70m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native <sla credentials 1> -rate threads=200 -pop seq=30000001..60000000 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 ]
