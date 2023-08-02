@@ -114,7 +114,7 @@ authenticator_password: ''
 # gemini defaults
 n_test_oracle_db_nodes: 1
 gemini_seed: 0
-oracle_scylla_version: '2021.1.15'
+oracle_scylla_version: '2021.1.21'
 append_scylla_args_oracle: '--enable-cache false'
 
 # cassandra-stress defaults
@@ -206,7 +206,7 @@ stress_image:
   nosqlbench: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
   cassandra-stress: '' # default would be same version as scylla under test
   scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.18'
-  gemini: 'scylladb/hydra-loaders:gemini-1.7.8'
+  gemini: 'scylladb/hydra-loaders:gemini-v1.8.6'
   alternator-dns: 'scylladb/hydra-loaders:alternator-dns-0.1'
   cdc-stresser: 'scylladb/hydra-loaders:cdc-stresser-20210630'
   kcl: 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'

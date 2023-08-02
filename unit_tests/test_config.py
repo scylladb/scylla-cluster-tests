@@ -454,10 +454,10 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(conf.get('ami_id_db_oracle'), ami_2021_1_15)
 
     def test_16_oracle_scylla_version_us_east_1(self):
-        ami_4_6_3 = "ami-09c658571b2d46d18"
+        ami_2021_1_21 = "ami-07a24cfab7424e96c"
 
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_ORACLE_SCYLLA_VERSION'] = "4.6.3"
+        os.environ['SCT_ORACLE_SCYLLA_VERSION'] = "2021.1.21"
         os.environ['SCT_REGION_NAME'] = 'us-east-1'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-eae4f795'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
@@ -466,7 +466,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
-        self.assertEqual(conf.get('ami_id_db_oracle'), ami_4_6_3)
+        self.assertEqual(conf.get('ami_id_db_oracle'), ami_2021_1_21)
 
     @pytest.mark.integration
     def test_16_oracle_scylla_version_eu_west_1(self):
@@ -681,7 +681,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                          {'alternator-dns': 'scylladb/hydra-loaders:alternator-dns-0.1',
                           'cassandra-stress': 'scylla-bench',
                           'cdc-stresser': 'scylladb/hydra-loaders:cdc-stresser-A',
-                          'gemini': 'scylladb/hydra-loaders:gemini-1.7.8',
+                          'gemini': 'scylladb/hydra-loaders:gemini-v1.8.6',
                           'ndbench': 'scylladb/hydra-loaders:ndbench-jdk8-A',
                           'nosqlbench': 'scylladb/hydra-loaders:nosqlbench-A',
                           'scylla-bench': 'scylladb/something',
@@ -689,7 +689,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                           'kcl': 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC',
                           'harry': 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816'})
 
-        self.assertEqual(conf.get('stress_image.gemini'), 'scylladb/hydra-loaders:gemini-1.7.8')
+        self.assertEqual(conf.get('stress_image.gemini'), 'scylladb/hydra-loaders:gemini-v1.8.6')
         self.assertEqual(conf.get('stress_image.non-exist'), None)
 
         self.assertEqual(conf.get('stress_read_cmd'), ['cassandra_stress', 'cassandra_stress'])
