@@ -1619,6 +1619,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'ldap_bind_dn': ldap_bind_dn,
                 'ldap_bind_pw': ldap_bind_pw}
 
+    def configure_kms(self):
+        # Hack for overriding issue https://github.com/scylladb/scylla-enterprise/issues/2792
+        # TODO: should be removed once a proper fix is implemented
+        self.remoter.sudo("find /opt/scylladb/ -iname *libp11-kit.so* | sudo xargs rm",
+                          verbose=True, ignore_status=True)
+        self.install_package("p11-kit")
+
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-statements,unused-argument,too-many-branches
     def config_setup(self,
                      append_scylla_args='',
@@ -1633,29 +1640,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             is_kms = bool(scylla_yml.kms_hosts)
 
         if is_kms:
-            # Hack for overriding issue https://github.com/scylladb/scylla-enterprise/issues/2792
-            # TODO: should be remove once a proper fix is implemented
-            self.remoter.sudo("find /opt/scylladb/ -iname *libp11-kit.so* | sudo xargs rm",
-                              verbose=True, ignore_status=True)
-            self.install_package("p11-kit")
-
-            # Hack to get credentials into place, until we can use instance profiles and roles
-            # TODO: remove when https://github.com/scylladb/scylla-enterprise/pull/3032 is finalized
-            self.remoter.run(shell_script_cmd("""
-                mkdir -p /home/scyllaadm/.aws
-                touch /home/scyllaadm/.aws/credentials
-                """), verbose=True, ignore_status=False)
-
-            with remote_file(remoter=self.remoter, remote_path='/home/scyllaadm/.aws/credentials',
-                             log_change=False) as fobj:
-                fobj.write(KeyStore().get_file_contents('kms_user_credentials').decode())
-
-            self.remoter.sudo(shell_script_cmd("""
-                mkdir -p /home/scylla/.aws
-                mv /home/scyllaadm/.aws/credentials /home/scylla/.aws/credentials
-                chown -R scylla /home/scylla/.aws
-                echo 'HOME=/home/scylla' > /etc/scylla.d/kms_hack.conf
-                """), verbose=True, ignore_status=False)
+            self.configure_kms()
 
         self.process_scylla_args(append_scylla_args)
 
