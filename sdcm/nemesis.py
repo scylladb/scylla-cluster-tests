@@ -2194,7 +2194,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for cmd in queries:
             self.log.debug(f'delete query: {cmd}')
             with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
-                session.execute(cmd, timeout=3600)
+                session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM), timeout=3600)
 
         self.target_node.run_nodetool('flush', args=ks_cf.replace('.', ' '))
 
