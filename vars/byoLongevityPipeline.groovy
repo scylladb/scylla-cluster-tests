@@ -70,7 +70,7 @@ def call() {
                    name: 'scylla_mgmt_address')
 
             string(defaultValue: '',
-                   description: 'master_latest|3.0|2.6',
+                   description: 'master_latest|3.1|3.0',
                    name: 'manager_version')
 
             string(defaultValue: "spot",

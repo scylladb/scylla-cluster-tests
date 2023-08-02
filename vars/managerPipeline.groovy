@@ -107,11 +107,11 @@ def call(Map pipelineParams) {
                    name: 'scylla_mgmt_address')
 
             string(defaultValue: "${pipelineParams.get('manager_version', 'master_latest')}",
-                   description: 'master_latest|3.0|2.6',
+                   description: 'master_latest|3.1|3.0',
                    name: 'manager_version')
 
             string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
-                   description: 'master_latest|3.0|2.6',
+                   description: 'master_latest|3.1|3.0',
                    name: 'target_manager_version')
 
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_address', '')}",
