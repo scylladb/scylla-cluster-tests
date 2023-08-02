@@ -4369,6 +4369,14 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if self.params.get('logs_transport') == 'ssh':
             node.install_package('python3')
 
+        if node.is_ubuntu():
+            result = node.remoter.sudo("pro status", ignore_status=True)
+            # https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/explanations/status_columns.html
+            if "ENTITLED" in result.stdout:  # Pro is enabled
+                result = node.remoter.run("cat /proc/sys/crypto/fips_enabled", ignore_status=True)
+                assert int(result.stdout) == 1, "Even though Ubuntu pro is enabled, FIPS is not enabled"
+                # https://ubuntu.com/tutorials/using-the-ua-client-to-enable-fips#4-enabling-fips-crypto-modules
+
         node.update_repo_cache()
 
         install_scylla = True
