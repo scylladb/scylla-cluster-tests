@@ -18,6 +18,8 @@ instance_type_db: 'i4i.4xlarge'
 gce_instance_type_db: 'n2-highmem-32'
 gce_n_local_ssd_disk_db: 16
 
+instance_type_monitor: 't3.xlarge'
+
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '023'
 nemesis_interval: 30
