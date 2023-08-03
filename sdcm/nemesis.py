@@ -110,6 +110,7 @@ from sdcm.utils.nemesis_utils.indexes import get_random_column_name, create_inde
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
+from sdcm.utils.sstable.sstable_utils import SstableUtils
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException
@@ -999,9 +1000,32 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info('Set back murmur3_partitioner_ignore_msb_bits value to 12')
         self.target_node.restart_node_with_resharding()
 
+    def replace_full_file_name_to_prefix(self, one_file, ks_cf_for_destroy):
+        # The file name like: /var/lib/scylla/data/scylla_bench/test-f60e4f30c98f11e98d46000000000002/mc-220-big-Data.db
+        # or /var/lib/scylla/data/scylla_bench/test-f60e4f30c98f11e98d46000000000002/mc-3g6x_0sic_4r1eo23d0mkrb3fs2l-big-Data.db
+        # For corruption we need to remove all files that their names are started from "mc-220-" or "mc-3g6x_0sic_4r1eo23d0mkrb3fs2l-"
+        # (MC format)
+        # Old format: "system-truncated-ka-" (system-truncated-ka-7-Data.db)
+        # Search for these prefixes
+        file_name = os.path.basename(one_file)
+
+        try:
+            file_name_template = re.search(r"([^-]+-[^-]+)-", file_name).group(1)
+        except Exception as error:  # pylint: disable=broad-except
+            self.log.debug('File name "{file_name}" is not as expected for Scylla data files. '
+                           'Search files for "{ks_cf_for_destroy}" table'.format(file_name=file_name,
+                                                                                 ks_cf_for_destroy=ks_cf_for_destroy))
+            self.log.debug('Error: {}'.format(error))
+            return ""
+
+        file_for_destroy = one_file.replace(file_name, file_name_template + '-*')
+        self.log.debug('Selected files for destroy: {}'.format(file_for_destroy))
+        return file_for_destroy
+
     @retrying(n=10, allowed_exceptions=(NoKeyspaceFound, NoFilesFoundToDestroy))
-    def _choose_file_for_destroy(self, ks_cfs):
+    def _choose_file_for_destroy(self, ks_cfs, return_one_file=True):
         file_for_destroy = ''
+        all_files = []
 
         ks_cf_for_destroy = random.choice(ks_cfs)  # expected value as: 'keyspace1.standard1'
 
@@ -1016,80 +1040,74 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for one_file in files.stdout.split():
             if not one_file or '/' not in one_file:
                 continue
-            file_name = os.path.basename(one_file)
-            # The file name like: /var/lib/scylla/data/scylla_bench/test-f60e4f30c98f11e98d46000000000002/mc-220-big-Data.db
-            # For corruption we need to remove all files that their names are started from "mc-220-" (MC format)
-            # Old format: "system-truncated-ka-" (system-truncated-ka-7-Data.db)
-            # Search for "<digit>-" substring
 
-            try:
-                file_name_template = re.search(r"(.*-\d+)-", file_name).group(1)
-            except Exception as error:  # pylint: disable=broad-except
-                self.log.debug('File name "{file_name}" is not as expected for Scylla data files. '
-                               'Search files for "{ks_cf_for_destroy}" table'.format(file_name=file_name,
-                                                                                     ks_cf_for_destroy=ks_cf_for_destroy))
-                self.log.debug('Error: {}'.format(error))
+            if not (file_for_destroy := self.replace_full_file_name_to_prefix(one_file, ks_cf_for_destroy)):
                 continue
 
-            file_for_destroy = one_file.replace(file_name, file_name_template + '-*')
             self.log.debug('Selected files for destroy: {}'.format(file_for_destroy))
             if file_for_destroy:
-                break
+                if return_one_file:
+                    break
+                all_files.append(file_for_destroy)
 
         if not file_for_destroy:
             raise NoFilesFoundToDestroy('Data file for destroy is not found in {}'.format(ks_cf_for_destroy))
 
-        return file_for_destroy
+        return file_for_destroy if return_one_file else all_files
+
+    def get_all_sstables(self, tables: list[str], node: BaseNode = None):
+        """
+        :param tables: list of tables. Format of name: <keyspace_name.table_name>
+        :param node: get SStables from the node
+        """
+        node = node or self.target_node
+
+        sstables = []
+        for ks_cf in tables:
+            sstable_util = SstableUtils(db_node=node, ks_cf=ks_cf)
+            ks_cf_sstables = sstable_util.get_sstables()
+            sstables.extend(ks_cf_sstables)
+
+        self.log.debug("All Sstables are: %s", sstables)
+
+        return sstables
 
     @decorate_with_context(ignore_ycsb_connection_refused)
-    def _destroy_data_and_restart_scylla(self):
-        def find_five_files_to_destroy():
-            all_files_to_destroy = []
-            try:
-                for _ in range(5):
-                    for _ in range(3):
-                        file_for_destroy = self._choose_file_for_destroy(tables)
-                        if file_for_destroy not in all_files_to_destroy:
-                            all_files_to_destroy.append(file_for_destroy)
-                            break
-            except NoFilesFoundToDestroy:
-                if not all_files_to_destroy:
-                    raise
-            return all_files_to_destroy
-        ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_empty_tables=False)
-        if not ks_cfs:
-            raise UnsupportedNemesis(
-                'Non-system keyspace and table are not found. CorruptThenRepair nemesis can\'t be run')
-
-        tables = []
-        errors = []
-        with self.cluster.cql_connection_patient(self.target_node) as session:
-            for table in ks_cfs:
-                has_data, error = self.cluster.is_table_has_data(session=session, table_name=table)
-                if has_data:
-                    tables.append(table)
-                if error:
-                    errors.append(error)
-                if len(tables) > 20:
-                    break
-
+    def _destroy_data_and_restart_scylla(self, keyspaces_for_destroy: list = None, sstables_to_destroy_perc: int = 50):  # pylint: disable=too-many-statements
+        tables = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_empty_tables=False,
+                                                        filter_by_keyspace=keyspaces_for_destroy)
         if not tables:
-            raise ValueError(
-                f'A non-empty user table is not found. Nemesis can\'t run. Got errors of: {errors}')
+            raise UnsupportedNemesis(
+                'Non-system keyspace and table are not found. The nemesis can\'t be run')
+
+        self.log.debug("Chosen tables: %s", tables)
 
         # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
 
         try:
-            # Remove 5 data files
-            all_files_to_destroy = find_five_files_to_destroy()
-            if len(all_files_to_destroy) < 5:
-                self.log.warning("Expected to find 5 files to destroy, but only found %s", len(all_files_to_destroy))
-            for file_for_destroy in all_files_to_destroy:
-                result = self.target_node.remoter.sudo('rm -f %s' % file_for_destroy)
+            # Remove data files
+            if not (all_files_to_destroy := self.get_all_sstables(tables=tables, node=self.target_node)):
+                raise UnsupportedNemesis(
+                    'SStables for destroy are not found. The nemesis can\'t be run')
+
+            # How many SStables are going to be deleted
+            sstables_amount_to_destroy = int(len(all_files_to_destroy) * sstables_to_destroy_perc / 100)
+            self.log.debug("SStables amount to destroy (%s percent of all SStables): %s", sstables_to_destroy_perc,
+                           sstables_amount_to_destroy)
+
+            while sstables_amount_to_destroy > 0:
+                file_for_destroy = random.choice(all_files_to_destroy)
+                if not (file_group_for_destroy := self.replace_full_file_name_to_prefix(one_file=file_for_destroy,
+                                                                                        ks_cf_for_destroy=tables)):
+                    continue
+
+                result = self.target_node.remoter.sudo('rm -f %s' % file_group_for_destroy)
                 if result.stderr:
-                    raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
-                                            'Error: {}'.format(result))
+                    raise FilesNotCorrupted(
+                        'Files were not removed. The nemesis can\'t be run. Error: {}'.format(result))
+                all_files_to_destroy.remove(file_for_destroy)
+                sstables_amount_to_destroy -= 1
                 self.log.debug('Files {} were destroyed'.format(file_for_destroy))
 
         finally:
@@ -2790,7 +2808,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         mgr_cluster = self.cluster.get_cluster_manager()
         mgr_task = mgr_cluster.create_repair_task()
         task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
-        assert task_final_status == TaskStatus.DONE,\
+        assert task_final_status == TaskStatus.DONE, \
             f'Task: {mgr_task.id} final status is: {str(mgr_task.status)}.\nTask progress string: ' \
             f'{mgr_task.progress_string(parse_table_res=False, is_verify_errorless_result=True).stdout}'
         self.log.info('Task: {} is done.'.format(mgr_task.id))
@@ -3257,7 +3275,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # verify node is removed by nodetool status
             removed_node_status = self.cluster.get_node_status_dictionary(
                 ip_address=node_to_remove.ip_address, verification_node=verification_node)
-            assert removed_node_status is None,\
+            assert removed_node_status is None, \
                 "Node was not removed properly (Node status:{})".format(removed_node_status)
 
             # add new node
