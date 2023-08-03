@@ -39,8 +39,6 @@ from sdcm.nemesis import MgmtRepair
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.sct_events.system import InfoEvent
-from sdcm.sct_events.filters import DbEventsFilter
-from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_stream_mutation_fragments_errors
 from sdcm.utils.gce_utils import get_gce_storage_client
 from sdcm.utils.azure_utils import AzureService
@@ -696,18 +694,11 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         healthcheck_task = mgr_cluster.get_healthcheck_task()
 
-        with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, line="failed to do checksum for"), \
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to do checksum for"), \
-                DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, line="Reactor stalled"), \
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to repair"), \
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="repair id "), \
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="get_repair_meta: repair_meta_id"):
+        self.db_cluster.enable_client_encrypt()
+        time.sleep(30)  # Make sure healthcheck task is triggered
 
-            self.db_cluster.enable_client_encrypt()
-            time.sleep(30)  # Make sure healthcheck task is triggered
-
-            # Scylla-manager should pick up client encryption setting automatically
-            healthcheck_task.wait_for_status(list_status=[TaskStatus.DONE], step=5, timeout=240)
+        # Scylla-manager should pick up client encryption setting automatically
+        healthcheck_task.wait_for_status(list_status=[TaskStatus.DONE], step=5, timeout=240)
 
         mgr_cluster.update(client_encrypt=True)
         time.sleep(30)  # Make sure healthcheck task is triggered
