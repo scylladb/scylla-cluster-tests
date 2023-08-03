@@ -602,7 +602,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         time.sleep(sleep_time)
         if self._is_it_on_kubernetes():
             # Kubernetes brings node up automatically, no need to start it up
-            self.target_node.wait_db_up(timeout=sleep_time)
+            self.target_node.wait_node_fully_start(timeout=sleep_time)
             return
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
@@ -832,11 +832,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                            line="Can't find a column family with UUID", node=self.target_node):
             self.target_node.restart()
 
-        self.log.info('Waiting scylla services to start after node restart')
-        self.target_node.wait_db_up(timeout=28800)  # 8 hours
-        self.log.info('Waiting JMX services to start after node restart')
-        self.target_node.wait_jmx_up()
-
+        self.target_node.wait_node_fully_start(timeout=28800)  # 8 hours
         self.repair_nodetool_repair()
 
     def disrupt_resetlocalschema(self):  # pylint: disable=invalid-name
@@ -861,11 +857,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_hard_reboot_node(self):
         self.reboot_node(target_node=self.target_node, hard=True)
-        self.log.info('Waiting scylla services to start after node reboot')
-        self.target_node.wait_db_up()
-        self.log.info('Waiting JMX services to start after node reboot')
-        self.target_node.wait_jmx_up()
-        self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
+        self.target_node.wait_node_fully_start()
 
     def disrupt_multiple_hard_reboot_node(self) -> None:
         cdc_expected_error_patterns = [
@@ -914,11 +906,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_soft_reboot_node(self):
         self.reboot_node(target_node=self.target_node, hard=False)
-        self.log.info('Waiting scylla services to start after node reboot')
-        self.target_node.wait_db_up()
-        self.log.info('Waiting JMX services to start after node reboot')
-        self.target_node.wait_jmx_up()
-        self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
+        self.target_node.wait_node_fully_start()
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_rolling_restart_cluster(self, random_order=False):
@@ -995,10 +983,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                       f'{murmur3_partitioner_ignore_msb_bits}')
         self.target_node.restart_node_with_resharding(
             murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
-        self.log.info('Waiting scylla services to start after node restart')
-        self.target_node.wait_db_up()
-        self.log.info('Waiting JMX services to start after node restart')
-        self.target_node.wait_jmx_up()
+        self.target_node.wait_node_fully_start()
 
         # Wait 5 minutes our before return back the default value
         self.log.debug(
@@ -3577,13 +3562,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.debug(f"{name}: failed to execute cleanup command "
                                f"{cmd} on node {node} due to the following error: {str(exc)}")
 
-    def wait_node_fully_start(self, node, timeout=3600):
-        self.log.info('Waiting scylla services to start after node reboot')
-        node.wait_db_up(timeout)
-        self.log.info('Waiting JMX services to start after node reboot')
-        node.wait_jmx_up()
-        self.cluster.wait_for_nodes_up_and_normal(nodes=[node])
-
     @decorate_with_context([
         ignore_ycsb_connection_refused,
         ignore_view_error_gate_closed_exception
@@ -3709,10 +3687,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
             if new_node := decommission_post_action():
-                self.wait_node_fully_start(new_node)
+                new_node.wait_node_fully_start()
                 new_node.run_nodetool("rebuild", retry=0)
             else:
-                self.wait_node_fully_start(self.target_node)
+                self.target_node.wait_node_fully_start()
                 self.target_node.run_nodetool(sub_cmd="rebuild", retry=0)
 
     def start_and_interrupt_repair_streaming(self):
@@ -3739,7 +3717,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         )
         ParallelObject(objects=[trigger, watcher], timeout=timeout).call_objects()
 
-        self.wait_node_fully_start(self.target_node)
+        self.target_node.wait_node_fully_start()
 
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
             self.target_node.run_nodetool("rebuild", retry=0)
@@ -3771,7 +3749,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             delay=1
         )
         ParallelObject(objects=[trigger, watcher], timeout=timeout + 60).call_objects()
-        self.wait_node_fully_start(self.target_node, timeout=300)
+        self.target_node.wait_node_fully_start(timeout=300)
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
             self.target_node.run_nodetool("rebuild", retry=0)
 

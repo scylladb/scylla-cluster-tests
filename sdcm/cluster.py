@@ -3110,6 +3110,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             token_ring_members.append({"host_id": member.get("value"), "ip_address": member.get("key")})
         return token_ring_members
 
+    def wait_node_fully_start(self, verbose=True, timeout=3600):
+        self.log.info('Waiting scylla services to start after node reboot')
+        self.wait_db_up(verbose=verbose, timeout=timeout)
+        self.log.info('Waiting JMX services to start after node reboot')
+        self.wait_jmx_up(verbose=verbose, timeout=timeout)
+        self.parent_cluster.wait_for_nodes_up_and_normal(nodes=[self])
+
 
 class FlakyRetryPolicy(RetryPolicy):
 
