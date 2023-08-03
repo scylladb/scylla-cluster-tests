@@ -1373,7 +1373,7 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
                               sct_branch_name=sct_branch, sct_repo=sct_repo)
     base_path = f'{server.base_sct_dir}/jenkins-pipelines'
 
-    enterprise_to_filter_out = r'ldap|ics|-sla|saslauthd'
+    enterprise_to_filter_out = r'ldap|ics|-sla|saslauthd|fips'
 
     for group_name, group_desc in [
         ('longevity', 'SCT Longevity Tests'),
