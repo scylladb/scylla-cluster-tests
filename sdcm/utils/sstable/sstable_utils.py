@@ -18,7 +18,7 @@ class SstableUtils:
     """
 
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, propagation_delay_in_seconds: int, ks_cf: str = None, db_node: BaseNode = None, **kwargs):
+    def __init__(self, propagation_delay_in_seconds: int = 0, ks_cf: str = None, db_node: BaseNode = None, **kwargs):
 
         self.db_node: BaseNode = db_node
         self.db_cluster: [BaseScyllaCluster, BaseCluster] = self.db_node.parent_cluster if self.db_node else None
