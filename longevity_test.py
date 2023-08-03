@@ -127,10 +127,10 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         keyspace_num = self.params.get('keyspace_num')
 
-        self.pre_create_alternator_tables()
+        # self.pre_create_alternator_tables()
 
-        self.run_pre_create_keyspace()
-        self.run_pre_create_schema()
+        # self.run_pre_create_keyspace()
+        # self.run_pre_create_schema()
 
         if scan_operation_params := self._get_scan_operation_params():
             for scan_param in scan_operation_params:
