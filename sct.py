@@ -1701,7 +1701,7 @@ def create_argus_test_run():
             job_url=get_job_url(),
             started_by=get_username(),
             commit_id=get_git_commit_id(),
-            sct_config=params,
+            sct_config=None,
         )
         LOGGER.info("Initialized Argus TestRun with test id %s", get_test_config().argus_client().run_id)
     except ArgusClientError:
