@@ -20,7 +20,7 @@ from functools import partial
 from sdcm.cluster import TestConfig
 from sdcm.sct_events import Severity
 from sdcm.sct_events.events_processes import \
-    EVENTS_ANALYZER_ID, EventsProcessesRegistry, BaseEventsProcess,\
+    EVENTS_ANALYZER_ID, EventsProcessesRegistry, BaseEventsProcess, \
     start_events_process, get_events_process, verbose_suppress
 
 
