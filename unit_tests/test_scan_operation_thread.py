@@ -9,14 +9,25 @@ test_scan_negative_exception - getting operation_timed_out in scan execution (wi
 from pathlib import Path
 import os
 from threading import Event
+from importlib import reload
 from unittest.mock import MagicMock, patch
 import pytest
 from cassandra import OperationTimedOut, ReadTimeout
 
 # from sdcm.utils.operations_thread import ThreadParams
 from unit_tests.test_cluster import DummyDbCluster, DummyNode
+from sdcm.utils.decorators import retrying, Retry
+import sdcm.scan_operation_thread
 from sdcm.scan_operation_thread import ScanOperationThread, ThreadParams, PrometheusDBStats
 
+
+def mock_retrying_decorator(*args, **kwargs):  # pylint: disable=unused-argument
+    """Decorate by doing nothing."""
+    return retrying(1, 1, allowed_exceptions=(Retry, ))
+
+
+with patch('sdcm.utils.decorators.retrying', mock_retrying_decorator):
+    reload(sdcm.scan_operation_thread)
 
 DEFAULT_PARAMS = {
     'termination_event': Event(),
@@ -87,8 +98,8 @@ class MockCqlConnectionPatient(MagicMock):
     events = ["Dispatching forward_request to 1 endpoints"]
 
 
-@pytest.fixture(scope='module')
-def cluster(node):  # pylint: disable=redefined-outer-name
+@pytest.fixture(scope='module', name="cluster")
+def new_cluster(node):  # pylint: disable=redefined-outer-name
     db_cluster = DBCluster(MockCqlConnectionPatient(), [node], {})
     node.parent_cluster = db_cluster
 
@@ -117,7 +128,7 @@ def test_scan_positive(mode, events, cluster):  # pylint: disable=redefined-oute
         **DEFAULT_PARAMS
     )
     with patch.object(PrometheusDBStats, '__init__', return_value=None):
-        with patch.object(PrometheusDBStats, 'query', return_value=[{'values': [[0, '1']]}]):
+        with patch.object(PrometheusDBStats, 'query', return_value=[{'values': [[0, '1'], [1, '2']]}]):
             with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
                 ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
             all_events = get_event_log_file(events)
@@ -125,6 +136,23 @@ def test_scan_positive(mode, events, cluster):  # pylint: disable=redefined-oute
             assert "Severity.NORMAL" in all_events[1] and "period_type=end" in all_events[1]
             if mode == "aggregate":
                 assert "MockCqlConnectionPatient" in all_events[1]
+
+
+def test_negative_prometheus_validation_error(events, cluster):
+    default_params = ThreadParams(
+        db_cluster=cluster,
+        ks_cf='a.b',
+        mode="aggregate",
+        **DEFAULT_PARAMS
+    )
+    with patch.object(PrometheusDBStats, '__init__', return_value=None):
+        with patch.object(PrometheusDBStats, 'query', return_value=[{'values': [[0, '1'], [1, '1']]}]):
+            with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=2):
+                ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
+            all_events = get_event_log_file(events)
+            assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
+            assert "Severity.ERROR" in all_events[1] and "period_type=end" in all_events[
+                1] and "Fullscan failed - 'forward_service_requests_dispatched_to_other_nodes' was not triggered" in all_events[1]
 
 
 class ExecuteOperationTimedOutMockCqlConnectionPatient(MockCqlConnectionPatient):
