@@ -37,6 +37,7 @@ repos:
         entry: autopep8 -i -j 2 --max-line-length=120 --ignore=E226,E24,W50,W690,E402
         language: system
         types: [python]
+        exclude: '\.sh$'
 
     -   id: pylint
         name: pylint
