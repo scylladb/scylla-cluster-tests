@@ -90,7 +90,7 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
 
     if only_latest:
         return output[-1:]
-    return output
+    return output[::-1]
 
 
 IMAGE_URL_REGEX = re.compile(
