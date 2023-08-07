@@ -2243,7 +2243,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.debug("Using USING TIMESTAMP clause in the deletion for this partition: %s", pkey)
             timestamp, clustering_key = self.get_random_timestamp_from_partition(
                 ks_cf=ks_cf, pkey=pkey, partition_percentage=partition_percentage)
-            queries.append(SimpleStatement(f"delete from {ks_cf} using timestamp {timestamp} where pk = {pkey}"))
+            queries.append(f"delete from {ks_cf} using timestamp {timestamp} where pk = {pkey}")
             verification_queries.append([pkey, clustering_key, timestamp])
 
         self.run_deletions(queries=queries, ks_cf=ks_cf)
