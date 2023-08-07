@@ -4004,10 +4004,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                           f'{str(exc)}').publish()
 
     def disrupt_grow_shrink_cluster(self):
-        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
-        if not self.has_steady_run and sleep_time_between_ops:
-            self.steady_state_latency()
-            self.has_steady_run = True
         self._grow_cluster(rack=None)
         self._shrink_cluster(rack=None)
 
@@ -4025,6 +4021,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def _grow_cluster(self, rack=None):
         if rack is None and self._is_it_on_kubernetes():
             rack = 0
+
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         self.log.info("Start grow cluster on %s nodes", add_nodes_number)
         InfoEvent(message=f"Start grow cluster on {add_nodes_number} nodes").publish()
