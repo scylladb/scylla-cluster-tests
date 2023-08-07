@@ -195,6 +195,10 @@ class ThreadFailedEvent(InformationalEvent):
         return super().msgfmt + ": message={0.message}\n{0.traceback}"
 
 
+class AwsKmsEvent(ThreadFailedEvent):
+    ...
+
+
 class CoreDumpEvent(InformationalEvent):
     # pylint: disable=too-many-arguments
     def __init__(self,

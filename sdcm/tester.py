@@ -65,6 +65,7 @@ from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.cassandra_harry_thread import CassandraHarryThread
 from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
+from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_network_configuration, get_ec2_services, \
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
@@ -764,6 +765,30 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             'kmip_hosts:' in append_scylla_yaml
         )
 
+    def prepare_kms_host(self) -> None:
+        if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
+            return None
+        kms_host = (yaml.safe_load(scylla_encryption_options) or {}).get("kms_host") or ''
+        if 'auto' not in kms_host:
+            return None
+        # Create a KMS key alias in each of the regions used by the current test run
+        aws_kms = AwsKms(region_names=self.params.region_names)
+        alias_name = f"alias/testid-{self.test_config.test_id()}"
+        aws_kms.create_alias(kms_key_alias_name=alias_name)
+
+        # Add kms_host with the dynamically created alias to the 'append_scylla_yaml'
+        append_scylla_yaml = yaml.safe_load(self.params.get("append_scylla_yaml") or '') or {}
+        if "kms_hosts" not in append_scylla_yaml:
+            append_scylla_yaml["kms_hosts"] = {}
+        append_scylla_yaml["kms_hosts"][kms_host] = {
+            'master_key': alias_name,
+            'aws_use_ec2_credentials': True,
+            # NOTE: the 'aws_region' will be changed per each node separately depending on it's region
+            'aws_region': 'auto'
+        }
+        self.params["append_scylla_yaml"] = yaml.safe_dump(append_scylla_yaml)
+        return None
+
     @teardown_on_exception
     @log_run_info
     def setUp(self):  # pylint: disable=too-many-branches,too-many-statements
@@ -790,6 +815,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.download_db_packages()
         if self.is_encrypt_keys_needed:
             self.download_encrypt_keys()
+        self.prepare_kms_host()
 
         self.init_resources()
 
@@ -874,6 +900,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             if db_cluster:
                 db_cluster.validate_seeds_on_all_nodes()
                 validate_raft_on_nodes(nodes=db_cluster.nodes)
+                db_cluster.start_kms_key_rotation_thread()
 
     def set_system_auth_rf(self, db_cluster=None):
 

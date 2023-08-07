@@ -35,3 +35,5 @@ data_volume_disk_num: 0
 data_volume_disk_type: 'gp2'
 data_volume_disk_size: 500
 data_volume_disk_iops: 10000 # depend on type iops could be 100-16000 for io2|io3 and 3000-16000 for gp3
+
+kms_key_rotation_interval: 60

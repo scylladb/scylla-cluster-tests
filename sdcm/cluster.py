@@ -71,9 +71,11 @@ from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml
 from sdcm import wait, mgmt
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
+from sdcm.sct_events.system import AwsKmsEvent
 from sdcm.snitch_configuration import SnitchConfig
 from sdcm.utils import properties
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
+from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.common import (
     S3Storage,
@@ -418,6 +420,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if any(substr in append_scylla_yaml for substr in (
                     "system_key_directory", "system_info_encryption", "kmip_hosts")):
                 install_encryption_at_rest_files(self.remoter)
+            for kms_host_name, kms_host_data in append_scylla_yaml.get("kms_hosts", {}).items():
+                if kms_host_data["aws_region"] == "auto":
+                    append_scylla_yaml["kms_hosts"][kms_host_name]["aws_region"] = self.region
             scylla_yml.update(append_scylla_yaml)
 
         return scylla_yml
@@ -4384,6 +4389,44 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             if nemesis_thread.is_alive():
                 stack_trace = traceback.format_stack(current_thread_frames[nemesis_thread.ident])
                 threads_tracebacks.append("\n".join(stack_trace))
+
+    def start_kms_key_rotation_thread(self) -> None:
+        if self.params.get("cluster_backend") != 'aws':
+            return None
+        kms_key_rotation_interval = self.params.get("kms_key_rotation_interval") or 60
+        kms_key_alias_name = ""
+        append_scylla_yaml = yaml.safe_load(self.params.get("append_scylla_yaml") or "") or {}
+        for kms_host_name, kms_host_data in append_scylla_yaml.get("kms_hosts", {}).items():
+            if "auto" in kms_host_name:
+                kms_key_alias_name = kms_host_data["master_key"]
+                break
+        if not kms_key_alias_name:
+            self.log.debug("Automatic KMS key is not configured. Skip creation of it's rotation thread.")
+            return None
+
+        @raise_event_on_failure
+        def _rotate_kms_key(kms_key_alias_name, kms_key_rotation_interval):
+            while True:
+                time.sleep(kms_key_rotation_interval * 60)
+                try:
+                    aws_kms.rotate_kms_key(kms_key_alias_name=kms_key_alias_name)
+                except Exception:  # pylint: disable=broad-except
+                    AwsKmsEvent(
+                        message=f"Failed to rotate AWS KMS key for the '{kms_key_alias_name}' alias",
+                        traceback=traceback.format_exc()).publish()
+
+        self.log.info("Start KMS key rotation thread for the '%s' alias", kms_key_alias_name)
+        aws_kms = AwsKms(region_names=self.params.region_names)
+        kms_key_rotation_thread = threading.Thread(
+            name='KmsKeyRotationThread',
+            target=_rotate_kms_key,
+            kwargs={
+                "kms_key_alias_name": kms_key_alias_name,
+                "kms_key_rotation_interval": kms_key_rotation_interval,
+            },
+            daemon=True)
+        kms_key_rotation_thread.start()
+        return None
 
     def scylla_configure_non_root_installation(self, node, devname, verbose, timeout):
         node.stop_scylla_server(verify_down=False)

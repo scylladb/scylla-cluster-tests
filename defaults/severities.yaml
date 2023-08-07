@@ -101,6 +101,7 @@ TestFrameworkEvent: CRITICAL
 SoftTimeoutEvent: ERROR
 ElasticsearchEvent: ERROR
 SpotTerminationEvent: CRITICAL
+AwsKmsEvent: ERROR
 ScyllaRepoEvent: WARNING
 InfoEvent: ERROR
 ThreadFailedEvent: ERROR
