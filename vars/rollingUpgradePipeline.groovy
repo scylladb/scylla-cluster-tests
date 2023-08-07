@@ -110,7 +110,8 @@ def call(Map pipelineParams) {
                                         supportedVersions = supportedUpgradeFromVersions(
                                             base_versions_list,
                                             pipelineParams.linux_distro,
-                                            params.new_scylla_repo
+                                            params.new_scylla_repo,
+                                            params.backend
                                         )
                                         (testDuration,
                                          testRunTimeout,
