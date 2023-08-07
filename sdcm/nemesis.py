@@ -3485,20 +3485,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                           f'{str(exc)}').publish()
 
     def disrupt_grow_shrink_cluster(self):
-        self._grow_cluster(rack=0)
-        self._shrink_cluster(rack=0)
+        self._grow_cluster(rack=None)
+        self._shrink_cluster(rack=None)
 
     def disrupt_grow_shrink_new_rack(self):
         rack = max(self.cluster.racks) + 1
         self._grow_cluster(rack)
         self._shrink_cluster(rack)
 
-    def _grow_cluster(self, rack=0):
-        if rack > 0:
-            if not self._is_it_on_kubernetes():
-                raise UnsupportedNemesis("SCT rack functionality is implemented only on kubernetes")
-            self.log.info("Rack deletion is not supported on kubernetes yet. "
-                          "Please see https://github.com/scylladb/scylla-operator/issues/287")
+    def _grow_cluster(self, rack=None):
+        if rack is None and self._is_it_on_kubernetes():
+            rack = 0
 
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         self.log.info("Start grow cluster on %s nodes", add_nodes_number)
@@ -3511,7 +3508,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info("Finish cluster grow")
         time.sleep(self.interval)
 
-    def _shrink_cluster(self, rack=0):
+    def _shrink_cluster(self, rack=None):
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         self.log.info("Start shrink cluster by %s nodes", add_nodes_number)
         InfoEvent(message=f'Start shrink cluster by {add_nodes_number} nodes').publish()
