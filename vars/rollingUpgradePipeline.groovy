@@ -22,7 +22,7 @@ def call(Map pipelineParams) {
                    description: 'Azure location',
                    name: 'azure_region_name')
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
-               description: 'aws|gce',
+               description: 'aws|gce|azure',
                name: 'backend')
 
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
