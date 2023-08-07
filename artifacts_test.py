@@ -282,8 +282,34 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             return False
         return True  # exit_status = 1 means the service doesn't exist
 
+    def run_pre_create_schema(self, replication_factor=1):
+        pre_create_schema = self.params.get('pre_create_schema')
+        if pre_create_schema:
+            keyspace_num = self.params.get('keyspace_num')
+            sstable_size = self.params.get('sstable_size')
+            compaction_strategy = self.params.get('compaction_strategy')
+            scylla_encryption_options = self.params.get('scylla_encryption_options')
+            self.log.debug('Pre Creating Schema for c-s with %s keyspaces', keyspace_num)
+            for i in range(1, keyspace_num+1):
+                keyspace_name = 'keyspace{}'.format(i)
+                self.create_keyspace(keyspace_name=keyspace_name, replication_factor=replication_factor)
+                self.log.debug('%s Created', keyspace_name)
+                col_num = 5
+                columns = {}
+                for col_idx in range(col_num):
+                    cs_key = '"C' + str(col_idx) + '"'
+                    columns[cs_key] = 'blob'
+                self.create_table(name='standard1', keyspace_name=keyspace_name, key_type='blob', read_repair=0.0,
+                                  compact_storage=True,
+                                  columns=columns,
+                                  scylla_encryption_options=scylla_encryption_options,
+                                  compaction=compaction_strategy, sstable_size=sstable_size)
+
     # pylint: disable=too-many-statements,too-many-branches
     def test_scylla_service(self):
+
+        self.run_pre_create_schema()
+
         backend = self.params.get("cluster_backend")
 
         if backend == "aws":
