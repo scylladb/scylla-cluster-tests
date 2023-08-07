@@ -1229,6 +1229,10 @@ class SCTConfiguration(dict):
         dict(name="scylla_encryption_options", env="SCT_SCYLLA_ENCRYPTION_OPTIONS", type=str_or_list,
              help="options will be used for enable encryption at-rest for tables"),
 
+        dict(name="kms_key_rotation_interval", env="SCT_KMS_KEY_ROTATION_INTERVAL", type=int,
+             help="The time interval in minutes which gets waited before the KMS key rotation happens."
+                  " Applied when the AWS KMS service is configured to be used."),
+
         dict(name="logs_transport", env="SCT_LOGS_TRANSPORT", type=str,
              help="How to transport logs: rsyslog, ssh or docker", choices=("rsyslog", "ssh", "docker", "syslog-ng")),
 
