@@ -36,7 +36,7 @@ def test_can_get_scylla_images_based_on_branch(azure_service):
 
 def test_can_get_scylla_images_based_on_scylla_version(azure_service):
     images = get_scylla_images("4.6.4", "eastus", azure_service=azure_service)
-    assert images[0].name == "ScyllaDB-4.6.4-0.20220516.11f008e8f-1-build-27"
+    assert images[0].name == "ScyllaDB-4.6.4-0.20220718.b60f14601-1-build-28"
     assert len(images) == 2
 
 
