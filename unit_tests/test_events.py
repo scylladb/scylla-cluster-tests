@@ -19,9 +19,10 @@ from pathlib import Path
 from datetime import datetime
 from unittest import mock
 
+import pytest
 from parameterized import parameterized
 
-from sdcm.exceptions import UnsupportedNemesis
+from sdcm.exceptions import UnsupportedNemesis, KillNemesis
 from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.utils.decorators import timeout
@@ -733,3 +734,28 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                 lines = fp_event.readlines()
                 LOGGER.info("File %s: content: %s", file_event, lines)
                 assert len(lines) == 1, f"Wrong number of lines {lines}"
+
+    def test_kill_nemesis_during_con_event(self):
+        with self.assertRaises(KillNemesis), DisruptionEvent(
+                nemesis_name="SomeNemesis", node="target_node", publish_event=False) as nemesis_event:
+            nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
+            self.assertEqual(
+                str(nemesis_event),
+                '(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: '
+                'nemesis_name=SomeNemesis target_node=target_node'
+            )
+
+            try:
+                raise KillNemesis()
+
+            except KillNemesis as ex:
+                nemesis_event.add_error([str(ex)])
+                nemesis_event.duration = 15
+                raise
+
+            except Exception:  # pylint: disable=broad-except
+                pytest.fail("we shouldn't reach this code path")
+
+        assert nemesis_event.errors_formatted == ''
+        self.assertEqual(nemesis_event.severity, Severity.NORMAL)
+        self.assertEqual(nemesis_event.duration_formatted, '15s')

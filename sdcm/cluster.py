@@ -86,6 +86,7 @@ from sdcm.utils.common import (
     download_dir_from_cloud,
     generate_random_string,
     prepare_and_start_saslauthd_service,
+    raise_exception_in_thread,
 )
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
@@ -135,6 +136,7 @@ from sdcm.paths import (
     SCYLLA_MANAGER_TLS_KEY_FILE,
 )
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
+from sdcm.exceptions import KillNemesis
 
 
 # Test duration (min). Parameter used to keep instances produced by tests that
@@ -4387,6 +4389,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         # pylint: disable=protected-access
         current_thread_frames = sys._current_frames()
         for nemesis_thread in self.nemesis_threads:
+            raise_exception_in_thread(nemesis_thread, KillNemesis)
             nemesis_thread.join(timeout)
             if nemesis_thread.is_alive():
                 stack_trace = traceback.format_stack(current_thread_frames[nemesis_thread.ident])

@@ -55,3 +55,7 @@ class AuditLogTestFailure(Exception):
 class BootstrapStreamErrorFailure(Exception):  # pylint: disable=too-few-public-methods
     """ raised if node was not boostrapped after bootstrap
     streaming was aborted """
+
+
+class KillNemesis(BaseException):
+    """Exception that would be raised, when a nemesis thread is killed at teardown of the test"""

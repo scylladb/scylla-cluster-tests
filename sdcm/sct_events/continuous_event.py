@@ -120,7 +120,7 @@ class ContinuousEvent(SctEvent, abstract=True):
         return self.begin_event()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_tb is not None:
+        if exc_tb is not None and isinstance(exc_val, Exception):
             if not isinstance(self.errors, list):
                 self.errors = []
 
