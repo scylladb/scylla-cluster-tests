@@ -21,7 +21,7 @@ from unittest import mock
 
 from parameterized import parameterized
 
-from sdcm.nemesis import UnsupportedNemesis
+from sdcm.exceptions import UnsupportedNemesis
 from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.utils.decorators import timeout

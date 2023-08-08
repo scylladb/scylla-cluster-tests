@@ -118,6 +118,21 @@ from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartiti
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException
 from sdcm.wait import wait_for, wait_for_log_lines
+from sdcm.exceptions import (
+    NoFilesFoundToDestroy,
+    NoKeyspaceFound,
+    FilesNotCorrupted,
+    LogContentNotFound,
+    LdapNotRunning,
+    TimestampNotFound,
+    PartitionNotFound,
+    WatcherCallableException,
+    UnsupportedNemesis,
+    CdcStreamsWasNotUpdated,
+    NemesisSubTestFailure,
+    AuditLogTestFailure,
+    BootstrapStreamErrorFailure,
+)
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
     get_gc_mode, GcMode
 from test_lib.cql_types import CQLTypeBuilder
@@ -136,78 +151,11 @@ EXCLUSIVE_NEMESIS_NAMES = (
 )
 
 
-class NoFilesFoundToDestroy(Exception):
-    pass
-
-
-class NoKeyspaceFound(Exception):
-    pass
-
-
-class FilesNotCorrupted(Exception):
-    pass
-
-
-class LogContentNotFound(Exception):
-    pass
-
-
-class LdapNotRunning(Exception):
-    pass
-
-
-class TimestampNotFound(Exception):
-    pass
-
-
-class PartitionNotFound(Exception):
-    pass
-
-
-class TriggerCallableException(Exception):
-    """ raised when a trigger function in a trigger - watcher pair fails"""
-
-
-class WatcherCallableException(Exception):
-    """ raised when a watcher function in a trigger - watcher pair fails"""
-
-
-class UnsupportedNemesis(Exception):
-    """ raised from within a nemesis execution to skip this nemesis"""
-
-
-class NoMandatoryParameter(Exception):
-    """ raised from within a nemesis execution to skip this nemesis"""
-
-
 class DefaultValue:  # pylint: disable=too-few-public-methods
     """
     This is class is intended to be used as default value for the cases when None is not applicable
     """
     ...
-
-
-class CdcStreamsWasNotUpdated(Exception):
-    """ raised if messages:
-          - Generation {}: streams description table already updated
-          - CDC description table successfully updated with generation
-        were not found in logs
-    """
-
-
-class NemesisSubTestFailure(Exception):
-    """ raised if nemesis got error from sub test
-    """
-
-
-class AuditLogTestFailure(Exception):
-    """ raised if nemesis got error from audit log validation
-    """
-
-
-class BootstrapStreamErrorFailure(Exception):  # pylint: disable=too-few-public-methods
-    """ raised if node was not boostrapped after bootstrap
-    streaming was aborted """
 
 
 class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
