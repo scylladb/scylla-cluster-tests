@@ -17,6 +17,7 @@
 - DeleteByPartitionsMonkey
 - DeleteByRowsRangeMonkey
 - DeleteOverlappingRowRangesMonkey
+- DisableBinaryGossipExecuteMajorCompaction
 - DrainKubernetesNodeThenDecommissionAndAddScyllaNode
 - DrainKubernetesNodeThenReplaceScyllaNode
 - DrainerMonkey
