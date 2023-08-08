@@ -96,6 +96,7 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                update_authenticator, ParallelObject,
                                ParallelObjectResult, sleep_for_percent_of_duration)
 from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
+from sdcm.utils.context_managers import nodetool_context
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.docker_utils import ContainerManager
@@ -1523,9 +1524,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             finally:
                 thread.result()
 
-    def disrupt_major_compaction(self):
+    def _major_compaction(self):
         with adaptive_timeout(Operations.MAJOR_COMPACT, self.target_node, timeout=8000):
             self.target_node.run_nodetool("compact")
+
+    def disrupt_major_compaction(self):
+        self._major_compaction()
 
     def disrupt_load_and_stream(self):
         # Checking the columns number of keyspace1.standard1
@@ -4800,6 +4804,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.info("Decommission added new node")
             self.cluster.decommission(new_node)
 
+    def disrupt_disable_binary_gossip_execute_major_compaction(self):
+        with nodetool_context(node=self.target_node, start_command="disablebinary", end_command="enablebinary"):
+            self.target_node.run_nodetool("statusbinary")
+            self.target_node.run_nodetool("status")
+            time.sleep(5)
+            with nodetool_context(node=self.target_node, start_command="disablegossip", end_command="enablegossip"):
+                self.target_node.run_nodetool("statusgossip")
+                self.target_node.run_nodetool("status")
+                time.sleep(30)
+                self._major_compaction()
+        self.target_node.run_nodetool("statusgossip")
+        self.target_node.run_nodetool("statusbinary")
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
     """
@@ -6234,3 +6251,11 @@ class BootstrapStreamingErrorNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_bootstrap_streaming_error()
+
+
+class DisableBinaryGossipExecuteMajorCompaction(Nemesis):
+    disruptive = True
+    kubernetes = True
+
+    def disrupt(self):
+        self.disrupt_disable_binary_gossip_execute_major_compaction()

@@ -311,3 +311,6 @@
   - disruptive = False
   - kubernetes = True
   - free_tier_set = True
+- disrupt_disable_binary_gossip_execute_major_compaction:
+  - disruptive = True
+  - kubernetes = True

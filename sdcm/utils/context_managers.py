@@ -24,3 +24,22 @@ def environment(**kwargs):
     finally:
         os.environ.clear()
         os.environ.update(original_environment)
+
+
+@contextmanager
+def nodetool_context(node, start_command, end_command):
+    """
+    To be used when a nodetool command can affect the state of the node,
+    like disablebinary/disablegossip, and it is needed to keep the node in said
+    state temporarily.
+
+    :param node: the db node where the nodetool command are to be executed on
+    :param start_command: the command to execute before yielding the context
+    :param end_command: the command to execute as the closing step
+    :return:
+    """
+    try:
+        result = node.run_nodetool(start_command)
+        yield result
+    finally:
+        node.run_nodetool(end_command)
