@@ -1456,7 +1456,8 @@ def create_test_release_jobs_enterprise(branch, username, password, sct_branch, 
         ('ICS', '*ics*', 'ICS'),
         ('Workload_Prioritization', 'features-sla-*', 'Workload Prioritization'),
         ('LDAP', '*ldap*', 'LDAP authorization and authentication tests'),
-        ('LDAP', '*saslauthd*', 'LDAP authorization and authentication tests')
+        ('LDAP', '*saslauthd*', 'LDAP authorization and authentication tests'),
+        ('FIPS', '*fips*', 'FIPS Encryption tests'),
     ]:
         current_dir = f'SCT_Enterprise_Features/{group_name}'
         server.create_directory(name=current_dir, display_name=group_desc)
