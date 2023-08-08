@@ -38,7 +38,8 @@ import zipfile
 import io
 import tempfile
 import traceback
-from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any
+import ctypes
+from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any, Type
 from urllib.parse import urlparse
 from unittest.mock import MagicMock, Mock
 from textwrap import dedent
@@ -52,7 +53,6 @@ import hashlib
 from pathlib import Path
 
 import requests
-
 import boto3
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
@@ -3152,3 +3152,8 @@ def SoftTimeoutContext(timeout: int, operation: str):  # pylint: disable=invalid
     if duration > timeout:
         SoftTimeoutEvent(operation=operation, soft_timeout=timeout,
                          duration=duration).publish_or_dump()
+
+
+def raise_exception_in_thread(thread: threading.Thread, exception_type: Type[BaseException]):
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_ulong(thread.ident), ctypes.py_object(exception_type))
+    LOGGER.debug("PyThreadState_SetAsyncExc: return [%s]", res)
