@@ -1276,7 +1276,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 for node in self.cluster.nodes:
                     with adaptive_timeout(Operations.CLEANUP, node=node, timeout=HOUR_IN_SEC * 48):
                         for keyspace in test_keyspaces:
-                            node.run_nodetool(sub_cmd='cleanup', args=keyspace)
+                            node.run_nodetool(sub_cmd='cleanup', args=keyspace, retry=0)
             finally:
                 self.unset_current_running_nemesis(new_node)
         return new_node
@@ -1866,7 +1866,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         def _nodetool_cleanup(node):
             InfoEvent('NodetoolCleanupMonkey %s' % node).publish()
             with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC * 48):
-                node.run_nodetool(sub_cmd="cleanup")
+                node.run_nodetool(sub_cmd="cleanup", retry=0)
 
         parallel_objects = ParallelObject(self.cluster.nodes, num_workers=min(
             32, len(self.cluster.nodes)), timeout=HOUR_IN_SEC * 48)
@@ -3397,7 +3397,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 for node in self.cluster.nodes:
                     with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC * 48):
                         for keyspace in test_keyspaces:
-                            node.run_nodetool(sub_cmd='cleanup', args=keyspace)
+                            node.run_nodetool(sub_cmd='cleanup', args=keyspace, retry=0)
             finally:
                 self.unset_current_running_nemesis(new_node)
 
