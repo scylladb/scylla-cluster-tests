@@ -125,8 +125,8 @@ SCYLLA_AGENT_CONFIG_NAME = "scylla-agent-config"
 K8S_LOCAL_VOLUME_PROVISIONER_VERSION = "0.1.0-rc.0"  # without 'v' prefix
 # NOTE: these values are taken from the default values of the "scylla-manager" helm chart.
 #       Needs to be defined separately to be able to reuse for image caching running on local K8S
-SCYLLA_VERSION_IN_SCYLLA_MANAGER = "4.3.0"
-SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER = "2.2.1"
+SCYLLA_VERSION_IN_SCYLLA_MANAGER = "5.2.6"
+SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER = "3.1.1"
 
 # NOTE: add custom annotations to a ServiceAccount used by a ScyllaCluster
 #       It is needed to make sure that annotations survive operator upgrades
