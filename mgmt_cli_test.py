@@ -42,6 +42,7 @@ from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_stream_mutation_fragments_errors
 from sdcm.utils.gce_utils import get_gce_storage_client
 from sdcm.utils.azure_utils import AzureService
+from sdcm.exceptions import FilesNotCorrupted
 
 
 class BackupFunctionsMixIn(LoaderUtilsMixin):
@@ -264,18 +265,6 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
         return stress_thread
-
-
-class NoFilesFoundToDestroy(Exception):
-    pass
-
-
-class NoKeyspaceFound(Exception):
-    pass
-
-
-class FilesNotCorrupted(Exception):
-    pass
 
 
 # pylint: disable=too-many-public-methods
