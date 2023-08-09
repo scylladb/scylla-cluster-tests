@@ -309,7 +309,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
                             'controllerManager',
                             'scheduler'
                         ],
-                        'enabled': True
+                        'enabled': self.params.get("k8s_log_api_calls"),
                     },
                 ]
             },
