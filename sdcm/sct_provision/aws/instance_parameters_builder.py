@@ -176,7 +176,7 @@ class ScyllaInstanceParamsBuilder(AWSInstanceParamsBuilder):
 
 
 class OracleScyllaInstanceParamsBuilder(ScyllaInstanceParamsBuilder):
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
+    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db_oracle'
     _IMAGE_ID_PARAM_NAME = 'ami_id_db_oracle'
     _ROOT_DISK_SIZE_PARAM_NAME = 'root_disk_size_db'
 
