@@ -1,12 +1,12 @@
 test_duration: 800
 
-prepare_write_cmd:  ["cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
-                     "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1)' n=3000000 -mode cql3 native -rate threads=40 -log interval=5"
+prepare_write_cmd:  ["cassandra-stress write cl=LOCAL_QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
+                     "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1)' cl=LOCAL_QUORUM n=3000000 -mode cql3 native -rate threads=40 -log interval=5"
                     ]
 
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
-             "cassandra-stress read  cl=QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
-             "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1,read=1,si_read1=1,si_read2=1)' duration=700m -mode cql3 native -rate threads=40 -log interval=5",
+stress_cmd: ["cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
+             "cassandra-stress read  cl=LOCAL_QUORUM duration=720m -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(5) size=FIXED(16)' -log interval=5",
+             "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1,read=1,si_read1=1,si_read2=1)' cl=LOCAL_QUORUM duration=700m -mode cql3 native -rate threads=40 -log interval=5",
              ]
 
 n_db_nodes: '5 5'
@@ -14,7 +14,7 @@ n_loaders: '2 1'
 region_aware_loader: true
 n_monitor_nodes: 1
 
-instance_type_db: 'i3en.xlarge'
+instance_type_db: 'i3en.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
 nemesis_selector: [["topology_changes"],["!disruptive","schema_changes"]]
