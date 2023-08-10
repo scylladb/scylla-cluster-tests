@@ -20,7 +20,8 @@ from sdcm.loader import CassandraHarryStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events.loaders import CassandraHarryEvent, CASSANDRA_HARRY_ERROR_EVENTS_PATTERNS
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.stress_thread import DockerBasedStressThread
+from sdcm.stress.base import format_stress_cmd_error
 from sdcm.utils.common import FileFollowerThread
 
 

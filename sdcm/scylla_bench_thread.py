@@ -21,10 +21,9 @@ from enum import Enum
 
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events import Severity
 from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
-from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.wait import wait_for
 
@@ -218,15 +217,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     retry=0,
                 )
             except Exception as exc:  # pylint: disable=broad-except
-                errors_str = format_stress_cmd_error(exc)
-                if "truncate: seastar::rpc::timeout_error" in errors_str:
-                    scylla_bench_event.severity = Severity.ERROR
-                elif self.stop_test_on_failure:
-                    scylla_bench_event.severity = Severity.CRITICAL
-                else:
-                    scylla_bench_event.severity = Severity.ERROR
-
-                scylla_bench_event.add_error([errors_str])
+                self.configure_event_on_failure(stress_event=scylla_bench_event, exc=exc)
 
         return loader, result
 

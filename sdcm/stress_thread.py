@@ -29,7 +29,7 @@ from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
 from sdcm.utils.user_profile import get_profile_content
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
-from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
+from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.version_utils import get_docker_image_by_version
 from sdcm.utils.remote_logger import SSHLoggerBase
@@ -319,8 +319,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 with SoftTimeoutContext(timeout=self.timeout, operation="cassandra-stress"):
                     result = cmd_runner.run(cmd=node_cmd, timeout=hard_timeout, log_file=log_file_name, retry=0)
             except Exception as exc:  # pylint: disable=broad-except
-                cs_stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
-                cs_stress_event.add_error(errors=[format_stress_cmd_error(exc)])
+                self.configure_event_on_failure(stress_event=cs_stress_event, exc=exc)
 
         return loader, result, cs_stress_event
 
