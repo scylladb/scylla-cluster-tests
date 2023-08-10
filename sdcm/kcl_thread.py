@@ -21,7 +21,8 @@ import threading
 from functools import cached_property
 from typing import Dict
 
-from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.stress_thread import DockerBasedStressThread
+from sdcm.stress.base import format_stress_cmd_error
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.loaders import KclStressEvent

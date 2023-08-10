@@ -20,7 +20,9 @@ from functools import cached_property
 from sdcm.cluster import BaseLoaderSet
 from sdcm.utils.common import generate_random_string
 from sdcm.utils.docker_remote import RemoteDocker
-
+from sdcm.sct_events import Severity
+from sdcm.sct_events.stress_events import StressEvent
+from sdcm.remote.libssh2_client.exceptions import Failure
 LOGGER = logging.getLogger(__name__)
 
 
@@ -127,6 +129,17 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
     @property
     def target_connection_bundle_file(self) -> str:
         return str(Path('/tmp/') / self.connection_bundle_file.name)
+
+    def configure_event_on_failure(self, stress_event: StressEvent, exc: Exception | Failure):
+        error_msg = format_stress_cmd_error(exc)
+        if (hasattr(exc, "result") and exc.result.failed) and exc.result.exited == 137:
+            error_msg = f"Stress killed by test/teardown\n{error_msg}"
+            stress_event.severity = Severity.WARNING
+        elif self.stop_test_on_failure:
+            stress_event.severity = Severity.CRITICAL
+        else:
+            stress_event.severity = Severity.ERROR
+        stress_event.add_error(errors=[error_msg])
 
 
 def format_stress_cmd_error(exc: Exception) -> str:

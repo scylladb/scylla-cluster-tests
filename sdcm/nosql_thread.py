@@ -18,8 +18,7 @@ import uuid
 import threading
 
 from sdcm.cluster import BaseNode
-from sdcm.sct_events import Severity
-from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.stress.base import DockerBasedStressThread
 from sdcm.sct_events.loaders import NoSQLBenchStressEvent, NOSQLBENCH_EVENT_PATTERNS
 from sdcm.utils.common import FileFollowerThread
 
@@ -113,6 +112,5 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                                               f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
                                           timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except
-                stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
-                stress_event.add_error(errors=[format_stress_cmd_error(exc)])
+                self.configure_event_on_failure(stress_event=stress_event, exc=exc)
             return None
