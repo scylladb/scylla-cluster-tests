@@ -2468,12 +2468,38 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def modify_table_compaction(self):
         """
             The compaction property defines the compaction strategy class for this table.
-            default: compaction = {'class': 'SizeTieredCompactionStrategy'}
+            default: compaction = {
+                'class': 'SizeTieredCompactionStrategy'
+                'bucket_high': 1.5,
+                'bucket_low': 0.5,
+                'min_sstable_size': 50,
+                'min_threshold': 4,
+                'max_threshold': 32,
+            }
         """
-        # TODO: Sub-properties for each of compaction strategies should also be tested
-        strategies = ("SizeTieredCompactionStrategy",
-                      "TimeWindowCompactionStrategy", "LeveledCompactionStrategy")
-        prop_val = {"class": random.choice(strategies)}
+        strategies = [
+            {
+                'class': 'SizeTieredCompactionStrategy',
+                'bucket_high': 1.5,
+                'bucket_low': 0.5,
+                'min_sstable_size': 50,
+                'min_threshold': 4,
+                'max_threshold': 32,
+            },
+            {
+                'class': 'LeveledCompactionStrategy',
+                'sstable_size_in_mb': 160,
+            },
+            {
+                'class': 'TimeWindowCompactionStrategy',
+                'compaction_window_unit': 'DAYS',
+                'compaction_window_size': 1,
+                'expired_sstable_check_frequency_seconds': 600,
+                'min_threshold': 4,
+                'max_threshold': 32,
+            },
+        ]
+        prop_val = random.choice(strategies)
         self._modify_table_property(name="compaction", val=str(prop_val))
 
     def modify_table_compression(self):
@@ -2519,8 +2545,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # Select table without columns with "counter" type for this nemesis - issue #1037:
         #    Modify_table nemesis chooses first non-system table, and modify default_time_to_live of it.
         #    But table with counters doesn't support this
-        self._modify_table_property(name="default_time_to_live", val=random.randint(864000, 630720000),
-                                    filter_out_table_with_counter=True)  # max allowed TTL - 20 years (630720000)
+
+        # max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
+        self._modify_table_property(name="default_time_to_live", val=random.randint(864000, 4300000),
+                                    filter_out_table_with_counter=True)
 
     def modify_table_max_index_interval(self):
         """
