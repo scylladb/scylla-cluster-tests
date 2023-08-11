@@ -17,7 +17,7 @@ import logging
 import warnings
 from pprint import pformat
 from types import SimpleNamespace  # pylint: disable=no-name-in-module
-from typing import List, Optional, Union, Any, Tuple
+from typing import List, Optional, Union, Any, Tuple, Protocol
 from functools import cache
 
 import docker
@@ -76,6 +76,12 @@ class _Name(SimpleNamespace):
 
     def __bool__(self):
         return self.full is not None
+
+
+class INodeWithContainerManager(Protocol):
+    # pylint: disable=too-few-public-methods
+    _containers: dict[str, Container]
+    tags: dict[str, str]
 
 
 class ContainerManager:  # pylint: disable=too-many-public-methods)
@@ -141,18 +147,18 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
     default_docker_client = _docker
 
     @classmethod
-    def get_docker_client(cls, instance: object, name: Optional[str] = None) -> DockerClient:
+    def get_docker_client(cls, instance: INodeWithContainerManager, name: Optional[str] = None) -> DockerClient:
         container = None if name is None else cls.get_container(instance, name, raise_not_found_exc=False)
         if container is None:
             return cls._get_docker_client_for_new_container(instance, _Name(name))
         return container.client
 
     @classmethod
-    def _get_docker_client_for_new_container(cls, instance: object, name: _Name) -> DockerClient:
+    def _get_docker_client_for_new_container(cls, instance: INodeWithContainerManager, name: _Name) -> DockerClient:
         return cls._get_attr_for_name(instance, name, "docker_client", default=cls.default_docker_client)
 
     @staticmethod
-    def _get_attr_for_name(instance: object,
+    def _get_attr_for_name(instance: INodeWithContainerManager,
                            name: _Name,
                            attr: str,
                            default: Optional[Any] = None,
@@ -176,19 +182,31 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
 
         return default
 
-    @staticmethod
-    def get_container(instance: object, name, raise_not_found_exc: bool = True) -> Optional[Container]:
+    @classmethod
+    def get_container(cls, instance: INodeWithContainerManager, name, raise_not_found_exc: bool = True) -> Optional[Container]:
         assert name is not None, "None is not allowed as a container name"
 
         container = instance._containers.get(name)
         if container is None and raise_not_found_exc:
             raise NotFound(f"There is no container `{name}' for {instance}.")
         if container:
-            container.reload()
+            try:
+                container.reload()
+            except OSError:
+                LOGGER.warning("Container failed to refresh, checking docker connection...")
+                docker_client = cls.get_docker_client(instance)
+                docker_client.ping()
+                LOGGER.info("Docker version: %s\nActive containers: %s", docker_client.version(),
+                            [c.name for c in docker_client.containers.list()])
+                container = docker_client.containers.get(name)
+                LOGGER.debug("Found container %s, reloading...", container)
+                container.reload()
+                instance._containers[name] = container
+
         return container
 
     @classmethod
-    def run_container(cls, instance: object, name: str, **extra_run_args) -> Container:
+    def run_container(cls, instance: INodeWithContainerManager, name: str, **extra_run_args) -> Container:
         container = cls.get_container(instance, name, raise_not_found_exc=False)
         if container is None:
             name = _Name(name)
@@ -223,7 +241,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return kwargs
 
     @classmethod
-    def destroy_container(cls, instance: object, name: str, ignore_keepalive: bool = False) -> bool:
+    def destroy_container(cls, instance: INodeWithContainerManager, name: str, ignore_keepalive: bool = False) -> bool:
         container = cls.get_container(instance, name)
         logfile = cls._get_attr_for_name(instance, _Name(name), "container_logfile", name_only_lookup=True)
         if logfile:
@@ -243,7 +261,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return False
 
     @classmethod
-    def destroy_all_containers(cls, instance: object, ignore_keepalive: bool = False) -> None:
+    def destroy_all_containers(cls, instance: INodeWithContainerManager, ignore_keepalive: bool = False) -> None:
         for name in tuple(instance._containers.keys()):
             try:
                 cls.destroy_container(instance, name, ignore_keepalive=ignore_keepalive)
@@ -251,11 +269,11 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
                 LOGGER.error("%s: some exception raised during container `%s' destroying", instance, name, exc_info=exc)
 
     @classmethod
-    def is_running(cls, instance: object, name: str) -> bool:
+    def is_running(cls, instance: INodeWithContainerManager, name: str) -> bool:
         return cls.get_container(instance, name).status == "running"
 
     @classmethod
-    def set_container_keep_alive(cls, instance: object, name: str) -> None:
+    def set_container_keep_alive(cls, instance: INodeWithContainerManager, name: str) -> None:
         container = cls.get_container(instance, name)
         if container.name.endswith(cls.keep_alive_suffix):
             return
@@ -263,13 +281,13 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         LOGGER.debug("Container %s set to keep alive.", container)
 
     @classmethod
-    def set_all_containers_keep_alive(cls, instance: object) -> None:
+    def set_all_containers_keep_alive(cls, instance: INodeWithContainerManager) -> None:
         for name in tuple(instance._containers.keys()):
             cls.set_container_keep_alive(instance, name)
 
     @classmethod
     def ssh_copy_id(cls,  # pylint: disable=too-many-arguments
-                    instance: object,
+                    instance: INodeWithContainerManager,
                     name: str,
                     user: str,
                     key_file: str,
@@ -283,20 +301,20 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
 
     @classmethod
     @retrying(n=20, sleep_time=2, allowed_exceptions=(Retry, ))
-    def wait_for_status(cls, instance: object, name: str, status: str) -> None:
+    def wait_for_status(cls, instance: INodeWithContainerManager, name: str, status: str) -> None:
         if cls.get_container(instance, name).status != status:
             raise Retry
 
     @classmethod
     @retrying(n=10, sleep_time=1, allowed_exceptions=(Retry, ))
-    def get_ip_address(cls, instance: object, name: str) -> str:
+    def get_ip_address(cls, instance: INodeWithContainerManager, name: str) -> str:
         ip_address = cls.get_container(instance, name).attrs["NetworkSettings"]["IPAddress"]
         if not ip_address:
             raise Retry
         return ip_address
 
     @classmethod
-    def get_container_port(cls, instance: object, name: str, port: Union[int, str]) -> Optional[int]:
+    def get_container_port(cls, instance: INodeWithContainerManager, name: str, port: Union[int, str]) -> Optional[int]:
         container = cls.get_container(instance, name)
         try:
             return int(container.ports[f"{port}/tcp"][0]["HostPort"])
@@ -304,7 +322,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
             return None
 
     @classmethod
-    def get_host_volume_path(cls, instance: object, container_name: str, path_in_container: str) -> str:
+    def get_host_volume_path(cls, instance: INodeWithContainerManager, container_name: str, path_in_container: str) -> str:
         """
             Return directory on the host that is mounted into the container to path `path_in_container`
         """
@@ -317,7 +335,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return ''
 
     @classmethod
-    def get_environ(cls, instance: object, name: str) -> dict:
+    def get_environ(cls, instance: INodeWithContainerManager, name: str) -> dict:
         container = cls.get_container(instance, name)
 
         def normalize(key: Any, value: Any = None) -> Tuple[Any, Any]:
@@ -325,7 +343,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return dict(normalize(*(item.split("=", 1))) for item in container.attrs["Config"]["Env"])
 
     @classmethod
-    def register_container(cls, instance: object, name: str, container: Container, replace: bool = False) -> None:
+    def register_container(cls, instance: INodeWithContainerManager, name: str, container: Container, replace: bool = False) -> None:
         assert name is not None, "None is not allowed as a container name"
 
         if container in instance._containers.values():
@@ -337,14 +355,14 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
             raise ContainerAlreadyRegistered(f"{instance}: there is another container registered for `{name}'")
 
     @staticmethod
-    def unregister_container(instance: object, name: str) -> None:
+    def unregister_container(instance: INodeWithContainerManager, name: str) -> None:
         if name not in instance._containers:
             raise NotFound(f"{instance}: there is no container registered for name `{name}'")
         del instance._containers[name]
         LOGGER.debug("%s: container `%s' unregistered", instance, name)
 
     @classmethod
-    def build_container_image(cls, instance: object, name: str, **extra_build_args) -> Image:
+    def build_container_image(cls, instance: INodeWithContainerManager, name: str, **extra_build_args) -> Image:
         assert name is not None, "None is not allowed as a container name"
 
         if cls.get_container(instance, name, raise_not_found_exc=False) is not None:
@@ -392,11 +410,11 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return image
 
     @classmethod
-    def _get_container_image_tag(cls, instance: object, name: _Name) -> Optional[str]:
+    def _get_container_image_tag(cls, instance: INodeWithContainerManager, name: _Name) -> Optional[str]:
         return cls._get_attr_for_name(instance, name, "container_image_tag", name_only_lookup=True)
 
     @classmethod
-    def _get_container_image_dockerfile_args(cls, instance: object, name: _Name) -> Optional[dict]:
+    def _get_container_image_dockerfile_args(cls, instance: INodeWithContainerManager, name: _Name) -> Optional[dict]:
         return cls._get_attr_for_name(instance, name, "container_image_dockerfile_args", name_only_lookup=True)
 
     @staticmethod
@@ -414,11 +432,11 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return docker_client.containers.get(c_id).name
 
     @classmethod
-    def pause_container(cls, instance: object, name: str) -> None:
+    def pause_container(cls, instance: INodeWithContainerManager, name: str) -> None:
         cls.get_container(instance, name).pause()
 
     @classmethod
-    def unpause_container(cls, instance: object, name: str) -> None:
+    def unpause_container(cls, instance: INodeWithContainerManager, name: str) -> None:
         cls.get_container(instance, name).unpause()
 
 

@@ -516,7 +516,7 @@ class GrafanaScreenShot(GrafanaEntity):
                     self.remote_browser.get_screenshot(grafana_url, screenshot_path)
                     screenshots.append(screenshot_path)
                 except Exception as details:  # pylint: disable=broad-except
-                    LOGGER.error("Error get screenshot %s: %s", dashboard.name, details)
+                    LOGGER.error("Error get screenshot %s: %s", dashboard.name, details, exc_info=True)
 
             return screenshots
 
