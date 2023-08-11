@@ -85,9 +85,9 @@ class Panel:
 class Snapshot:  # pylint: disable=too-few-public-methods
     locators_sequence = [
         (By.XPATH, """//button[contains(@aria-label, "Share dashboard or panel")]"""),
-        (By.XPATH, """//ul/li/a[contains(@aria-label, "Tab Snapshot") and contains(text(), "Snapshot")]"""),
-        (By.XPATH, """//button//span[contains(text(), "Publish to snapshot.raintank.io")]"""),
-        (By.XPATH, """//a[contains(@href, "https://snapshot.raintank.io")]""")
+        (By.XPATH, """//div/a[contains(@aria-label, "Tab Snapshot") and contains(text(), "Snapshot")]"""),
+        (By.XPATH, """//button//span[contains(text(), "Publish to snapshots.raintank.io")]"""),
+        (By.XPATH, """//input[contains(@value, "https://snapshots.raintank.io")]""")
     ]
 
     def get_shared_link(self, remote_browser):
@@ -112,8 +112,8 @@ class Snapshot:  # pylint: disable=too-few-public-methods
             EC.visibility_of_element_located(snapshot_link_locator))
         snapshot_link_element = remote_browser.find_element(*snapshot_link_locator)
 
-        LOGGER.debug(snapshot_link_element.text)
-        return snapshot_link_element.text
+        LOGGER.debug(snapshot_link_element.get_attribute("value"))
+        return snapshot_link_element.get_attribute("value")
 
 
 class Dashboard:
@@ -151,7 +151,7 @@ class OverviewDashboard(Dashboard):
     path = 'd/overview-{version}/scylla-{dashboard_name}'
     title = 'Overview'
     resolution = '1920px*4000px'
-    panels = [Panel("Disk Size by DC"),
+    panels = [Panel("Average Disk Usage"),
               Panel("Running Compactions"),
               Panel("Writes"),
               Panel("Write Latencies"),
