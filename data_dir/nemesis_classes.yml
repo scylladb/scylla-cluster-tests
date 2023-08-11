@@ -20,7 +20,8 @@
 - DrainKubernetesNodeThenDecommissionAndAddScyllaNode
 - DrainKubernetesNodeThenReplaceScyllaNode
 - DrainerMonkey
-- EnableDisableTableEncryptionAwsKmsProviderMonkey
+- EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey
+- EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey
 - EnospcAllNodesMonkey
 - EnospcMonkey
 - GrowShrinkClusterNemesis
