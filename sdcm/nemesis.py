@@ -3876,20 +3876,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     # TODO: add support for the 'LocalFileSystemKeyProviderFactory' and 'KmipKeyProviderFactory' key providers
     # TODO: add encryption for a table with large partitions?
 
-    def disrupt_enable_disable_table_encryption_aws_kms_provider(self):
-        if self.cluster.params.get("cluster_backend") != "aws":
-            raise UnsupportedNemesis("This nemesis is supported only on the AWS cluster backend")
-        if not self.cluster.nodes[0].is_enterprise:
-            raise UnsupportedNemesis("KMS+EaR feature is only supported by Scylla Enterprise")
-        self._enable_disable_table_encryption(additional_scylla_encryption_options={
-            'key_provider': 'KmsKeyProviderFactory'})
+    def disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation(self):
+        self._enable_disable_table_encryption(
+            enable_kms_key_rotation=False,
+            additional_scylla_encryption_options={'key_provider': 'KmsKeyProviderFactory'})
+
+    def disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation(self):
+        self._enable_disable_table_encryption(
+            enable_kms_key_rotation=True,
+            additional_scylla_encryption_options={'key_provider': 'KmsKeyProviderFactory'})
 
     @scylla_versions(("2023.2.0-dev", None))
-    def _enable_disable_table_encryption(self, additional_scylla_encryption_options=None):
+    def _enable_disable_table_encryption(self, enable_kms_key_rotation, additional_scylla_encryption_options=None):
+        if self.cluster.params.get("cluster_backend") != "aws":
+            raise UnsupportedNemesis("This nemesis is supported only on the AWS cluster backend")
+
         scylla_encryption_options = {'cipher_algorithm': 'AES/ECB/PKCS5Padding', 'secret_key_strength': 128}
         scylla_encryption_options |= additional_scylla_encryption_options or {}
         aws_kms, kms_key_alias_name = None, None
-        enable_kms_key_rotation = False
 
         # Handle AWS KMS specific parts
         if additional_scylla_encryption_options and additional_scylla_encryption_options.get(
@@ -5100,12 +5104,35 @@ class StopStartMonkey(Nemesis):
         self.disrupt_stop_start_scylla_server()
 
 
-class EnableDisableTableEncryptionAwsKmsProviderMonkey(Nemesis):
+class EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey(Nemesis):
     disruptive = True
     kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
 
     def disrupt(self):
-        self.disrupt_enable_disable_table_encryption_aws_kms_provider()
+        self.disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation()
+
+
+class EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey(Nemesis):
+    disruptive = True
+    kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
+
+    def disrupt(self):
+        self.disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation()
+
+
+class EnableDisableTableEncryptionAwsKmsProviderMonkey(Nemesis):
+    disruptive = True
+    kubernetes = False  # Enable it when EKS SCT code starts supporting the KMS service
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disrupt_methods_list = [
+            'disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation',
+            'disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation',
+        ]
+
+    def disrupt(self):
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list, predefined_sequence=True)
 
 
 # Disabling this nemesis due to mulitple known issues like (https://github.com/scylladb/scylla/issues/5080).
