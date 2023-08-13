@@ -24,8 +24,8 @@ if ! aws --version; then
 fi
 echo "AWS CLI installed."
 echo "==================================     NOTES      ================================================="
-echo "To check that Hydra is installed, run 'hydra ls' anywhere in bash."
-echo "It will run 'ls' command in the SCT Docker container."
+echo "To check that Hydra is installed, run 'hydra bash' anywhere in bash."
+echo "It will create a SCT Docker container and connect to its bash."
 echo "When running Hydra for the first time it will build the SCT Docker image. Please be patient!"
 echo "==================================================================================================="
 echo "Please run 'aws configure' to configure AWS CLI"
