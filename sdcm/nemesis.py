@@ -4967,7 +4967,9 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     time.sleep(args[0].interval)
                 NEMESIS_LOCK.release()
             else:
-                NEMESIS_RUN_INFO.pop(nemesis_run_info_key)
+                # NOTE: the key may be absent if a nemesis which waits for a lock release
+                #       gets killed/aborted. So, use safe 'pop' call with the default 'None' value.
+                NEMESIS_RUN_INFO.pop(nemesis_run_info_key, None)
 
         return result
 
