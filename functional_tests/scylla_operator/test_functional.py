@@ -36,6 +36,7 @@ from sdcm.cluster_k8s import (
     SCYLLA_OPERATOR_NAMESPACE
 )
 from sdcm.mgmt import TaskStatus
+from sdcm.utils.common import ParallelObject
 from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units,
@@ -152,6 +153,44 @@ def test_rolling_restart_cluster(db_cluster):
                                                     f"-c scylla", namespace=db_cluster.namespace)
         assert "scylla_io_setup" not in scylla_log.stdout, \
             f"iotune was run after reboot on {pod_name_and_status['name']}"
+
+
+@pytest.mark.required_operator("v1.10.0")
+def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
+    log_followers = {}
+    for node in db_cluster.nodes:
+        for keyspace in db_cluster.nodes[0].run_cqlsh('describe keyspaces').stdout.split():
+            log_followers[f"{node.name}--{keyspace}"] = node.follow_system_log(patterns=[
+                f"api - force_keyspace_cleanup: keyspace={keyspace} "])
+
+    def wait_for_cleanup_logs(log_follower_name, log_follower, db_cluster):
+        db_rf = len(db_cluster.nodes)
+        while not list(log_follower):
+            # NOTE: log lines located as last may not be caught fast enough because of the chunk-size limitation.
+            #       So, perform additional DB actions to create log noise which will cause log reader moving on.
+            current_ks_name = f"ks_db_log_population_{int(time.time())}"
+            cql_create_ks_cmd = (
+                f"CREATE KEYSPACE IF NOT EXISTS {current_ks_name}"
+                f" WITH replication = {{'class': 'NetworkTopologyStrategy', 'replication_factor' : {db_rf}}}")
+            db_cluster.nodes[0].run_cqlsh(cmd=cql_create_ks_cmd, timeout=10)
+            time.sleep(4)
+            db_cluster.nodes[0].run_cqlsh(cmd=f"DROP KEYSPACE IF EXISTS {current_ks_name}", timeout=10)
+            time.sleep(4)
+        log.info("%s: log search succeeded", log_follower_name)
+
+    new_nodes_count = 1
+    new_nodes = db_cluster.add_nodes(count=new_nodes_count, dc_idx=0, rack=0, enable_auto_bootstrap=True)
+    try:
+        db_cluster.wait_for_pods_readiness(pods_to_wait=new_nodes_count, total_pods=len(db_cluster.nodes))
+        object_set = ParallelObject(
+            objects=[[name, log_follower, db_cluster] for name, log_follower in log_followers.items()],
+            num_workers=min(32, len(log_followers)),
+            timeout=600,
+        )
+        object_set.run(func=wait_for_cleanup_logs, unpack_objects=True, ignore_exceptions=False)
+    finally:
+        for new_node in new_nodes:
+            db_cluster.decommission(new_node)
 
 
 def _scylla_cluster_monitoring_ckecks(db_cluster: ScyllaPodCluster, monitoring_type: str):
