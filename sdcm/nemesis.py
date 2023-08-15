@@ -3796,6 +3796,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._grow_cluster(rack=None)
         self._shrink_cluster(rack=None)
 
+    # NOTE: version limitation is caused by the following:
+    #       - https://github.com/scylladb/scylla-enterprise/issues/3211
+    #       - https://github.com/scylladb/scylladb/issues/14184
+    @scylla_versions(("5.2.7", None), ("2023.1.1", None))
     def disrupt_grow_shrink_new_rack(self):
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Adding new rack is not supported for non-k8s Scylla clusters")

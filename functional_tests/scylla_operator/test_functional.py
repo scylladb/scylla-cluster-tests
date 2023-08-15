@@ -394,6 +394,10 @@ def test_orphaned_services_after_shrink_cluster(db_cluster):
     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
 
 
+# NOTE: version limitation is caused by the following:
+#       - https://github.com/scylladb/scylla-enterprise/issues/3211
+#       - https://github.com/scylladb/scylladb/issues/14184
+@pytest.mark.requires_scylla_versions(("5.2.7", None), ("2023.1.1", None))
 def test_orphaned_services_multi_rack(db_cluster):
     """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
     log.info("Add node to the rack 1")
