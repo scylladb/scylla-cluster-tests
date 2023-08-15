@@ -1975,9 +1975,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     apt-get update
                     apt-get install apt-transport-https -y
                     apt-get install gnupg1-curl dirmngr -y
-                    curl https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public | sudo apt-key add -
                     apt-get install software-properties-common -y
-                    add-apt-repository --yes https://adoptopenjdk.jfrog.io/adoptopenjdk/deb/
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_10_prereqs)
 
