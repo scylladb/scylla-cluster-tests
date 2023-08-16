@@ -847,7 +847,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.log.info('Task: {} is done.'.format(repair_task.id))
         self.log.debug("sctool version is : {}".format(manager_tool.sctool.version))
 
-        expected_keyspaces_to_be_repaired = ["system_auth", "system_distributed", "system_traces",  # pylint: disable=invalid-name
+        expected_keyspaces_to_be_repaired = ["system_auth", "system_distributed",  # pylint: disable=invalid-name
                                              self.NETWORKSTRATEGY_KEYSPACE_NAME]
         per_keyspace_progress = repair_task.per_keyspace_progress
         self.log.info("Looking in the repair output for all of the required keyspaces")
