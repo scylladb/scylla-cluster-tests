@@ -2018,8 +2018,8 @@ class SCTConfiguration(dict):
 
         self._verify_data_volume_configuration(backend)
 
-        self._validate_seeds_number()
         if self.get('n_db_nodes'):
+            self._validate_seeds_number()
             self._validate_nemesis_can_run_on_non_seed()
             self._validate_number_of_db_nodes_divides_by_az_number()
 

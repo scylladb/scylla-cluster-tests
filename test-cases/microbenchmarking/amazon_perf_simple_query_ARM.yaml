@@ -9,7 +9,7 @@ use_mgmt: false
 
 instance_type_db: 'c7g.large'
 data_volume_disk_num: 1
-user_prefix: 'perf-microbenchmarking-amazon'
+user_prefix: 'perf-microbenchmarking-amazon-ARM'
 instance_provision: "spot"
 instance_provision_fallback_on_demand: true
 
