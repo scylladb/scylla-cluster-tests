@@ -198,9 +198,6 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
                           f'Restore run time: {restore_task.duration}.').publish()
         if restore_schema:
             self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
-        if restore_data:
-            for node in self.db_cluster.nodes:
-                node.run_nodetool("repair")  # After data restoration, you should repair every node
 
     def run_verification_read_stress(self):
         stress_queue = []
