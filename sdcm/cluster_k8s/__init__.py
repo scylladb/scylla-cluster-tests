@@ -59,6 +59,8 @@ from sdcm.remote.kubernetes_cmd_runner import (
 )
 from sdcm.coredump import CoredumpExportFileThread
 from sdcm.mgmt import AnyManagerCluster
+from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils import properties
@@ -2741,7 +2743,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         scylla_shards = node.scylla_shards
 
         timeout = timeout or (node.pod_terminate_timeout * 60)
-        with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
+        with adaptive_timeout(operation=Operations.DECOMMISSION, node=node), DbEventsFilter(
+                db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                line="std::runtime_error.*decommission"):
             self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members - 1)
             self.k8s_cluster.kubectl(f"wait --timeout={timeout}s --for=delete pod {node.name}",
                                      namespace=self.namespace,
