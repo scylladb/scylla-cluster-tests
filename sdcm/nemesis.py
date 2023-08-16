@@ -1551,7 +1551,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                                                         test_data=test_data)
             for sstables_info, load_on_node in map_files_to_node:
                 SstableLoadUtils.upload_sstables(load_on_node, test_data=sstables_info, table_name="standard1")
-                SstableLoadUtils.run_load_and_stream(load_on_node)
+                # NOTE: on K8S logs may appear with a delay, so add a bigger timeout for it.
+                #       See https://github.com/scylladb/scylla-cluster-tests/issues/6314
+                kwargs = {"start_timeout": 1800, "end_timeout": 1800} if self._is_it_on_kubernetes() else {}
+                SstableLoadUtils.run_load_and_stream(load_on_node, **kwargs)
 
     # pylint: disable=too-many-statements
     def disrupt_nodetool_refresh(self, big_sstable: bool = False):

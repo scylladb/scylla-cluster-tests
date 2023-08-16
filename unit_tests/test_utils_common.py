@@ -228,4 +228,4 @@ class TestSstableLoadUtils(unittest.TestCase):
 
     def test_load_and_stream_waits_for_log_lines(self):
         self.node.remoter = Remoter(self.node.system_log)
-        SstableLoadUtils.run_load_and_stream(self.node, timeout=1)
+        SstableLoadUtils.run_load_and_stream(self.node, start_timeout=1, end_timeout=2)
