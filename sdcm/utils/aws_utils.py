@@ -27,7 +27,7 @@ from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
-ARM_ARCH_PREFIXES = ('im4', 'is4', 'a1.', 'inf', 'm6', 'c6', 'r6', 'm7', 'c7', 'r7')
+ARM_ARCH_PREFIXES = ('im4', 'is4', 'a1.', 'inf', 'm6', 'c6g', 'r6', 'm7', 'c7g', 'r7')
 AwsArchType = Literal['x86_64', 'arm64']
 
 

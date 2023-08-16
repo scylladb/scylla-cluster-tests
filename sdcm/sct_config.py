@@ -1958,8 +1958,8 @@ class SCTConfiguration(dict):
 
         self._verify_data_volume_configuration(backend)
 
-        self._validate_seeds_number()
         if self.get('n_db_nodes'):
+            self._validate_seeds_number()
             self._validate_nemesis_can_run_on_non_seed()
         if 'extra_network_interface' in self and len(self.region_names) >= 2:
             raise ValueError("extra_network_interface isn't supported for multi region use cases")
