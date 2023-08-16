@@ -1,9 +1,9 @@
-test_duration: 360
+test_duration: 420
 
-prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=20 -pop seq=1..20971520 -col 'n=FIXED(2) size=FIXED(256)' -log interval=5"
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..20971520 -col 'n=FIXED(2) size=FIXED(256)' -log interval=5"
 
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=4 -pop seq=1..20971520 -col 'n=FIXED(2) size=FIXED(256)' -log interval=5",
-             "cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=4 -pop seq=1..20971520 -col 'n=FIXED(2) size=FIXED(256)' -log interval=5"
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native connectionsPerHost=500 -rate threads=4 -pop seq=1..20971520 -col 'n=FIXED(2) size=FIXED(256)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native connectionsPerHost=500 -rate threads=4 -pop seq=1..20971520 -col 'n=FIXED(2) size=FIXED(256)' -log interval=5"
              ]
 
 n_db_nodes: 4
@@ -11,7 +11,7 @@ n_loaders: 50
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.metal'
-instance_type_loader: 'c5.large'
+instance_type_loader: 'c7i.large'
 instance_type_monitor: 'm5.2xlarge'
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '031'
@@ -24,3 +24,8 @@ keyspace_num: 50
 
 user_prefix: 'longevity-many-clients-4h'
 space_node_threshold: 64424
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
