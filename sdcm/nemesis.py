@@ -1596,7 +1596,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _k8s_fake_enospc_error(self, node):
         """Fakes ENOSPC error for scylla container (for /var/lib/scylla dir) using chaos-mesh without filling up disk."""
-        if not self._is_chaos_mesh_initialized():
+        raise UnsupportedNemesis("https://github.com/scylladb/scylla-cluster-tests/issues/6327")
+        if not self._is_chaos_mesh_initialized():  # pylint: disable=unreachable
             raise UnsupportedNemesis(
                 "Chaos Mesh is not installed. Set 'k8s_use_chaos_mesh' config option to 'true'")
         no_space_errors_in_log = node.follow_system_log(patterns=['No space left on device'])
