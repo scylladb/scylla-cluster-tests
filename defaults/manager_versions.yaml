@@ -9,6 +9,22 @@ manager_repos_by_version:
     ubuntu18: 'http://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list'
     ubuntu20: 'http://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list'
     ubuntu22: 'http://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list'
+  "3.2":
+    centos7: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-3.2.repo'
+    centos8: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-3.2.repo'
+    debian10: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/debian/scylladb-manager-3.2.list'
+    debian11: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/debian/scylladb-manager-3.2.list'
+    ubuntu18: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/ubuntu/scylladb-manager-3.2.list'
+    ubuntu20: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/ubuntu/scylladb-manager-3.2.list'
+    ubuntu22: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/ubuntu/scylladb-manager-3.2.list'
+  "3.1":
+    centos7: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-3.1.repo'
+    centos8: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-3.1.repo'
+    debian10: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/debian/scylladb-manager-3.1.list'
+    debian11: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/debian/scylladb-manager-3.1.list'
+    ubuntu18: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/ubuntu/scylladb-manager-3.1.list'
+    ubuntu20: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/ubuntu/scylladb-manager-3.1.list'
+    ubuntu22: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/ubuntu/scylladb-manager-3.1.list'
   "3.0":
     centos7: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-3.0.repo'
     centos8: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-3.0.repo'
