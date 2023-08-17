@@ -1140,7 +1140,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         def _is_cluster_upgraded() -> bool:
             for node in self.db_cluster.nodes:
                 node.forget_scylla_version()
-                if node.scylla_version != target_version or not node.db_up:
+                if node.scylla_version.replace("~", "-") != target_version.replace("~", "-") or not node.db_up:
                     return False
             return True
         wait.wait_for(
