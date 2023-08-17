@@ -3484,6 +3484,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                           f'{str(exc)}').publish()
 
     def disrupt_grow_shrink_cluster(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
         self._grow_cluster(rack=None)
         self._shrink_cluster(rack=None)
 
