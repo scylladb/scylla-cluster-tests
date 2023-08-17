@@ -1462,10 +1462,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             states = [val['state'] for dc in status.values() for ip, val in dc.items() if ip == node_ip]
             return states[0] if states else None
 
+        def nodetool_getendpoints(keyspace: str, table: str, key: str) -> List["str"] | None:
+            node = random.choice(self.cluster.nodes)
+            getendpoints_output = node.run_nodetool_cmd("getendpoints", f"{keyspace} {table} {key}")
+            return getendpoints_output.stdout.splitlines() if getendpoints_output else None
+
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis(
                 'Use "disrupt_terminate_kubernetes_host_then_replace_scylla_node" '
                 'instead this one for K8S')
+
+        initial_endpoints = len(nodetool_getendpoints("system_auth", "roles", "cassandra"))
+
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         old_node_ip = self.target_node.ip_address
         host_id = self.target_node.host_id
@@ -1494,6 +1502,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         f"Old node should have been removed from status but it wasn't. State was: {state}"
 
             wait_for_old_node_to_removed()
+
+            new_endpoints = len(nodetool_getendpoints("system_auth", "roles", "cassandra"))
+
+            assert initial_endpoints == new_endpoints, \
+                f"Number of endpoints should be the same after node replacement. Pre: {initial_endpoints}, Post: {new_endpoints}"
 
         finally:
             self.unset_current_running_nemesis(new_node)
