@@ -1210,7 +1210,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         def _get_all_zones_common_params() -> list[dict]:
             all_zones_common_params = []
             aws_region = AwsRegion(region_name=regions[0])
-            availability_zones = [zone[-1] for zone in aws_region.availability_zones]
+            availability_zones = [zone[-1] for zone in
+                                  aws_region.get_availability_zones_for_instance_type(self.params.get('instance_type_db'))]
             for zone in availability_zones:
                 all_zones_common_params.append(
                     get_common_params(params=self.params, regions=regions, credentials=self.credentials,

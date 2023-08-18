@@ -13,7 +13,7 @@
 
 import logging
 from ipaddress import ip_network
-from functools import cached_property
+from functools import cached_property, cache
 
 import boto3
 import botocore
@@ -79,6 +79,21 @@ class AwsRegion:
     def availability_zones(self):
         response = self.client.describe_availability_zones()
         return [zone["ZoneName"]for zone in response['AvailabilityZones'] if zone["State"] == "available"]
+
+    @cache
+    def get_availability_zones_for_instance_type(self, instance_type):
+        response = self.client.describe_instance_type_offerings(
+            LocationType='availability-zone',
+            Filters=[
+                {
+                    'Name': 'instance-type',
+                    'Values': [
+                        instance_type,
+                    ]
+                },
+            ]
+        )
+        return [offering['Location'] for offering in response['InstanceTypeOfferings']]
 
     @cached_property
     def vpc_ipv6_cidr(self):
