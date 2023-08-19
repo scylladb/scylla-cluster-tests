@@ -3,3 +3,6 @@ nemesis_selector: ['kubernetes']
 
 n_db_nodes: 5
 k8s_n_scylla_pods_per_cluster: 4
+
+k8s_scylla_disk_gi: 1730
+k8s_minio_storage_size: '1900Gi'
