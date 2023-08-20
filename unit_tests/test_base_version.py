@@ -49,10 +49,7 @@ class TestBaseVersion(unittest.TestCase):
         linux_distro = 'ubuntu-jammy'
         cloud_provider = 'azure'
         version_list = general_test(scylla_repo, linux_distro, cloud_provider)
-        # TODO: add 2023.1 to the list below:
-        # once 2023.1 will be released, it will appear in the list below, but as it is not only on an RC,
-        # it was filtered out during `self.filter_rc_only_version(ent_base_version)`
-        self.assertEqual(version_list, ['5.2'])
+        self.assertEqual(version_list, ['5.2', '2023.1'])
 
     def test_4_5_with_centos8(self):
         scylla_repo = self.url_base + '/branch-4.5/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
