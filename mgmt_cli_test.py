@@ -452,27 +452,37 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                       timeout=110000, restore_data=True)
         self.run_verification_read_stress()
 
-    def test_restore_multiple_backup_snapshots(self):
+    def test_restore_multiple_backup_snapshots(self):  # pylint: disable=too-many-locals
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        if self.params.get('cluster_backend') != 'aws':
+        cluster_backend = self.params.get('cluster_backend')
+        if cluster_backend != 'aws':
             self.log.error("Test supports only AWS ATM")
             return
         persistent_manager_snapshots_dict = get_persistent_snapshots()
-        target_bucket = persistent_manager_snapshots_dict["aws"]["bucket"]
-        location_list = [f"s3:{target_bucket}"]
+        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"]
+        backup_bucket_backend = self.params.get("backup_bucket_backend")
+        location_list = [f"{backup_bucket_backend}:{target_bucket}"]
+        confirmation_stress_template = persistent_manager_snapshots_dict[cluster_backend]["confirmation_stress_template"]
         read_stress_list = []
-        for _, snapshot_info in persistent_manager_snapshots_dict["aws"]["snapshots"].items():
-            self.log.info("Restoring the keyspace %s", snapshot_info["keyspace_name"])
-            # Schema restore is not correlated with the data size
-            self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_info["snapshot_tag"],
+        snapshot_sizes = persistent_manager_snapshots_dict[cluster_backend]["snapshots_sizes"]
+        for size in snapshot_sizes:
+            number_of_rows = persistent_manager_snapshots_dict[cluster_backend]["snapshots_sizes"][size]["number_of_rows"]
+            expected_timeout = persistent_manager_snapshots_dict[cluster_backend]["snapshots_sizes"][size]["expected_timeout"]
+            snapshot_dict = persistent_manager_snapshots_dict[cluster_backend]["snapshots_sizes"][size]["snapshots"]
+            snapshot_tag = random.choice(list(snapshot_dict.keys()))
+            keyspace_name = snapshot_dict[snapshot_tag]["keyspace_name"]
+
+            self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
                                           timeout=180, restore_schema=True, location_list=location_list)
-            self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_info["snapshot_tag"],
-                                          timeout=snapshot_info["expected_timeout"], restore_data=True,
-                                          location_list=location_list)
-            stress_command = snapshot_info["confirmation_stress_command"]
+            self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
+                                          timeout=expected_timeout, restore_data=True, location_list=location_list)
+            stress_command = confirmation_stress_template.format(num_of_rows=number_of_rows,
+                                                                 keyspace_name=keyspace_name,
+                                                                 sequence_start=1,
+                                                                 sequence_end=number_of_rows)
             read_stress_list.append(stress_command)
         for stress in read_stress_list:
             read_thread = self.run_stress_thread(stress_cmd=stress, round_robin=False)
