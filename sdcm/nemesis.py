@@ -178,6 +178,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     schema_changes: bool = False
     config_changes: bool = False
     free_tier_set: bool = False     # nemesis should be run in FreeTierNemesisSet
+    manager_operation: bool = False  # flag that signals that the nemesis uses scylla manager
 
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, **kwargs):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(self, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
@@ -399,6 +400,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             schema_changes: Optional[bool] = None,
             config_changes: Optional[bool] = None,
             free_tier_set: Optional[bool] = None,
+            manager_operation: Optional[bool] = None,
     ) -> List[str]:
         return self.get_list_of_methods_by_flags(
             disruptive=disruptive,
@@ -410,6 +412,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             schema_changes=schema_changes,
             config_changes=config_changes,
             free_tier_set=free_tier_set,
+            manager_operation=manager_operation,
         )
 
     def _is_it_on_kubernetes(self) -> bool:
@@ -419,7 +422,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return self.cluster.k8s_cluster.chaos_mesh.initialized
 
     # pylint: disable=too-many-arguments,unused-argument
-    def get_list_of_methods_by_flags(
+    def get_list_of_methods_by_flags(  # pylint: disable=too-many-locals
             self,
             disruptive: Optional[bool] = None,
             run_with_gemini: Optional[bool] = None,
@@ -430,7 +433,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             schema_changes: Optional[bool] = None,
             config_changes: Optional[bool] = None,
             free_tier_set: Optional[bool] = None,
-            sla: Optional[bool] = None
+            sla: Optional[bool] = None,
+            manager_operation: Optional[bool] = None,
     ) -> List[str]:
         subclasses_list = self._get_subclasses(
             disruptive=disruptive,
@@ -443,6 +447,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             config_changes=config_changes,
             free_tier_set=free_tier_set,
             sla=sla,
+            manager_operation=manager_operation,
         )
         disrupt_methods_list = []
         for subclass in subclasses_list:
@@ -5625,6 +5630,7 @@ class ToggleGcModeMonkey(Nemesis):
 
 
 class MgmtBackup(Nemesis):
+    manager_operation = True
     disruptive = False
     limited = True
 
@@ -5633,6 +5639,7 @@ class MgmtBackup(Nemesis):
 
 
 class MgmtBackupSpecificKeyspaces(Nemesis):
+    manager_operation = True
     disruptive = False
     limited = True
 
@@ -5641,6 +5648,7 @@ class MgmtBackupSpecificKeyspaces(Nemesis):
 
 
 class MgmtRestore(Nemesis):
+    manager_operation = True
     disruptive = True
     kubernetes = True
     limited = True
@@ -5650,6 +5658,7 @@ class MgmtRestore(Nemesis):
 
 
 class MgmtRepair(Nemesis):
+    manager_operation = True
     disruptive = False
     kubernetes = True
     limited = True
