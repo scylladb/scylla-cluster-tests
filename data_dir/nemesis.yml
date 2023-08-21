@@ -105,16 +105,20 @@
   - free_tier_set = True
 - disrupt_mgmt_backup:
   - disruptive = False
+  - manager_operation = True
   - limited = True
 - disrupt_mgmt_backup_specific_keyspaces:
   - disruptive = False
+  - manager_operation = True
   - limited = True
 - disrupt_mgmt_repair_cli:
   - disruptive = False
+  - manager_operation = True
   - kubernetes = True
   - limited = True
 - disrupt_mgmt_restore:
   - disruptive = True
+  - manager_operation = True
   - kubernetes = False
   - limited = True
 - disrupt_modify_table:
