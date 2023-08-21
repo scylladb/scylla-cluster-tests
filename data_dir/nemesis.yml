@@ -111,6 +111,11 @@
   - disruptive = False
   - manager_operation = True
   - limited = True
+- disrupt_mgmt_corrupt_then_repair:
+  - disruptive = True
+  - manager_operation = True
+  - kubernetes = True
+  - limited = True
 - disrupt_mgmt_repair_cli:
   - disruptive = False
   - manager_operation = True

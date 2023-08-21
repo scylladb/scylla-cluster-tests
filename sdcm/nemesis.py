@@ -2808,10 +2808,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             mgr_task.stop()
             assert False, f'Backup task {mgr_task.id} timed out - while on status {status}'
 
-    @latency_calculator_decorator(legend="Scylla-Manger repair")
     def disrupt_mgmt_repair_cli(self):
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
+        self._mgmt_repair_cli()
+
+    def disrupt_mgmt_corrupt_then_repair(self):
+        if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
+            raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
+        self._destroy_data_and_restart_scylla()
+        self._mgmt_repair_cli()
+
+    @latency_calculator_decorator(legend="Scylla-Manger repair")
+    def _mgmt_repair_cli(self):
         mgr_cluster = self.cluster.get_cluster_manager()
         mgr_task = mgr_cluster.create_repair_task()
         task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
@@ -5461,6 +5470,7 @@ class LimitedChaosMonkey(Nemesis):
         #  - SoftRebootNodeMonkey
         #  - TruncateMonkey
         #  - TopPartitions
+        #  - MgmtCorruptThenRepair
         #  - MgmtRepair
         #  - NoCorruptRepairMonkey
         #  - SnapshotOperations
@@ -5700,6 +5710,16 @@ class MgmtRepair(Nemesis):
         self.disrupt_mgmt_repair_cli()
         self.log.info('disrupt_mgmt_repair_cli Nemesis end')
         # For Manager APIs test, use: self.disrupt_mgmt_repair_api()
+
+
+class MgmtCorruptThenRepair(Nemesis):
+    manager_operation = True
+    disruptive = True
+    kubernetes = True
+    limited = True
+
+    def disrupt(self):
+        self.disrupt_mgmt_corrupt_then_repair()
 
 
 class AbortRepairMonkey(Nemesis):
@@ -6055,6 +6075,7 @@ class ScyllaOperatorBasicOperationsMonkey(Nemesis):
             'disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node',
             'disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node',
             'disrupt_replace_scylla_node_on_kubernetes',
+            'disrupt_mgmt_corrupt_then_repair',
             'disrupt_mgmt_repair_cli',
             'disrupt_mgmt_backup_specific_keyspaces',
             'disrupt_mgmt_backup',
