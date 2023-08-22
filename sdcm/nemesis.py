@@ -1379,8 +1379,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.info('Mark %s (uid=%s) to be replaced', node, old_uid)
         node.wait_for_svc()
-        node.mark_to_be_replaced()
-        self._kubernetes_wait_till_node_up_after_been_recreated(node, old_uid=old_uid)
+        with DbEventsFilter(
+                db_event=DatabaseLogEvent.DATABASE_ERROR,
+                line="init - Startup failed: seastar::sleep_aborted (Sleep is aborted)"):
+            # NOTE: we ignore the 'init - Startup failed' error because we 'replace' pod during the 'init' phase
+            node.mark_to_be_replaced()
+            self._kubernetes_wait_till_node_up_after_been_recreated(node, old_uid=old_uid)
 
         # NOTE: wait for all other neighbour pods become ready
         for neighbour_scylla_pod in neighbour_scylla_pods:
