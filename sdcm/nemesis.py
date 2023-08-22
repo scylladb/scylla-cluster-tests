@@ -3203,6 +3203,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         experiment = NetworkPacketLossExperiment(self.target_node, duration, probability=100)
         experiment.start()
         experiment.wait_until_finished()
+        time.sleep(15)
         self._wait_all_nodes_un()
 
     def disrupt_network_block(self):
