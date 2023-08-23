@@ -24,7 +24,7 @@ spec:
       serviceAccountName: haproxy-kubernetes-ingress
       containers:
       - name: haproxy-ingress
-        image: haproxytech/kubernetes-ingress:1.9.0
+        image: haproxytech/kubernetes-ingress:1.10.6
         args:
         - --configmap=haproxy-controller/haproxy-kubernetes-ingress
         - --default-backend-service=haproxy-controller/haproxy-kubernetes-ingress-default-backend
