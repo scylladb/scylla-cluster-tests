@@ -866,9 +866,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         placement = add_pool_node_affinity({}, self.POOL_LABEL_NAME, pool_name) if pool_name else {}
         placement["podAntiAffinity"] = {"requiredDuringSchedulingIgnoredDuringExecution": [{
             "topologyKey": "kubernetes.io/hostname",
-            "labelSelector": {"matchExpressions": [{
-                "key": "scylla/cluster", "operator": "In", "values": [cluster_name],
-            }]}
+            "labelSelector": {"matchExpressions": [
+                {"key": "scylla/cluster", "operator": "In", "values": [cluster_name]},
+                {"key": "app.kubernetes.io/name", "operator": "In", "values": ["scylla"]},
+            ]}
         }]}
         placement["tolerations"] = [{
             "key": "role",
