@@ -2255,6 +2255,42 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         return list(partitions_for_delete.keys()) + partitions_for_exclude
 
+    def disrupt_mv_sync_tombstones(self):
+        """
+        Delete few partitions in a base table which has a materialized view.
+        Wait a random while.
+        Query MV to verify tombstones data is updated.
+        To be tested on a c-s user-profile load.
+        """
+
+        ks_cf = 'customer_ks.customer_cf'
+        ks_cf_mv = 'customer_ks.customer_cf_by_account'
+        partitions_amount = random.randint(100, 5000)
+        partitions_for_delete = self.choose_partitions_for_delete(partitions_amount, ks_cf)
+
+        if not partitions_for_delete:
+            raise UnsupportedNemesis('Not found partitions for delete. Nemesis can not be run')
+
+        delete_queries = []
+        select_queries = []
+        for partition_key in partitions_for_delete.keys():
+            delete_queries.append(f"delete from {ks_cf} where pk = {partition_key}")
+            select_queries.append(f"select * from {ks_cf_mv} where pk = {partition_key} ALLOW FILTERING")
+
+        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+            for cmd in delete_queries:
+                session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM), timeout=3600)
+
+        random_sleep = random.randint(5,200)
+        self.log.debug('Sleeping for: %s before validating deletions in MV', random_sleep)
+        time.sleep(random_sleep)
+
+        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+            for cmd in select_queries:
+                res = session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM))
+                assert not res, f"[{ks_cf_mv}] Unexpected partition data that wasn't deleted for ({cmd}): {res}"
+
+
     def disrupt_delete_10_full_partitions(self):
         """
         Delete few partitions in the table with large partitions
@@ -5292,6 +5328,14 @@ class DeleteByPartitionsMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_delete_10_full_partitions()
+
+class MvSyncTombstonesMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_mv_sync_tombstones()
 
 
 class DeleteByRowsRangeMonkey(Nemesis):

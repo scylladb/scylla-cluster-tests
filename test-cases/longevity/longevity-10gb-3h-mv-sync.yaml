@@ -1,6 +1,8 @@
 test_duration: 255
 
 cs_duration: '55m'
+max_partitions_in_test_table: 1000000
+partition_range_with_data_validation: 0-1
 cs_user_profiles:
     - scylla-qa-internal/custom_a1/mv_sync_basic_mv.yaml
 
@@ -9,7 +11,8 @@ n_loaders: 1
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.large'
-nemesis_class_name: 'NoOpMonkey'
+nemesis_class_name: 'MvSyncTombstonesMonkey'
+nemesis_interval: 5
 
 user_prefix: 'longevity-10gb-3h-mv-sync'
-space_node_threshold: 64424
+space_node_threshold: 644
