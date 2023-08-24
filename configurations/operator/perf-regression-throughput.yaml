@@ -1,3 +1,8 @@
+k8s_scylla_disk_gi: 1760
+k8s_loader_run_type: 'dynamic'
+# NOTE: HDR feature is not compatible with the way how dynamic loaders work
+use_hdr_cs_histogram: false
+
 # NOTE: main configuration adds '--blocked-reactor-notify-ms' arg
 #       which gets set by the scylla-operator itself. So, redefine this config option
 #       by removing the duplication of the scylla arg which will make Scylla fail.
