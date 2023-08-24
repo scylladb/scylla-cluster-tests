@@ -54,6 +54,7 @@ from pathlib import Path
 
 import requests
 import boto3
+from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Image as EC2Image
@@ -3028,7 +3029,7 @@ def get_partition_keys(ks_cf: str, session, pk_name: str = 'pk', limit: int = No
     cmd = f'select distinct {pk_name} from {ks_cf}'
     if limit:
         cmd += f' limit {limit}'
-    cql_result = session.execute(cmd)
+    cql_result = session.execute(SimpleStatement(cmd, fetch_size=200))
     pks_list = [getattr(row, pk_name) for row in cql_result.current_rows]
     return pks_list
 
