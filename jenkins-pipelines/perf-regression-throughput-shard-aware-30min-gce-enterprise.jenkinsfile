@@ -7,7 +7,7 @@ perfRegressionParallelPipeline(
     backend: "gce",
     region: "us-east1",
     test_name: "performance_regression_test.PerformanceRegressionTest",
-    test_config: '''["test-cases/performance/perf-regression.100threads.30M-keys-i4i.yaml", "configurations/run_db_node_benchmarks.yaml", "configurations/disable_speculative_retry.yaml"]''',
+    test_config: '''["test-cases/performance/perf-regression.100threads.30M-keys-i4i-enterprise.yaml", "configurations/run_db_node_benchmarks.yaml", "configurations/disable_speculative_retry.yaml"]''',
     sub_tests: ["test_write", "test_read", "test_mixed"],
     test_email_title: "throughput - shard-aware",
 
