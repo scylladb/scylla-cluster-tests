@@ -2276,7 +2276,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             base_table_name = result.one().base_table_name
             base_ks_cf = '.'.join([keyspace, base_table_name])
             partition_key_name = \
-            get_column_names(session=session, ks=keyspace, cf=base_table_name, is_primary_key=True)[0]
+                get_column_names(session=session, ks=keyspace, cf=base_table_name, is_primary_key=True)[0]
             pk_list = get_partition_keys(ks_cf=base_ks_cf, session=session, pk_name=partition_key_name,
                                          limit=random.randint(100, 5000))
         num_of_partitions = len(pk_list)
@@ -2286,23 +2286,35 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not num_of_partitions:
             raise UnsupportedNemesis('Not found partitions for delete. Nemesis can not run')
 
-        delete_queries = select_queries = []
-        for partition_key in pk_list:
-            delete_queries.append(f"delete from {base_ks_cf} where pk = {partition_key}")
-            select_queries.append(f"select * from {mv_ks_cf} where pk = {partition_key} ALLOW FILTERING")
+        # delete_queries = select_queries = []
+        # delete_query = f"delete from {base_ks_cf} where {partition_key_name} = ?"
+        # select_query = f"select * from {mv_ks_cf} where {partition_key_name} = ? ALLOW FILTERING using timeout 5m"
+        # for partition_key in pk_list:
+        #     delete_queries.append(f"delete from {base_ks_cf} where {partition_key_name} = '{partition_key}'")
+        #     select_queries.append(f"select * from {mv_ks_cf} where {partition_key_name} = '{partition_key}' ALLOW FILTERING")
 
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
-            for cmd in delete_queries:
-                session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM), timeout=300)
+            delete_query = session.prepare(f"delete from {base_ks_cf} where {partition_key_name} = ?")
+            for partition_key in pk_list:
+                session.execute(delete_query, [partition_key])
+                # session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM), timeout=300)
 
-        random_sleep = random.randint(5,200)
+        random_sleep = random.randint(5, 200)
         self.log.debug('Sleeping for: %s before validating deletions in MV', random_sleep)
         time.sleep(random_sleep)
 
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
-            for cmd in select_queries:
-                res = session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM))
-                assert not res, f"[{mv_ks_cf}] Unexpected partition data that wasn't deleted for ({cmd}): {res.all()}"
+            mv_query = session.prepare(
+                f"select * from {mv_ks_cf} where {partition_key_name} = ? ALLOW FILTERING using timeout 5m")
+            base_table_query = session.prepare(
+                f"select * from {base_ks_cf} where {partition_key_name} = ? ALLOW FILTERING using timeout 5m")
+            for partition_key in pk_list:
+                mv_res = session.execute(mv_query, [partition_key], timeout=300)
+                base_table_res = session.execute(base_table_query, [partition_key], timeout=300)
+                if mv_res:  # Either deletion is not updated in MV or it was rewritten by background load to base table.
+                    assert base_table_res, (
+                        f"[{mv_ks_cf}] Unexpected partition data that wasn't deleted for ({query},"
+                        f" {partition_key}): {mv_res.all()}")
 
     def disrupt_mv_sync_tombstones(self):
         """
@@ -2330,7 +2342,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for cmd in delete_queries:
                 session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM), timeout=3600)
 
-        random_sleep = random.randint(5,200)
+        random_sleep = random.randint(5, 200)
         self.log.debug('Sleeping for: %s before validating deletions in MV', random_sleep)
         time.sleep(random_sleep)
 
@@ -2338,7 +2350,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for cmd in select_queries:
                 res = session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM))
                 assert not res, f"[{ks_cf_mv}] Unexpected partition data that wasn't deleted for ({cmd}): {res}"
-
 
     def disrupt_delete_10_full_partitions(self):
         """
@@ -5377,6 +5388,7 @@ class DeleteByPartitionsMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_delete_10_full_partitions()
+
 
 class MvSyncTombstonesMonkey(Nemesis):
     disruptive = False
