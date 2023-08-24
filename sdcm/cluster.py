@@ -3552,15 +3552,16 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     def get_non_system_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
                                   filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
-                                  filter_by_keyspace: list = None) -> List[str]:
+                                  filter_by_keyspace: list = None, filter_out_non_mv=False) -> List[str]:
         return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
                                        filter_out_mv=filter_out_mv, filter_empty_tables=filter_empty_tables,
-                                       filter_out_system=True, filter_out_cdc_log_tables=True, filter_by_keyspace=filter_by_keyspace)
+                                       filter_out_system=True, filter_out_cdc_log_tables=True,
+                                       filter_by_keyspace=filter_by_keyspace, filter_out_non_mv=filter_out_non_mv)
 
     def get_any_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
                            filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
                            filter_out_system=False, filter_out_cdc_log_tables=False,
-                           filter_by_keyspace: list = None) -> List[str]:
+                           filter_by_keyspace: list = None, filter_out_non_mv=False) -> List[str]:
         regular_column_names = ["keyspace_name", "table_name"]
         materialized_view_column_names = ["keyspace_name", "view_name"]
         regular_table_names, materialized_view_table_names = set(), set()
@@ -3620,6 +3621,11 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             return result
 
         with self.cql_connection_patient(db_node) as session:
+            if filter_out_non_mv:
+                if filter_out_mv:
+                    self.log.warning('Invalid filtering out both mv and non-mv (all) tables!')
+                    return []
+                return list(execute_cmd(cql_session=session, entity_type="view"))
             regular_table_names = execute_cmd(cql_session=session, entity_type="column")
             if regular_table_names and filter_out_mv:
                 materialized_view_table_names = execute_cmd(cql_session=session, entity_type="view")

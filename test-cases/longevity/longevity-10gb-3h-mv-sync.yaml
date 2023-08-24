@@ -11,7 +11,7 @@ n_loaders: 1
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.large'
-nemesis_class_name: 'MvSyncTombstonesMonkey'
+nemesis_class_name: 'DeletePartitionsQueryMvMonkey'
 nemesis_interval: 5
 
 user_prefix: 'longevity-10gb-3h-mv-sync'
