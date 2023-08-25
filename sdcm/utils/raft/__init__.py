@@ -4,12 +4,11 @@ import random
 
 from enum import Enum
 from typing import Protocol, NamedTuple, Mapping, Iterable
-from collections import namedtuple
 
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events import Severity
-from sdcm.utils.version_utils import ComparableScyllaVersion
+# from sdcm.utils.version_utils import ComparableScyllaVersion
 
 
 LOGGER = logging.getLogger(__name__)
@@ -77,6 +76,10 @@ class RaftFeatureOperations(Protocol):
     def is_enabled(self) -> bool:
         ...
 
+    @property
+    def consistent_topology_changes_enabled(self) -> bool:
+        ...
+
     def get_status(self) -> str:
         ...
 
@@ -116,6 +119,9 @@ class RaftFeature(RaftFeatureOperations):
         TopologyOperations.BOOTSTRAP: ABORT_BOOTSTRAP_LOG_PATTERNS,
     }
 
+    RAFT_SCHEMA_MANAGEMENT_FEATURE = "SUPPORTS_RAFT_CLUSTER_MANAGEMENT"
+    RAFT_TOPOLOGY_CHANGES_FEATURE = "SUPPORTS_CONSISTENT_TOPOLOGY_CHANGES"
+
     def __init__(self, node: "BaseNode") -> None:
         super().__init__()
         self._node = node
@@ -123,6 +129,13 @@ class RaftFeature(RaftFeatureOperations):
     @property
     def is_enabled(self) -> bool:
         return True
+
+    @property
+    def consistent_topology_changes_enabled(self) -> bool:
+        """Check whether CONSISTENT_TOPOLOGY_CHANGES feature is enabled"""
+        with self._node.parent_cluster.cql_connection_patient(node=self._node) as session:
+            enabled_features = self._node.parent_cluster.get_enabled_features(session)
+            return self.RAFT_TOPOLOGY_CHANGES_FEATURE in enabled_features
 
     def get_status(self) -> str:
         """ get raft status """
@@ -287,6 +300,10 @@ class NoRaft(RaftFeatureOperations):
     def is_enabled(self) -> bool:
         return False
 
+    @property
+    def consistent_topology_changes_enabled(self):
+        return False
+
     def get_status(self) -> str:
         return ""
 
@@ -319,16 +336,9 @@ class NoRaft(RaftFeatureOperations):
 
 
 def get_raft_mode(node) -> RaftFeature | NoRaft:
-    scylla_version = ComparableScyllaVersion(node.scylla_version)
-    if scylla_version >= RAFT_DEFAULT_SCYLLA_VERSION:
-        return RaftFeature(node)
-    with node.remote_scylla_yaml() as scylla_yaml:
-        if node.is_kubernetes():
-            consistent_cluster_management = scylla_yaml.get('consistent_cluster_management')
-        else:
-            consistent_cluster_management = scylla_yaml.consistent_cluster_management
-        node.log.debug("consistent_cluster_management : %s", consistent_cluster_management)
-        return RaftFeature(node) if consistent_cluster_management else NoRaft(node)
+    with node.parent_cluster.cql_connection_patient(node) as session:
+        enabled_features = node.parent_cluster.get_enabled_features(session)
+        return RaftFeature(node) if RaftFeature.RAFT_SCHEMA_MANAGEMENT_FEATURE in enabled_features else NoRaft(node)
 
 
 __all__ = ["get_raft_mode",

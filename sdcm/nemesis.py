@@ -38,8 +38,9 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from types import MethodType  # pylint: disable=no-name-in-module
 
-from cassandra import ConsistencyLevel, InvalidRequest
+from cassandra import ConsistencyLevel, InvalidRequest, Unavailable
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.cluster import NoHostAvailable, OperationTimedOut  # pylint: disable=no-name-in-module
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.backend.util.enums import NemesisStatus
@@ -118,6 +119,7 @@ from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE
 from sdcm.utils.nemesis_utils.indexes import get_random_column_name, create_index, \
     wait_for_index_to_be_built, verify_query_by_index_works, drop_index, get_column_names, \
     wait_for_view_to_be_built, drop_materialized_view, is_cf_a_view
+from sdcm.utils.nemesis_utils import node_operations
 from sdcm.utils.node import build_node_api_command
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
@@ -145,6 +147,7 @@ from sdcm.exceptions import (
     AuditLogTestFailure,
     BootstrapStreamErrorFailure,
     QuotaConfigurationFailure,
+    BannedQueryExecUnexpectedSuccess,
 )
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
     get_gc_mode, GcMode
@@ -5008,6 +5011,123 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.restart_scylla_server()
             raise
 
+    def disrupt_refuse_connection_with_block_scylla_ports_on_banned_node(self):
+        self._refuse_connection_from_banned_node(use_iptables=True)
+
+    def disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node(self):
+        self._refuse_connection_from_banned_node(use_iptables=False)
+
+    def _refuse_connection_from_banned_node(self, use_iptables=False):
+        """Banned node could not connect with rest nodes in cluster
+
+        If node was removed from cluster for any reason, even if removed node
+        become alive and try to communicate with rest node in cluster, all connections
+        from it should be refused by other nodes in cluster
+        1. on target node block any scylladb process
+        1.1 Pause process
+        1.2 Block with iptables port 9100/10000
+        2. Wait and remove target node from cluster
+        3. start scylla on target node
+        4. Create exclusive connection to target node
+        5. Execute cql command on target node and validate that no operation
+        from target node passed to cluster
+        """
+        if not self.target_node.raft.consistent_topology_changes_enabled:
+            raise UnsupportedNemesis("Raft feature: consistent-topology-changes is not enabled")
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Skip test for K8S because no supported yet")
+        keyspace_name = "banned_keyspace"
+        table_name = "table1"
+
+        def prepare_test_keyspace(node):
+            """ Create new table for verification missing data
+
+            Create new keyspace and table which allow to
+            verify that no operations come from banned node
+            """
+            with self.cluster.cql_connection_patient(node) as session:
+                session.execute(
+                    f"CREATE KEYSPACE IF NOT EXISTS {keyspace_name} \
+                        WITH replication = {{'class': 'NetworkTopologyStrategy', \
+                            'replication_factor' : {self.tester.params.get('n_db_nodes')} }};")
+                session.execute(
+                    f"CREATE TABLE IF NOT EXISTS {keyspace_name}.{table_name} (id BIGINT PRIMARY KEY, name text);")
+
+        simulate_node_unavailability = node_operations.block_scylla_ports if use_iptables else node_operations.stop_scylla_with_sigstop
+        with self.run_nemesis(node_list=self.cluster.nodes,
+                              nemesis_label=f"Running {simulate_node_unavailability.__name__}") as working_node:
+            target_host_id = self.target_node.host_id
+
+            prepare_test_keyspace(self.target_node)
+            try:
+                with simulate_node_unavailability(self.target_node):
+                    # target node stopped by Contextmanger. Wait while its status will be updated
+                    wait_for(node_operations.is_node_seen_as_down, timeout=600, throw_exc=True,
+                             down_node=self.target_node, verification_node=working_node)
+                    self.log.debug("Remove node %s : hostid: %s with stopped scylla from cluster",
+                                   self.target_node.name, target_host_id)
+                    working_node.run_nodetool(f"removenode {target_host_id}", retry=3)
+                    self.log.debug("Wait while all node update topology status")
+                    wait_for(node_operations.is_node_removed_from_cluster, timeout=300, throw_exc=True,
+                             removed_node=self.target_node, verification_node=working_node)
+                    # Run read barrier on working node to validate that it update raft topology state
+                    self.cluster.call_read_barrier(working_node)
+
+                # Context manager at exit  start scylla on target node.
+                # But node already removed from cluster. So any operations from it
+                # should be banned. If query executed succesfull, raise an error
+                assert self.target_node.is_port_used(
+                    port=9042, service_name="scylla-service"), f"Port 9042 is closed on node {self.target_node.name}"
+
+                with self.cluster.cql_connection_exclusive(node=self.target_node) as session:
+                    try:
+                        stmt = SimpleStatement(f"INSERT INTO {keyspace_name}.{table_name} (id, name) VALUES (1, 'name1');",
+                                               consistency_level=ConsistencyLevel.ALL)
+                        session.execute(stmt)
+                        self.log.error("Banned query passed to cluster from banned node")
+                        raise BannedQueryExecUnexpectedSuccess(
+                            "Query from banned node was executed succesful with Consistency.ALL")
+                    except (NoHostAvailable, OperationTimedOut, Unavailable) as exc:
+                        self.log.debug("Query failed with error: %s as expected", exc)
+
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.error("Isolate node with %s failed with error %s", simulate_node_unavailability.__name__, exc)
+                raise
+            finally:
+                # because target node removed from cluster, terminate it
+                # and bootstrap new one
+                LOGGER.debug("Terminating node %s", self.target_node.name)
+                self.cluster.terminate_node(self.target_node)
+                # check node was removed previously, if not remove it from cluster
+                removed_node_status = self.cluster.get_node_status_dictionary(
+                    ip_address=self.target_node.ip_address, verification_node=working_node)
+                if removed_node_status is not None:
+                    working_node.run_nodetool(f"removenode {target_host_id}", retry=3)
+                LOGGER.debug("Restore number of cluster nodes")
+                new_node = self._add_and_init_new_cluster_node()
+                LOGGER.debug("New node %s was added", new_node.name)
+
+                with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                                    line="failed to repair"):
+                    for node in self.cluster.nodes:
+                        try:
+                            self.repair_nodetool_repair(node=node, publish_event=False)
+                        except Exception as details:  # pylint: disable=broad-except
+                            self.log.error(f"failed to execute repair command "
+                                           f"on node {node} due to the following error: {str(details)}")
+
+                try:
+                    with self.cluster.cql_connection_patient(new_node) as session:
+                        LOGGER.debug("Check keyspace %s.%s is empty", keyspace_name, table_name)
+                        result = list(session.execute(f"SELECT * from {keyspace_name}.{table_name}"))
+                        LOGGER.debug("Query result %s", result)
+                        assert not result, f"New rows were added from banned node, {result}"
+                finally:
+                    with self.cluster.cql_connection_patient(working_node) as session:
+                        LOGGER.debug("Drop keyspace %s", keyspace_name)
+                        session.execute(f"DROP KEYSPACE IF EXISTS {keyspace_name}", timeout=300)
+                self.unset_current_running_nemesis(new_node)
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
     """
@@ -6564,3 +6684,21 @@ class EndOfQuotaNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_end_of_quota_nemesis()
+
+
+class IsolateNodeWithProcessSignalNemesis(Nemesis):
+    disruptive = True
+    topology_changes = True
+    kubernetes = False
+
+    def disrupt(self):
+        self.disrupt_refuse_connection_with_send_sigstop_signal_to_scylla_on_banned_node()
+
+
+class IsolateNodeWithIptableRuleNemesis(Nemesis):
+    disruptive = True
+    topology_changes = True
+    kubernetes = False
+
+    def disrupt(self):
+        self.disrupt_refuse_connection_with_block_scylla_ports_on_banned_node()

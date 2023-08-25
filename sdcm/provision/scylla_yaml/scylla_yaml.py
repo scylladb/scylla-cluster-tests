@@ -341,6 +341,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     audit_keyspaces: str = None  # None
 
     compaction_collection_items_count_warning_threshold: int = None  # None
+    force_gossip_topology_changes: bool = None  # False
 
     def dict(  # pylint: disable=arguments-differ
         self,
