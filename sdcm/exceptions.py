@@ -79,3 +79,7 @@ class ExitByEventError(Exception):
 
 class SstablesNotFound(Exception):
     pass
+
+
+class BannedQueryExecutedSuccessful(Exception):
+    """Expception when query executed succesfully on banned node"""

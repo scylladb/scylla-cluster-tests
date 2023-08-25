@@ -238,6 +238,10 @@
   - topology_changes = True
 - disrupt_rebuild_streaming_err:
   - disruptive = True
+- disrupt_refusing_connection_from_banned_node:
+  - disruptive = True
+  - topology_changes = True
+  - kubernetes = False
 - disrupt_remove_node_then_add_node:
   - disruptive = True
   - kubernetes = False
