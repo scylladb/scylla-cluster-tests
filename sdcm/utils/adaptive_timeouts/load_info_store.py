@@ -121,17 +121,20 @@ class NodeLoadInfoService:
     def shards_count(self) -> int:
         return len([key for key in self._get_scylla_metrics() if key.startswith('scylla_lsa_free_space')])
 
+    @cached_property
+    def scheduler_regex(self) -> re.compile:
+        return re.compile(r".*group=\"(?P<group>.*)\",shard=\"(?P<shard>\d+)")
+
     def scylla_scheduler_shares(self) -> dict:
         """
         output example: {"sl:sl200": [200, 200], "sl:default": [1000, 1000]}
         """
-        scheduler_regex = re.compile(r".*group=\"(?P<group>.*)\",shard=\"(?P<shard>\d+)")
         scheduler_group_shares = defaultdict(list)
-        all_metrix = self._get_metrics(port=9180)
-        for key, value in all_metrix.items():
+        all_metrics = self._get_metrics(port=9180)
+        for key, value in all_metrics.items():
             if key.startswith('scylla_scheduler_shares'):
                 try:
-                    match = scheduler_regex.match(key)
+                    match = self.scheduler_regex.match(key)
                     try:
                         scheduler_group_shares[match.groups()[0]].append(int(value.split(".")[0]))
                     except ValueError as details:
