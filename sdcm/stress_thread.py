@@ -23,7 +23,7 @@ from pathlib import Path
 from functools import cached_property
 
 from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
-from sdcm.cluster import BaseLoaderSet  # , BaseNode
+from sdcm.cluster import BaseLoaderSet
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
@@ -39,12 +39,13 @@ LOGGER = logging.getLogger(__name__)
 
 
 class CassandraStressEventsPublisher(FileFollowerThread):
-    def __init__(self, node: Any, cs_log_filename: str, event_id: str = None):
+    def __init__(self, node: Any, cs_log_filename: str, event_id: str = None, stop_test_on_failure: bool = True):
         super().__init__()
 
         self.node = str(node)
         self.cs_log_filename = cs_log_filename
         self.event_id = event_id
+        self.stop_test_on_failure = stop_test_on_failure
 
     def run(self) -> None:
         while not self.stopped():
@@ -62,6 +63,9 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                         event.event_id = self.event_id
 
                     if pattern.search(line):
+                        if event.severity == Severity.CRITICAL and not self.stop_test_on_failure:
+                            event = event.clone()  # so we don't change the severity to other stress threads
+                            event.severity = Severity.ERROR
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
                         break  # Stop iterating patterns to avoid creating two events for one line of the log
 
@@ -303,7 +307,8 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                                         stress_operation=stress_cmd_opt,
                                         stress_log_filename=log_file_name,
                                         loader_idx=loader_idx, cpu_idx=cpu_idx), \
-                CassandraStressEventsPublisher(node=loader, cs_log_filename=log_file_name) as publisher, \
+                CassandraStressEventsPublisher(node=loader, cs_log_filename=log_file_name,
+                                               stop_test_on_failure=self.stop_test_on_failure) as publisher, \
                 CassandraStressEvent(node=loader, stress_cmd=self.stress_cmd,
                                      log_file_name=log_file_name) as cs_stress_event, \
                 CassandraStressHDRExporter(instance_name=cmd_runner_name,
