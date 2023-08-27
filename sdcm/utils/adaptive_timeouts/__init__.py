@@ -39,6 +39,15 @@ def _get_query_timeout(node_info_service: NodeLoadInfoService, timeout: int | fl
     return timeout, stats
 
 
+def _get_service_level_propagation_timeout(node_info_service: NodeLoadInfoService, timeout: int | float = None,
+                                           service_level_for_test_step: str = None) -> \
+        tuple[int | float, dict[str, Any]]:
+    """service_level_for_test_step will report in ES on which step of test the timeout happened"""
+    timeout, stats = _get_soft_timeout(node_info_service=node_info_service, timeout=timeout)
+    stats["service_level_for_test_step"] = service_level_for_test_step
+    return timeout, stats
+
+
 class Operations(Enum):
     """Available operations for adaptive timeouts. Each operation maps to a function to calculate timeout based on node load info.
 
@@ -56,6 +65,8 @@ class Operations(Enum):
     SOFT_TIMEOUT = ("soft_timeout", _get_soft_timeout, ("timeout",))
     FLUSH = ("flush", _get_soft_timeout, ("timeout",))
     QUERY = ("query", _get_query_timeout, ("timeout", "query"))
+    SERVICE_LEVEL_PROPAGATION = ("service_level_propagation", _get_service_level_propagation_timeout,
+                                 ("timeout", "service_level_for_test_step"))
 
 
 @contextmanager
