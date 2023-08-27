@@ -11,7 +11,8 @@ n_loaders: 1
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.large'
-nemesis_class_name: 'DeletePartitionsQueryMvMonkey'
+nemesis_class_name: 'SisyphusMonkey:1 DeletePartitionsQueryMvMonkey:1'
+nemesis_selector: ["stop_start_or_repair"]
 nemesis_seed: '032'
 nemesis_interval: 5
 

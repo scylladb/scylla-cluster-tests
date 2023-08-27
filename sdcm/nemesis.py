@@ -178,6 +178,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     schema_changes: bool = False
     config_changes: bool = False
     free_tier_set: bool = False     # nemesis should be run in FreeTierNemesisSet
+    stop_start_or_repair: bool = False  # For MV sync testing scenario: either stop-start scylla, or run a repair.
 
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, **kwargs):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(self, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
@@ -5177,6 +5178,7 @@ class StopWaitStartMonkey(Nemesis):
     disruptive = True
     kubernetes = True
     limited = True
+    stop_start_or_repair = True
 
     def disrupt(self):
         self.disrupt_stop_wait_start_scylla_server(600)
@@ -5285,6 +5287,7 @@ class NoCorruptRepairMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     limited = True
+    stop_start_or_repair = True
 
     def disrupt(self):
         self.disrupt_no_corrupt_repair()
