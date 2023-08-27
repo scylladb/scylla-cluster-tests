@@ -95,7 +95,7 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                update_certificates, reach_enospc_on_node, clean_enospc_on_node,
                                parse_nodetool_listsnapshots,
                                update_authenticator, ParallelObject,
-                               ParallelObjectResult, sleep_for_percent_of_duration)
+                               ParallelObjectResult, sleep_for_percent_of_duration, get_partition_keys)
 from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
 from sdcm.utils.context_managers import nodetool_context
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
@@ -178,6 +178,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     schema_changes: bool = False
     config_changes: bool = False
     free_tier_set: bool = False     # nemesis should be run in FreeTierNemesisSet
+    stop_start_or_repair: bool = False  # For MV sync testing scenario: either stop-start scylla, or run a repair.
 
     def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, **kwargs):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(self, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
@@ -2258,6 +2259,102 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.run_deletions(queries=queries, ks_cf=ks_cf)
 
         return list(partitions_for_delete.keys()) + partitions_for_exclude
+
+    def disrupt_delete_partitions_and_query_mv(self):
+        """
+        Delete few partitions in a base table which has a materialized view.
+        Wait a random while.
+        Query MV to verify tombstones data is updated.
+        """
+
+        mv_ks_cfs: List[str] = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_out_non_mv=True)
+        if not mv_ks_cfs:
+            raise UnsupportedNemesis(
+                'Non-system keyspace and materialized-view are not found. disrupt_delete_partitions_and_query_mv nemesis can\'t run')
+        mv_ks_cf: str = random.choice(mv_ks_cfs)
+        self.log.debug('Selected Materialized-view: %s', mv_ks_cf)
+        keyspace, view = mv_ks_cf.split('.')
+        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+            query = (f"SELECT base_table_name FROM system_schema.views WHERE keyspace_name = '{keyspace}' AND "
+                     f"view_name = '{view}'  ALLOW FILTERING")
+            result = session.execute(query)
+            base_table_name = result.one().base_table_name
+            base_ks_cf = '.'.join([keyspace, base_table_name])
+            partition_key_name = \
+                get_column_names(session=session, ks=keyspace, cf=base_table_name, is_primary_key=True)[0]
+            pk_list = get_partition_keys(ks_cf=base_ks_cf, session=session, pk_name=partition_key_name,
+                                         limit=random.randint(100, 5000))
+        num_of_partitions = len(pk_list)
+        self.log.debug("Found %s partitions to delete from %s's base table - %s", num_of_partitions, mv_ks_cf,
+                       base_ks_cf)
+
+        if not num_of_partitions:
+            raise UnsupportedNemesis('Not found partitions for delete. Nemesis can not run')
+
+        # delete_queries = select_queries = []
+        # delete_query = f"delete from {base_ks_cf} where {partition_key_name} = ?"
+        # select_query = f"select * from {mv_ks_cf} where {partition_key_name} = ? ALLOW FILTERING using timeout 5m"
+        # for partition_key in pk_list:
+        #     delete_queries.append(f"delete from {base_ks_cf} where {partition_key_name} = '{partition_key}'")
+        #     select_queries.append(f"select * from {mv_ks_cf} where {partition_key_name} = '{partition_key}' ALLOW FILTERING")
+
+        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+            delete_query = session.prepare(f"delete from {base_ks_cf} where {partition_key_name} = ?")
+            for partition_key in pk_list:
+                session.execute(delete_query, [partition_key])
+                # session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM), timeout=300)
+
+        random_sleep = random.randint(5, 200)
+        self.log.debug('Sleeping for: %s before validating deletions in MV', random_sleep)
+        time.sleep(random_sleep)
+
+        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+            mv_query = session.prepare(
+                f"select * from {mv_ks_cf} where {partition_key_name} = ? ALLOW FILTERING using timeout 5m")
+            base_table_query = session.prepare(
+                f"select * from {base_ks_cf} where {partition_key_name} = ? ALLOW FILTERING using timeout 5m")
+            for partition_key in pk_list:
+                mv_res = session.execute(mv_query, [partition_key], timeout=300)
+                base_table_res = session.execute(base_table_query, [partition_key], timeout=300)
+                if mv_res:  # Either deletion is not updated in MV or it was rewritten by background load to base table.
+                    assert base_table_res, (
+                        f"[{mv_ks_cf}] Unexpected partition data that wasn't deleted for ({query},"
+                        f" {partition_key}): {mv_res.all()}")
+
+    def disrupt_mv_sync_tombstones(self):
+        """
+        Delete few partitions in a base table which has a materialized view.
+        Wait a random while.
+        Query MV to verify tombstones data is updated.
+        To be tested on a c-s user-profile load.
+        """
+
+        ks_cf = 'customer_ks.customer_cf'
+        ks_cf_mv = 'customer_ks.customer_cf_by_account'
+        partitions_amount = random.randint(100, 5000)
+        partitions_for_delete = self.choose_partitions_for_delete(partitions_amount, ks_cf)
+
+        if not partitions_for_delete:
+            raise UnsupportedNemesis('Not found partitions for delete. Nemesis can not be run')
+
+        delete_queries = []
+        select_queries = []
+        for partition_key in partitions_for_delete.keys():
+            delete_queries.append(f"delete from {ks_cf} where pk = {partition_key}")
+            select_queries.append(f"select * from {ks_cf_mv} where pk = {partition_key} ALLOW FILTERING")
+
+        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+            for cmd in delete_queries:
+                session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM), timeout=3600)
+
+        random_sleep = random.randint(5, 200)
+        self.log.debug('Sleeping for: %s before validating deletions in MV', random_sleep)
+        time.sleep(random_sleep)
+
+        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+            for cmd in select_queries:
+                res = session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM))
+                assert not res, f"[{ks_cf_mv}] Unexpected partition data that wasn't deleted for ({cmd}): {res}"
 
     def disrupt_delete_10_full_partitions(self):
         """
@@ -5090,6 +5187,7 @@ class StopWaitStartMonkey(Nemesis):
     disruptive = True
     kubernetes = True
     limited = True
+    stop_start_or_repair = True
 
     def disrupt(self):
         self.disrupt_stop_wait_start_scylla_server(600)
@@ -5221,6 +5319,7 @@ class NoCorruptRepairMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     limited = True
+    stop_start_or_repair = True
 
     def disrupt(self):
         self.disrupt_no_corrupt_repair()
@@ -5324,6 +5423,24 @@ class DeleteByPartitionsMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_delete_10_full_partitions()
+
+
+class MvSyncTombstonesMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_mv_sync_tombstones()
+
+
+class DeletePartitionsQueryMvMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_delete_partitions_and_query_mv()
 
 
 class DeleteByRowsRangeMonkey(Nemesis):
