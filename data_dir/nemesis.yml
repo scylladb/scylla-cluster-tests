@@ -20,6 +20,9 @@
   - disruptive = True
   - schema_changes = True
   - free_tier_set = True
+- disrupt_bootstrap_streaming_error:
+  - disruptive = True
+  - topology_changes = True
 - disrupt_corrupt_then_scrub:
   - disruptive = False
 - disrupt_create_index:
@@ -45,6 +48,9 @@
   - disruptive = True
   - kubernetes = True
 - disrupt_destroy_data_then_repair:
+  - disruptive = True
+  - kubernetes = True
+- disrupt_disable_binary_gossip_execute_major_compaction:
   - disruptive = True
   - kubernetes = True
 - disrupt_disable_enable_ldap_authorization:
@@ -115,7 +121,7 @@
   - limited = True
 - disrupt_mgmt_restore:
   - disruptive = True
-  - kubernetes = False
+  - kubernetes = True
   - limited = True
 - disrupt_modify_table:
   - disruptive = False
@@ -314,6 +320,3 @@
   - disruptive = False
   - kubernetes = True
   - free_tier_set = True
-- disrupt_disable_binary_gossip_execute_major_compaction:
-  - disruptive = True
-  - kubernetes = True

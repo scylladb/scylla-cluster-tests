@@ -4,6 +4,7 @@
 - AddRemoveMvNemesis
 - AddRemoveRackNemesis
 - BlockNetworkMonkey
+- BootstrapStreamingErrorNemesis
 - CDCStressorMonkey
 - ClusterRollingRestart
 - ClusterRollingRestartRandomOrder
