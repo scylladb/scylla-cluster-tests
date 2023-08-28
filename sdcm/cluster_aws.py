@@ -513,6 +513,18 @@ class AWSNode(cluster.BaseNode):
         else:
             return self._instance.private_ip_address
 
+    @cached_property
+    def public_dns_name(self) -> str:
+        result = self.remoter.run(
+            'curl http://169.254.169.254/latest/meta-data/public-hostname', verbose=False)
+        return result.stdout.strip()
+
+    @cached_property
+    def private_dns_name(self) -> str:
+        result = self.remoter.run(
+            'curl http://169.254.169.254/latest/meta-data/local-hostname', verbose=False)
+        return result.stdout.strip()
+
     def _get_public_ip_address(self) -> Optional[str]:
         return self._instance.public_ip_address
 

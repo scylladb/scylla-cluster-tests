@@ -56,6 +56,8 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def listen_address(self) -> Optional[str]:
+        if self.params.get('use_dns_names'):
+            return self.node.private_dns_name
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
         if self.params.get('extra_network_interface'):
@@ -65,6 +67,8 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def rpc_address(self) -> Optional[str]:
+        if self.params.get('use_dns_names'):
+            return self.node.private_dns_name
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
         if self.params.get('extra_network_interface'):
@@ -74,6 +78,8 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def broadcast_rpc_address(self) -> Optional[str]:
+        if self.params.get('use_dns_names'):
+            return self.node.private_dns_name
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
         if self.params.get('extra_network_interface'):
