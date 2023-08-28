@@ -33,6 +33,7 @@
 - MemoryStressMonkey
 - MgmtBackup
 - MgmtBackupSpecificKeyspaces
+- MgmtCorruptThenRepair
 - MgmtRepair
 - MgmtRestore
 - ModifyTableMonkey
