@@ -500,7 +500,7 @@ class IntegrationTests(unittest.TestCase):
         'State': 'available', 'BlockDeviceMappings': [
             {'DeviceName': '/dev/sda1',
              'Ebs': {'DeleteOnTermination': True,
-                     'SnapshotId': 'snap-0a2df75621efaf18c',
+                     'SnapshotId': 'snap-0717a2bee0a38bc84',
                      'VolumeSize': 30,
                      'VolumeType': 'gp2',
                      'Encrypted': False}},
@@ -520,19 +520,19 @@ class IntegrationTests(unittest.TestCase):
              'VirtualName': 'ephemeral6'},
             {'DeviceName': '/dev/sdi',
              'VirtualName': 'ephemeral7'}],
-        'Description': 'ScyllaDB 4.6.9', 'EnaSupport': True, 'Hypervisor': 'xen',
-        'Name': 'ScyllaDB 4.6.9', 'RootDeviceName': '/dev/sda1', 'RootDeviceType': 'ebs',
+        'Description': 'ScyllaDB Enterprise 2021.1.15', 'EnaSupport': True, 'Hypervisor': 'xen',
+        'Name': 'ScyllaDB Enterprise 2021.1.15', 'RootDeviceName': '/dev/sda1', 'RootDeviceType': 'ebs',
         'Tags': [
-            {'Key': 'ScyllaMachineImageVersion', 'Value': '4.6.9-20221009.a36534e106b-1'},
-            {'Key': 'ScyllaPython3Version', 'Value': '4.6.9-0.20221009.18e7a4603-1'},
+            {'Key': 'ScyllaMachineImageVersion', 'Value': '2021.1.15-20221011.82741b636ba-1'},
+            {'Key': 'ScyllaPython3Version', 'Value': '2021.1.15-20221011.82741b636ba-1'},
             {'Key': 'user_data_format_version', 'Value': '2'},
-            {'Key': 'ScyllaToolsVersion', 'Value': '4.6.9-0.20221009.18e7a4603-1'},
-            {'Key': 'ScyllaJMXVersion', 'Value': '4.6.9-0.20221009.18e7a4603-1'},
-            {'Key': 'branch', 'Value': 'branch-4.6'},
-            {'Key': 'scylla-git-commit', 'Value': '18e7a46038379e566619197eb11c1f650bfec2be'},
-            {'Key': 'build-tag', 'Value': 'jenkins-scylla-4.6-ami-63'},
-            {'Key': 'ScyllaVersion', 'Value': '4.6.9-0.20221009.18e7a4603-1'},
-            {'Key': 'build-id', 'Value': '94'}
+            {'Key': 'ScyllaToolsVersion', 'Value': '2021.1.15-20221011.82741b636ba-1'},
+            {'Key': 'ScyllaJMXVersion', 'Value': '2021.1.15-20221011.82741b636ba-1'},
+            {'Key': 'branch', 'Value': 'branch-2021.1'},
+            {'Key': 'scylla-git-commit', 'Value': '3d8c23d0b20af12302608c6286ace0c3dc070828'},
+            {'Key': 'build-tag', 'Value': 'jenkins-enterprise-2021.1-promote-release-213'},
+            {'Key': 'ScyllaVersion', 'Value': '2021.1.15-20221011.82741b636ba-1'},
+            {'Key': 'build-id', 'Value': '213'}
         ], 'VirtualizationType': 'hvm'})
 
     @property
