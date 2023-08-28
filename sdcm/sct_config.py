@@ -1481,6 +1481,9 @@ class SCTConfiguration(dict):
              help="""Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.
              Provide number of racks to simulate."""),
 
+        dict(name="use_dns_names", env="SCT_USE_DNS_NAMES", type=boolean,
+             help="""Use dns names instead of ip addresses for nodes in cluster"""),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

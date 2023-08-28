@@ -251,6 +251,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         self.remoter: Optional[RemoteCmdRunnerBase] = None
 
+        self._use_dns_names: bool = parent_cluster.params.get('use_dns_names') or False
         self._spot_monitoring_thread = None
         self._journal_thread = None
         self._docker_log_process = None
@@ -803,6 +804,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self._public_ip_address_cached = self._get_public_ip_address()
         return self._public_ip_address_cached
 
+    @property
+    def public_dns_name(self) -> str:
+        return self.name
+
+    @property
+    def private_dns_name(self) -> str:
+        return self.name
+
     def _get_public_ip_address(self) -> Optional[str]:
         public_ips, _ = self._refresh_instance_state()
         if public_ips:
@@ -894,6 +903,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         Use it for localhost connections (e.g., cqlsh)
         """
+        if self._use_dns_names:
+            return self.private_dns_name
         return self.ip_address
 
     @property
@@ -3951,7 +3962,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     @property
     def seed_nodes_ips(self):
-        seed_nodes_ips = [node.ip_address for node in self.nodes if node.is_seed]
+        if self.params.get('use_dns_names'):
+            seed_nodes_ips = [node.private_dns_name for node in self.nodes if node.is_seed]
+        else:
+            seed_nodes_ips = [node.ip_address for node in self.nodes if node.is_seed]
         assert seed_nodes_ips, "We should have at least one selected seed by now"
         return seed_nodes_ips
 
