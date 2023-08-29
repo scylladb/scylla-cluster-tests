@@ -378,7 +378,6 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
     external_access: bool = False,
     external_ipv4: str = None,
     accelerators: List[compute_v1.AcceleratorConfig] = None,
-    preemptible: bool = False,
     spot: bool = False,
     instance_termination_action: str = "STOP",
     custom_hostname: str = None,
@@ -415,8 +414,6 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
             This setting requires `external_access` to be set to True to work.
         accelerators: a list of AcceleratorConfig objects describing the accelerators that will
             be attached to the new instance.
-        preemptible: boolean value indicating if the new instance should be preemptible
-            or not. Preemptible VMs have been deprecated and you should now use Spot VMs.
         spot: boolean value indicating if the new instance should be a Spot VM or not.
         instance_termination_action: What action should be taken once a Spot VM is terminated.
             Possible values: "STOP", "DELETE"
@@ -462,11 +459,6 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
 
     if accelerators:
         instance.guest_accelerators = accelerators
-
-    if preemptible:
-        # Set the preemptible setting
-        instance.scheduling = compute_v1.Scheduling()
-        instance.scheduling.preemptible = True
 
     if spot:
         # Set the Spot VM setting

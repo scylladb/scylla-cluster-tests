@@ -381,7 +381,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 "block-project-ssh-keys": "true",
                 "ssh-keys": f"{username}:{key_type} {public_key}",
             },
-            preemptible=spot,
+            spot=spot,
             service_accounts=self._service_accounts,
         )
         instance = self._create_node_with_retries(name=name,
@@ -389,7 +389,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                   create_node_params=create_node_params,
                                                   spot=spot)
 
-        self.log.info('Created %s instance %s', 'spot' if spot else 'on-demand', instance)
+        self.log.debug('Created %s instance %s', 'spot' if spot else 'on-demand', instance)
         try:
             set_tags_as_labels(instance)
         except google.api_core.exceptions.InvalidArgument as exc:
@@ -421,7 +421,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                     LOGGER.warning("Attempted to destroy node: {name: %s, idx:%s}, but could not find it. "
                                    "Possibly the node was destroyed already.", name, dc_idx)
 
-            create_node_params['preemptible'] = spot = False
+            create_node_params['spot'] = spot = False
 
             raise gbe
 
