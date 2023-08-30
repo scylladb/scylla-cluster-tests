@@ -1652,7 +1652,7 @@ class SCTConfiguration(dict):
         # 5) overwrite AMIs
         for key in self.ami_id_params:
             if param := self.get(key):
-                self[key] = convert_name_to_ami_if_needed(param, self.region_names)
+                self[key] = convert_name_to_ami_if_needed(param, tuple(self.region_names))
 
         # 6) handle scylla_version if exists
         scylla_linux_distro = self.get('scylla_linux_distro')

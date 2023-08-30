@@ -1925,6 +1925,7 @@ def get_ec2_image_name_tag(ami: EC2Image) -> str:
     return ""
 
 
+@lru_cache
 def convert_name_to_ami_if_needed(ami_id_param: str, region_names: list[str],) -> str:
     """
     convert image name in ami_id param to ami_ids
