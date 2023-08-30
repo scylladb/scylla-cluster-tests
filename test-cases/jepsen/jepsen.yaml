@@ -13,6 +13,7 @@ n_loaders: 1
 n_monitor_nodes: 1
 nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'debian-buster'
+use_preinstalled_scylla: false
 user_prefix: 'jepsen'
 scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/debian/scylla-4.6-buster.list'
 jepsen_scylla_repo: 'https://github.com/scylladb/jepsen.git'
