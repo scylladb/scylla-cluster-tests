@@ -27,7 +27,7 @@ class DBCluster:  # pylint: disable=too-few-public-methods
         self.nodes = nodes
 
     def get_node_cql_ips(self):
-        return [node.cql_ip_address for node in self.nodes]
+        return [node.cql_address for node in self.nodes]
 
 
 def test_01_gemini_thread(request, docker_scylla, params):

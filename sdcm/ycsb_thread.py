@@ -121,9 +121,9 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             target_address = 'alternator'
         else:
             if hasattr(self.node_list[0], 'parent_cluster'):
-                target_address = self.node_list[0].parent_cluster.get_node().cql_ip_address
+                target_address = self.node_list[0].parent_cluster.get_node().cql_address
             else:
-                target_address = self.node_list[0].cql_ip_address
+                target_address = self.node_list[0].cql_address
 
         if 'dynamodb' in self.stress_cmd:
             dynamodb_teample = dedent('''
@@ -168,7 +168,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 docker.send_files(tmp_file.name, os.path.join('/tmp', 'aws_empty_file'))
 
     def build_stress_cmd(self):
-        hosts = ",".join([i.cql_ip_address for i in self.node_list])
+        hosts = ",".join([i.cql_address for i in self.node_list])
 
         stress_cmd = f'{self.stress_cmd} -s '
         if 'dynamodb' in self.stress_cmd:

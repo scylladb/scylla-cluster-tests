@@ -311,7 +311,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     @property
     def all_node_ips_for_stress_command(self):
-        return f' -node {",".join([n.cql_ip_address for n in self.db_cluster.nodes])}'
+        return f' -node {",".join([n.cql_address for n in self.db_cluster.nodes])}'
 
     @staticmethod
     def _get_columns_num_of_single_stress(single_stress_cmd):

@@ -41,8 +41,16 @@ class RemoteDocker(BaseNode):
         return self.internal_ip_address
 
     @property
-    def cql_ip_address(self):
+    def cql_address(self):
         return self.internal_ip_address
+
+    @property
+    def private_dns_name(self):
+        raise NotImplementedError()
+
+    @property
+    def public_dns_name(self) -> str:
+        raise NotImplementedError()
 
     @cached_property
     def running_in_docker(self):

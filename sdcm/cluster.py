@@ -251,7 +251,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         self.remoter: Optional[RemoteCmdRunnerBase] = None
 
-        self._use_dns_names: bool = parent_cluster.params.get('use_dns_names') or False
+        self._use_dns_names: bool = parent_cluster.params.get('use_dns_names') if parent_cluster else False
         self._spot_monitoring_thread = None
         self._journal_thread = None
         self._docker_log_process = None
@@ -434,8 +434,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def refresh_ip_address(self):
         # Invalidate ip address cache
         self._private_ip_address_cached = self._public_ip_address_cached = self._ipv6_ip_address_cached = None
-        self.__dict__.pop('cql_ip_address', None)
-
+        self.__dict__.pop('cql_address', None)
+        self.__dict__.pop('public_dns_name', None)
+        self.__dict__.pop('private_dns_name', None)
         if self.ssh_login_info["hostname"] == self.external_address:
             return
 
@@ -861,7 +862,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         raise NotImplementedError()
 
     @cached_property
-    def cql_ip_address(self):
+    def cql_address(self):
         if self.test_config.IP_SSH_CONNECTIONS == 'public':
             return self.external_address
         with self.remote_scylla_yaml() as scylla_yaml:
@@ -3386,7 +3387,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         return [node.public_ip_address for node in self.nodes]
 
     def get_node_cql_ips(self):
-        return [node.cql_ip_address for node in self.nodes]
+        return [node.cql_address for node in self.nodes]
 
     def get_node_database_errors(self):
         errors = {}
@@ -3533,7 +3534,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             wlrr = HostFilterPolicy(child_policy=RoundRobinPolicy(), predicate=host_filter)
             node_ips = []
         else:
-            node_ips = [node.cql_ip_address]
+            node_ips = [node.cql_address]
             wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
                                     compression=compression, protocol_version=protocol_version,
@@ -3932,19 +3933,19 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         seeds_selector = self.params.get('seeds_selector')
         seeds_num = self.params.get('seeds_num')
 
-        seed_nodes_ips = None
+        seed_nodes_addresses = None
         if first_only:
             node = self.nodes[0]
             node.wait_ssh_up()
-            seed_nodes_ips = [node.ip_address]
+            seed_nodes_addresses = [node.scylla_listen_address]
         elif seeds_selector == "all":
-            seed_nodes_ips = [node.ip_address for node in self.nodes]
+            seed_nodes_addresses = [node.scylla_listen_address for node in self.nodes]
         elif self.test_config.REUSE_CLUSTER or self.params.get('db_type') == 'cloud_scylla':
             node = self.nodes[0]
             node.wait_ssh_up()
-            seed_nodes_ips = wait.wait_for(self.read_seed_info_from_scylla_yaml,
-                                           step=10, text='Waiting for seed read from scylla yaml',
-                                           timeout=wait_for_timeout, throw_exc=True)
+            seed_nodes_addresses = wait.wait_for(self.read_seed_info_from_scylla_yaml,
+                                                 step=10, text='Waiting for seed read from scylla yaml',
+                                                 timeout=wait_for_timeout, throw_exc=True)
         else:
             if seeds_selector == 'random':
                 selected_nodes = random.sample(self.nodes, seeds_num)
@@ -3952,22 +3953,22 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             else:
                 selected_nodes = self.nodes[:seeds_num]
 
-            seed_nodes_ips = [node.ip_address for node in selected_nodes]
+            seed_nodes_addresses = [node.scylla_listen_address for node in selected_nodes]
 
         for node in self.nodes:
-            if node.ip_address in seed_nodes_ips:
+            if node.scylla_listen_address in seed_nodes_addresses:
                 node.set_seed_flag(True)
 
-        assert seed_nodes_ips, "We should have at least one selected seed by now"
+        assert seed_nodes_addresses, "We should have at least one selected seed by now"
 
     @property
-    def seed_nodes_ips(self):
+    def seed_nodes_addresses(self):
         if self.params.get('use_dns_names'):
-            seed_nodes_ips = [node.private_dns_name for node in self.nodes if node.is_seed]
+            seed_nodes_addresses = [node.private_dns_name for node in self.nodes if node.is_seed]
         else:
-            seed_nodes_ips = [node.ip_address for node in self.nodes if node.is_seed]
-        assert seed_nodes_ips, "We should have at least one selected seed by now"
-        return seed_nodes_ips
+            seed_nodes_addresses = [node.ip_address for node in self.nodes if node.is_seed]
+        assert seed_nodes_addresses, "We should have at least one selected seed by now"
+        return seed_nodes_addresses
 
     @property
     def seed_nodes(self):
@@ -3983,10 +3984,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         for node in self.nodes:
             yaml_seeds_ips = node.extract_seeds_from_scylla_yaml()
             for ip in yaml_seeds_ips:
-                assert ip in self.seed_nodes_ips, \
+                assert ip in self.seed_nodes_addresses, \
                     'Wrong seed IP {act_ip} in the scylla.yaml on the {node_name} node. ' \
                     'Expected {exp_ips}'.format(node_name=node.name,
-                                                exp_ips=self.seed_nodes_ips,
+                                                exp_ips=self.seed_nodes_addresses,
                                                 act_ip=ip)
 
     @contextlib.contextmanager
@@ -4676,10 +4677,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if not node:
             node = self.nodes[0]
 
-        seed_nodes_ips = node.extract_seeds_from_scylla_yaml()
+        seed_nodes_addresses = node.extract_seeds_from_scylla_yaml()
         # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
         # In this case we want to ignore it and wait, when reflector will select real node and update scylla.yaml
-        return [n.ip_address for n in self.nodes if n.ip_address in seed_nodes_ips]
+        return [n.ip_address for n in self.nodes if n.ip_address in seed_nodes_addresses]
 
     def get_node(self):
         if not self._node_cycle:
@@ -4812,7 +4813,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if manager_tool is None:
             manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.scylla_manager_node, scylla_cluster=self)
         if host_ip is None:
-            host_ip = self.nodes[0].ip_address
+            host_ip = self.nodes[0].scylla_listen_address
         credentials = self.get_db_auth()  # pylint: disable=no-member
         return manager_tool.add_cluster(name=cluster_name, host=host_ip, auth_token=self.scylla_manager_auth_token,
                                         credentials=credentials)
@@ -5772,7 +5773,23 @@ class LocalNode(BaseNode):
     def check_spot_termination(self):
         pass
 
+    @property
+    def private_dns_name(self):
+        raise NotImplementedError()
+
+    @property
+    def public_dns_name(self) -> str:
+        raise NotImplementedError()
+
 
 class LocalK8SHostNode(LocalNode):
     def configure_remote_logging(self):
         self.log.debug("No need to configure remote logging on k8s")
+
+    @property
+    def private_dns_name(self):
+        raise NotImplementedError()
+
+    @property
+    def public_dns_name(self) -> str:
+        raise NotImplementedError()

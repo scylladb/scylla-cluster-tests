@@ -1818,7 +1818,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         return None
 
     @property
-    def cql_ip_address(self):
+    def cql_address(self):
         return self.ip_address
 
     @property
@@ -2576,7 +2576,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         pass
 
     @property
-    def seed_nodes_ips(self):
+    def seed_nodes_addresses(self):
         return []
 
     @property

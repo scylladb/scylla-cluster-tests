@@ -819,8 +819,8 @@ def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path)
     db_cluster.nodes[0].refresh_ip_address()
 
     execution_profile = ExecutionProfile(load_balancing_policy=WhiteListRoundRobinPolicy([
-                                         db_cluster.nodes[0].cql_ip_address]))
-    cluster = Cluster(contact_points=[db_cluster.nodes[0].cql_ip_address], port=db_cluster.nodes[0].CQL_SSL_PORT,
+                                         db_cluster.nodes[0].cql_address]))
+    cluster = Cluster(contact_points=[db_cluster.nodes[0].cql_address], port=db_cluster.nodes[0].CQL_SSL_PORT,
                       execution_profiles={EXEC_PROFILE_DEFAULT: execution_profile})
     ssl_context = ssl.SSLContext(protocol=ssl.PROTOCOL_SSLv23)
     ssl_context.verify_mode = ssl.VerifyMode.CERT_REQUIRED  # pylint: disable=no-member

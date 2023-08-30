@@ -73,8 +73,8 @@ class TestSeedSelector(unittest.TestCase):
         self.cluster.set_seeds()
         self.assertTrue(self.cluster.seed_nodes == [self.cluster.nodes[0], self.cluster.nodes[1]])
         self.assertTrue(self.cluster.non_seed_nodes == [self.cluster.nodes[2]])
-        self.assertTrue(self.cluster.seed_nodes_ips == [self.cluster.nodes[0].ip_address,
-                                                        self.cluster.nodes[1].ip_address])
+        self.assertTrue(self.cluster.seed_nodes_addresses == [self.cluster.nodes[0].ip_address,
+                                                              self.cluster.nodes[1].ip_address])
 
     def test_reuse_cluster_seed(self):
         self.setup_cluster(nodes_number=3)
@@ -84,7 +84,7 @@ class TestSeedSelector(unittest.TestCase):
         self.cluster.set_seeds()
         self.assertTrue(self.cluster.seed_nodes == [self.cluster.nodes[1]])
         self.assertTrue(self.cluster.non_seed_nodes == [self.cluster.nodes[0], self.cluster.nodes[2]])
-        self.assertTrue(self.cluster.seed_nodes_ips == [self.cluster.nodes[1].ip_address])
+        self.assertTrue(self.cluster.seed_nodes_addresses == [self.cluster.nodes[1].ip_address])
 
     def test_random_2_seeds(self):
         self.setup_cluster(nodes_number=3)
@@ -92,7 +92,7 @@ class TestSeedSelector(unittest.TestCase):
         self.cluster.set_seeds()
         self.assertTrue(len(self.cluster.seed_nodes) == 2)
         self.assertTrue(len(self.cluster.non_seed_nodes) == 1)
-        self.assertTrue(len(self.cluster.seed_nodes_ips) == 2)
+        self.assertTrue(len(self.cluster.seed_nodes_addresses) == 2)
 
     def test_first_1_seed(self):
         self.setup_cluster(nodes_number=1)
@@ -100,4 +100,4 @@ class TestSeedSelector(unittest.TestCase):
         self.cluster.set_seeds()
         self.assertTrue(self.cluster.seed_nodes == [self.cluster.nodes[0]])
         self.assertTrue(self.cluster.non_seed_nodes == [])
-        self.assertTrue(self.cluster.seed_nodes_ips == [self.cluster.nodes[0].ip_address])
+        self.assertTrue(self.cluster.seed_nodes_addresses == [self.cluster.nodes[0].ip_address])

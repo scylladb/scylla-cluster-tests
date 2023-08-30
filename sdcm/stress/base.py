@@ -119,8 +119,8 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
             assert db_nodes, "No node to query, nemesis runs on all DB nodes!"
             node_to_query = random.choice(db_nodes)
             LOGGER.debug("Selected '%s' to query for local nodes", node_to_query)
-            return node_to_query.cql_ip_address
-        return self.node_list[0].cql_ip_address
+            return node_to_query.cql_address
+        return self.node_list[0].cql_address
 
     @property
     def connection_bundle_file(self) -> Path:
