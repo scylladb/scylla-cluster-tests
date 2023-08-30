@@ -150,7 +150,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             stress_cmd = f'{stress_cmd.strip()} -cloud-config-path={self.target_connection_bundle_file}'
         else:
             # Select first seed node to send the scylla-bench cmds
-            ips = ",".join([n.cql_ip_address for n in self.node_list])
+            ips = ",".join([n.cql_address for n in self.node_list])
             stress_cmd = f'{stress_cmd.strip()} -nodes {ips}'
 
         return stress_cmd

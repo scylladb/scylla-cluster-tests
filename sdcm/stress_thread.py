@@ -150,7 +150,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                     LOGGER.error("Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
                                  loader.region, datacenter_name_per_region)
 
-            node_ip_list = [n.cql_ip_address for n in self.node_list]
+            node_ip_list = [n.cql_address for n in self.node_list]
             stress_cmd += ",".join(node_ip_list)
         if 'skip-unsupported-columns' in self._get_available_suboptions(cmd_runner, '-errors'):
             stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns'])

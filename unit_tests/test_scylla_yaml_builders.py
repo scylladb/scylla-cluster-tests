@@ -39,7 +39,7 @@ def is_builtin(inst):
 
 # pylint: disable=too-few-public-methods
 class FakeCluster:
-    seed_nodes_ips = ['1.1.1.1']
+    seed_nodes_addresses = ['1.1.1.1']
 
 
 # pylint: disable=too-few-public-methods
@@ -407,7 +407,7 @@ class DummyCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=too-few-p
         self.name = 'dummy_cluster'
 
     @property
-    def seed_nodes_ips(self):
+    def seed_nodes_addresses(self):
         return [node.ip_address for node in self.nodes]
 
     def init_nodes(self):
@@ -585,7 +585,7 @@ class IntegrationTests(unittest.TestCase):
                     cluster.nodes.append(node)
                 cluster.nodes[0].is_seed = True
                 cluster.init_nodes()
-                seed_node_ips = ','.join(cluster.seed_nodes_ips)
+                seed_node_ips = ','.join(cluster.seed_nodes_addresses)
                 for node in cluster.nodes:
                     node.validate_scylla_yaml(expected_node_config=expected_node_config, seed_node_ips=seed_node_ips)
         finally:

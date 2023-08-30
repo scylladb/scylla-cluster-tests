@@ -66,7 +66,7 @@ class CassandraHarryThread(DockerBasedStressThread):
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         # Select first seed node to send the scylla-harry cmds
-        ip = self.node_list[0].cql_ip_address
+        ip = self.node_list[0].cql_address
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)

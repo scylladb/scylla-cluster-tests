@@ -1836,6 +1836,11 @@ class SCTConfiguration(dict):
                     f"Simulating racks requires endpoint_snitch to be GossipingPropertyFileSnitch while it set to {self['endpoint_snitch']}"
             self["endpoint_snitch"] = "org.apache.cassandra.locator.GossipingPropertyFileSnitch"
 
+        # 16 Validate use_dns_names
+        if self.get("use_dns_names"):
+            if cluster_backend not in ("aws",):
+                raise ValueError(f"use_dns_names is not supported for {cluster_backend} backend")
+
     def log_config(self):
         self.log.info(self.dump_config())
 

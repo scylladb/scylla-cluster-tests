@@ -29,7 +29,7 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def _seed_address(self) -> str:
-        return ','.join(self.node.parent_cluster.seed_nodes_ips)
+        return ','.join(self.node.parent_cluster.seed_nodes_addresses)
 
     @property
     def _private_ip_address(self) -> str:
