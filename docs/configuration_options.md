@@ -78,7 +78,6 @@
 | **<a href="#user-content-email_subject_postfix" name="email_subject_postfix">email_subject_postfix</a>**  | Email subject postfix | N/A | SCT_EMAIL_SUBJECT_POSTFIX
 | **<a href="#user-content-enable_test_profiling" name="enable_test_profiling">enable_test_profiling</a>**  | Turn on sct profiling | N/A | SCT_ENABLE_TEST_PROFILING
 | **<a href="#user-content-ssh_transport" name="ssh_transport">ssh_transport</a>**  | Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2' | libssh2 | SSH_TRANSPORT
-| **<a href="#user-content-experimental" name="experimental">experimental</a>**  | when enabled scylla will use it's experimental features | True | SCT_EXPERIMENTAL
 | **<a href="#user-content-server_encrypt" name="server_encrypt">server_encrypt</a>**  | when enable scylla will use encryption on the server side | N/A | SCT_SERVER_ENCRYPT
 | **<a href="#user-content-client_encrypt" name="client_encrypt">client_encrypt</a>**  | when enable scylla will use encryption on the client side | N/A | SCT_CLIENT_ENCRYPT
 | **<a href="#user-content-hinted_handoff" name="hinted_handoff">hinted_handoff</a>**  | when enable or disable scylla hinted handoff (enabled/disabled) | enabled | SCT_HINTED_HANDOFF

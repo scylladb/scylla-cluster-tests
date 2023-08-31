@@ -467,9 +467,6 @@ class SCTConfiguration(dict):
              help="""Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'"""),
 
         # Scylla command line arguments options
-        dict(name="experimental", env="SCT_EXPERIMENTAL", type=boolean,
-             help="when enabled scylla will use it's experimental features"),
-
         dict(name="server_encrypt", env="SCT_SERVER_ENCRYPT", type=boolean,
              help="when enable scylla will use encryption on the server side"),
 

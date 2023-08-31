@@ -58,10 +58,11 @@ alternator_secret_access_key: 'password'
 # Scan interval: 10 minutes
 # TTL (YCSB parameter): 8 minutes.
 # gc_grace_seconds: 20 minutes
-experimental: true
+experimental_features:
+  - alternator-streams
+  - alternator-ttl
+  - keyspace-storage-options
 append_scylla_yaml: |
-  experimental_features:
-    - alternator-ttl
   alternator_ttl_period_in_seconds: 600
 
 post_prepare_cql_cmds: "ALTER TABLE alternator_usertable_no_lwt.usertable_no_lwt with gc_grace_seconds = 1200;"

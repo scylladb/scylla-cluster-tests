@@ -13,7 +13,7 @@
       ]
     }
   ],
-  "experimental": true,
+  "experimental_features": ["alternator-streams", "alternator-ttl", "keyspace-storage-options"],
   "prometheus_address": "0.0.0.0",
   "alternator_enforce_authorization": false,
   "auto_bootstrap": true,

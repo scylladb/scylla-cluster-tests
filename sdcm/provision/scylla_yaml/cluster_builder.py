@@ -12,7 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 from functools import cached_property
-from typing import Optional, Any
+from typing import Optional, Any, List
 
 from pydantic import Field
 
@@ -38,10 +38,11 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
         return None
 
     @property
-    def experimental(self) -> Optional[bool]:
-        if self.params.get('experimental') is None:
-            return None
-        return bool(self.params.get('experimental'))
+    def experimental_features(self) -> List[str]:
+        features = self.params.get('experimental_features')
+        if features is None:
+            return []
+        return features
 
     @property
     def enable_ipv6_dns_lookup(self) -> bool:

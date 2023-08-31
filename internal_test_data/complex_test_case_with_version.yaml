@@ -19,7 +19,10 @@ nemesis_interval: 5
 user_prefix: 'longevity-50gb-4d-not-jenkins'
 space_node_threshold: 644245094
 ip_ssh_connections: 'private'
-experimental: true
+experimental_features:
+  - alternator-streams
+  - alternator-ttl
+  - keyspace-storage-options
 instance_provision: 'on_demand'
 
 

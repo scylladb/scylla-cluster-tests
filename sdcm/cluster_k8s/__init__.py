@@ -1689,8 +1689,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         #       So, define some options here by default. It may be extended later if needed.
         with self.remote_scylla_yaml(namespace=namespace) as scylla_yml:
             # Process cluster params
-            if self.params.get("experimental"):
-                scylla_yml["experimental"] = self.params.get("experimental")
+            if self.params.get("experimental_features"):
+                scylla_yml["experimental_features"] = self.params.get("experimental_features")
             if self.params.get("hinted_handoff"):
                 scylla_yml["hinted_handoff_enabled"] = self.params.get(
                     "hinted_handoff").lower() in ("enabled", "true")
