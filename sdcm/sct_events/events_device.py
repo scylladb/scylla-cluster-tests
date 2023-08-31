@@ -137,7 +137,7 @@ class EventsDevice(multiprocessing.Process):
     def inbound_events(self, stop_event: StopEvent) -> Generator[Any, None, None]:
         with zmq.Context() as ctx, self._sub_socket(ctx) as sub:
             while not stop_event.is_set():
-                while sub.poll(timeout=self.sub_polling_timeout):
+                if sub.poll(timeout=self.sub_polling_timeout):
                     yield sub.recv_pyobj(flags=zmq.NOBLOCK)
 
     # pylint: disable=import-outside-toplevel

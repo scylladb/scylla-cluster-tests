@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
+import threading
 import time
 import unittest
 import unittest.mock
@@ -34,6 +34,7 @@ class TestEventsAnalyzer(unittest.TestCase, EventsUtilsMixin):
 
     # pylint: disable=protected-access
     def test_events_analyzer(self):
+        initial_events_no = self.events_main_device.events_counter  # coming from other tests
         start_events_analyzer(_registry=self.events_processes_registry)
         events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
 
@@ -53,8 +54,32 @@ class TestEventsAnalyzer(unittest.TestCase, EventsUtilsMixin):
                     self.events_main_device.publish_event(event1)
                     self.events_main_device.publish_event(event2)
 
-            self.assertEqual(self.events_main_device.events_counter, events_analyzer.events_counter)
+            self.assertEqual(self.events_main_device.events_counter, initial_events_no + events_analyzer.events_counter)
 
             mock.assert_called_once()
         finally:
             events_analyzer.stop(timeout=1)
+
+    def test_can_stop_events_analyzer_during_stream_of_events(self):
+        start_events_analyzer(_registry=self.events_processes_registry)
+        events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
+
+        time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
+        stop_event = threading.Event()
+
+        def publish_event_every_100_ms():
+            while not stop_event.is_set():
+                event3 = InfoEvent(message="m1")
+                self.events_main_device.publish_event(event3)
+                time.sleep(0.1)
+
+        thread = threading.Thread(target=publish_event_every_100_ms)
+        thread.start()
+        try:
+            with self.wait_for_n_events(events_analyzer, count=2, timeout=1):
+                # make sure that events_analyzer is alive and processing events
+                pass
+            events_analyzer.stop(timeout=5)
+        finally:
+            stop_event.set()
+            thread.join(timeout=1)
