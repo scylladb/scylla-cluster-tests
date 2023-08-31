@@ -2744,7 +2744,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # verify node is removed by nodetool status
             removed_node_status = self.cluster.get_node_status_dictionary(
                 ip_address=node_to_remove.ip_address, verification_node=verification_node)
-            assert removed_node_status is None,\
+            assert removed_node_status is None, \
                 "Node was not removed properly (Node status:{})".format(removed_node_status)
 
             # add new node
@@ -3296,8 +3296,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.install_epel()
             self.target_node.remoter.sudo('yum install -y stress-ng')
         elif self.target_node.distro.is_ubuntu:
-            # Install stress on Ubuntu: https://snapcraft.io/install/stress-ng/ubuntu
-            self.target_node.remoter.sudo('snap install stress-ng')
+            self.target_node.remoter.sudo('apt-get -y install stress-ng')
         else:
             raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
         self.log.info('Try to allocate 120% available memory, the allocated memory will be swaped out')
