@@ -101,10 +101,11 @@ alternator_secret_access_key: 'password'
 # Scan: 4 minutes
 # TTL: 16 different ones. The longer is 10 days, the second longer is 2.5 hours
 # GC Grace: 8 minutes
-experimental: true
+experimental_features:
+  - alternator-streams
+  - alternator-ttl
+  - keyspace-storage-options
 append_scylla_yaml: |
-  experimental_features:
-    - alternator-ttl
   alternator_ttl_period_in_seconds: 240
 
 post_prepare_cql_cmds: "ALTER TABLE alternator_usertable_no_lwt.usertable_no_lwt with gc_grace_seconds = 480;"

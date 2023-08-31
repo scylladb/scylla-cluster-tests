@@ -19,7 +19,10 @@ nemesis_interval: 5
 user_prefix: 'longevity-50gb-4d-not-jenkins'
 space_node_threshold: 644245094
 ip_ssh_connections: 'private'
-experimental: true
+experimental_features:
+  - alternator-streams
+  - alternator-ttl
+  - keyspace-storage-options
 append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc'
 instance_provision: 'on_demand'
 

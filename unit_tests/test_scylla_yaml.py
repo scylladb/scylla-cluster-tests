@@ -243,7 +243,6 @@ class ScyllaYamlTest(unittest.TestCase):
                 'enable_sstables_md_format': None,
                 'enable_user_defined_functions': None,
                 'endpoint_snitch': None,
-                'experimental': None,
                 'experimental_features': None,
                 'fd_initial_value_ms': None,
                 'fd_max_interval_ms': None,

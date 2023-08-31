@@ -21,5 +21,5 @@ space_node_threshold: 64424
 
 server_encrypt: true
 
-experimental: false
+experimental_features: []
 append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --experimental-features cdc'

@@ -46,7 +46,10 @@ nemesis_interval: 5
 
 user_prefix: 'alternator-streams-4h'
 space_node_threshold: 64424
-experimental: true
+experimental_features:
+  - alternator-streams
+  - alternator-ttl
+  - keyspace-storage-options
 
 alternator_port: 8080
 dynamodb_primarykey_type: HASH

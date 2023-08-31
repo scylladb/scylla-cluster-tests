@@ -77,8 +77,16 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):
             os.chdir(curr_dir)
 
     ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
+    # experimental features previous enabled by '--experimental' umbrella flag, which
+    # was deprecated and removed, so let's specify them explictly. 'udf' should be
+    # enabled separately along with 'enable_user_defined_functions'
+    experimental_features = ['alternator-streams',
+                             'alternator-ttl',
+                             'keyspace-storage-options']
+    experimental_flags = ' '.join(f'--experimental-features {feature}'
+                                  for feature in experimental_features)
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
-                          command_line=f"--smp 1 --experimental 1 {alternator_flags}",
+                          command_line=f"--smp 1 {experimental_flags} {alternator_flags}",
                           extra_docker_opts=(f'-p 8000 -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
                                              f' -v {ssl_dir}:/etc/scylla/ssl_conf'
                                              ' --entrypoint /entry.sh'))
