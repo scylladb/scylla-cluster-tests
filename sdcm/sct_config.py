@@ -463,6 +463,9 @@ class SCTConfiguration(dict):
              help="""If true would kill the fullscan thread in the test teardown"""),
 
         # Scylla command line arguments options
+        dict(name="experimental_features", env="SCT_EXPERIMENTAL_FEATURES", type=list,
+             help="unlock specified experimental features"),
+
         dict(name="server_encrypt", env="SCT_SERVER_ENCRYPT", type=boolean,
              help="when enable scylla will use encryption on the server side"),
 

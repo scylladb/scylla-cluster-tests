@@ -80,6 +80,7 @@
 | **<a href="#user-content-ssh_transport" name="ssh_transport">ssh_transport</a>**  | Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2' | libssh2 | SSH_TRANSPORT
 | **<a href="#user-content-bench_run" name="bench_run">bench_run</a>**  | If true would kill the scylla-bench thread in the test teardown | N/A | SCT_BENCH_RUN
 | **<a href="#user-content-fullscan" name="fullscan">fullscan</a>**  | If true would kill the fullscan thread in the test teardown | N/A | SCT_FULLSCAN
+| **<a href="#user-content-experimental-features" name="experimental_features">experimental_features</a>**  | unlock specified experimental features | N/A | SCT_EXPERIMENTAL_FEATURES
 | **<a href="#user-content-server_encrypt" name="server_encrypt">server_encrypt</a>**  | when enable scylla will use encryption on the server side | N/A | SCT_SERVER_ENCRYPT
 | **<a href="#user-content-client_encrypt" name="client_encrypt">client_encrypt</a>**  | when enable scylla will use encryption on the client side | N/A | SCT_CLIENT_ENCRYPT
 | **<a href="#user-content-hinted_handoff" name="hinted_handoff">hinted_handoff</a>**  | when enable or disable scylla hinted handoff (enabled/disabled) | enabled | SCT_HINTED_HANDOFF
