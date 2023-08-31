@@ -24,10 +24,10 @@ n_monitor_nodes: 1
 instance_type_db: 'i4i.large'
 instance_type_loader: 'c6i.xlarge'
 
-# GCP
-gce_instance_type_db: 'n2-highmem-2'
-gce_n_local_ssd_disk_db: 2
-gce_instance_type_loader: 'e2-standard-4'
+user_prefix: 'cluster-scale-test'
+ssh_transport: 'libssh2'
+experimental_features: []
+use_legacy_cluster_init: true
 
 # Azure
 azure_instance_type_db: 'Standard_L8s_v3'

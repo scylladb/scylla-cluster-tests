@@ -45,6 +45,10 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
         return features
 
     @property
+    def enable_ipv6_dns_lookup(self) -> bool:
+        return self._is_ip_ssh_connections_ipv6
+
+    @property
     def authenticator(self) -> Optional[str]:
         if self._is_authenticator_valid:
             return self._authenticator

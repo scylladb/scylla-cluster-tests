@@ -13,8 +13,8 @@
       ]
     }
   ],
-  "broadcast_rpc_address": "__NODE_PRIVATE_ADDRESS_2__",
-  "experimental_features": [],
+  "broadcast_rpc_address": "__NODE_PRIVATE_ADDRESS__",
+  "experimental_features": ["alternator-streams", "alternator-ttl", "keyspace-storage-options"],
   "prometheus_address": "0.0.0.0",
   "alternator_enforce_authorization": false,
   "auto_bootstrap": true,
