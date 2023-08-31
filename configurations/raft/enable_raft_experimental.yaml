@@ -1,3 +1,6 @@
 append_scylla_yaml: |
   experimental_features:
+    - alternator-streams
+    - alternator-ttl
+    - keyspace-storage-options
     - raft

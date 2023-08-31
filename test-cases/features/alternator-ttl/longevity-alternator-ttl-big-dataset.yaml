@@ -58,10 +58,11 @@ alternator_secret_access_key: 'password'
 # Enable TTL feature in Scylla.
 # Set 'alternator_ttl_period_in_seconds' to 1 hour for the TTL scan interval.
 # gc_grace_seconds: 2 hours.
-experimental: true
+experimental_features:
+  - alternator-streams
+  - alternator-ttl
+  - keyspace-storage-options
 append_scylla_yaml: |
-  experimental_features:
-    - alternator-ttl
   alternator_ttl_period_in_seconds: 3600
 
 

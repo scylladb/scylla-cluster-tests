@@ -95,6 +95,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'cluster_name': 'test-cluster',
                 'alternator_enforce_authorization': False,
                 'enable_ipv6_dns_lookup': False,
+                'experimental_features': [],
             }
         )
 
@@ -125,6 +126,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'authorizer': 'AllowAllAuthorizer',
                 'enable_ipv6_dns_lookup': False,
                 'endpoint_snitch': 'org.apache.cassandra.locator.Ec2Snitch',
+                'experimental_features': [],
                 'ldap_attr_role': 'cn',
                 'ldap_bind_dn': 'cn=admin,dc=scylla-qa,dc=com', 'ldap_bind_passwd': 'scylla-0',
                 'ldap_url_template': 'ldap://1.1.1.1:389/dc=scylla-qa,dc=com?cn?sub?'
@@ -162,7 +164,9 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                 'authorizer': 'CassandraAuthorizer',
                 'enable_ipv6_dns_lookup': False,
-                'ldap_attr_role': 'cn', 'ldap_bind_dn': 'cn=admin,dc=scylla-qa,dc=com',
+                'experimental_features': [],
+                'ldap_attr_role': 'cn',
+                'ldap_bind_dn': 'cn=admin,dc=scylla-qa,dc=com',
                 'ldap_bind_passwd': 'scylla-0',
                 'ldap_url_template': 'ldap://1.1.1.1:389/dc=scylla-qa,dc=com?cn?sub?'
                                      '(uniqueMember=uid={USER},ou=Person,dc=scylla-qa,dc=com)',
@@ -204,6 +208,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'authorizer': 'CassandraAuthorizer',
                 'enable_ipv6_dns_lookup': False,
                 'endpoint_snitch': 'org.apache.cassandra.locator.GossipingPropertyFileSnitch',
+                'experimental_features': [],
                 'hinted_handoff_enabled': False,
                 'ldap_attr_role': 'cn', 'ldap_bind_dn': 'SOMEDN', 'ldap_bind_passwd': 'PASSWORD',
                 'ldap_url_template': 'ldap://3.3.3.3:389/dc=scylla-qa,dc=com?cn?sub?(member=CN={USER},dc=scylla-qa,dc=com)',
