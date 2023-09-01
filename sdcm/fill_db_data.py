@@ -436,7 +436,6 @@ class FillDatabaseData(ClusterTester):
                 [[-4]]
             ],
             'min_version': '1.7',
-            'skip_condition': "'experimental_features' in self.params",
             'max_version': '',
             'skip': ''},
         {
