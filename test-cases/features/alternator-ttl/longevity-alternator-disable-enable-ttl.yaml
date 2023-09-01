@@ -53,9 +53,7 @@ alternator_secret_access_key: 'password'
 # (YCSB TTL parameter is set to 10 minutes)
 # Set 'gc_grace_seconds' for 8 minutes,
 experimental_features:
-  - alternator-streams
   - alternator-ttl
-  - keyspace-storage-options
 append_scylla_yaml: |
   alternator_ttl_period_in_seconds: 240
 
