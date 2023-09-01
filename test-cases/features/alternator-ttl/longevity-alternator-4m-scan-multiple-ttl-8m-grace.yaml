@@ -102,9 +102,7 @@ alternator_secret_access_key: 'password'
 # TTL: 16 different ones. The longer is 10 days, the second longer is 2.5 hours
 # GC Grace: 8 minutes
 experimental_features:
-  - alternator-streams
   - alternator-ttl
-  - keyspace-storage-options
 append_scylla_yaml: |
   alternator_ttl_period_in_seconds: 240
 

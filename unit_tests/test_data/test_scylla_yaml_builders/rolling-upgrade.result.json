@@ -20,7 +20,7 @@
     "keyfile": "/etc/scylla/ssl_conf/db.key",
     "truststore": "/etc/scylla/ssl_conf/cadb.pem"
   },
-  "experimental_features": ["alternator-streams", "alternator-ttl", "keyspace-storage-options"],
+  "experimental_features": [],
   "saslauthd_socket_path": "/run/saslauthd/mux",
   "prometheus_address": "0.0.0.0",
   "alternator_enforce_authorization": false,

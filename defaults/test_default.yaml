@@ -12,10 +12,6 @@ manager_scylla_backend_version: '2022'
 
 scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.6.repo'
 
-experimental_features:
-  - alternator-streams
-  - alternator-ttl
-  - keyspace-storage-options
 round_robin: false
 
 append_scylla_args: '--blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1'

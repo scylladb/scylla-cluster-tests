@@ -14,7 +14,6 @@ instance_type_db: 'm5d.large'
 
 user_prefix: 'cluster-scale-test'
 ssh_transport: 'libssh2'
-experimental_features: []
 use_legacy_cluster_init: true
 
 nemesis_interval: 5
