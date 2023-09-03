@@ -380,7 +380,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @property
     def db_node_instance_type(self) -> Optional[str]:
-        backend = self.parent_cluster.cluster_backend()
+        backend = self.parent_cluster.cluster_backend
         if backend in ("aws", "aws-siren"):
             return self.parent_cluster.params.get("instance_type_db")
         elif backend == "azure":
