@@ -541,7 +541,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         2) CPUSET
         3) Number of cores on the machine
         """
-        return self.smp or self.cpuset or self.cpu_cores
+        shards = self.smp or self.cpuset or self.cpu_cores
+        try:
+            return int(shards)
+        except Exception:  # pylint: disable=broad-except
+            self.log.error("Failed to convert to integer shards value: %s", shards)
+            return 0
 
     @property
     def cpuset(self):
