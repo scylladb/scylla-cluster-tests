@@ -1,0 +1,39 @@
+test_duration: 5
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+user_prefix: 'fruch-testing'
+
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=10m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=2 -pop seq=1..3000 -log interval=5" ]
+
+stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_profile_4mv_5queries.yaml ops'(insert=15,read1=1,read2=1,read3=1,read4=1,read5=1)' cl=QUORUM duration=5760m -mode cql3 native -rate threads=10",
+                  "cassandra-stress user profile=/tmp/c-s_profile_2mv_2queries.yaml ops'(insert=6,mv_p_read1=1,mv_p_read2=1)' cl=QUORUM duration=5760m -mode cql3 native -rate threads=10",
+                  "cassandra-stress user profile=/tmp/c-s_profile_3si_5queries.yaml ops'(insert=25,si_read1=1,si_read2=1,si_read3=1,si_read4=1,si_read5=1)' cl=QUORUM duration=5760m -mode cql3 native -rate threads=10",
+                  "cassandra-stress user profile=/tmp/c-s_profile_2si_2queries.yaml ops'(insert=10,si_p_read1=1,si_p_read2=1)' cl=QUORUM duration=5760m -mode cql3 native -rate threads=10"
+                 ]
+
+db_type: scylla
+instance_type_db: 'i4i.large'
+
+scylla_network_config:
+- address: "listen_address"
+  ip_type: “ipv4”
+  public: false
+  use_dns: false
+  nic: 0
+- address: broadcast_rpc_address  # Address that is broadcasted to tell the clients to connect to. Related to rpc_address.
+  ip_type: ipv4
+  public: false  # Should be False when multiple interfaces; Only public IPv6 is supported by AWS
+  use_dns: false
+  nic: 0
+- address: broadcast_address  # Address that is broadcasted to tell other Scylla nodes to connect to. Related to listen_address above.
+  ip_type: ipv4
+  public: false  # Should be False when multiple interfaces; Only public IPv6 is supported by AWS
+  use_dns: false
+  nic: 0
+- address: test_communication  # Type of IP used to connect from test to DB/monitor instances
+  ip_type: ipv4
+  public: false
+  use_dns: false
+  nic: 0  #  If ipv4 and public is True it has to be primary network interface (device index is 0)

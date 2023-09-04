@@ -10,12 +10,12 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-
-
+from functools import cached_property
 from typing import Optional, List, Any
 
 from pydantic import Field
 
+from sdcm.provision.network_configuration import is_ip_ssh_connections_ipv6
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, SeedProvider
 
 
@@ -54,10 +54,16 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
             )
         ]
 
+    @cached_property
+    def _is_ip_ssh_connections_ipv6(self):
+        return is_ip_ssh_connections_ipv6(self.params)
+
     @property
     def listen_address(self) -> Optional[str]:
-        if self.params.get('use_dns_names'):
-            return self.node.private_dns_name
+        if self.node.scylla_network_configuration:
+            return self.node.scylla_network_configuration.listen_address
+
+        # TODO: remove next lines when scylla_network_configuration is supported for all backends
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
         if self.params.get('extra_network_interface'):
@@ -67,8 +73,10 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def rpc_address(self) -> Optional[str]:
-        if self.params.get('use_dns_names'):
-            return self.node.private_dns_name
+        if self.node.scylla_network_configuration:
+            return self.node.scylla_network_configuration.rpc_address
+
+        # TODO: remove next lines when scylla_network_configuration is supported for all backends
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
         if self.params.get('extra_network_interface'):
@@ -78,8 +86,10 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def broadcast_rpc_address(self) -> Optional[str]:
-        if self.params.get('use_dns_names'):
-            return self.node.private_dns_name
+        if self.node.scylla_network_configuration:
+            return self.node.scylla_network_configuration.broadcast_rpc_address
+
+        # TODO: remove next lines when scylla_network_configuration is supported for all backends
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
         if self.params.get('extra_network_interface'):
@@ -91,6 +101,10 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def broadcast_address(self) -> Optional[str]:
+        if self.node.scylla_network_configuration:
+            return self.node.scylla_network_configuration.broadcast_address
+
+        # TODO: remove next lines when scylla_network_configuration is supported for all backends
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
         if self.params.get('extra_network_interface'):
@@ -99,6 +113,10 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
         if self._intra_node_comm_public:
             return self._public_ip_address
         return None
+
+    @property
+    def enable_ipv6_dns_lookup(self) -> bool:
+        return self._is_ip_ssh_connections_ipv6
 
     @property
     def prometheus_address(self) -> Optional[str]:

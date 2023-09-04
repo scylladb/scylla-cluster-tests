@@ -1,4 +1,6 @@
 {
+  "broadcast_address": "__NODE_PRIVATE_ADDRESS__",
+  "broadcast_rpc_address": "__NODE_PRIVATE_ADDRESS__",
   "listen_address": "__NODE_PRIVATE_ADDRESS__",
   "endpoint_snitch": "org.apache.cassandra.locator.Ec2Snitch",
   "rpc_address": "__NODE_PRIVATE_ADDRESS__",

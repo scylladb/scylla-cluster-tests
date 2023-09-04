@@ -79,6 +79,19 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
             assert int(container.labels["NodeIndex"]) == node_index, "Container labeled with wrong index."
             self._containers["node"] = container
 
+    @property
+    def network_interfaces(self):
+        pass
+        # TODO: it did not work, we can it check later
+        # return [NetworkInterface(ipv4_public_address=self._get_public_ip_address(),
+        #                          ipv6_public_addresses='',
+        #                          ipv4_private_addresses=[self._get_private_ip_address()],
+        #                          ipv6_private_address='',
+        #                          dns_private_name='',
+        #                          dns_public_name='',
+        #                          device_index=0
+        #                          )]
+
     def is_docker(self):
         return True
 

@@ -16,7 +16,6 @@ post_behavior_monitor_nodes: "keep-on-failure"
 
 user_prefix: manager-regression
 space_node_threshold: 6442
-ip_ssh_connections: 'ipv6'
 
 aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
 

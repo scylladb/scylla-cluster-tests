@@ -72,6 +72,13 @@ class AzureNode(cluster.BaseNode):
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
 
+    @property
+    def network_interfaces(self):
+        pass
+
+    def refresh_network_interfaces_info(self):
+        pass
+
     @retrying(n=6, sleep_time=1)
     def _set_keep_alive(self) -> bool:
         self._instance.add_tags({"keep": "alive"})

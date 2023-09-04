@@ -39,6 +39,8 @@ from sdcm import ec2_client, cluster, wait
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
+from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration, is_ip_ssh_connections_ipv6, \
+    network_interfaces_count, ssh_connection_ip_type
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.sct_provision.aws.cluster import PlacementGroup
 
@@ -203,17 +205,17 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if not ec2_user_data:
             ec2_user_data = self._ec2_user_data
         self.log.debug("Passing user_data '%s' to create_instances", ec2_user_data)
-        interfaces = [{'DeviceIndex': 0,
-                       'SubnetId': self._ec2_subnet_id[dc_idx][az_idx],
-                       'AssociatePublicIpAddress': True,
-                       'Groups': self._ec2_security_group_ids[dc_idx]}]
-        if self.extra_network_interface:
-            interfaces = [{'DeviceIndex': 0,
-                           'SubnetId': self._ec2_subnet_id[dc_idx][az_idx],
-                           'Groups': self._ec2_security_group_ids[dc_idx]},
-                          {'DeviceIndex': 1,
-                           'SubnetId': self._ec2_subnet_id[dc_idx][az_idx],
-                           'Groups': self._ec2_security_group_ids[dc_idx]}]
+        interfaces_amount = network_interfaces_count(self.params)
+        interfaces = []
+        for i in range(interfaces_amount):
+            interfaces.append({'DeviceIndex': i,
+                               'SubnetId': self._ec2_subnet_id[dc_idx][az_idx],
+                               'Groups': self._ec2_security_group_ids[dc_idx]})
+        # Can only be associated with a single network interface only with the device index of 0:
+        # https://docs.aws.amazon.com/sdkfornet1/latest/apidocs/html/P_Amazon_EC2_Model_InstanceNetworkInterfaceSpecification_
+        # AssociatePublicIpAddress.htm
+        if interfaces_amount == 1:
+            interfaces[0].update({'AssociatePublicIpAddress': True})
 
         self.log.info(f"Create {self.instance_provision} instance(s)")
         if self.instance_provision == 'mixed':
@@ -385,7 +387,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             node = self._create_node(instance, self._ec2_ami_username, self.node_prefix,
                                      self._node_index, self.logdir, dc_idx=dc_idx, rack=node_rack)
             node.enable_auto_bootstrap = enable_auto_bootstrap
-            if self.params.get('ip_ssh_connections') == 'ipv6' and not node.distro.is_amazon2 and \
+            if ssh_connection_ip_type(self.params) == 'ipv6' and not node.distro.is_amazon2 and \
                     not node.distro.is_ubuntu:
                 node.config_ipv6_as_persistent()
             self.nodes.append(node)
@@ -416,7 +418,6 @@ class AWSNode(cluster.BaseNode):
         self.node_index = node_index
         self._instance = ec2_instance
         self._ec2_service: EC2ServiceResource = ec2_service
-        self._eth1_private_ip_address = None
         self.eip_allocation_id = None
         ssh_login_info = {'hostname': None,
                           'user': ami_username,
@@ -427,6 +428,46 @@ class AWSNode(cluster.BaseNode):
                          base_logdir=base_logdir,
                          node_prefix=node_prefix,
                          dc_idx=dc_idx, rack=rack)
+
+    def __str__(self):
+        # If multiple network interface is defined on the node, private address in the `nodetool status` is IP that defined in
+        # broadcast_address. Keep this output in correlation with `nodetool status`
+        if self.scylla_network_configuration.broadcast_address_ip_type == "private":
+            node_private_ip = self.scylla_network_configuration.broadcast_address
+        else:
+            node_private_ip = self.private_ip_address
+
+        return 'Node %s [%s | %s%s] (seed: %s)' % (
+            self.name,
+            self.public_ip_address,
+            node_private_ip,
+            " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
+            self.is_seed)
+
+    @property
+    def network_interfaces(self):
+        interfaces_tmp = []
+        device_indexes = []
+        for interface in self._instance.network_interfaces:
+            private_ip_addresses = [private_address["PrivateIpAddress"]
+                                    for private_address in interface.private_ip_addresses]
+            ipv6_addresses = [ipv6_address['Ipv6Address'] for ipv6_address in interface.ipv6_addresses]
+            device_indexes.append(interface.attachment['DeviceIndex'])
+            ipv4_public_address = interface.association_attribute['PublicIp'] if interface.association_attribute else None
+            dns_public_name = interface.association_attribute['PublicDnsName'] if interface.association_attribute else None
+            interfaces_tmp.append(NetworkInterface(ipv4_public_address=ipv4_public_address,
+                                                   ipv6_public_addresses=ipv6_addresses,
+                                                   ipv4_private_addresses=private_ip_addresses,
+                                                   ipv6_private_address='',
+                                                   dns_private_name=interface.private_dns_name,
+                                                   dns_public_name=dns_public_name,
+                                                   device_index=interface.attachment['DeviceIndex']
+                                                   )
+                                  )
+        # Order interfaces by device_index (set primary interface first)
+        interfaces = sorted(interfaces_tmp, key=lambda d: d.device_index)
+        self.log.debug("Sorted interfaces: %s", interfaces)
+        return interfaces
 
     def init(self):
         LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
@@ -441,6 +482,14 @@ class AWSNode(cluster.BaseNode):
             self._ec2_service.create_tags(Resources=resources_to_tag, Tags=tags_as_ec2_tags(self.tags))
 
         self._wait_public_ip()
+        self.scylla_network_configuration = ScyllaNetworkConfiguration(
+            network_interfaces=self.network_interfaces,
+            scylla_network_config=self.parent_cluster.params["scylla_network_config"])
+        # TODO: keep next two for debug purpose
+        self.log.debug("Node %s scylla_network_config: %s", self.name,
+                       self.parent_cluster.params["scylla_network_config"])
+        self.log.debug("Node %s network_interfaces: %s", self.name,
+                       self.scylla_network_configuration.network_interfaces)
         super().init()
 
     @property
@@ -522,12 +571,8 @@ class AWSNode(cluster.BaseNode):
         the communication address for usage between the test and the nodes
         :return:
         """
-        if self.parent_cluster.params.get("ip_ssh_connections") == "ipv6":
-            return self.ipv6_ip_address
-        elif self.test_config.IP_SSH_CONNECTIONS == 'public' or self.test_config.INTRA_NODE_COMM_PUBLIC:
-            return self.public_ip_address
-        else:
-            return self._instance.private_ip_address
+        self.log.debug("external_address is: %s", self.scylla_network_configuration.test_communication)
+        return self.scylla_network_configuration.test_communication
 
     @cached_property
     def public_dns_name(self) -> str:
@@ -541,40 +586,36 @@ class AWSNode(cluster.BaseNode):
             'curl http://169.254.169.254/latest/meta-data/local-hostname', verbose=False)
         return result.stdout.strip()
 
-    def _get_public_ip_address(self) -> Optional[str]:
-        return self._instance.public_ip_address
-
-    def _get_private_ip_address(self) -> Optional[str]:
-        if self._eth1_private_ip_address:
-            return self._eth1_private_ip_address
-        return self._instance.private_ip_address
-
     def _get_ipv6_ip_address(self) -> Optional[str]:
-        return self._instance.network_interfaces[0].ipv6_addresses[0]["Ipv6Address"]
+        return self.scylla_network_configuration.interface_ipv6_address
+
+    def refresh_network_interfaces_info(self):
+        self.scylla_network_configuration.network_interfaces = self.network_interfaces
 
     def _refresh_instance_state(self):
         self._wait_public_ip()
-        public_ipv4_addresses = [self._instance.public_ip_address]
-        private_ipv4_addresses = [self._instance.private_ip_address]
-        if self._eth1_private_ip_address:
-            private_ipv4_addresses += [self._eth1_private_ip_address]
+        self.refresh_network_interfaces_info()
+        public_ipv4_addresses = [interface.ipv4_public_address for interface in self.scylla_network_configuration.network_interfaces
+                                 if interface.ipv4_public_address]
+        # AWS allows to have a few private IPv4 addresses per interface. For
+        # now the first one address is picking, until we have anything else defined/implemented
+        private_ipv4_addresses = [
+            interface.ipv4_private_addresses[0] for interface in self.scylla_network_configuration.network_interfaces]
         return public_ipv4_addresses, private_ipv4_addresses
 
     def allocate_and_attach_elastic_ip(self, parent_cluster, dc_idx):
-        primary_interface = [
-            interface for interface in self._instance.network_interfaces if interface.attachment['DeviceIndex'] == 0][0]
-        if primary_interface.association_attribute is None:
-            # create and attach EIP
-            client: EC2Client = boto3.client('ec2', region_name=parent_cluster.region_names[dc_idx])
-            response = client.allocate_address(Domain='vpc')
+        for interface in self._instance.network_interfaces:
+            if interface.attachment['DeviceIndex'] == 0 and interface.association_attribute is None:
+                # create and attach EIP
+                client: EC2Client = boto3.client('ec2', region_name=parent_cluster.region_names[dc_idx])
+                response = client.allocate_address(Domain='vpc')
 
-            self.eip_allocation_id = response['AllocationId']
-            client.associate_address(
-                AllocationId=self.eip_allocation_id,
-                NetworkInterfaceId=primary_interface.id,
-            )
-        self._eth1_private_ip_address = [interface for interface in self._instance.network_interfaces if
-                                         interface.attachment['DeviceIndex'] == 1][0].private_ip_address
+                self.eip_allocation_id = response['AllocationId']
+                client.associate_address(
+                    AllocationId=self.eip_allocation_id,
+                    NetworkInterfaceId=interface.id,
+                )
+                break
 
     def _instance_wait_safe(self, instance_method: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
         try:
@@ -592,6 +633,18 @@ class AWSNode(cluster.BaseNode):
 
     def _wait_public_ip(self):
         ec2_instance_wait_public_ip(self._instance)
+
+    @cached_property
+    def cql_address(self):
+        address = self.scylla_network_configuration.test_communication \
+            if self.test_config.IP_SSH_CONNECTIONS == 'public' else self.scylla_network_configuration.broadcast_rpc_address
+        self.log.debug("cql_address is: %s", address)
+        return address
+
+    @property
+    def ip_address(self):
+        self.log.debug("ip_address is: %s", self.scylla_network_configuration.broadcast_address)
+        return self.scylla_network_configuration.broadcast_address
 
     def config_ipv6_as_persistent(self):
         if self.distro.is_ubuntu:
@@ -802,7 +855,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             n_nodes=n_nodes,
             params=params,
             node_type=node_type,
-            extra_network_interface=params.get('extra_network_interface'))
+            extra_network_interface=network_interfaces_count(params) > 1)
         self.version = '2.1'
 
     # pylint: disable=too-many-arguments
@@ -841,7 +894,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def _scylla_post_install(self, node: AWSNode, new_scylla_installed: bool, devname: str) -> None:
         super()._scylla_post_install(node, new_scylla_installed, devname)
-        if self.params.get('ip_ssh_connections') == 'ipv6':
+        if is_ip_ssh_connections_ipv6(self.params):
             node.set_web_listen_address()
 
     def _reuse_cluster_setup(self, node):

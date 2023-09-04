@@ -1460,6 +1460,15 @@ class SCTConfiguration(dict):
         dict(name="stress_image", env="SCT_STRESS_IMAGE", type=dict_or_str,
              help="Dict of the images to use for the stress tools"),
 
+        dict(name="scylla_network_config", env="SCT_SCYLLA_NETWORK_CONFIG", type=list,
+             help="""Configure Scylla networking with single or multiple NIC/IP combinations.
+                  It must be defined for listen_address and rpc_address. For each address mandatory parameters are:
+                  - address: listen_address/rpc_address/broadcast_rpc_address/broadcast_address/test_communication
+                  - ip_type: ipv4 or ipv6
+                  - public: false or true
+                  - nic: number of NIC. 0, 1
+                  Supported for AWS only meanwhile"""),
+
         dict(name="enable_argus", env="SCT_ENABLE_ARGUS", type=boolean,
              help="Control reporting to argus"),
 
@@ -1524,7 +1533,7 @@ class SCTConfiguration(dict):
         'aws': ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
                 "region_name", "ami_id_db_scylla", "ami_id_loader",
                 "ami_id_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
-                "ami_monitor_user"],
+                "ami_monitor_user", "scylla_network_config"],
 
         'gce': ['user_prefix', 'gce_network', 'gce_image_db', 'gce_image_username', 'gce_instance_type_db',
                 'gce_root_disk_type_db',  'gce_n_local_ssd_disk_db',
@@ -1872,6 +1881,34 @@ class SCTConfiguration(dict):
             if cluster_backend not in ("aws",):
                 raise ValueError(f"use_dns_names is not supported for {cluster_backend} backend")
 
+        # 17 Validate scylla network configuration mandatory values
+        if scylla_network_config := self.get("scylla_network_config"):
+            check_list = {"listen_address": None, "rpc_address": None,
+                          "broadcast_rpc_address": None, "broadcast_address": None, "test_communication": None}
+            number2word = {1: "first", 2: "second", 3: "third"}
+            nics = set()
+            for i, address_config in enumerate(scylla_network_config):
+                for param in ["address", "ip_type", "public", "nic"]:
+                    if address_config.get(param) is None:
+                        raise ValueError(
+                            f"'{param}' parameter value for {number2word[i + 1]} address is not defined. It is must parameter")
+
+                if address_config["ip_type"] == "ipv4" and address_config["nic"] == 1 and address_config["public"] is True:
+                    raise ValueError(
+                        "If ipv4 and public is True it has to be primary network interface, it means device index (nic) is 0")
+
+                nics.add(address_config["nic"])
+                if address_config["address"] not in check_list:
+                    continue
+
+                check_list[address_config["address"]] = True
+
+            if not_defined_address := ",".join([key for key, value in check_list.items() if value is None]):
+                raise ValueError(f"Interface address(es) were not defined: {not_defined_address}")
+
+            if len(nics) > 1 and len(self.region_names) >= 2:
+                raise ValueError("Multiple network interfaces aren't supported for multi region use cases")
+
     def log_config(self):
         self.log.info(self.dump_config())
 
@@ -2093,8 +2130,6 @@ class SCTConfiguration(dict):
             self._validate_nemesis_can_run_on_non_seed()
             self._validate_number_of_db_nodes_divides_by_az_number()
 
-        if 'extra_network_interface' in self and len(self.region_names) >= 2:
-            raise ValueError("extra_network_interface isn't supported for multi region use cases")
         self._check_partition_range_with_data_validation_correctness()
         self._verify_scylla_bench_mode_and_workload_parameters()
 

@@ -529,6 +529,9 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer):
                                            zone=k8s_cluster.gce_zone,
                                            instance=self.node_name)
 
+    def refresh_network_interfaces_info(self):
+        pass
+
     def terminate_k8s_host(self):
         self.k8s_cluster.log.info(
             'terminate_k8s_host: GCE instance of kubernetes node will be terminated, '

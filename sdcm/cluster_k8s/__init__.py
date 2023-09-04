@@ -2022,6 +2022,10 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
         """
         return self.k8s_cluster.proposed_scylla_yaml
 
+    @property
+    def network_interfaces(self):
+        pass
+
     parent_cluster: ScyllaPodCluster
 
     def actual_scylla_yaml(self) -> ContextManager[ScyllaYaml]:

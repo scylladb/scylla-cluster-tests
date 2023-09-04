@@ -734,6 +734,9 @@ class EksScyllaPodContainer(BaseScyllaPodContainer):
     def ec2_instance_id(self):
         return self._node.spec.provider_id.split('/')[-1]
 
+    def refresh_network_interfaces_info(self):
+        pass
+
     def terminate_k8s_host(self):
         self.k8s_cluster.log.info(
             'terminate_k8s_host: EC2 instance of kubernetes node will be terminated, '

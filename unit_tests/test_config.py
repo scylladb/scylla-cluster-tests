@@ -811,6 +811,145 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                           'scylla-qa-internal/custom_d1/rolling_upgrade_dataset1.yaml'])
         self.assertEqual(duration_per_cs_profile, ['60m', '20m'])
 
+    @pytest.mark.integration
+    def test_31_check_network_config_aws(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_REGION_NAME'] = 'eu-west-1'
+        os.environ['SCT_N_DB_NODES'] = '2'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.dump_config()
+
+        self.assertEqual(conf.get('scylla_network_config'),
+                         [{'address': 'listen_address', 'listen_all': False, 'ip_type': 'ipv4', 'public': False, 'use_dns': False,
+                           'nic': 0},
+                          {'address': 'rpc_address', 'listen_all': False, 'ip_type': 'ipv4',
+                              'public': False, 'use_dns': False, 'nic': 0},
+                          {'address': 'broadcast_rpc_address', 'ip_type': 'ipv4',
+                              'public': False, 'use_dns': False, 'nic': 0},
+                          {'address': 'broadcast_address', 'ip_type': 'ipv4', 'public': False, 'use_dns': False, 'nic': 0},
+                          {'address': 'test_communication', 'ip_type': 'ipv4', 'public': False, 'use_dns': False, 'nic': 0}])
+
+    @pytest.mark.integration
+    def test_31_check_network_config_aws_interface_not_defined(self):
+        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/network_config_interface_not_defined.yaml"]'''
+
+        with self.assertRaises(ValueError) as context:
+            sct_config.SCTConfiguration()
+
+        self.assertEqual("Interface address(es) were not defined: rpc_address", str(context.exception))
+
+    @pytest.mark.integration
+    def test_31_check_network_config_aws_interface_param_not_defined(self):
+        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/network_config_interface_param_not_defined.yaml"]'''
+
+        with self.assertRaises(ValueError) as context:
+            sct_config.SCTConfiguration()
+
+        self.assertEqual(
+            "'public' parameter value for first address is not defined. It is must parameter", str(context.exception))
+
+    @pytest.mark.integration
+    def test_31_check_network_config_aws_interface_param_public_not_primary(self):
+        os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/network_config_interface_param_public_not_primary.yaml"]'''
+
+        with self.assertRaises(ValueError) as context:
+            sct_config.SCTConfiguration()
+
+        self.assertEqual(
+            "If ipv4 and public is True it has to be primary network interface, it means device index (nic) is 0", str(context.exception))
+
+    @pytest.mark.integration
+    def test_31_check_network_config_gce(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
+        os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.dump_config()
+
+        self.assertEqual(conf.get('scylla_network_config'), None)
+
+    @pytest.mark.integration
+    def test_31_check_network_config_azure(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'azure'
+        os.environ['SCT_AZURE_REGION_NAME'] = 'eastus'
+        os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.dump_config()
+
+        self.assertEqual(conf.get('scylla_network_config'), None)
+
+    @pytest.mark.integration
+    def test_31_check_network_config_docker(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.dump_config()
+
+        self.assertEqual(conf.get('scylla_network_config'), None)
+
+    @pytest.mark.integration
+    def test_31_check_network_config_aws_siren(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_DB_TYPE'] = 'cloud_scylla'
+        os.environ['SCT_REGION_NAME'] = 'us-east-1'
+        os.environ['SCT_N_DB_NODES'] = '2'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+        os.environ['SCT_AUTHENTICATOR_USER'] = "user"
+        os.environ['SCT_AUTHENTICATOR_PASSWORD'] = "pass"
+        os.environ['SCT_CLOUD_CLUSTER_ID'] = "193712947904378"
+        os.environ['SCT_SECURITY_GROUP_IDS'] = "sg-89fi3rkl"
+        os.environ['SCT_SUBNET_ID'] = "sub-d32f09sdf"
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.dump_config()
+
+        # TODO: longevity with Siren backend does not work now.
+        #  We will need to validate if this configuration should be supported there
+        self.assertEqual(conf.get('scylla_network_config'),
+                         [{'address': 'listen_address', 'listen_all': False, 'ip_type': 'ipv4', 'public': False, 'use_dns': False,
+                           'nic': 0},
+                          {'address': 'rpc_address', 'listen_all': False, 'ip_type': 'ipv4',
+                              'public': False, 'use_dns': False, 'nic': 0},
+                          {'address': 'broadcast_rpc_address', 'ip_type': 'ipv4',
+                              'public': False, 'use_dns': False, 'nic': 0},
+                          {'address': 'broadcast_address', 'ip_type': 'ipv4', 'public': False, 'use_dns': False, 'nic': 0},
+                          {'address': 'test_communication', 'ip_type': 'ipv4', 'public': False, 'use_dns': False, 'nic': 0}])
+
+    @pytest.mark.integration
+    def test_31_check_network_config_k8s(self):
+        os.environ['SCT_N_DB_NODES'] = '3'
+        os.environ['SCT_REGION_NAME'] = 'eu-north-1'
+        os.environ['SCT_AVAILABILITY_ZONE'] = 'b,c'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-eks'
+        os.environ['SCT_SCYLLA_VERSION'] = "5.2.0"
+        os.environ['SCT_K8S_SCYLLA_OPERATOR_HELM_REPO'] = (
+            'https://storage.googleapis.com/scylla-operator-charts/latest')
+        os.environ['SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION'] = 'latest'
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.dump_config()
+
+        self.assertEqual(conf.get('scylla_network_config'),
+                         [{'address': 'listen_address', 'listen_all': False, 'ip_type': 'ipv4', 'public': False, 'use_dns': False,
+                           'nic': 0},
+                          {'address': 'rpc_address', 'listen_all': False, 'ip_type': 'ipv4',
+                              'public': False, 'use_dns': False, 'nic': 0},
+                          {'address': 'broadcast_rpc_address', 'ip_type': 'ipv4',
+                              'public': False, 'use_dns': False, 'nic': 0},
+                          {'address': 'broadcast_address', 'ip_type': 'ipv4', 'public': False, 'use_dns': False, 'nic': 0},
+                          {'address': 'test_communication', 'ip_type': 'ipv4', 'public': False, 'use_dns': False, 'nic': 0}])
+
 
 if __name__ == "__main__":
     unittest.main()

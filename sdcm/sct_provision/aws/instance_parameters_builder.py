@@ -21,6 +21,7 @@ from sdcm.cluster import UserRemoteCredentials
 from sdcm.provision.aws.instance_parameters import AWSDiskMapping, AWSPlacementInfo, AWSDiskMappingEbsInfo
 from sdcm.provision.aws.instance_parameters_builder import AWSInstanceParamsBuilderBase
 from sdcm.provision.common.user_data import UserDataBuilderBase
+from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.aws_utils import ec2_ami_get_root_device_name, get_ec2_network_configuration
 
@@ -67,7 +68,8 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     @property
     def NetworkInterfaces(self) -> List[dict]:  # pylint: disable=invalid-name
         output = [{'DeviceIndex': 0, **self._network_interface_params}]
-        if self.params.get('extra_network_interface'):
+        # TODO: handle case when more then 1 additional interface should be added
+        if network_interfaces_count(self.params) > 1:
             output.append({'DeviceIndex': 1, **self._network_interface_params})
         return output
 

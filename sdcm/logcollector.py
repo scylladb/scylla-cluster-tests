@@ -34,6 +34,7 @@ import sdcm.monitorstack.ui as monitoring_ui
 from sdcm.paths import SCYLLA_YAML_PATH, SCYLLA_PROPERTIES_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH, \
     SCYLLA_MANAGER_YAML_PATH
 from sdcm.provision import provisioner_factory
+from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import ProvisionerError
 from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
 from sdcm.db_stats import PrometheusDBStats
@@ -1481,7 +1482,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         )
 
     def get_aws_ip_address(self, instance):
-        return instance['PublicIpAddress'] if self.params.get('ip_ssh_connections') == 'public' else instance['PrivateIpAddress']
+        return instance['PublicIpAddress'] if ssh_connection_ip_type(self.params) == 'public' else instance['PrivateIpAddress']
 
     def get_aws_instances_by_testid(self):
         instances = list_instances_aws({"TestId": self.test_id}, running=True)
