@@ -545,10 +545,10 @@ def clean_cloud_resources(tags_dict, dry_run=False):
     if "TestId" not in tags_dict and "RunByUser" not in tags_dict:
         LOGGER.error("Can't clean cloud resources, TestId or RunByUser is missing")
         return False
-
     clean_instances_aws(tags_dict, dry_run=dry_run)
     clean_elastic_ips_aws(tags_dict, dry_run=dry_run)
     clean_test_security_groups(tags_dict, dry_run=dry_run)
+    clean_placement_groups_aws(tags_dict, dry_run=dry_run)
 
     if "NodeType" not in tags_dict or tags_dict.get("NodeType") == "k8s":
         clean_clusters_eks(tags_dict, dry_run=dry_run)
@@ -731,7 +731,9 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         client: EC2Client = boto3.client('ec2', region_name=region)
         custom_filter = []
         if tags_dict:
-            custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
+            custom_filter = [{'Name': 'tag:{}'.format(key),
+                              'Values': value if isinstance(value, list) else [value]}
+                             for key, value in tags_dict.items()]
         response = client.describe_instances(Filters=custom_filter)
         instances[region] = [instance for reservation in response['Reservations'] for instance in reservation[
             'Instances']]
@@ -2364,24 +2366,26 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
     kubeconfig_dir = Path(testrun_dir) if testrun_dir else Path(logdir)
     os.environ['KUBECONFIG'] = str(kubeconfig_dir / ".kube/config")
 
+    node_types_to_cleanup = []
     for cluster_nodes_type, action_type in actions_per_type.items():
         if action_type["action"] == "keep":
             LOGGER.info("Post behavior %s for %s. Keep resources running", action_type["action"], cluster_nodes_type)
         elif action_type["action"] == "destroy":
-            LOGGER.info("Post behavior %s for %s. Clean resources", action_type["action"], cluster_nodes_type)
+            LOGGER.info("Post behavior %s for %s. Schedule cleanup", action_type["action"], cluster_nodes_type)
             for node_type in action_type["node_types"]:
-                clean_cloud_resources(params | {"NodeType": node_type}, dry_run=dry_run)
+                node_types_to_cleanup.append(node_type)
             continue
         elif action_type["action"] == "keep-on-failure" and not critical_events:
-            LOGGER.info("Post behavior %s for %s. Test run Successful. Clean resources",
+            LOGGER.info("Post behavior %s for %s. No critical events found. Schedule cleanup.",
                         action_type["action"], cluster_nodes_type)
             for node_type in action_type["node_types"]:
-                clean_cloud_resources(params | {"NodeType": node_type}, dry_run=dry_run)
+                node_types_to_cleanup.append(node_type)
             continue
         else:
             LOGGER.info("Post behavior %s for %s. Test run Failed. Keep resources running",
                         action_type["action"], cluster_nodes_type)
             continue
+    clean_cloud_resources(params | {"NodeType": node_types_to_cleanup}, dry_run=dry_run)
 
 
 def search_test_id_in_latest(logdir):
@@ -2995,3 +2999,87 @@ duration_pattern = re.compile(r'(?P<hours>[\d]*)h|(?P<minutes>[\d]*)m|(?P<second
 def time_period_str_to_seconds(time_str: str) -> int:
     """Transforms duration string into seconds int. e.g. 1h -> 3600, 1h22m->4920 or 10m->600"""
     return sum([int(g[0] or 0) * 3600 + int(g[1] or 0) * 60 + int(g[2] or 0) for g in duration_pattern.findall(time_str)])
+
+
+# -----AWS Placement Group section -----
+def list_placement_groups_aws(tags_dict=None, region_name=None, available=False, group_as_region=False, verbose=False):
+    """
+        list all placement groups with specific tags AWS
+
+        :param tags_dict: key-value pairs used for filtering
+        :param region_name: name of the region to list
+        :param available: get all available placement groups
+        :param group_as_region: if True the results would be grouped into regions
+        :param verbose: if True will log progress information
+
+        :return: instances dict where region is a key
+        """
+    placement_groups = {}
+    aws_regions = [region_name] if region_name else all_aws_regions()
+
+    def get_placement_groups(region):
+        if verbose:
+            LOGGER.info('Going to list aws region "%s"', region)
+        time.sleep(random.random())
+        client: EC2Client = boto3.client('ec2', region_name=region)
+        custom_filter = []
+        if tags_dict:
+            custom_filter = [{'Name': 'tag:{}'.format(key),
+                              'Values': value if isinstance(value, list) else [value]}
+                             for key, value in tags_dict.items()]
+        response = client.describe_placement_groups(Filters=custom_filter)
+        placement_groups[region] = list(response['PlacementGroups'])
+
+        if verbose:
+            LOGGER.info("%s: done [%s/%s]", region, len(list(placement_groups.keys())), len(aws_regions))
+
+    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)
+                   ).run(get_placement_groups, ignore_exceptions=True)
+
+    for curr_region_name in placement_groups:
+        if available:
+            placement_groups[curr_region_name] = [
+                i for i in placement_groups[curr_region_name] if i['State'] == 'available']
+        else:
+            placement_groups[curr_region_name] = [i for i in placement_groups[curr_region_name]
+                                                  if not i['State'] == 'deleted']
+    if not group_as_region:
+        placement_groups = list(itertools.chain(*list(placement_groups.values())))  # flatten the list of lists
+        total_items = len(placement_groups)
+    else:
+        total_items = sum([len(value) for _, value in placement_groups.items()])
+
+    if verbose:
+        LOGGER.info("Found total of {} instances.".format(total_items))
+
+    return placement_groups
+
+
+def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
+    """Remove all placement groups with specific tags in AWS."""
+    # pylint: disable=too-many-locals,import-outside-toplevel
+    assert tags_dict, "tags_dict not provided (can't clean all instances)"
+    if regions:
+        aws_placement_groups = {}
+        for region in regions:
+            aws_placement_groups |= list_placement_groups_aws(
+                tags_dict=tags_dict, region_name=region, group_as_region=True)
+    else:
+        aws_placement_groups = list_placement_groups_aws(tags_dict=tags_dict, group_as_region=True)
+
+    for region, instance_list in aws_placement_groups.items():
+        if not instance_list:
+            LOGGER.info("There are no placement groups to remove in AWS region %s", region)
+            continue
+        client: EC2Client = boto3.client('ec2', region_name=region)
+        for instance in instance_list:
+            name = instance.get("GroupName")
+            LOGGER.info("Going to delete placement group '{name} ".format(name=name))
+            if not dry_run:
+                try:
+                    response = client.delete_placement_group(GroupName=name)
+                    LOGGER.debug("Done. Result: %s\n", response)
+                except Exception as ex:  # pylint: disable=broad-except
+                    LOGGER.debug("Failed with: %s", str(ex))
+
+# ----------
