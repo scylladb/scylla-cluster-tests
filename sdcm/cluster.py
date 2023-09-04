@@ -1631,13 +1631,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'ldap_bind_dn': ldap_bind_dn,
                 'ldap_bind_pw': ldap_bind_pw}
 
-    def configure_kms(self):
-        # Hack for overriding issue https://github.com/scylladb/scylla-enterprise/issues/2792
-        # TODO: should be removed once a proper fix is implemented
-        self.remoter.sudo("find /opt/scylladb/ -iname *libp11-kit.so* | sudo xargs rm",
-                          verbose=True, ignore_status=True)
-        self.install_package("p11-kit")
-
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-statements,unused-argument,too-many-branches
     def config_setup(self,
                      append_scylla_args='',
@@ -1649,10 +1642,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.parent_cluster.proposed_scylla_yaml,
                 self.proposed_scylla_yaml
             )
-            is_kms = bool(scylla_yml.kms_hosts)
-
-        if is_kms:
-            self.configure_kms()
 
         self.process_scylla_args(append_scylla_args)
 

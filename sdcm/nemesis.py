@@ -3973,7 +3973,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         }
                         is_restart_needed = True
                 if is_restart_needed:
-                    node.configure_kms()
                     node.restart_scylla()
 
         # Create table with encryption
