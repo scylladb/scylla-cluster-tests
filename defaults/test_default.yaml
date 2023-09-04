@@ -226,3 +226,5 @@ custom_es_index: ''
 run_fullscan: []
 
 stress_step_duration: '15m'
+
+use_placement_group: false

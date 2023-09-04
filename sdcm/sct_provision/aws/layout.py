@@ -13,7 +13,8 @@
 
 from functools import cached_property
 
-from sdcm.sct_provision.aws.cluster import OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster
+from sdcm.sct_provision.aws.cluster import (
+    OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup)
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
 from sdcm.test_config import TestConfig
 
@@ -25,6 +26,8 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend='aws'):
         return TestConfig()
 
     def provision(self):
+        if self.placement_group:
+            self.placement_group.provision()
         if self.db_cluster:
             self.db_cluster.provision()
         if self.monitoring_cluster:
@@ -63,6 +66,14 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend='aws'):
         if not self._provision_another_scylla_cluster:
             return None
         return OracleDBCluster(
+            params=self._params,
+            common_tags=self._test_config.common_tags(),
+            test_id=self._test_config.test_id(),
+        )
+
+    @cached_property
+    def placement_group(self):
+        return PlacementGroup(
             params=self._params,
             common_tags=self._test_config.common_tags(),
             test_id=self._test_config.test_id(),
