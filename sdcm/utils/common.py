@@ -575,6 +575,7 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):  # pylint: dis
         clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
+        clean_placement_groups_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         if cluster_backend == 'aws':
             clean_aws_kms_alias(tags_dict, config.region_names)
     if cluster_backend in ('gce', 'k8s-gke', ''):
@@ -3158,3 +3159,87 @@ def SoftTimeoutContext(timeout: int, operation: str):  # pylint: disable=invalid
 def raise_exception_in_thread(thread: threading.Thread, exception_type: Type[BaseException]):
     res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_ulong(thread.ident), ctypes.py_object(exception_type))
     LOGGER.debug("PyThreadState_SetAsyncExc: return [%s]", res)
+
+
+# -----AWS Placement Group section -----
+def list_placement_groups_aws(tags_dict=None, region_name=None, available=False, group_as_region=False, verbose=False):
+    """
+        list all placement groups with specific tags AWS
+
+        :param tags_dict: key-value pairs used for filtering
+        :param region_name: name of the region to list
+        :param available: get all available placement groups
+        :param group_as_region: if True the results would be grouped into regions
+        :param verbose: if True will log progress information
+
+        :return: instances dict where region is a key
+        """
+    placement_groups = {}
+    aws_regions = [region_name] if region_name else all_aws_regions()
+
+    def get_placement_groups(region):
+        if verbose:
+            LOGGER.info('Going to list aws region "%s"', region)
+        time.sleep(random.random())
+        client: EC2Client = boto3.client('ec2', region_name=region)
+        custom_filter = []
+        if tags_dict:
+            custom_filter = [{'Name': 'tag:{}'.format(key),
+                              'Values': value if isinstance(value, list) else [value]}
+                             for key, value in tags_dict.items()]
+        response = client.describe_placement_groups(Filters=custom_filter)
+        placement_groups[region] = list(response['PlacementGroups'])
+
+        if verbose:
+            LOGGER.info("%s: done [%s/%s]", region, len(list(placement_groups.keys())), len(aws_regions))
+
+    ParallelObject(aws_regions, timeout=100, num_workers=len(aws_regions)
+                   ).run(get_placement_groups, ignore_exceptions=True)
+
+    for curr_region_name in placement_groups:
+        if available:
+            placement_groups[curr_region_name] = [
+                i for i in placement_groups[curr_region_name] if i['State'] == 'available']
+        else:
+            placement_groups[curr_region_name] = [i for i in placement_groups[curr_region_name]
+                                                  if not i['State'] == 'deleted']
+    if not group_as_region:
+        placement_groups = list(itertools.chain(*list(placement_groups.values())))  # flatten the list of lists
+        total_items = len(placement_groups)
+    else:
+        total_items = sum([len(value) for _, value in placement_groups.items()])
+
+    if verbose:
+        LOGGER.info("Found total of {} instances.".format(total_items))
+
+    return placement_groups
+
+
+def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
+    """Remove all placement groups with specific tags in AWS."""
+    # pylint: disable=too-many-locals,import-outside-toplevel
+    assert tags_dict, "tags_dict not provided (can't clean all instances)"
+    if regions:
+        aws_placement_groups = {}
+        for region in regions:
+            aws_placement_groups |= list_placement_groups_aws(
+                tags_dict=tags_dict, region_name=region, group_as_region=True)
+    else:
+        aws_placement_groups = list_placement_groups_aws(tags_dict=tags_dict, group_as_region=True)
+
+    for region, instance_list in aws_placement_groups.items():
+        if not instance_list:
+            LOGGER.info("There are no placement groups to remove in AWS region %s", region)
+            continue
+        client: EC2Client = boto3.client('ec2', region_name=region)
+        for instance in instance_list:
+            name = instance.get("GroupName")
+            LOGGER.info("Going to delete placement group '{name} ".format(name=name))
+            if not dry_run:
+                try:
+                    response = client.delete_placement_group(GroupName=name)
+                    LOGGER.debug("Done. Result: %s\n", response)
+                except Exception as ex:  # pylint: disable=broad-except
+                    LOGGER.debug("Failed with: %s", str(ex))
+
+# ----------
