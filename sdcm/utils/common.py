@@ -605,10 +605,10 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):  # pylint: dis
     if "TestId" not in tags_dict and "RunByUser" not in tags_dict:
         LOGGER.error("Can't clean cloud resources, TestId or RunByUser is missing")
         return False
-
-    cluster_backend = config.get("cluster_backend") or ''
-    aws_regions = config.region_names
-    gce_projects = [config.get("gce_project") or 'gcp-sct-project-1']
+    clean_instances_aws(tags_dict, dry_run=dry_run)
+    clean_elastic_ips_aws(tags_dict, dry_run=dry_run)
+    clean_test_security_groups(tags_dict, dry_run=dry_run)
+    clean_placement_groups_aws(tags_dict, dry_run=dry_run)
 
     if cluster_backend.startswith("k8s-local"):
         LOGGER.info("No remote resources are expected in the local K8S setups. Skipping.")
@@ -2518,6 +2518,11 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
     actions_per_type = get_post_behavior_actions(config)
     LOGGER.debug(actions_per_type)
 
+    # Define 'KUBECONFIG' env var that is needed in some cases on K8S backends
+    testrun_dir = get_testrun_dir(test_id=params.get('TestId'), base_dir=logdir)
+    kubeconfig_dir = Path(testrun_dir) if testrun_dir else Path(logdir)
+    os.environ['KUBECONFIG'] = str(kubeconfig_dir / ".kube/config")
+
     node_types_to_cleanup = []
     for cluster_nodes_type, action_type in actions_per_type.items():
         if action_type["action"] == "keep":
@@ -2537,7 +2542,7 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
             LOGGER.info("Post behavior %s for %s. Test run Failed. Keep resources running",
                         action_type["action"], cluster_nodes_type)
             continue
-    clean_cloud_resources(params | {"NodeType": node_types_to_cleanup}, config=config, dry_run=dry_run)
+    clean_cloud_resources(params | {"NodeType": node_types_to_cleanup}, dry_run=dry_run)
 
 
 def search_test_id_in_latest(logdir):
@@ -3116,74 +3121,6 @@ def time_period_str_to_seconds(time_str: str) -> int:
     return sum([int(g[0] or 0) * 3600 + int(g[1] or 0) * 60 + int(g[2] or 0) for g in duration_pattern.findall(time_str)])
 
 
-def sleep_for_percent_of_duration(duration: int, percent: int, min_duration: int, max_duration: int):
-    """Waits the percentage of a duration in seconds, with a minimum and maximum duration (min < duration * percentage < max)"""
-    duration = int(duration * percent / 100)
-    duration = max(min(duration, max_duration), min_duration)
-    LOGGER.debug("Sleeping for %s seconds", duration)
-    time.sleep(duration)
-
-
-def get_keyspace_partition_ranges(node, keyspace: str):
-    result = node.run_nodetool("describering", keyspace)
-    if not result.stdout:
-        return None
-
-    ranges_as_list = re.findall(r'^\s*TokenRange\((.*)\)\s*$', result.stdout, re.MULTILINE)
-    if not ranges_as_list:
-        raise ValueError(f"No TokenRange() found in describering: {result.stdout}")
-
-    return [describering_parsing(one_range) for one_range in ranges_as_list]
-
-
-def keyspace_min_max_tokens(node, keyspace: str):
-    ranges = get_keyspace_partition_ranges(node, keyspace)
-    if not ranges:
-        return None, None
-
-    min_token = min([token['start_token'] for token in ranges])
-    max_token = max([token['end_token'] for token in ranges])
-    return min_token, max_token
-
-
-def describering_parsing(describering_output):
-    def _list2dic(attr_list, heads_to_dict):
-        res = {}
-        for ind, attr in enumerate(heads_to_dict):
-            res[attr] = attr_list[ind].strip()
-        return res
-
-    found_attributes = re.findall(r'^\s*start_token:(-?\d+), end_token:(-?\d+), endpoints:\[([\d\., ]+)\], '
-                                  r'rpc_endpoints:\[([\d\., ]+)\], endpoint_details:\[(.*)\]\s*$',
-                                  describering_output, re.MULTILINE)
-    heads = ['start_token', 'end_token', 'endpoints', 'rpc_endpoints']
-    result = {}
-    assert found_attributes, "Wrong format of token range: " + describering_output
-    for index, attribute in enumerate(heads):
-        attr_value = found_attributes[0][index].strip()
-        result[attribute] = int(attr_value) if "token" in attribute else attr_value
-        result["details"] = [_list2dic(attr_list, ['host', 'datacenter', 'rack']) for attr_list in
-                             re.findall(r'EndpointDetails\(host:([\d\.,]+), datacenter:([^,]+), rack:([^\)]+)\),?',
-                                        found_attributes[0][4])]
-    return result
-
-
-@contextmanager
-def SoftTimeoutContext(timeout: int, operation: str):  # pylint: disable=invalid-name
-    """Publish SoftTimeoutEvent with operation info in case of duration > timeout"""
-    start_time = time.time()
-    yield
-    duration = time.time() - start_time
-    if duration > timeout:
-        SoftTimeoutEvent(operation=operation, soft_timeout=timeout,
-                         duration=duration).publish_or_dump()
-
-
-def raise_exception_in_thread(thread: threading.Thread, exception_type: Type[BaseException]):
-    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_ulong(thread.ident), ctypes.py_object(exception_type))
-    LOGGER.debug("PyThreadState_SetAsyncExc: return [%s]", res)
-
-
 # -----AWS Placement Group section -----
 def list_placement_groups_aws(tags_dict=None, region_name=None, available=False, group_as_region=False, verbose=False):
     """
@@ -3238,11 +3175,9 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
     return placement_groups
 
 
-@retrying(n=30, sleep_time=10, allowed_exceptions=(ClientError,))
 def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
     """Remove all placement groups with specific tags in AWS."""
     # pylint: disable=too-many-locals,import-outside-toplevel
-    tags_dict = {key: value for key, value in tags_dict.items() if key != "NodeType"}
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     if regions:
         aws_placement_groups = {}
@@ -3254,7 +3189,7 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
 
     for region, instance_list in aws_placement_groups.items():
         if not instance_list:
-            LOGGER.debug("There are no placement groups to remove in AWS region %s", region)
+            LOGGER.info("There are no placement groups to remove in AWS region %s", region)
             continue
         client: EC2Client = boto3.client('ec2', region_name=region)
         for instance in instance_list:
@@ -3263,8 +3198,8 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
             if not dry_run:
                 try:
                     response = client.delete_placement_group(GroupName=name)
-                    LOGGER.info("Placement group deleted: %s\n", response)
+                    LOGGER.debug("Done. Result: %s\n", response)
                 except Exception as ex:  # pylint: disable=broad-except
-                    LOGGER.debug("Failed to delete placement group: %s", str(ex))
-                    raise
+                    LOGGER.debug("Failed with: %s", str(ex))
+
 # ----------
