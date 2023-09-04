@@ -25,6 +25,7 @@ import google.api_core.exceptions
 from google.cloud import compute_v1
 
 from sdcm import cluster
+from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.utils.gce_utils import (
@@ -92,6 +93,9 @@ class GCENode(cluster.BaseNode):
                          node_prefix=node_prefix,
                          dc_idx=dc_idx)
 
+    def refresh_network_interfaces_info(self):
+        pass
+
     @staticmethod
     def is_gce() -> bool:
         return True
@@ -135,6 +139,10 @@ class GCENode(cluster.BaseNode):
 
         ip_tuple = (gce_public_addresses(instance), gce_private_addresses(instance))
         return ip_tuple
+
+    @property
+    def network_interfaces(self):
+        pass
 
     @property
     def region(self):
@@ -365,7 +373,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         public_key, key_type = pub_key_from_private_key_file(self.params.get("user_credentials_path"))
         zone = self._gce_zone_names[dc_idx]
         network_tags = ["sct-network-only"]
-        if self.params.get('intra_node_comm_public') or self.params.get('ip_ssh_connections') == 'public':
+        if self.params.get('intra_node_comm_public') or ssh_connection_ip_type(self.params) == 'public':
             network_tags.append("sct-allow-public")
         create_node_params = dict(
             project_id=self.project, zone=zone,

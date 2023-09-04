@@ -57,6 +57,13 @@ class LocalNode(BaseNode):
     def region(self):
         return "eu-north-1"
 
+    @property
+    def network_interfaces(self):
+        pass
+
+    def refresh_network_interfaces_info(self):
+        pass
+
     def _refresh_instance_state(self):
         return "127.0.0.1", "127.0.0.1"
 

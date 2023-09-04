@@ -7,8 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: """['configurations/nemesis/longevity-5gb-1h-nemesis.yaml', 'configurations/nemesis/StopStartInterfacesNetworkMonkey.yaml', 'configurations/nemesis/additional_configs/extra_interface_public.yaml']""",
-
-    ip_ssh_connections: "public"
+    test_config: """['configurations/nemesis/longevity-5gb-1h-nemesis.yaml', 'configurations/nemesis/StopStartInterfacesNetworkMonkey.yaml', 'configurations/network_config/two_interfaces.yaml']""",
 
 )

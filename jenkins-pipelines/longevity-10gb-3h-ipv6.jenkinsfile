@@ -6,8 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
-    ip_ssh_connections: 'ipv6',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-10gb-3h.yaml'
+    test_config: '''["test-cases/longevity/longevity-10gb-3h.yaml", "configurations/network_config/all_addresses_ipv6_public.yaml"]'''
 
 )

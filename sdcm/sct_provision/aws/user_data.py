@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 from typing import Union
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -8,8 +9,11 @@ from pydantic import Field
 
 from sdcm.provision.aws.configuration_script import AWSConfigurationScriptBuilder
 from sdcm.provision.common.user_data import UserDataBuilderBase, DataDeviceType, ScyllaUserDataBuilderBase, RaidLevelType
+from sdcm.provision.network_configuration import is_ip_ssh_connections_ipv6, network_interfaces_count
 from sdcm.provision.scylla_yaml import ScyllaYaml
 from sdcm.sct_config import SCTConfiguration
+
+LOGGER = logging.getLogger()
 
 
 class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
@@ -52,12 +56,13 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
     @property
     def post_configuration_script(self) -> str:
         post_boot_script = AWSConfigurationScriptBuilder(
-            aws_additional_interface=self.params.get('extra_network_interface') or False,
-            aws_ipv6_workaround=self.params.get('ip_ssh_connections') == 'ipv6',
+            aws_additional_interface=network_interfaces_count(self.params) > 1,
+            aws_ipv6_workaround=is_ip_ssh_connections_ipv6(self.params),
             syslog_host_port=self.syslog_host_port,
             logs_transport=self.params.get('logs_transport'),
             disable_ssh_while_running=True,
         ).to_string()
+        LOGGER.info("post_boot_script: %s", post_boot_script)
         return base64.b64encode(post_boot_script.encode('utf-8')).decode('ascii')
 
     def to_string(self) -> str:
@@ -115,7 +120,7 @@ class AWSInstanceUserDataBuilder(UserDataBuilderBase):
         post_boot_script = AWSConfigurationScriptBuilder(
             # Monitoring and loader nodes does not use additional interface
             aws_additional_interface=False,
-            aws_ipv6_workaround=self.params.get('ip_ssh_connections') == 'ipv6',
+            aws_ipv6_workaround=is_ip_ssh_connections_ipv6(self.params),
             logs_transport=self.params.get('logs_transport'),
             syslog_host_port=self.syslog_host_port,
             disable_ssh_while_running=True,

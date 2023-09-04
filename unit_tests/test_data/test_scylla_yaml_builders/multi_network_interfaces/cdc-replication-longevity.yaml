@@ -1,0 +1,52 @@
+test_duration: 900
+
+user_prefix: 'cdc-replication-longevity'
+db_type: mixed_scylla
+
+n_db_nodes: 3
+instance_type_db: 'i4i.large'
+
+n_test_oracle_db_nodes: 1
+instance_type_db_oracle: 'i3.large'
+
+n_loaders: 1
+instance_type_loader: 'c5.large'
+
+n_monitor_nodes: 1
+
+nemesis_class_name: 'CategoricalMonkey'
+nemesis_interval: 5
+
+gemini_cmd: "gemini --duration 30m --warmup 0s -c 4 -m write --non-interactive --cql-features basic --max-mutation-retries 100 --max-mutation-retries-backoff 100ms --replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}\" --table-options \"cdc = {'enabled': true, 'ttl': 0}\" --use-server-timestamps --test-host-selection-policy token-aware"
+
+# Required by SCT, although not used:
+gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
+
+scylla_network_config:
+- address: listen_address  # Address Scylla listens for connections from other nodes. See storage_port and ssl_storage_ports.
+  ip_type: ipv4
+  public: false
+  listen_all: true  # Should be True when multiple interfaces - Scylla should be listening on all interfaces
+  use_dns: false
+  nic: 1
+- address: rpc_address  # Address on which Scylla is going to expect Thrift and CQL client connections.
+  ip_type: ipv4
+  public: false
+  listen_all: true  # Should be True when multiple interfaces - Scylla should be listening on all interfaces
+  use_dns: false
+  nic: 1
+- address: broadcast_rpc_address  # Address that is broadcasted to tell the clients to connect to. Related to rpc_address.
+  ip_type: ipv4
+  public: false  # Should be False when multiple interfaces
+  use_dns: false
+  nic: 1
+- address: broadcast_address  # Address that is broadcasted to tell other Scylla nodes to connect to. Related to listen_address above.
+  ip_type: ipv4
+  public: false  # Should be False when multiple interfaces
+  use_dns: false
+  nic: 1  #  If ipv4 and public is True it has to be primary network interface (device index is 0)
+- address: test_communication  # Type of IP used to connect to machine instances
+  ip_type: ipv4
+  public: false
+  use_dns: false
+  nic: 0  #  If ipv4 and public is True it has to be primary network interface (device index is 0)

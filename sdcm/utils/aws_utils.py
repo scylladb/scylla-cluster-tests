@@ -21,6 +21,7 @@ from botocore.exceptions import ClientError
 from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
 from mypy_boto3_ec2.literals import ArchitectureTypeType
 
+from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.utils.decorators import retrying
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.wait import wait_for
@@ -314,7 +315,7 @@ def get_ec2_network_configuration(regions: list[str], availability_zones: list[s
         assert sct_sg, f"No SCT security group configured for {region}! Run 'hydra prepare-aws-region'"
         security_groups.append(sct_sg.group_id)
 
-        if params.get('intra_node_comm_public') or params.get('ip_ssh_connections') == 'public':
+        if ssh_connection_ip_type(params) == 'public':
             test_config = TestConfig()
             test_id = test_config.test_id()
 

@@ -18,6 +18,7 @@ from typing import Literal, List, Union, Optional
 from pydantic import Field, validator, BaseModel  # pylint: disable=no-name-in-module
 
 from sdcm.provision.common.builders import AttrBuilder
+from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.sct_config import SCTConfiguration
 
 
@@ -172,18 +173,12 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         return self.params.get('authorizer')
 
     @property
-    def _is_ip_ssh_connections_ipv6(self):
-        if self.params.get('ip_ssh_connections') == 'ipv6':
-            return True
-        return False
-
-    @property
     def _default_endpoint_snitch(self) -> Literal[
             'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
             'org.apache.cassandra.locator.GossipingPropertyFileSnitch',
             'org.apache.cassandra.locator.Ec2Snitch']:
         if self._cluster_backend == 'aws':
-            if self.params.get('ip_ssh_connections') == 'public':
+            if ssh_connection_ip_type(self.params) == 'public':
                 return 'org.apache.cassandra.locator.Ec2MultiRegionSnitch'
             else:
                 return 'org.apache.cassandra.locator.Ec2Snitch'

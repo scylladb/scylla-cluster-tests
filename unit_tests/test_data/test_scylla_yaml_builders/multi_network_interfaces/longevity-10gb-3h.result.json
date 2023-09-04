@@ -1,9 +1,7 @@
 {
-  "broadcast_address": "__NODE_PRIVATE_ADDRESS__",
-  "broadcast_rpc_address": "__NODE_PRIVATE_ADDRESS__",
-  "listen_address": "__NODE_PRIVATE_ADDRESS__",
-  "endpoint_snitch": "org.apache.cassandra.locator.Ec2Snitch",
-  "rpc_address": "__NODE_PRIVATE_ADDRESS__",
+  "broadcast_address": "__NODE_PRIVATE_ADDRESS_2__",
+  "listen_address": "0.0.0.0",
+  "rpc_address": "0.0.0.0",
   "cluster_name": "dummy_cluster",
   "seed_provider": [
     {
@@ -15,10 +13,11 @@
       ]
     }
   ],
+  "broadcast_rpc_address": "__NODE_PRIVATE_ADDRESS_2__",
   "experimental_features": [],
   "prometheus_address": "0.0.0.0",
+  "enable_ipv6_dns_lookup": false,
   "alternator_enforce_authorization": false,
   "auto_bootstrap": true,
-  "enable_ipv6_dns_lookup": false,
   "hinted_handoff_enabled": false
 }

@@ -22,6 +22,7 @@ from unittest.mock import patch
 from parameterized import parameterized
 
 from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
+from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration, ssh_connection_ip_type
 from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder, ScyllaYamlClusterAttrBuilder, ScyllaYaml
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase
 from sdcm.sct_config import SCTConfiguration
@@ -45,11 +46,13 @@ class FakeCluster:
 # pylint: disable=too-few-public-methods
 class TestConfigWithLdap:
     LDAP_ADDRESS = '1.1.1.1', '389'
+    IP_SSH_CONNECTIONS = "private"
 
 
 # pylint: disable=too-few-public-methods
 class TestConfigWithoutLdap:
     LDAP_ADDRESS = None
+    IP_SSH_CONNECTIONS = "private"
 
 
 # pylint: disable=too-few-public-methods
@@ -57,6 +60,7 @@ class FakeNode:
     parent_cluster = FakeCluster()
     public_ip_address = '2.2.2.2'
     private_ip_address = '1.1.1.1'
+    scylla_network_configuration = None
 
 
 class ScyllaYamlClusterAttrBuilderBase(unittest.TestCase):
@@ -94,7 +98,6 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
             expected_as_dict={
                 'cluster_name': 'test-cluster',
                 'alternator_enforce_authorization': False,
-                'enable_ipv6_dns_lookup': False,
                 'experimental_features': [],
             }
         )
@@ -124,7 +127,6 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'alternator_enforce_authorization': False,
                 'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                 'authorizer': 'AllowAllAuthorizer',
-                'enable_ipv6_dns_lookup': False,
                 'endpoint_snitch': 'org.apache.cassandra.locator.Ec2Snitch',
                 'experimental_features': [],
                 'ldap_attr_role': 'cn',
@@ -163,7 +165,6 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'alternator_write_isolation': 'always_use_lwt',
                 'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                 'authorizer': 'CassandraAuthorizer',
-                'enable_ipv6_dns_lookup': False,
                 'experimental_features': [],
                 'ldap_attr_role': 'cn',
                 'ldap_bind_dn': 'cn=admin,dc=scylla-qa,dc=com',
@@ -206,7 +207,6 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'alternator_port': False,
                 'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                 'authorizer': 'CassandraAuthorizer',
-                'enable_ipv6_dns_lookup': False,
                 'endpoint_snitch': 'org.apache.cassandra.locator.GossipingPropertyFileSnitch',
                 'experimental_features': [],
                 'hinted_handoff_enabled': False,
@@ -262,6 +262,7 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 }
             },
             expected_as_dict={
+                'enable_ipv6_dns_lookup': False,
                 'listen_address': '1.1.1.1',
                 'rpc_address': '1.1.1.1',
                 'seed_provider': [
@@ -289,6 +290,7 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
             expected_as_dict={
                 'broadcast_address': '2.2.2.2',
                 'broadcast_rpc_address': '2.2.2.2',
+                'enable_ipv6_dns_lookup': False,
                 'listen_address': '1.1.1.1',
                 'rpc_address': '1.1.1.1',
                 'seed_provider': [
@@ -316,6 +318,7 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
             expected_as_dict={
                 'broadcast_address': '1.1.1.1',
                 'broadcast_rpc_address': '1.1.1.1',
+                'enable_ipv6_dns_lookup': False,
                 'listen_address': '0.0.0.0',
                 'rpc_address': '0.0.0.0',
                 'seed_provider': [
@@ -343,6 +346,7 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
             expected_as_dict={
                 'broadcast_address': '1.1.1.1',
                 'broadcast_rpc_address': '1.1.1.1',
+                'enable_ipv6_dns_lookup': False,
                 'listen_address': '0.0.0.0',
                 'rpc_address': '0.0.0.0',
                 'seed_provider': [
@@ -419,15 +423,16 @@ class DummyCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=too-few-p
         pass
 
 
-class DummyNode(BaseNode):  # pylint: disable=abstract-method
+class DummyNode(BaseNode):  # pylint: disable=abstract-method,too-many-instance-attributes
     _system_log = None
     is_enterprise = False
     distro = Distro.CENTOS7
 
     def __init__(self, node_num: int, parent_cluster, base_logdir: str):
-        self._private_ip_address = '1.1.1.' + str(node_num)
-        self._public_ip_address = '2.2.2.' + str(node_num)
-        self._ipv6_ip_address = 'aaaa:db8:aaaa:aaaa:aaaa:aaaa:aaaa:aaa' + str(node_num)
+        self._private_ip_address = ['1.1.1.' + str(node_num), '1.1.2.' + str(node_num)]
+        self._public_ip_address = ['2.2.2.' + str(node_num)]
+        self._ipv6_ip_address = ['aaaa:db8:aaaa:aaaa:aaaa:aaaa:aaaa:aaa' + str(node_num),
+                                 'aaaa:db8:aaaa:aaaa:aaaa:aaaa:aaaa:bbb' + str(node_num)]
         self._scylla_yaml = ScyllaYaml()
         super().__init__(
             base_logdir=base_logdir,
@@ -435,6 +440,33 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
             name='node-' + str(node_num),
             ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
         )
+
+    def init(self):
+        super().init()
+        if self.parent_cluster.params.environment['cluster_backend'] == 'aws':
+            self.scylla_network_configuration = ScyllaNetworkConfiguration(
+                network_interfaces=self.network_interfaces,
+                scylla_network_config=self.parent_cluster.params["scylla_network_config"])
+
+    @property
+    def network_interfaces(self):
+        return [NetworkInterface(ipv4_public_address=self._public_ip_address[0],
+                                 ipv6_public_addresses=[self._ipv6_ip_address[0]],
+                                 ipv4_private_addresses=[self._private_ip_address[0]],
+                                 ipv6_private_address='',
+                                 dns_private_name="",
+                                 dns_public_name="",
+                                 device_index=0
+                                 ),
+                NetworkInterface(ipv4_public_address=None,
+                                 ipv6_public_addresses=[self._ipv6_ip_address[1]],
+                                 ipv4_private_addresses=[self._private_ip_address[1]],
+                                 ipv6_private_address='',
+                                 dns_private_name="",
+                                 dns_public_name="",
+                                 device_index=1
+                                 )
+                ]
 
     def _init_remoter(self, ssh_login_info):
         self.remoter = FakeRemoter()
@@ -444,10 +476,10 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
         yield self._scylla_yaml
 
     def _get_private_ip_address(self):
-        return self._private_ip_address
+        return self._private_ip_address[0]
 
     def _get_public_ip_address(self):
-        return self._public_ip_address
+        return self._public_ip_address[0]
 
     def process_scylla_args(self, append_scylla_args=''):
         pass
@@ -460,7 +492,7 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
         pass
 
     def _get_ipv6_ip_address(self):
-        return self._ipv6_ip_address
+        return self._ipv6_ip_address[0]
 
     def start_task_threads(self):
         # disable all background threads
@@ -493,6 +525,8 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     def validate_scylla_yaml(self, expected_node_config, seed_node_ips):
         with self.remote_scylla_yaml() as node_yaml:
             expected_node_yaml = expected_node_config.replace(
+                '__NODE_PRIVATE_ADDRESS_2__', self._private_ip_address[1])
+            expected_node_yaml = expected_node_yaml.replace(
                 '__NODE_PRIVATE_ADDRESS__', self.private_ip_address)
             expected_node_yaml = expected_node_yaml.replace(
                 '__NODE_PUBLIC_ADDRESS__', self.public_ip_address)
@@ -551,7 +585,7 @@ class IntegrationTests(unittest.TestCase):
     def temp_dir(self):
         return tempfile.mkdtemp()
 
-    def _run_test(self, config_path: str, expected_node_config: str):
+    def _run_test(self, config_path: str, expected_node_config: str, region_names: str):
         old_environ = os.environ.copy()
         old_test_config = {key: value for key, value in TestConfig().__class__.__dict__.items() if
                            is_builtin(type(value)) and not key.startswith('__')}
@@ -562,7 +596,7 @@ class IntegrationTests(unittest.TestCase):
                     patch("sdcm.provision.scylla_yaml.certificate_builder.install_client_certificate",
                           return_value=None):
                 os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-                os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
+                os.environ['SCT_REGION_NAME'] = region_names
                 os.environ['SCT_CONFIG_FILES'] = config_path
                 os.environ['SCT_PREPARE_SASLAUTHD'] = "true"
 
@@ -574,9 +608,9 @@ class IntegrationTests(unittest.TestCase):
                     test_config.set_multi_region(len(conf.get('region_name').split()) > 1)
                 elif cluster_backend == 'gce':
                     test_config.set_multi_region(len(conf.get('gce_datacenter').split()) > 1)
+                    test_config.set_intra_node_comm_public(conf.get('intra_node_comm_public'))
 
-                test_config.set_ip_ssh_connections(conf.get(key='ip_ssh_connections'))
-                test_config.set_intra_node_comm_public(conf.get('intra_node_comm_public'))
+                test_config.set_ip_ssh_connections(ssh_connection_ip_type(conf))
 
                 cluster = DummyCluster(params=conf)
                 for node_num in range(3):
@@ -605,4 +639,16 @@ class IntegrationTests(unittest.TestCase):
     def test_integration_node(self, config_path, result_path):
         with open(result_path, encoding="utf-8") as result_file:
             expected_node_config = result_file.read()
-        self._run_test(config_path, expected_node_config=expected_node_config)
+        self._run_test(config_path, expected_node_config=expected_node_config,
+                       region_names='["eu-west-1", "us-east-1"]')
+
+    @parameterized.expand([
+        (
+            os.path.join(BASE_FOLDER, "multi_network_interfaces",  config_name),
+            os.path.join(BASE_FOLDER, "multi_network_interfaces", config_name.replace('.yaml', '.result.json')),
+        ) for config_name in os.listdir(os.path.join(BASE_FOLDER, "multi_network_interfaces")) if config_name.endswith('.yaml')
+    ])
+    def test_integration_node_multi_interface(self, config_path, result_path):
+        with open(result_path, encoding="utf-8") as result_file:
+            expected_node_config = result_file.read()
+        self._run_test(config_path, expected_node_config=expected_node_config, region_names='["eu-west-1"]')

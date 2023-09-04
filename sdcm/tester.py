@@ -56,6 +56,7 @@ from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
 from sdcm.scan_operation_thread import ScanOperationThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
@@ -316,9 +317,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self._profile_factory = ProfilerFactory(os.path.join(self.logdir, 'profile.stats'))
             self._profile_factory.activate()
 
-        ip_ssh_connections = self.params.get(key='ip_ssh_connections')
-        self.log.debug("IP used for SSH connections is '%s'",
-                       ip_ssh_connections)
+        ip_ssh_connections = ssh_connection_ip_type(self.params)
         self.test_config.set_ip_ssh_connections(ip_ssh_connections)
         self._init_test_duration()
         post_behavior_db_nodes = self.params.get('post_behavior_db_nodes')

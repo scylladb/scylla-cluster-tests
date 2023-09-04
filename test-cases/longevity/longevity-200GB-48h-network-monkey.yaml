@@ -16,12 +16,6 @@ nemesis_seed: '002'
 nemesis_interval: 10
 nemesis_multiply_factor: 15
 
-extra_network_interface: true
-# when using multiple network interfaces in the same subnet, we run into the the possibility
-# that the interface we tried to contact does not respond, but the other one does.
-# To prevent that, we use the public IP address to contact the nodes instead.
-ip_ssh_connections: 'public'
-
 nemesis_during_prepare: false
 
 user_prefix: 'longevity-200gb-48h-network'
