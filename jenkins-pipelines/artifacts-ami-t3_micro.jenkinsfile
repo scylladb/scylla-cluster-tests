@@ -1,0 +1,14 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    test_config: '''["test-cases/artifacts/ami.yaml", "configurations/t3_micro_data_volumes.yaml"]''',
+    backend: 'aws',
+    provision_type: 'spot_low_price',
+
+    timeout: [time: 45, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+    builds_to_keep: '100'
+)
