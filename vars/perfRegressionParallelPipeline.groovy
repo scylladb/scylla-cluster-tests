@@ -217,7 +217,7 @@ def call(Map pipelineParams) {
                                                             dir('scylla-cluster-tests') {
                                                                 timeout(time: 30, unit: 'MINUTES') {
                                                                     if (params.backend == 'aws' || params.backend == 'azure') {
-                                                                        provisionResources(new_params, builder.region)
+                                                                        provisionResources(params, builder.region)
                                                                     } else {
                                                                         sh """
                                                                             echo 'Skipping because non-AWS/Azure backends are not supported'

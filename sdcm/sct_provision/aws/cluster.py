@@ -210,7 +210,6 @@ class ClusterBase(BaseModel):
             params=self.params,
             region_id=region_id,
             user_data_raw=self._user_data,
-            availability_zone=availability_zone,
             placement_group=self.placement_group_name
         )
         return AWSInstanceParams(**params_builder.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True))

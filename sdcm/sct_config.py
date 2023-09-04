@@ -2228,14 +2228,6 @@ class SCTConfiguration(dict):
         assert num_of_db_nodes > seeds_num, \
             "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
 
-    def _validate_number_of_db_nodes_divides_by_az_number(self):
-        if self.get("cluster_backend").startswith("k8s"):
-            return
-        az_count = len(self.get('availability_zone').split(',')) if self.get('availability_zone') else 1
-        for nodes_num in [int(i) for i in str(self.get('n_db_nodes')).split(' ')]:
-            assert nodes_num % az_count == 0, \
-                f"Number of db nodes ({nodes_num}) should be divisible by number of availability zones ({az_count})"
-
     def _validate_placement_group_required_values(self):
         if self.get("use_placement_group"):
             az_count = len(self.get('availability_zone').split(',')) if self.get('availability_zone') else 1
@@ -2243,12 +2235,6 @@ class SCTConfiguration(dict):
             assert az_count == 1 and regions_count == 1, \
                 (f"Number of Regions({regions_count}) and AZ({az_count}) should be 1 "
                  f"when param use_placement_group is used")
-
-    def _validate_scylla_d_overrides_files_exists(self):
-        if scylla_d_overrides_files := self.get("scylla_d_overrides_files"):
-            for config_file_path in scylla_d_overrides_files:
-                config_file = pathlib.Path(get_sct_root_path()) / config_file_path
-                assert config_file.exists(), f"{config_file} doesn't exists, please check your configuration"
 
     def _check_per_backend_required_values(self, backend: str):
         if backend in self.available_backends:

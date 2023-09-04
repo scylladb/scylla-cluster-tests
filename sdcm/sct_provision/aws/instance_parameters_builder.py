@@ -33,7 +33,6 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     params: Union[SCTConfiguration, dict] = Field(as_dict=False)
     region_id: int = Field(as_dict=False)
     user_data_raw: Union[str, UserDataBuilderBase] = Field(as_dict=False)
-    availability_zone: int = 0
     placement_group: str = None
 
     _INSTANCE_TYPE_PARAM_NAME: str = None
@@ -87,8 +86,13 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
 
     @property
     def Placement(self) -> Optional[AWSPlacementInfo]:  # pylint: disable=invalid-name
+        """
+        If only one AZ is configured let's restrict it via placement option
+        """
+        if len(self._availability_zones) != 1:
+            return None
         return AWSPlacementInfo(
-            AvailabilityZone=self._region_name + self._availability_zones[self.availability_zone],
+            AvailabilityZone=self._region_name + self._availability_zones[0],
             GroupName=self.placement_group)
 
     @property
