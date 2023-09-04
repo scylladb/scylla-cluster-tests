@@ -1,0 +1,3 @@
+instance_type_db: 't3.micro'
+data_volume_disk_num: 1  # t3.micro doesn't include any local volumes (outside of root), so an additional disk is required for scylla
+data_volume_disk_size: 50
