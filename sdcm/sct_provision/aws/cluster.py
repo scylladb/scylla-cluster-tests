@@ -15,8 +15,7 @@ import abc
 from functools import cached_property
 from typing import List, Dict
 
-from pydantic import BaseModel  # pylint: disable=no-name-in-module
-
+from pydantic import BaseModel
 from sdcm import cluster
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
@@ -29,6 +28,7 @@ from sdcm.sct_provision.aws.instance_parameters_builder import ScyllaInstancePar
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder, AWSInstanceUserDataBuilder
 from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_SPOT, INSTANCE_PROVISION_SPOT_FLEET
 from sdcm.test_config import TestConfig
+from sdcm.provision.aws.utils import create_cluster_placement_groups_aws
 
 
 class ClusterNode(BaseModel):
@@ -57,6 +57,7 @@ class ClusterBase(BaseModel):
     _NODE_NUM_PARAM_NAME = None
     _INSTANCE_PARAMS_BUILDER = None
     _USER_PARAM = None
+    _USE_PLACEMENT_GROUP = True
 
     @property
     def _provisioner(self):
@@ -99,6 +100,14 @@ class ClusterBase(BaseModel):
     @property
     def cluster_name(self):
         return '%s-%s' % (cluster.prepend_user_prefix(self._user_prefix, self._cluster_postfix), self._short_id)
+
+    @property
+    def placement_group_name(self):
+        if self.params.get("use_placement_group") and self._USE_PLACEMENT_GROUP:
+            return '%s-%s' % (
+                cluster.prepend_user_prefix(self._user_prefix, "placement_group"), self._short_id)
+        else:
+            return None
 
     @property
     def _node_prefix(self):
@@ -201,6 +210,7 @@ class ClusterBase(BaseModel):
             region_id=region_id,
             user_data_raw=self._user_data,
             availability_zone=availability_zone,
+            placement_group=self.placement_group_name
         )
         return AWSInstanceParams(**params_builder.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True))
 
@@ -288,6 +298,8 @@ class MonitoringCluster(ClusterBase):
     _NODE_NUM_PARAM_NAME = 'n_monitor_nodes'
     _INSTANCE_PARAMS_BUILDER = MonitorInstanceParamsBuilder
     _USER_PARAM = 'ami_monitor_user'
+    # disable placement group for monitor nodes, because it doesn't need low-latency network performance
+    _USE_PLACEMENT_GROUP = False
 
     @property
     def _user_data(self) -> str:
@@ -295,6 +307,18 @@ class MonitoringCluster(ClusterBase):
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
         ).to_string()
+
+
+class PlacementGroup(ClusterBase):
+
+    @property
+    def _user_data(self) -> str:
+        return ''
+
+    def provision(self):
+        if self.placement_group_name:
+            create_cluster_placement_groups_aws(
+                name=self.placement_group_name, tags=self.common_tags, region=self._region(0))
 
 
 ClusterNode.update_forward_refs()

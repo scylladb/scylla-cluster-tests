@@ -359,3 +359,15 @@ def configure_eth1_script():
 def configure_set_preserve_hostname_script():
     return 'grep "preserve_hostname: true" /etc/cloud/cloud.cfg 1>/dev/null 2>&1 ' \
            '|| echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg\n'
+
+
+# -----AWS Placement Group section -----
+def create_cluster_placement_groups_aws(name: str, tags: dict, region=None, dry_run=False):
+    ec2: EC2Client = ec2_clients[region]
+    result = ec2.create_placement_group(
+        DryRun=dry_run, GroupName=name, Strategy='cluster',
+        TagSpecifications=[{
+            'ResourceType': 'placement-group',
+            "Tags": [{"Key": key, "Value": value} for key, value in tags.items()] +
+                    [{"Key": "Name", "Value": name}], }],)
+    return result

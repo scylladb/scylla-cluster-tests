@@ -57,6 +57,7 @@ import boto3
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Image as EC2Image
+from botocore.exceptions import ClientError
 import docker  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
 from google.cloud.storage import Blob as GceBlob
 from google.cloud.compute_v1.types import Metadata as GceMetadata, Instance as GceInstance
@@ -3215,9 +3216,11 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
     return placement_groups
 
 
+@retrying(n=30, sleep_time=10, allowed_exceptions=(ClientError,))
 def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
     """Remove all placement groups with specific tags in AWS."""
     # pylint: disable=too-many-locals,import-outside-toplevel
+    tags_dict = {key: value for key, value in tags_dict.items() if key != "NodeType"}
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     if regions:
         aws_placement_groups = {}
@@ -3240,6 +3243,6 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
                     response = client.delete_placement_group(GroupName=name)
                     LOGGER.debug("Done. Result: %s\n", response)
                 except Exception as ex:  # pylint: disable=broad-except
-                    LOGGER.debug("Failed with: %s", str(ex))
-
+                    LOGGER.info("Failed with: %s", str(ex))
+                    raise
 # ----------
