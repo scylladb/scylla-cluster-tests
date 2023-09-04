@@ -73,6 +73,7 @@ from sdcm.utils.common import (
     list_load_balancers_aws,
     list_cloudformation_stacks_aws,
     list_instances_aws,
+    list_placement_groups_aws,
     list_instances_gce,
     list_logs_by_test_id,
     list_resources_docker,
@@ -384,6 +385,26 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         click.echo(aws_table.get_string(title="SGs used on AWS"))
     else:
         click.secho("No security groups found for selected filters in AWS!", fg="yellow")
+
+    click.secho("Checking AWS Placement Groups...", fg='green')
+    placement_groups = list_placement_groups_aws(tags_dict=params, available=get_all_running, verbose=verbose)
+    if placement_groups:
+        aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser"])
+        aws_table.align = "l"
+        aws_table.sortby = 'Id'
+        for group in placement_groups:
+            tags = aws_tags_to_dict(group.get('Tags'))
+            test_id = tags.get("TestId", "N/A")
+            run_by_user = tags.get("RunByUser", "N/A")
+            name = tags.get("Name", "N/A")
+            aws_table.add_row([
+                name,
+                group['GroupId'],
+                test_id,
+                run_by_user])
+        click.echo(aws_table.get_string(title="SGs used on AWS"))
+    else:
+        click.secho("No placement groups found for selected filters in AWS!", fg="yellow")
 
     click.secho("Checking AWS Load Balancers...", fg='green')
     load_balancers = list_load_balancers_aws(tags_dict=params, verbose=verbose)
