@@ -626,6 +626,10 @@ class SCTConfiguration(dict):
         dict(name="security_group_ids", env="SCT_SECURITY_GROUP_IDS", type=str_or_list,
              help="AWS security groups ids to use"),
 
+        dict(name="use_placement_group", env="SCT_USE_PLACEMENT_GROUP", type=str,
+             help="if true, create 'cluster' placement group for test case "
+                  "for low-latency network performance achievement"),
+
         dict(name="subnet_id", env="SCT_SUBNET_ID", type=str_or_list,
              help="AWS subnet ids to use"),
 
@@ -2032,6 +2036,8 @@ class SCTConfiguration(dict):
         self._check_partition_range_with_data_validation_correctness()
         self._verify_scylla_bench_mode_and_workload_parameters()
 
+        self._validate_placement_group_required_values()
+
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get('docker_image')
         scylla_version = self.get('scylla_version')
@@ -2112,6 +2118,14 @@ class SCTConfiguration(dict):
         for nodes_num in [int(i) for i in str(self.get('n_db_nodes')).split(' ')]:
             assert nodes_num % az_count == 0, \
                 f"Number of db nodes ({nodes_num}) should be divisible by number of availability zones ({az_count})"
+
+    def _validate_placement_group_required_values(self):
+        if self.get("use_placement_group"):
+            az_count = len(self.get('availability_zone').split(',')) if self.get('availability_zone') else 1
+            regions_count = len(self.region_names)
+            assert az_count == 1 and regions_count == 1, \
+                (f"Number of Regions({regions_count}) and AZ({az_count}) should be 1 "
+                 f"when param use_placement_group is used")
 
     def _check_per_backend_required_values(self, backend: str):
         if backend in self.available_backends:

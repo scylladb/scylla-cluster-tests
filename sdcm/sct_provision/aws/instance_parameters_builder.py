@@ -30,6 +30,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     region_id: int = Field(as_dict=False)
     user_data_raw: Union[str, UserDataBuilderBase] = Field(as_dict=False)
     availability_zone: int = 0
+    placement_group: str = None
 
     _INSTANCE_TYPE_PARAM_NAME: str = None
     _IMAGE_ID_PARAM_NAME: str = None
@@ -82,7 +83,9 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
 
     @property
     def Placement(self) -> Optional[AWSPlacementInfo]:  # pylint: disable=invalid-name
-        return AWSPlacementInfo(AvailabilityZone=self._region_name + self._availability_zones[self.availability_zone])
+        return AWSPlacementInfo(
+            AvailabilityZone=self._region_name + self._availability_zones[self.availability_zone],
+            GroupName=self.placement_group)
 
     @property
     def UserData(self) -> Optional[str]:  # pylint: disable=invalid-name

@@ -48,3 +48,5 @@ custom_es_index: 'performancestatsv2'
 use_hdr_cs_histogram: true
 
 append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+
+use_placement_group: true

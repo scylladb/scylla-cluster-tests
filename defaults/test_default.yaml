@@ -227,3 +227,5 @@ run_fullscan: []
 
 stress_step_duration: '15m'
 simulated_racks: 0
+
+use_placement_group: false
