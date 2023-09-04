@@ -3214,7 +3214,7 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
         client: EC2Client = boto3.client('ec2', region_name=region)
         for instance in instance_list:
             name = instance.get("GroupName")
-            LOGGER.info("Going to delete placement group '{name} ".format(name=name))
+            LOGGER.info("Going to delete placement group '{name} in region {region}".format(name=name, region=region))
             if not dry_run:
                 try:
                     response = client.delete_placement_group(GroupName=name)
