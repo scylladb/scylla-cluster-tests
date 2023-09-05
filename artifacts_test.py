@@ -322,7 +322,8 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         with self.subTest("verify write cache for NVMe devices"):
             self.verify_nvme_write_cache()
 
-        if backend != "docker" and not self.params.get("nonroot_offline_install"):
+        if (backend != "docker" and not self.params.get("nonroot_offline_install")
+                and self.node.db_node_instance_type != "t3.micro"):
             with self.subTest("verify XFS online discard enabled"):
                 self.verify_xfs_online_discard_enabled()
 
