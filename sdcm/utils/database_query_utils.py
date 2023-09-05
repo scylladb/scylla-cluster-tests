@@ -64,6 +64,9 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
             partition_range_splitted = self.partition_range_with_data_validation.split('-')
             self.partition_start_range = int(partition_range_splitted[0])
             self.partition_end_range = int(partition_range_splitted[1])
+            if self.max_partitions_in_test_table:
+                self.non_validated_partitions = self.max_partitions_in_test_table - (
+                    self.partition_end_range - self.partition_start_range)
 
     @property
     def db_cluster(self):
