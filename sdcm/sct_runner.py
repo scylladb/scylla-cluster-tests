@@ -647,7 +647,7 @@ class AwsSctRunner(SctRunner):
                     instance=instance,
                     test_id=tags.get("TestId"),
                     instance_name=instance_name,
-                    public_ips=[instance.get("PublicIpAddress"), ],
+                    public_ips=[public_ip, ] if (public_ip := instance.get("PublicIpAddress")) else [],
                     launch_time=instance["LaunchTime"],
                     keep=tags.get("keep"),
                     keep_action=tags.get("keep_action"),
@@ -1204,7 +1204,7 @@ def clean_sct_runners(test_status: str,
 
         # ssh_run_cmd currently only works on AWS, no point of wasting time
         # trying to lookup on AWS instance from GCP/Azure
-        if sct_runner_info.cloud_provider == "aws":
+        if sct_runner_info.public_ips and sct_runner_info.cloud_provider == "aws":
             ssh_run_cmd_result = ssh_run_cmd(command=cmd, test_id=sct_runner_info.test_id,
                                              node_name=sct_runner_name, force_use_public_ip=True)
 
