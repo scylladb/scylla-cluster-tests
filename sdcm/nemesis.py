@@ -1213,6 +1213,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             new_node.replacement_node_ip = old_node_ip
         try:
+            self.cluster.set_seeds()
+            self.cluster.update_seed_provider()
             with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.nodes[0], timeout=timeout):
                 self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, check_node_health=False)
             self.cluster.clean_replacement_node_options(new_node)
