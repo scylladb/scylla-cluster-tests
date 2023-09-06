@@ -4568,9 +4568,20 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if not ks_cf_list:
                 raise UnsupportedNemesis("No table found to create index on")
             ks, cf = random.choice(ks_cf_list).split('.')
-            column = get_random_column_name(session, ks, cf)
-            if not column:
+            all_column_names = get_column_names(session, ks, cf)
+
+            # Query the system_schema.indexes table to get a list of columns with secondary indexes
+            index_query = f"SELECT options FROM system_schema.indexes WHERE keyspace_name = '{ks}' AND table_name = '{cf}'"
+            index_res = session.execute(index_query)
+            secondary_index_options_map_res = {row.options for row in index_res}
+            columns_with_secondary_index = [options['target'] for options in secondary_index_options_map_res]
+            # Filter out columns with secondary indexes
+            filtered_column_names = [column_name for column_name in all_column_names if
+                                     column_name not in columns_with_secondary_index]
+
+            if not filtered_column_names:
                 raise UnsupportedNemesis("No column found to create index on")
+            column = random.choice(filtered_column_names)
             try:
                 index_name = create_index(session, ks, cf, column)
             except InvalidRequest as exc:
