@@ -70,7 +70,7 @@ class NemesisJobGenerator:
             nemesis_config_body = Template(self.nemesis_config_file_template).render(
                 {"nemesis_class": cls})
             with (self.nemesis_test_config_dir / new_config_name).open(mode="w") as file:
-                file.write(nemesis_config_body)
+                file.write(nemesis_config_body + '\n')
             LOGGER.info("Created test config file: %s", new_config_name)
 
     def create_job_files_from_template(self) -> list[Path]:
@@ -86,7 +86,7 @@ class NemesisJobGenerator:
                 })
             job_path = self.base_nemesis_job_dir / job_file_name
             with job_path.open("w") as file:
-                file.write(nemesis_job_groovy_source)
+                file.write(nemesis_job_groovy_source + "\n")
             LOGGER.info("Created pipeline file: %s", job_file_name)
 
             pipeline_files.append(job_path)
