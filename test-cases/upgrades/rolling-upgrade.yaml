@@ -27,6 +27,9 @@ authenticator: 'PasswordAuthenticator'
 authenticator_user: 'cassandra'
 authenticator_password: 'cassandra'
 
+append_scylla_yaml: |
+  audit: "none"
+
 use_mgmt: false
 
 gemini_cmd: "gemini -d --duration 2h \

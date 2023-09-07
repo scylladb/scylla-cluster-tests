@@ -19,6 +19,9 @@ authenticator: 'PasswordAuthenticator'
 authenticator_user: 'cassandra'
 authenticator_password: 'cassandra'
 
+append_scylla_yaml: |
+  audit: "none"
+
 use_legacy_cluster_init: false
 internode_compression: 'all'
 
