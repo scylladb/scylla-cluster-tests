@@ -15,6 +15,9 @@ region_name: 'eu-west-1 eu-west-2'
 
 user_prefix: 'multi-dc-rolling-upgrade'
 
+append_scylla_yaml: |
+  audit: "none"
+
 server_encrypt: true
 authenticator: 'PasswordAuthenticator'
 authenticator_user: 'cassandra'

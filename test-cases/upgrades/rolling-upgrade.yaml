@@ -22,6 +22,9 @@ instance_type_db: 'i3.2xlarge'
 
 user_prefix: 'rolling-upgrade'
 
+append_scylla_yaml: |
+  audit: "none"
+
 server_encrypt: true
 authenticator: 'PasswordAuthenticator'
 authenticator_user: 'cassandra'
