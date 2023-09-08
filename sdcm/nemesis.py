@@ -2792,13 +2792,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         restore_task = mgr_cluster.create_restore_task(restore_data=True,
                                                        location_list=location_list, snapshot_tag=chosen_snapshot_tag)
-        restore_task.wait_and_get_final_status(step=30, timeout=chosen_snapshot_info["expected_timeout"])
+        if self.cluster.params.get('server_encrypt'):
+            soft_mgmt_restore_timeout = int(chosen_snapshot_info["expected_timeout"] * 1.2)
+            hard_mgmt_restore_timeout = int(chosen_snapshot_info["expected_timeout"] * 2)
+        else:
+            soft_mgmt_restore_timeout = chosen_snapshot_info["expected_timeout"]
+            hard_mgmt_restore_timeout = int(chosen_snapshot_info["expected_timeout"] * 1.1)
+        with adaptive_timeout(Operations.SOFT_TIMEOUT, self.cluster.nodes[0], timeout=soft_mgmt_restore_timeout):
+            restore_task.wait_and_get_final_status(step=30, timeout=hard_mgmt_restore_timeout)
         assert restore_task.status == TaskStatus.DONE, f'Data restoration of {chosen_snapshot_tag} has failed!'
 
         manager_version = mgr_cluster.sctool.parsed_client_version
         if manager_version < LooseVersion("3.2"):
             mgr_task = mgr_cluster.create_repair_task()
-            task_final_status = mgr_task.wait_and_get_final_status(timeout=chosen_snapshot_info["expected_timeout"])
+            with adaptive_timeout(Operations.SOFT_TIMEOUT, self.cluster.nodes[0],
+                                  timeout=soft_mgmt_restore_timeout):
+                task_final_status = mgr_task.wait_and_get_final_status(timeout=hard_mgmt_restore_timeout)
             assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
                 mgr_task.id, str(mgr_task.status))
 
