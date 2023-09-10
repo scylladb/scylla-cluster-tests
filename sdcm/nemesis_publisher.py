@@ -49,21 +49,30 @@ class NemesisElasticSearchPublisher:
         test_data = self.stats
         assert test_data, "without self.stats data we can't publish nemesis ES"
         if 'scylla-server' in test_data['versions']:
-            version = test_data['versions']['scylla-server']['version']
-            commit_id = test_data['versions']['scylla-server']['commit_id']
-        elif 'version' in test_data['versions'] and 'commit_id' in test_data['versions']:
-            version = test_data['versions']['version']
-            commit_id = test_data['versions']['commit_id']
+            version = test_data['versions']['scylla-server'].get('version', '')
+            commit_id = test_data['versions']['scylla-server'].get('commit_id', '')
+            commit_date = test_data['versions']['scylla-server'].get('date', '')
+            build_id = test_data['versions']['scylla-server'].get('build_id', '')
+        elif 'version' in test_data['versions']:
+            version = test_data['versions'].get('version', '')
+            commit_id = test_data['versions'].get('commit_id', '')
+            commit_date = test_data['versions'].get('date', '')
+            build_id = test_data['versions'].get('build_id', '')
         else:
             version = ''
             commit_id = ''
-
+            commit_date = ''
+            build_id = ''
+        scylla_version = '.'.join([version, commit_date, commit_id])
         new_nemesis_data = dict(
             test_id=test_data['test_details']['test_id'],
             job_name=test_data['test_details']['job_name'],
             test_name=test_data['test_details']['test_name'],
             scylla_version=version,
             scylla_git_sha=commit_id,
+            scylla_commit_date=commit_date,
+            full_scylla_version=scylla_version,
+            build_id=build_id,
         )
         if status:
             new_nemesis_data.update(
