@@ -166,6 +166,7 @@ class CassandraStressLogEvent(LogEvent, abstract=True):
     TooManyHintsInFlight: Type[LogEventProtocol]
     ShardAwareDriver: Type[LogEventProtocol]
     SchemaDisagreement: Type[LogEventProtocol]
+    AuthenticationError: Type[LogEventProtocol]
 
 
 class SchemaDisagreementErrorEvent(SctEvent):
@@ -215,15 +216,22 @@ CassandraStressLogEvent.add_subevent_type("ShardAwareDriver", severity=Severity.
                                           regex="Using optimized driver")
 CassandraStressLogEvent.add_subevent_type("SchemaDisagreement", severity=Severity.WARNING,
                                           regex="No schema agreement")
-
+# By default audit is disabled in 20223.1 by https://github.com/scylladb/scylla-enterprise/pull/3094.
+# But it won't be disabled in 2022.1 and 2022.2.
+# This message generates too much noise for us. We do not need it will fail the test. Create WARNING message, not ERROR.
+# This event will be cretaed in branch 2023.1, not in 2022.x
+CassandraStressLogEvent.add_subevent_type("AuthenticationError", severity=Severity.WARNING,
+                                          regex="Authentication error on host.*Cannot achieve consistency level for cl ONE")
 
 CS_ERROR_EVENTS = (
     CassandraStressLogEvent.TooManyHintsInFlight(),
     CassandraStressLogEvent.OperationOnKey(),
     CassandraStressLogEvent.IOException(),
+    CassandraStressLogEvent.AuthenticationError(),
     CassandraStressLogEvent.ConsistencyError(),
     CassandraStressLogEvent.SchemaDisagreement(),
 )
+
 CS_NORMAL_EVENTS = (CassandraStressLogEvent.ShardAwareDriver(), )
 
 CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \

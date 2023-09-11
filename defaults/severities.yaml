@@ -86,6 +86,7 @@ CassandraStressLogEvent.OperationOnKey: CRITICAL
 CassandraStressLogEvent.TooManyHintsInFlight: ERROR
 CassandraStressLogEvent.ShardAwareDriver: NORMAL
 CassandraStressLogEvent.SchemaDisagreement: WARNING
+CassandraStressLogEvent.AuthenticationError: WARNING
 SchemaDisagreementErrorEvent: ERROR
 ScyllaBenchLogEvent.ConsistencyError: ERROR
 GeminiStressLogEvent.GeminiEvent: CRITICAL
