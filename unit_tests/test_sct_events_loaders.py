@@ -399,6 +399,7 @@ class TestCassandraStressLogEvent(unittest.TestCase):
         self.assertTrue(issubclass(CassandraStressLogEvent.OperationOnKey, CassandraStressLogEvent))
         self.assertTrue(issubclass(CassandraStressLogEvent.TooManyHintsInFlight, CassandraStressLogEvent))
         self.assertTrue(issubclass(CassandraStressLogEvent.SchemaDisagreement, CassandraStressLogEvent))
+        self.assertTrue(issubclass(CassandraStressLogEvent.AuthenticationError, CassandraStressLogEvent))
 
     def test_known_cs_normal(self):
         self.assertTrue(issubclass(CassandraStressLogEvent.ShardAwareDriver, CassandraStressLogEvent))
@@ -436,6 +437,11 @@ class TestCassandraStressLogEvent(unittest.TestCase):
                        'Requires 2, alive 1',
                        expected_type='ConsistencyError',
                        expected_severity=Severity.ERROR)
+
+        self.get_event(line='ERROR 13:04:18,965 Authentication error on host rolling-upgrade-sla--centos-8-db-node-373473f1-0-3.c.'
+                            'sct-project-1.internal/10.142.1.41:9042: Cannot achieve consistency level for cl ONE. Requires 1, alive 0',
+                       expected_type='AuthenticationError',
+                       expected_severity=Severity.WARNING)
 
     def test_cs_normal_shared_awarnes_event(self):
         self.get_event(line='com.datastax.driver.core.Cluster - ===== Using optimized driver!!! =====',

@@ -88,6 +88,7 @@ CassandraStressLogEvent.TooManyHintsInFlight: ERROR
 CassandraStressLogEvent.ShardAwareDriver: NORMAL
 CassandraStressLogEvent.SchemaDisagreement: WARNING
 CqlStressCassandraStressLogEvent.ReadValidationError: CRITICAL
+CassandraStressLogEvent.AuthenticationError: WARNING
 SchemaDisagreementErrorEvent: ERROR
 ScyllaBenchLogEvent.ConsistencyError: ERROR
 ScyllaBenchLogEvent.DataValidationError: CRITICAL
