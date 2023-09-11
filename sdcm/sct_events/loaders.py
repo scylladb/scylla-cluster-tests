@@ -166,6 +166,7 @@ class CassandraStressLogEvent(LogEvent, abstract=True):
     TooManyHintsInFlight: Type[LogEventProtocol]
     ShardAwareDriver: Type[LogEventProtocol]
     SchemaDisagreement: Type[LogEventProtocol]
+    AuthenticationError: Type[LogEventProtocol]
 
 
 class SchemaDisagreementErrorEvent(SctEvent):
@@ -215,15 +216,18 @@ CassandraStressLogEvent.add_subevent_type("ShardAwareDriver", severity=Severity.
                                           regex="Using optimized driver")
 CassandraStressLogEvent.add_subevent_type("SchemaDisagreement", severity=Severity.WARNING,
                                           regex="No schema agreement")
-
+CassandraStressLogEvent.add_subevent_type("AuthenticationError", severity=Severity.WARNING,
+                                          regex="Authentication error on host")
 
 CS_ERROR_EVENTS = (
     CassandraStressLogEvent.TooManyHintsInFlight(),
     CassandraStressLogEvent.OperationOnKey(),
     CassandraStressLogEvent.IOException(),
+    CassandraStressLogEvent.AuthenticationError(),
     CassandraStressLogEvent.ConsistencyError(),
     CassandraStressLogEvent.SchemaDisagreement(),
 )
+
 CS_NORMAL_EVENTS = (CassandraStressLogEvent.ShardAwareDriver(), )
 
 CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
