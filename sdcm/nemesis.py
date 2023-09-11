@@ -5008,10 +5008,23 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                                                          method_name=method_name, start_time=start_time)
                 try:
                     result = method(*args[1:], **kwargs)
-                except (UnsupportedNemesis, MethodVersionNotFound, KillNemesis) as exp:
-                    skip_reason = "Killed" if isinstance(exp, KillNemesis) else str(exp)
+                except (UnsupportedNemesis, MethodVersionNotFound) as exp:
+                    skip_reason = str(exp)
                     log_info.update({'subtype': 'skipped', 'skip_reason': skip_reason})
                     nemesis_event.skip(skip_reason=skip_reason)
+                    raise
+                except KillNemesis:
+                    if args[0].tester.get_event_summary().get('CRITICAL', 0):
+                        error_sting = "Killed by tearDown - test fail"
+                        nemesis_event.add_error([error_sting])
+                        nemesis_event.full_traceback = traceback.format_exc()
+                        nemesis_event.severity = Severity.ERROR
+                        log_info.update({'error': error_sting, 'full_traceback': traceback.format_exc()})
+                        status = False
+                    else:
+                        skip_reason = "Killed by tearDown - test success"
+                        log_info.update({'subtype': 'skipped', 'skip_reason': skip_reason})
+                        nemesis_event.skip(skip_reason=skip_reason)
                     raise
                 except Exception as details:  # pylint: disable=broad-except
                     nemesis_event.add_error([str(details)])
