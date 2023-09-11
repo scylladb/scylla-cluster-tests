@@ -32,3 +32,5 @@ authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
+
+use_dns_names: true
