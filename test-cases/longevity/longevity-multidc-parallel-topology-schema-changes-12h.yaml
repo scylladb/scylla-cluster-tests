@@ -9,7 +9,8 @@ stress_cmd: ["cassandra-stress write cl=LOCAL_QUORUM duration=720m -schema 'repl
              "cassandra-stress user profile=/tmp/cs_multidc_si_lcs.yaml ops'(insert=1,read=1,si_read1=1,si_read2=1)' cl=LOCAL_QUORUM duration=700m -mode cql3 native -rate threads=40 -log interval=5",
              ]
 
-n_db_nodes: '5 5'
+availability_zone: 'a,b,c'
+n_db_nodes: '6 6'
 n_loaders: '2 1'
 region_aware_loader: true
 n_monitor_nodes: 1
@@ -21,6 +22,7 @@ nemesis_selector: [["topology_changes"],["!disruptive","schema_changes"]]
 nemesis_interval: 10
 nemesis_filter_seeds: false
 nemesis_during_prepare: false
+nemesis_add_node_cnt: 3
 
 seeds_num: 3
 round_robin: true

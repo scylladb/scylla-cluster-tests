@@ -7,13 +7,12 @@ stress_cmd: [ "cassandra-stress user no-warmup profile=/tmp/cdc_profile.yaml ops
               "cassandra-stress user no-warmup profile=/tmp/cdc_profile_preimage_postimage.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=200m -mode cql3 native -rate threads=100"
              ]
 
-availability_zone: 'a'
+availability_zone: 'a,b,c'
 n_db_nodes: 6
 n_loaders: 2
 n_monitor_nodes: 1
 
 instance_type_db: 'i4i.4xlarge'
-simulated_racks: 3
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '009'
