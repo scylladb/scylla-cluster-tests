@@ -141,7 +141,7 @@ DatabaseLogEvent.add_subevent_type("RPC_CONNECTION", severity=Severity.WARNING,
 DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR,
                                    regex=r"(^ERROR|!\s*?ERR).*\[shard.*\]")
 DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR,
-                                   regex="backtrace")
+                                   regex="^(?!.*audit:).*backtrace")
 SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.WARNING(),
     DatabaseLogEvent.NO_SPACE_ERROR(),
