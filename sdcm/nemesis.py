@@ -1208,7 +1208,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
-        if new_node.is_replacement_by_host_id_supported:
+
+        # since we need this logic before starting a node, and in `use_preinstalled_scylla: false` case
+        # scylla is not yet installed, we should check the target node for version,
+        # it should be up and with scylla executable available
+        if self.target_node.is_replacement_by_host_id_supported:
             new_node.replacement_host_id = host_id
         else:
             new_node.replacement_node_ip = old_node_ip
