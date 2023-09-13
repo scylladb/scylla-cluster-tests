@@ -1200,6 +1200,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.warning("Node will not be terminated. Please terminate manually!!!")
             raise
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
+        new_node.wait_node_fully_start()
         InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
 
@@ -4273,7 +4274,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             properties_file.update(**rackdc_value)
         self.cluster.wait_for_init(node_list=[new_node], timeout=900,
                                    check_node_health=False)
-        self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
+        new_node.wait_node_fully_start()
         self.monitoring_set.reconfigure_scylla_monitoring()
         return new_node
 

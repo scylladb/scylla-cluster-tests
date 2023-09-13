@@ -107,6 +107,7 @@ from sdcm.utils.version_utils import (
     ComparableScyllaVersion,
     SCYLLA_VERSION_RE,
 )
+from sdcm.utils.node import build_node_api_command
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent, add_severity_limit_rules, max_severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
@@ -138,7 +139,7 @@ from sdcm.paths import (
     SCYLLA_MANAGER_TLS_KEY_FILE,
 )
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
-from sdcm.exceptions import KillNemesis
+from sdcm.exceptions import KillNemesis, NodeNotReady
 
 
 # Test duration (min). Parameter used to keep instances produced by tests that
@@ -3095,8 +3096,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def get_token_ring_members(self) -> list[dict[str, str]]:
         self.log.debug("Get token ring members")
         token_ring_members = []
-        token_ring_members_cmd = 'curl -s -X GET --header "Content-Type: application/json" --header ' \
-            '"Accept: application/json" "http://127.0.0.1:10000/storage_service/host_id"'
+        token_ring_members_cmd = build_node_api_command('/storage_service/host_id')
         result = self.remoter.run(token_ring_members_cmd, ignore_status=True, verbose=True)
         if not result.stdout:
             return []
@@ -3110,12 +3110,24 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             token_ring_members.append({"host_id": member.get("value"), "ip_address": member.get("key")})
         return token_ring_members
 
+    @retrying(n=360, sleep_time=10, allowed_exceptions=NodeNotReady, message="Waiting for native_transport")
+    def wait_native_transport(self):
+        path = '/storage_service/native_transport'
+        self.log.debug(f"Checking if node is fully started, using API call to {path}")
+        native_transport_query = build_node_api_command(path_url=path)
+        res = self.remoter.run(native_transport_query)
+        if res.return_code != 0:
+            raise NodeNotReady(f"Node {self.name} did not join the cluster yet")
+
     def wait_node_fully_start(self, verbose=True, timeout=3600):
-        self.log.info('Waiting scylla services to start after node reboot')
+        self.log.info('Waiting scylla services to start after node boot or reboot')
         self.wait_db_up(verbose=verbose, timeout=timeout)
-        self.log.info('Waiting JMX services to start after node reboot')
+        self.log.info('Waiting JMX services to start after node boot or reboot')
         self.wait_jmx_up(verbose=verbose, timeout=timeout)
+        self.log.info('Waiting for all nodes to be Up Normal')
         self.parent_cluster.wait_for_nodes_up_and_normal(nodes=[self])
+        self.log.info('Waiting for native_transport to be ready')
+        self.wait_native_transport()
 
 
 class FlakyRetryPolicy(RetryPolicy):

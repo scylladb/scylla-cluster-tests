@@ -6,6 +6,10 @@ class NoKeyspaceFound(Exception):
     pass
 
 
+class NodeNotReady(Exception):
+    pass
+
+
 class FilesNotCorrupted(Exception):
     pass
 

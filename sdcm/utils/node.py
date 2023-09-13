@@ -25,5 +25,5 @@ def build_node_api_command(path_url, request_method: RequestMethods = RequestMet
     if not path_url.startswith('/'):
         path_url = '/' + path_url
 
-    return f'curl -s -X {request_method} --header "Content-Type: application/json" --header ' \
+    return f'curl -X {request_method} --header "Content-Type: application/json" --header ' \
            f'"Accept: application/json" "http://127.0.0.1:{api_port}{path_url}"'
