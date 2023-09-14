@@ -10,6 +10,7 @@ from sdcm.utils.common import remote_get_file, LOGGER, RemoteTemporaryFolder
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.sstable.load_inventory import (TestDataInventory, BIG_SSTABLE_COLUMN_1_DATA, COLUMN_1_DATA,
                                                MULTI_NODE_DATA, BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA)
+from sdcm.utils.node import RequestMethods, build_node_api_command
 from sdcm.wait import wait_for_log_lines
 
 LOCAL_CMD_RUNNER = LocalCmdRunner()
@@ -121,9 +122,8 @@ class SstableLoadUtils:
 
             # `load_and_stream` parameter is not supported by nodetool yet. This is workaround
             # https://github.com/scylladb/scylla-tools-java/issues/253
-            load_api_cmd = 'curl -X POST --header "Content-Type: application/json" --header ' \
-                           f'"Accept: application/json" "http://127.0.0.1:10000/storage_service/sstables/{keyspace_name}?' \
-                           f'cf={table_name}&load_and_stream=true"'
+            path = f'/storage_service/sstables/{keyspace_name}?cf={table_name}&load_and_stream=true'
+            load_api_cmd = build_node_api_command(path_url=path, request_method=RequestMethods.POST)
             node.remoter.run(load_api_cmd)
 
     @staticmethod
