@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+from __future__ import annotations
+
 import time
 import socket
 import logging
@@ -19,7 +21,7 @@ from abc import abstractmethod, ABCMeta
 from datetime import datetime
 from functools import cached_property
 from threading import Thread, Event as ThreadEvent
-from typing import Generator
+from typing import TYPE_CHECKING
 from multiprocessing import Process, Event
 from textwrap import dedent
 
@@ -31,13 +33,18 @@ from urllib3.exceptions import (
     ReadTimeoutError,
 )
 
-from sdcm import wait
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events import Severity
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.decorators import retrying
+
+if TYPE_CHECKING:
+    from typing import Generator
+
+    from sdcm.cluster import BaseNode
+
 
 logging.getLogger('parso.python.diff').setLevel(logging.WARNING)
 
@@ -48,107 +55,82 @@ class LoggerBase(metaclass=ABCMeta):
         self._log = logging.getLogger(self.__class__.__name__)
 
     @abstractmethod
-    def start(self):
-        pass
+    def start(self) -> None:
+        ...
 
     @abstractmethod
-    def stop(self, timeout=None):
-        pass
+    def stop(self, timeout: float | None = None) -> None:
+        ...
 
 
-class NodeLoggerBase(LoggerBase, metaclass=ABCMeta):
-    def __init__(self, node, target_log_file: str):
-        self._node = node
+class SSHLoggerBase(LoggerBase):
+    RETRIEVE_LOG_MESSAGE_TEMPLATE = "Reading Scylla logs from {since}"
+    VERBOSE_RETRIEVE = True
+    READINESS_CHECK_DELAY = 10  # seconds
+
+    def __init__(self, node: BaseNode, target_log_file: str):
         super().__init__(target_log_file=target_log_file)
-
-
-class SSHLoggerBase(NodeLoggerBase):
-    _retrieve_message = "Reading Scylla logs from {since}"
-
-    def __init__(self, node, target_log_file: str):
-        super().__init__(node, target_log_file)
+        self._node = node
         self._termination_event = Event()
-        self.node = node
-        self._remoter = None
-        self._remoter_params = node.remoter.get_init_arguments()
         self._child_process = Process(target=self._journal_thread, daemon=True)
 
-    @property
-    @abstractmethod
-    def _logger_cmd(self) -> str:
-        pass
-
-    def _file_exists(self, file_path):
-        try:
-            result = self._remoter.run('sudo test -e %s' % file_path,
-                                       ignore_status=True)
-            return result.exit_status == 0
-        except Exception as details:  # pylint: disable=broad-except
-            self._log.error('Error checking if file %s exists: %s',
-                            file_path, details)
-        return False
-
-    def _log_retrieve(self, since):
-        if not since:
-            since = 'the beginning'
-        self._log.debug(self._retrieve_message.format(since=since))
-
-    def _retrieve(self, since):
-        since = '--since "{}" '.format(since) if since else ""
-        self._remoter.run(self._logger_cmd.format(since=since),
-                          verbose=True, ignore_status=True,
-                          log_file=self._target_log_file)
-
-    def _retrieve_journal(self, since):
-        try:
-            self._log_retrieve(since)
-            self._retrieve(since)
-        except Exception as details:  # pylint: disable=broad-except
-            self._log.error('Error retrieving remote node DB service log: %s', details)
-
-    @raise_event_on_failure
-    def _journal_thread(self):
-        # NOTE: K8S and docker backends use separate non-SSH remoters
-        #       where each new call is separate process.
-        #       So, reuse the remoter class we already have defined in the node.
-        if self.node.is_docker():
-            self._remoter = self.node.remoter
-        else:
-            self._remoter = RemoteCmdRunnerBase.create_remoter(**self._remoter_params)
-        read_from_timestamp = None
-        while not self._termination_event.is_set():
-            self._wait_ssh_up(verbose=False)
-            self._retrieve_journal(since=read_from_timestamp)
-            read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
-    def _wait_ssh_up(self, verbose=True, timeout=500):
-        text = None
-        if verbose:
-            text = '%s: Waiting for SSH to be up' % self
-        wait.wait_for(func=self._remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
-
-    def start(self):
+    def start(self) -> None:
+        self._termination_event.clear()
         self._child_process.start()
 
-    def stop(self, timeout=None):
+    def stop(self, timeout: float | None = None) -> None:
+        self._termination_event.set()
         self._child_process.terminate()
-        self._child_process.join(timeout)
+        self._child_process.join(timeout=timeout)
         if self._child_process.is_alive():
             self._child_process.kill()  # pylint: disable=no-member
 
+    @raise_event_on_failure
+    def _journal_thread(self) -> None:
+        read_from_timestamp = None
+        while not self._termination_event.is_set():
+            if self._is_ready_to_retrieve():
+                self._retrieve(since=read_from_timestamp)
+                read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                time.sleep(self.READINESS_CHECK_DELAY)
+
+    def _is_ready_to_retrieve(self) -> bool:
+        return self._remoter.is_up()
+
+    def _retrieve(self, since: str) -> None:
+        self._log.debug(self.RETRIEVE_LOG_MESSAGE_TEMPLATE.format(since=since or "the beginning"))
+        try:
+            self._remoter.run(
+                cmd=self._logger_cmd_template.format(since=f'--since "{since}" ' if since else ""),
+                verbose=self.VERBOSE_RETRIEVE,
+                ignore_status=True,
+                log_file=self._target_log_file,
+            )
+        except Exception as details:  # pylint: disable=broad-except
+            self._log.error("Error retrieving remote node DB service log: %s", details)
+
+    @cached_property
+    def _remoter(self) -> RemoteCmdRunnerBase:
+        if self._node.is_docker():
+            # NOTE: K8S and docker backends use separate non-SSH remoters
+            #       where each new call is a separate process.
+            #       So, reuse the remoter class we already have defined in the node.
+            return self._node.remoter
+        return RemoteCmdRunnerBase.create_remoter(**self._node.remoter.get_init_arguments())
+
+    @property
+    @abstractmethod
+    def _logger_cmd_template(self) -> str:  # The `since' parameter will be passed to a returned template.
+        ...
+
 
 class SSHScyllaSystemdLogger(SSHLoggerBase):
-
-    def _wait_ssh_up(self, *args, **kwargs):
-        super()._wait_ssh_up(*args, **kwargs)
-        self.wait_for_python_to_available()
-
-    @retrying(n=30, sleep_time=15)
-    def wait_for_python_to_available(self):
-        assert self.node.remoter.sudo("which python3", ignore_status=True).ok
+    def _is_ready_to_retrieve(self) -> bool:
+        return super()._is_ready_to_retrieve() and self._remoter.sudo(cmd="which python3", ignore_status=True).ok
 
     @staticmethod
-    def reformat_output_command(cmd):
+    def reformat_output_command(cmd: str) -> str:
         """
         Wrapping journalctl -f command with a python program
         that read a s json stream, and add the level/priority that
@@ -174,10 +156,10 @@ class SSHScyllaSystemdLogger(SSHLoggerBase):
                       f'{cmd} -o json | python3 -c "$PYTHON_PROG"'
                       )
 
-    @property
-    def _logger_cmd(self) -> str:
+    @cached_property
+    def _logger_cmd_template(self) -> str:
         return self.reformat_output_command(
-            f'{self.node.journalctl} -f --no-tail --no-pager '
+            f'{self._node.journalctl} -f --no-tail --no-pager '
             '--utc {since} '
             '-u scylla-ami-setup.service '
             '-u scylla-image-setup.service '
@@ -194,38 +176,41 @@ class SSHNonRootScyllaSystemdLogger(SSHLoggerBase):
     In NonRoot installation, scylla-server log is redirected a log file in install directory.
     Related commit: https://github.com/scylladb/scylla/commit/0f786f05fed41be94b09e33aa34a767074a14ec1
     """
-    @property
-    def _logger_cmd(self) -> str:
-        scylla_log_file = '~/scylladb/scylla-server.log'
-        return f'mkdir -p ~/scylladb && touch {scylla_log_file} && tail -F {scylla_log_file}'
+    SCYLLA_LOG_FILE = "~/scylladb/scylla-server.log"
+
+    @cached_property
+    def _logger_cmd_template(self) -> str:
+        return f"mkdir -p ~/scylladb && touch {self.SCYLLA_LOG_FILE} && tail -F {self.SCYLLA_LOG_FILE}"
 
 
 class SSHGeneralSystemdLogger(SSHLoggerBase):
-    @property
-    def _logger_cmd(self) -> str:
+    @cached_property
+    def _logger_cmd_template(self) -> str:
         return 'sudo journalctl -f --no-tail --no-pager --utc {since} '
 
 
-class SSHScyllaFileLogger(SSHLoggerBase):
-    @property
-    def _logger_cmd(self) -> str:
-        return 'sudo tail -f /var/log/syslog | grep scylla'
-
-    def _retrieve(self, since):
-        wait.wait_for(self._file_exists, step=10, timeout=600, throw_exc=True,
-                      file_path='/var/log/syslog')
-        super()._retrieve(since)
-
-
 class SSHGeneralFileLogger(SSHLoggerBase):
-    @property
-    def _logger_cmd(self) -> str:
-        return 'sudo tail -f /var/log/syslog'
+    REMOTE_LOG_PATH = "/var/log/syslog"
 
-    def _retrieve(self, since):
-        wait.wait_for(self._file_exists, step=10, timeout=600, throw_exc=True,
-                      file_path='/var/log/syslog')
-        super()._retrieve(since)
+    def _is_ready_to_retrieve(self) -> bool:
+        return super()._is_ready_to_retrieve() and self._is_file_exist(file_path=self.REMOTE_LOG_PATH)
+
+    def _is_file_exist(self, file_path: str) -> bool:
+        try:
+            return self._remoter.run(cmd=f"sudo test -e {file_path}", ignore_status=True).ok
+        except Exception as details:  # pylint: disable=broad-except
+            self._log.error("Error checking if file %s exists: %s", file_path, details)
+        return False
+
+    @cached_property
+    def _logger_cmd_template(self) -> str:
+        return f"sudo tail -f {self.REMOTE_LOG_PATH}"
+
+
+class SSHScyllaFileLogger(SSHGeneralFileLogger):
+    @cached_property
+    def _logger_cmd_template(self) -> str:
+        return f"{super()._logger_cmd_template} | grep scylla"
 
 
 class CommandLoggerBase(LoggerBase):

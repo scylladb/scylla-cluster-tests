@@ -23,7 +23,7 @@ from pathlib import Path
 from functools import cached_property
 
 from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
-from sdcm.cluster import BaseLoaderSet
+from sdcm.cluster import BaseLoaderSet, BaseNode
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
@@ -71,14 +71,15 @@ class CassandraStressEventsPublisher(FileFollowerThread):
 
 
 class CSHDRFileLogger(SSHLoggerBase):
-    @property
-    def _logger_cmd(self) -> str:
-        return f"tail -f {self._target_log_file}"
+    VERBOSE_RETRIEVE = False
 
-    def _retrieve(self, since):
-        self._remoter.run(self._logger_cmd.format(since=since),
-                          verbose=False, ignore_status=True,
-                          log_file=os.path.join(self.node.logdir, self._target_log_file))
+    def __init__(self, node: BaseNode, remote_log_file: str, target_log_file: str):
+        super().__init__(node=node, target_log_file=target_log_file)
+        self._remote_log_file = remote_log_file
+
+    @cached_property
+    def _logger_cmd_template(self) -> str:
+        return f"tail -f {self._remote_log_file}"
 
     def __enter__(self):
         self.start()
@@ -284,7 +285,11 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
         if self.params.get("use_hdr_cs_histogram"):
             stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)
-            hdr_logger_context = CSHDRFileLogger(node=loader, target_log_file=remote_hdr_file_name)
+            hdr_logger_context = CSHDRFileLogger(
+                node=loader,
+                remote_log_file=remote_hdr_file_name,
+                target_log_file=os.path.join(loader.logdir, remote_hdr_file_name),
+            )
         else:
             hdr_logger_context = contextlib.nullcontext()
 
