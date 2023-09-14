@@ -112,6 +112,7 @@ from sdcm.utils.loader_utils import DEFAULT_USER, DEFAULT_USER_PASSWORD, SERVICE
 from sdcm.utils.nemesis_utils.indexes import get_random_column_name, create_index, \
     wait_for_index_to_be_built, verify_query_by_index_works, drop_index, get_column_names, \
     wait_for_view_to_be_built, drop_materialized_view, is_cf_a_view
+from sdcm.utils.node import build_node_api_command
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
@@ -2897,8 +2898,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 raise
 
         def repair_streaming_exists():
-            active_repair_cmd = 'curl -s -X GET --header "Content-Type: application/json" --header ' \
-                                '"Accept: application/json" "http://127.0.0.1:10000/storage_service/active_repair/"'
+            path = '/storage_service/active_repair/'
+            active_repair_cmd = build_node_api_command(path_url=path)
             result = self.target_node.remoter.run(active_repair_cmd)
             active_repairs = re.match(r".*\[(\d)+\].*", result.stdout)
             if active_repairs:
