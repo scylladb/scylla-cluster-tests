@@ -24,6 +24,7 @@ gce_n_local_ssd_disk_db: 3
 
 gce_pd_standard_disk_size_db: 0
 gce_pd_ssd_disk_size_db: 0
+gce_setup_hybrid_raid: false
 gce_pd_ssd_disk_size_loader: 0
 gce_pd_ssd_disk_size_monitor: 0
 
