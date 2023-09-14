@@ -88,7 +88,7 @@ from sdcm.utils.common import (
     download_dir_from_cloud,
     generate_random_string,
     prepare_and_start_saslauthd_service,
-    raise_exception_in_thread,
+    raise_exception_in_thread, get_sct_root_path,
 )
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
@@ -4560,6 +4560,27 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     result = node.remoter.sudo(cmd="scylla_io_setup")
                     if result.ok:
                         self.log.info("Scylla_io_setup result: %s", result.stdout)
+
+                if self.params.get('gce_setup_hybrid_raid'):
+                    gce_n_local_ssd_disk_db = self.params.get('gce_n_local_ssd_disk_db')
+                    gce_pd_ssd_disk_size_db = self.params.get('gce_pd_ssd_disk_size_db')
+                    if not (gce_n_local_ssd_disk_db > 0 and gce_pd_ssd_disk_size_db > 0):
+                        msg = f"Hybrid RAID cannot be configured without NVMe ({gce_n_local_ssd_disk_db}) " \
+                              f"and PD-SSD ({gce_pd_ssd_disk_size_db})"
+                        raise ValueError(msg)
+
+                    # The script to configure a hybrid RAID is named "hybrid_raid.py" and located on the private repository.
+                    hybrid_raid_script = "hybrid_raid.py"
+                    target_path = os.path.join("/tmp", hybrid_raid_script)
+                    node.remoter.send_files(
+                        src=f"{get_sct_root_path()}/scylla-qa-internal/custom_d1/{hybrid_raid_script}", dst=target_path)
+
+                    # /dev/sdb is the additional SSD that is used for creting RAID-1 along with the other NVMEs (RAID-0)
+                    hybrid_raid_setup_cmd = f"sudo python3 {target_path} --nvme-raid-level 0 --write-mostly-device /dev/sdb"
+                    # The timeout value is dependent on the SSD size and might have to be adjusted if a fixed "standard"
+                    # disk size is agreed to be used (should be around 370GB).
+                    # So this make sure the "mdadm --create" command will get enough time to finish.
+                    node.remoter.run('sudo bash -cxe "%s"' % hybrid_raid_setup_cmd, timeout=7200)
 
                 node.start_scylla_server(verify_up=False)
 

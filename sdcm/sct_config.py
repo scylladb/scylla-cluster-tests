@@ -753,6 +753,9 @@ class SCTConfiguration(dict):
         dict(name="gce_pd_ssd_disk_size_db", env="SCT_GCE_PD_SSD_DISK_SIZE_DB", type=int,
              help=""),
 
+        dict(name="gce_setup_hybrid_raid", env="SCT_GCE_SETUP_HYBRID_RAID", type=boolean,
+             help="If True, SCT configures a hybrid RAID of NVMEs and an SSD for scylla's data"),
+
         dict(name="gce_pd_ssd_disk_size_loader", env="SCT_GCE_PD_SSD_DISK_SIZE_LOADER", type=int,
              help=""),
 
