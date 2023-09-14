@@ -5780,7 +5780,6 @@ class MgmtCorruptThenRepair(Nemesis):
     manager_operation = True
     disruptive = True
     kubernetes = True
-    limited = True
 
     def disrupt(self):
         self.disrupt_mgmt_corrupt_then_repair()
