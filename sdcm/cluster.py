@@ -4568,21 +4568,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                         msg = f"Hybrid RAID cannot be configured without NVMe ({gce_n_local_ssd_disk_db}) " \
                               f"and PD-SSD ({gce_pd_ssd_disk_size_db})"
                         raise ValueError(msg)
-                    # pylint: disable=anomalous-backslash-in-string
-                    hybrid_raid_setup_cmd = dedent("""
-                        mdadm --create --verbose --force --run /dev/md10 --level=1 --bitmap=none --raid-devices=2 /dev/sdb /dev/md0
-                        md10_uuid=$(sudo blkid /dev/md10 | grep -o 'UUID="[^"]*' | cut -d'"' -f2)
-                        echo "UUID=$md10_uuid /var/lib/scylla xfs defaults,noatime,nofail 0 0" | sudo tee -a /etc/fstab > /dev/null
-                        echo "UUID=$md10_uuid /var/lib/systemd/coredump xfs defaults,noatime,nofail 0 0" | sudo tee -a /etc/fstab > /dev/null
-                        sed -i "s/What=\/dev\/disk\/by-uuid\/[^ ]*/What=\/dev\/disk\/by-uuid\/$md10_uuid/" /etc/systemd/system/var-lib-scylla.mount
-                        mkfs.xfs -f -m crc=1 -d su=2048k,sw=512 -l version=2 -L HybridRAID /dev/md10
-                        systemctl daemon-reload
-                        systemctl restart var-lib-scylla.mount
-                        systemctl restart var-lib-systemd-coredump.mount
-                    """)
-                    result = node.remoter.run('sudo bash -cxe "%s"' % hybrid_raid_setup_cmd)
-                    if result.ok:
-                        self.log.info("Hybrid RAID setup result: %s", result.stdout)
+
+                    hybrid_raid_script = "hybrid_raid.py"
+                    target_path = os.path.join("/tmp", hybrid_raid_script)
+                    node.remoter.send_files(src=f"./data_dir/disk_conf/{hybrid_raid_script}", dst=target_path)
+
+                    hybrid_raid_setup_cmd = f"sudo python3 {target_path} --nvme-raid-level 0 --write-mostly-device /dev/sdb"
+                    node.remoter.run('sudo bash -cxe "%s"' % hybrid_raid_setup_cmd, timeout=7200)
 
                 node.start_scylla_server(verify_up=False)
 
