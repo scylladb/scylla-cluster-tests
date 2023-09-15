@@ -40,6 +40,7 @@ from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
 from sdcm.provision.scylla_yaml import SeedProvider
+from sdcm.sct_provision.aws.cluster import PlacementGroup
 
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -99,6 +100,9 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self._ec2_user_data = ec2_user_data
         self.region_names = region_names
         self.params = params
+        self.placement_group_name = PlacementGroup(
+            params=params, common_tags=self.test_config.common_tags(),
+            test_id=self.test_config.test_id()).placement_group_name
 
         super().__init__(cluster_uuid=cluster_uuid,
                          cluster_prefix=cluster_prefix,
@@ -141,6 +145,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx])
         subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
         region_name_with_az = subnet_info['AvailabilityZone']
+        ec2.add_placement_group_name_param(params, self.placement_group_name)
         LOGGER.debug('Sending an On-Demand request with params: %s', params)
         LOGGER.debug('Using EC2 service with DC-index: %s, (associated with region: %s)',
                      dc_idx, self.region_names[dc_idx])
@@ -166,7 +171,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            user_data=ec2_user_data,
                            count=count,
                            block_device_mappings=self._ec2_block_device_mappings,
-                           aws_instance_profile=self.instance_profile_name)
+                           aws_instance_profile=self.instance_profile_name,
+                           placement_group_name=self.placement_group_name,)
 
         limit = SPOT_FLEET_LIMIT if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET else SPOT_CNT_LIMIT
         request_cnt = 1

@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError, NoRegionError
 from sdcm.utils.decorators import retrying
 from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.test_config import TestConfig
-
+from sdcm.utils.common import list_placement_groups_aws
 LOGGER = logging.getLogger(__name__)
 
 STATUS_FULFILLED = 'fulfilled'
@@ -32,6 +32,10 @@ class CreateSpotInstancesError(Exception):
 
 
 class GetInstanceByPrivateIpError(Exception):
+    pass
+
+
+class GetPlacementGroupError(Exception):
     pass
 
 
@@ -66,7 +70,7 @@ class EC2ClientWrapper():
 
     def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',  # pylint: disable=too-many-arguments
                                user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None,
-                               aws_instance_profile=None):
+                               aws_instance_profile=None, placement_group_name=None):
         """
         Create a spot instance request
         :return: list of request id-s
@@ -83,6 +87,7 @@ class EC2ClientWrapper():
                                            },
                       ValidUntil=datetime.datetime.now() + datetime.timedelta(minutes=self._timeout/60 + 5)
                       )
+        self.add_placement_group_name_param(params['LaunchSpecification'], placement_group_name)
         if aws_instance_profile:
             params['LaunchSpecification']['IamInstanceProfile'] = {'Name': aws_instance_profile}
         LOGGER.debug("block_device_mappings: %s", block_device_mappings)
@@ -103,7 +108,7 @@ class EC2ClientWrapper():
         return request_ids
 
     def _request_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
-                            block_device_mappings=None, aws_instance_profile=None):
+                            block_device_mappings=None, aws_instance_profile=None, placement_group_name=None):
 
         spot_price = self._get_spot_price(instance_type)
         fleet_config = {'LaunchSpecifications':
@@ -118,6 +123,7 @@ class EC2ClientWrapper():
                         'SpotPrice': str(spot_price['desired']),
                         'TargetCapacity': count,
                         }
+        self.add_placement_group_name_param(fleet_config['LaunchSpecifications'][0], placement_group_name)
         if aws_instance_profile:
             fleet_config['LaunchSpecifications'][0]['IamInstanceProfile'] = {'Name': aws_instance_profile}
         if key_pair:
@@ -253,7 +259,7 @@ class EC2ClientWrapper():
         self._client.create_tags(Resources=instance_ids, Tags=tags)
 
     def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',  # pylint: disable=too-many-arguments
-                              count=1, duration=0, block_device_mappings=None, aws_instance_profile=None):
+                              count=1, duration=0, block_device_mappings=None, aws_instance_profile=None, placement_group_name=None):
         """
         Create spot instances
 
@@ -266,6 +272,7 @@ class EC2ClientWrapper():
         :param count: number of instances to launch
         :param duration: (optional) instance life time in minutes(multiple of 60)
         :param aws_instance_profile: instance profile granting access to S3 objects
+        :param placement_group_name: to create instances in the placement group
 
         :return: list of instance id-s
         """
@@ -277,7 +284,8 @@ class EC2ClientWrapper():
         request_ids = self._request_spot_instance(instance_type, image_id, region_name, network_if, spot_price['desired'],
                                                   key_pair, user_data, count, duration,
                                                   block_device_mappings=block_device_mappings,
-                                                  aws_instance_profile=aws_instance_profile)
+                                                  aws_instance_profile=aws_instance_profile,
+                                                  placement_group_name=placement_group_name)
         instance_ids, resp = self._wait_for_request_done(request_ids)
 
         if not instance_ids:
@@ -293,7 +301,7 @@ class EC2ClientWrapper():
         return instances
 
     def create_spot_fleet(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='', count=3,  # pylint: disable=too-many-arguments
-                          block_device_mappings=None, aws_instance_profile=None):
+                          block_device_mappings=None, aws_instance_profile=None, placement_group_name=None):
         """
         Create spot fleet
         :param instance_type: instance type
@@ -305,6 +313,7 @@ class EC2ClientWrapper():
         :param count: number of instances to launch
         :param block_device_mappings:
         :param aws_instance_profile: instance profile granting access to S3 objects
+        :param placement_group_name: to create instances in the placement group
 
         :return: list of instance id-s
         """
@@ -312,7 +321,8 @@ class EC2ClientWrapper():
 
         request_id = self._request_spot_fleet(instance_type, image_id, region_name, network_if, key_pair,
                                               user_data, count, block_device_mappings=block_device_mappings,
-                                              aws_instance_profile=aws_instance_profile)
+                                              aws_instance_profile=aws_instance_profile,
+                                              placement_group_name=placement_group_name)
         instance_ids, resp = self._wait_for_fleet_request_done(request_id)
         if not instance_ids:
             err_code = resp if resp in [FLEET_LIMIT_EXCEEDED_ERROR,
@@ -353,3 +363,21 @@ class EC2ClientWrapper():
             raise GetInstanceByPrivateIpError("Cannot find instance by private ip: %s" % private_ip)
 
         return self.get_instance(instances['Reservations'][0]['Instances'][0]['InstanceId'])
+
+    def add_placement_group_name_param(self, boto3_params, placement_group_name):
+        if placement_group_name:
+            placement_group_tags = {"Name": placement_group_name}
+            list_placement_groups = list_placement_groups_aws(
+                placement_group_tags, self.region_name)
+            if list_placement_groups:
+                if len(list_placement_groups) == 1:
+                    LOGGER.info('use placement group name: %s', placement_group_name)
+                    if "Placement" not in boto3_params:
+                        boto3_params['Placement'] = {}
+                    boto3_params['Placement']['GroupName'] = placement_group_name
+                else:
+                    error_message = f"more than one placement group with tags {placement_group_tags} found: \n {list_placement_groups}"
+                    raise GetPlacementGroupError(error_message)
+            else:
+                error_message = f"use_placement_group param is true but no placement group with tags {placement_group_tags} found"
+                raise GetPlacementGroupError(error_message)
