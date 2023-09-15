@@ -1,0 +1,29 @@
+test_duration: 550
+
+prepare_write_cmd:  [
+  "cassandra-stress write cl=QUORUM n=10485760 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=300 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5 -pop seq=1..10485760",
+  "cassandra-stress write cl=QUORUM n=10485760 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=300 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5 -pop seq=10485761..20971520",
+]
+stress_cmd: [
+  "cassandra-stress write cl=QUORUM duration=360m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=30 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+  "cassandra-stress read  cl=QUORUM duration=360m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=30 -pop 'dist=uniform(1..20971520)' -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+]
+round_robin: true
+
+n_db_nodes: '3 3'
+n_loaders: '1 1'
+n_monitor_nodes: 1
+
+instance_type_db: 'i4i.xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '111'
+nemesis_interval: 5
+nemesis_filter_seeds: false
+nemesis_during_prepare: false
+
+user_prefix: 'long-encrypt-at-rest-20gb-6h-multidc'
+
+seeds_num: 2
+
+server_encrypt: true
