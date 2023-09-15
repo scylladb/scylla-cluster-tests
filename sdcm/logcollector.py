@@ -60,7 +60,7 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
-from sdcm.utils.gce_utils import gce_public_addresses
+from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1508,13 +1508,17 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
     def gce_first_public_ip(instance):
         return gce_public_addresses(instance)[0]
 
+    @staticmethod
+    def gce_first_private_ip(instance):
+        return gce_private_addresses(instance)[0]
+
     def get_gce_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
         filtered_instances = filter_gce_instances_by_type(instances)
         for instance in filtered_instances['db_nodes']:
             self.db_cluster.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
-                                                      "hostname": self.gce_first_public_ip(instance),
+                                                      "hostname": self.gce_first_private_ip(instance),
                                                       "user": self.params.get('gce_image_username'),
                                                       "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
@@ -1523,7 +1527,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         for instance in filtered_instances['monitor_nodes']:
             self.monitor_set.append(CollectingNode(name=instance.name,
                                                    ssh_login_info={
-                                                       "hostname": self.gce_first_public_ip(instance),
+                                                       "hostname": self.gce_first_private_ip(instance),
                                                        "user": self.params.get('gce_image_username'),
                                                        "key_file": self.params.get('user_credentials_path')},
                                                    instance=instance,
@@ -1532,7 +1536,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         for instance in filtered_instances['loader_nodes']:
             self.loader_set.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
-                                                      "hostname": self.gce_first_public_ip(instance),
+                                                      "hostname": self.gce_first_private_ip(instance),
                                                       "user": self.params.get('gce_image_username'),
                                                       "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
@@ -1541,7 +1545,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         for instance in filtered_instances['kubernetes_nodes']:
             self.kubernetes_set.append(CollectingNode(name=instance.name,
                                                       ssh_login_info={
-                                                          "hostname": self.gce_first_public_ip(instance),
+                                                          "hostname": self.gce_first_private_ip(instance),
                                                           "user": self.params.get('gce_image_username'),
                                                           "key_file": self.params.get('user_credentials_path')},
                                                       instance=instance,

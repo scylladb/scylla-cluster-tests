@@ -364,7 +364,9 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         username = self._gce_image_username
         public_key, key_type = pub_key_from_private_key_file(self.params.get("user_credentials_path"))
         zone = self._gce_zone_names[dc_idx]
-
+        network_tags = ["sct-network-only"]
+        if self.params.get('intra_node_comm_public') or self.params.get('ip_ssh_connections') == 'public':
+            network_tags.append("sct-allow-public")
         create_node_params = dict(
             project_id=self.project, zone=zone,
             machine_type=self._gce_instance_type,
@@ -383,6 +385,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             },
             spot=spot,
             service_accounts=self._service_accounts,
+            network_tags=network_tags
         )
         instance = self._create_node_with_retries(name=name,
                                                   dc_idx=dc_idx,
