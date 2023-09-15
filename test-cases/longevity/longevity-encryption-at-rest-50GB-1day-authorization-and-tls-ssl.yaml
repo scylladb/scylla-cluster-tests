@@ -1,0 +1,31 @@
+test_duration: 1940
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..100000000"]
+
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=960m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native  -rate threads=100 -pop seq=1..100000000 -log interval=5",
+             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=960m -mode cql3 native -rate threads=20"]
+
+stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=1440m -mode cql3 native  -rate threads=50 -pop seq=1..100000000 -log interval=5"]
+
+run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 60}']
+n_db_nodes: 6
+n_loaders: 3
+n_monitor_nodes: 1
+
+instance_type_db: 'i4i.4xlarge'
+instance_type_loader: 'c5.2xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '111'
+nemesis_interval: 5
+
+user_prefix: 'longevity-encrypt-at-rest-50gb-1d'
+
+space_node_threshold: 644245094
+
+server_encrypt: true
+client_encrypt: true
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
