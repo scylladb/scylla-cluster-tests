@@ -89,9 +89,6 @@ class AWSPricing:
 
     def get_instance_price(self, region, instance_type, state, lifecycle):
         if state == "running":
-            if instance_type.startswith("i4"):
-                LOGGER.warning("AWSPricing: i4 instance type is not generally available")
-                return 0
             if lifecycle == InstanceLifecycle.ON_DEMAND:
                 return self.get_on_demand_instance_price(region_name=region, instance_type=instance_type)
             if lifecycle == InstanceLifecycle.SPOT:
