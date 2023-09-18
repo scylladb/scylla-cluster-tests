@@ -583,7 +583,7 @@ def build_reporter(name: str,
         return SlaPerUserEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "ManagerUpgrade" in name:
         return ManagerUpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)
-    elif "Upgrade" in name:
+    elif "Upgrade" in name and "PerformanceRegression" not in name:
         return UpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Artifacts" in name:
         return ArtifactsEmailReporter(email_recipients=email_recipients, logdir=logdir)
