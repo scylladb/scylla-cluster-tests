@@ -18,7 +18,7 @@ instance_type_monitor: 't3.large'
 instance_type_db: 'i3en.2xlarge'
 
 nemesis_class_name: 'NemesisSequence'
-nemesis_interval: 60
+nemesis_interval: 30
 nemesis_sequence_sleep_between_ops: 10
 
 user_prefix: 'perf-latency-nemesis'

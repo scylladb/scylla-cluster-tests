@@ -21,12 +21,13 @@ from enum import Enum
 
 import yaml
 
+from upgrade_test import UpgradeTest
 from sdcm.tester import ClusterTester, teardown_on_exception
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressEvent
-from sdcm.sct_events.system import HWPerforanceEvent
-from sdcm.utils.decorators import log_run_info
+from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
+from sdcm.utils.decorators import log_run_info, latency_calculator_decorator
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes
 
 KB = 1024
@@ -797,3 +798,94 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
         self.update_hdrhistograms(histogram_name='test_histogram_by_interval',
                                   histogram_data=histogram_data_by_interval)
+
+
+class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):  # pylint: disable=too-many-ancestors
+    def get_email_data(self):  # pylint: disable=no-self-use
+        return PerformanceRegressionTest.get_email_data(self)
+
+    @latency_calculator_decorator(legend="Upgrade Node")
+    def upgrade_node(self, node):  # pylint: disable=arguments-differ
+        InfoEvent(message='Upgrade Node %s begin' % node.name).publish()
+        self._upgrade_node(node)
+        InfoEvent(message='Upgrade Node %s ended' % node.name).publish()
+
+    def _stop_stress_when_finished(self):  # pylint: disable=no-self-use
+        with EventsSeverityChangerFilter(new_severity=Severity.NORMAL,  # killing stress creates Critical error
+                                         event_class=CassandraStressEvent,
+                                         extra_time_to_expiration=60):
+            self.loaders.kill_stress_thread()
+
+    @latency_calculator_decorator
+    def steady_state_latency(self):  # pylint: disable=no-self-use
+        sleep_time = self.db_cluster.params.get('nemesis_interval') * 60
+        InfoEvent(message='Starting Steady State calculation for %ss' % sleep_time).publish()
+        time.sleep(sleep_time)
+        InfoEvent(message='Ended Steady State calculation. Took %ss' % sleep_time).publish()
+
+    @latency_calculator_decorator
+    def post_upgrades_steady_state(self):
+        sleep_time = self.db_cluster.params.get('nemesis_interval') * 60
+        InfoEvent(message='Starting Post-Upgrade Steady State calculation for %ss' % sleep_time).publish()
+        time.sleep(sleep_time)
+        InfoEvent(message='Ended Post-Upgrade Steady State calculation. Took %ss' % sleep_time).publish()
+
+    def run_workload_and_upgrade(self, stress_cmd, sub_type=None):
+        # next 3 lines, is a workaround to have it working inside `latency_calculator_decorator`
+        self.cluster = self.db_cluster  # pylint: disable=attribute-defined-outside-init
+        self.tester = self  # pylint: disable=attribute-defined-outside-init
+        self.monitoring_set = self.monitors  # pylint: disable=attribute-defined-outside-init
+
+        if sub_type is None:
+            sub_type = 'read' if ' read ' in stress_cmd else 'write' if ' write ' in stress_cmd else 'mixed'
+        test_index = f'latency-during-upgrade-{sub_type}'
+        self.create_test_stats(sub_type=sub_type, append_sub_test_to_name=False, test_index=test_index)
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
+        self.steady_state_latency()
+        versions_list = []
+
+        def _get_version_and_build_id_from_node(node):
+            version = node.remoter.run('scylla --version')
+            build_id = node.remoter.run('scylla --build-id')
+            return version.stdout.strip(), build_id.stdout.strip()
+
+        for node in self.db_cluster.nodes:
+            base_version, base_build_id = _get_version_and_build_id_from_node(node)
+            self.upgrade_node(node)
+            target_version, target_build_id = _get_version_and_build_id_from_node(node)
+            versions_list.append({'base_version': base_version,
+                                  'base_build_id': base_build_id,
+                                  'target_version': target_version,
+                                  'target_build_id': target_build_id,
+                                  'node_name': node.name
+                                  })
+            time.sleep(120)  # sleeping 2 min to give time for cache to re-heat
+        self.post_upgrades_steady_state()
+
+        # TODO: check if all `base_version` and all `target_version` are the same
+        self.update({'base_target_versions': versions_list})
+        self._stop_stress_when_finished()
+        results = self.get_stress_results(queue=stress_queue)
+        self.update_test_details(scrap_metrics_step=60)
+        self.display_results(results, test_name='test_latency_with_upgrade')
+        self.update_test_details(scrap_metrics_step=60)
+        self.display_results(results, test_name='test_latency_during_upgrade')
+        self.check_latency_during_ops(op_is_upgrade=True)
+
+    def _prepare_latency_with_upgrade(self):
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()
+        self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
+
+    def test_latency_read_with_upgrade(self):
+        self._prepare_latency_with_upgrade()
+        self.run_workload_and_upgrade(stress_cmd=self.params.get('stress_cmd_r'))
+
+    def test_latency_write_with_upgrade(self):
+        self._prepare_latency_with_upgrade()
+        self.run_workload_and_upgrade(stress_cmd=self.params.get('stress_cmd_w'))
+
+    def test_latency_mixed_with_upgrade(self):
+        self._prepare_latency_with_upgrade()
+        self.run_workload_and_upgrade(stress_cmd=self.params.get('stress_cmd_m'))
