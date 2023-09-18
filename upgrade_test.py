@@ -156,9 +156,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                                 msg='Expected truncated entry in the system.local table, but it\'s not found')
 
     @truncate_entries
+    def upgrade_node(self, node, upgrade_sstables=True):
+        self._upgrade_node(node=node, upgrade_sstables=upgrade_sstables)
+
     @decorate_with_context(ignore_abort_requested_errors)
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
-    def upgrade_node(self, node, upgrade_sstables=True):
+    def _upgrade_node(self, node, upgrade_sstables=True):
         # pylint: disable=too-many-branches,too-many-statements
         new_scylla_repo = self.params.get('new_scylla_repo')
         new_version = self.params.get('new_version')
@@ -174,8 +177,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message='Upgrading a Node').publish()
         # because of scylladb/scylla-enterprise#2818 we are for now adding this workaround
         if node.distro.is_ubuntu:
+            InfoEvent(message='upgrade_node - removing "shim-signed" package as a workaround').publish()
             node.remoter.sudo("apt-get remove shim-signed -y --allow-remove-essential")
+            InfoEvent(message='upgrade_node - ended removing "shim-signed" package as a workaround').publish()
+        InfoEvent(message=f'upgrade_node - starting to "upgrade_system" of the node {node.name}').publish()
         node.upgrade_system()
+        InfoEvent(message=f'upgrade_node - ended to "upgrade_system" of the node {node.name}').publish()
 
         # We assume that if update_db_packages is not empty we install packages from there.
         # In this case we don't use upgrade based on new_scylla_repo(ignored sudo yum update scylla...)
@@ -183,8 +190,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.orig_ver = result.stdout.strip()
 
         if upgrade_node_packages:
+            InfoEvent(message='upgrade_node - started to "upgrade_node_packages').publish()
             # update_scylla_packages
+            InfoEvent(message='upgrade_node - started sending upgrade packages to node').publish()
             node.remoter.send_files(upgrade_node_packages, '/tmp/scylla', verbose=True)
+            InfoEvent(message='upgrade_node - ended sending upgrade packages to node').publish()
             # node.remoter.run('sudo yum update -y --skip-broken', connect_timeout=900)
             node.remoter.run('sudo yum install python34-PyYAML -y')
             # replace the packages
@@ -198,20 +208,33 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             # and all the rest
             node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/*.rpm | true')
             node.remoter.run(r'rpm -qa scylla\*')
+            InfoEvent(message='upgrade_node - ended to "upgrade_node_packages').publish()
         elif new_scylla_repo:
+            InfoEvent(message='upgrade_node - started to create "new_scylla_repo"').publish()
             # backup the data
             node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
             if node.is_rhel_like():
                 node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
             else:
                 node.remoter.run('sudo cp /etc/apt/sources.list.d/scylla.list ~/scylla.list-backup')
+            InfoEvent(message='upgrade_node - ended to create "new_scylla_repo"').publish()
+            InfoEvent(message='upgrade_node - started to "backup_conf"').publish()
             backup_conf(node)
+            InfoEvent(message='upgrade_node - ended to "backup_conf"').publish()
             assert new_scylla_repo.startswith('http')
+            InfoEvent(message='upgrade_node - started to "download_scylla_repo"').publish()
             node.download_scylla_repo(new_scylla_repo)
+            InfoEvent(message='upgrade_node - ended to "download_scylla_repo"').publish()
             # flush all memtables to SSTables
+            InfoEvent(message='upgrade_node - started to "drain"').publish()
             node.run_nodetool("drain", timeout=15*60, coredump_on_timeout=True, retry=0)
+            InfoEvent(message='upgrade_node - ended to "drain"').publish()
+            InfoEvent(message='upgrade_node - started to "nodetool snapshot"').publish()
             node.run_nodetool("snapshot")
+            InfoEvent(message='upgrade_node - ended to "nodetool snapshot"').publish()
+            InfoEvent(message='upgrade_node - started to "stop_scylla_server"').publish()
             node.stop_scylla_server(verify_down=False)
+            InfoEvent(message='upgrade_node - ended to "stop_scylla_server"').publish()
 
             orig_is_enterprise = node.is_enterprise
             if node.is_rhel_like():
@@ -232,39 +255,65 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
             if self.upgrade_rollback_mode == 'reinstall':
                 if node.is_rhel_like():
+                    InfoEvent(message='upgrade_node - starting to remove and install scylla on RHEL').publish()
                     node.remoter.run(r'sudo yum remove scylla\* -y')
                     node.remoter.run('sudo yum install {} -y'.format(scylla_pkg_ver))
+                    InfoEvent(message='upgrade_node - ended to remove and install scylla on RHEL').publish()
                 else:
+                    InfoEvent(message='upgrade_node - starting to remove and install scylla on debian').publish()
                     node.remoter.run(r'sudo apt-get remove scylla\* -y')
                     # fixme: add publick key
                     node.remoter.run(
                         r'sudo apt-get install {} -y '
                         r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg_ver))
+                    InfoEvent(message='upgrade_node - ended to remove and install scylla on debian').publish()
+                InfoEvent(message='upgrade_node - starting to "recover_conf"').publish()
                 recover_conf(node)
+                InfoEvent(message='upgrade_node - ended to "recover_conf"').publish()
+                InfoEvent(message='upgrade_node - starting to "daemon-reload"').publish()
                 node.remoter.run('sudo systemctl daemon-reload')
+                InfoEvent(message='upgrade_node - ended to "daemon-reload"').publish()
             else:
                 if node.is_rhel_like():
+                    InfoEvent(message='upgrade_node - starting to "yum update"').publish()
                     node.remoter.run(r'sudo yum update {}\* -y'.format(scylla_pkg_ver))
+                    InfoEvent(message='upgrade_node - ended to "yum update"').publish()
                 else:
+                    InfoEvent(message='upgrade_node - starting to "apt-get update"').publish()
                     node.remoter.run('sudo apt-get update')
                     node.remoter.run(
                         r'sudo apt-get dist-upgrade {} -y '
                         r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg))
+                    InfoEvent(message='upgrade_node - ended to "apt-get update"').publish()
+        InfoEvent(message='upgrade_node - starting to "check_reload_systemd_config"').publish()
         check_reload_systemd_config(node)
+        InfoEvent(message='upgrade_node - ended to "check_reload_systemd_config"').publish()
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
+        InfoEvent(message='upgrade_node - starting to "run_scylla_sysconfig_setup"').publish()
         node.run_scylla_sysconfig_setup()
+        InfoEvent(message='upgrade_node - ended to "run_scylla_sysconfig_setup"').publish()
         if scylla_yaml_updates:
+            InfoEvent(message='upgrade_node - starting to "update_scylla_yaml"').publish()
             self._update_scylla_yaml_on_node(node_to_update=node, updates=scylla_yaml_updates)
+            InfoEvent(message='upgrade_node - ended to "update_scylla_yaml"').publish()
+        InfoEvent(message='upgrade_node - starting to "start_scylla_server"').publish()
         node.start_scylla_server(verify_up_timeout=500)
+        InfoEvent(message='upgrade_node - ended to "start_scylla_server"').publish()
+        InfoEvent(message='upgrade_node - starting to "get_db_nodes_cpu_mode"').publish()
         self.db_cluster.get_db_nodes_cpu_mode()
+        InfoEvent(message='upgrade_node - ended to "get_db_nodes_cpu_mode"').publish()
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout.strip()
         assert self.orig_ver != new_ver, "scylla-server version isn't changed"
         self.new_ver = new_ver
+        InfoEvent(message='upgrade_node - starting to "_update_argus_upgraded_version"').publish()
         self._update_argus_upgraded_version(node, new_ver)
+        InfoEvent(message='upgrade_node - ended to "_update_argus_upgraded_version"').publish()
         if upgrade_sstables:
+            InfoEvent(message='upgrade_node - starting to "upgradesstables_if_command_available"').publish()
             self.upgradesstables_if_command_available(node)
+            InfoEvent(message='upgrade_node - ended to "upgradesstables_if_command_available"').publish()
 
     @truncate_entries
     @decorate_with_context(ignore_abort_requested_errors)
