@@ -85,7 +85,7 @@ from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJE
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer, \
-    LatencyDuringOperationsPerformanceAnalyzer
+    LatencyDuringOperationsPerformanceAnalyzer, LatencyDuringUpgradesPerformanceAnalyzer
 from sdcm.sct_config import init_and_verify_sct_config
 from sdcm.sct_events import Severity
 from sdcm.sct_events.setup import start_events_device, stop_events_device, enable_default_filters
@@ -3058,10 +3058,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         assert used >= size, f"Waiting for Scylla data dir to reach '{size}', " \
                              f"current size is: '{used}'"
 
-    def check_latency_during_ops(self):
+    def check_latency_during_ops(self, op_is_upgrade=False):
         start_time = self.start_time if not self.create_stats else self._stats["test_details"]["start_time"]
         end_time = time.time()
-        analyzer = LatencyDuringOperationsPerformanceAnalyzer
+        if op_is_upgrade:
+            analyzer = LatencyDuringUpgradesPerformanceAnalyzer
+        else:
+            analyzer = LatencyDuringOperationsPerformanceAnalyzer
         results_analyzer = analyzer(es_index=self._test_index,
                                     es_doc_type=self._es_doc_type,
                                     email_recipients=self.params.get(
