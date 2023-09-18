@@ -32,6 +32,7 @@ def call(Map pipelineParams) {
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
+            string(defaultValue: '', description: '', name: 'new_scylla_repo')
             string(defaultValue: '', description: '', name: 'scylla_repo')
             string(defaultValue: '',
                    description: 'cloud path for RPMs, s3:// or gs://',
@@ -239,6 +240,10 @@ def call(Map pipelineParams) {
                                                         else
                                                             echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
                                                             exit 1
+                                                        fi
+
+                                                        if [[ ! -z "${params.new_scylla_repo}" ]] ; then
+                                                            export SCT_NEW_SCYLLA_REPO=${params.new_scylla_repo}
                                                         fi
 
                                                         if [[ "${params.update_db_packages || false}" == "true" ]] ; then

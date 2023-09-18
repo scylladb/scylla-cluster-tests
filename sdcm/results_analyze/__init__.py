@@ -113,6 +113,16 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         return f"[{setup_details['cluster_backend']}][{setup_details['instance_type_db']}]"
 
     def _test_version(self, test_doc):
+        if test_doc['_source'].get('base_target_versions'):
+            base_version = test_doc['_source']['base_target_versions'][0]['base_version']
+            base_build_id = test_doc['_source']['base_target_versions'][0]['base_build_id']
+            target_version = test_doc['_source']['base_target_versions'][0]['target_version']
+            target_build_id = test_doc['_source']['base_target_versions'][0]['target_build_id']
+            return {'base_version': base_version,
+                    'base_build_id': base_build_id,
+                    'target_version': target_version,
+                    'target_build_id': target_build_id
+                    }
         if test_doc['_source'].get('versions'):
             for value in ('scylla-server', 'scylla-enterprise-server'):
                 key = test_doc['_source']['versions'].get(value)
@@ -216,6 +226,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_latency_during_ops_short.html", logger=logger, events=events)
         self.percentiles = ['percentile_90', 'percentile_99']
+        self.test_name_for_email_subject = 'latency during operations'
 
     def get_debug_events(self):
         return self.get_events(event_severity=[Severity.DEBUG.name])
@@ -403,9 +414,19 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
         test_version_info = self._test_version(doc)
         if test_version_info:
-            test_version = f"{test_version_info['version']}.{test_version_info['date']}.{test_version_info['commit_id']}"
-            build_id = test_version_info.get('build_id', '')
+            if 'base_version' in test_version_info:
+                base_version = test_version_info['base_version']
+                base_build_id = test_version_info['base_build_id']
+                test_version = test_version_info['target_version']
+                build_id = test_version_info['target_build_id']
+            else:
+                base_version = ''
+                base_build_id = ''
+                test_version = f"{test_version_info['version']}.{test_version_info['date']}.{test_version_info['commit_id']}"
+                build_id = test_version_info.get('build_id', '')
         else:
+            base_version = ''
+            base_build_id = ''
             test_version = ''
             build_id = ''
 
@@ -426,8 +447,9 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         config_files = ' '.join(doc["_source"]["setup_details"]["config_files"])
         dataset_size = re.search(r'(\d{3}gb)', config_files).group() or 'unknown size'
 
-        subject = f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results (latency during operations' \
-                  f' {dataset_size}) - {test_name} - {test_version} - {str(test_start_time)}'
+        subject = (f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results '
+                   f'({self.test_name_for_email_subject} {dataset_size}) -'
+                   f' {test_name} - {test_version} - {str(test_start_time)}')
         best_results_per_nemesis = self._get_best_per_nemesis_for_each_version(doc, is_gce)
         self._compare_current_best_results_average(data, best_results_per_nemesis)
 
@@ -443,6 +465,8 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             test_name=full_test_name,
             test_start_time=str(test_start_time),
             test_id=doc['_source']['test_details'].get('test_id', doc["_id"]),
+            base_version=base_version,
+            base_build_id=base_build_id,
             test_version=test_version,
             build_id=build_id,
             setup_details=self._get_setup_details(doc, is_gce),
@@ -469,6 +493,15 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
         return True
+
+
+class LatencyDuringUpgradesPerformanceAnalyzer(LatencyDuringOperationsPerformanceAnalyzer):
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None,  # pylint: disable=too-many-arguments
+                 events=None):
+        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+                         logger=logger, events=events)
+        self.percentiles = ['percentile_90', 'percentile_99']
+        self.test_name_for_email_subject = 'latency during upgrades'
 
 
 class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):

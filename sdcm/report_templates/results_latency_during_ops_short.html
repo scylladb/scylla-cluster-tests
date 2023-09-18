@@ -10,11 +10,19 @@
         <span>Test id: </span>
         <span class="blue">{{ test_id }}</span>
         <br>
-        <span>Scylla Server Version: </span>
-        {% if build_id %}
+        {% if base_version %}
+            <span>Scylla Server Base Version: </span>
+            <span class="blue">{{ base_version }} with build-id {{ base_build_id }}</span>
+            <br>
+            <span>Scylla Server Target Version: </span>
             <span class="blue">{{ test_version }} with build-id {{ build_id }}</span>
         {% else %}
-            <span class="blue">{{ test_version }}</span>
+            <span>Scylla Server Version: </span>
+            {% if build_id %}
+                <span class="blue">{{ test_version }} with build-id {{ build_id }}</span>
+            {% else %}
+                <span class="blue">{{ test_version }}</span>
+            {% endif %}
         {% endif %}
     </h3>
     <div>
