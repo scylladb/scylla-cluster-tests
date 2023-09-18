@@ -24,7 +24,10 @@ from cassandra import AlreadyExists, InvalidRequest
 
 from sdcm.tester import ClusterTester
 from sdcm.utils import loader_utils
+from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.operations_thread import ThreadParams
+from sdcm.sct_events.system import InfoEvent
+from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
 
 
 class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
@@ -104,6 +107,25 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.run_tombstone_gc_verification_thread(**tombstone_gc_verification_params)
 
         self.run_prepare_write_cmd()
+
+        # Grow cluster to target size if requested
+        if cluster_target_size := self.params.get('cluster_target_size'):
+            add_node_cnt = self.params.get('add_node_cnt')
+            node_cnt = len(self.db_cluster.nodes)
+
+            InfoEvent(message=f"Starting to grow cluster from {node_cnt} to {cluster_target_size}").publish()
+
+            while node_cnt < cluster_target_size:
+                InfoEvent(message=f"f'Adding node number {node_cnt + 1}").publish()
+                new_nodes = self.db_cluster.add_nodes(count=add_node_cnt, enable_auto_bootstrap=True)
+                self.monitors.reconfigure_scylla_monitoring()
+                up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
+                with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.nodes[0], timeout=up_timeout):
+                    self.db_cluster.wait_for_init(node_list=new_nodes, timeout=up_timeout, check_node_health=False)
+                self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
+                node_cnt = len(self.db_cluster.nodes)
+
+            InfoEvent(message=f"f'Growing cluster finished, new cluster size is {node_cnt}, ").publish()
 
         # Collect data about partitions and their rows amount
         validate_partitions = self.params.get('validate_partitions')

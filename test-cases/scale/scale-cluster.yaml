@@ -1,24 +1,46 @@
-cassandra_stress_threads: 500
-cassandra_stress_population_size: 10000000
-space_node_threshold: 100
+test_duration: 600
+# 128KB row (16 * 8192), 244GB dataset (2M rows * 128KB)
+prepare_write_cmd:  [ "cassandra-stress write cl=ALL n=500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..500000          -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5",
+                      "cassandra-stress write cl=ALL n=500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=500001..1000000   -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5",
+                      "cassandra-stress write cl=ALL n=500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1000001..1500000  -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5",
+                      "cassandra-stress write cl=ALL n=500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1500001..2000000  -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5"
+                    ]
 
+stress_cmd: [ "cassandra-stress mixed cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..500000          -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5",
+              "cassandra-stress mixed cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=500001..1000000   -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5",
+              "cassandra-stress mixed cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1000001..1500000  -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5",
+              "cassandra-stress mixed cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -pop seq=1500001..2000000  -col 'n=FIXED(16) size=FIXED(8192)' -log interval=5"
+             ]
+
+round_robin: true
+
+n_db_nodes: 20
 add_node_cnt: 1
-seeds_num: 1
-
-n_db_nodes: 3
-n_loaders: 1
+cluster_target_size: 25
+n_loaders: 4
 n_monitor_nodes: 1
-cluster_target_size: 5
 
-instance_type_db: 'm5d.large'
+# AWS
+instance_type_db: 'i4i.large'
+instance_type_loader: 'c5.xlarge'
 
-user_prefix: 'cluster-scale-test'
-ssh_transport: 'libssh2'
-use_legacy_cluster_init: true
+# GCP
+gce_instance_type_db: 'n2-highmem-2'
+gce_n_local_ssd_disk_db: 2
+gce_instance_type_loader: 'e2-standard-4'
 
+# Azure
+azure_instance_type_db: 'Standard_L8s_v3'
+azure_instance_type_loader: 'Standard_F4s_v2'
+
+run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 10}']
+
+nemesis_class_name: 'SisyphusMonkey'
 nemesis_interval: 5
-nemesis_class_name: 'ChaosMonkey'
+nemesis_during_prepare: false
 
-cluster_health_check: false
+user_prefix: 'cluster-base-scale-test'
 
-backtrace_decoding: false
+use_preinstalled_scylla: true
+
+internode_compression: 'all'

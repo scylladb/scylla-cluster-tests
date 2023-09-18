@@ -1,3 +1,13 @@
 test_duration: 600 # (120min for 180 nodes creation + 240min for add 20 new nodes + 240min to run nemesis after the cluster was grown)
 n_db_nodes: 180
 cluster_target_size: 200
+
+user_prefix: 'cluster-scale-180-200-test'
+
+# This is in order to start the basic cluster faster
+use_legacy_cluster_init: true
+
+# Takes too long on big clusters
+cluster_health_check: false
+
+backtrace_decoding: false
