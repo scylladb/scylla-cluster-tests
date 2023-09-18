@@ -24,6 +24,10 @@ AWS Secret Access Key [****************5NcH]:
 Default region name [us-east-1]:
 Default output format [None]:
 
+# if using OKTA, use any of the tools to create the AWS profile, and export it as such,
+# anywhere you are gonna use hydra command (replace DeveloperAccessRole with the name of your profile):
+export AWS_PROFILE=DeveloperAccessRole
+
 # Install hydra (docker holding all requirements for running SCT)
 sudo ./install-hydra.sh
 ```
