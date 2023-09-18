@@ -21,9 +21,10 @@ class RequestMethods(Enum):
     POST = 'POST'
 
 
-def build_node_api_command(path_url, request_method: RequestMethods = RequestMethods.GET, api_port=10000):
+def build_node_api_command(path_url, request_method: RequestMethods = RequestMethods.GET, api_port=10000, silent=True):
     if not path_url.startswith('/'):
         path_url = '/' + path_url
+    silent_flag = '-s ' if silent else ''
 
-    return f'curl -X {request_method} --header "Content-Type: application/json" --header ' \
+    return f'curl -X {silent_flag}{request_method.value} --header "Content-Type: application/json" --header ' \
            f'"Accept: application/json" "http://127.0.0.1:{api_port}{path_url}"'
