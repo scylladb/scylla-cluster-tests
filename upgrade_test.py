@@ -194,7 +194,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
     @decorate_with_context(ignore_abort_requested_errors)
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
-    def _upgrade_node(self, node, upgrade_sstables=True, new_scylla_repo=None, new_version=None):
+    def _upgrade_node(self, node, upgrade_sstables=True):
         # pylint: disable=too-many-branches,too-many-statements
         new_scylla_repo = new_scylla_repo or self.params.get('new_scylla_repo')
         new_version = new_version or self.params.get('new_version')
@@ -213,7 +213,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message='Upgrading a Node').publish()
         # because of scylladb/scylla-enterprise#2818 we are for now adding this workaround
         if node.distro.is_ubuntu:
+            InfoEvent(message='upgrade_node - removing "shim-signed" package as a workaround').publish()
             node.remoter.sudo("apt-get remove shim-signed -y --allow-remove-essential")
+            InfoEvent(message='upgrade_node - ended removing "shim-signed" package as a workaround').publish()
+        InfoEvent(message=f'upgrade_node - starting to "upgrade_system" of the node {node.name}').publish()
         node.upgrade_system()
         InfoEvent(message=f'upgrade_node - ended to "upgrade_system" of the node {node.name}').publish()
 
@@ -287,7 +290,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     scylla_pkg_ver += f" {scylla_pkg}-machine-image{ver_suffix}"
 
             if self.upgrade_rollback_mode == 'reinstall':
-                if node.distro.is_rhel_like:
+                if node.is_rhel_like():
                     InfoEvent(message='upgrade_node - starting to remove and install scylla on RHEL').publish()
                     node.remoter.run(r'sudo yum remove scylla\* -y')
                     node.remoter.run('sudo yum install {} -y'.format(scylla_pkg_ver))
@@ -307,7 +310,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 node.remoter.run('sudo systemctl daemon-reload')
                 InfoEvent(message='upgrade_node - ended to "daemon-reload"').publish()
             else:
-                if node.distro.is_rhel_like:
+                if node.is_rhel_like():
                     InfoEvent(message='upgrade_node - starting to "yum update"').publish()
                     node.remoter.run(r'sudo yum update {}\* -y'.format(scylla_pkg_ver))
                     InfoEvent(message='upgrade_node - ended to "yum update"').publish()
@@ -330,8 +333,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message='upgrade_node - starting to "update_scylla_yaml"').publish()
             self._update_scylla_yaml_on_node(node_to_update=node, updates=scylla_yaml_updates)
             InfoEvent(message='upgrade_node - ended to "update_scylla_yaml"').publish()
-        node.forget_scylla_version()
-        node.drop_raft_property()
         InfoEvent(message='upgrade_node - starting to "start_scylla_server"').publish()
         node.start_scylla_server(verify_up_timeout=500)
         InfoEvent(message='upgrade_node - ended to "start_scylla_server"').publish()
