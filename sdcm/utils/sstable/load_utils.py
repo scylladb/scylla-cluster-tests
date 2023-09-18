@@ -123,7 +123,7 @@ class SstableLoadUtils:
             # `load_and_stream` parameter is not supported by nodetool yet. This is workaround
             # https://github.com/scylladb/scylla-tools-java/issues/253
             path = f'/storage_service/sstables/{keyspace_name}?cf={table_name}&load_and_stream=true'
-            load_api_cmd = build_node_api_command(path_url=path, request_method=RequestMethods.POST)
+            load_api_cmd = build_node_api_command(path_url=path, request_method=RequestMethods.POST, silent=False)
             node.remoter.run(load_api_cmd)
 
     @staticmethod
