@@ -116,7 +116,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             InfoEvent(message=f"Starting to grow cluster from {node_cnt} to {cluster_target_size}").publish()
 
             while node_cnt < cluster_target_size:
-                InfoEvent(message=f"f'Adding node number {node_cnt + 1}").publish()
+                InfoEvent(message=f"Adding node number {node_cnt + 1}").publish()
                 new_nodes = self.db_cluster.add_nodes(count=add_node_cnt, enable_auto_bootstrap=True)
                 self.monitors.reconfigure_scylla_monitoring()
                 up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
@@ -125,7 +125,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
                 node_cnt = len(self.db_cluster.nodes)
 
-            InfoEvent(message=f"f'Growing cluster finished, new cluster size is {node_cnt}, ").publish()
+            InfoEvent(message=f"Growing cluster finished, new cluster size is {node_cnt}").publish()
 
         # Collect data about partitions and their rows amount
         validate_partitions = self.params.get('validate_partitions')
