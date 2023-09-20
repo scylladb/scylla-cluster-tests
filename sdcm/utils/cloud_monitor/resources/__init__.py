@@ -19,8 +19,12 @@ class CloudInstance:  # pylint: disable=too-few-public-methods,too-many-instance
         self.create_time = create_time
         self.keep = keep  # keep alive
         self.project = project
-        self.price = self.pricing.get_instance_price(region=self.region, instance_type=self.instance_type,
-                                                     state=self.state, lifecycle=self.lifecycle)
+
+        try:
+            self.price = self.pricing.get_instance_price(region=self.region, instance_type=self.instance_type,
+                                                         state=self.state, lifecycle=self.lifecycle)
+        except Exception:  # pylint: disable=broad-except
+            self.price = -0.0  # to indicate in the report that we were unable to get the price.
 
     @property
     def region(self):
