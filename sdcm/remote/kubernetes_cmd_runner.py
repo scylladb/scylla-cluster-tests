@@ -33,6 +33,7 @@ from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.common import (
     deprecation,
     generate_random_string,
+    KeyBasedLock,
 )
 from sdcm.utils.decorators import retrying
 from sdcm.wait import wait_for
@@ -41,6 +42,7 @@ from .base import RetryableNetworkException
 from .remote_base import RemoteCmdRunnerBase, StreamWatcher
 
 LOGGER = logging.getLogger(__name__)
+KEY_BASED_LOCKS = KeyBasedLock()
 
 
 def is_scylla_bench_command(command):
@@ -213,8 +215,9 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
     # pylint: disable=too-many-arguments,unused-argument
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
     def send_files(self, src, dst, delete_dst=False, preserve_symlinks=False, verbose=False):
-        KubernetesOps.copy_file(self.kluster, src, f"{self.namespace}/{self.pod_name}:{dst}",
-                                container=self.container, timeout=300)
+        with KEY_BASED_LOCKS.get_lock(f"k8s--{self.kluster.name}--{self.namespace}--{self.pod_name}"):
+            KubernetesOps.copy_file(self.kluster, src, f"{self.namespace}/{self.pod_name}:{dst}",
+                                    container=self.container, timeout=300)
         return True
 
     def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
