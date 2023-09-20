@@ -98,6 +98,20 @@ SCYLLA_AMI_OWNER_ID_LIST = ["797456418907", "158855661827"]
 SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
 
 
+class KeyBasedLock():  # pylint: disable=too-few-public-methods
+    """Class designed for creating locks based on hashable keys."""
+
+    def __init__(self):
+        self.key_lock_mapping = {}
+        self.handler_lock = threading.Lock()
+
+    def get_lock(self, hashable_key):
+        with self.handler_lock:
+            if hashable_key not in self.key_lock_mapping:
+                self.key_lock_mapping[hashable_key] = threading.Lock()
+            return self.key_lock_mapping[hashable_key]
+
+
 def deprecation(message):
     warnings.warn(message, DeprecationWarning, stacklevel=3)
 
