@@ -2746,7 +2746,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         timeout = timeout or (node.pod_terminate_timeout * 60)
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node), DbEventsFilter(
                 db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                line="std::runtime_error.*decommission"):
+                line="std::runtime_error (Operation decommission is in progress, try again)"):
             self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members - 1)
             self.k8s_cluster.kubectl(f"wait --timeout={timeout}s --for=delete pod {node.name}",
                                      namespace=self.namespace,
