@@ -25,14 +25,12 @@ from functools import wraps, cache
 from typing import List
 
 from argus.client.sct.types import Package
-from cassandra import ConsistencyLevel
 
 from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import CassandraStressThread
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.version_utils import get_node_supported_sstable_versions
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
@@ -50,7 +48,6 @@ def truncate_entries(func):
     def inner(self, *args, **kwargs):
         node = args[0]
         with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
-            session.default_consistency_level = ConsistencyLevel.QUORUM
             InfoEvent(message="Start truncate simple tables").publish()
             try:
                 self.cql_truncate_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
@@ -64,7 +61,6 @@ def truncate_entries(func):
 
         # re-new connection
         with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
-            session.default_consistency_level = ConsistencyLevel.QUORUM
             self.validate_truncated_entries_for_table(session=session, system_truncated=True)
             self.read_data_from_truncated_tables(session=session)
             self.cql_insert_data_to_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
@@ -131,8 +127,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         for table_name in tables_name:
             InfoEvent(message="Start read data from truncated tables").publish()
             try:
-                with adaptive_timeout(Operations.QUERY, node=self.db_cluster.nodes[0], timeout=60, query="SELECT"):
-                    count = self.rows_to_list(session.execute(truncate_query.format(table_name), timeout=120))
+                count = self.rows_to_list(session.execute(truncate_query.format(table_name)))
                 self.assertEqual(str(count[0][0]), '0',
                                  msg='Expected that there is no data in the table truncate_ks.{}, but found {} rows'
                                  .format(table_name, count[0][0]))
