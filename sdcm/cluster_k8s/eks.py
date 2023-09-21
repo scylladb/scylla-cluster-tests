@@ -44,6 +44,7 @@ from sdcm.utils.aws_utils import (
     get_ec2_network_configuration,
     tags_as_ec2_tags,
     EksClusterCleanupMixin,
+    get_arch_from_instance_type,
 )
 
 
@@ -54,6 +55,8 @@ R = TypeVar("R")  # pylint: disable=invalid-name
 SUPPORTED_EBS_STORAGE_CLASSES = ['gp3', ]
 
 EC2_INSTANCE_UPDATE_LOCK = Lock()
+
+ARCH_TO_IMAGE_TYPE_MAPPING = {'arm64': 'AL2_ARM_64', 'x86_64': 'AL2_x86_64'}
 
 
 def deploy_k8s_eks_cluster(region_name: str, availability_zone: str,
@@ -164,6 +167,8 @@ class EksNodePool(CloudK8sNodePool):
             is_deployed: bool = False,
             user_data: str = None,
     ):
+        arch = get_arch_from_instance_type(instance_type)
+        image_type = ARCH_TO_IMAGE_TYPE_MAPPING.get(arch)
         super().__init__(
             k8s_cluster=k8s_cluster,
             name=name,
