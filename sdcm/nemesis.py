@@ -4701,7 +4701,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             audit.configure(audit_config)
             keyspace_name = keyspaces_for_audit[0]
             errors = []
-            audit_start = datetime.datetime.now()
+            audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
             InfoEvent(message='Writing/Reading data from audited keyspace').publish()
             write_cmd = f"cassandra-stress write no-warmup cl=ALL n=1000 -schema" \
                         f" 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)" \
@@ -4741,7 +4741,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         audit_config.categories = ["DCL", "DDL", "AUTH", "ADMIN"]
         audit.configure(audit_config)
         table_name = "audit_cf"
-        audit_start = datetime.datetime.now()
+        audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
         with self.cluster.cql_connection_patient(node=self.target_node) as session:
             query = f"CREATE TABLE IF NOT EXISTS {keyspace_name}.{table_name} (id int PRIMARY KEY, value timestamp)"
             session.execute(query)
@@ -4750,7 +4750,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if not audit_rows:
                 errors.append("Audit log is empty while should contain executed DDL (create table) operation")
 
-            audit_start = datetime.datetime.now()
+            audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
             query = f"ALTER TABLE {keyspace_name}.{table_name} WITH read_repair_chance = 0.0"
             session.execute(query)
             self.cluster.wait_for_schema_agreement()
@@ -4758,7 +4758,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if not audit_rows:
                 errors.append("Audit log is empty while should contain executed DDL (alter table) operation")
 
-            audit_start = datetime.datetime.now()
+            audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
             query = f"DROP TABLE {keyspace_name}.{table_name}"
             session.execute(query, timeout=300)
             self.cluster.wait_for_schema_agreement()
