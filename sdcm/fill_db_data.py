@@ -21,7 +21,6 @@ import logging
 import random
 import time
 import re
-import traceback
 
 from collections import OrderedDict
 from uuid import UUID
@@ -31,10 +30,7 @@ from cassandra.util import sortedset, SortedSet  # pylint: disable=no-name-in-mo
 from cassandra import ConsistencyLevel
 from cassandra.protocol import ProtocolException  # pylint: disable=no-name-in-module
 
-from sdcm.sct_events import Severity
-from sdcm.sct_events.system import InfoEvent
 from sdcm.tester import ClusterTester
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.decorators import retrying
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
 from sdcm.utils.version_utils import ComparableScyllaVersion
@@ -3045,26 +3041,19 @@ class FillDatabaseData(ClusterTester):
             # Added sleep after each created table
             time.sleep(15)
 
-    def cql_insert_data_to_simple_tables(self, session, rows):  # pylint: disable=invalid-name
+    @staticmethod
+    def cql_insert_data_to_simple_tables(session, rows):  # pylint: disable=invalid-name
         def insert_query():
-            with adaptive_timeout(Operations.QUERY, node=self.db_cluster.nodes[0], timeout=60, query="INSERT"):
-                session.execute(
-                    f'INSERT INTO truncate_table{i} (my_id, col1, value) VALUES ( {k}, {k}, {k})', timeout=120)
+            return f'INSERT INTO truncate_table{i} (my_id, col1, value) VALUES ( {k}, {k}, {k})'
+        for i in range(rows):  # pylint: disable=unused-variable
+            for k in range(100):  # pylint: disable=unused-variable
+                session.execute(insert_query())
 
-        for i in range(rows):
-            for k in range(100):
-                # Catch the exception as we do not want to stop the test on this failure
-                try:
-                    insert_query()
-                except Exception as details:  # pylint: disable=broad-except
-                    InfoEvent(message=f"Failed insert data to simple tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
-                              severity=Severity.ERROR).publish()
-
-    def cql_truncate_simple_tables(self, session, rows):
+    @staticmethod
+    def cql_truncate_simple_tables(session, rows):
         truncate_query = 'TRUNCATE TABLE truncate_table%d'
         for i in range(rows):
-            with adaptive_timeout(Operations.QUERY, node=self.db_cluster.nodes[0], timeout=60, query="TRUNCATE"):
-                session.execute(truncate_query % i, timeout=300)
+            session.execute(truncate_query % i)
 
     def fill_db_data_for_truncate_test(self, insert_rows):
         # Prepare connection and keyspace
