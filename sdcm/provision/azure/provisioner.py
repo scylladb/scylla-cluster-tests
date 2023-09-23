@@ -18,6 +18,7 @@ from typing import Dict, List
 
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
 from azure.mgmt.resource.resources.models import ResourceGroup
+from invoke import Result
 
 from sdcm.provision.azure.ip_provider import IpAddressProvider
 from sdcm.provision.azure.network_interface_provider import NetworkInterfaceProvider
@@ -152,8 +153,8 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         self._nic_provider.delete(self._nic_provider.get(name))
         self._ip_provider.delete(self._ip_provider.get(name))
 
-    def reboot_instance(self, name: str, wait=True) -> None:
-        self._vm_provider.reboot(name, wait)
+    def reboot_instance(self, name: str, wait: bool, hard: bool = False) -> None:
+        self._vm_provider.reboot(name, wait, hard)
 
     def list_instances(self) -> List[VmInstance]:
         """List virtual machines for given provisioner."""
@@ -181,6 +182,10 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         instance = self._vm_to_instance(self._vm_provider.add_tags(name, tags))
         self._cache[name] = instance
         LOGGER.info("Added tags '%s' to intance '%s'", tags, name)
+
+    def run_command(self, name: str, command: str) -> Result:
+        """Runs command on instance."""
+        return self._vm_provider.run_command(name, command)
 
     @property
     def _resource_group_name(self):
