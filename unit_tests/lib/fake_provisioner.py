@@ -11,7 +11,10 @@
 #
 # Copyright (c) 2022 ScyllaDB
 import datetime
+import subprocess
 from typing import List, Dict
+
+from invoke import Result
 
 from sdcm.provision.provisioner import Provisioner, VmInstance, InstanceDefinition, PricingModel
 
@@ -68,8 +71,12 @@ class FakeProvisioner(Provisioner):
     def cleanup(self, wait: bool = False) -> None:
         self._instances = {}
 
-    def reboot_instance(self, name: str, wait: bool) -> None:
+    def reboot_instance(self, name: str, wait: bool, hard: bool = False) -> None:
         pass
+
+    def run_command(self, name: str, command: str) -> Result:
+        """Runs command on instance."""
+        return subprocess.run(command, shell=True, capture_output=True, text=True)  # pylint: disable=subprocess-run-check
 
     @classmethod
     def discover_regions(cls, test_id: str, **kwargs) -> List[Provisioner]:  # pylint: disable=unused-argument
