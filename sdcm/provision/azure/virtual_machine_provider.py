@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 import base64
+import time
 from datetime import datetime
 import logging
 import os
@@ -20,7 +21,8 @@ from typing import Dict, Optional, Any, List
 
 import binascii
 from azure.core.exceptions import ResourceNotFoundError, AzureError
-from azure.mgmt.compute.models import VirtualMachine
+from azure.mgmt.compute.models import VirtualMachine, RunCommandInput
+from invoke import Result
 
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, ProvisionError
 from sdcm.provision.user_data import UserDataBuilder
@@ -142,13 +144,17 @@ class VirtualMachineProvider:
             LOGGER.info("Instance %s has been terminated.", name)
         del self._cache[name]
 
-    def reboot(self, name: str, wait: bool = True) -> None:
+    def reboot(self, name: str, wait: bool = True, hard: bool = False) -> None:
         LOGGER.info("Triggering reboot of instance: %s", name)
-        task = self._azure_service.compute.virtual_machines.begin_restart(self._resource_group_name, vm_name=name)
-        if wait is True:
-            LOGGER.info("Waiting for reboot of instance: %s...", name)
-            task.wait()
-            LOGGER.info("Instance %s has been rebooted.", name)
+        flags = "-ff" if hard else "-f"
+        self.run_command(name, f"reboot {flags}")
+        start_time = time.time()
+        while wait and time.time() - start_time < 600:  # 10 minutes
+            time.sleep(10)
+            instance_view = self._azure_service.compute.virtual_machines.instance_view(
+                self._resource_group_name, vm_name=name)
+            if instance_view and instance_view.statuses[-1].display_status == 'VM running':
+                break
 
     def add_tags(self, name: str, tags: Dict[str, str]) -> VirtualMachine:
         """Adds tags to instance (with waiting for completion)"""
@@ -222,6 +228,27 @@ class VirtualMachineProvider:
                 }
             })
         return storage_profile
+
+    def run_command(self, name: str, command: str) -> Result:
+        if name not in self._cache:
+            raise AttributeError(f"Instance '{name}' does not exist in resource group '{self._resource_group_name}'")
+        LOGGER.debug("Running command '%s' on instance: %s", command, name)
+        command_object = RunCommandInput(command_id="RunShellScript", script=[command])
+        result = self._azure_service.compute.virtual_machines.begin_run_command(
+            self._resource_group_name, name, command_object).result()
+        LOGGER.debug("Finished running command '%s' on instance: %s: %s", command, name, result.value[0])
+        try:
+            stdout, stderr = result.value[0].message.split('[stdout]\n')[1].split('\n[stderr]\n')[0:2]
+            exited = 0  # doesn't mean it passed, Azure does not provide rc
+        except IndexError:
+            stdout, stderr = result.value[0].message, ""
+            exited = 1
+        return Result(
+            stdout=stdout,
+            stderr=stderr,
+            exited=exited,
+            encoding="utf-8"
+        )
 
     @staticmethod
     def _get_pricing_params(pricing_model: PricingModel):
