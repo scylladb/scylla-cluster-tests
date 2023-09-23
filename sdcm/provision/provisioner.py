@@ -17,6 +17,8 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Dict
 
+from invoke import Result
+
 from sdcm.keystore import SSHKey
 from sdcm.provision.user_data import UserDataObject
 
@@ -86,10 +88,10 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
         was triggered."""
         self._provisioner.terminate_instance(self.name, wait=wait)
 
-    def reboot(self, wait: bool = True) -> None:
+    def reboot(self, wait: bool = True, hard: bool = False) -> None:
         """Reboots the instance.
         If wait is set to True, waits until machine is up, otherwise, returns when reboot was triggered."""
-        self._provisioner.reboot_instance(self.name, wait)
+        self._provisioner.reboot_instance(self.name, wait, hard)
 
     def add_tags(self, tags: Dict[str, str]) -> None:
         """Adds tags to the instance."""
@@ -99,6 +101,10 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
     @property
     def availability_zone(self) -> str:
         return self._provisioner.availability_zone
+
+    def run_command(self, command: str) -> Result:
+        """Runs command on instance."""
+        return self._provisioner.run_command(self.name, command)
 
 
 class Provisioner(ABC):
@@ -147,7 +153,7 @@ class Provisioner(ABC):
         """Terminate instance by name"""
         raise NotImplementedError()
 
-    def reboot_instance(self, name: str, wait: bool) -> None:
+    def reboot_instance(self, name: str, wait: bool, hard: bool = False) -> None:
         """Reboot instance by name. """
         raise NotImplementedError()
 
@@ -161,6 +167,10 @@ class Provisioner(ABC):
 
     def add_instance_tags(self, name: str, tags: Dict[str, str]) -> None:
         """Adds tags to instance."""
+        raise NotImplementedError()
+
+    def run_command(self, name: str, command: str) -> Result:
+        """Runs command on instance."""
         raise NotImplementedError()
 
 

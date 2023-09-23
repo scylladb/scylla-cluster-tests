@@ -14,6 +14,7 @@
 import json
 import os
 import shutil
+import subprocess
 
 from pathlib import Path
 from typing import List, Any, Dict
@@ -21,7 +22,7 @@ from typing import List, Any, Dict
 from azure.core.exceptions import ResourceNotFoundError, AzureError
 from azure.mgmt.network.models import (NetworkSecurityGroup, Subnet, PublicIPAddress, NetworkInterface, VirtualNetwork)
 from azure.mgmt.resource.resources.models import ResourceGroup
-from azure.mgmt.compute.models import VirtualMachine, Image
+from azure.mgmt.compute.models import VirtualMachine, Image, InstanceViewStatus, RunCommandResult
 
 
 def snake_case_to_camel_case(string):
@@ -40,6 +41,20 @@ class WaitableObject:  # pylint: disable=too-few-public-methods
 
     def wait(self):
         pass
+
+
+class ResultableObject:  # pylint: disable=too-few-public-methods
+
+    def __init__(self, stdout, stderr):
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def result(self,):
+        value = InstanceViewStatus(**{'additional_properties': {}, 'code': 'ProvisioningState/succeeded',
+                                      'level': 'Info', 'display_status': 'Provisioning succeeded',
+                                      'message': f'Enable succeeded: \n[stdout]\n{self.stdout}\n[stderr]\n{self.stderr}',
+                                      'time': None})
+        return RunCommandResult(value=[value])
 
 
 class FakeResourceGroups:
@@ -565,6 +580,12 @@ class FakeVirtualMachines:
     def begin_restart(self, resource_group_name, vm_name  # pylint: disable=unused-argument, no-self-use
                       ) -> WaitableObject:
         return WaitableObject()
+
+    # pylint: disable=unused-argument,no-self-use
+    def begin_run_command(self, resource_group_name, vm_name, parameters) -> ResultableObject:
+        result = subprocess.run(parameters.script[0], shell=True, capture_output=True,  # pylint: disable=subprocess-run-check
+                                text=True)
+        return ResultableObject(result.stdout, result.stderr)
 
 
 class FakeImages:  # pylint: disable=too-few-public-methods
