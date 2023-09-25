@@ -1186,9 +1186,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
 
         # since we need this logic before starting a node, and in `use_preinstalled_scylla: false` case
-        # scylla is not yet installed, we should check the target node for version,
+        # scylla is not yet installed or target node was terminated, we should use an alive node without nemesis for version,
         # it should be up and with scylla executable available
-        if self.target_node.is_replacement_by_host_id_supported:
+        verification_node = random.choice([
+            node for node in self.cluster.nodes
+            if node not in (new_node, self.target_node) and not node.running_nemesis])
+
+        if verification_node.is_replacement_by_host_id_supported:
             new_node.replacement_host_id = host_id
         else:
             new_node.replacement_node_ip = old_node_ip
