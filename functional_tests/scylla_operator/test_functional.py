@@ -172,10 +172,15 @@ def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
             cql_create_ks_cmd = (
                 f"CREATE KEYSPACE IF NOT EXISTS {current_ks_name}"
                 f" WITH replication = {{'class': 'NetworkTopologyStrategy', 'replication_factor' : {db_rf}}}")
-            db_cluster.nodes[0].run_cqlsh(cmd=cql_create_ks_cmd, timeout=10)
-            time.sleep(4)
-            db_cluster.nodes[0].run_cqlsh(cmd=f"DROP KEYSPACE IF EXISTS {current_ks_name}", timeout=10)
-            time.sleep(4)
+            try:
+                db_cluster.nodes[0].run_cqlsh(cmd=cql_create_ks_cmd, timeout=60)
+                time.sleep(4)
+                db_cluster.nodes[0].run_cqlsh(cmd=f"DROP KEYSPACE IF EXISTS {current_ks_name}", timeout=60)
+                time.sleep(4)
+            except Exception as exc:  # pylint: disable=broad-except
+                # NOTE: we don't care if some of the queries fail.
+                #       At first, there are redundant ones and, at second, they are utilitary.
+                log.warning("Utilitary CQL query has failed: %s", exc)
         log.info("%s: log search succeeded", log_follower_name)
 
     new_nodes_count = 1
