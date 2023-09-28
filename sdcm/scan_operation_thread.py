@@ -383,7 +383,9 @@ class FullPartitionScanOperation(FullscanOperationBase):
                 self.log.debug("Compared output of normal and reversed queries is identical!")
                 result = True
             else:
-                self.log.warning("Normal and reversed queries output differs: \n%s", result.stdout.strip())
+                output = result.stdout.strip()
+                self.log.warning("Normal and reversed queries output differs (diff-size is %s): \n%s",
+                                 len(output.splitlines()), output[200])
                 ls_cmd = f"ls -alh {file_names}"
                 head_cmd = f"head {file_names}"
                 for cmd in [ls_cmd, head_cmd]:
