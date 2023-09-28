@@ -499,7 +499,8 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
             expected_node_yaml = expected_node_yaml.replace(
                 '__SEED_NODE_IPS__', seed_node_ips)
             expected_node_yaml = expected_node_yaml.replace('__NODE_IPV6_ADDRESS__', self.ipv6_ip_address)
-            assert json.loads(expected_node_yaml) == node_yaml.dict(exclude_unset=True, exclude_defaults=True)
+            assert json.loads(expected_node_yaml) == node_yaml.dict(
+                exclude_unset=True, exclude_defaults=True, exclude_none=True)
 
 
 class IntegrationTests(unittest.TestCase):
