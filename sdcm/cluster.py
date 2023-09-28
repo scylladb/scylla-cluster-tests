@@ -1597,6 +1597,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.proposed_scylla_yaml
             )
 
+        # TODO: remove when https://github.com/scylladb/scylla-machine-image/issues/484 gets fixed
+        with self.remote_scylla_yaml() as scylla_yml:
+            scylla_yml.experimental = None
+
         self.process_scylla_args(append_scylla_args)
 
         if debug_install:
