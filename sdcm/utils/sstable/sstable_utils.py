@@ -3,8 +3,6 @@ import json
 import logging
 import random
 
-from sdcm.cluster import BaseScyllaCluster, BaseCluster, BaseNode
-
 
 class NonDeletedTombstonesFound(Exception):
     pass
@@ -18,10 +16,10 @@ class SstableUtils:
     """
 
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, propagation_delay_in_seconds: int = 0, ks_cf: str = None, db_node: BaseNode = None, **kwargs):
-
-        self.db_node: BaseNode = db_node
-        self.db_cluster: [BaseScyllaCluster, BaseCluster] = self.db_node.parent_cluster if self.db_node else None
+    def __init__(self, propagation_delay_in_seconds: int = 0, ks_cf: str = None, db_node: 'BaseNode' = None,
+                 **kwargs):
+        self.db_node = db_node
+        self.db_cluster = self.db_node.parent_cluster if self.db_node else None
         self.ks_cf = ks_cf or random.choice(self.db_cluster.get_non_system_ks_cf_list(self.db_cluster.nodes[0]))
         self.keyspace, self.table = self.ks_cf.split('.')
         self.propagation_delay_in_seconds = propagation_delay_in_seconds
@@ -52,6 +50,55 @@ class SstableUtils:
         message = f'filtered by last {from_minutes_ago} minutes' if from_minutes_ago else '(not filtered by time)'
         self.log.debug('Got %s sstables %s', len(selected_sstables), message)
         return selected_sstables
+
+    def is_sstable_encrypted(self, sstables=None) -> list:
+        if not sstables:
+            sstables = self.get_sstables()
+        if isinstance(sstables, str):
+            sstables = [sstables]
+        sstables_encrypted_mapping = {}
+        for sstable in sstables:
+            sstables_res = self.db_node.remoter.sudo(
+                f"{self.db_node.add_install_prefix('/usr/bin/scylla')} sstable dump-scylla-metadata"
+                "  --logger-log-level scylla-sstable=debug"
+                f" --sstables {sstable} --keyspace {self.keyspace} --table {self.table}",
+                ignore_status=True, verbose=True)
+            self.log.debug("sstables_res.stdout: %s", sstables_res.stdout)
+            self.log.debug("sstables_res.stderr: %s", sstables_res.stderr)
+            # NOTE: if we have 'stdout' then the data was successfully read and it means there was no encryption
+            if sstables_res.stdout:
+                self.log.debug("Successfully read the sstable located at '%s'.", sstable)
+                sstables_encrypted_mapping[sstable] = False
+            # NOTE: case when sstable exists and it is encrypted:
+            #       [shard 0:main] seastar - Exiting on unhandled exception: \
+            #       sstables::malformed_sstable_exception (Buffer improperly sized to hold requested data. \
+            #       Got: 2. Expected: 4 in sstable \
+            #       /var/.../me-3g9s_1eqc_2z60w2ushgma9j7ypu-big-Statistics.db)
+            elif "malformed_sstable_exception (Buffer improperly sized to hold requested data" in sstables_res.stderr:
+                sstables_encrypted_mapping[sstable] = True
+            # NOTE: case when sstable was concurrently deleted:
+            #       [shard 0:main] seastar - Exiting on unhandled exception: \
+            #       sstables::malformed_sstable_exception \
+            #       (/var/.../me-3g9s_1941_4web4236cvthbyawsi-big-TOC.txt: file not found)
+            elif " file not found)" in sstables_res.stderr:
+                self.log.debug("'%s' sstable doesn't exist anymore. Skipping it.", sstable)
+            # NOTE: case when
+            #       Could not load SSTable: /var/.../me-3g9w_104a_01xg12j55gjivrwtt5-big-Data.db: \
+            #       sstables::malformed_sstable_exception (/var/.../me-3g9w_104a_01xg12j55gjivrwtt5-big-Data.db: \
+            #       first and last keys of summary are misordered: \
+            #       first={key: pk{00080000000000000003}, token: -578762209316392770} \
+            #       > last={key: pk{00080000000000000008}, token: -6917704163689751025})
+            elif "first and last keys of summary are misordered" in sstables_res.stderr:
+                self.log.warning(
+                    "'%s' sstable cannot be loaded with 'first and last keys of summary are misordered' error. "
+                    "Not representative. Skipping it.",
+                    sstable)
+            # NOTE: all other unexpected cases
+            else:
+                self.log.warning(
+                    "Unexpected error reading sstable located at '%s': %s", sstable, sstables_res.stderr)
+                sstables_encrypted_mapping[sstable] = None
+        return list(sstables_encrypted_mapping.values())
 
     def count_sstable_tombstones(self, sstable: str) -> int:
         self.db_node.remoter.run(

@@ -100,6 +100,7 @@ from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_g
 from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.test_config import TestConfig
+from sdcm.utils.sstable.sstable_utils import SstableUtils
 from sdcm.utils.version_utils import (
     assume_version,
     get_gemini_version,
@@ -4334,9 +4335,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         _wait_for_nodes_up_and_normal()
 
-    def get_test_keyspaces(self):
+    def get_test_keyspaces(self, db_node=None):
         """Function returning a list of non-system keyspaces (created by test)"""
-        keyspaces = self.nodes[0].run_cqlsh("describe keyspaces").stdout.split()
+        db_node = db_node or self.nodes[0]
+        keyspaces = db_node.run_cqlsh("describe keyspaces").stdout.split()
         return [ks for ks in keyspaces if not ks.startswith("system")]
 
     def cfstat_reached_threshold(self, key, threshold, keyspaces=None):
@@ -4435,7 +4437,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             return None
 
         @raise_event_on_failure
-        def _rotate_kms_key(kms_key_alias_name, kms_key_rotation_interval):
+        def _rotate_kms_key(kms_key_alias_name, kms_key_rotation_interval, db_cluster):
             while True:
                 time.sleep(kms_key_rotation_interval * 60)
                 try:
@@ -4443,6 +4445,17 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 except Exception:  # pylint: disable=broad-except
                     AwsKmsEvent(
                         message=f"Failed to rotate AWS KMS key for the '{kms_key_alias_name}' alias",
+                        traceback=traceback.format_exc()).publish()
+                try:
+                    target_node = [node for node in db_cluster.nodes if not node.running_nemesis][0]
+                    ks_cf = db_cluster.get_non_system_ks_cf_list(db_node=target_node, filter_out_mv=True)[0]
+                    sstable_util = SstableUtils(db_node=target_node, ks_cf=ks_cf)
+                    encryption_results = sstable_util.is_sstable_encrypted()
+                    assert encryption_results
+                    assert all(encryption_result is True for encryption_result in encryption_results)
+                except Exception:  # pylint: disable=broad-except
+                    AwsKmsEvent(
+                        message="Failed to check the fact of encryption (KMS) for sstables",
                         traceback=traceback.format_exc()).publish()
 
         self.log.info("Start KMS key rotation thread for the '%s' alias", kms_key_alias_name)
@@ -4453,6 +4466,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             kwargs={
                 "kms_key_alias_name": kms_key_alias_name,
                 "kms_key_rotation_interval": kms_key_rotation_interval,
+                "db_cluster": self,
             },
             daemon=True)
         kms_key_rotation_thread.start()
