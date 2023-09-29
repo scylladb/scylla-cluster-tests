@@ -4010,30 +4010,44 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         def upgrade_sstables(nodes):
             for node in nodes:
                 self.log.info("Upgradesstables on the '%s' node for the new encrypted table", node.name)
+                # NOTE: 'flush' is needed in case there are no sstables yet
+                node.remoter.run(f'nodetool flush -- {keyspace_name} {table_name}', verbose=True)
+                time.sleep(2)
                 node.remoter.run(f'nodetool upgradesstables -a -- {keyspace_name} {table_name}', verbose=True)
+
+        @retrying(n=4, sleep_time=30, allowed_exceptions=(AssertionError, ))
+        def check_encryption_fact(sstable_util_instance, expected_bool_value):
+            encryption_results = sstable_util_instance.is_sstable_encrypted()
+            assert encryption_results
+            assert all(encryption_result is expected_bool_value for encryption_result in encryption_results)
 
         try:
             for i in range(2 if (aws_kms and kms_key_alias_name and enable_kms_key_rotation) else 1):
                 # Write data
                 write_cmd = (
                     "scylla-bench -mode=write -workload=sequential -consistency-level=all -replication-factor=3"
-                    " -partition-count=50 -clustering-row-count=100 -clustering-row-size=uniform:50..150"
-                    f" -keyspace {keyspace_name} -table {table_name} -timeout=120s")
+                    " -partition-count=50 -clustering-row-count=100 -clustering-row-size=uniform:75..125"
+                    f" -keyspace {keyspace_name} -table {table_name} -timeout=120s -validate-data")
                 write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, stop_test_on_failure=False)
                 self.tester.verify_stress_thread(write_thread)
                 upgrade_sstables(self.cluster.nodes)
 
                 # Read data
                 read_cmd = (
-                    "scylla-bench -mode=read -workload=sequential -consistency-level=all"
-                    " -partition-count=50 -clustering-row-count=100 -timeout=60s -iterations=1 -validate-data"
-                    " -concurrency=10 -connection-count=10 -rows-per-request=10")
+                    "scylla-bench -mode=read -workload=sequential -consistency-level=all -replication-factor=3"
+                    " -partition-count=50 -clustering-row-count=100 -clustering-row-size=uniform:75..125"
+                    f" -keyspace {keyspace_name} -table {table_name} -timeout=120s -validate-data"
+                    " -iterations=1 -concurrency=10 -connection-count=10 -rows-per-request=10")
                 read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
                 self.tester.verify_stress_thread(read_thread)
 
                 # Rotate KMS key
                 if enable_kms_key_rotation and aws_kms and kms_key_alias_name and i == 0:
                     aws_kms.rotate_kms_key(kms_key_alias_name)
+
+            # Check that sstables of that table are really encrypted
+            sstable_util = SstableUtils(db_node=self.target_node, ks_cf=f"{keyspace_name}.{table_name}")
+            check_encryption_fact(sstable_util, True)
 
             # Disable encryption for the encrypted table
             self.log.info("Disable encryption for the '%s.%s' table", keyspace_name, table_name)
@@ -4049,8 +4063,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # ReWrite some data making the sstables be rewritten
             write_cmd = (
                 "scylla-bench -mode=write -workload=sequential -consistency-level=all -replication-factor=3"
-                " -partition-count=10 -clustering-row-count=100 -clustering-row-size=uniform:50..150"
-                f" -keyspace {keyspace_name} -table {table_name} -timeout=30s")
+                " -partition-count=10 -clustering-row-count=100 -clustering-row-size=uniform:75..125"
+                f" -keyspace {keyspace_name} -table {table_name} -timeout=30s -validate-data")
             write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, stop_test_on_failure=False)
             self.tester.verify_stress_thread(write_thread)
             upgrade_sstables(self.cluster.nodes)
@@ -4058,6 +4072,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # ReRead data
             read_thread3 = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
             self.tester.verify_stress_thread(read_thread3)
+
+            # Check that sstables of that table are not encrypted anymore
+            check_encryption_fact(sstable_util, False)
         finally:
             # Delete table
             self.log.info("Delete '%s.%s' table with server encryption", keyspace_name, table_name)
