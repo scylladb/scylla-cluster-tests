@@ -537,7 +537,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return None
 
     @property
-    def scylla_shards(self):
+    def scylla_shards(self) -> int:
         """
         Priority of selecting number of shards for Scylla is defined in
         <dist.common.scripts.scylla_util.scylla_cpuinfo.nr_shards> and has following order:
@@ -3405,18 +3405,20 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         for node in self.nodes:
             node.destroy()
 
-    def terminate_node(self, node):
+    def terminate_node(self, node: BaseNode, scylla_shards: int = 0) -> None:
+        # NOTE: BaseNode.scylla_shards uses SSH commands to get actual numbers which is not possible on a dead node.
+        #       In such cases, a caller needs to get the number of shards before the node dies and provide it.
         if node.ip_address not in self.dead_nodes_ip_address_list:
             self.dead_nodes_list.append(DeadNode(
                 name=node.name,
                 public_ip=node.public_ip_address,
                 private_ip=node.private_ip_address,
-                ipv6_ip=node.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else '',
+                ipv6_ip=node.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
                 ip_address=node.ip_address,
-                shards=node.scylla_shards,
+                shards=scylla_shards or node.scylla_shards,
                 termination_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-                terminated_by_nemesis=node.running_nemesis))
-
+                terminated_by_nemesis=node.running_nemesis,
+            ))
         if node in self.nodes:
             self.nodes.remove(node)
         node.destroy()
