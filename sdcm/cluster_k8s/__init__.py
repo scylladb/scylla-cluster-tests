@@ -2709,36 +2709,13 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         racks.pop(rack)
         self.replace_scylla_cluster_value('/spec/datacenter/racks', racks)
 
-    def terminate_node(self, node: BasePodContainer, scylla_shards=""):  # pylint: disable=arguments-differ
-        """Terminate node.
-
-        :param node: 'node' object to be processed.
-        :param scylla_shards: expected to be the same as 'node.scylla_shards'.
-            Used to avoid remoter calls to the target node.
-            Useful when the node is unreachable by SSH on the moment of this method call.
-        """
-        if node.ip_address not in self.dead_nodes_ip_address_list:
-            self.dead_nodes_list.append(DeadNode(
-                name=node.name,
-                public_ip=node.public_ip_address,
-                private_ip=node.private_ip_address,
-                ipv6_ip=node.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else '',
-                ip_address=node.ip_address,
-                shards=scylla_shards or node.scylla_shards,
-                termination_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-                terminated_by_nemesis=node.running_nemesis,
-            ))
-        if node in self.nodes:
-            self.nodes.remove(node)
-        node.destroy()
-
     def decommission(self, node: BaseScyllaPodContainer, timeout: int | float = None):
         rack = node.rack
         rack_nodes = self.get_rack_nodes(rack)
         assert rack_nodes[-1] == node, "Can withdraw the last node only"
         current_members = len(rack_nodes)
 
-        # NOTE: "scylla_shards" property uses remoter calls and we save it's result before
+        # NOTE: "scylla_shards" property uses remoter calls, and we save its result before
         # the target scylla node gets killed using kubectl command which precedes the target GCE
         # node deletion using "terminate_node" command.
         scylla_shards = node.scylla_shards
