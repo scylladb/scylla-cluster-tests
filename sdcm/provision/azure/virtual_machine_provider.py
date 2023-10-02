@@ -203,28 +203,24 @@ class VirtualMachineProvider:
                            "create_option": "FromImage",
                            "deleteOption": "Delete",  # somehow deletion of VM does not delete os_disk anyway...
                            "managed_disk": {
-                               "storage_account_type": "Premium_LRS",  # SSD
+                               "storage_account_type": "StandardSSD_LRS",  # SSD
                            }
                            } | ({} if disk_size is None else {"disk_size_gb": disk_size}),
         }}
         if image_id.startswith("/subscriptions/"):
-            storage_profile.update({
-                "storage_profile": {
-                    "image_reference": {"id": image_id},
-                    "deleteOption": "Delete"
-                }
+            storage_profile['storage_profile'].update({
+                "image_reference": {"id": image_id},
+                "deleteOption": "Delete"
             })
         else:
             image_reference_values = image_id.split(":")
-            storage_profile.update({
-                "storage_profile": {
-                    "image_reference": {
-                        "publisher": image_reference_values[0],
-                        "offer": image_reference_values[1],
-                        "sku": image_reference_values[2],
-                        "version": image_reference_values[3],
-                    },
-                }
+            storage_profile['storage_profile'].update({
+                "image_reference": {
+                    "publisher": image_reference_values[0],
+                    "offer": image_reference_values[1],
+                    "sku": image_reference_values[2],
+                    "version": image_reference_values[3],
+                },
             })
         return storage_profile
 
