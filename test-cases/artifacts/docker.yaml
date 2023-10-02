@@ -1,6 +1,5 @@
 backtrace_decoding: false
 cluster_backend: 'docker'
-logs_transport: 'ssh'
 n_db_nodes: 1
 n_loaders: 0
 n_monitor_nodes: 0
