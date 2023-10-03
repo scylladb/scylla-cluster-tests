@@ -126,6 +126,7 @@ from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes, CSWorkloadTypes, make_cs_range_histogram_summary, \
     make_cs_range_histogram_summary_by_interval
 from sdcm.utils.raft.common import validate_raft_on_nodes
+from test_lib.compaction import CompactionStrategy
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
@@ -2301,7 +2302,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             prefix = ' AND compaction={'
             postfix = '}'
             compaction_clause = " 'class': '%s'" % compaction
-            if sstable_size:
+            if sstable_size and compaction in [CompactionStrategy.LEVELED.value, CompactionStrategy.INCREMENTAL.value]:
                 compaction_clause += ", 'sstable_size_in_mb' : '%s'" % sstable_size
             query += prefix + compaction_clause + postfix
 
