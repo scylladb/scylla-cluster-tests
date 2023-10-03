@@ -1704,8 +1704,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             )
         if self.parent_cluster.params.get('db_nodes_shards_selection') == 'random':
             append_scylla_args += f" --smp {self.scylla_random_shards()}"
-        if self.db_node_instance_type == "t3.micro":
-            append_scylla_args += ' --developer-mode 1 '
 
         if append_scylla_args:
             self.log.debug("Append following args to scylla: `%s'", append_scylla_args)
