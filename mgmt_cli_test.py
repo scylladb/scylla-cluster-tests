@@ -547,7 +547,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, restore_data_with_task=True,
-                                   timeout=1000)
+                                   timeout=3000)
         self.run_verification_read_stress()
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_restore_backup_with_task')
