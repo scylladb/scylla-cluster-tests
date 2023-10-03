@@ -85,7 +85,7 @@ def get_compaction_strategy(node, keyspace, table):
     return compaction
 
 
-def get_compaction_random_additional_params():
+def get_compaction_random_additional_params(strategy: CompactionStrategy):
     """
 
     :return: list_additional_params
@@ -96,8 +96,17 @@ def get_compaction_random_additional_params():
     min_threshold = random.randint(2, 10)
     max_threshold = random.randint(4, 64)
     sstable_size_in_mb = random.randint(50, 2000)
-    list_additional_params = [{'bucket_high': bucket_high}, {'bucket_low': bucket_low},
-                              {'min_sstable_size': min_sstable_size}, {'min_threshold': min_threshold},
-                              {'max_threshold': max_threshold}, {'sstable_size_in_mb': sstable_size_in_mb}]
 
-    return list_additional_params
+    # doc : https://github.com/scylladb/scylladb/blob/d543b96d1837c73f2ded42d4c5c8de17005c2f36/docs/cql/compaction.rst
+    list_additional_params_options = {
+        CompactionStrategy.LEVELED: [{'sstable_size_in_mb': sstable_size_in_mb}],
+        CompactionStrategy.SIZE_TIERED:
+            [{'bucket_high': bucket_high}, {'bucket_low': bucket_low}, {'min_sstable_size': min_sstable_size},
+             {'min_threshold': min_threshold}, {'max_threshold': max_threshold}],
+        CompactionStrategy.TIME_WINDOW: [{'min_threshold': min_threshold}, {'max_threshold': max_threshold}],
+        CompactionStrategy.INCREMENTAL:
+            [{'bucket_high': bucket_high}, {'bucket_low': bucket_low}, {'min_sstable_size': min_sstable_size},
+             {'min_threshold': min_threshold}, {'max_threshold': max_threshold},
+             {'sstable_size_in_mb': sstable_size_in_mb}]
+    }
+    return list_additional_params_options[strategy]

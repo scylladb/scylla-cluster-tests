@@ -2424,7 +2424,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
             Alters a non-system table compaction strategy from ICS to any-other and vise versa.
         """
-        list_additional_params = get_compaction_random_additional_params()
         all_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
 
         if not all_ks_cfs:
@@ -2443,7 +2442,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         new_compaction_strategy_as_dict = {'class': new_compaction_strategy.value}
 
         if new_compaction_strategy in [CompactionStrategy.INCREMENTAL, CompactionStrategy.SIZE_TIERED]:
-            for param in list_additional_params:
+            for param in get_compaction_random_additional_params(new_compaction_strategy):
                 new_compaction_strategy_as_dict.update(param)
         alter_command_prefix = 'ALTER TABLE ' if not is_cf_a_view(
             node=self.target_node, ks=keyspace, cf=table) else 'ALTER MATERIALIZED VIEW '
