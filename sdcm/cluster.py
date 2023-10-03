@@ -277,6 +277,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._alert_manager: Optional[PrometheusAlertManagerListener] = None
 
         self.termination_event = threading.Event()
+        self.stop_wait_db_up_event = threading.Event()
         self.lock = threading.Lock()
 
         self._running_nemesis = None
@@ -1255,7 +1256,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be up' % self
-        wait.wait_for(func=self.db_up, step=60, text=text, timeout=timeout, throw_exc=True)
+
+        wait.wait_for(func=self.db_up, step=60, text=text, timeout=timeout,
+                      throw_exc=True, stop_event=self.stop_wait_db_up_event)
         self.db_init_finished = True
         try:
             self._report_housekeeping_uuid(verbose=True)
@@ -4384,7 +4387,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 result = node.remoter.run("cat /proc/sys/crypto/fips_enabled", ignore_status=True)
                 assert int(result.stdout) == 1, "Even though Ubuntu pro is enabled, FIPS is not enabled"
                 # https://ubuntu.com/tutorials/using-the-ua-client-to-enable-fips#4-enabling-fips-crypto-modules
-
         node.update_repo_cache()
         node.install_package('lsof net-tools', wait_for_package_manager=True)
         install_scylla = True
@@ -4416,7 +4418,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.config_setup(append_scylla_args=self.get_scylla_args())
 
             self._scylla_post_install(node, install_scylla, nic_devname)
-
             # prepare and start saslauthd service
             if self.params.get('prepare_saslauthd'):
                 prepare_and_start_saslauthd_service(node)
@@ -4473,7 +4474,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 self.install_scylla_manager(node)
         else:
             self._reuse_cluster_setup(node)
-
         node.wait_db_up(verbose=verbose, timeout=timeout)
         nodes_status = node.get_nodes_status()
         check_nodes_status(nodes_status=nodes_status, current_node=node)

@@ -240,7 +240,14 @@ class Raft(RaftFeatureOperations):
             EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                         event_class=DatabaseLogEvent.RUNTIME_ERROR,
                                         regex=r".*init - Startup failed: std::runtime_error.*repair_reason=bootstrap.*aborted_by_user=true",
-                                        extra_time_to_expiration=timeout)
+                                        extra_time_to_expiration=timeout),
+            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                        event_class=DatabaseLogEvent,
+                                        regex=".*init - Startup failed.*"),
+            EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                        event_class=DatabaseLogEvent.DATABASE_ERROR,
+                                        regex=r".*node_ops - bootstrap.*Operation failed.*seastar::abort_requested_exception",
+                                        extra_time_to_expiration=timeout),
 
 
 
