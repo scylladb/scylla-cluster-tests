@@ -84,7 +84,7 @@ from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors
                                                  ignore_ycsb_connection_refused, decorate_with_context,
                                                  ignore_reactor_stall_errors)
 from sdcm.sct_events.health import DataValidatorEvent
-from sdcm.sct_events.loaders import CassandraStressLogEvent
+from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sla.sla_tests import SlaTests
@@ -4012,6 +4012,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert encryption_results
             assert all(encryption_result is expected_bool_value for encryption_result in encryption_results)
 
+        def run_write_scylla_bench_load(write_cmd):
+            # NOTE: 'scylla-bench' runs 'truncate' operation when 'validate-data' is used in addition
+            #       to the 'write' mode. So it may cause racy following loader error:
+            #
+            #       Error during truncate: seastar::rpc::remote_verb_error (filesystem error: \
+            #         link failed: No such file or directory
+            #       It also may cause the 'sstable - Error while linking SSTable' error messages in DB logs
+            with EventsSeverityChangerFilter(
+                    new_severity=Severity.WARNING, event_class=ScyllaBenchEvent, extra_time_to_expiration=30,
+                    regex=r".*Error during truncate: seastar::rpc::remote_verb_error \(filesystem error.*"
+            ), EventsSeverityChangerFilter(
+                    new_severity=Severity.WARNING, event_class=DatabaseLogEvent, extra_time_to_expiration=30,
+                    regex=".*sstable - Error while linking SSTable.*filesystem error: stat failed: No such file or directory.*"):
+                write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, stop_test_on_failure=False)
+                self.tester.verify_stress_thread(write_thread)
+
         try:
             for i in range(2 if (aws_kms and kms_key_alias_name and enable_kms_key_rotation) else 1):
                 # Write data
@@ -4019,8 +4035,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     "scylla-bench -mode=write -workload=sequential -consistency-level=all -replication-factor=3"
                     " -partition-count=50 -clustering-row-count=100 -clustering-row-size=uniform:75..125"
                     f" -keyspace {keyspace_name} -table {table_name} -timeout=120s -validate-data")
-                write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, stop_test_on_failure=False)
-                self.tester.verify_stress_thread(write_thread)
+                run_write_scylla_bench_load(write_cmd)
                 upgrade_sstables(self.cluster.nodes)
 
                 # Read data
@@ -4051,13 +4066,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             read_thread2 = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
             self.tester.verify_stress_thread(read_thread2)
 
-            # ReWrite some data making the sstables be rewritten
-            write_cmd = (
-                "scylla-bench -mode=write -workload=sequential -consistency-level=all -replication-factor=3"
-                " -partition-count=10 -clustering-row-count=100 -clustering-row-size=uniform:75..125"
-                f" -keyspace {keyspace_name} -table {table_name} -timeout=30s -validate-data")
-            write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, stop_test_on_failure=False)
-            self.tester.verify_stress_thread(write_thread)
+            # ReWrite data making the sstables be rewritten
+            run_write_scylla_bench_load(write_cmd)
             upgrade_sstables(self.cluster.nodes)
 
             # ReRead data
