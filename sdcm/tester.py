@@ -905,9 +905,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def set_system_auth_rf(self, db_cluster=None):
 
-        def _nodetool_repair(node):
-            node.run_nodetool(sub_cmd="repair -pr system_auth", timeout=MINUTE_IN_SEC * 20)
-
         if not db_cluster:
             db_cluster = self.db_cluster
         # No need to change system tables when running via scylla-cloud
@@ -935,9 +932,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                              num_retry_on_failure=3)
         self.log.debug("system_auth description: %s", res.stdout)
         self.log.info('repair system_auth keyspace ...')
-        parallel_objects = ParallelObject(self.db_cluster.nodes, num_workers=min(
-            32, len(self.db_cluster.nodes)), timeout=MINUTE_IN_SEC * 25)
-        parallel_objects.run(_nodetool_repair)
+        for node in self.db_cluster.nodes:
+            node.run_nodetool(sub_cmd="repair -pr system_auth", timeout=MINUTE_IN_SEC * 20)
         self.log.info('repair system_auth keyspace done')
 
     @cache
