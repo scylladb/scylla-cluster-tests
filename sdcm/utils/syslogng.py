@@ -88,6 +88,7 @@ options {{
   create_dirs(yes);
   perm(0640);
   dir_perm(0750);
+  frac-digits(3);
 }};
 
 source s_network_tcp {{
