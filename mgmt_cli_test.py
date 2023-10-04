@@ -36,6 +36,7 @@ from sdcm.remote import shell_script_cmd
 from sdcm.tester import ClusterTester
 from sdcm.cluster import TestConfig
 from sdcm.nemesis import MgmtRepair
+from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.sct_events.system import InfoEvent
@@ -546,8 +547,11 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
-        self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, restore_data_with_task=True,
-                                   timeout=3000)
+        soft_timeout = 36 * 60
+        hard_timeout = 50 * 60
+        with adaptive_timeout(Operations.MGMT_REPAIR, self.db_cluster.nodes[0], timeout=soft_timeout):
+            self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, restore_data_with_task=True,
+                                       timeout=hard_timeout)
         self.run_verification_read_stress()
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_restore_backup_with_task')
