@@ -610,10 +610,12 @@ class LocalKindCluster(LocalMinimalClusterBase):
         if self.params.get('k8s_enable_tls'):
             images_to_cache.extend(self.ingress_controller_images)
 
-        try:
-            images_to_cache.append(self.get_operator_image())
-        except ValueError as exc:
-            LOGGER.warning("scylla-operator image won't be cached. Error: %s", str(exc))
+        # TODO: enable caching of the 'scylla-operator' image when the following bug gets fixed:
+        #       https://github.com/scylladb/scylla-operator/issues/1448
+        # try:
+        #     images_to_cache.append(self.get_operator_image())
+        # except ValueError as exc:
+        #     LOGGER.warning("scylla-operator image won't be cached. Error: %s", str(exc))
 
         if not self.params.get('reuse_cluster'):
             self.load_images(images_to_cache)
