@@ -2,3 +2,7 @@
 #       which gets set by the scylla-operator itself. So, redefine this config option
 #       by removing the duplication of the scylla arg which will make Scylla fail.
 append_scylla_args: ''
+
+# NOTE: remove following when the following SCT bug gets fixed:
+#       https://github.com/scylladb/scylla-cluster-tests/issues/6289
+use_hdr_cs_histogram: false
