@@ -148,20 +148,21 @@ def call(Map pipelineParams) {
 
                                                     export SCT_COLLECT_LOGS=false
                                                     export SCT_CONFIG_FILES=${test_config}
-
+                                                    if [[ -n "${params.region ? params.region : ''}" ]] ; then
+                                                        export SCT_REGION_NAME='${params.region}'
+                                                    fi
+                                                    if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
+                                                        export SCT_GCE_DATACENTER=${params.gce_datacenter}
+                                                    fi
+                                                    if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
+                                                        export SCT_AZURE_REGION_NAME=${params.azure_region_name}
+                                                    fi
                                                     if [[ ! -z "${params.scylla_ami_id}" ]]; then
                                                         export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
-                                                        export SCT_REGION_NAME="${params.region}"
                                                     elif [[ ! -z "${params.gce_image_db}" ]]; then
                                                         export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
-                                                        if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-                                                            export SCT_GCE_DATACENTER=${params.gce_datacenter}
-                                                        fi
                                                     elif [[ ! -z "${params.azure_image_db}" ]]; then
                                                         export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
-                                                        if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
-                                                            export SCT_AZURE_REGION_NAME=${params.azure_region_name}
-                                                        fi
                                                     elif [[ ! -z "${params.scylla_version}" ]]; then
                                                         export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                                     elif [[ ! -z "${params.scylla_repo}" ]]; then
