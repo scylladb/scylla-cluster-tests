@@ -1,12 +1,12 @@
 # Version of the kind to be used
-mini_k8s_version: '0.17.0'
+mini_k8s_version: '0.20.0'
 
 n_db_nodes: 4
 k8s_n_scylla_pods_per_cluster: 3
 
-scylla_version: '5.2.7'
-scylla_mgmt_agent_version: '3.1.0'
-mgmt_docker_image: 'scylladb/scylla-manager:3.1.0'
+scylla_version: '5.2.9'
+scylla_mgmt_agent_version: '3.2.2'
+mgmt_docker_image: 'scylladb/scylla-manager:3.2.2'
 
 # NOTE: If 'k8s_scylla_operator_docker_image' not set then the one from helm chart will be used.
 # To test nightly builds define it like this: 'scylladb/scylla-operator:nightly'
@@ -51,4 +51,4 @@ backup_bucket_location: 'minio-bucket'
 #       It will allow to test 'serverless' feature against any stable Scylla release
 #       with old 'cassandra-stress' binary.
 stress_image:
-  cassandra-stress: 'scylladb/scylla:5.2.7'
+  cassandra-stress: 'scylladb/scylla:5.2.9'
