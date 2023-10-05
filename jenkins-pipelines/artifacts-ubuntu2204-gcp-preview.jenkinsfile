@@ -1,0 +1,15 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    test_config: '''["test-cases/artifacts/ubuntu2204.yaml", "configurations/gce/preview-instance.yaml"]''',
+    backend: 'gce',
+    gce_datacenter: 'us-central1',
+    gce_project: 'gcp-local-ssd-latency',
+
+    provision_type: 'spot',
+    post_behavior_db_nodes: 'destroy',
+    timeout: [time: 90, unit: 'MINUTES']
+)
