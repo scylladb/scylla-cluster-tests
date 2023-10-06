@@ -32,6 +32,7 @@ def get_username() -> str:  # pylint: disable=too-many-return-statements
 
     user_id = os.environ.get('BUILD_USER_ID')
     if user_id:
+        user_id = user_id.replace("[", "").replace("]", "")
         return user_id
 
     current_linux_user = getpass.getuser()
