@@ -59,6 +59,14 @@ class AzureNode(cluster.BaseNode):
                          node_prefix=node_prefix,
                          dc_idx=dc_idx)
 
+    def init(self) -> None:
+        super().init()
+        # disable auditd service
+        self.remoter.sudo("systemctl stop auditd", ignore_status=True)
+        self.remoter.sudo("systemctl disable auditd", ignore_status=True)
+        self.remoter.sudo("systemctl mask auditd", ignore_status=True)
+        self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
+
     @cached_property
     def tags(self) -> Dict[str, str]:
         return {**super().tags,
