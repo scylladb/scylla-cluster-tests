@@ -43,6 +43,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     BAD_ALLOC: Type[LogEventProtocol]
     SCHEMA_FAILURE: Type[LogEventProtocol]
     RUNTIME_ERROR: Type[LogEventProtocol]
+    DIRECTORY_NOT_EMPTY: Type[LogEventProtocol]
     FILESYSTEM_ERROR: Type[LogEventProtocol]
     STACKTRACE: Type[LogEventProtocol]
     RAFT_TRANSFER_SNAPSHOT_ERROR: Type[LogEventProtocol]
@@ -118,6 +119,9 @@ DatabaseLogEvent.add_subevent_type("SCHEMA_FAILURE", severity=Severity.ERROR,
                                    regex="Failed to load schema version")
 DatabaseLogEvent.add_subevent_type("RUNTIME_ERROR", severity=Severity.ERROR,
                                    regex="std::runtime_error")
+# remove below workaround after dropping support for Scylla 2023.1 and 5.2 (see scylladb/scylla#13538)
+DatabaseLogEvent.add_subevent_type("DIRECTORY_NOT_EMPTY", severity=Severity.NORMAL,
+                                   regex="remove failed: Directory not empty")
 DatabaseLogEvent.add_subevent_type("FILESYSTEM_ERROR", severity=Severity.ERROR,
                                    regex="filesystem_error")
 DatabaseLogEvent.add_subevent_type("DISK_ERROR", severity=Severity.ERROR,
@@ -168,6 +172,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.BAD_ALLOC(),
     DatabaseLogEvent.SCHEMA_FAILURE(),
     DatabaseLogEvent.RUNTIME_ERROR(),
+    DatabaseLogEvent.DIRECTORY_NOT_EMPTY(),
     DatabaseLogEvent.FILESYSTEM_ERROR(),
     DatabaseLogEvent.DISK_ERROR(),
     DatabaseLogEvent.STACKTRACE(),
