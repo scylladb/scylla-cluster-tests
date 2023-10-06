@@ -520,7 +520,7 @@ class FakeVirtualMachines:
                         }
                     },
                     "secrets": [],
-                    "allowExtensionOperations": False,
+                    "allowExtensionOperations": True,
                     "requireGuestProvisionSignal": True
                 },
                 "networkProfile": {
