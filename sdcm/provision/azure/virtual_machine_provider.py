@@ -174,7 +174,6 @@ class VirtualMachineProvider:
     def _get_os_profile(computer_name: str, admin_username: str,
                         admin_password: str, ssh_public_key: str, custom_data: str) -> Dict[str, Any]:
         os_profile = {"os_profile": {
-            "allow_extension_operations": False,
             "computer_name": computer_name,
             "admin_username": admin_username,
             "admin_password": admin_password,
