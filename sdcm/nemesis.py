@@ -1398,8 +1398,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         node.wait_for_svc()
         with DbEventsFilter(
                 db_event=DatabaseLogEvent.DATABASE_ERROR,
-                line="init - Startup failed: seastar::sleep_aborted (Sleep is aborted)"):
-            # NOTE: we ignore the 'init - Startup failed' error because we 'replace' pod during the 'init' phase
+                # NOTE: ignore following expected error messages:
+                #       'init - Startup failed: seastar::sleep_aborted (Sleep is aborted)'
+                #       'init - Startup failed: seastar::gate_closed_exception (gate closed)'
+                line="init - Startup failed: seastar"):
             node.mark_to_be_replaced()
             self._kubernetes_wait_till_node_up_after_been_recreated(node, old_uid=old_uid)
 
