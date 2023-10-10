@@ -41,9 +41,7 @@ SUPPORTED_REGIONS = {
     # Currently choose only zones c and d as zone b frequently fails allocating resources.
     'us-east1': 'cd',
     'us-east4': 'abc',
-    'us-west1': 'abc',
-    'us-central1': 'a',
-}
+    'us-west1': 'abc'}
 
 
 SUPPORTED_PROJECTS = {'gcp', 'gcp-sct-project-1',
