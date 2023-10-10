@@ -462,11 +462,9 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
     if accelerators:
         instance.guest_accelerators = accelerators
 
-    instance.scheduling = compute_v1.Scheduling()
-    instance.scheduling.on_host_maintenance = "TERMINATE"
-
     if spot:
         # Set the Spot VM setting
+        instance.scheduling = compute_v1.Scheduling()
         instance.scheduling.provisioning_model = (
             compute_v1.Scheduling.ProvisioningModel.SPOT.name
         )
