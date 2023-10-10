@@ -2162,7 +2162,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
             f"Failed to find pods using '{pods_selector}' selector on '{self.node_name}' node "
             f"in '{namespace}' namespace. Didn't run the 'fstrim' command")
         self.parent_cluster.k8s_cluster.kubectl(
-            f"exec -ti {podnames[0]} -- sh -c 'fstrim -v {scylla_disk_path}'",
+            f"exec {podnames[0]} -- sh -c 'fstrim -v {scylla_disk_path}'",
             namespace=namespace)
 
 
