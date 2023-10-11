@@ -14,6 +14,7 @@ import abc
 import getpass
 import logging
 import os
+import re
 from typing import Tuple, Optional, Callable
 from textwrap import dedent
 from functools import cached_property
@@ -394,6 +395,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
             self.stop_k8s_software()
             self.start_k8s_software()
         self.create_kubectl_config()
+        self.start_scylla_pods_ip_change_tracker_thread()
         if self.test_config.REUSE_CLUSTER:
             return
         self.on_deploy_completed()
@@ -486,6 +488,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
         audit_log_path_option = ""
         if self.params.get("k8s_log_api_calls"):
             audit_log_path_option = f"audit-log-path: {DST_APISERVER_AUDIT_LOG}"
+        pod_subnet, service_subnet = '10.16.0.0/16', '10.19.0.0/16'
         script_start_part = f"""
         sysctl fs.protected_regular=0
         ip link set docker0 promisc on
@@ -494,8 +497,8 @@ class LocalKindCluster(LocalMinimalClusterBase):
         kind: Cluster
         apiVersion: kind.x-k8s.io/v1alpha4
         networking:
-          podSubnet: 10.244.0.0/16
-          serviceSubnet: 10.96.0.0/16
+          podSubnet: {pod_subnet}
+          serviceSubnet: {service_subnet}
           disableDefaultCNI: true
         kubeadmConfigPatches:
         - |
@@ -542,17 +545,28 @@ class LocalKindCluster(LocalMinimalClusterBase):
             labels:
               {POOL_LABEL_NAME}: {node_pool_type}
                 """
-        script_end_part = """
+        script_end_part = f"""
         EndOfSpec
         /var/tmp/kind delete cluster || true
         /var/tmp/kind create cluster --config /tmp/kind.cluster.yaml
         SERVICE_GATEWAY=`docker inspect kind-control-plane \
-            -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`
-        ip ro add 10.96.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.96.0.0/16 via $SERVICE_GATEWAY
-        ip ro add 10.224.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.224.0.0/16 via $SERVICE_GATEWAY
+            -f '{{{{range.NetworkSettings.Networks}}}}{{{{.IPAddress}}}}{{{{end}}}}'`
+        ip ro add {service_subnet} via $SERVICE_GATEWAY || ip ro change {service_subnet} via $SERVICE_GATEWAY
         """
         script = dedent(script_start_part + script_end_part)
         self.host_node.remoter.run(f"sudo -E bash -cxe '{script}'")
+
+    def setup_pod_network_connectivity(self):
+        target_route_regex = re.compile(
+            r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2} via \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3} .*")
+        route_lines = self.host_node.remoter.run(
+            "docker exec kind-control-plane /bin/bash -c 'ip r'").stdout.split("\n")
+        for route_line in route_lines:
+            if not target_route_regex.match(route_line):
+                continue
+            route_parts = route_line.split()
+            route_cmd = "ip ro add {0} via {1} || ip ro change {0} via {1}".format(route_parts[0], route_parts[2])
+            self.host_node.remoter.run(f"sudo bash -c '{route_cmd}'")
 
     def stop_k8s_software(self):
         self.host_node.remoter.run('/var/tmp/kind delete cluster', ignore_status=True)
@@ -627,6 +641,8 @@ class LocalKindCluster(LocalMinimalClusterBase):
             self.host_node.remoter.run(
                 f"/var/tmp/kind load docker-image {dst_image}", ignore_status=True)
 
+        self.setup_pod_network_connectivity()
+
     def install_static_local_volume_provisioner(
             self, node_pools: list[CloudK8sNodePool] | CloudK8sNodePool) -> None:
         if not isinstance(node_pools, list):
@@ -688,16 +704,6 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
 
     def terminate_k8s_host(self):
         raise NotImplementedError("Not supported on local K8S backends")
-
-    def _refresh_instance_state(self):
-        # NOTE: Local K8S must use service IP address for connections, not pod's
-        public_ips, private_ips = [], []
-        if cluster_ip_service := self._cluster_ip_service:
-            private_ips.append(cluster_ip_service.spec.cluster_ip)
-        if pod_status := self._pod_status:
-            public_ips.append(pod_status.host_ip)
-            private_ips.append(pod_status.pod_ip)
-        return (public_ips or [None, ], private_ips or [None, ])
 
 
 # pylint: disable=too-many-ancestors
