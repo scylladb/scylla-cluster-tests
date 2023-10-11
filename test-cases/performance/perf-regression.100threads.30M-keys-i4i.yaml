@@ -33,7 +33,7 @@ root_disk_size_loader: 50
 gce_instance_type_monitor: 'n2-highmem-8'
 #------
 
-user_prefix: 'perf-regression-i4i'
+user_prefix: 'perf-regress-i4i-4x'
 space_node_threshold: 644245094
 
 backtrace_decoding: false
