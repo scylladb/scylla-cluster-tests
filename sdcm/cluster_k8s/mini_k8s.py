@@ -44,6 +44,7 @@ from sdcm.cluster_k8s import (
     SCYLLA_VERSION_IN_SCYLLA_MANAGER,
 )
 from sdcm.utils.k8s import TokenUpdateThread, HelmValues
+from sdcm.utils.k8s.chaos_mesh import ChaosMesh
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import docker_hub_login
 from sdcm.utils import version_utils
@@ -584,6 +585,12 @@ class LocalKindCluster(LocalMinimalClusterBase):
         else:
             if provisioner_image := self.static_local_volume_provisioner_image:
                 images_to_cache.append(provisioner_image)
+        if self.params.get("k8s_use_chaos_mesh"):
+            chaos_mesh_version = ChaosMesh.VERSION
+            if not chaos_mesh_version.startswith("v"):
+                chaos_mesh_version = f"v{chaos_mesh_version}"
+            for image_suffix in ("daemon", "mesh"):
+                images_to_cache.append(f"ghcr.io/chaos-mesh/chaos-{image_suffix}:{chaos_mesh_version}")
         if self.scylla_image:
             scylla_image_repo, scylla_image_tag = self.scylla_image.split(":")
             if not version_utils.SEMVER_REGEX.match(scylla_image_tag):
