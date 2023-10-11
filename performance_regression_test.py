@@ -101,8 +101,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                       result['latency 95th percentile'],
                       result['latency 99th percentile'],
                       result['latency 99.9th percentile'],
-                      result['Total partitions'],
-                      result['Total errors'])
+                      result['total partitions'],
+                      result['total errors'])
 
     def get_test_xml(self, result, test_name=''):
         test_content = """
@@ -498,6 +498,21 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                     AND speculative_retry = 'NONE';
             """)
 
+    @staticmethod
+    def _get_write_c_s_commands_spread_evenly(stress_command, loaders_num, multiplier):
+        """
+        spreads population distribution across all loaders multiplied by multiplier
+        so when running them in parallel, each c-s process will not overlap another one with the same ranges
+        use result commands with round_robin
+        """
+        parts_count = loaders_num * multiplier
+        stress_command = stress_command.split("-pop seq=1..")
+        count = str(int(stress_command[-1]) // parts_count)
+        commands = []
+        for part in range(parts_count):
+            commands.append(stress_command[0] + f"-pop seq={part * int(count) + 1}..{(part + 1) * int(count)}")
+        return commands
+
     # Base Tests
     def test_write(self):
         """
@@ -516,9 +531,19 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.run_fstrim_on_all_db_nodes()
 
         # run a workload
-        stress_queue = self.run_stress_thread(
-            stress_cmd=base_cmd_w, stress_num=stress_multiplier, stats_aggregate_cmds=False)
-        results = self.get_stress_results(queue=stress_queue)
+        stress_threads = []
+        if isinstance(base_cmd_w, list):
+            base_cmd_w = self._get_write_c_s_commands_spread_evenly(base_cmd_w[0], self.params.get('n_loaders'),
+                                                                    stress_multiplier)
+            for stress_cmd in base_cmd_w:
+                stress_threads.append(self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_multiplier,
+                                                             round_robin=True, stats_aggregate_cmds=False))
+        else:
+            stress_threads.append(self.run_stress_thread(
+                stress_cmd=base_cmd_w, stress_num=stress_multiplier, stats_aggregate_cmds=False))
+        results = []
+        for stress in stress_threads:
+            results += self.get_stress_results(queue=stress)
 
         self.build_histogram(PerformanceTestWorkload.WRITE, PerformanceTestType.THROUGHPUT)
         self.update_test_details(scylla_conf=True)

@@ -1,0 +1,52 @@
+test_duration: 300
+
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..30000000"
+prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=30000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=125 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..30000000"
+stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+stress_multiplier_w: 2
+stress_multiplier_r: 1
+stress_multiplier_m: 1
+
+# NOTE: following is needed for the K8S case
+k8s_loader_run_type: 'static'
+
+n_db_nodes: 3
+n_loaders: 6
+n_monitor_nodes: 1
+
+
+# AWS
+instance_type_db: 'i4i.4xlarge'
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.small'
+#------
+
+#GCE
+use_preinstalled_scylla: true
+gce_instance_type_db: 'n2-highmem-8'
+gce_root_disk_type_db: 'pd-ssd'
+gce_n_local_ssd_disk_db: 8
+gce_instance_type_loader: 'c3-highcpu-8'
+gce_root_disk_type_loader: 'pd-ssd'
+root_disk_size_loader: 50
+gce_instance_type_monitor: 'n2-highmem-8'
+#------
+
+user_prefix: 'perf-regression-i4i-4x'
+space_node_threshold: 644245094
+
+backtrace_decoding: false
+print_kernel_callstack: true
+
+store_perf_results: true
+use_mgmt: false
+send_email: true
+email_recipients: ['scylla-perf-results@scylladb.com']
+
+custom_es_index: 'performancestatsv2'
+use_hdr_cs_histogram: true
+
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+
+use_placement_group: true

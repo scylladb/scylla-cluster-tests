@@ -1,9 +1,9 @@
 test_duration: 3000
 
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=50 -pop seq=1..30000000"
-prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=30000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=100 -pop seq=1..30000000"
-stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=50 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
-stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate threads=50 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..30000000"
+prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=30000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..30000000"
+stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=50 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
 
 n_db_nodes: 3
 n_loaders: 2
@@ -17,8 +17,8 @@ max_deviation: 5 # 5% relative difference
 n_stress_process: 1
 
 #AWS
-instance_type_db: 'i2.2xlarge'
-instance_type_loader: 'c4.2xlarge'
+instance_type_db: 'i4i.2xlarge'
+instance_type_loader: 'c5.2xlarge'
 instance_type_monitor: 't3.small'
 space_node_threshold: 644245094
 # tests are running on aws. The loader uses the shard-aware driver
