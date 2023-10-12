@@ -61,6 +61,10 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         # emails for each test. When we move to use SCT Runners, it won't be necessary.
         self._clean_email_data()
         super().__init__(*args)
+        # next 3 lines, is a workaround to have it working inside `latency_calculator_decorator`
+        self.cluster = self.db_cluster
+        self.monitoring_set = self.monitors
+        self.tester = self
 
     @teardown_on_exception
     @log_run_info
@@ -319,6 +323,18 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.display_results(results, test_name='test_latency')
         self.check_regression()
 
+    @latency_calculator_decorator
+    def steady_state_latency(self, steady_state_time):  # pylint: disable=no-self-use
+        InfoEvent(message='Starting Steady State calculation for %ss' % steady_state_time).publish()
+        time.sleep(steady_state_time)
+        InfoEvent(message='Ended Steady State calculation. Took %ss' % steady_state_time).publish()
+
+    @latency_calculator_decorator
+    def post_upgrades_steady_state(self, steady_state_time):  # pylint: disable=no-self-use
+        InfoEvent(message='Starting Post-Upgrade Steady State calculation for %ss' % steady_state_time).publish()
+        time.sleep(steady_state_time)
+        InfoEvent(message='Ended Post-Upgrade Steady State calculation. Took %ss' % steady_state_time).publish()
+
     def run_workload(self, stress_cmd, nemesis=False, sub_type=None):
         # create new document in ES with doc_id = test_id
         # allow to correctly save results for future compare
@@ -329,7 +345,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
         if nemesis:
             interval = self.params.get('nemesis_interval')
-            time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
+            self.steady_state_latency(interval * 60)
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis(interval=interval, cycles_count=1)
             self._stop_load_when_nemesis_threads_end()
@@ -816,32 +832,15 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
                                          extra_time_to_expiration=60):
             self.loaders.kill_stress_thread()
 
-    @latency_calculator_decorator
-    def steady_state_latency(self):  # pylint: disable=no-self-use
-        sleep_time = self.db_cluster.params.get('nemesis_interval') * 60
-        InfoEvent(message='Starting Steady State calculation for %ss' % sleep_time).publish()
-        time.sleep(sleep_time)
-        InfoEvent(message='Ended Steady State calculation. Took %ss' % sleep_time).publish()
-
-    @latency_calculator_decorator
-    def post_upgrades_steady_state(self):
-        sleep_time = self.db_cluster.params.get('nemesis_interval') * 60
-        InfoEvent(message='Starting Post-Upgrade Steady State calculation for %ss' % sleep_time).publish()
-        time.sleep(sleep_time)
-        InfoEvent(message='Ended Post-Upgrade Steady State calculation. Took %ss' % sleep_time).publish()
-
     def run_workload_and_upgrade(self, stress_cmd, sub_type=None):
-        # next 3 lines, is a workaround to have it working inside `latency_calculator_decorator`
-        self.cluster = self.db_cluster  # pylint: disable=attribute-defined-outside-init
-        self.tester = self  # pylint: disable=attribute-defined-outside-init
-        self.monitoring_set = self.monitors  # pylint: disable=attribute-defined-outside-init
+        steady_state_sleep_interval = self.db_cluster.params.get('nemesis_interval') * 60
 
         if sub_type is None:
             sub_type = 'read' if ' read ' in stress_cmd else 'write' if ' write ' in stress_cmd else 'mixed'
         test_index = f'latency-during-upgrade-{sub_type}'
         self.create_test_stats(sub_type=sub_type, append_sub_test_to_name=False, test_index=test_index)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
-        self.steady_state_latency()
+        self.steady_state_latency(steady_state_sleep_interval)
         versions_list = []
 
         def _get_version_and_build_id_from_node(node):
@@ -860,7 +859,7 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
                                   'node_name': node.name
                                   })
             time.sleep(120)  # sleeping 2 min to give time for cache to re-heat
-        self.post_upgrades_steady_state()
+        self.post_upgrades_steady_state(steady_state_sleep_interval)
 
         # TODO: check if all `base_version` and all `target_version` are the same
         self.update({'base_target_versions': versions_list})

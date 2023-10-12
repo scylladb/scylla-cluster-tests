@@ -175,7 +175,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     # i.e switch off/on network interface, network issues
     kubernetes: bool = False        # flag that signal that nemesis run with k8s cluster
     limited: bool = False           # flag that signal that nemesis are belong to limited set of nemesises
-    has_steady_run: bool = False    # flag that signal that nemesis should be run with perf tests with steady run
     schema_changes: bool = False
     config_changes: bool = False
     free_tier_set: bool = False     # nemesis should be run in FreeTierNemesisSet
@@ -3873,10 +3872,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                           f'{str(exc)}').publish()
 
     def disrupt_grow_shrink_cluster(self):
-        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
-        if not self.has_steady_run and sleep_time_between_ops:
-            self.steady_state_latency()
-            self.has_steady_run = True
         self._grow_cluster(rack=None)
         self._shrink_cluster(rack=None)
 
@@ -4122,21 +4117,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 if not check_ssl_reload_log(node_system_logs[node]):
                     raise Exception('SSL auto Reload did not happen')
 
-    @latency_calculator_decorator
-    def steady_state_latency(self, sleep_time=None):
-        if not sleep_time:
-            sleep_time = self.cluster.params.get('nemesis_interval') * 60
-        InfoEvent(message=f'StartEvent - start a sleep of {sleep_time} as Steady State').publish()
-        time.sleep(sleep_time)
-        InfoEvent(message='FinishEvent - Steady State sleep has been finished').publish()
-
     def disrupt_run_unique_sequence(self):
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
         sleep_time_between_ops = sleep_time_between_ops if sleep_time_between_ops else 8
         sleep_time_between_ops = sleep_time_between_ops * 60
-        if not self.has_steady_run:
-            self.steady_state_latency()
-            self.has_steady_run = True
         InfoEvent(message='StartEvent - start a repair by ScyllaManager').publish()
         self.disrupt_mgmt_repair_cli()
         InfoEvent(message='FinishEvent - Manager repair has finished').publish()
