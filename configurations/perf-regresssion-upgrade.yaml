@@ -1,0 +1,5 @@
+cluster_health_check: false
+nemesis_interval: 2
+
+user_prefix: 'perf-latency-upgrade'
+email_subject_postfix: 'latency during upgrades'

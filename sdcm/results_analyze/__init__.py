@@ -226,7 +226,6 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_latency_during_ops_short.html", logger=logger, events=events)
         self.percentiles = ['percentile_90', 'percentile_99']
-        self.test_name_for_email_subject = 'latency during operations'
 
     def get_debug_events(self):
         return self.get_events(event_severity=[Severity.DEBUG.name])
@@ -407,7 +406,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.error("Compare results failed: %s", exc)
 
-    def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, email_subject_postfix=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-arguments
         doc = self.get_test_by_id(test_id)
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.LongevityTest.test_custom_time
@@ -448,7 +447,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         dataset_size = re.search(r'(\d{3}gb)', config_files).group() or 'unknown size'
 
         subject = (f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results '
-                   f'({self.test_name_for_email_subject} {dataset_size}) -'
+                   f'({email_subject_postfix} {dataset_size}) -'
                    f' {test_name} - {test_version} - {str(test_start_time)}')
         best_results_per_nemesis = self._get_best_per_nemesis_for_each_version(doc, is_gce)
         self._compare_current_best_results_average(data, best_results_per_nemesis)
@@ -493,15 +492,6 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
         return True
-
-
-class LatencyDuringUpgradesPerformanceAnalyzer(LatencyDuringOperationsPerformanceAnalyzer):
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None,  # pylint: disable=too-many-arguments
-                 events=None):
-        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
-                         logger=logger, events=events)
-        self.percentiles = ['percentile_90', 'percentile_99']
-        self.test_name_for_email_subject = 'latency during upgrades'
 
 
 class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
