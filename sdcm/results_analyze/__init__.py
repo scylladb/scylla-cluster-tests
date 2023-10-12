@@ -222,11 +222,12 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     Get latency during operations performance analyzer
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None,  # pylint: disable=too-many-arguments
+                 nemesis_class_name=None):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_latency_during_ops_short.html", logger=logger, events=events)
         self.percentiles = ['percentile_90', 'percentile_99']
-        self.test_name_for_email_subject = 'latency during operations'
+        self.test_name_for_email_subject = f'latency during {nemesis_class_name}'
 
     def get_debug_events(self):
         return self.get_events(event_severity=[Severity.DEBUG.name])
@@ -497,10 +498,11 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
 class LatencyDuringUpgradesPerformanceAnalyzer(LatencyDuringOperationsPerformanceAnalyzer):
     def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None,  # pylint: disable=too-many-arguments
-                 events=None):
+                 events=None, nemesis_class_name='upgrades'):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          logger=logger, events=events)
         self.percentiles = ['percentile_90', 'percentile_99']
+        self.log.debug('we set %s for compatibility reason, but not used in this test', nemesis_class_name)
         self.test_name_for_email_subject = 'latency during upgrades'
 
 

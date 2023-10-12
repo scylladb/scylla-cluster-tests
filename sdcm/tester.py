@@ -3115,6 +3115,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def check_latency_during_ops(self, op_is_upgrade=False):
         start_time = self.start_time if not self.create_stats else self._stats["test_details"]["start_time"]
         end_time = time.time()
+        nemesis_class_name = self.params.get('nemesis_class_name') or 'upgrades'
         if op_is_upgrade:
             analyzer = LatencyDuringUpgradesPerformanceAnalyzer
         else:
@@ -3124,7 +3125,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     email_recipients=self.params.get(
                                         'email_recipients'),
                                     events=get_events_grouped_by_category(
-                                        _registry=self.events_processes_registry))
+                                        _registry=self.events_processes_registry),
+                                    nemesis_class_name=nemesis_class_name,
+                                    )
         with open(self.latency_results_file, encoding="utf-8") as file:
             latency_results = json.load(file)
         self.log.debug('latency_results were loaded from file %s and its result is %s',
