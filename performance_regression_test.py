@@ -870,7 +870,7 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
         self.display_results(results, test_name='test_latency_with_upgrade')
         self.update_test_details(scrap_metrics_step=60)
         self.display_results(results, test_name='test_latency_during_upgrade')
-        self.check_latency_during_ops(op_is_upgrade=True)
+        self.check_latency_during_ops()
 
     def _prepare_latency_with_upgrade(self):
         self.run_fstrim_on_all_db_nodes()
