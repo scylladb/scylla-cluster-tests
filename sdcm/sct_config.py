@@ -921,6 +921,24 @@ class SCTConfiguration(dict):
         dict(name="k8s_connection_bundle_file", env="SCT_K8S_CONNECTION_BUNDLE_FILE", type=_file,
              help="Serverless configuration bundle file", k8s_multitenancy_supported=True),
 
+        # NOTE: following 'k8s_db_node_service_type', 'k8s_db_node_to_node_broadcast_ip_type' and
+        #       'k8s_db_node_to_client_broadcast_ip_type' options are supported only starting with
+        #       the 'v1.11.0-rc.0' scylla-operator version.
+        dict(name="k8s_db_node_service_type", env="SCT_K8S_DB_NODE_SERVICE_TYPE",
+             type=str, choices=("", "ClusterIP", "Headless", "LoadBalancer"),
+             help="Defines the type of the K8S 'Service' objects type used for ScyllaDB pods. "
+                  "Empty value means 'do not set and allow scylla-operator to choose'."),
+        dict(name="k8s_db_node_to_node_broadcast_ip_type", env="SCT_K8S_DB_NODE_TO_NODE_BROADCAST_IP_TYPE",
+             type=str, choices=("", "ServiceClusterIP", "PodIP", "ServiceLoadBalancerIngress"),
+             help="Defines the source of the IP address to be used for the 'broadcast_address' config "
+                  "option in the 'scylla.yaml' files. "
+                  "Empty value means 'do not set and allow scylla-operator to choose'."),
+        dict(name="k8s_db_node_to_client_broadcast_ip_type", env="SCT_K8S_DB_NODE_TO_CLIENT_BROADCAST_IP_TYPE",
+             type=str, choices=("", "ServiceClusterIP", "PodIP", "ServiceLoadBalancerIngress"),
+             help="Defines the source of the IP address to be used for the 'broadcast_rpc_address' config "
+                  "option in the 'scylla.yaml' files. "
+                  "Empty value means 'do not set and allow scylla-operator to choose'."),
+
         dict(name="k8s_use_chaos_mesh", env="SCT_K8S_USE_CHAOS_MESH", type=boolean,
              help="""enables chaos-mesh for k8s testing"""),
 

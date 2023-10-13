@@ -880,6 +880,14 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         dns_domains = []
         expose_options = {}
+        if ComparableScyllaOperatorVersion(self._scylla_operator_chart_version.split("-")[0]) >= "1.11.0":
+            if k8s_db_node_service_type := self.params.get("k8s_db_node_service_type"):
+                expose_options["nodeService"] = {"type": k8s_db_node_service_type}
+            for broadcast_direction_type in ("node", "client"):
+                if ip_type := self.params.get(f"k8s_db_node_to_{broadcast_direction_type}_broadcast_ip_type"):
+                    if "broadcastOptions" not in expose_options:
+                        expose_options["broadcastOptions"] = {}
+                    expose_options["broadcastOptions"][f"{broadcast_direction_type}s"] = {"type": ip_type}
         if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
                 self._scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
             dns_domains = [f"{cluster_name}.sct.scylladb.com"]
