@@ -15,6 +15,7 @@
 
 
 import os
+import sys
 import time
 
 from enum import Enum
@@ -61,10 +62,6 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         # emails for each test. When we move to use SCT Runners, it won't be necessary.
         self._clean_email_data()
         super().__init__(*args)
-        # next 3 lines, is a workaround to have it working inside `latency_calculator_decorator`
-        self.cluster = self.db_cluster
-        self.monitoring_set = self.monitors
-        self.tester = self
 
     @teardown_on_exception
     @log_run_info
@@ -325,12 +322,23 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
     @latency_calculator_decorator
     def steady_state_latency(self, steady_state_time):  # pylint: disable=no-self-use
+        # the next lines, is a workaround to have it working inside `latency_calculator_decorator`
+        if not self.cluster:
+            self.cluster = self.db_cluster  # pylint: disable=attribute-defined-outside-init
+            self.monitoring_set = self.monitors  # pylint: disable=attribute-defined-outside-init
+            self.tester = self  # pylint: disable=attribute-defined-outside-init
+
         InfoEvent(message='Starting Steady State calculation for %ss' % steady_state_time).publish()
         time.sleep(steady_state_time)
         InfoEvent(message='Ended Steady State calculation. Took %ss' % steady_state_time).publish()
 
     @latency_calculator_decorator
     def post_upgrades_steady_state(self, steady_state_time):  # pylint: disable=no-self-use
+        # the next lines, is a workaround to have it working inside `latency_calculator_decorator`
+        if not self.cluster:
+            self.cluster = self.db_cluster  # pylint: disable=attribute-defined-outside-init
+            self.monitoring_set = self.monitors  # pylint: disable=attribute-defined-outside-init
+            self.tester = self  # pylint: disable=attribute-defined-outside-init
         InfoEvent(message='Starting Post-Upgrade Steady State calculation for %ss' % steady_state_time).publish()
         time.sleep(steady_state_time)
         InfoEvent(message='Ended Post-Upgrade Steady State calculation. Took %ss' % steady_state_time).publish()
@@ -341,10 +349,13 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         if sub_type is None:
             sub_type = 'read' if ' read ' in stress_cmd else 'write' if ' write ' in stress_cmd else 'mixed'
         test_index = f'latency-during-ops-{sub_type}'
+        sys.exit(2)
         self.create_test_stats(sub_type=sub_type, append_sub_test_to_name=False, test_index=test_index)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
         if nemesis:
             interval = self.params.get('nemesis_interval')
+            if not self.cluster:
+                self.cluster = self.db_cluster
             self.steady_state_latency(interval * 60)
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis(interval=interval, cycles_count=1)
