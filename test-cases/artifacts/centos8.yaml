@@ -16,3 +16,4 @@ scylla_linux_distro: 'centos'
 test_duration: 60
 user_prefix: 'artifacts-centos8'
 use_preinstalled_scylla: false
+aws_fallback_to_next_availability_zone: true
