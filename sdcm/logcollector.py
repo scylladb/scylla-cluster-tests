@@ -788,7 +788,7 @@ class ScyllaLogCollector(LogCollector):
                             command="sudo journalctl --no-tail --no-pager -u scylla-ami-setup.service "
                                     "-u scylla-image-setup.service -u scylla-io-setup.service -u scylla-server.service "
                                     "-u scylla-jmx.service -u scylla-housekeeping-restart.service "
-                                    "-u scylla-housekeeping-daily.service", search_locally=True),
+                                    "-u scylla-housekeeping-daily.service -o short-precise", search_locally=True),
                     FileLog(name='kallsyms_*',
                             search_locally=True),
                     FileLog(name='lsof_*',
