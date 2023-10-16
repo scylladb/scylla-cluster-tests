@@ -16,3 +16,4 @@ scylla_linux_distro: 'ubuntu-jammy'
 test_duration: 60
 user_prefix: 'artifacts-ubuntu2204'
 system_auth_rf: 1
+aws_fallback_to_next_availability_zone: true

@@ -21,3 +21,4 @@ scylla_apt_keys:
 test_duration: 60
 user_prefix: 'artifacts-debian10'
 system_auth_rf: 1
+aws_fallback_to_next_availability_zone: true

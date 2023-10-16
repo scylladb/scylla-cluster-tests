@@ -17,3 +17,4 @@ scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-
 test_duration: 60
 user_prefix: 'artifacts-centos8'
 system_auth_rf: 1
+aws_fallback_to_next_availability_zone: true
