@@ -1192,7 +1192,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def is_port_used(self, port: int, service_name: str) -> bool:
         # Check that "ss" is present and install if absent
-        ss_version_result = self.remoter.run("ss --version || echo ss_not_found")
+        ss_version_result = self.remoter.run("ss --version || echo ss_not_found", retry=5)
         if "ss_not_found" in ss_version_result.stdout:
             self.log.debug(
                 f"Failed to get 'ss' binary version\n"
