@@ -72,7 +72,7 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
         LOGGER.info("Installing chaos-mesh on %s k8s cluster...", self._k8s_cluster.k8s_scylla_cluster_name)
         self._k8s_cluster.helm("repo add chaos-mesh https://charts.chaos-mesh.org")
         self._k8s_cluster.helm('repo update')
-        self._k8s_cluster.kubectl(f"create namespace {self.NAMESPACE}")
+        self._k8s_cluster.create_namespace(self.NAMESPACE)
         aux_node_pool_affinity = get_helm_pool_affinity_values(
             self._k8s_cluster.POOL_LABEL_NAME, self._k8s_cluster.AUXILIARY_POOL_NAME)
         scylla_node_pool_affinity = get_helm_pool_affinity_values(

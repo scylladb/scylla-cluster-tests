@@ -390,7 +390,7 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
             },
         }]
     })
-    db_cluster.k8s_cluster.kubectl(f"create namespace {namespace}", ignore_status=True)
+    db_cluster.k8s_cluster.create_namespace(namespace=namespace)
     db_cluster.k8s_cluster.helm_install(
         target_chart_name=target_chart_name,
         source_chart_name="scylla-operator/scylla",
@@ -616,13 +616,7 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     target_chart_name, namespace = ("t-default-values",) * 2
     expected_capacity = '10Gi'
 
-    log.info("Create %s namespace", namespace)
-
-    namespaces = yaml.safe_load(db_cluster.k8s_cluster.kubectl("get namespaces -o yaml").stdout)
-
-    if not [ns["metadata"]["name"] for ns in namespaces["items"] if ns["metadata"]["name"] == namespace]:
-        db_cluster.k8s_cluster.kubectl(f"create namespace {namespace}")
-
+    db_cluster.k8s_cluster.create_namespace(namespace=namespace)
     db_cluster.k8s_cluster.create_scylla_manager_agent_config(namespace=namespace)
 
     log.debug('Deploy cluster with default storage capacity (expected "%s")', expected_capacity)
