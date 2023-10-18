@@ -47,7 +47,8 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
 
         self.run_search_best_performance(**stress_params)
 
-    def run_search_best_performance(self, stress_cmd_tmpl: str,  # pylint: disable=too-many-arguments,too-many-locals,too-many-statements
+    # pylint: disable=too-many-arguments,too-many-locals,too-many-statements,too-many-branches
+    def run_search_best_performance(self, stress_cmd_tmpl: str,
                                     stress_num: int,
                                     stress_num_step: int,
                                     stress_step_duration: str,
@@ -96,10 +97,15 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
                                                     threads=threads,
                                                     duration=stress_step_duration)
             self.log.debug("Run c-s command %s", stress_cmd)
-            stress_queue = self.run_stress_thread(stress_cmd=stress_cmd,
-                                                  stress_num=stress_num,
-                                                  stats_aggregate_cmds=False,)
-            results = self.get_stress_results(queue=stress_queue, store_results=False)
+            stress_threads = []
+            base_cmd_w = self._get_write_c_s_commands_spread_evenly(stress_cmd, len(self.loaders.nodes),
+                                                                    stress_num)
+            for stress_cmd in base_cmd_w:
+                stress_threads.append(self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num,
+                                                             round_robin=True, stats_aggregate_cmds=False))
+            results = []
+            for stress in stress_threads:
+                results += self.get_stress_results(queue=stress)
             self.log.debug("Current results %s", results)
             current_result = self._calculate_average_stats(results)
             current_result.update({
