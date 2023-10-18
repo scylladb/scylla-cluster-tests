@@ -55,6 +55,7 @@ from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from argus.backend.util.enums import ResourceState
+from argus.client.sct.types import LogLink
 from sdcm.node_exporter_setup import NodeExporterSetup, SyslogNgExporterSetup
 from sdcm.db_log_reader import DbLogReader
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
@@ -131,7 +132,7 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.monitorstack.ui import AlternatorDashboard
 from sdcm.logcollector import GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3, \
-    save_kallsyms_map, collect_diagnostic_data
+    save_kallsyms_map, collect_diagnostic_data, ScyllaLogCollector
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, \
     LDAP_PORT, DEFAULT_PWD_SUFFIX
 from sdcm.utils.remote_logger import get_system_logging_thread
@@ -3392,6 +3393,15 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             ))
         if node in self.nodes:
             self.nodes.remove(node)
+        try:
+            ScyllaLogCollector.cluster_log_type = node.name
+            log_links = ScyllaLogCollector([node],
+                                           test_id=self.test_config.test_id(),
+                                           storage_dir=os.path.join(self.logdir, "collected_logs"),
+                                           params=self.params).collect_logs()
+            self.test_config.argus_client().submit_sct_logs([LogLink(log_name=node.name, log_link=log_links[0])])
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            self.log.error("Failed to collect logs for node %s: %s", node.name, exc)
         node.destroy()
 
     def get_db_auth(self):
