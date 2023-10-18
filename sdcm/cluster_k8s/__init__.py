@@ -426,6 +426,14 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         return os.path.join(os.path.dirname(
             os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))), 'kubectl.token')
 
+    def create_namespace(self, namespace: str) -> None:
+        LOGGER.info("Create '%s' namespace", namespace)
+        namespaces = yaml.safe_load(self.kubectl("get namespaces -o yaml").stdout)
+        if not [ns["metadata"]["name"] for ns in namespaces["items"] if ns["metadata"]["name"] == namespace]:
+            self.kubectl(f"create namespace {namespace}")
+        else:
+            LOGGER.warning("The '%s' namespace already exists.")
+
     @cached_property
     def cert_manager_log(self) -> str:
         return os.path.join(self.logdir, "cert_manager.log")
@@ -477,12 +485,13 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     @log_run_info
     def deploy_cert_manager(self, pool_name: str = None) -> None:
+        cert_manager_namespace = "cert-manager"
         if not self.params.get('reuse_cluster'):
             if pool_name is None:
                 pool_name = self.AUXILIARY_POOL_NAME
 
             LOGGER.info("Deploy cert-manager")
-            self.kubectl("create namespace cert-manager", ignore_status=True)
+            self.create_namespace(cert_manager_namespace)
             LOGGER.debug(self.helm("repo add jetstack https://charts.jetstack.io"))
 
             if pool_name:
@@ -496,8 +505,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             helm_values.set('installCRDs', True)
 
             LOGGER.debug(self.helm(
-                f"install cert-manager jetstack/cert-manager --version v{self.params.get('k8s_cert_manager_version')}",
-                namespace="cert-manager", values=helm_values))
+                "install cert-manager jetstack/cert-manager"
+                f" --version v{self.params.get('k8s_cert_manager_version')}",
+                namespace=cert_manager_namespace, values=helm_values))
 
         self.kubectl_wait("--all --for=condition=Ready pod", namespace="cert-manager",
                           timeout=600)
@@ -623,7 +633,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             if scylla_operator_image_tag:
                 values.set('controllerImage.tag', scylla_operator_image_tag)
 
-            self.kubectl(f'create namespace {SCYLLA_MANAGER_NAMESPACE}')
+            self.create_namespace(SCYLLA_MANAGER_NAMESPACE)
 
             # Install and wait for initialization of the Scylla Manager chart
             LOGGER.debug(self.helm_install(
@@ -708,7 +718,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
             # Install and wait for initialization of the Scylla Operator chart
             LOGGER.info("Deploy Scylla Operator")
-            self.kubectl(f'create namespace {SCYLLA_OPERATOR_NAMESPACE}')
+            self.create_namespace(SCYLLA_OPERATOR_NAMESPACE)
             LOGGER.debug(self.helm_install(
                 target_chart_name="scylla-operator",
                 source_chart_name="scylla-operator/scylla-operator",
@@ -841,7 +851,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def deploy_minio_s3_backend(self):
         if not self.params.get('reuse_cluster'):
             LOGGER.info('Deploy minio s3-like backend server')
-            self.kubectl(f"create namespace {MINIO_NAMESPACE}")
+            self.create_namespace(MINIO_NAMESPACE)
             values = HelmValues({})
             values.set('persistence.size', self.params.get("k8s_minio_storage_size"))
             LOGGER.debug(self.helm_install(
