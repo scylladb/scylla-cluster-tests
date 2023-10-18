@@ -12,6 +12,8 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+
+#  pylint: disable=too-many-lines
 import logging
 import os
 import random
@@ -87,6 +89,133 @@ def test_single_operator_image_tag_is_everywhere(db_cluster):
         f"Found pods that have unexpected scylla-operator image tags.\n"
         f"Expected is '{expected_operator_tag}'.\n"
         f"Pods: {yaml.safe_dump(pods_with_wrong_image_tags, indent=2)}")
+
+
+@pytest.mark.required_operator("v1.11.0")
+def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylint: disable=too-many-locals,too-many-statements,too-many-branches
+    """
+    Deploy 2 'ScyllaCluster' K8S objects in 2 different namespaces in the single K8S cluster
+    and combine them into a single DB cluster.
+    Combining is done by using 'externalSeeds' config option and single 'cluster name' value.
+    Only PodIPs are used for the connectivity.
+    """
+    cluster_name, target_chart_name, namespace = ("t-podip-quasi-multidc", ) * 3
+    target_chart_name2, namespace2 = (f"{cluster_name}-2", ) * 2
+    dc_name, dc_name2 = (f"quasi-dc-{i}" for i in range(1, 3))
+    k8s_cluster, kubectl = db_cluster.k8s_cluster, db_cluster.k8s_cluster.kubectl
+    operator_version = k8s_cluster._scylla_operator_chart_version  # pylint: disable=protected-access
+    need_to_collect_logs = True
+    logdir = f"{os.path.join(k8s_cluster.logdir, 'test_deploy_quasi_multidc_db_cluster')}"
+    values = HelmValues({
+        'exposeOptions': {
+            'nodeService': {'type': 'Headless'},
+            'broadcastOptions': {key: {'type': 'PodIP'} for key in ('nodes', 'clients')},
+        },
+        'developerMode': True,
+        'fullnameOverride': cluster_name,
+        'scyllaImage': {
+            'repository': k8s_cluster.params.get('docker_image'),
+            'tag': k8s_cluster.params.get('scylla_version'),
+        },
+        'agentImage': {'tag': k8s_cluster.params.get('scylla_mgmt_agent_version')},
+        'serviceAccount': {'create': True, 'annotations': {}, 'name': f"{cluster_name}-member"},
+        'serviceMonitor': {'create': False},
+        'sysctls': ["fs.aio-max-nr=300000000"],
+        'datacenter': dc_name,
+        'racks': [{
+            'name': k8s_cluster.rack_name,
+            'members': 3, 'storage': {'capacity': '2Gi'},
+            'resources': {
+                'requests': {'cpu': '200m', 'memory': "200Mi"},
+                'limits': {'cpu': '500m', 'memory': "400Mi"},
+            }
+        }]
+    })
+
+    k8s_cluster.create_namespace(namespace=namespace)
+    k8s_cluster.create_scylla_manager_agent_config(namespace=namespace)
+
+    def get_pod_names_and_ips(cluster_name: str, namespace: str):
+        pod_names_and_ips = kubectl(
+            "get pods --no-headers -o=custom-columns=':.metadata.name,:.status.podIP'"
+            f" -l scylla/cluster={cluster_name}",
+            namespace=namespace).stdout.split("\n")
+        pod_names_and_ips = [row.strip() for row in pod_names_and_ips if row.strip()]
+        assert pod_names_and_ips
+        assert len(pod_names_and_ips) == 3
+        pod_data = {namespace: {}}
+        for pod_name_and_ip in pod_names_and_ips:
+            pod_name, pod_ip = pod_name_and_ip.split()
+            pod_data[namespace][pod_name.strip()] = pod_ip.strip()
+            assert pod_ip not in ("", "None"), "Pod IPs were expected to be set"
+        return pod_data
+
+    log.info('Deploy first ScyllaCluster')
+    try:
+        log.debug(k8s_cluster.helm_install(
+            target_chart_name=target_chart_name, source_chart_name="scylla-operator/scylla",
+            version=operator_version, use_devel=True, values=values, namespace=namespace))
+        k8s_cluster.kubectl_wait("--all --for=condition=Ready pod", namespace=namespace, timeout=1200)
+
+        # NOTE: check that Scylla services are headless - no IPs are set
+        svc_ips = kubectl(
+            "get svc --no-headers -o=custom-columns=':.spec.clusterIP'"
+            f" -l scylla/cluster={cluster_name} -l scylla-operator.scylladb.com/scylla-service-type=member",
+            namespace=namespace).stdout.split()
+        assert svc_ips
+        assert len(svc_ips) == 3
+        assert all(svc_ip in ('', 'None') for svc_ip in svc_ips), "SVC IPs were expected to be absent"
+
+        # NOTE: read Scylla pods IPs
+        pods_data = get_pod_names_and_ips(cluster_name=cluster_name, namespace=namespace)
+        try:
+            k8s_cluster.create_namespace(namespace=namespace2)
+            k8s_cluster.create_scylla_manager_agent_config(namespace=namespace2)
+
+            log.info('Deploy second ScyllaCluster')
+            values.set("datacenter", dc_name2)
+            values.set("externalSeeds", list(pods_data[namespace].values()))
+            log.debug(k8s_cluster.helm_install(
+                target_chart_name=target_chart_name2, source_chart_name="scylla-operator/scylla",
+                version=operator_version, use_devel=True, values=values, namespace=namespace2))
+            k8s_cluster.kubectl_wait(
+                "--all --for=condition=Ready pod", namespace=namespace2, timeout=1200)
+            pods_data |= get_pod_names_and_ips(cluster_name=cluster_name, namespace=namespace2)
+            ip_to_dc_map = {}
+            for current_namespace in pods_data.keys():
+                for pod_ip in pods_data[current_namespace].values():
+                    ip_to_dc_map[pod_ip] = dc_name if current_namespace == namespace else dc_name2
+
+            log.info("Verify DB cluster's peers info")
+            for current_namespace in pods_data.keys():
+                for pod_name, pod_ip in pods_data[current_namespace].items():
+                    cqlsh_cmd = "SELECT JSON peer, data_center, rack, rpc_address FROM system.peers;"
+                    cqlsh_results = kubectl(
+                        f"exec {pod_name} -- /bin/cqlsh -e \"{cqlsh_cmd}\"",
+                        namespace=current_namespace).stdout.split("---\n")[-1].split("\n")
+                    table_rows = [yaml.safe_load(row) for row in cqlsh_results if "{" in row]
+                    assert len(table_rows) == 5, "Expected 5 peers"
+                    for row in table_rows:
+                        assert row["peer"] == row["rpc_address"]
+                        assert row["peer"] != pod_ip
+                        assert row["peer"] in ip_to_dc_map
+                        assert row["rack"] == k8s_cluster.rack_name
+                        assert row["data_center"] == ip_to_dc_map[row["peer"]]
+            need_to_collect_logs = False
+        finally:
+            if need_to_collect_logs:
+                KubernetesOps.gather_k8s_logs(
+                    logdir_path=logdir, kubectl=kubectl, namespaces=[namespace, namespace2])
+                need_to_collect_logs = False
+            k8s_cluster.helm(f"uninstall {target_chart_name2} --timeout 120s", namespace=namespace2)
+            kubectl(f"delete namespace {namespace2}")
+
+    finally:
+        if need_to_collect_logs:
+            KubernetesOps.gather_k8s_logs(
+                logdir_path=logdir, kubectl=kubectl, namespaces=[namespace, namespace2])
+        k8s_cluster.helm(f"uninstall {target_chart_name} --timeout 120s", namespace=namespace)
+        kubectl(f"delete namespace {namespace}")
 
 
 @pytest.mark.restart_is_used
