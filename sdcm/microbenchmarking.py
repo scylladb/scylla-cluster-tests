@@ -43,7 +43,7 @@ setup_stdout_logger()
 LOGGER = logging.getLogger("microbenchmarking")
 LOGGER.setLevel(logging.DEBUG)
 
-MICROBENCHMARK_INDEX_NAME = 'microbenchmarkingv2'
+MICROBENCHMARK_INDEX_NAME = 'microbenchmarkingv3'
 
 
 @contextlib.contextmanager
