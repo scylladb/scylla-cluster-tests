@@ -34,7 +34,7 @@ class TestBaseVersion(unittest.TestCase):
         scylla_repo = self.url_base + '/master/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
-        self.assertEqual(version_list, ['5.3'])
+        self.assertEqual(version_list, ['5.4'])
 
     def test_ubuntu_22_azure_5_3(self):
         scylla_repo = self.url_base + '/branch-5.3/deb/unified/2023-05-23T22:36:08Z/scylladb-5.3/scylla.list'
