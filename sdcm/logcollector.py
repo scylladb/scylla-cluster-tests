@@ -830,6 +830,27 @@ class ScyllaLogCollector(LogCollector):
         return super().collect_logs(local_search_path)
 
 
+class EvictedScyllaLogCollector(ScyllaLogCollector):
+    """Collect Scylla logs to local db node log directory for future upload to S3 upon log-collection step"""
+
+    def __init__(self, node, params):  # pylint: disable=super-init-not-called
+        self.node = node
+        self.params = params
+        self.log_dir = os.path.dirname(node.system_log)
+        for entity in self.log_entities:
+            if self.params:
+                entity.set_params(self.params)
+
+    def collect_logs(self, local_search_path=None):
+        LOGGER.info('Collecting logs on host: %s', self.node.name)
+        remote_node_dir = self.create_remote_storage_dir(self.node)
+        for log_entity in self.log_entities:
+            try:
+                log_entity.collect(self.node, self.log_dir, remote_node_dir)
+            except Exception as details:  # pylint: disable=unused-variable, broad-except
+                LOGGER.error("Error occured during collecting on host: %s\n%s", self.node.name, details)
+
+
 def save_kallsyms_map(node):
 
     LOGGER.info('Saving kallsyms map from host: %s', node.name)
