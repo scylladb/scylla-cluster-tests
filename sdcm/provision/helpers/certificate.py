@@ -14,12 +14,13 @@
 from textwrap import dedent
 
 from sdcm.remote import shell_script_cmd
+from sdcm.utils.common import get_data_dir_path
 
 
 def install_client_certificate(remoter):
     if remoter.run('ls /etc/scylla/ssl_conf', ignore_status=True).ok:
         return
-    remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
+    remoter.send_files(src=get_data_dir_path('ssl_conf'), dst='/tmp/')  # pylint: disable=not-callable
     setup_script = dedent("""
         mkdir -p ~/.cassandra/
         cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
@@ -33,7 +34,7 @@ def install_client_certificate(remoter):
 def install_encryption_at_rest_files(remoter):
     if remoter.sudo('ls /etc/encrypt_conf/system_key_dir', ignore_status=True).ok:
         return
-    remoter.send_files(src="./data_dir/encrypt_conf", dst="/tmp/")
+    remoter.send_files(src=get_data_dir_path('encrypt_conf'), dst="/tmp/")
     remoter.sudo(shell_script_cmd(dedent("""
         rm -rf /etc/encrypt_conf
         mv -f /tmp/encrypt_conf /etc
