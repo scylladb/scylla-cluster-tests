@@ -332,3 +332,6 @@
   - disruptive = False
   - kubernetes = True
   - free_tier_set = True
+- disrupt_end_of_quota_nemesis:
+  - disruptive = True
+  - kubernetes = False

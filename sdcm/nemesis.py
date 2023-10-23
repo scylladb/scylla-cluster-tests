@@ -80,7 +80,7 @@ from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors
                                                  ignore_scrub_invalid_errors, ignore_view_error_gate_closed_exception,
                                                  ignore_stream_mutation_fragments_errors,
                                                  ignore_ycsb_connection_refused, decorate_with_context,
-                                                 ignore_reactor_stall_errors,
+                                                 ignore_reactor_stall_errors, ignore_disk_quota_exceeded_errors,
                                                  ignore_error_apply_view_update)
 from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
@@ -95,6 +95,8 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                parse_nodetool_listsnapshots,
                                update_authenticator, ParallelObject,
                                ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table)
+from sdcm.utils.quota import configure_quota_on_node_for_scylla_user_context, is_quota_enabled_on_node, enable_quota_on_node, \
+    write_data_to_reach_end_of_quota
 from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
 from sdcm.utils.context_managers import nodetool_context
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
@@ -136,6 +138,7 @@ from sdcm.exceptions import (
     NemesisSubTestFailure,
     AuditLogTestFailure,
     BootstrapStreamErrorFailure,
+    QuotaConfigurationFailure,
 )
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
     get_gc_mode, GcMode
@@ -1681,6 +1684,42 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         reach_enospc_on_node(target_node=node)
                     finally:
                         clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
+
+    def disrupt_end_of_quota_nemesis(self, sleep_time=30):
+        """
+        Nemesis flow
+        ---------------------
+        1. Enable quota on the node.
+        2. Check disk usage.
+        3. Define quota size same as disk usage + 3GB.
+        4. Approach end of quota in a loop with fallocate file that takes 90% of quota size each iteration.
+        5. Wait for end of quota message to appear in the log - "Disk quota exceeded" / Except I/O Error if happens.
+        6. Remove the sparse files.
+        7. Remove the quota by setting it to 0.
+        8. Restart scylla server.
+        9. Verify scylla is up.
+        """
+
+        node = self.target_node
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Skipping nemesis for kubernetes")
+
+        result = node.remoter.run('cat /proc/mounts')
+        if '/var/lib/scylla' not in result.stdout:
+            raise UnsupportedNemesis("Scylla doesn't use an individual storage, skip end of quota test")
+
+        enable_quota_on_node(node)
+        quota_enabled = is_quota_enabled_on_node(node)
+        if not quota_enabled:
+            raise QuotaConfigurationFailure("Failed to configure quota on the cluster")
+
+        with ignore_disk_quota_exceeded_errors(node):
+            with configure_quota_on_node_for_scylla_user_context(node) as quota_size:
+                write_data_to_reach_end_of_quota(node, quota_size)
+            LOGGER.debug('Sleep 15 seconds before restart scylla-server')
+            time.sleep(15)
+            node.restart_scylla_server()
+            node.wait_db_up()
 
     def disrupt_remove_service_level_while_load(self):
         # Temporary solution. We do not want to run SLA nemeses during not-SLA test until the feature is stable
@@ -6400,3 +6439,11 @@ class DisableBinaryGossipExecuteMajorCompaction(Nemesis):
 
     def disrupt(self):
         self.disrupt_disable_binary_gossip_execute_major_compaction()
+
+
+class EndOfQuotaNemesis(Nemesis):
+    disruptive = True
+    config_changes = True
+
+    def disrupt(self):
+        self.disrupt_end_of_quota_nemesis()

@@ -65,6 +65,10 @@ class KillNemesis(BaseException):
     """Exception that would be raised, when a nemesis thread is killed at teardown of the test"""
 
 
+class QuotaConfigurationFailure(Exception):
+    """Exception that would be raised, if quota configuration failed"""
+
+
 class WaitForTimeoutError(Exception):
     """Exception that would be raised timeout exceeded in wait.wait_for function"""
 
