@@ -247,6 +247,7 @@ class TestSisyphusMonkeyNemesisFilter:
             "disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back",
             "disrupt_resetlocalschema",
             "disrupt_toggle_audit_syslog",
+            "disrupt_end_of_quota_nemesis",
         ]
 
     @pytest.fixture(autouse=True)

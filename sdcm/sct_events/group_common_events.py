@@ -134,6 +134,32 @@ def ignore_no_space_errors(node):
 
 
 @contextmanager
+def ignore_disk_quota_exceeded_errors(node):
+    with ExitStack() as stack:
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.BACKTRACE,
+            line="Disk quota exceeded",
+            node=node,
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.FILESYSTEM_ERROR,
+            line="Disk quota exceeded",
+            node=node,
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="Disk quota exceeded",
+            node=node,
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DISK_ERROR,
+            line="Disk quota exceeded",
+            node=node,
+        ))
+        yield
+
+
+@contextmanager
 def ignore_mutation_write_errors():
     with ExitStack() as stack:
         stack.enter_context(EventsSeverityChangerFilter(
