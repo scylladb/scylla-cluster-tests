@@ -1,0 +1,2 @@
+instance_type_db: 'i4i.xlarge'
+k8s_scylla_disk_gi: 800

@@ -7,7 +7,7 @@ longevityPipeline(
     functional_test: true,
     region: 'eu-north-1',
     test_name: 'functional_tests/scylla_operator',
-    test_config: 'test-cases/scylla-operator/functional.yaml',
+    test_config: '''["test-cases/scylla-operator/functional.yaml", "configurations/operator/functional-eks.yaml"]''',
     email_recipients: 'qa@scylladb.com,scylla-operator@scylladb.com',
     availability_zone: 'a,b',
     post_behavior_db_nodes: 'destroy',
