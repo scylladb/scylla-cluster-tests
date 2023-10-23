@@ -115,11 +115,12 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
                         ent_base_version += ent_release_list[idx - 2:][:2]
                     else:
                         LOGGER.warning('enterprise version format not the default - %s', version)
-            elif version == 'enterprise' or ComparableScyllaVersion(version) > ent_release_list[0]:
+            elif version == 'enterprise':
                 ent_base_version.append(ent_release_list[-1])
-            elif re.match(r'\d+.\d+', version) and ComparableScyllaVersion(version) >= ent_release_list[0]:
-                oss_base_version.append(oss_release_list[-1])
-                ent_base_version += ent_release_list[-2:]
+            elif re.match(r'\d+.\d+', version):
+                relevant_versions = [v for v in ent_release_list if ComparableScyllaVersion(v) < version]
+                # oss_base_version.append(oss_release_list[-1])
+                ent_base_version += relevant_versions[-2:]
         elif product == 'scylla':
             if version in supported_versions:
                 # The dest version is a released opensource version
@@ -130,12 +131,13 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
                 else:
                     # Choose the last two releases as upgrade base
                     oss_base_version += oss_release_list[idx-1:][:2]
-            elif version == 'master' or ComparableScyllaVersion(version) > oss_release_list[0]:
+            elif version == 'master':
                 oss_base_version.append(oss_release_list[-1])
-            elif re.match(r'\d+.\d+', version) and ComparableScyllaVersion(version) < oss_release_list[0]:
+            elif re.match(r'\d+.\d+', version):
+                relevant_versions = [v for v in oss_release_list if ComparableScyllaVersion(v) < version]
                 # If dest version is smaller than the first supported opensource release,
                 # it might be an invalid dest version
-                oss_base_version.append(oss_release_list[-1])
+                oss_base_version.append(relevant_versions[-1])
         else:
             raise ValueError("Unsupported product %s" % product)
 
