@@ -543,6 +543,50 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error saving logs to Argus", exc_info=True)
 
+    def argus_collect_gemini_results(self):
+        try:
+            # pylint: disable=no-member
+            if not getattr(self, "gemini_results"):
+                return
+
+            if self.loaders:
+                gemini_version = self.loaders.gemini_version
+            else:
+                self.log.warning("Failed to get gemini version as loader instance is not created")
+                gemini_version = ""
+
+            seed = self.params.get("gemini_seed")
+            gemini_command, *_ = self.gemini_results["cmd"]
+            if not seed:
+                seed_match = re.search(r"--seed (?P<seed>\d+) ", gemini_command)
+                if seed_match:
+                    seed = seed_match.groupdict().get("seed", -1)
+                else:
+                    seed = -1
+
+            results = self.gemini_results["results"]
+            results = results[0] if len(results) > 0 else None
+            if not results or not isinstance(results, dict):
+                self.log.warning("Results object is not a dictionary: %s\nReplacing with empty dict.", results)
+                results = {}
+
+            self.test_config.argus_client().submit_gemini_results({
+                "gemini_command": "\n".join(self.gemini_results["cmd"]),
+                "gemini_read_errors": results.get("read_errors", -1),
+                "gemini_read_ops": results.get("read_ops", -1),
+                "gemini_seed": seed,
+                "gemini_status": self.gemini_results["status"],
+                "gemini_version": gemini_version,
+                "gemini_write_errors": results.get("write_errors", -1),
+                "gemini_write_ops": results.get("write_ops", -1),
+                "oracle_node_ami_id": self.params.get("ami_id_db_oracle"),
+                "oracle_node_instance_type": self.params.get("instance_type_db_oracle"),
+                "oracle_node_scylla_version": self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else "N/A",
+                "oracle_nodes_count": self.params.get("n_test_oracle_db_nodes"),
+            })
+        except Exception:  # pylint: disable=broad-except
+            self.log.warning("Error submitting gemini results to argus", exc_info=True)
+
     def _init_ldap(self):
         self.params['are_ldap_users_on_scylla'] = False
 
@@ -2809,6 +2853,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.update_test_with_errors()
         time.sleep(1)  # Sleep is needed to let final event being saved into files
         self.save_email_data()
+        self.argus_collect_gemini_results()
         self.destroy_localhost()
         self.send_email()
         self.stop_event_device()
