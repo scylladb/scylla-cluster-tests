@@ -172,9 +172,9 @@ def call(Map pipelineParams) {
                             checkout scm
 
                             dir("scylla-qa-internal") {
-                                git(url: 'git@github.com:scylladb/scylla-qa-internal.git',
+                                git(url: 'git@github.com:fruch/scylla-qa-internal.git',
                                     credentialsId:'b8a774da-0e46-4c91-9f74-09caebaea261',
-                                    branch: 'master')
+                                    branch: 'add_cust_d_configs')
                             }
                         }
                     }
