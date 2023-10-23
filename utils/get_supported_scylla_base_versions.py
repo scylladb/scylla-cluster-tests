@@ -20,6 +20,9 @@ supported_src_oss = {'2021.1': '4.3', '2022.1': '5.0', '2022.2': '5.1', '2023.1'
 start_support_versions = {'centos-8': {'scylla': '4.1', 'enterprise': '2021.1'}}
 start_support_backend = {'azure': {'scylla': '5.2', 'enterprise': '2023.1'}}
 
+# list of version that are available, but aren't supported, and we should test upgrades from
+unsupported_versions = ['5.3', ]
+
 
 class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
 
@@ -173,6 +176,8 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
             # Enterprise: the major version is smaller than the start support version
             if self.ent_start_support_version and is_enterprise(version_prefix) and \
                     ComparableScyllaVersion(version_prefix) < self.ent_start_support_version:
+                continue
+            if version_prefix in unsupported_versions:
                 continue
             supported_versions.append(version_prefix)
         version_list = self.get_supported_scylla_base_versions(supported_versions)
