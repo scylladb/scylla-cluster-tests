@@ -2,7 +2,6 @@
 import groovy.json.JsonSlurper
 
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
-def base_versions_list = []
 
 def call(Map pipelineParams) {
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
@@ -136,22 +135,6 @@ def call(Map pipelineParams) {
                                     dir('scylla-cluster-tests') {
                                         checkout scm
                                         (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
-                                        base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
-                                        def new_repo = params.new_scylla_repo
-                                        supportedVersions = ''
-                                        new_params = params.collectEntries { param -> [param.key, param.value] }
-                                        if (new_repo) {
-                                            // NOTE: master and enterprise will have 1 single version, but for releases,
-                                            // we will choose automatically only the last one
-                                            supportedVersions = supportedUpgradeFromVersions(
-                                                base_versions_list,
-                                                'ubuntu-focal',
-                                                new_repo,
-                                                params.backend
-                                            ).last()
-                                            new_params["scylla_version"] = supportedVersions
-                                        }
-                                        println("the supported version is $supportedVersions")
                                     }
                                 }
                             }
@@ -264,8 +247,6 @@ def call(Map pipelineParams) {
                                                         fi
                                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                                             export SCT_AMI_ID_DB_SCYLLA=${params.scylla_ami_id}
-                                                        elif [[ ! -z "${supportedVersions}" ]]; then
-                                                            export SCT_SCYLLA_VERSION=${supportedVersions}
                                                         elif [[ ! -z "${params.scylla_version}" ]] ; then
                                                             export SCT_SCYLLA_VERSION=${params.scylla_version}
                                                         elif [[ ! -z "${params.scylla_repo}" ]] ; then
