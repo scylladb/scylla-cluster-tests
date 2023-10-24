@@ -697,6 +697,9 @@ class SCTConfiguration(dict):
         dict(name="use_prepared_loaders", env="SCT_USE_PREPARED_LOADERS", type=boolean,
              help="If True, we use prepared VMs for loader (instead of using docker images)"),
 
+        dict(name="scylla_d_overrides_files", env="SCT_scylla_d_overrides_files", type=str_or_list_or_eval,
+             help="list of files that should upload to /etc/scylla.d/ directory to override scylla config files"),
+
         # GCE config options
         dict(name="gce_project", env="SCT_GCE_PROJECT", type=str,
              help="gcp project name to use"),
