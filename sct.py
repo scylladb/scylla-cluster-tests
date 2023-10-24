@@ -891,7 +891,7 @@ def update_conf_docs():
     config_logger.setLevel(logging.ERROR)
     markdown_file = Path(__name__).parent / 'docs' / 'configuration_options.md'
     markdown_file.write_text(SCTConfiguration().dump_help_config_markdown())
-    click.secho("dos writen {markdown_file}")
+    click.secho(f"docs written into {markdown_file}")
 
 
 @cli.command("perf-regression-report", help="Generate and send performance regression report")

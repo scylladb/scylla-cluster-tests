@@ -231,3 +231,5 @@ simulated_racks: 0
 use_dns_names: false
 
 use_placement_group: false
+
+scylla_d_overrides_files: []

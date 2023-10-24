@@ -88,7 +88,8 @@ from sdcm.utils.common import (
     download_dir_from_cloud,
     generate_random_string,
     prepare_and_start_saslauthd_service,
-    raise_exception_in_thread, get_sct_root_path,
+    raise_exception_in_thread,
+    get_sct_root_path,
 )
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
@@ -4496,7 +4497,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         node.wait_db_up(verbose=verbose, timeout=timeout)
         node.wait_jmx_up(verbose=verbose, timeout=200)
 
-    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches,too-many-statements
+    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches,too-many-statements,too-many-locals
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
         if node.distro.is_centos8 or node.distro.is_rhel8 or node.distro.is_oel8 or node.distro.is_rocky8 or node.distro.is_rocky9:
             node.remoter.sudo('systemctl stop iptables', ignore_status=True)
@@ -4581,6 +4582,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     # disk size is agreed to be used (should be around 370GB).
                     # So this make sure the "mdadm --create" command will get enough time to finish.
                     node.remoter.run('sudo bash -cxe "%s"' % hybrid_raid_setup_cmd, timeout=7200)
+
+                for config_file_path in self.params.get('scylla_d_overrides_files'):
+                    config_file = Path(get_sct_root_path()) / config_file_path
+                    with remote_file(remoter=node.remoter,
+                                     remote_path=f'/etc/scylla.d/{config_file.name}',
+                                     sudo=True) as fobj:
+                        fobj.write(config_file.read_text())
 
                 node.start_scylla_server(verify_up=False)
 
