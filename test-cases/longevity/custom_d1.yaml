@@ -1,0 +1,35 @@
+test_duration: 1500
+n_db_nodes: 6
+n_loaders: 2
+n_monitor_nodes: 1
+
+prepare_write_cmd: [
+  "cassandra-stress user profile=scylla-qa-internal/custom_d1/posts_dataset.yaml cl=QUORUM  'ops(insert=1)' n=12M -rate 'threads=100' -pop 'seq=0..12M'",
+  "cassandra-stress user profile=scylla-qa-internal/custom_d1/posts_dataset.yaml cl=QUORUM  'ops(insert=1)' n=12M -rate 'threads=100' -pop 'seq=12M..24M'"
+]
+stress_cmd: [ "cassandra-stress user profile=scylla-qa-internal/custom_d1/posts_dataset.yaml cl=QUORUM 'ops(insert=5,update1=3,read1=50,delete1=1)' duration=720m -rate 'threads=100' -pop 'dist=gauss(0..24M)'",
+              "cassandra-stress user profile=scylla-qa-internal/custom_d1/posts_dataset.yaml cl=QUORUM 'ops(insert=5,update1=3,read1=50,delete1=1)' duration=720m -rate 'threads=100' -pop 'dist=gauss(0..24M)'"
+]
+round_robin: true
+gce_instance_type_db: 'n2-highmem-32'
+gce_instance_type_loader: 'e2-standard-4'
+instance_type_db: 'i4i.2xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '112'
+nemesis_interval: 5
+nemesis_during_prepare: false
+
+user_prefix: 'hybrid-3h-custom-d1'
+
+gce_n_local_ssd_disk_db: 4
+gce_pd_ssd_disk_size_db: 1500
+gce_setup_hybrid_raid: true
+
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts'
+use_preinstalled_scylla: false
+scylla_d_overrides_files: [
+  'scylla-qa-internal/custom_d1/workload1/scylla.d/cpuset.conf',
+  'scylla-qa-internal/custom_d1/workload1/scylla.d/memory.conf',
+  'scylla-qa-internal/custom_d1/workload1/scylla.d/io.conf',
+]
