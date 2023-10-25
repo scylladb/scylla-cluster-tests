@@ -30,5 +30,5 @@ gemini_table_options:
 stress_cdclog_reader_cmd: "cdc-stressor -duration 215m -stream-query-round-duration 30s"
 
 db_type: mixed_scylla
-instance_type_db_oracle: 'i4i.8xlarge'
+instance_type_db_oracle: 'i3.8xlarge'
 oracle_scylla_version: "2021.1.15"
