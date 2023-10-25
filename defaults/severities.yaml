@@ -87,6 +87,7 @@ CassandraStressLogEvent.OperationOnKey: CRITICAL
 CassandraStressLogEvent.TooManyHintsInFlight: ERROR
 CassandraStressLogEvent.ShardAwareDriver: NORMAL
 CassandraStressLogEvent.SchemaDisagreement: WARNING
+CqlStressCassandraStressLogEvent.ReadValidationError: CRITICAL
 SchemaDisagreementErrorEvent: ERROR
 ScyllaBenchLogEvent.ConsistencyError: ERROR
 ScyllaBenchLogEvent.DataValidationError: CRITICAL
@@ -117,6 +118,7 @@ EventsSeverityChangerFilter: NORMAL
 NodetoolEvent: ERROR
 ScyllaBenchEvent: CRITICAL
 CassandraStressEvent: CRITICAL
+CqlStressCassandraStressEvent: CRITICAL
 LatteStressEvent: CRITICAL
 GeminiStressEvent: CRITICAL
 ScyllaServerStatusEvent: NORMAL

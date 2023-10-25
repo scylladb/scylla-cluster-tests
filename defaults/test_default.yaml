@@ -216,6 +216,7 @@ stress_image:
   kcl: 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'
   harry: 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816'
   latte: 'scylladb/hydra-loaders:latte-rust1_73-20231025'
+  cql-stress-cassandra-stress: 'scylladb/hydra-loaders:cql-stress-cassandra-stress-20240119'
 
 service_level_shares: [1000]
 

@@ -202,6 +202,64 @@ class CassandraStressHDRExporter(StressExporter):
         return list(percentiles.values())
 
 
+class CqlStressCassandraStressExporter(StressExporter):
+    # Lines containing any of these should be skipped. These are the logs emitted by the `tracing` crate.
+    TRACING_LOGS = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR']
+
+    # pylint: disable=too-many-arguments
+
+    def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
+                 loader_idx: int, cpu_idx: int = 1):
+
+        self.keyspace_regex = re.compile(r'.*Keyspace:\s(.*?)$')
+        self.do_skip = True
+        super().__init__(instance_name, metrics, stress_operation, stress_log_filename, loader_idx,
+                         cpu_idx)
+
+    def create_metrix_gauge(self):
+        gauge_name = f'sct_cql_stress_cassandra_stress_{self.stress_operation}_gauge'
+        if gauge_name not in self.METRICS_GAUGES:
+            self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
+                gauge_name,
+                'Gauge for cql-stress cassandra stress metrics',
+                [f'cql_stress_cassandra_stress_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', 'keyspace'])
+        return gauge_name
+
+    def merics_position_in_log(self) -> MetricsPosition:
+        """
+        total ops ,    op/s,    mean,     med,     .95,     .99,    .999,     max,   time, errors
+            30645,   30602,     0.3,     0.2,     0.7,     1.1,     1.7,     2.4,    1.0,      0
+            62965,   32336,     0.3,     0.3,     0.6,     0.7,     0.9,     1.3,    2.0,      0
+            99175,   36203,     0.3,     0.2,     0.5,     0.7,     0.9,     1.2,    3.0,      0
+        """
+        return MetricsPosition(ops=1, lat_mean=2, lat_med=3, lat_perc_95=4, lat_perc_99=5, lat_perc_999=6,
+                               lat_max=7, errors=9)
+
+    def skip_line(self, line: str) -> bool:
+        if not self.keyspace:
+            if 'Keyspace:' in line:
+                self.keyspace = self.keyspace_regex.match(line).groups()[0]
+
+        if "total ops ," in line:
+            # Stats header has been printed - start collecting the metrics.
+            self.do_skip = False
+            return True
+
+        for tracing_log in self.TRACING_LOGS:
+            if tracing_log in line:
+                return True
+
+        if "Results:" in line:
+            # Stress test finished.
+            self.do_skip = True
+
+        return self.do_skip
+
+    @staticmethod
+    def split_line(line: str) -> list:
+        return [element.strip() for element in line.split(',')]
+
+
 class ScyllaBenchStressExporter(StressExporter):
 
     def create_metrix_gauge(self) -> str:
