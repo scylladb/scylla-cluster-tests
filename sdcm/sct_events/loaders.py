@@ -78,6 +78,10 @@ class LatteStressEvent(StressEvent):
     ...
 
 
+class CqlStressCassandraStressEvent(StressEvent):
+    ...
+
+
 class CassandraHarryEvent(StressEvent, abstract=True):
     failure: Type[StressEventProtocol]
     error: Type[SctEventProtocol]
@@ -235,6 +239,21 @@ CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
 
 CS_NORMAL_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in CS_NORMAL_EVENTS]
+
+
+class CqlStressCassandraStressLogEvent(LogEvent, abstract=True):
+    ReadValidationError: Type[LogEventProtocol]
+
+
+CqlStressCassandraStressLogEvent.add_subevent_type(
+    "ReadValidationError", severity=Severity.CRITICAL, regex=r"read validation error")
+
+
+CQL_STRESS_CS_ERROR_EVENTS = (
+    CqlStressCassandraStressLogEvent.ReadValidationError(),
+)
+CQL_STRESS_CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+    [(re.compile(event.regex), event) for event in CQL_STRESS_CS_ERROR_EVENTS]
 
 
 class ScyllaBenchLogEvent(LogEvent, abstract=True):
