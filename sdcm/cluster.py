@@ -4588,6 +4588,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     with remote_file(remoter=node.remoter,
                                      remote_path=f'/etc/scylla.d/{config_file.name}',
                                      sudo=True) as fobj:
+                        fobj.truncate(0)  # first clear the file
                         fobj.write(config_file.read_text())
 
                 node.start_scylla_server(verify_up=False)
