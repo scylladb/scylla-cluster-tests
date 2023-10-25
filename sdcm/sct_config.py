@@ -40,6 +40,7 @@ from sdcm.utils.common import (
     get_scylla_ami_versions,
     get_scylla_gce_images_versions,
     convert_name_to_ami_if_needed,
+    get_sct_root_path,
 )
 from sdcm.utils.operations_thread import ConfigParams
 from sdcm.utils.version_utils import (
@@ -2038,6 +2039,7 @@ class SCTConfiguration(dict):
                                 break  # We are ok here and skipping whole command if file is there
                             raise ValueError(f"Stress command parameter '{param_name}' contains profile "
                                              f"'{profile_path}' that does not exists under data_dir/")
+        self._validate_scylla_d_overrides_files_exists()
 
     def verify_configuration(self):
         """
@@ -2159,6 +2161,12 @@ class SCTConfiguration(dict):
             assert az_count == 1 and regions_count == 1, \
                 (f"Number of Regions({regions_count}) and AZ({az_count}) should be 1 "
                  f"when param use_placement_group is used")
+
+    def _validate_scylla_d_overrides_files_exists(self):
+        if scylla_d_overrides_files := self.get("scylla_d_overrides_files"):
+            for config_file_path in scylla_d_overrides_files:
+                config_file = pathlib.Path(get_sct_root_path()) / config_file_path
+                assert config_file.exists(), f"{config_file} doesn't exists, please check your configuration"
 
     def _check_per_backend_required_values(self, backend: str):
         if backend in self.available_backends:
