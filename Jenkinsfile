@@ -120,6 +120,8 @@ pipeline {
             steps {
                 script {
                     try {
+                        checkoutQaInternal(params)
+
                         sh ''' ./docker/env/hydra.sh bash ./utils/lint_test_cases.sh '''
                         pullRequestSetResult('success', 'jenkins/lint_test_cases', 'All test cases are passed')
                     } catch(Exception ex) {
