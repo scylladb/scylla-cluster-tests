@@ -1219,13 +1219,15 @@ def _(metadata: dict):
 
 def filter_gce_by_tags(tags_dict, instances: list[GceInstance]) -> list[GceInstance]:
     filtered_instances = []
+
     for instance in instances:
         tags = gce_meta_to_dict(instance.metadata)
-        for tag_k, tag_v in tags_dict.items():
-            if tag_k not in tags or (tags[tag_k] not in tag_v if isinstance(tag_v, list) else tags[tag_k] != tag_v):
-                break
-        else:
+        found_keys = set(k for k in tags_dict if k in tags and tags_dict[k] == tags[k])
+        if 'Name' in tags_dict.keys() and tags_dict['Name'] == instance.name:
+            found_keys |= {"Name"}
+        if found_keys == set(tags_dict.keys()):
             filtered_instances.append(instance)
+
     return filtered_instances
 
 
