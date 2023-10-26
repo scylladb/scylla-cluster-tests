@@ -27,7 +27,12 @@ from sdcm.utils.common import (
     list_instances_gce,
     gce_meta_to_dict,
 )
-from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
+from sdcm.utils.gce_utils import (
+    gce_public_addresses,
+    gce_private_addresses,
+    get_gce_compute_instances_client,
+    gce_set_tags,
+)
 from sdcm.utils.aws_region import AwsRegion
 
 
@@ -167,7 +172,7 @@ def select_instance(region: str = None, **tags) -> dict | None:
     if len(aws_vms + gce_vms) == 1:
         return (aws_vms + gce_vms)[0]
 
-    if not aws_vms or not gce_vms:
+    if not aws_vms and not gce_vms:
         click.echo(click.style("Found no matching instances", fg='red'))
         return {}
     # create the question object
@@ -192,7 +197,7 @@ def select_instance(region: str = None, **tags) -> dict | None:
     return question.ask()
 
 
-def select_instance_group(region: str = None, **tags) -> list:
+def select_instance_group(region: str = None, backends: list | None = None, **tags) -> list:
     user = tags.get('user')
     test_id = tags.get('test_id')
     node_name = tags.get('node_name')
@@ -203,18 +208,31 @@ def select_instance_group(region: str = None, **tags) -> list:
         tags.update({"TestId": test_id})
     if node_name:
         tags.update({'Name': node_name})
-    vms = list_instances_aws(tags, running=True, region_name=region)
 
-    if len(vms) == 1:
-        return vms
+    backends = backends or ['aws', 'gce']
+    aws_vms = []
+    gce_vms = []
 
-    if not vms:
+    if 'aws' in backends:
+        aws_vms = list_instances_aws(tags, running=True, region_name=region)
+
+    if 'gce' in backends:
+        gce_vms = list_instances_gce(tags, running=True)
+
+    if len(aws_vms + gce_vms) == 1:
+        return (aws_vms + gce_vms)[0]
+
+    if not aws_vms and not gce_vms:
         click.echo(click.style("Found no matching instances", fg='red'))
         return []
 
-    choices = [
-        Choice(f"{get_tags(vm).get('Name')} - {vm['PublicIpAddress']} {vm['PrivateIpAddress']} - {get_region(vm)}",
-               value=vm, checked=True) for vm in vms
+    choices = [Choice(
+        f"aws - {get_tags(vm).get('Name')} - {vm['PublicIpAddress']} {vm['PrivateIpAddress']} - {get_region(vm)}",
+        value=vm) for vm in aws_vms
+    ] + [
+        Choice(
+            f"gce - {vm.name} - {list(gce_public_addresses(vm))[0]} {list(gce_private_addresses(vm))[0]} - {vm.zone.split('/')[-1]}",
+            value=vm) for vm in gce_vms
     ]
     # create the question object
     question = questionary.checkbox(
@@ -373,15 +391,32 @@ def copy_cmd(user, test_id, region, force_use_public_ip, src, dest):
 @click.option("-g", "--group-id", default=None, help="GroupId to use, default to create one base on TestId")
 def attach_test_sg_cmd(user, test_id, region, group_id):
     assert user or test_id
-    instances = select_instance_group(region=region, test_id=test_id, user=user)
+    instances = select_instance_group(region=region, backends=['aws'], test_id=test_id, user=user)
 
     for i in instances:
         aws_region: AwsRegion = AwsRegion(get_region(i))
         instance = aws_region.resource.Instance(i['InstanceId'])
-        click.echo(click.style(f"attaching test SG to {get_tags(i).get('Name', 'N/A')}", fg='green'))
+        click.echo(click.style(f"attaching test SG to {get_name(i)}", fg='green'))
         if group_id:
             group_id_to_add = group_id
         else:
             group_id_to_add = aws_region.provide_sct_test_security_group(get_tags(i).get('TestId', 'N/A')).group_id
         all_sg_ids = list(set([sg['GroupId'] for sg in instance.security_groups] + [group_id_to_add]))
         instance.modify_attribute(Groups=all_sg_ids)
+
+
+@click.command("gce-allow-public", help="Attach test default security group to a group of instances")
+@click.option("-u", "--user", default=None,
+              help="User to search for (RunByUser tag)")
+@click.option("-t", "--test-id", default=None, help="test id to search for")
+def gcp_allow_public(user, test_id):
+    assert user or test_id
+    instances = select_instance_group(backends=['gce'], test_id=test_id, user=user)
+    for i in instances:
+        instances_client, info = get_gce_compute_instances_client()
+        gce_set_tags(instances_client=instances_client,
+                     instance=i,
+                     new_tags=['sct-allow-public'],
+                     project=info['project_id'],
+                     zone=i.zone.split('/')[-1])
+        click.echo(click.style(f"set netwrok tag 'sct-allow-public' to {get_name(i)}", fg='green'))
