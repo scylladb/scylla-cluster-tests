@@ -74,6 +74,10 @@ class ScyllaBenchEvent(StressEvent):
     ...
 
 
+class LatteStressEvent(StressEvent):
+    ...
+
+
 class CassandraHarryEvent(StressEvent, abstract=True):
     failure: Type[StressEventProtocol]
     error: Type[SctEventProtocol]

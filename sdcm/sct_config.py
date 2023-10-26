@@ -17,6 +17,7 @@ Handling Scylla-cluster-test configuration loading
 import json
 # pylint: disable=too-many-lines
 import os
+import re
 import ast
 import logging
 import getpass
@@ -2039,6 +2040,12 @@ class SCTConfiguration(dict):
                     stress_cmd = [stress_cmd]
                 for cmd in stress_cmd:
                     cmd = cmd.strip(' ')
+                    if cmd.startswith('latte'):
+                        script_name_regx = re.compile(r'([/\w-]*\.rn)')
+                        script_name = script_name_regx.search(cmd).group(1)
+                        full_path = pathlib.Path(get_sct_root_path()) / script_name
+                        assert full_path.exists(), f"{full_path} doesn't exists, please check your configuration"
+
                     if not cmd.startswith('cassandra-stress'):
                         continue
                     for option in cmd.split():
