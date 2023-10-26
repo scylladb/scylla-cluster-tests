@@ -19,6 +19,7 @@ import time
 
 from sdcm.utils.common import ParallelObject
 from sdcm.tester import silence
+from sdcm.utils.database_query_utils import PartitionsValidationAttributes
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class TenantMixin:  # pylint: disable=too-many-instance-attributes
         self.test_config = test_config
         self._init_test_duration()
         self.create_stats = self.params.get(key='store_perf_results')
+        self.partitions_attrs: PartitionsValidationAttributes | None = self._init_data_validation()
         self.status = "RUNNING"
         self.cluster_index = str(cluster_index)
         self._test_id = self.test_config.test_id() + f"--{cluster_index}"
