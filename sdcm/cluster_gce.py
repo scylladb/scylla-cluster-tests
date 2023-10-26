@@ -381,7 +381,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 "startup-script": startup_script,
                 "user-data": self.prepare_user_data(enable_auto_bootstrap),
                 "block-project-ssh-keys": "true",
-                "ssh-keys": f"{username}:{key_type} {public_key}",
+                "ssh-keys": f"{username}:{key_type} {public_key} {username}",
             },
             spot=spot,
             service_accounts=self._service_accounts,
