@@ -2774,7 +2774,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             self.use_nemesis_seed()
             chosen_snapshot_size = random.choice(fitting_snapshot_sizes)
-            snapshot_tag = random.choice(list(snapshot_groups_by_size[chosen_snapshot_size]["snapshots"].keys()))
+            if self.cluster.nodes[0].is_enterprise:
+                snapshot_tag = random.choice(list(snapshot_groups_by_size[chosen_snapshot_size]["snapshots"].keys()))
+            else:
+                all_snapshots = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"]
+                oss_snapshots = [snapshot_key for snapshot_key, snapshot_value in all_snapshots.items() if
+                                 snapshot_value['scylla_product'] == "oss"]
+
+                snapshot_tag = random.choice(oss_snapshots)
             snapshot_info = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"][snapshot_tag]
             snapshot_info.update({"expected_timeout": snapshot_groups_by_size[chosen_snapshot_size]["expected_timeout"],
                                   "number_of_rows": snapshot_groups_by_size[chosen_snapshot_size]["number_of_rows"]})
