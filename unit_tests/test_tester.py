@@ -33,7 +33,8 @@ class FakeSCTConfiguration(SCTConfiguration):
     def _load_environment_variables(self):
         return {
             'config_files': ['test-cases/PR-provision-test-docker.yaml'],
-            'cluster_backend': 'docker'
+            'cluster_backend': 'docker',
+            'run_commit_log_check_thread': False
         }
 
 
