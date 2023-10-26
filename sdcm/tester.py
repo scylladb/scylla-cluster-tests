@@ -100,6 +100,7 @@ from sdcm.utils.version_utils import get_relocatable_pkg_url
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.ndbench_thread import NdBenchStressThread
 from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
+from sdcm.stress.latte_thread import LatteStressThread
 from sdcm.localhost import LocalHost
 from sdcm.cdclog_reader_thread import CDCLogReaderThread
 from sdcm.logcollector import (
@@ -1866,6 +1867,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return self.run_stress_thread_harry(**params)
         elif stress_cmd.startswith('bin/ycsb'):
             return self.run_ycsb_thread(**params)
+        elif stress_cmd.startswith('latte'):
+            params['stop_test_on_failure'] = stop_test_on_failure
+            return self.run_latte_thread(**params)
         elif stress_cmd.startswith('ndbench'):
             return self.run_ndbench_thread(**params)
         elif stress_cmd.startswith('hydra-kcl'):
@@ -1991,6 +1995,29 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                 stress_num=stress_num,
                                 node_list=self.db_cluster.nodes,
                                 round_robin=round_robin, params=self.params).run()
+
+    def run_latte_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
+                         round_robin=False, stats_aggregate_cmds=True, stop_test_on_failure=True, **_):
+        if duration:
+            timeout = self.get_duration(duration)
+        elif self._stress_duration and ' --duration' in stress_cmd:
+            timeout = self.get_duration(self._stress_duration)
+            stress_cmd = re.sub(r'\s--duration\s+\d+[mhd]\s', f' --duration {self._stress_duration}m ', stress_cmd)
+        else:
+            timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
+
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="latte", aggregate=stats_aggregate_cmds)
+
+        stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
+        return LatteStressThread(loader_set=self.loaders,
+                                 stress_cmd=stress_cmd,
+                                 timeout=timeout,
+                                 stress_num=stress_num,
+                                 node_list=self.db_cluster.nodes,
+                                 round_robin=round_robin,
+                                 stop_test_on_failure=stop_test_on_failure,
+                                 params=self.params).run()
 
     # pylint: disable=too-many-arguments
     def run_hydra_kcl_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',

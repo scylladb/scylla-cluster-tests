@@ -35,6 +35,7 @@ def test_duration_str_to_seconds_function(duration, seconds):
     ("scylla-bench -workload=uniform -concurrency 64 -duration 1h -validate-data", 3600 + 900),
     ("scylla-bench -partition-count=20000 -duration=250s", 250 + 900),
     ("gemini -d --duration 10m --warmup 10s -c 5 -m write", 610 + 900),
+    ("latte run --duration 10m --sampling 5s", 600 + 900),
 ))
 def test_get_timeout_from_stress_cmd(stress_cmd, timeout):
     assert get_timeout_from_stress_cmd(stress_cmd) == timeout

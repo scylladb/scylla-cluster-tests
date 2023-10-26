@@ -906,7 +906,9 @@ class LoaderLogCollector(LogCollector):
         FileLog(name='*cassandra-harry*.log',
                 search_locally=True),
         FileLog(name="*cs-hdr-*.hdr",
-                search_locally=True)
+                search_locally=True),
+        FileLog(name='*latte*.log',
+                search_locally=True),
     ]
 
     def collect_logs(self, local_search_path=None) -> list[str]:

@@ -2116,6 +2116,27 @@
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "K"
+          },
+                    {
+            "expr": "sct_latte_read_gauge{type=\"p95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "L"
+          },
+          {
+            "expr": "sct_latte_update_gauge{type=\"p95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "M"
+          },
+          {
+            "expr": "sct_latte_run_gauge{type=\"p95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "N"
           }
         ],
         "thresholds": [],
@@ -2233,6 +2254,27 @@
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "K"
+          },
+          {
+            "expr": "sct_latte_read_gauge{type=\"p99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "L"
+          },
+          {
+            "expr": "sct_latte_update_gauge{type=\"p99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "M"
+          },
+          {
+            "expr": "sct_latte_run_gauge{type=\"p99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "N"
           }
         ],
         "thresholds": [],
