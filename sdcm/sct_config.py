@@ -867,10 +867,6 @@ class SCTConfiguration(dict):
                   "Defined in sdcm.utils.sstable.load_inventory. "
                   "Expected values: BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA"),
 
-        dict(name="k8s_scylla_datacenter", env="SCT_K8S_SCYLLA_DATACENTER", type=str,
-             help=""),
-        dict(name="k8s_scylla_rack", env="SCT_K8S_SCYLLA_RACK", type=str,
-             help=""),
         dict(name="k8s_scylla_cpu_limit", env="SCT_K8S_SCYLLA_CPU_LIMIT",
              type=str, k8s_multitenancy_supported=True,
              help="The CPU limit that will be set for each Scylla cluster deployed in K8S. "
@@ -1545,25 +1541,24 @@ class SCTConfiguration(dict):
                       'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
         'k8s-local-kind': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
-                           'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
+                           'k8s_scylla_operator_helm_repo',
                            'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'mini_k8s_version',
                            'mgmt_docker_image'],
 
         'k8s-local-kind-aws': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
-                               'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
+                               'k8s_scylla_operator_helm_repo',
                                'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'mini_k8s_version',
                                'mgmt_docker_image'],
 
         'k8s-local-kind-gce': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
-                               'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
+                               'k8s_scylla_operator_helm_repo',
                                'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'mini_k8s_version',
                                'mgmt_docker_image'],
 
         'k8s-gke': ['gke_cluster_version', 'gce_instance_type_db', 'gce_root_disk_type_db',
                     'gce_n_local_ssd_disk_db', 'user_credentials_path', 'scylla_version',
-                    'scylla_mgmt_agent_version', 'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter',
-                    'k8s_scylla_rack', 'k8s_scylla_cluster_name',
-                    'k8s_loader_cluster_name', 'gce_instance_type_loader',
+                    'scylla_mgmt_agent_version', 'k8s_scylla_operator_helm_repo',
+                    'k8s_scylla_cluster_name', 'k8s_loader_cluster_name', 'gce_instance_type_loader',
                     'gce_image_monitor', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
                     'gce_n_local_ssd_disk_monitor', 'mgmt_docker_image'],
 
@@ -1571,8 +1566,7 @@ class SCTConfiguration(dict):
                     'ami_id_db_scylla', 'ami_id_monitor',
                     'aws_root_disk_name_monitor', 'ami_db_scylla_user', 'ami_monitor_user', 'user_credentials_path',
                     'scylla_version', 'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image',
-                    'k8s_scylla_datacenter', 'k8s_scylla_rack', 'k8s_scylla_cluster_name',
-                    'k8s_loader_cluster_name',
+                    'k8s_scylla_cluster_name', 'k8s_loader_cluster_name',
                     'mgmt_docker_image', 'eks_service_ipv4_cidr', 'eks_vpc_cni_version', 'eks_role_arn',
                     'eks_cluster_version', 'eks_nodegroup_role_arn'],
     }

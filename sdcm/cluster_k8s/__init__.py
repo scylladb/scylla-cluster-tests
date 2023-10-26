@@ -307,6 +307,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         else:
             self.uuid = cluster_uuid
         self.region_name = region_name
+        self.rack_name = "rack-1"
         self.shortid = str(self.uuid)[:8]
         self.name = f"{user_prefix}-{self.shortid}"
         self.params = params
@@ -935,12 +936,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             'serviceMonitor': {
                 'create': False
             },
-            'datacenter': self.params.get('k8s_scylla_datacenter'),
+            'datacenter': self.region_name,
             'dnsDomains': dns_domains,
             'exposeOptions': expose_options,
             'racks': [
                 {
-                    'name': self.params.get('k8s_scylla_rack'),
+                    'name': self.rack_name,
                     'scyllaConfig': SCYLLA_CONFIG_NAME,
                     'scyllaAgentConfig': SCYLLA_AGENT_CONFIG_NAME,
                     'members': 0,

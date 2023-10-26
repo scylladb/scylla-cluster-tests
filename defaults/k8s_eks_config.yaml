@@ -25,7 +25,6 @@ k8s_enable_performance_tuning: true
 
 k8s_loader_cluster_name: 'sct-loaders'
 k8s_scylla_cluster_name: 'sct-cluster'
-k8s_scylla_datacenter: 'us-east1-b'
 k8s_scylla_disk_gi: 3490
 # NOTE: use any of the following pairs:
 #   'k8s_scylla_disk_class=local-raid-disks'   and 'k8s_local_volume_provisioner_type=static'
@@ -40,7 +39,6 @@ k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-c
 k8s_scylla_operator_chart_version: 'latest'
 k8s_use_chaos_mesh: true
 
-k8s_scylla_rack: 'us-east1'
 k8s_minio_storage_size: '60Gi'
 
 k8s_n_monitor_nodes: 0
