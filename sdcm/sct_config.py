@@ -1516,6 +1516,10 @@ class SCTConfiguration(dict):
 
         dict(name="validate_large_collections", env="SCT_VALIDATE_LARGE_COLLECTIONS", type=boolean,
              help="Enable validation for large cells in system table and logs"),
+
+        dict(name="run_commit_log_check_thread", env="SCT_RUN_COMMIT_LOG_CHECK_THREAD", type=boolean,
+             help="""Run commit log check thread if commitlog_use_hard_size_limit is True"""),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

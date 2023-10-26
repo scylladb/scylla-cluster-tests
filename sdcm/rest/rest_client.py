@@ -46,7 +46,7 @@ class RestClient:
         LOGGER.info("Sending a POST request for: %s", url)
         return requests.post(url=url, params=params)
 
-    def _prepare_request(self, method: Literal["GET", "POST"], path: str, params: dict[str, str]):
+    def _prepare_request(self, method: Literal["GET", "POST"], path: str, params: dict[str, str] | None):
         full_url = f"{self._base_url}/{path}"
         prepared_request = requests.Request(method=method, url=full_url, params=params).prepare()
 

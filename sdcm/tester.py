@@ -129,6 +129,7 @@ from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes, CSWorkloadTypes, make_cs_range_histogram_summary, \
     make_cs_range_histogram_summary_by_interval
 from sdcm.utils.raft.common import validate_raft_on_nodes
+from sdcm.commit_log_check_thread import CommitLogCheckThread
 from test_lib.compaction import CompactionStrategy
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
@@ -957,6 +958,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 db_cluster.validate_seeds_on_all_nodes()
                 validate_raft_on_nodes(nodes=db_cluster.nodes)
                 db_cluster.start_kms_key_rotation_thread()
+
+        if self.params.get('run_commit_log_check_thread'):
+            self.run_commit_log_check_thread(self.get_duration(None))
 
     def set_system_auth_rf(self, db_cluster=None):
 
@@ -2160,6 +2164,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             the ScanOperationThread
         """
         ScanOperationThread(thread_params=fullscan_params, thread_name=thread_name).start()
+
+    def run_commit_log_check_thread(self, duration):
+        if self.monitors:
+            CommitLogCheckThread(self, duration).start()
 
     def run_tombstone_gc_verification_thread(self, duration=None, interval=600, propagation_delay_in_seconds=3600, **kwargs):
         """Run a thread of tombstones gc verification.
