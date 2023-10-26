@@ -1080,7 +1080,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         time.sleep(60)
         self.k8s_cluster.kubectl(
             f"rollout status statefulset/{self.params.get('k8s_scylla_cluster_name')}-"
-            f"{self.params.get('k8s_scylla_datacenter')}-{self.params.get('k8s_scylla_rack')}"
+            f"{self.k8s_cluster.region_name}-{self.k8s_cluster.rack_name}"
             " --watch=true --timeout=20m",
             timeout=1205,
             namespace=self.db_cluster.namespace)

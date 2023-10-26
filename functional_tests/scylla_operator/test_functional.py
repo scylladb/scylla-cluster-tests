@@ -379,9 +379,9 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
         'developerMode': True,
         'sysctls': ["fs.aio-max-nr=1048576"],
         'serviceMonitor': {'create': False},
-        'datacenter': db_cluster.k8s_cluster.params.get('k8s_scylla_datacenter'),
+        'datacenter': db_cluster.k8s_cluster.region_name,
         'racks': [{
-            'name': db_cluster.k8s_cluster.params.get('k8s_scylla_rack'),
+            'name': db_cluster.k8s_cluster.rack_name,
             'members': 1,
             'storage': {},
             'resources': {

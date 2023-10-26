@@ -15,8 +15,6 @@ k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-c
 k8s_scylla_operator_chart_version: 'latest'
 k8s_cert_manager_version: '1.8.0'
 
-k8s_scylla_datacenter: 'dc-1'
-k8s_scylla_rack: 'kind'
 k8s_scylla_cluster_name: 'sct-cluster'
 k8s_scylla_disk_gi: 10
 # NOTE: use any of the following pairs:

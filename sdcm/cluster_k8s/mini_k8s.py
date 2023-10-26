@@ -411,6 +411,7 @@ class LocalMinimalClusterBase(MinimalClusterBase):
         super().__init__(
             mini_k8s_version=software_version,
             user_prefix=user_prefix,
+            region_name="local-dc-1",
             params=params)
 
     # pylint: disable=invalid-overridden-method
