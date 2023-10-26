@@ -540,3 +540,37 @@ def gce_set_labels(instances_client: compute_v1.InstancesClient,
                                             instances_set_labels_request_resource=request)
 
     return wait_for_extended_operation(operation, f"setting labels on {instance.name}")
+
+
+def gce_set_tags(instances_client: compute_v1.InstancesClient,
+                 instance: compute_v1.Instance,
+                 new_tags: list,
+                 project: str,
+                 zone: str):
+    """
+    Helper to do the set_tags operation correctly, without
+    removing existing tags and applying the fingerprinting correctly
+
+    Args:
+        instances_client: client to execute the operation on.
+        instance: the instance to label
+        new_tags: list of the tags to apply
+        project: the project id to use
+        zone: the zone instance is in
+
+    Returns:
+        Whatever the operation.result() returns.
+    """
+
+    request = compute_v1.SetTagsInstanceRequest()
+
+    request.tags_resource = instance.tags
+    request.tags_resource.items.extend(new_tags)
+    request.tags_resource.items = list(set(request.tags_resource.items))
+    request.zone = zone
+    request.project = project
+    request.instance = instance.name
+
+    operation = instances_client.set_tags(request=request)
+
+    return wait_for_extended_operation(operation, f"setting tags on {instance.name}")
