@@ -14,12 +14,20 @@ import os
 import pty
 import shlex
 import subprocess
+from functools import singledispatch
 
 import click
 import questionary
 from questionary import Choice
+from google.cloud import compute_v1
 
-from sdcm.utils.common import list_instances_aws, get_free_port
+from sdcm.utils.common import (
+    list_instances_aws,
+    get_free_port,
+    list_instances_gce,
+    gce_meta_to_dict,
+)
+from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
 from sdcm.utils.aws_region import AwsRegion
 
 
@@ -27,11 +35,37 @@ def get_region(instance: dict) -> str:
     return instance.get('Placement').get('AvailabilityZone')[:-1]
 
 
-def get_tags(instance: dict) -> dict:
+@singledispatch
+def get_tags(instance) -> dict:
+    raise NotImplementedError()
+
+
+@get_tags.register
+def _(instance: dict) -> dict:
     return {i['Key']: i['Value'] for i in instance['Tags']}
 
 
-def find_bastion_for_instance(instance: dict) -> dict:
+@get_tags.register
+def _(instance: compute_v1.Instance) -> dict:
+    return gce_meta_to_dict(instance.metadata)
+
+
+@singledispatch
+def get_name(instance):
+    raise NotImplementedError()
+
+
+@get_name.register(dict)
+def _(instance: dict):
+    get_tags(instance).get('Name')
+
+
+@get_name.register(compute_v1.Instance)
+def _(instance: compute_v1.Instance):
+    return instance.name
+
+
+def aws_find_bastion_for_instance(instance: dict) -> dict:
     region = get_region(instance)
     tags = {'bastion': 'true'}
     bastions = list_instances_aws(tags, running=True, region_name=region)
@@ -39,7 +73,14 @@ def find_bastion_for_instance(instance: dict) -> dict:
     return bastions[0]
 
 
-def guess_username(instance: dict) -> str:
+def gce_find_bastion_for_instance() -> compute_v1.Instance:
+    tags = {'bastion': 'true'}
+    bastions = list_instances_gce(tags, running=True)
+    assert bastions, "No bastion found"
+    return bastions[0]
+
+
+def guess_username(instance: dict | compute_v1.Instance) -> str:
     user_name = get_tags(instance).get('UserName')
     if user_name:
         return user_name
@@ -56,12 +97,43 @@ def guess_username(instance: dict) -> str:
         return 'ubuntu'
 
 
-def get_proxy_command(instance: dict, force_use_public_ip: bool, strict_host_checking: bool = False) -> [str, str, str]:
+def get_proxy_command(instance: dict | compute_v1.Instance,
+                      force_use_public_ip: bool,
+                      strict_host_checking: bool = False) -> [str, str, str]:
+    if isinstance(instance, compute_v1.Instance):
+        return gce_get_proxy_command(instance,
+                                     strict_host_checking=strict_host_checking)
+    else:
+        return aws_get_proxy_command(instance=instance,
+                                     force_use_public_ip=force_use_public_ip,
+                                     strict_host_checking=strict_host_checking)
+
+
+def gce_get_proxy_command(instance: compute_v1.Instance, strict_host_checking: bool):
+    if "sct-network-only" in instance.tags.items and "sct-allow-public" not in instance.tags.items:
+        target_username = 'scylla-test'
+        target_key = '~/.ssh/scylla-test'
+        bastion = gce_find_bastion_for_instance()
+        bastion_username, bastion_ip = guess_username(bastion), list(gce_public_addresses(bastion))[0]
+        target_ip = list(gce_private_addresses(instance))[0]
+        strict_host_check = ""
+        if not strict_host_checking:
+            strict_host_check = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+        proxy_command = f'-o ProxyCommand="ssh {strict_host_check} -i {target_key} -W %h:%p {bastion_username}@{bastion_ip}"'
+    else:
+        target_ip = list(gce_public_addresses(instance))[0]
+        proxy_command = ''
+        target_username = 'scylla-test'
+        target_key = '~/.ssh/scylla-test'
+    return proxy_command, target_ip, target_username, target_key
+
+
+def aws_get_proxy_command(instance: dict, force_use_public_ip: bool, strict_host_checking: bool = False) -> [str, str, str]:
     aws_region = AwsRegion(get_region(instance))
 
     if aws_region.sct_vpc.vpc_id == instance["VpcId"] and not force_use_public_ip:
         # if we are the current VPC setup, proxy via bastion needed
-        bastion = find_bastion_for_instance(instance)
+        bastion = aws_find_bastion_for_instance(instance)
         bastion_username,  bastion_ip = guess_username(bastion), bastion["PublicIpAddress"]
         target_ip = instance["PrivateIpAddress"]
         strict_host_check = ""
@@ -74,7 +146,7 @@ def get_proxy_command(instance: dict, force_use_public_ip: bool, strict_host_che
         proxy_command = ''
 
     target_username = guess_username(instance)
-    return proxy_command, target_ip, target_username
+    return proxy_command, target_ip, target_username, '~/.ssh/scylla-qa-ec2'
 
 
 def select_instance(region: str = None, **tags) -> dict | None:
@@ -88,20 +160,25 @@ def select_instance(region: str = None, **tags) -> dict | None:
         tags.update({"TestId": test_id})
     if node_name:
         tags.update({'Name': node_name})
-    vms = list_instances_aws(tags, running=True, region_name=region)
+    aws_vms = list_instances_aws(tags, running=True, region_name=region)
 
-    if len(vms) == 1:
-        return vms[0]
+    gce_vms = list_instances_gce(tags, running=True)
 
-    if not vms:
+    if len(aws_vms + gce_vms) == 1:
+        return (aws_vms + gce_vms)[0]
+
+    if not aws_vms or not gce_vms:
         click.echo(click.style("Found no matching instances", fg='red'))
         return {}
     # create the question object
     question = questionary.select(
         "Select machine: ",
         choices=[
-            Choice(f"{get_tags(vm).get('Name')} - {vm['PublicIpAddress']} {vm['PrivateIpAddress']} - {get_region(vm)}",
-                   value=vm) for vm in vms
+            Choice(f"aws - {get_tags(vm).get('Name')} - {vm['PublicIpAddress']} {vm['PrivateIpAddress']} - {get_region(vm)}",
+                   value=vm) for vm in aws_vms
+        ] + [
+            Choice(f"gce - {vm.name} - {list(gce_public_addresses(vm))[0]} {list(gce_private_addresses(vm))[0]} - {vm.zone.split('/')[-1]}",
+                   value=vm) for vm in gce_vms
         ],
         show_selected=True,
     )
@@ -168,14 +245,14 @@ def ssh(user, test_id, region, force_use_public_ip, node_name):
     connect_vm = select_instance(region=region, test_id=test_id, user=user, node_name=node_name)
 
     if connect_vm:
-        proxy_command, target_ip, target_username = get_proxy_command(connect_vm, force_use_public_ip)
-        click.echo(click.style(f"ssh into: {get_tags(connect_vm).get('Name')}",
+        proxy_command, target_ip, target_username, target_key = get_proxy_command(connect_vm, force_use_public_ip)
+        click.echo(click.style(f"ssh into: {get_name(connect_vm)}",
                                fg='green', bold=True))
         rows = os.environ.get("LINES") or subprocess.check_output(['tput', 'lines'], text=True).strip()
         cols = os.environ.get("COLUMNS") or subprocess.check_output(['tput', 'cols'], text=True).strip()
         tty_options = f'stty rows {rows} cols {cols}'
         cmd = (f'bash -c \'{tty_options}; ssh -tt {proxy_command}'
-               f' -i ~/.ssh/scylla-qa-ec2 -o "UserKnownHostsFile=/dev/null" '
+               f' -i {target_key} -o "UserKnownHostsFile=/dev/null" '
                f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 {target_username}@{target_ip} \'')
         click.echo(cmd)
         pty.spawn(shlex.split(cmd))
@@ -191,7 +268,14 @@ def ssh(user, test_id, region, force_use_public_ip, node_name):
 @click.argument("node_name", required=False)
 @click.argument("command", required=True)
 def ssh_cmd(user, test_id, region, force_use_public_ip, node_name, command):
-    return ssh_run_cmd(node_name, command, user, test_id, region, force_use_public_ip)
+    output = ssh_run_cmd(node_name, command, user, test_id, region, force_use_public_ip)
+    if output.stderr:
+        click.echo(click.style(output.stderr, fg='red'))
+    if output.stdout:
+        click.echo(output.stdout)
+    if not output.returncode == 0:
+        click.echo(click.style(f'{output.returncode=}', fg='red', bold=True))
+    return output
 
 
 def ssh_run_cmd(node_name: str, command: str, user: str = None,
@@ -202,16 +286,16 @@ def ssh_run_cmd(node_name: str, command: str, user: str = None,
     cmd_out = None
 
     if connect_vm:
-        proxy_command, target_ip, target_username = get_proxy_command(connect_vm, force_use_public_ip,
-                                                                      strict_host_checking=False)
-        click.echo(click.style(f"run command {command} via ssh into: {get_tags(connect_vm).get('Name')}",
+        proxy_command, target_ip, target_username, target_key = get_proxy_command(connect_vm, force_use_public_ip,
+                                                                                  strict_host_checking=False)
+        click.echo(click.style(f"run command {command} via ssh into: {get_name(connect_vm)}",
                                fg='green', bold=True))
 
         cmd = (f'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {proxy_command} '
-               f'-i ~/.ssh/scylla-qa-ec2 '
+               f'-i {target_key} '
                f' -o ServerAliveInterval=10 {target_username}@{target_ip} '
                f'{command}')
-        cmd_out = subprocess.run(cmd, shell=True, capture_output=True, check=False)
+        cmd_out = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
     return cmd_out
 
 
@@ -227,15 +311,20 @@ def tunnel(user, test_id, region, port, node_name):
     connect_vm = select_instance(region=region, test_id=test_id, user=user, node_name=node_name)
 
     if connect_vm:
-        aws_region = AwsRegion(get_region(connect_vm))
-
-        bastion = find_bastion_for_instance(connect_vm)
-        bastion_username, bastion_ip = guess_username(bastion), bastion["PublicIpAddress"]
-        if aws_region.sct_vpc.vpc_id == connect_vm["VpcId"]:
-            target_ip = connect_vm["PrivateIpAddress"]
+        if isinstance(connect_vm, compute_v1.Instance):
+            bastion = gce_find_bastion_for_instance()
+            bastion_username, bastion_ip = guess_username(bastion), list(gce_public_addresses(bastion))[0]
+            target_ip = list(gce_private_addresses(connect_vm))[0]
         else:
-            target_ip = connect_vm["PublicIpAddress"]
-        click.echo(click.style(f"tunnel into: {get_tags(connect_vm).get('Name')}", fg='green'))
+            aws_region = AwsRegion(get_region(connect_vm))
+
+            bastion = aws_find_bastion_for_instance(connect_vm)
+            bastion_username, bastion_ip = guess_username(bastion), bastion["PublicIpAddress"]
+            if aws_region.sct_vpc.vpc_id == connect_vm["VpcId"]:
+                target_ip = connect_vm["PrivateIpAddress"]
+            else:
+                target_ip = connect_vm["PublicIpAddress"]
+        click.echo(click.style(f"tunnel into: {get_name(connect_vm)}", fg='green'))
         local_port = get_free_port()
         cmd = f'ssh -i ~/.ssh/scylla-qa-ec2 -N -L {local_port}:{target_ip}:{port} -o "UserKnownHostsFile=/dev/null" ' \
               f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 {bastion_username}@{bastion_ip}'
@@ -263,7 +352,7 @@ def copy_cmd(user, test_id, region, force_use_public_ip, src, dest):
     connect_vm = select_instance(region=region, test_id=test_id, user=user)
 
     if connect_vm:
-        proxy_command, target_ip, target_username = get_proxy_command(connect_vm, force_use_public_ip)
+        proxy_command, target_ip, target_username, target_key = get_proxy_command(connect_vm, force_use_public_ip)
         target = f'{target_username}@{target_ip}:'
         if ':' in src:
             src = target + src.split(':', maxsplit=1)[1]
@@ -272,7 +361,7 @@ def copy_cmd(user, test_id, region, force_use_public_ip, src, dest):
         else:
             click.echo(click.style("Not [src] nor [dest] has target host in them", fg='red'))
         pty.spawn(shlex.split(f'scp {proxy_command}'
-                              f' -i ~/.ssh/scylla-qa-ec2 -o "UserKnownHostsFile=/dev/null" '
+                              f' -i {target_key} -o "UserKnownHostsFile=/dev/null" '
                               f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 -C {src} {dest}'))
 
 
