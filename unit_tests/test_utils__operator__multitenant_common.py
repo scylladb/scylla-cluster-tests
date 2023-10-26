@@ -35,6 +35,9 @@ class FakeTestBase:
     def _init_test_duration(self):
         pass
 
+    def _init_data_validation(self):
+        pass
+
 
 class FakeLongevityTest(FakeTestBase):
     pass
