@@ -4577,7 +4577,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                         src=f"{get_sct_root_path()}/scylla-qa-internal/custom_d1/{hybrid_raid_script}", dst=target_path)
 
                     # /dev/sdb is the additional SSD that is used for creting RAID-1 along with the other NVMEs (RAID-0)
-                    hybrid_raid_setup_cmd = f"sudo python3 {target_path} --nvme-raid-level 0 --write-mostly-device /dev/sdb"
+                    hybrid_raid_setup_cmd = f"sudo python3 {target_path} --nvme-raid-level 0 --write-mostly-device /dev/sdb --duplex"
                     # The timeout value is dependent on the SSD size and might have to be adjusted if a fixed "standard"
                     # disk size is agreed to be used (should be around 370GB).
                     # So this make sure the "mdadm --create" command will get enough time to finish.
