@@ -2485,12 +2485,6 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
     actions_per_type = get_post_behavior_actions(config)
     LOGGER.debug(actions_per_type)
 
-    if (config.get("cluster_backend") or "").startswith("k8s"):
-        # Define 'KUBECONFIG' env var that is needed in some cases on K8S backends
-        testrun_dir = get_testrun_dir(test_id=params.get('TestId'), base_dir=logdir)
-        kubeconfig_dir = Path(testrun_dir) if testrun_dir else Path(logdir)
-        os.environ['KUBECONFIG'] = str(kubeconfig_dir / ".kube/config")
-
     node_types_to_cleanup = []
     for cluster_nodes_type, action_type in actions_per_type.items():
         if action_type["action"] == "keep":

@@ -173,8 +173,11 @@ class GcloudContextManager:
         if one_time:
             self._span_container()
         try:
-            LOGGER.debug("Execute `gcloud %s'", command)
-            res = self._container.exec_run(["sh", "-c", f"gcloud {command}"])
+            command = f"gcloud {command}"
+            if kube_config_path := getattr(self._instance, "kube_config_path", ""):
+                command = f"KUBECONFIG={kube_config_path} {command}"
+            LOGGER.debug("Execute `%s'", command)
+            res = self._container.exec_run(["sh", "-c", command])
             if res.exit_code:
                 raise DockerException(f"{self._container}: {res.output.decode('utf-8')}")
             return res.output.decode("utf-8")
@@ -191,10 +194,9 @@ class GcloudContainerMixin:
     _gcloud_container_instance = None
 
     def gcloud_container_run_args(self) -> dict:
-        kube_config_path = os.environ.get('KUBECONFIG', '~/.kube/config')
-        kube_config_dir_path = os.path.expanduser(kube_config_path)
+        user_home = os.path.expanduser("~")
         volumes = {
-            os.path.dirname(kube_config_dir_path): {"bind": os.path.dirname(kube_config_dir_path), "mode": "rw"},
+            user_home: {"bind": user_home, "mode": "rw"},
         }
         return dict(image=GOOGLE_CLOUD_SDK_IMAGE,
                     command="cat",
@@ -203,7 +205,7 @@ class GcloudContainerMixin:
                     volumes=volumes,
                     user=f"{os.getuid()}:{os.getgid()}",
                     tmpfs={'/.config': f'size=50M,uid={os.getuid()}'},
-                    environment={'KUBECONFIG': kube_config_path},
+                    environment={},
                     )
 
     def _get_gcloud_container(self) -> Container:

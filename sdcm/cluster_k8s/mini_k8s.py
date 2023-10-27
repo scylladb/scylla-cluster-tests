@@ -221,11 +221,22 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
     def create_kubectl_config(self):
         """Kubectl config gets created when K8S cluster is started"""
         LOGGER.info("Creating kubectl config")
-        if self._target_user:
-            self.host_node.remoter.run(self._create_kubectl_config_cmd)
-            # Create config for target user in it's default place
-            self.host_node.remoter.run(f'KUBECONFIG="" {self._create_kubectl_config_cmd}')
-        self.host_node.remoter.sudo(f'bash -cxe " KUBECONFIG=\'\' {self._create_kubectl_config_cmd}"')
+        default_kube_config_dir_path = os.path.expanduser("~/.kube")
+        kube_paths = {self.kube_config_dir_path, default_kube_config_dir_path}
+        for kube_path in kube_paths:
+            if not os.path.exists(kube_path):
+                os.makedirs(kube_path, exist_ok=True)
+            if self._target_user:
+                self.host_node.remoter.sudo(
+                    f'bash -cxe "chown -R {self._target_user}:{self._target_user} {kube_path}"')
+        # NOTE: export KinD's cluster kubeconfig to 2 places for the following reasons:
+        #       - The non-default path will be used only by test.
+        #       - The default path may be used by user anytime for any K8S cluster
+        #         including the KinD one in parallel to a test run.
+        #       As a result a user won't need to bother himself about
+        #       the 'current context' running KinD tests locally.
+        self.host_node.remoter.run(f'KUBECONFIG="{self.kube_config_path}" {self._create_kubectl_config_cmd}')
+        self.host_node.remoter.run(f'KUBECONFIG="" {self._create_kubectl_config_cmd}')
 
     def create_token_update_thread(self) -> TokenUpdateThread:
         """No token update thread required"""

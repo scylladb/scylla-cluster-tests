@@ -346,8 +346,10 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
             kubectl_token_path=self.kubectl_token_path
         )
 
-    def create_kubectl_config(self):
-        LOCALRUNNER.run(f'aws eks --region {self.region_name} update-kubeconfig --name {self.short_cluster_name}')
+    def create_kubectl_config(self) -> None:
+        LOCALRUNNER.run(
+            f"aws eks --region {self.region_name} update-kubeconfig"
+            f" --name {self.short_cluster_name} --kubeconfig={self.kube_config_path}")
 
     def deploy(self):
         LOGGER.info("Create EKS cluster `%s'", self.short_cluster_name)

@@ -28,6 +28,7 @@ from sdcm.wait import exponential_retry
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
 from sdcm.utils.gce_utils import (
+    GcloudContainerMixin,
     GcloudContextManager,
     get_gce_compute_instances_client,
     wait_for_extended_operation,
@@ -305,8 +306,13 @@ class GkeCluster(KubernetesCluster):
                      f"--user {self.gce_user}")
 
     @cached_property
-    def gcloud(self) -> GcloudContextManager:  # pylint: disable=no-self-use
-        return self.test_config.tester_obj().localhost.gcloud
+    def gcloud(self) -> GcloudContextManager:
+        return type("GcloudCmdRunner", (GcloudContainerMixin, ), {
+            "_containers": {},
+            "tags": {},
+            "name": "gcloud_cmd_runner",
+            "kube_config_path": self.kube_config_path,
+        })().gcloud
 
     def deploy_node_pool(self, pool: GkeNodePool, wait_till_ready=True) -> None:
         self._add_pool(pool)

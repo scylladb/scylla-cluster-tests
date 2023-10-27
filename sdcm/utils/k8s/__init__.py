@@ -233,8 +233,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             k8s_configuration.host = kluster.k8s_server_url
         else:
             k8s.config.load_kube_config(
-                config_file=os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config')),
-                client_configuration=k8s_configuration)
+                config_file=kluster.kube_config_path, client_configuration=k8s_configuration)
         return k8s_configuration
 
     @classmethod
@@ -285,9 +284,12 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
 
     @staticmethod
     def kubectl_cmd(kluster, *command, namespace=None, ignore_k8s_server_url=False):
-        cmd = [KUBECTL_BIN, ]
+        cmd = [KUBECTL_BIN]
+        if getattr(kluster, "kube_config_path", None) is not None:
+            cmd.append(f"--kubeconfig={kluster.kube_config_path}")
         if sct_test_logdir := os.environ.get('_SCT_TEST_LOGDIR'):
-            cmd.append(f"--cache-dir={Path(sct_test_logdir) / '.kube/http-cache'}")
+            cmd.append(
+                f"--cache-dir={Path(sct_test_logdir) / '.kube/http-cache'}--{kluster.short_cluster_name}")
         if not ignore_k8s_server_url and getattr(kluster, "k8s_server_url", None) is not None:
             cmd.append(f"--server={kluster.k8s_server_url}")
         if namespace:
@@ -394,9 +396,11 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
     def unexpose_pod_ports(cls, kluster, pod_name, namespace=None, timeout=KUBECTL_TIMEOUT):
         cls.kubectl(kluster, f"delete service {pod_name}-loadbalancer", namespace=namespace, timeout=timeout)
 
-    @classmethod
-    def get_kubectl_auth_config_for_first_user(cls, config):
+    @staticmethod
+    def get_kubectl_auth_config(kluster, config):
         for user in config["users"]:
+            if kluster.short_cluster_name not in user["name"]:
+                continue
             for auth_type in ['exec', 'auth-provider']:
                 if auth_type in user["user"]:
                     return auth_type, user["user"][auth_type]
@@ -484,22 +488,22 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                  timeout=timeout * 60,
                  throw_exc=True)
 
-    @classmethod
-    def patch_kube_config(cls, static_token_path, kube_config_path: str = None) -> None:
+    @staticmethod
+    def patch_kube_config(kluster, static_token_path, kube_config_path: str = None) -> None:
         # It assumes that config is already created by gcloud
         # It patches kube config so that instead of running gcloud each time
         # we will get it's output from the cache file located at gcloud_token_path
         # To keep this cache file updated we run GcloudTokenUpdateThread thread
         if kube_config_path is None:
-            kube_config_path = os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))
+            kube_config_path = kluster.kube_config_path
         LOGGER.debug("Patch %s to use file token %s", kube_config_path, static_token_path)
 
         with open(kube_config_path, encoding="utf-8") as kube_config:
             data = yaml.safe_load(kube_config)
-        auth_type, user_config = KubernetesOps.get_kubectl_auth_config_for_first_user(data)
+        auth_type, user_config = KubernetesOps.get_kubectl_auth_config(kluster, data)
 
         if user_config is None:
-            raise RuntimeError("Unable to find user configuration in ~/.kube/config")
+            raise RuntimeError("Unable to find user configuration at the '%s'" % kube_config_path)
         KubernetesOps.patch_kubectl_auth_config(user_config, auth_type, "cat", [static_token_path])
 
         with open(kube_config_path, "w", encoding="utf-8") as kube_config:
@@ -620,12 +624,9 @@ class HelmException(Exception):
 
 class HelmContainerMixin:
     def helm_container_run_args(self) -> dict:
-        kube_config_path = os.environ.get('KUBECONFIG', '~/.kube/config')
-        kube_config_dir_path = os.path.expanduser(kube_config_path)
-        helm_config_path = os.path.expanduser(os.environ.get('HELM_CONFIG_HOME', '~/.helm'))
+        user_home = os.path.expanduser("~")
         volumes = {
-            os.path.dirname(kube_config_dir_path): {"bind": os.path.dirname(kube_config_dir_path), "mode": "rw"},
-            helm_config_path: {"bind": "/root/.helm", "mode": "rw"},
+            user_home: {"bind": user_home, "mode": "rw"},
             sct_abs_path(""): {"bind": sct_abs_path(""), "mode": "ro"},
             '/tmp': {"bind": "/tmp", "mode": "rw"},
         }
@@ -635,7 +636,7 @@ class HelmContainerMixin:
                     name=f"{self.name}-helm",
                     network_mode="host",
                     volumes=volumes,
-                    environment={'KUBECONFIG': kube_config_path},
+                    environment={},
                     )
 
     @cached_property
@@ -643,7 +644,11 @@ class HelmContainerMixin:
         return ContainerManager.run_container(self, "helm")
 
     def helm(self, kluster, *command: str, namespace: Optional[str] = None, values: 'HelmValues' = None, prepend_command=None) -> str:  # pylint: disable=no-self-use
-        cmd = ["helm", ]
+        cmd = [
+            f"HELM_CONFIG_HOME={kluster.helm_dir_path}",
+            "helm",
+            f"--kubeconfig={kluster.kube_config_path}"
+        ]
         if prepend_command:
             if isinstance(prepend_command, list):
                 cmd = prepend_command + cmd
