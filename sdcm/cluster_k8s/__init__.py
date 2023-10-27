@@ -423,9 +423,24 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         return partial(self.test_config.tester_obj().localhost.helm_upgrade, self)
 
     @cached_property
-    def kubectl_token_path(self):  # pylint: disable=no-self-use
-        return os.path.join(os.path.dirname(
-            os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))), 'kubectl.token')
+    def kube_config_dir_path(self):
+        _kube_config_dir_path = os.path.join(os.path.expanduser(self.logdir), ".kube")
+        os.makedirs(_kube_config_dir_path, exist_ok=True)
+        return _kube_config_dir_path
+
+    @cached_property
+    def kube_config_path(self):
+        return os.path.join(self.kube_config_dir_path, "config")
+
+    @cached_property
+    def kubectl_token_path(self):
+        return os.path.join(self.kube_config_dir_path, "token")
+
+    @cached_property
+    def helm_dir_path(self):
+        _helm_dir_path = os.path.join(os.path.dirname(self.kube_config_dir_path), ".helm")
+        os.makedirs(_helm_dir_path, exist_ok=True)
+        return _helm_dir_path
 
     def create_namespace(self, namespace: str) -> None:
         LOGGER.info("Create '%s' namespace", namespace)
@@ -1560,7 +1575,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.create_kubectl_config()
         if self.TOKEN_UPDATE_NEEDED:
             self.start_token_update_thread()
-            KubernetesOps.patch_kube_config(self.kubectl_token_path)
+            KubernetesOps.patch_kube_config(self, self.kubectl_token_path)
             wait_for(self.check_if_token_is_valid, timeout=120, throw_exc=True)
         self.start_scylla_pods_ip_change_tracker_thread()
 

@@ -54,6 +54,7 @@ from sdcm.utils.common import (
     normalize_ipv6_url, create_remote_storage_dir,
 )
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
+from sdcm.utils.context_managers import environment
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
 from sdcm.utils.get_username import get_username
@@ -1223,26 +1224,35 @@ class KubernetesLogCollector(BaseSCTLogCollector):
                     return os.path.join(base_logdir, sub_dir)
         return ""
 
-    def _find_k8s_subdir(self, test_run_logdir) -> str:
+    def _find_k8s_subdirs(self, test_run_logdir) -> str:
+        k8s_subdirs = []
         for sub_dir in next(os.walk(test_run_logdir))[1]:
-            if not sub_dir.endswith(self.test_id[:8]) or any(
-                    log_type in sub_dir for log_type in ('db-cluster', 'loader-set', 'monitor-set')):
+            if self.test_id[:6] not in sub_dir:
                 continue
             sub_files = next(os.walk(os.path.join(test_run_logdir, sub_dir)))[2]
             if any(file_name in sub_files for file_name in ('cert_manager.log', 'scylla_operator.log')):
-                return os.path.join(test_run_logdir, sub_dir)
-        return ""
+                k8s_subdirs.append(os.path.join(test_run_logdir, sub_dir))
+        return k8s_subdirs
 
     def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
         try:
             base_logdir = TestConfig.base_logdir()
             test_run_logdir = self._find_test_run_subdir_by_test_id(base_logdir)
-            if test_run_logdir:
-                k8s_logdir = self._find_k8s_subdir(test_run_logdir)
-                if os.path.isdir(k8s_logdir) and not os.path.isdir(os.path.join(k8s_logdir, "namespaces")):
-                    os.environ["_SCT_TEST_LOGDIR"] = test_run_logdir
-                    os.environ["KUBECONFIG"] = os.path.join(test_run_logdir, ".kube/config")
-                    KubernetesOps.gather_k8s_logs(k8s_logdir)
+            if not test_run_logdir:
+                return super().collect_logs(local_search_path=local_search_path)
+            k8s_logdirs = self._find_k8s_subdirs(test_run_logdir)
+            with environment(_SCT_TEST_LOGDIR=test_run_logdir):
+                for k8s_logdir in k8s_logdirs:
+                    if os.path.isdir(k8s_logdir) and not os.path.isdir(
+                            os.path.join(k8s_logdir, "namespaces")):
+                        for _, _, current_k8s_logdir_sub_file in next(
+                                os.walk(os.path.join(k8s_logdir, '.kube'))):
+                            if not current_k8s_logdir_sub_file.endswith("config"):
+                                continue
+                            with environment(KUBECONFIG=os.path.join(
+                                    k8s_logdir, '.kube', current_k8s_logdir_sub_file)):
+                                KubernetesOps.gather_k8s_logs(k8s_logdir)
+                                break
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.warning("Got following failure processing the K8S logs: %s", exc)
         return super().collect_logs(local_search_path=local_search_path)

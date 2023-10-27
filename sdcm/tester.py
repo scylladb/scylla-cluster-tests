@@ -18,14 +18,13 @@ from dataclasses import asdict
 import logging
 import os
 import re
-import stat
 import time
 import traceback
 import unittest
 import unittest.mock
 from typing import NamedTuple, Optional, Union, List, Dict, Any
 from uuid import uuid4
-from functools import wraps, cached_property, cache
+from functools import wraps, cache
 import threading
 import signal
 import json
@@ -351,7 +350,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.init_argus_run()
         self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
-        self._move_kubectl_config()
         self.localhost = self._init_localhost()
         self.test_config.set_rsyslog_imjournal_rate_limit(
             interval=self.params.get("rsyslog_imjournal_rate_limit_interval"),
@@ -689,29 +687,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def _init_localhost(self):
         return LocalHost(user_prefix=self.params.get("user_prefix"), test_id=self.test_config.test_id())
-
-    def _move_kubectl_config(self):
-        secure_mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
-        os.environ['KUBECONFIG'] = self.kubectl_config_path
-        if not os.path.exists(self.kubectl_config_path):
-            os.makedirs(os.path.dirname(self.kubectl_config_path), exist_ok=True)
-            with open(self.kubectl_config_path, 'w', encoding="utf-8") as kube_config_file:
-                kube_config_file.write('')
-                kube_config_file.flush()
-        os.chmod(os.path.dirname(self.kubectl_config_path), mode=secure_mode)
-        os.chmod(self.kubectl_config_path, mode=secure_mode)
-        os.environ['HELM_CONFIG_HOME'] = self.helm_config_path
-        if not os.path.exists(self.helm_config_path):
-            os.makedirs(os.path.dirname(self.helm_config_path), exist_ok=True)
-        os.chmod(os.path.dirname(self.helm_config_path), mode=secure_mode)
-
-    @cached_property
-    def kubectl_config_path(self):
-        return os.path.join(os.path.expanduser(self.logdir), '.kube/config')
-
-    @cached_property
-    def helm_config_path(self):
-        return os.path.join(os.path.expanduser(self.logdir), '.helm')
 
     def _init_params(self):
         self.params = init_and_verify_sct_config()
