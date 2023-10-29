@@ -2815,10 +2815,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.info("Restoring the schema of the keyspace '%s'", chosen_snapshot_info["keyspace_name"])
             restore_task = mgr_cluster.create_restore_task(restore_schema=True, location_list=location_list,
                                                            snapshot_tag=chosen_snapshot_tag)
-            step = 10
-            extra_time = 300
-            restore_task.wait_and_get_final_status(step=step,
-                                                   timeout=chosen_snapshot_info['expected_timeout'] / step + extra_time)
+
+            restore_task.wait_and_get_final_status(step=10,
+                                                   timeout=6*60)  # giving 6 minutes to restore the schema
             assert restore_task.status == TaskStatus.DONE, f'Schema restoration of {chosen_snapshot_tag} has failed!'
             self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
 
