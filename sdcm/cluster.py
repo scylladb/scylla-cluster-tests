@@ -4142,7 +4142,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.install_package('python3')
 
         node.update_repo_cache()
-
         install_scylla = True
 
         if self.params.get("use_preinstalled_scylla") and node.is_scylla_installed(raise_if_not_installed=True):
