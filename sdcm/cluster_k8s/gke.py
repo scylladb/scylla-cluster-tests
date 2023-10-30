@@ -195,11 +195,6 @@ class GkeCluster(KubernetesCluster):
                  cluster_uuid=None,
                  n_nodes=2,
                  ):
-        super().__init__(
-            params=params,
-            cluster_uuid=cluster_uuid,
-            user_prefix=user_prefix
-        )
         self.gke_cluster_version = gke_cluster_version
         self.gke_k8s_release_channel = gke_k8s_release_channel.strip()
         self.gce_disk_type = gce_disk_type
@@ -210,12 +205,16 @@ class GkeCluster(KubernetesCluster):
         self.n_nodes = n_nodes
         self.gce_project = info['project_id']
         self.gce_user = info['client_email']
-
         dc_parts = gce_datacenter[0].split("-")[:3]
         self.gce_region = "-".join(dc_parts[:2])
         self.gce_zone = f"{self.gce_region}-"
         self.gce_zone += dc_parts[2] if len(dc_parts) == 3 else 'b'
-
+        super().__init__(
+            params=params,
+            cluster_uuid=cluster_uuid,
+            user_prefix=user_prefix,
+            region_name=self.gce_region,
+        )
         self.gke_cluster_created = False
         self._authenticate_in_gcloud()
         self.api_call_rate_limiter = ApiCallRateLimiter(
