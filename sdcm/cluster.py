@@ -2029,7 +2029,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         elif self.distro.is_sles:
             raise Exception("Offline install on SLES isn't supported")
         elif self.distro.is_debian10 or self.distro.is_debian11:
-            self.remoter.run(f'sudo apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
+            self.remoter.sudo('apt-get install -y openjdk-11-jre')
+            self.remoter.sudo(f'apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
         else:
             self.remoter.run(f'sudo apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
             self.remoter.run('sudo update-java-alternatives --jre-headless '
