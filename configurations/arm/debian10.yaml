@@ -1,5 +1,5 @@
 ami_db_scylla_user: 'admin'
-ami_id_db_scylla: 'ami-03505f4be3ad4f07b'
+ami_id_db_scylla: 'ami-02db9c628ca10eb90' # debian-10-arm64-20230917-1506
 region_name: 'eu-west-1'
 instance_type_db: 'im4gn.xlarge'
 # enhanced network isn't supported
