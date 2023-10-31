@@ -21,7 +21,7 @@ loader_swap_size: 10240  #10GB SWAP space
 azure_image_username: 'scyllaadm'
 # used prepared centos7 AMI for loader
 ami_loader_user: 'ubuntu'
-scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/debian/scylla-4.6-buster.list'
+scylla_repo_loader: ''
 # centos7 is used for monitor
 ami_monitor_user: 'ubuntu'
 
