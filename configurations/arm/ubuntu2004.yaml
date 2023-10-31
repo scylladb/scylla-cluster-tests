@@ -1,5 +1,5 @@
 ami_db_scylla_user: 'ubuntu'
-ami_id_db_scylla: 'ami-0127b718f588563a0'
+ami_id_db_scylla: 'ami-0a7fc9991623e938a' # ubuntu/images/hvm-ssd/ubuntu-focal-20.04-arm64-server-20231030
 region_name: 'eu-west-1'
 instance_type_db: 'im4gn.xlarge'
 use_preinstalled_scylla: false
