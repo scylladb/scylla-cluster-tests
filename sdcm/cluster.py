@@ -5558,7 +5558,6 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
               message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
         for node in self.nodes:
-            cluster_backend = self.params.get("cluster_backend")
             monitoring_targets = []
             for db_node in self.targets["db_cluster"].nodes:
                 monitoring_targets.append(f"[{getattr(db_node, self.DB_NODES_IP_ADDRESS)}]:9180")
@@ -5572,10 +5571,9 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 python3 genconfig.py -s -n -d {self.monitoring_conf_dir} {monitoring_targets}
             """), verbose=True)
 
-            if cluster_backend != "docker":
-                node.remoter.sudo(f"docker run --rm -v {self.monitoring_conf_dir}:/workdir"
-                                  f" mikefarah/yq:3 yq w -i node_exporter_servers.yml"
-                                  f" '[0].targets[+]' ''[{node.private_ip_address}]:9100''", verbose=True)
+            with node._remote_yaml(f'{self.monitoring_conf_dir}/node_exporter_servers.yml') as exporter_yaml:  # pylint: disable=protected-access
+                exporter_yaml[0]['targets'] += [f'[{node.private_ip_address}]:9100']
+                exporter_yaml[0]['targets'] = list(set(exporter_yaml[0]['targets']))  # remove duplicates
 
             if self.params.get("cloud_prom_bearer_token"):
                 node.remoter.sudo(shell_script_cmd(f"""\
