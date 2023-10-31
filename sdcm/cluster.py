@@ -1993,6 +1993,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     apt-get install apt-transport-https -y
                     apt-get install gnupg1-curl dirmngr -y
                     apt-get install software-properties-common -y
+                    apt-get install openjdk-11-jre -y
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_10_prereqs)
 
@@ -2004,9 +2005,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo apt-get install -y rsync')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
-            self.remoter.run(
-                'sudo apt-get install -y '
-                ' {} '.format(self.scylla_pkg()))
+            self.install_package(self.scylla_pkg())
 
     def offline_install_scylla(self, unified_package, nonroot):
         """
