@@ -14,10 +14,11 @@
 """ This module keeps utilities that help to extract schema definition and stress commands from user profile """
 from __future__ import absolute_import, annotations
 
-import os
 import re
 
 import yaml
+
+from sdcm.utils.common import find_file_under_sct_dir
 
 
 def get_stress_command_for_profile(params, stress_cmds_part, search_for_user_profile, stress_cmd=None):
@@ -114,19 +115,22 @@ def get_profile_content(stress_cmd):
     """
     Looking profile yaml in data_dir or the path as is to get the user profile
     and loading it's yaml
+    Example of stress commands that supported:
+    - cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(select=1)' ...
+    - scylla-qa-internal/cust_a/features/doc1.yaml
 
     :return: (profile_filename, dict with yaml)
     """
+    cs_profile = re.search(r'profile=(?P<path>.*)/(?P<file>.*\.yaml)', stress_cmd) or \
+        re.search(r'(?P<path>.*)/(?P<file>.*\.yaml)', stress_cmd)
 
-    cs_profile = re.search(r'profile=(.*\.yaml)', stress_cmd).group(1)
-    if "scylla-qa-internal" in cs_profile:
-        sct_cs_profile = os.path.join(os.path.dirname(__file__), '../../', cs_profile)
+    if cs_profile:
+        profile_path = cs_profile.group("path")
+        profile_file = cs_profile.group("file")
     else:
-        sct_cs_profile = os.path.join(os.path.dirname(__file__), '../../', 'data_dir', os.path.basename(cs_profile))
-    if os.path.exists(sct_cs_profile):
-        cs_profile = sct_cs_profile
-    elif not os.path.exists(cs_profile):
-        raise FileNotFoundError('User profile file {} not found'.format(cs_profile))
+        raise FileNotFoundError(f"Profile is not found in stress command: '{stress_cmd}'")
+
+    cs_profile = find_file_under_sct_dir(filename=profile_file, sub_folder=profile_path)
 
     with open(cs_profile, encoding="utf-8") as yaml_stream:
         profile = yaml.safe_load(yaml_stream)

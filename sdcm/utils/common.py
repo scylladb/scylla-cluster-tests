@@ -184,6 +184,24 @@ def get_sct_root_path():
     return os.path.abspath(sct_root_dir)
 
 
+def find_file_under_sct_dir(filename: str, sub_folder: str = None):
+    """
+    Find file under scylla_cluster_test where sub_folder is part of the file path (optional)
+    """
+    sct_path = Path(get_sct_root_path())
+    profile_file_full_path = sct_path.rglob(filename)
+    for profile_file_path in profile_file_full_path:
+        # sub_folder == "/tmp" - cover user profile path inside cassandra-stress command, like:
+        # "cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(select=1)'
+        if sub_folder == "/tmp" or sub_folder is None:
+            # return first found file with the name
+            return str(profile_file_path)
+        elif sub_folder in str(profile_file_path.parent):
+            return str(profile_file_path)
+
+    raise FileNotFoundError(f"User profile file {filename} not found under {str(sct_path)}")
+
+
 def verify_scylla_repo_file(content, is_rhel_like=True):
     LOGGER.info('Verifying Scylla repo file')
     if is_rhel_like:
