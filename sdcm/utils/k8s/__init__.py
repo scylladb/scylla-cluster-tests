@@ -519,7 +519,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                                         field_selector=field_selector, timeout_seconds=timeout)
 
     @classmethod
-    def gather_k8s_logs(cls, logdir_path, kubectl=None) -> None:  # pylint: disable=too-many-locals,too-many-branches
+    def gather_k8s_logs(cls, logdir_path, kubectl=None, namespaces=None) -> None:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         # NOTE: reuse data where possible to minimize spent time due to API limiter restrictions
         LOGGER.info("K8S-LOGS: starting logs gathering")
         logdir = Path(logdir_path)
@@ -530,18 +530,27 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         LOGGER.info("K8S-LOGS: gathering cluster scoped resources")
         cluster_scope_dir = "cluster-scoped-resources"
         os.makedirs(logdir / cluster_scope_dir, exist_ok=True)
-        for resource_type in kubectl(
-                "api-resources --namespaced=false --verbs=list -o name").stdout.split():
+        if namespaces:
+            # NOTE: gather only small set of the cluster-wide objects which are needed for specific namespaces
+            cluster_wide_resource_types = ("namespaces", "nodes", "persistentvolumes")
+        else:
+            cluster_wide_resource_types = kubectl(
+                "api-resources --namespaced=false --verbs=list -o name").stdout.split()
+        for resource_type in cluster_wide_resource_types:
             for output_format in ("yaml", "wide"):
                 logfile = logdir / cluster_scope_dir / f"{resource_type}.{output_format}"
                 kubectl(f"get {resource_type} -o {output_format} > {logfile}", ignore_status=True)
         kubectl(f"describe nodes > {logdir / cluster_scope_dir / 'nodes.desc'}",
                 timeout=600, ignore_status=True)
 
-        # Read all the namespaces from already saved file
-        with open(logdir / cluster_scope_dir / "namespaces.wide", mode="r", encoding="utf-8") as namespaces_file:
-            # Reverse order of namespaces because preferred ones are there
-            namespaces = [n.split()[0] for n in namespaces_file.readlines()[1:]][::-1]
+        if not namespaces:
+            # Read all the namespaces from already saved file
+            with open(logdir / cluster_scope_dir / "namespaces.wide",
+                      mode="r", encoding="utf-8") as namespaces_file:
+                # Reverse order of namespaces because preferred ones are there
+                namespaces = [n.split()[0] for n in namespaces_file.readlines()[1:]][::-1]
+        elif isinstance(namespaces, str):
+            namespaces = [namespaces]
 
         # Gather namespace-scoped resources info
         LOGGER.info("K8S-LOGS: gathering namespace scoped resources. list of namespaces: %s",
