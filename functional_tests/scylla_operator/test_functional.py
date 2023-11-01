@@ -13,6 +13,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 import logging
+import os
 import random
 import threading
 import time
@@ -41,6 +42,7 @@ from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units,
     HelmValues,
+    KubernetesOps,
 )
 from sdcm.utils.k8s.chaos_mesh import PodFailureExperiment
 
@@ -157,7 +159,9 @@ def test_rolling_restart_cluster(db_cluster):
 
 @pytest.mark.required_operator("v1.10.0")
 def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
-    log_followers = {}
+    log_followers, need_to_collect_logs, stop_ks_creation = {}, True, False
+    k8s_cluster = db_cluster.k8s_cluster
+    logdir = f"{os.path.join(k8s_cluster.logdir, 'test_add_new_node_and_check_old_nodes_are_cleaned_up')}"
     for node in db_cluster.nodes:
         for keyspace in db_cluster.nodes[0].run_cqlsh('describe keyspaces').stdout.split():
             log_followers[f"{node.name}--{keyspace}"] = node.follow_system_log(patterns=[
@@ -165,7 +169,7 @@ def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
 
     def wait_for_cleanup_logs(log_follower_name, log_follower, db_cluster):
         db_rf = len(db_cluster.nodes)
-        while not list(log_follower):
+        while not (list(log_follower) or stop_ks_creation):
             # NOTE: log lines located as last may not be caught fast enough because of the chunk-size limitation.
             #       So, perform additional DB actions to create log noise which will cause log reader moving on.
             current_ks_name = f"ks_db_log_population_{int(time.time())}"
@@ -181,7 +185,10 @@ def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
                 # NOTE: we don't care if some of the queries fail.
                 #       At first, there are redundant ones and, at second, they are utilitary.
                 log.warning("Utilitary CQL query has failed: %s", exc)
-        log.info("%s: log search succeeded", log_follower_name)
+        if stop_ks_creation:
+            log.warning("%s: log search timed out", log_follower_name)
+        else:
+            log.info("%s: log search succeeded", log_follower_name)
 
     new_nodes_count = 1
     new_nodes = db_cluster.add_nodes(count=new_nodes_count, dc_idx=0, rack=0, enable_auto_bootstrap=True)
@@ -193,7 +200,12 @@ def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
             timeout=600,
         )
         object_set.run(func=wait_for_cleanup_logs, unpack_objects=True, ignore_exceptions=False)
+        need_to_collect_logs = False
     finally:
+        stop_ks_creation = True
+        if need_to_collect_logs:
+            KubernetesOps.gather_k8s_logs(
+                logdir_path=logdir, kubectl=k8s_cluster.kubectl, namespaces=[SCYLLA_NAMESPACE])
         for new_node in new_nodes:
             db_cluster.decommission(new_node)
 
