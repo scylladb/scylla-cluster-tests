@@ -2047,6 +2047,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         elif self.distro.is_sles:
             raise Exception("Offline install on SLES isn't supported")
         elif self.distro.is_debian10 or self.distro.is_debian11:
+            # FIXME: need to re-test and remove the following line once issue will be fixed:
+            # refs to https://github.com/scylladb/scylladb/issues/15878
             self.remoter.sudo('apt-get install -y openjdk-11-jre')
             self.remoter.sudo(f'apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
         else:
