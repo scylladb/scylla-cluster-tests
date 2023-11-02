@@ -440,9 +440,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def _is_it_on_kubernetes(self) -> bool:
         return isinstance(getattr(self.tester, "db_cluster", None), PodCluster)
 
-    def _is_chaos_mesh_initialized(self) -> bool:
-        return self.cluster.k8s_cluster.chaos_mesh.initialized
-
     # pylint: disable=too-many-arguments,unused-argument
     def get_list_of_methods_by_flags(  # pylint: disable=too-many-locals
             self,
@@ -1306,11 +1303,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             "/spec/datacenter/racks/0/resources", {
                 "limits": {
                     "cpu": cpus,
-                    "memory": self.cluster.k8s_cluster.scylla_memory_limit,
+                    "memory": self.target_node.k8s_cluster.scylla_memory_limit,
                 },
                 "requests": {
                     "cpu": cpus,
-                    "memory": self.cluster.k8s_cluster.scylla_memory_limit,
+                    "memory": self.target_node.k8s_cluster.scylla_memory_limit,
                 },
             })
 
@@ -1369,7 +1366,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         # Calculate new value for the CPU cores dedicated for Scylla pods
         current_cpus = convert_cpu_value_from_k8s_to_units(
-            self.cluster.k8s_cluster.scylla_cpu_limit)
+            self.target_node.k8s_cluster.scylla_cpu_limit)
         if current_cpus <= 1:
             new_cpus = current_cpus + 1
         else:
@@ -1429,7 +1426,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # NOTE: wait for all other neighbour pods become ready
         for neighbour_scylla_pod in neighbour_scylla_pods:
             KubernetesOps.wait_for_pod_readiness(
-                kluster=self.cluster.k8s_cluster,
+                kluster=node.k8s_cluster,
                 pod_name=neighbour_scylla_pod.metadata.name,
                 namespace=neighbour_scylla_pod.metadata.namespace,
                 # TODO: calculate timeout based on the data size and load
@@ -1467,7 +1464,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # NOTE: wait for all other neighbour pods become ready
         for neighbour_scylla_pod in neighbour_scylla_pods:
             KubernetesOps.wait_for_pod_readiness(
-                kluster=self.cluster.k8s_cluster,
+                kluster=node.k8s_cluster,
                 pod_name=neighbour_scylla_pod.metadata.name,
                 namespace=neighbour_scylla_pod.metadata.namespace,
                 # TODO: calculate timeout based on the data size and load
@@ -1477,7 +1474,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self.tester.params.get('k8s_tenants_num') < 2:
             return []
         matched_pods = KubernetesOps.list_pods(
-            self.cluster.k8s_cluster, namespace=None,
+            scylla_pod.k8s_cluster, namespace=None,
             field_selector=f"spec.nodeName={scylla_pod.pod_spec.node_name}",
             label_selector="app.kubernetes.io/name=scylla")
         return [matched_pod
@@ -1645,10 +1642,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             result = self.target_node.run_cqlsh(query_verify)
             assert '(1 rows)' in result.stdout, f'The key {key} is not loaded by `nodetool refresh`'
 
-    def _k8s_fake_enospc_error(self, node):
+    def _k8s_fake_enospc_error(self, node):  # pylint: disable=no-self-use
         """Fakes ENOSPC error for scylla container (for /var/lib/scylla dir) using chaos-mesh without filling up disk."""
         raise UnsupportedNemesis("https://github.com/scylladb/scylla-cluster-tests/issues/6327")
-        if not self._is_chaos_mesh_initialized():  # pylint: disable=unreachable
+        if not node.k8s_cluster.chaos_mesh.initialized:  # pylint: disable=unreachable
             raise UnsupportedNemesis(
                 "Chaos Mesh is not installed. Set 'k8s_use_chaos_mesh' config option to 'true'")
         no_space_errors_in_log = node.follow_system_log(patterns=['No space left on device'])
@@ -4185,10 +4182,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _k8s_disrupt_memory_stress(self):
         """Uses chaos-mesh experiment based on https://github.com/chaos-mesh/memStress"""
-        if not self._is_chaos_mesh_initialized():
+        if not self.target_node.k8s_cluster.chaos_mesh.initialized:
             raise UnsupportedNemesis(
                 "Chaos Mesh is not installed. Set 'k8s_use_chaos_mesh' config option to 'true'")
-        memory_limit = self.cluster.k8s_cluster.scylla_memory_limit
+        memory_limit = self.target_node.k8s_cluster.scylla_memory_limit
         # If a container's memory usage increases too quickly the OOM killer is invoked
         # so reduce ramp to ~2GB/s: time_to_reach = memory (in GB) /2
         time_to_reach_secs = int(convert_memory_value_from_k8s_to_units(memory_limit)/2)

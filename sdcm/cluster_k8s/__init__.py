@@ -1767,6 +1767,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
             node_prefix=node_prefix,
             dc_idx=dc_idx,
             rack=rack)
+        self.k8s_cluster = self.parent_cluster.k8s_cluster
 
     @cached_property
     def pod_replace_timeout(self) -> int:
@@ -1786,7 +1787,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
     def _init_remoter(self, ssh_login_info):
         self.remoter = KubernetesCmdRunner(
-            kluster=self.parent_cluster.k8s_cluster,
+            kluster=self.k8s_cluster,
             pod_image=self.image,
             pod_name=self.name,
             container=self.parent_cluster.container,
@@ -1801,8 +1802,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
     @property
     def region(self):
-        # TODO: make it be multi-dc aware when multi-dc support gets added
-        return self.parent_cluster.k8s_cluster.params.get('k8s_scylla_datacenter')
+        return self.k8s_cluster.region_name
 
     def start_journal_thread(self):
         self._journal_thread = get_system_logging_thread(logs_transport="k8s_client",
@@ -1821,8 +1821,9 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
     @property
     def _pod(self):
-        pods = KubernetesOps.list_pods(self.parent_cluster, namespace=self.parent_cluster.namespace,
-                                       field_selector=f"metadata.name={self.name}")
+        pods = KubernetesOps.list_pods(
+            self.k8s_cluster, namespace=self.parent_cluster.namespace,
+            field_selector=f"metadata.name={self.name}")
         return pods[0] if pods else None
 
     @property
@@ -1839,18 +1840,20 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
     @property
     def _node(self):
-        return KubernetesOps.get_node(self.parent_cluster, self.node_name)
+        return KubernetesOps.get_node(self.k8s_cluster, self.node_name)
 
     @property
     def _cluster_ip_service(self):
-        services = KubernetesOps.list_services(self.parent_cluster, namespace=self.parent_cluster.namespace,
-                                               field_selector=f"metadata.name={self.name}")
+        services = KubernetesOps.list_services(
+            self.k8s_cluster, namespace=self.parent_cluster.namespace,
+            field_selector=f"metadata.name={self.name}")
         return services[0] if services else None
 
     @property
     def _svc(self):
-        services = KubernetesOps.list_services(self.parent_cluster, namespace=self.parent_cluster.namespace,
-                                               field_selector=f"metadata.name={self.name}")
+        services = KubernetesOps.list_services(
+            self.k8s_cluster, namespace=self.parent_cluster.namespace,
+            field_selector=f"metadata.name={self.name}")
         return services[0] if services else None
 
     @property
@@ -1866,7 +1869,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
     @property
     def private_ip_address(self) -> Optional[str]:
-        if ip := self.parent_cluster.k8s_cluster.scylla_pods_ip_mapping.get(
+        if ip := self.k8s_cluster.scylla_pods_ip_mapping.get(
                 self.parent_cluster.namespace, {}).get(self.name, {}).get('current_ip'):
             return ip
         return super().private_ip_address
@@ -1913,7 +1916,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def _wait_for_k8s_node_readiness(self):
         if self.node_name is None:
             raise RuntimeError(f"Can't find node for pod {self.name}")
-        result = self.parent_cluster.k8s_cluster.kubectl(
+        result = self.k8s_cluster.kubectl(
             f"wait node --timeout={self.pod_readiness_timeout // 3}m --for=condition=Ready {self.node_name}",
             namespace=self.parent_cluster.namespace,
             timeout=self.pod_readiness_timeout // 3 * 60 + 10
@@ -1936,7 +1939,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def wait_for_pod_readiness(self, pod_readiness_timeout_minutes: int = None):
         timeout = pod_readiness_timeout_minutes or self.pod_readiness_timeout
         KubernetesOps.wait_for_pod_readiness(
-            kluster=self.parent_cluster.k8s_cluster,
+            kluster=self.k8s_cluster,
             pod_name=self.name,
             namespace=self.parent_cluster.namespace,
             pod_readiness_timeout_minutes=timeout)
@@ -1953,7 +1956,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         raise NotImplementedError("Not implemented yet")  # TODO: implement this method.
 
     def hard_reboot(self):
-        self.parent_cluster.k8s_cluster.kubectl(
+        self.k8s_cluster.kubectl(
             f'delete pod {self.name} --now',
             namespace=self.parent_cluster.namespace,
             timeout=self.pod_terminate_timeout * 60 + 10)
@@ -1962,7 +1965,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
     def soft_reboot(self):
         # Kubernetes brings pods back to live right after it is deleted
-        self.parent_cluster.k8s_cluster.kubectl(
+        self.k8s_cluster.kubectl(
             f'delete pod {self.name} --grace-period={self.pod_terminate_timeout * 60}',
             namespace=self.parent_cluster.namespace,
             timeout=self.pod_terminate_timeout * 60 + 10)
@@ -1994,7 +1997,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         """
         Delete kubernetes node, which will terminate scylla node that is running on it
         """
-        self.parent_cluster.k8s_cluster.kubectl(
+        self.k8s_cluster.kubectl(
             f'delete node {self.node_name} --now',
             timeout=self.pod_terminate_timeout * 60 + 10)
 
@@ -2022,7 +2025,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
         """
         For kubernetes there is no node-specific scylla.yaml, only cluster-wide
         """
-        return self.parent_cluster.proposed_scylla_yaml
+        return self.k8s_cluster.proposed_scylla_yaml
 
     parent_cluster: ScyllaPodCluster
 
@@ -2037,14 +2040,14 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
         Scylla Operator handles 'scylla.yaml' file updates using ConfigMap resource
         and we don't need to update it on each node separately.
         """
-        return self.parent_cluster.remote_scylla_yaml()
+        return self.k8s_cluster.remote_scylla_yaml()
 
     def remote_cassandra_rackdc_properties(self) -> ContextManager:
         """
         Scylla Operator handles 'cassandra-rackdc.properties' file updates using ConfigMap resource
         and we don't need to update it on each node separately.
         """
-        return self.parent_cluster.remote_cassandra_rackdc_properties()
+        return self.k8s_cluster.remote_cassandra_rackdc_properties()
 
     @property
     def verify_up_timeout(self):
@@ -2122,10 +2125,10 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
             Scylla node   X
             '''))
         k8s_node_name = self.node_name
-        self.parent_cluster.k8s_cluster.kubectl(
+        self.k8s_cluster.kubectl(
             f'drain {k8s_node_name} -n scylla --ignore-daemonsets --delete-local-data')
         time.sleep(5)
-        self.parent_cluster.k8s_cluster.kubectl(f'uncordon {k8s_node_name}')
+        self.k8s_cluster.kubectl(f'uncordon {k8s_node_name}')
 
     def _restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits: int = 12):
         # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
@@ -2155,7 +2158,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
         cmd = f'label svc {self.name} scylla/replace=""'
         if overwrite:
             cmd += ' --overwrite'
-        self.parent_cluster.k8s_cluster.kubectl(cmd, namespace=self.parent_cluster.namespace, ignore_status=True)
+        self.k8s_cluster.kubectl(cmd, namespace=self.parent_cluster.namespace, ignore_status=True)
 
     def wait_for_svc(self):
         wait_for(self._wait_for_svc,
@@ -2164,7 +2167,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
                  throw_exc=True)
 
     def _wait_for_svc(self):
-        self.parent_cluster.k8s_cluster.kubectl(
+        self.k8s_cluster.kubectl(
             f"get svc {self.name}", namespace=self.parent_cluster.namespace, verbose=False)
         return True
 
@@ -2197,14 +2200,14 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
             pods_selector = "app.kubernetes.io/name=local-csi-driver"
             scylla_disk_path = "/mnt/persistent-volumes"
             namespace = "local-csi-driver"
-        podnames = self.parent_cluster.k8s_cluster.kubectl(
+        podnames = self.k8s_cluster.kubectl(
             f"get pod -l {pods_selector} --field-selector spec.nodeName={self.node_name} "
             "-o jsonpath='{range .items[*]}{.metadata.name}'",
             namespace=namespace).stdout.strip().split("\n")
         assert podnames, (
             f"Failed to find pods using '{pods_selector}' selector on '{self.node_name}' node "
             f"in '{namespace}' namespace. Didn't run the 'fstrim' command")
-        self.parent_cluster.k8s_cluster.kubectl(
+        self.k8s_cluster.kubectl(
             f"exec -ti {podnames[0]} -- sh -c 'fstrim -v {scylla_disk_path}'",
             namespace=namespace)
 
@@ -2232,14 +2235,13 @@ class LoaderPodContainer(BasePodContainer):
             "K8S_NAMESPACE": self.parent_cluster.namespace,
             "K8S_LOADER_CLUSTER_NAME": self.loader_cluster_name,
             "K8S_LOADER_NAME": self.loader_name,
-            "POD_CPU_LIMIT": self.parent_cluster.k8s_cluster.calculated_loader_cpu_limit,
-            "POD_MEMORY_LIMIT": self.parent_cluster.k8s_cluster.calculated_loader_memory_limit,
+            "POD_CPU_LIMIT": self.k8s_cluster.calculated_loader_cpu_limit,
+            "POD_MEMORY_LIMIT": self.k8s_cluster.calculated_loader_memory_limit,
         }
         self.remoter = KubernetesPodRunner(
-            kluster=self.parent_cluster.k8s_cluster,
+            kluster=self.k8s_cluster,
             template_path=self.TEMPLATE_PATH,
-            template_modifiers=list(
-                self.parent_cluster.k8s_cluster.calculated_loader_affinity_modifiers),
+            template_modifiers=list(self.k8s_cluster.calculated_loader_affinity_modifiers),
             pod_name_template=self.loader_pod_name_template,
             namespace=self.parent_cluster.namespace,
             environ=environ,

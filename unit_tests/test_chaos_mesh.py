@@ -46,19 +46,19 @@ class DummyK8sCluster:
 
 @dataclass
 class DummyPodCluster:
-    k8s_cluster: DummyK8sCluster
     namespace: str = "scylla"
 
 
 @dataclass
 class DummyPod:
     parent_cluster: DummyPodCluster
+    k8s_cluster: DummyK8sCluster
     name: str
 
 
 def test_podchaos_experiment_configuration_is_valid(capsys):
     k8s_cluster = DummyK8sCluster()
-    pod = DummyPod(DummyPodCluster(k8s_cluster), name="dummy-pod-1")
+    pod = DummyPod(DummyPodCluster(), k8s_cluster, name="dummy-pod-1")
     experiment = PodFailureExperiment(pod=pod, duration="10s")
     experiment.start()
     captured = capsys.readouterr()
@@ -82,7 +82,7 @@ def test_podchaos_experiment_configuration_is_valid(capsys):
 
 def test_memorystress_experiment_configuration_is_valid(capsys):
     k8s_cluster = DummyK8sCluster()
-    pod = DummyPod(DummyPodCluster(k8s_cluster), name="dummy-pod-1")
+    pod = DummyPod(DummyPodCluster(), k8s_cluster, name="dummy-pod-1")
     experiment = MemoryStressExperiment(pod=pod, duration="10s", workers=4, size="512MB", time_to_reach="10s")
     experiment.start()
     captured = capsys.readouterr()
@@ -146,7 +146,7 @@ unknown_conditions = ''
 def test_experiment_statuses_for_podchaos_condidtions(conditions, status):
     k8s_cluster = DummyK8sCluster()
     k8s_cluster.register_kubectl_result("get PodChaos", Result(stdout=conditions))
-    pod = DummyPod(DummyPodCluster(k8s_cluster), name="dummy-pod-1")
+    pod = DummyPod(DummyPodCluster(), k8s_cluster, name="dummy-pod-1")
 
     experiment = PodFailureExperiment(pod=pod, duration="10s")
     assert experiment.get_status() == status
@@ -155,7 +155,7 @@ def test_experiment_statuses_for_podchaos_condidtions(conditions, status):
 def test_wait_for_finished_returns_when_status_is_finished():
     k8s_cluster = DummyK8sCluster()
     k8s_cluster.register_kubectl_result("get PodChaos", Result(stdout=finished_conditions))
-    pod = DummyPod(DummyPodCluster(k8s_cluster), name="dummy-pod-1")
+    pod = DummyPod(DummyPodCluster(), k8s_cluster, name="dummy-pod-1")
 
     experiment = PodFailureExperiment(pod=pod, duration="1s")
     experiment.start()
@@ -167,7 +167,7 @@ def test_wait_for_finished_raises_exception_when_status_is_error():
     k8s_cluster = DummyK8sCluster()
     k8s_cluster.register_kubectl_result("get PodChaos", Result(error_conditions))
     k8s_cluster.register_kubectl_result("describe PodChaos ", Result(stdout="pod description got from k8s"))
-    pod = DummyPod(DummyPodCluster(k8s_cluster), name="dummy-pod-1")
+    pod = DummyPod(DummyPodCluster(), k8s_cluster, name="dummy-pod-1")
 
     experiment = PodFailureExperiment(pod=pod, duration="1s")
     experiment.start()
@@ -180,7 +180,7 @@ def test_wait_for_finished_raises_exception_when_timeout_occurs():
     k8s_cluster = DummyK8sCluster()
     k8s_cluster.register_kubectl_result("get PodChaos", Result(running_conditions))
     k8s_cluster.register_kubectl_result("describe PodChaos ", Result(stdout="pod description got from k8s"))
-    pod = DummyPod(DummyPodCluster(k8s_cluster), name="dummy-pod-1")
+    pod = DummyPod(DummyPodCluster(), k8s_cluster, name="dummy-pod-1")
 
     experiment = PodFailureExperiment(pod=pod, duration="1s")
     experiment._timeout = 0

@@ -600,7 +600,7 @@ class EksScyllaPodContainer(BaseScyllaPodContainer):
 
     @property
     def ec2_host(self):
-        return self.parent_cluster.k8s_cluster.get_ec2_instance_by_id(self.ec2_instance_id)
+        return self.k8s_cluster.get_ec2_instance_by_id(self.ec2_instance_id)
 
     @property
     def ec2_instance_id(self):
@@ -616,8 +616,8 @@ class EksScyllaPodContainer(BaseScyllaPodContainer):
             '''))
         self._instance_wait_safe(self.ec2_instance_destroy)
         self.wait_for_k8s_node_readiness()
-        self.parent_cluster.k8s_cluster.set_security_groups_on_all_instances()
-        self.parent_cluster.k8s_cluster.set_tags_on_all_instances()
+        self.k8s_cluster.set_security_groups_on_all_instances()
+        self.k8s_cluster.set_tags_on_all_instances()
 
     def ec2_instance_destroy(self, ec2_host=None):
         ec2_host = ec2_host or self.ec2_host
@@ -668,8 +668,9 @@ class EksScyllaPodCluster(ScyllaPodCluster):
                                       rack=rack,
                                       enable_auto_bootstrap=enable_auto_bootstrap)
         for node in new_nodes:
-            self.k8s_cluster.set_security_groups(node.ec2_instance_id)
-            self.k8s_cluster.set_tags(node.ec2_instance_id)
+            ec2_instance_id = node.ec2_instance_id
+            node.k8s_cluster.set_security_groups(ec2_instance_id)
+            node.k8s_cluster.set_tags(ec2_instance_id)
         return new_nodes
 
 

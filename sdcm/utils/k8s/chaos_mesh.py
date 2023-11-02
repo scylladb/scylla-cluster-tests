@@ -121,7 +121,7 @@ class ChaosMeshExperiment:
     CHAOS_KIND = ""  # need to override it in child classes
 
     def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", name: str, timeout: int = 0):
-        self._k8s_cluster = pod.parent_cluster.k8s_cluster
+        self._k8s_cluster = pod.k8s_cluster
         self._name = name
         self._namespace = pod.parent_cluster.namespace
         self._experiment = {
