@@ -707,7 +707,7 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
 
     @cached_property
     def host_remoter(self):
-        return self.parent_cluster.k8s_cluster.remoter
+        return self.k8s_cluster.remoter
 
     @property
     def docker_id(self):

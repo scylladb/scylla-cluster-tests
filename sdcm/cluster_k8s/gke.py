@@ -436,7 +436,7 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer):
 
     @property
     def k8s_node(self):
-        k8s_cluster = self.parent_cluster.k8s_cluster
+        k8s_cluster = self.k8s_cluster
         return k8s_cluster.gce_service.get(project=k8s_cluster.gce_project,
                                            zone=k8s_cluster.gce_zone,
                                            instance=self.node_name)
@@ -456,8 +456,8 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer):
         if self.k8s_node:
             instances_client, _ = get_gce_compute_instances_client()
             operation = instances_client.delete(instance=self.k8s_node.name,
-                                                project=self.parent_cluster.k8s_cluster.gce_project,
-                                                zone=self.parent_cluster.k8s_cluster.gce_zone)
+                                                project=self.k8s_cluster.gce_project,
+                                                zone=self.k8s_cluster.gce_zone)
             wait_for_extended_operation(operation, "wait for k8s_node deletion")
 
     def _instance_wait_safe(self, instance_method: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
@@ -489,7 +489,7 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer):
         # Removing GKE instance and adding one node back to the cluster
         # TBD: Remove below lines when https://issuetracker.google.com/issues/178302655 is fixed
         self.parent_cluster.node_pool.remove_instance(instance_name=node_name)
-        self.parent_cluster.k8s_cluster.resize_node_pool(
+        self.k8s_cluster.resize_node_pool(
             self.parent_cluster.node_pool.name,
             self.parent_cluster.node_pool.num_nodes,
         )

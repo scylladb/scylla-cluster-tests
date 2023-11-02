@@ -295,7 +295,7 @@ class KubectlGeneralLogger(CommandNodeLoggerBase):
     @property
     def _logger_cmd(self) -> str:
         parent_cluster = self._node.parent_cluster
-        cmd = parent_cluster.k8s_cluster.kubectl_cmd(
+        cmd = self._node.k8s_cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s", self._node.name, "-c",
             parent_cluster.container, namespace=parent_cluster.namespace)
         return f"{cmd} >> {self._target_log_file} 2>&1"  # pylint: disable=protected-access
@@ -315,9 +315,10 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
         super().__init__(target_log_file)
         self._pod_name = pod.name
         self._parent_cluster = pod.parent_cluster
+        self._k8s_cluster = pod.k8s_cluster
         self._last_log_timestamp = ""
         self._last_read_timestamp = None
-        self._k8s_core_v1_api = KubernetesOps.core_v1_api(self._parent_cluster.k8s_cluster.get_api_client())
+        self._k8s_core_v1_api = KubernetesOps.core_v1_api(self._k8s_cluster.get_api_client())
         self._termination_event = ThreadEvent()
         self._file_object = open(self._target_log_file, "a", encoding="utf-8")  # pylint: disable=consider-using-with
         self._log_reader = None
@@ -391,7 +392,7 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
                 "'_open_stream()': failed to open pod log stream:\n%s", exc)
             # NOTE: following is workaround for the error 401 which may happen due to
             #       some config data corruption during the forced socket connection failure
-            self._k8s_core_v1_api = KubernetesOps.core_v1_api(self._parent_cluster.k8s_cluster.get_api_client())
+            self._k8s_core_v1_api = KubernetesOps.core_v1_api(self._k8s_cluster.get_api_client())
             raise ConnectionError(str(exc)) from None
 
     def _reread_logs_till_last_logged_timestamp(self):
