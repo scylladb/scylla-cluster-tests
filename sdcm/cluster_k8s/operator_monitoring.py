@@ -32,9 +32,16 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
         self.kluster = kluster
         super().__init__(daemon=True)
 
-    @timeout(timeout=300, sleep_time=10, message='Wait for file to be available')
     def _get_file_follower(self) -> Iterable[str]:
-        return File(self.kluster.scylla_operator_log, 'r').iterate_lines()
+        follower_message = (
+            f"{self.kluster.region_name}: Wait for the '{self.kluster.scylla_operator_log}' "
+            "file to be available")
+
+        @timeout(timeout=300, sleep_time=10, message=follower_message)
+        def _get_file_follower_wrapped(kluster) -> Iterable[str]:
+            return File(kluster.scylla_operator_log, 'r').iterate_lines()
+
+        return _get_file_follower_wrapped(self.kluster)
 
     def run(self):
         file_follower = self._get_file_follower()

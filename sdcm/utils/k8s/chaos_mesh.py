@@ -24,6 +24,7 @@ from typing import Literal
 import yaml
 from botocore.utils import deep_merge
 
+from sdcm.log import SDCMAdapter
 from sdcm import sct_abs_path
 from sdcm.utils.common import time_period_str_to_seconds
 from sdcm.utils.k8s import HelmValues, get_helm_pool_affinity_values
@@ -61,15 +62,17 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
 
     def __init__(self, k8s_cluster: "sdcm.cluster_k8s.KubernetesCluster"):
         self._k8s_cluster = k8s_cluster
+        self.log = SDCMAdapter(LOGGER, extra={'prefix': k8s_cluster.region_name})
         self.initialized = False
 
     def initialize(self) -> None:
         """Installs chaos-mesh on k8s cluster and prepares for future k8s chaos testing."""
         if self._k8s_cluster.kubectl(f"get ns {self.NAMESPACE}", ignore_status=True).ok:
             self.initialized = True
-            LOGGER.info("Chaos Mesh is already installed. Skipping installation.")
+            self.log.info("Chaos Mesh is already installed. Skipping installation.")
             return
-        LOGGER.info("Installing chaos-mesh on %s k8s cluster...", self._k8s_cluster.k8s_scylla_cluster_name)
+        self.log.info(
+            "Installing chaos-mesh on %s k8s cluster...", self._k8s_cluster.k8s_scylla_cluster_name)
         self._k8s_cluster.helm("repo add chaos-mesh https://charts.chaos-mesh.org")
         self._k8s_cluster.helm('repo update')
         self._k8s_cluster.create_namespace(self.NAMESPACE)
@@ -98,7 +101,9 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
             atomic=True,
             timeout="30m"
         )
-        LOGGER.info("chaos-mesh installed successfully on %s k8s cluster.", self._k8s_cluster.k8s_scylla_cluster_name)
+        self.log.info(
+            "chaos-mesh installed successfully on %s k8s cluster.",
+            self._k8s_cluster.k8s_scylla_cluster_name)
         self.initialized = True
 
         # NOTE: following is needed to pass through the GKE's admission controller
@@ -142,6 +147,7 @@ class ChaosMeshExperiment:
         }
         self._timeout: int = timeout
         self._end_time: int = 0
+        self.log = SDCMAdapter(LOGGER, extra={'prefix': self._k8s_cluster.region_name})
 
     @property
     def name(self):
@@ -149,13 +155,13 @@ class ChaosMeshExperiment:
 
     def start(self):
         """Starts experiment. Does not wait for finish."""
-        LOGGER.debug("Starting a %s experiment %s", self.CHAOS_KIND, self._name)
+        self.log.debug("Starting a %s experiment %s", self.CHAOS_KIND, self._name)
         assert self._k8s_cluster, "K8s cluster hasn't been configured for this experiment."
         with NamedTemporaryFile(suffix=".yaml", mode="w") as experiment_config_file:
             yaml.dump(self._experiment, experiment_config_file)
             experiment_config_file.flush()
             self._k8s_cluster.apply_file(experiment_config_file.name)
-        LOGGER.info("'%s' experiment '%s' has started", self.CHAOS_KIND, self._name)
+        self.log.info("'%s' experiment '%s' has started", self.CHAOS_KIND, self._name)
         self._end_time = time.time() + self._timeout
 
     # pylint: disable=too-many-return-statements
@@ -180,19 +186,19 @@ class ChaosMeshExperiment:
             return ExperimentStatus.PAUSED
         if condition["AllRecovered"] and not condition["Paused"] and condition["Selected"]:
             return ExperimentStatus.FINISHED
-        LOGGER.warning("Unknown experiment status: %s", condition)
+        self.log.warning("Unknown experiment status: %s", condition)
         return ExperimentStatus.UNKNOWN
 
     def wait_until_finished(self):
         """Waits given timeout seconds for experiment to finish.
 
         In case of experiment status being an error or timeout occurred, raises an exception."""
-        LOGGER.debug("waiting until '%s' experiment ends...", self._name)
+        self.log.debug("waiting until '%s' experiment ends...", self._name)
         assert self._end_time, "Experiment was not started. Use 'start()' method before waiting."
         while time.time() < self._end_time:
             status = self.get_status()
             if status == ExperimentStatus.FINISHED:
-                LOGGER.debug("'%s' experiment ended.", self._name)
+                self.log.debug("'%s' experiment ended.", self._name)
                 return
             elif status == ExperimentStatus.ERROR:
                 raise ChaosMeshExperimentException(msg="Experiment status error", experiment=self)

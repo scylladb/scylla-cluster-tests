@@ -112,6 +112,7 @@ def test_helm_values_try_set_by_list_index():
 class FakeK8SKluster:  # pylint: disable=too-few-public-methods
     def __init__(self):
         self.get_api_client = mock.MagicMock()
+        self.region_name = 'fake-region-1'
 
 
 def get_k8s_endpoint_update(namespace, pod_name, ip, required_labels_in_place=True,
