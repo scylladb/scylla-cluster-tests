@@ -28,6 +28,7 @@ from sdcm.utils.k8s.chaos_mesh import PodFailureExperiment, ExperimentStatus, Ch
 @dataclass
 class DummyK8sCluster:
     _commands: Dict[str, Result] = field(default_factory=dict)
+    region_name: str = 'fake-region-1'
 
     def apply_file(self, config_path: str):
         """Parses file content to yaml and prints it."""

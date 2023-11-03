@@ -37,6 +37,7 @@ from urllib3.exceptions import (
     ReadTimeoutError,
 )
 
+from sdcm.log import SDCMAdapter
 from sdcm import sct_abs_path
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.common import walk_thru_data
@@ -343,7 +344,8 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             config_paths.append(config_path)
 
         for current_config_path in sorted(config_paths):
-            LOGGER.debug("Processing '%s' file.", current_config_path)
+            LOGGER.debug("Processing '%s' file.", current_config_path,
+                         extra={'prefix': kluster.region_name})
             with NamedTemporaryFile(mode='tw') as temp_file:
                 resulted_content = []
                 if envsubst:
@@ -422,11 +424,13 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                                      timeout: float, namespace: str,
                                      selector: str = '',
                                      sleep_between_retries: int = 10):
-        assert isinstance(total_pods, (int, float)) or callable(total_pods), "total_pods should be number or callable"
+        assert isinstance(total_pods, (int, float)) or callable(total_pods), (
+            "total_pods should be number or callable")
+        waiter_message = (
+            f"{kluster.region_name}: Wait for the '{total_pods}' pod(s) "
+            f"from the '{namespace}' namespace with '{condition}' condition to be true...")
 
-        @timeout_decor(message=f"Wait for {total_pods} pod(s) from {namespace} namespace {condition} to be true...",
-                       timeout=timeout * 60,
-                       sleep_time=sleep_between_retries)
+        @timeout_decor(message=waiter_message, timeout=timeout * 60, sleep_time=sleep_between_retries)
         def wait_for_condition(kluster, condition, total_pods, timeout, namespace, selector):
             # To make it more informative in worst case scenario made it repeat 5 times, by readiness_timeout // 5
             if selector:
@@ -496,7 +500,9 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         # To keep this cache file updated we run GcloudTokenUpdateThread thread
         if kube_config_path is None:
             kube_config_path = kluster.kube_config_path
-        LOGGER.debug("Patch %s to use file token %s", kube_config_path, static_token_path)
+        LOGGER.debug(
+            "Patch %s to use file token %s", kube_config_path, static_token_path,
+            extra={'prefix': kluster.region_name})
 
         with open(kube_config_path, encoding="utf-8") as kube_config:
             data = yaml.safe_load(kube_config)
@@ -510,7 +516,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             yaml.safe_dump(data, kube_config)
 
         LOGGER.debug('Patched kubectl config at %s with static kubectl token from %s',
-                     kube_config_path, static_token_path)
+                     kube_config_path, static_token_path, extra={'prefix': kluster.region_name})
 
     @classmethod
     def watch_events(cls, k8s_core_v1_api: k8s.client.CoreV1Api, name: str = None, namespace: str = None,
@@ -670,7 +676,7 @@ class HelmContainerMixin:
 
         cmd = " ".join(cmd)
 
-        LOGGER.debug("Execute `%s'", cmd)
+        LOGGER.debug("Execute `%s'", cmd, extra={'prefix': kluster.region_name})
         try:
             result = LOCALRUNNER.run(cmd)
             output = result.stdout.strip()
@@ -820,6 +826,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
         self.mapper_dict = mapper_dict
         self.watcher = None
         self._k8s_core_v1_api = KubernetesOps.core_v1_api(self.k8s_kluster.get_api_client())
+        self.log = SDCMAdapter(LOGGER, extra={'prefix': k8s_kluster.region_name})
 
     @retrying(n=3600, sleep_time=1, allowed_exceptions=(ConnectionError, ))
     def _open_stream(self, cache={}) -> None:  # pylint: disable=dangerous-default-value
@@ -838,7 +845,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
                 _request_timeout=self.READ_REQUEST_TIMEOUT,
                 _preload_content=False)
         except k8s.client.rest.ApiException as exc:
-            LOGGER.warning("'_open_stream()': failed to open stream:\n%s", exc)
+            self.log.warning("'_open_stream()': failed to open stream:\n%s", exc)
             # NOTE: following is workaround for the error 401 which may happen due to
             #       some config data corruption during the forced socket connection failure
             self._k8s_core_v1_api = KubernetesOps.core_v1_api(self.k8s_kluster.get_api_client())
@@ -864,10 +871,10 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
             except Exception:  # pylint: disable=broad-except
                 if not self._termination_event.wait(0.01):
                     raise
-                LOGGER.info("Scylla pods IP change tracker thread has been stopped")
+                self.log.info("Scylla pods IP change tracker thread has been stopped")
 
     def stop(self, timeout=None) -> None:
-        LOGGER.warning("Stopping Scylla pods IP change tracker thread")
+        self.log.warning("Stopping Scylla pods IP change tracker thread")
         self._termination_event.set()
         if hasattr(self.watcher, 'close') and not self.watcher.closed:
             self.watcher.close()
@@ -895,7 +902,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
         # }
         data = {}
         try:
-            LOGGER.debug("Processing following line: %s", line)
+            self.log.debug("Processing following line: %s", line)
             data = yaml.safe_load(line) or {}
             metadata = data.get('object', {}).get('metadata', {})
             namespace = metadata.get('namespace')
@@ -926,7 +933,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
                     if not old_ip_candidate:
                         break
                     self.mapper_dict[namespace][name]['old_ips'].append(old_ip_candidate)
-                    LOGGER.info(
+                    self.log.info(
                         "'%s/%s' node has changed it's pod IP address from '%s' to '%s'. "
                         "All old IPs: %s",
                         namespace, name, old_ip_candidate, current_ip_address,
@@ -936,7 +943,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
                 else:
                     break
         except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.warning(
+            self.log.warning(
                 "Failed to parse following line: %s\nerr: %s", line, exc)
 
     def _call_callbacks(self, namespace: str, pod_name: str) -> None:
@@ -950,11 +957,11 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
             kwargs = {} | callback[2]
             if add_pod_name_as_kwarg:
                 kwargs['pod_name'] = pod_name
-            LOGGER.debug("Calling '%s' callback %s", func.__name__, suffix)
+            self.log.debug("Calling '%s' callback %s", func.__name__, suffix)
             try:
                 func(*args, **kwargs)
             except Exception as exc:  # pylint: disable=broad-except
-                LOGGER.warning("Callback call failed %s: %s", suffix, str(exc))
+                self.log.warning("Callback call failed %s: %s", suffix, str(exc))
 
         data = self.mapper_dict.get(namespace, {})
         for dict_key in (pod_name, '__each__'):
@@ -1003,7 +1010,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
         Per-pod callbacks get run first, then per-namespace ones.
         """
         if not callbacks:
-            LOGGER.warning(
+            self.log.warning(
                 "No callbacks are provided. Nothing to register. "
                 "namespace='%s', pod_name='%s'",
                 namespace, pod_name)
@@ -1029,7 +1036,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
                 self.mapper_dict[namespace][pod_name]['callbacks'].append(
                     (callback[0], callback[1], callback[2], add_pod_name_as_kwarg))
             else:
-                LOGGER.warning(
+                self.log.warning(
                     "Unexpected type (%s) of the callback: %s. Skipping", type(callback), callback)
 
 

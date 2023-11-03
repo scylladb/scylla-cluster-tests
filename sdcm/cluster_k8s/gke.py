@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import logging
 from textwrap import dedent
 from typing import List, Dict, ParamSpec, TypeVar
 from functools import cached_property
@@ -46,8 +45,6 @@ GKE_API_CALL_RATE_LIMIT = 5  # ops/s
 GKE_API_CALL_QUEUE_SIZE = 1000  # ops
 GKE_URLLIB_RETRY = 5  # How many times api request is retried before reporting failure
 GKE_URLLIB_BACKOFF_FACTOR = 0.1
-
-LOGGER = logging.getLogger(__name__)
 
 P = ParamSpec("P")  # pylint: disable=invalid-name
 R = TypeVar("R")  # pylint: disable=invalid-name
@@ -269,8 +266,9 @@ class GkeCluster(KubernetesCluster):
         return f"{type(self).__name__} {self.name} | Region: {self.gce_region} | Version: {self.gke_cluster_version}"
 
     def deploy(self):
-        LOGGER.info("Create GKE cluster `%s' with %d node(s) in %s",
-                    self.short_cluster_name, self.n_nodes, self.AUXILIARY_POOL_NAME)
+        self.log.info(
+            "Create GKE cluster `%s' with %d node(s) in %s",
+            self.short_cluster_name, self.n_nodes, self.AUXILIARY_POOL_NAME)
         tags = ",".join(f"{key}={value}" for key, value in self.tags.items())
         with self.gcloud as gcloud:
             # NOTE: only static K8S release channel supports disabling of autoupgrade
@@ -301,7 +299,7 @@ class GkeCluster(KubernetesCluster):
                 is_deployed=True
             ))
 
-        LOGGER.info("Setup RBAC for GKE cluster `%s'", self.name)
+        self.log.info("Setup RBAC for GKE cluster `%s'", self.name)
         self.kubectl("create clusterrolebinding cluster-admin-binding --clusterrole cluster-admin "
                      f"--user {self.gce_user}")
 
@@ -318,7 +316,9 @@ class GkeCluster(KubernetesCluster):
         self._add_pool(pool)
         if pool.is_deployed:
             return
-        LOGGER.info("Create %s pool with %d node(s) in GKE cluster `%s'", pool.name, pool.num_nodes, self.name)
+        self.log.info(
+            "Create %s pool with %d node(s) in GKE cluster `%s'",
+            pool.name, pool.num_nodes, self.name)
         if wait_till_ready:
             with self.api_call_rate_limiter.pause:
                 pool.deploy_and_wait_till_ready()
@@ -358,7 +358,7 @@ class GkeCluster(KubernetesCluster):
 
         with self.gcloud as gcloud:
             # Upgrade control plane (API, scheduler, manager and so on ...)
-            LOGGER.info("Upgrading K8S control plane to the '%s' version", upgrade_version)
+            self.log.info("Upgrading K8S control plane to the '%s' version", upgrade_version)
             gcloud.run(f"container clusters upgrade {self.short_cluster_name} "
                        f"--master --quiet --project {self.gce_project} "
                        f"--region {self.gce_region} "
@@ -371,8 +371,7 @@ class GkeCluster(KubernetesCluster):
                     (self.SCYLLA_POOL_NAME, not use_additional_scylla_nodepool)):
                 if not need_upgrade:
                     continue
-                LOGGER.info("Upgrading '%s' node pool to the '%s' version",
-                            node_pool, upgrade_version)
+                self.log.info("Upgrading '%s' node pool to the '%s' version", node_pool, upgrade_version)
                 # NOTE: one node upgrade takes about 10 minutes if no load and preloaded data exist
                 gcloud.run(f"container clusters upgrade {self.short_cluster_name} "
                            f"--quiet --project {self.gce_project} "
@@ -442,8 +441,9 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer):
                                            instance=self.node_name)
 
     def terminate_k8s_host(self):
-        self.log.info('terminate_k8s_host: GCE instance of kubernetes node will be terminated, '
-                      'the following is affected :\n' + dedent('''
+        self.k8s_cluster.log.info(
+            'terminate_k8s_host: GCE instance of kubernetes node will be terminated, '
+            'the following is affected :\n' + dedent('''
             GCE instance  X  <-
             K8s node      X
             Scylla Pod    X
@@ -477,7 +477,7 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer):
         # As result GKE infrastructure does not allow you to add a node to the cluster
         # In order to fix that we have to delete instance manually and add a node to the cluster
 
-        self.log.info('terminate_k8s_node: kubernetes node will be deleted, the following is affected :\n' + dedent('''
+        self.k8s_cluster.log.info('terminate_k8s_node: kubernetes node will be deleted, the following is affected :\n' + dedent('''
             GKE instance    X  <-
             K8s node        X  <-
             Scylla Pod      X

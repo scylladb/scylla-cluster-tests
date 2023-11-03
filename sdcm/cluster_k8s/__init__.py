@@ -58,6 +58,7 @@ from sdcm.remote.kubernetes_cmd_runner import (
     KubernetesPodRunner,
 )
 from sdcm.coredump import CoredumpExportFileThread
+from sdcm.log import SDCMAdapter
 from sdcm.mgmt import AnyManagerCluster
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
@@ -231,7 +232,7 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-insta
                 capacity = item.status.allocatable
                 return convert_cpu_value_from_k8s_to_units(capacity['cpu']), convert_memory_value_from_k8s_to_units(
                     capacity['memory'])
-        raise RuntimeError(f"Can't find any node for pool '{self.name}'")
+        raise RuntimeError(f"{self.k8s_cluster.region_name}: Can't find any node for pool '{self.name}'")
 
     @property
     def cpu_capacity(self) -> float:
@@ -250,14 +251,16 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-insta
         try:
             return self.k8s_cluster.k8s_core_v1_api.list_node(label_selector=f'{self.pool_label_name}={self.name}')
         except Exception as details:  # pylint: disable=broad-except
-            LOGGER.debug("Failed to get nodes list: %s", str(details))
+            self.k8s_cluster.log.debug("Failed to get nodes list: %s", str(details))
             return {}
 
     def wait_for_nodes_readiness(self):
         readiness_timeout = self.readiness_timeout
 
         @timeout_wrapper(
-            message=f"Wait for {self.num_nodes} node(s) in pool {self.name} to be ready...",
+            message=(
+                f"{self.k8s_cluster.region_name}: Wait for {self.num_nodes} node(s)"
+                f" in the '{self.name}' pool to be ready..."),
             sleep_time=30,
             timeout=readiness_timeout * 60)
         def wait_nodes_are_ready():
@@ -333,6 +336,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     #       such as 'sdcm.utils.remote_logger.ScyllaOperatorLogger'.
     _scylla_operator_namespace = SCYLLA_OPERATOR_NAMESPACE
     _scylla_manager_namespace = SCYLLA_MANAGER_NAMESPACE
+
+    @cached_property
+    def log(self):
+        # return logging.getLogger(f"{__name__} | {self.region_name}")
+        return SDCMAdapter(LOGGER, extra={'prefix': self.region_name})
 
     @cached_property
     def tenants_number(self) -> int:
@@ -443,12 +451,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         return _helm_dir_path
 
     def create_namespace(self, namespace: str) -> None:
-        LOGGER.info("Create '%s' namespace", namespace)
+        self.log.info("Create '%s' namespace", namespace)
         namespaces = yaml.safe_load(self.kubectl("get namespaces -o yaml").stdout)
         if not [ns["metadata"]["name"] for ns in namespaces["items"] if ns["metadata"]["name"] == namespace]:
             self.kubectl(f"create namespace {namespace}")
         else:
-            LOGGER.warning("The '%s' namespace already exists.")
+            self.log.warning("The '%s' namespace already exists.")
 
     @cached_property
     def cert_manager_log(self) -> str:
@@ -506,9 +514,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             if pool_name is None:
                 pool_name = self.AUXILIARY_POOL_NAME
 
-            LOGGER.info("Deploy cert-manager")
+            self.log.info("Deploy cert-manager")
             self.create_namespace(cert_manager_namespace)
-            LOGGER.debug(self.helm("repo add jetstack https://charts.jetstack.io"))
+            self.log.debug(self.helm("repo add jetstack https://charts.jetstack.io"))
 
             if pool_name:
                 values_dict = get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name)
@@ -520,7 +528,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
             helm_values.set('installCRDs', True)
 
-            LOGGER.debug(self.helm(
+            self.log.debug(self.helm(
                 "install cert-manager jetstack/cert-manager"
                 f" --version v{self.params.get('k8s_cert_manager_version')}",
                 namespace=cert_manager_namespace, values=helm_values))
@@ -555,7 +563,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     @cached_property
     def _scylla_operator_chart_version(self):
-        LOGGER.debug(self.helm(
+        self.log.debug(self.helm(
             f"repo add scylla-operator {self.params.get('k8s_scylla_operator_helm_repo')}"))
 
         # NOTE: 'scylla-operator' and 'scylla-manager' chart versions are always the same.
@@ -563,11 +571,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         chart_version = self.params.get("k8s_scylla_operator_chart_version").strip().lower()
         if chart_version in ("", "latest"):
             chart_version = self.get_latest_chart_version("scylla-operator/scylla-operator")
-            LOGGER.info(
+            self.log.info(
                 "Using automatically found following latest scylla-operator chart version: %s",
                 chart_version)
         else:
-            LOGGER.info(
+            self.log.info(
                 "Using following predefined scylla-operator chart version: %s", chart_version)
         return chart_version
 
@@ -612,7 +620,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         # controllerImage.tag        -> self.params.get(
         #                                   'k8s_scylla_operator_docker_image').split(':')[-1]
         if not self.params.get('reuse_cluster'):
-            LOGGER.info("Deploy scylla-manager")
+            self.log.info("Deploy scylla-manager")
 
             helm_affinity = get_helm_pool_affinity_values(
                 self.POOL_LABEL_NAME, pool_name) if pool_name else {}
@@ -652,7 +660,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             self.create_namespace(SCYLLA_MANAGER_NAMESPACE)
 
             # Install and wait for initialization of the Scylla Manager chart
-            LOGGER.debug(self.helm_install(
+            self.log.debug(self.helm_install(
                 target_chart_name="scylla-manager",
                 source_chart_name="scylla-operator/scylla-manager",
                 version=self._scylla_operator_chart_version,
@@ -733,9 +741,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 values.set('image.tag', scylla_operator_image_tag)
 
             # Install and wait for initialization of the Scylla Operator chart
-            LOGGER.info("Deploy Scylla Operator")
+            self.log.info("Deploy Scylla Operator")
             self.create_namespace(SCYLLA_OPERATOR_NAMESPACE)
-            LOGGER.debug(self.helm_install(
+            self.log.debug(self.helm_install(
                 target_chart_name="scylla-operator",
                 source_chart_name="scylla-operator/scylla-operator",
                 version=self._scylla_operator_chart_version,
@@ -778,29 +786,31 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def upgrade_scylla_operator(self, new_helm_repo: str,
                                 new_chart_version: str,
                                 new_docker_image: str = '') -> None:
-        LOGGER.info("Upgrade Scylla Operator using '%s' helm chart and '%s' docker image\n"
-                    "Helm repo: %s", new_chart_version, new_docker_image, new_helm_repo)
+        self.log.info(
+            "Upgrade Scylla Operator using '%s' helm chart and '%s' docker image\n"
+            "Helm repo: %s", new_chart_version, new_docker_image, new_helm_repo)
 
         local_repo_name = "scylla-operator-upgrade"
-        LOGGER.debug(self.helm(f"repo add {local_repo_name} {new_helm_repo}"))
+        self.log.debug(self.helm(f"repo add {local_repo_name} {new_helm_repo}"))
         self.helm('repo update')
 
         # Calculate new chart name if it is not specific
         if new_chart_version in ("", "latest"):
             new_chart_version = self.get_latest_chart_version(f"{local_repo_name}/scylla-operator")
-            LOGGER.info(
+            self.log.info(
                 "Using automatically found following latest scylla-operator "
                 "upgrade chart version: %s", new_chart_version)
         else:
-            LOGGER.info("Using following predefined scylla-operator upgrade chart version: %s",
-                        new_chart_version)
+            self.log.info(
+                "Using following predefined scylla-operator upgrade chart version: %s",
+                new_chart_version)
 
         # Upgrade CRDs if new chart version is newer than v1.5.0
         # Helm doesn't do CRD 'upgrades', only 'creations'.
         # Details:
         #   https://helm.sh/docs/chart_best_practices/custom_resource_definitions/#some-caveats-and-explanations
         if ComparableScyllaOperatorVersion(new_chart_version.split("-")[0]) > "1.5.0":
-            LOGGER.info("Upgrade Scylla Operator CRDs: START")
+            self.log.info("Upgrade Scylla Operator CRDs: START")
             try:
                 with TemporaryDirectory() as tmpdir:
                     self.helm(
@@ -813,8 +823,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                         self.apply_file(
                             os.path.join(crd_basedir, current_file), modifiers=[], envsubst=False)
             except Exception as exc:  # pylint: disable=broad-except
-                LOGGER.debug("Upgrade Scylla Operator CRDs: Exception: %s", exc)
-            LOGGER.info("Upgrade Scylla Operator CRDs: END")
+                self.log.debug("Upgrade Scylla Operator CRDs: Exception: %s", exc)
+            self.log.info("Upgrade Scylla Operator CRDs: END")
 
         # Get existing scylla-operator helm chart values
         values = HelmValues(json.loads(self.helm(
@@ -831,7 +841,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         values.set('image.tag', new_docker_image.split(':')[-1].strip())
 
         # Upgrade Scylla Operator using Helm chart
-        LOGGER.debug(self.helm_upgrade(
+        self.log.debug(self.helm_upgrade(
             target_chart_name="scylla-operator",
             source_chart_name=f"{local_repo_name}/scylla-operator",
             version=new_chart_version,
@@ -866,11 +876,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     @log_run_info
     def deploy_minio_s3_backend(self):
         if not self.params.get('reuse_cluster'):
-            LOGGER.info('Deploy minio s3-like backend server')
+            self.log.info('Deploy minio s3-like backend server')
             self.create_namespace(MINIO_NAMESPACE)
             values = HelmValues({})
             values.set('persistence.size', self.params.get("k8s_minio_storage_size"))
-            LOGGER.debug(self.helm_install(
+            self.log.debug(self.helm_install(
                 target_chart_name="minio",
                 source_chart_name=LOCAL_MINIO_DIR,
                 namespace=MINIO_NAMESPACE,
@@ -1041,7 +1051,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         if not isinstance(node_pools, list):
             node_pools = [node_pools]
 
-        LOGGER.info("Install static local volume provisioner")
+        self.log.info("Install static local volume provisioner")
         self.apply_file(
             LOCAL_PROVISIONER_FILE,
             modifiers=[affinity_modifier
@@ -1056,7 +1066,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         if not isinstance(node_pools, list):
             node_pools = [node_pools]
 
-        LOGGER.info("Install dynamic local volume provisioner")
+        self.log.info("Install dynamic local volume provisioner")
         config_modifiers = [affinity_modifier
                             for current_pool in node_pools
                             for affinity_modifier in current_pool.affinity_modifiers]
@@ -1122,7 +1132,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         if not isinstance(node_pools, list):
             node_pools = [node_pools]
 
-        LOGGER.info("Install DaemonSets required by scylla nodes")
+        self.log.info("Install DaemonSets required by scylla nodes")
         scylla_machine_image_args = '--all'
         if ComparableScyllaOperatorVersion(self._scylla_operator_chart_version) > "1.5.0":
             # NOTE: operator versions newer than v1.5.0 have it's own perf tuning,
@@ -1166,7 +1176,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         # Tune performance of the Scylla nodes
         if self.is_performance_tuning_enabled:
-            LOGGER.info("Tune K8S nodes dedicated for Scylla")
+            self.log.info("Tune K8S nodes dedicated for Scylla")
             self.kubectl_wait(
                 "--for condition=established crd/scyllaoperatorconfigs.scylla.scylladb.com")
             self.kubectl_wait("--for condition=established crd/nodeconfigs.scylla.scylladb.com")
@@ -1192,7 +1202,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     @log_run_info
     def deploy_ingress_controller(self, pool_name: str = None):
-        LOGGER.info("Create and initialize ingress controller")
+        self.log.info("Create and initialize ingress controller")
         if not self.params.get('reuse_cluster'):
             pool_name = pool_name or self.AUXILIARY_POOL_NAME
             comma_separated_tags = ", ".join([f'{k}={v}' for k, v in self.tags.items()])
@@ -1271,7 +1281,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         if self.params.get('reuse_cluster'):
             try:
                 self.wait_till_cluster_is_operational()
-                LOGGER.debug("Check Scylla cluster")
+                self.log.debug("Check Scylla cluster")
                 self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=namespace)
                 self.start_scylla_cluster_events_thread()
                 return
@@ -1279,7 +1289,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 raise RuntimeError(
                     "SCT_REUSE_CLUSTER is set, but target scylla cluster is unhealthy") from exc
 
-        LOGGER.info("Create and initialize a Scylla cluster")
+        self.log.info("Create and initialize a Scylla cluster")
         self.create_scylla_manager_agent_config(namespace=namespace)
 
         # Init 'scylla-config' configMap before installation of Scylla to avoid redundant restart
@@ -1287,7 +1297,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.scylla_restart_required = False
 
         # Deploy scylla cluster
-        LOGGER.debug(self.helm_install(
+        self.log.debug(self.helm_install(
             target_chart_name="scylla",
             source_chart_name="scylla-operator/scylla",
             version=self._scylla_operator_chart_version,
@@ -1301,10 +1311,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         ))
         self.wait_till_cluster_is_operational()
 
-        LOGGER.debug("Check Scylla cluster")
+        self.log.debug("Check Scylla cluster")
         self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=namespace)
-        LOGGER.debug("Wait for %d secs before we start to apply changes to the cluster",
-                     DEPLOY_SCYLLA_CLUSTER_DELAY)
+        self.log.debug(
+            "Wait for %d secs before we start to apply changes to the cluster",
+            DEPLOY_SCYLLA_CLUSTER_DELAY)
         self.start_scylla_cluster_events_thread(namespace=namespace)
 
         # TODO: define 'scyllaArgs' option as part of the Scylla helm chart when following
@@ -1321,20 +1332,20 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def _affinity_modifiers_for_monitoring_resources(self):
         node_pool = self.pools.get(self.MONITORING_POOL_NAME)
         if not node_pool:
-            LOGGER.warning(
+            self.log.warning(
                 "'Monitoring' node pool was not found."
                 " Will schedule 'monitoring' resources creation in the 'Auxiliary' one.")
             node_pool = self.pools.get(self.AUXILIARY_POOL_NAME)
         affinity_modifiers = node_pool.affinity_modifiers if node_pool else None
         if not affinity_modifiers:
-            LOGGER.warning(
+            self.log.warning(
                 "'Auxiliary' node pool was not found."
                 " Will schedule 'monitoring' resources creation without affinity rules.")
         return affinity_modifiers
 
     @log_run_info
     def deploy_prometheus_operator(self) -> None:
-        LOGGER.info("Deploy Prometheus operator")
+        self.log.info("Deploy Prometheus operator")
         if not self.params.get('reuse_cluster'):
             # NOTE: apply configs on the 'server' side to avoid following error:
             #         The CustomResourceDefinition "prometheuses.monitoring.coreos.com" is invalid:\
@@ -1348,8 +1359,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     def deploy_scylla_cluster_monitoring(self, cluster_name: str, namespace: str,
                                          monitoring_type: str = "Platform") -> None:
-        LOGGER.info("Deploy 'ScyllaDBMonitoring' (type: %s) for the '%s' Scylla cluster in the '%s' namespace",
-                    monitoring_type, cluster_name, namespace)
+        self.log.info(
+            "Deploy 'ScyllaDBMonitoring' (type: %s) for the '%s' Scylla cluster in the '%s' namespace",
+            monitoring_type, cluster_name, namespace)
         self.apply_file(
             SCYLLA_MONITORING_CONFIG_PATH,
             modifiers=self._affinity_modifiers_for_monitoring_resources,
@@ -1425,11 +1437,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 f" -d @{sct_dashboard_obj.name} -H 'Content-Type: application/json'"
             ).stdout.strip()
         if upload_result != "200":
-            LOGGER.warning(
+            self.log.warning(
                 "Error uploading SCT dashboard '%s' to the grafana in the '%s' namespace: %s",
                 sct_dashboard_file, namespace, upload_result)
         else:
-            LOGGER.info(
+            self.log.info(
                 "SCT dashboard '%s' uploaded successfully to the grafana in the '%s' namespace",
                 sct_dashboard_file, namespace)
         return upload_result
@@ -1438,7 +1450,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def deploy_loaders_cluster(self,
                                node_pool: CloudK8sNodePool = None,
                                namespace: str = LOADER_NAMESPACE) -> None:
-        LOGGER.info("Create and initialize a loaders cluster in the '%s' namespace", namespace)
+        self.log.info("Create and initialize a loaders cluster in the '%s' namespace", namespace)
         if node_pool:
             self.deploy_node_pool(node_pool)
             cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
@@ -1656,7 +1668,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             pod_object.wait_for_svc()
             pod_object.mark_to_be_replaced()
             pod_object.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
-            LOGGER.info("Wait for the '%s' pod to be ready", pod_object.name)
+            self.log.info("Wait for the '%s' pod to be ready", pod_object.name)
             pod_object.wait_for_pod_readiness(
                 pod_readiness_timeout_minutes=pod_readiness_timeout_minutes)
 
@@ -1673,7 +1685,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             original_config_map = deepcopy(config_map)
             yield config_map
             if original_config_map == config_map:
-                LOGGER.debug("%s: scylla config map hasn't been changed", self)
+                self.log.debug("%s: scylla config map hasn't been changed", self)
                 return
             if exists:
                 self.k8s_core_v1_api.patch_namespaced_config_map(
@@ -1705,13 +1717,13 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             new_data = deepcopy(old_data)
             yield new_data
             if old_data == new_data:
-                LOGGER.debug("%s: '%s' hasn't been changed", self, filename)
+                self.log.debug("%s: '%s' hasn't been changed", self, filename)
                 return
             old_data_as_list = yaml.safe_dump(old_data).splitlines(keepends=True)
             new_data_as_str = yaml.safe_dump(new_data)
             new_data_as_list = new_data_as_str.splitlines(keepends=True)
             diff = "".join(unified_diff(old_data_as_list, new_data_as_list))
-            LOGGER.debug("%s: '%s' has been updated:\n%s", self, filename, diff)
+            self.log.debug("%s: '%s' has been updated:\n%s", self, filename, diff)
             if not new_data:
                 scylla_config_map.pop(filename, None)
             else:
@@ -1745,9 +1757,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 scylla_yml["murmur3_partitioner_ignore_msb_bits"] = int(
                     kwargs.pop("murmur3_partitioner_ignore_msb_bits"))
 
-            LOGGER.info("K8S SCYLLA_YAML: %s", scylla_yml)
+            self.log.info("K8S SCYLLA_YAML: %s", scylla_yml)
             if kwargs:
-                LOGGER.warning("K8S SCYLLA_YAML, not applied options: %s", kwargs)
+                self.log.warning("K8S SCYLLA_YAML, not applied options: %s", kwargs)
 
 
 class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-methods
@@ -1774,7 +1786,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         return self.pod_terminate_timeout + self.pod_readiness_timeout
 
     def configure_remote_logging(self):
-        self.log.debug("No need to configure remote logging on k8s")
+        self.k8s_cluster.log.debug("No need to configure remote logging on k8s")
 
     @staticmethod
     def is_docker() -> bool:
@@ -1809,7 +1821,8 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
                                                          node=self,
                                                          target_log_file=self.system_log)
         if self._journal_thread:
-            self.log.info("Use %s as logging daemon", type(self._journal_thread).__name__)
+            self.k8s_cluster.log.info(
+                "Use %s as logging daemon", type(self._journal_thread).__name__)
             self._journal_thread.start()
         else:
             TestFrameworkEvent(source=self.__class__.__name__,
@@ -2118,7 +2131,8 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
         Gracefully terminating kubernetes host and return it back to life.
         It terminates scylla node that is running on it
         """
-        self.log.info('drain_k8s_node: kubernetes node will be drained, the following is affected :\n' + dedent('''
+        self.k8s_cluster.log.info(
+            'drain_k8s_node: kubernetes node will be drained, the following is affected :\n' + dedent('''
             GCE instance  -
             K8s node      X  <-
             Scylla Pod    X
@@ -2527,7 +2541,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
     @retrying(n=20, sleep_time=3, allowed_exceptions=(k8s_exceptions.ApiException, ),
               message="Failed to update ScyllaCluster's spec...")
     def replace_scylla_cluster_value(self, path: str, value: Any) -> Optional[ANY_KUBERNETES_RESOURCE]:
-        LOGGER.debug("Replace `%s' with `%s' in %s's spec", path, value, self.scylla_cluster_name)
+        self.k8s_cluster.log.debug(
+            "Replace `%s' with `%s' in %s's spec", path, value, self.scylla_cluster_name)
         return self._k8s_scylla_cluster_api.patch(body=[{"op": "replace", "path": path, "value": value}],
                                                   name=self.scylla_cluster_name,
                                                   namespace=self.namespace,
@@ -3001,8 +3016,9 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                 "POD_MEMORY_LIMIT": self.k8s_cluster.calculated_loader_memory_limit,
             },
         )
-        LOGGER.debug("Check the '%s' loaders cluster in the '%s' namespace",
-                     self.loader_cluster_name, self.namespace)
+        self.k8s_cluster.debug(
+            "Check the '%s' loaders cluster in the '%s' namespace",
+            self.loader_cluster_name, self.namespace)
         self.k8s_cluster.kubectl("get statefulset", namespace=self.namespace)
         self.k8s_cluster.kubectl("get pods", namespace=self.namespace)
 

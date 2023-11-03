@@ -197,15 +197,15 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         return self.host_node.remoter.run('ls /usr/local/bin/docker || ls /usr/bin/docker', ignore_status=True).ok
 
     def setup_prerequisites(self):
-        LOGGER.info("Install prerequisites to %s", self.host_node)
+        self.log.info("Install prerequisites to %s", self.host_node)
         MinimalK8SOps.setup_prerequisites(node=self.host_node)
 
     def setup_docker(self):
-        LOGGER.info("Install docker to %s", self.host_node)
+        self.log.info("Install docker to %s", self.host_node)
         MinimalK8SOps.setup_docker(node=self.host_node, target_user=self._target_user)
 
     def setup_kubectl(self):
-        LOGGER.info("Install kubectl to %s", self.host_node)
+        self.log.info("Install kubectl to %s", self.host_node)
         MinimalK8SOps.setup_kubectl(node=self.host_node, kubectl_version=self.local_kubectl_version)
 
     def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None,
@@ -220,7 +220,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
 
     def create_kubectl_config(self):
         """Kubectl config gets created when K8S cluster is started"""
-        LOGGER.info("Creating kubectl config")
+        self.log.info("Creating kubectl config")
         default_kube_config_dir_path = os.path.expanduser("~/.kube")
         kube_paths = {self.kube_config_dir_path, default_kube_config_dir_path}
         for kube_path in kube_paths:
@@ -260,11 +260,11 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         return LOCALRUNNER.run("kubectl version --client --short").stdout.rsplit(None, 1)[-1][1:]
 
     def docker_pull(self, image):
-        LOGGER.info("Pull `%s' to docker environment", image)
+        self.log.info("Pull `%s' to docker environment", image)
         self.remoter.run(f"docker pull -q {image}")
 
     def docker_tag(self, src, dst):
-        LOGGER.info("Retag `%s' image as '%s'", src, dst)
+        self.log.info("Retag `%s' image as '%s'", src, dst)
         self.remoter.run(f"docker tag {src} {dst}")
 
     @property
@@ -347,7 +347,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
                 try:
                     return doc["spec"]["template"]["spec"]["containers"][0]["image"]
                 except Exception as exc:  # pylint: disable=broad-except
-                    LOGGER.warning(
+                    self.log.warning(
                         "Could not read the static local volume provisioner image: %s", exc)
         return ""
 
@@ -379,7 +379,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
                             try:
                                 ingress_images.add(container["image"])
                             except Exception as exc:  # pylint: disable=broad-except
-                                LOGGER.warning(
+                                self.log.warning(
                                     "Could not read the ingress controller related image: %s", exc)
         return ingress_images
 
@@ -497,7 +497,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
         self.host_node.remoter.sudo(f'bash -cxe "{script}"')
 
     def start_k8s_software(self) -> None:
-        LOGGER.info("Start Kind cluster")
+        self.log.info("Start Kind cluster")
         audit_log_path_option = ""
         if self.params.get("k8s_log_api_calls"):
             audit_log_path_option = f"audit-log-path: {DST_APISERVER_AUDIT_LOG}"
@@ -625,7 +625,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
                         scylla_image_tag)
                     images_to_retag[self.scylla_image] = f"{scylla_image_repo}:{new_scylla_image_tag}"
                 except ValueError as exc:
-                    LOGGER.warning(
+                    self.log.warning(
                         "Failed to transform non-semver scylla version '%s' to a semver-like one:\n%s",
                         scylla_image_tag, str(exc))
 
@@ -648,7 +648,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
         # try:
         #     images_to_cache.append(self.get_operator_image())
         # except ValueError as exc:
-        #     LOGGER.warning("scylla-operator image won't be cached. Error: %s", str(exc))
+        #     self.log.warning("scylla-operator image won't be cached. Error: %s", str(exc))
 
         if not self.params.get('reuse_cluster'):
             self.load_images(images_to_cache)
@@ -692,7 +692,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
                     f"&& mkdir -p {self.logdir}/{dst_subdir} "
                     f"&& mv {self.logdir}/*/{log_prefix}* {self.logdir}/{dst_subdir}")
             except Exception as exc:  # pylint: disable=broad-except
-                LOGGER.warning(
+                self.log.warning(
                     "Failed to copy K8S apiserver audit logs located at '%s'. Exception: \n%s",
                     src_container_path, exc)
         super().gather_k8s_logs()

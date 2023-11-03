@@ -12,7 +12,6 @@
 # Copyright (c) 2020 ScyllaDB
 import base64
 import os
-import logging
 import time
 import pprint
 from textwrap import dedent
@@ -43,8 +42,6 @@ from sdcm.cluster_k8s import (
 )
 from sdcm.remote import LOCALRUNNER
 
-
-LOGGER = logging.getLogger(__name__)
 
 P = ParamSpec("P")  # pylint: disable=invalid-name
 R = TypeVar("R")  # pylint: disable=invalid-name
@@ -177,9 +174,9 @@ class EksNodePool(CloudK8sNodePool):
         return node_pool_config
 
     def deploy(self) -> None:
-        LOGGER.info("Deploy %s node pool with %d node(s)", self.name, self.num_nodes)
+        self.k8s_cluster.log.info("Deploy %s node pool with %d node(s)", self.name, self.num_nodes)
         if self.is_launch_template_required:
-            LOGGER.info("Deploy launch template %s", self.launch_template_name)
+            self.k8s_cluster.log.info("Deploy launch template %s", self.launch_template_name)
             self.k8s_cluster.ec2_client.create_launch_template(
                 LaunchTemplateName=self.launch_template_name,
                 LaunchTemplateData=self._launch_template_cfg,
@@ -188,7 +185,7 @@ class EksNodePool(CloudK8sNodePool):
         self.is_deployed = True
 
     def resize(self, num_nodes):
-        LOGGER.info("Resize %s pool to %d node(s)", self.name, num_nodes)
+        self.k8s_cluster.log.info("Resize %s pool to %d node(s)", self.name, num_nodes)
         self.k8s_cluster.eks_client.update_nodegroup_config(
             clusterName=self.k8s_cluster.short_cluster_name,
             nodegroupName=self.name,
@@ -206,8 +203,9 @@ class EksNodePool(CloudK8sNodePool):
                 clusterName=self.k8s_cluster.short_cluster_name,
                 nodegroupName=self.name)
         except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.debug("Failed to delete nodegroup %s/%s, due to the following error:\n%s",
-                         self.k8s_cluster.short_cluster_name, self.name, exc)
+            self.k8s_cluster.log.debug(
+                "Failed to delete nodegroup %s/%s, due to the following error:\n%s",
+                self.k8s_cluster.short_cluster_name, self.name, exc)
 
 
 class EksTokenUpdateThread(TokenUpdateThread):
@@ -352,11 +350,11 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
             f" --name {self.short_cluster_name} --kubeconfig={self.kube_config_path}")
 
     def deploy(self):
-        LOGGER.info("Create EKS cluster `%s'", self.short_cluster_name)
+        self.log.info("Create EKS cluster `%s'", self.short_cluster_name)
         self.create_eks_cluster()
-        LOGGER.info("Patch kubectl config")
+        self.log.info("Patch kubectl config")
         self.patch_kubectl_config()
-        LOGGER.info("Create storage class")
+        self.log.info("Create storage class")
         self.create_ebs_storge_class()
 
     def create_ebs_storge_class(self):
@@ -371,7 +369,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
             clusterName=self.short_cluster_name,
             addonName='aws-ebs-csi-driver',
         )
-        LOGGER.debug(pprint.pformat(addon_info))
+        self.log.debug(pprint.pformat(addon_info))
         return addon_info['addon']
 
     @property
@@ -418,7 +416,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         IPs per network interface per node type details:
             https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-eni.html
         """
-        LOGGER.info("Tune network of the EKS cluster")
+        self.log.info("Tune network of the EKS cluster")
         env_vars = (
             "WARM_ENI_TARGET=0",
             "MINIMUM_IP_TARGET=8",
@@ -463,14 +461,14 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
             instance_ids = [instance_id for instance_id in instance_ids if instance_id not in memo]
             if not instance_ids:
                 return
-            LOGGER.debug("Going to update tags of the following instances: %s", instance_ids)
+            self.log.debug("Going to update tags of the following instances: %s", instance_ids)
             boto3.client('ec2', region_name=self.region_name).create_tags(
                 Resources=instance_ids,
                 Tags=[{"Key": key, "Value": value} for key, value in self.tags.items()],
             )
             for instance_id in instance_ids:
                 memo[instance_id] = 'already_updated'
-            LOGGER.debug("Successfully updated tags for the following instances: %s", instance_ids)
+            self.log.debug("Successfully updated tags for the following instances: %s", instance_ids)
 
     def set_tags_on_all_instances(self):
         # NOTE: EKS doesn't apply nodeGroup's tags to nodes.
@@ -483,7 +481,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         with EC2_INSTANCE_UPDATE_LOCK:
             if instance_id in memo:
                 return
-            LOGGER.debug("Going to update security groups of the following instance: %s", instance_id)
+            self.log.debug("Going to update security groups of the following instance: %s", instance_id)
             instance = self.get_ec2_instance_by_id(instance_id)
             for network_interface in instance.network_interfaces:
                 security_groups = [g["GroupId"] for g in network_interface.groups]
@@ -492,7 +490,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
                 security_groups.append(self.ec2_security_group_ids[0][0])
                 network_interface.modify_attribute(Groups=security_groups)
             memo[instance_id] = 'already_updated'
-            LOGGER.debug("Successfully updated security groups for the following instance: %s", instance_id)
+            self.log.debug("Successfully updated security groups for the following instance: %s", instance_id)
 
     def set_security_groups_on_all_instances(self):
         # NOTE: EKS doesn't apply nodeGroup's security groups to nodes
@@ -510,7 +508,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         upgrade_version = f"1.{int(self.eks_cluster_version.split('.')[1]) + 1}"
 
         # Upgrade control plane (API, scheduler, manager and so on ...)
-        LOGGER.info("Upgrading K8S control plane to the '%s' version", upgrade_version)
+        self.log.info("Upgrading K8S control plane to the '%s' version", upgrade_version)
         self.eks_client.update_cluster_version(
             name=self.short_cluster_name,
             version=upgrade_version,
@@ -533,7 +531,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
                 (self.SCYLLA_POOL_NAME, not use_additional_scylla_nodepool)):
             if not need_upgrade:
                 continue
-            LOGGER.info("Upgrading '%s' node pool to the '%s' version", node_pool, upgrade_version)
+            self.log.info("Upgrading '%s' node pool to the '%s' version", node_pool, upgrade_version)
             self.eks_client.update_nodegroup_version(
                 clusterName=self.short_cluster_name,
                 nodegroupName=node_pool,
@@ -607,8 +605,9 @@ class EksScyllaPodContainer(BaseScyllaPodContainer):
         return self._node.spec.provider_id.split('/')[-1]
 
     def terminate_k8s_host(self):
-        self.log.info('terminate_k8s_host: EC2 instance of kubernetes node will be terminated, '
-                      'the following is affected :\n' + dedent('''
+        self.k8s_cluster.log.info(
+            'terminate_k8s_host: EC2 instance of kubernetes node will be terminated, '
+            'the following is affected :\n' + dedent('''
             EC2 instance  X  <-
             K8s node      X
             Scylla Pod    X
@@ -636,7 +635,8 @@ class EksScyllaPodContainer(BaseScyllaPodContainer):
         """
         Delete kubernetes node, which will terminate scylla node that is running on it
         """
-        self.log.info('terminate_k8s_node: kubernetes node will be deleted, the following is affected :\n' + dedent('''
+        self.k8s_cluster.log.info(
+            'terminate_k8s_node: kubernetes node will be deleted, the following is affected :\n' + dedent('''
             EC2 instance    X  <-
             K8s node        X  <-
             Scylla Pod      X
