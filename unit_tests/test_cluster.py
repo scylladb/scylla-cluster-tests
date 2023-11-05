@@ -535,6 +535,9 @@ class TestNodetoolStatus(unittest.TestCase):
         datacenter_name_per_region = db_cluster.get_rack_names_per_datacenter_and_rack_idx(db_nodes=[node1])
         assert datacenter_name_per_region == {('east-us', '1'): '1a'}
 
+        nodes_per_region = db_cluster.get_nodes_per_datacenter_and_rack_idx()
+        assert nodes_per_region == {('east-us', '1'): [node1, node2], ('west-us', '2'): [node3, ]}
+
     def test_can_get_nodetool_status_ipv6(self):  # pylint: disable=no-self-use
         resp = "\n".join(["Datacenter: eu-north",
                           "====================",

@@ -105,7 +105,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         self.stop_test_on_failure = stop_test_on_failure
         self.compaction_strategy = compaction_strategy
 
-    def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):  # pylint: disable=too-many-branches
+    def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):  # pylint: disable=too-many-branches,too-many-locals
         stress_cmd = self.stress_cmd
 
         if "no-warmup" not in stress_cmd:
@@ -153,12 +153,14 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
             # if there are multiple rack/AZs configured, we'll try to configue c-s to pin to them
             rack_names = self.loader_set.get_rack_names_per_datacenter_and_rack_idx(db_nodes=self.node_list)
-
+            node_list = self.node_list
             if len(set(rack_names.values())) > 1 and 'rack' in self._get_available_suboptions(cmd_runner, '-node'):
                 if loader_rack := rack_names.get((str(loader.region), str(loader.rack))):
                     stress_cmd += f"rack={loader_rack} "
+                    node_list = self.loader_set.get_nodes_per_datacenter_and_rack_idx(
+                        db_nodes=self.node_list).get((str(loader.region), str(loader.rack)))
 
-            node_ip_list = [n.cql_address for n in self.node_list]
+            node_ip_list = [n.cql_address for n in node_list]
 
             stress_cmd += ",".join(node_ip_list)
         if 'skip-unsupported-columns' in self._get_available_suboptions(cmd_runner, '-errors'):
