@@ -3213,6 +3213,14 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         return rack_names_mapping
 
+    def get_nodes_per_datacenter_and_rack_idx(self, db_nodes: list[BaseNode] | None = None):
+        db_nodes = db_nodes if db_nodes else self.nodes
+        nodes_mapping = {}
+        for (region, rack), nodes in self.nodes_by_racks_idx_and_regions(nodes=db_nodes).items():
+            nodes_mapping[(region, rack)] = nodes
+
+        return nodes_mapping
+
     def send_file(self, src, dst, verbose=False):
         for loader in self.nodes:
             loader.remoter.send_files(src=src, dst=dst, verbose=verbose)
