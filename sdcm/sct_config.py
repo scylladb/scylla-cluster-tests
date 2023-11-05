@@ -1109,7 +1109,9 @@ class SCTConfiguration(dict):
 
         # PerformanceRegressionUserProfilesTest
         dict(name="cs_user_profiles", env="SCT_CS_USER_PROFILES", type=str_or_list,
-             help=""),
+             help="cassandra-stress user-profiles list. Executed in test step"),
+        dict(name="prepare_cs_user_profiles", env="SCT_PREPARE_CS_USER_PROFILES", type=str_or_list,
+             help="cassandra-stress user-profiles list. Executed in prepare step"),
         dict(name="cs_duration", env="SCT_CS_DURATION", type=str,
              help=""),
         dict(name="cs_debug", env="SCT_CS_DEBUG", type=boolean,

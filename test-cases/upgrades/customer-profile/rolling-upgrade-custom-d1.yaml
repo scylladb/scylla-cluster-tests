@@ -1,0 +1,43 @@
+test_duration: 360
+
+# workloads
+# Customer profiles directory path is: scylla-qa-internal/customer-profile/cust_d
+cs_user_profiles:
+    - scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml,60m
+
+
+prepare_cs_user_profiles:
+    - scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml,30m
+
+n_db_nodes: 4
+n_loaders: 2
+n_monitor_nodes: 1
+
+gce_instance_type_db: 'n2-highmem-8'
+gce_instance_type_loader: 'n1-highmem-8'
+gce_n_local_ssd_disk_db: 2
+gce_pd_ssd_disk_size_db: 750
+gce_setup_hybrid_raid: true
+
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts'
+use_preinstalled_scylla: false
+
+scylla_d_overrides_files: [
+  'scylla-qa-internal/custom_d1/workload1/scylla.d/n2-highmem-8/cpuset.conf',
+  'scylla-qa-internal/custom_d1/workload1/scylla.d/memory.conf',
+  'scylla-qa-internal/custom_d1/workload1/scylla.d/io.conf',
+]
+
+user_prefix: 'rolling-upgrade-custom-d1'
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+
+recover_system_tables: true
+
+append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1'
+
+use_mgmt: false
+
+use_prepared_loaders: true

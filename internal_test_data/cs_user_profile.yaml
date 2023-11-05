@@ -1,0 +1,16 @@
+test_duration: 5
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+user_prefix: 'fruch-testing'
+
+cs_user_profiles:
+    - scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml,60m
+    - scylla-qa-internal/custom_d1/rolling_upgrade_dataset1.yaml,20m
+prepare_cs_user_profiles:
+    - scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml,30m
+    - scylla-qa-internal/custom_d1/rolling_upgrade_dataset1.yaml,20m
+
+db_type: scylla
+instance_type_db: 'i4i.large'

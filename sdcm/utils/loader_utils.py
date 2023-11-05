@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -13,6 +12,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
+import os
 import re
 import time
 
@@ -117,6 +117,69 @@ class LoaderUtilsMixin:
 
         return stress_queue
 
+    @staticmethod
+    def parse_cs_user_profiles_param(cs_user_profiles):
+        """
+        The function parses user_profile parameter that defined in test yaml as:
+        ```
+            cs_user_profiles:
+                - scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml,45m
+                - scylla-qa-internal/custom_d1/rolling_upgrade_dataset2.yaml,45m
+        ```
+        where first is user profile and second - how long the profile will be run (optional)
+        The goal is to create two lists:
+        - list of cs user profiles
+        - list of duration for every cs user profile (if defined)
+        The expected output of the function:
+            user_profiles = ['scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml',
+                             'scylla-qa-internal/custom_d1/rolling_upgrade_dataset2.yaml']
+            duration_per_cs_profile = ['45m', '45m']
+        """
+        user_profiles_def = list(zip(*[profile.split(",") for profile in cs_user_profiles]))
+        user_profiles = list(user_profiles_def[0])
+        duration_per_cs_profile = None if len(user_profiles_def) == 1 else list(user_profiles_def[1])
+        return user_profiles, duration_per_cs_profile
+
+    def run_cs_user_profiles(self, cs_profiles: str | int | list, duration_per_cs_profile: str | list = None, stress_queue: list = None):  # pylint: disable=too-many-locals
+        """
+         :param duration_per_cs_profile: if duration of cassandra-stress command is parameterized, it is expected to get needed value for
+                                         duration
+
+         Example of cassandra stress command:
+         cassandra-stress user profile={} cl=QUORUM  'ops(insert=10)' duration={} -mode cql3 native -rate threads=100
+
+         Example of duration_per_cs_profile for the command:
+         ["30m"]
+
+         Example of the tests where we can use it are the test that use "scylla-qa-internal" profiles:
+             cs_user_profiles:
+                - scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml,60m
+        """
+        stress_queue = stress_queue if stress_queue is not None else []
+        if not isinstance(cs_profiles, list):
+            cs_profiles = [cs_profiles]
+
+        if duration_per_cs_profile and not isinstance(duration_per_cs_profile, list):
+            duration_per_cs_profile = [duration_per_cs_profile]
+
+        round_robin = self.params.get('round_robin')
+        for i, cs_profile in enumerate(cs_profiles):
+            assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
+            self.log.debug('Run stress with user profile %s', cs_profile)
+            profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
+            with open(cs_profile, encoding="utf-8") as file:
+                content = file.readlines()
+                for cmd in [line.lstrip('#').strip() for line in content if line.find('cassandra-stress') > 0]:
+                    stress_cmd = (cmd.format(profile_dst)) if duration_per_cs_profile is None else (
+                        cmd.format(profile_dst, duration_per_cs_profile[i].strip()))
+                    params = {'stress_cmd': stress_cmd, 'profile': cs_profile, 'round_robin': round_robin}
+                    stress_params = dict(params)
+
+                    self.log.debug('stress cmd: {}'.format(stress_cmd))
+                    stress_queue.append(self.run_stress_thread(**stress_params))
+
+        return stress_queue
+
     def run_stress_and_verify_threads(self, params=None):
         stress_queue = []
 
@@ -155,28 +218,32 @@ class LoaderUtilsMixin:
         # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
         # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
         prepare_write_cmd = self.params.get('prepare_write_cmd')
+        prepare_cs_user_profiles = self.params.get('prepare_cs_user_profiles')
         keyspace_num = self.params.get('keyspace_num')
         write_queue = []
         verify_queue = []
 
-        if not prepare_write_cmd:
+        if not prepare_write_cmd and not prepare_cs_user_profiles:
             self.log.debug("No prepare write commands are configured to run. Continue with stress commands")
             return
-        # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
-        # the loaders (round_robin).
-        if keyspace_num > 1 and self.params.get('round_robin'):
-            self.log.debug("Using round_robin for multiple Keyspaces...")
-            for i in range(1, keyspace_num + 1):
-                keyspace_name = self._get_keyspace_name(i)
+        if prepare_write_cmd:
+            # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
+            # the loaders (round_robin).
+            if keyspace_num > 1 and self.params.get('round_robin'):
+                self.log.debug("Using round_robin for multiple Keyspaces...")
+                for i in range(1, keyspace_num + 1):
+                    keyspace_name = self._get_keyspace_name(i)
+                    self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
+                                                                   'keyspace_name': keyspace_name,
+                                                                   'round_robin': True})
+            # Not using round_robin and all keyspaces will run on all loaders
+            else:
                 self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                               'keyspace_name': keyspace_name,
-                                                               'round_robin': True})
-        # Not using round_robin and all keyspaces will run on all loaders
-        else:
-            self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                           'keyspace_num': keyspace_num,
-                                                           'round_robin': self.params.get('round_robin')})
+                                                               'keyspace_num': keyspace_num,
+                                                               'round_robin': self.params.get('round_robin')})
 
+        if prepare_cs_user_profiles:
+            self.run_cs_user_profiles(cs_profiles=prepare_cs_user_profiles, stress_queue=write_queue)
         # In some cases we don't want the nemesis to run during the "prepare" stage in order to be 100% sure that
         # all keys were written succesfully
         if self.params.get('nemesis_during_prepare'):

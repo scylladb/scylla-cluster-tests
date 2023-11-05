@@ -106,6 +106,8 @@ def call(Map pipelineParams) {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
                                         checkout scm
+                                        checkoutQaInternal(params)
+
                                         ArrayList base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
                                         supportedVersions = supportedUpgradeFromVersions(
                                             base_versions_list,
@@ -145,6 +147,7 @@ def call(Map pipelineParams) {
                                                         wrap([$class: 'BuildUser']) {
                                                             dir('scylla-cluster-tests') {
                                                                 checkout scm
+                                                                checkoutQaInternal(params)
                                                             }
                                                         }
                                                     }
