@@ -2112,7 +2112,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if 'scylla_bench' not in test_keyspaces:
             raise UnsupportedNemesis("This nemesis can run on scylla_bench test only")
 
-        if not self.tester.partitions_attrs.max_partitions_in_test_table:
+        if not (self.tester.partitions_attrs and self.tester.partitions_attrs.max_partitions_in_test_table):
             raise UnsupportedNemesis(
                 'This nemesis expects "max_partitions_in_test_table" sub-parameter of data_validation to be set')
 
