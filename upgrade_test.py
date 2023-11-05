@@ -32,6 +32,7 @@ from sdcm.cluster import BaseNode
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import CassandraStressThread
+from sdcm.utils.user_profile import get_profile_content
 from sdcm.utils.version_utils import get_node_supported_sstable_versions
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import (
@@ -108,7 +109,7 @@ def recover_conf(node):
             r'test -e $conf.backup && sudo cp -v $conf.backup $conf; done')
 
 
-# pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-instance-attributes, too-many-public-methods
 class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     """
     Test a Scylla cluster upgrade.
@@ -179,10 +180,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
     @decorate_with_context(ignore_abort_requested_errors)
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
-    def _upgrade_node(self, node, upgrade_sstables=True):
+    def _upgrade_node(self, node, upgrade_sstables=True, new_scylla_repo=None, new_version=None):
         # pylint: disable=too-many-branches,too-many-statements
-        new_scylla_repo = self.params.get('new_scylla_repo')
-        new_version = self.params.get('new_version')
+        new_scylla_repo = new_scylla_repo or self.params.get('new_scylla_repo')
+        new_version = new_version or self.params.get('new_version')
         upgrade_node_packages = self.params.get('upgrade_node_packages')
 
         scylla_yaml_updates = {}
@@ -334,11 +335,13 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message='upgrade_node - ended to "upgradesstables_if_command_available"').publish()
 
     @truncate_entries
-    @decorate_with_context(ignore_abort_requested_errors)
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
     def rollback_node(self, node, upgrade_sstables=True):
-        # pylint: disable=too-many-branches,too-many-statements
+        self._rollback_node(node=node, upgrade_sstables=upgrade_sstables)
 
+    @decorate_with_context(ignore_abort_requested_errors)
+    def _rollback_node(self, node, upgrade_sstables=True):
+        # pylint: disable=too-many-branches,too-many-statements
         InfoEvent(message='Rollbacking a Node').publish()
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout.strip()
@@ -1262,3 +1265,169 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 self.log.warning("Couldn't extract version from %s", new_version)
         except Exception as exc:  # pylint: disable=broad-except
             self.log.exception("Failed to save upgraded Scylla version in Argus", exc_info=exc)
+
+
+class UpgradeCustomTest(UpgradeTest):
+    def test_custom_profile_rolling_upgrade(self):
+        """
+        Run a load of a custom profile.
+        Upgrade half of nodes in the cluster, and run rollback.
+        Upgrade all nodes to new version in the end.
+        """
+        cs_user_profiles = self.prepare_data_before_upgrade()
+        self._custom_profile_rolling_upgrade(cs_user_profiles=cs_user_profiles)
+
+    def test_custom_profile_sequential_rolling_upgrade(self):
+        """
+        Run a load of a custom profile.
+        Perform sequential rolling upgrade with upgrade path:
+        step 1. 2021.1 -> 2022.1
+        step 2. 2022.1 -> 2023.1
+        In each step: upgrade half of nodes in the cluster, and run rollback.
+        Upgrade all nodes to new version in the end.
+        """
+        cs_user_profiles = self.prepare_data_before_upgrade()
+        # Temporary solution. If we want to have sequential upgrade test, we will need to change the test parameters and build upgrade path
+        new_version = "2022.1"
+        new_scylla_repo = \
+            "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2022.1.list" \
+            "scylla.list"
+        InfoEvent(message=f'Starting rolling upgrade test to {new_version}').publish()
+        self._custom_profile_rolling_upgrade(cs_user_profiles=cs_user_profiles,
+                                             new_version=new_version, new_scylla_repo=new_scylla_repo)
+        InfoEvent(message=f'Finished rolling upgrade test to {new_version}').publish()
+
+        new_version = "2023.1"
+        new_scylla_repo = \
+            "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2023.1.list"
+        InfoEvent(message=f'Starting rolling upgrade test to {new_version}').publish()
+        self._custom_profile_rolling_upgrade(cs_user_profiles=cs_user_profiles,
+                                             new_version=new_version, new_scylla_repo=new_scylla_repo)
+        InfoEvent(message=f'Finished rolling upgrade test to {new_version}').publish()
+
+    def prepare_data_before_upgrade(self):
+        InfoEvent(message='Running a prepare load for the initial custom data').publish()
+        if not (prepare_cs_user_profiles := self.params.get('prepare_cs_user_profiles')):
+            SyntaxError("Parameter 'prepare_cs_user_profiles' is not supplied")
+
+        user_profiles, duration_per_cs_profile = self.parse_cs_user_profiles_param(prepare_cs_user_profiles)
+        stress_before_upgrade = self.run_cs_user_profiles(cs_profiles=user_profiles,
+                                                          duration_per_cs_profile=duration_per_cs_profile)
+        for queue in stress_before_upgrade:
+            self.verify_stress_thread(cs_thread_pool=queue)
+
+        # write workload during entire test
+        if not (cs_user_profiles := self.params.get('cs_user_profiles')):
+            SyntaxError("Parameter 'cs_user_profiles' is not supplied")
+
+        return cs_user_profiles
+
+    def _custom_profile_rolling_upgrade(self, cs_user_profiles, new_scylla_repo=None, new_version=None):  # pylint: disable=too-many-locals,too-many-statements
+        InfoEvent(message='Starting write workload during entire test').publish()
+        user_profiles, duration_per_cs_profile = self.parse_cs_user_profiles_param(cs_user_profiles)
+        entire_write_thread_pool = self.run_cs_user_profiles(cs_profiles=user_profiles,
+                                                             duration_per_cs_profile=duration_per_cs_profile)
+
+        # Let wait for start writing data
+        for stress_cmd in user_profiles:
+            _, profile = get_profile_content(stress_cmd)
+            keyspace_name = profile.get('keyspace')
+            self.log.debug("keyspace_name: %s", keyspace_name)
+            if not keyspace_name:
+                continue
+
+            try:
+                self.metric_has_data(
+                    metric_query='sct_cassandra_stress_user_gauge{type="ops", keyspace="%s"}' % keyspace_name, n=10)
+            except Exception as err:  # pylint: disable=broad-except
+                InfoEvent(
+                    f"Get metrix data for keyspace {keyspace_name} failed with error: {err}", severity=Severity.ERROR).publish()
+
+        # generate random order to upgrade
+        nodes_num = len(self.db_cluster.nodes)
+        # prepare an array containing the indexes
+        indexes = list(range(nodes_num))
+        # shuffle it so we will upgrade the nodes in a random order
+        random.shuffle(indexes)
+
+        with ignore_upgrade_schema_errors():
+
+            step = 'Step1 - Upgrade First Node '
+            InfoEvent(message=step).publish()
+            # upgrade first node
+            self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
+            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
+            # Call "_upgrade_node" to prevent running truncate test
+            self._upgrade_node(self.db_cluster.node_to_upgrade,
+                               new_scylla_repo=new_scylla_repo, new_version=new_version)
+            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
+            self.db_cluster.node_to_upgrade.check_node_health()
+
+            InfoEvent(message='after upgraded one node').publish()
+            self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                          step=step+' - after upgraded one node')
+
+            step = 'Step2 - Upgrade Second Node '
+            InfoEvent(message=step).publish()
+            # upgrade second node
+            self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[1]]
+            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
+            # Call "_upgrade_node" to prevent running truncate test
+            self._upgrade_node(self.db_cluster.node_to_upgrade,
+                               new_scylla_repo=new_scylla_repo, new_version=new_version)
+            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
+            self.db_cluster.node_to_upgrade.check_node_health()
+
+            self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                          step=step+' - after upgraded two nodes')
+
+            InfoEvent(message='Step3 - Rollback Second Node ').publish()
+            # rollback second node
+            InfoEvent(message='Rollback Node %s begin' % self.db_cluster.nodes[indexes[1]].name).publish()
+            # Call "_rollback_node" to prevent running truncate test
+            self._rollback_node(self.db_cluster.nodes[indexes[1]])
+            InfoEvent(message='Rollback Node %s ended' % self.db_cluster.nodes[indexes[1]].name).publish()
+            self.db_cluster.nodes[indexes[1]].check_node_health()
+
+        step = 'Step4 - Verify data during mixed cluster mode '
+        InfoEvent(message=step).publish()
+        InfoEvent(message='Repair the first upgraded Node').publish()
+        self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
+        self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                      step=step)
+
+        with ignore_upgrade_schema_errors():
+
+            step = 'Step5 - Upgrade rest of the Nodes '
+            InfoEvent(message=step).publish()
+            for i in indexes[1:]:
+                self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
+                InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
+                # Call "_upgrade_node" to prevent running truncate test
+                self._upgrade_node(self.db_cluster.node_to_upgrade,
+                                   new_scylla_repo=new_scylla_repo, new_version=new_version)
+                InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
+                self.db_cluster.node_to_upgrade.check_node_health()
+                self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
+                                                              step=step)
+
+        InfoEvent(message='Step6 - Verify stress results after upgrade ').publish()
+        InfoEvent(message='Waiting for stress threads to complete after upgrade').publish()
+
+        for queue in entire_write_thread_pool:
+            self.verify_stress_thread(cs_thread_pool=queue)
+
+        InfoEvent(message='Step7 - Upgrade sstables to latest supported version ').publish()
+        # figure out what is the last supported sstable version
+        self.expected_sstable_format_version = self.get_highest_supported_sstable_version()
+
+        # run 'nodetool upgradesstables' on all nodes and check/wait for all file to be upgraded
+        upgradesstables = self.db_cluster.run_func_parallel(func=self.upgradesstables_if_command_available)
+
+        # only check sstable format version if all nodes had 'nodetool upgradesstables' available
+        if all(upgradesstables):
+            InfoEvent(message='Upgrading sstables if new version is available').publish()
+            tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
+            assert all(tables_upgraded), "Failed to upgrade the sstable format {}".format(tables_upgraded)
+
+        InfoEvent(message='all nodes were upgraded, and last workaround is verified.').publish()

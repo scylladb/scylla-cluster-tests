@@ -18,6 +18,7 @@ import unittest
 from collections import namedtuple
 import pytest
 from sdcm import sct_config
+from sdcm.utils import loader_utils
 from sdcm.utils.common import get_latest_scylla_release
 
 RPM_URL = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/' \
@@ -794,6 +795,29 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
         self.assertEqual(conf.get('n_db_nodes'), 3)
         self.assertEqual(conf.get('availability_zone'), 'b,c')
+
+    def test_30_cs_profile_parse(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_REGION_NAME'] = '["eu-west-1"]'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/cs_user_profile.yaml'
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        user_profiles, duration_per_cs_profile = \
+            loader_utils.LoaderUtilsMixin.parse_cs_user_profiles_param(conf["prepare_cs_user_profiles"])
+        self.assertEqual(user_profiles,
+                         ['scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml',
+                          'scylla-qa-internal/custom_d1/rolling_upgrade_dataset1.yaml'])
+        self.assertEqual(duration_per_cs_profile, ['30m', '20m'])
+
+        user_profiles, duration_per_cs_profile = loader_utils.LoaderUtilsMixin.parse_cs_user_profiles_param(
+            conf["cs_user_profiles"])
+        self.assertEqual(user_profiles,
+                         ['scylla-qa-internal/custom_d1/rolling_upgrade_dataset.yaml',
+                          'scylla-qa-internal/custom_d1/rolling_upgrade_dataset1.yaml'])
+        self.assertEqual(duration_per_cs_profile, ['60m', '20m'])
 
 
 if __name__ == "__main__":

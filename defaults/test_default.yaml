@@ -124,6 +124,7 @@ stress_multiplier_r: 1
 stress_multiplier_m: 1
 keyspace_num: 1
 cs_user_profiles: []
+prepare_cs_user_profiles: []
 cs_duration: '50m'
 batch_size: 1
 pre_create_schema: false
