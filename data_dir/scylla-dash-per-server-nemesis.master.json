@@ -388,7 +388,7 @@
         "steppedLine": false,
         "targets": [
           {
-            "expr": "(sum(irate(scylla_transport_requests_served{cluster=~\"$cluster|$^\"}[60s])) or vector(0)) + (sum(irate(scylla_thrift_served{cluster=~\"$cluster|$^\"}[60s])) or vector(0)) + (sum(irate(scylla_alternator_operation{cluster=~\"$cluster|$^\"}[60s])) or vector(0))",
+            "expr": "(sum(irate(scylla_transport_requests_served{cluster=~\"$cluster|$^\"}[60s])) or vector(0)) + (sum(irate(scylla_alternator_operation{cluster=~\"$cluster|$^\"}[60s])) or vector(0))",
             "intervalFactor": 1,
             "legendFormat": "Total Requests",
             "refId": "A",
@@ -602,7 +602,7 @@
         "steppedLine": false,
         "targets": [
           {
-            "expr": "sum(rate(scylla_transport_requests_served{instance=~\"[[node]]\",cluster=~\"$cluster|$^\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) by ([[by]]) + (sum(rate(scylla_thrift_served{instance=~\"[[node]]\",cluster=~\"$cluster|$^\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) by ([[by]]) or max(scylla_transport_requests_served{instance=~\"[[node]]\",cluster=~\"$cluster|$^\", dc=~\"$dc\", shard=~\"[[shard]]\"}) by([[by]])*0)",
+            "expr": "sum(rate(scylla_transport_requests_served{instance=~\"[[node]]\",cluster=~\"$cluster|$^\", dc=~\"$dc\", shard=~\"[[shard]]\"}[$__rate_interval])) by ([[by]])",
             "format": "time_series",
             "intervalFactor": 1,
             "legendFormat": "",
