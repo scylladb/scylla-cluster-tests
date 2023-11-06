@@ -295,7 +295,7 @@ class PrometheusDBStats:
         if self.alternator:
             query = "sum(irate(scylla_alternator_operation{}[30s]))"
         else:
-            query = "sum(irate(scylla_transport_requests_served{}[30s]))%20%2B%20sum(irate(scylla_thrift_served{}[30s]))"
+            query = "sum(irate(scylla_transport_requests_served{}[30s]))"
         return self._get_query_values(query, start_time, end_time, scrap_metrics_step=scrap_metrics_step)
 
     def get_scylla_reactor_utilization(self, start_time, end_time, scrap_metrics_step=None, instance=None):
