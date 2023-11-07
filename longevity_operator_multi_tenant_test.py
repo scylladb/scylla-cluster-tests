@@ -28,10 +28,11 @@ class LongevityOperatorMultiTenantTest(MultiTenantTestMixin, LongevityTest):
 
         self.log.info("Starting tests worker threads")
 
-        self.log.info("Clusters count: %s", self.k8s_cluster.tenants_number)
+        tenants_number = self.k8s_clusters[0].tenants_number
+        self.log.info("Clusters count: %s", tenants_number)
         object_set = ParallelObject(
             timeout=int(self.test_duration) * 60,
             objects=[[tenant] for tenant in self.tenants],
-            num_workers=self.k8s_cluster.tenants_number
+            num_workers=tenants_number,
         )
         object_set.run(func=_run_test_on_one_tenant, unpack_objects=True, ignore_exceptions=False)

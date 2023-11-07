@@ -728,7 +728,6 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
 # pylint: disable=too-many-ancestors
 class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
     """Represents scylla cluster hosted on locally running minimal k8s clusters such as k3d, minikube or kind"""
-    k8s_cluster: MinimalClusterBase
     PodContainerClass = LocalMinimalScyllaPodContainer
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=20, sleep_time=60, timeout=0):  # pylint: disable=too-many-arguments
@@ -746,7 +745,7 @@ class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
         self.wait_for_nodes_up_and_normal(nodes=node_list)
 
     def upgrade_scylla_cluster(self, new_version: str) -> None:
-        self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{new_version}")
+        self.k8s_clusters[0].docker_pull(f"{self.params.get('docker_image')}:{new_version}")
         return super().upgrade_scylla_cluster(new_version)
 
     @staticmethod

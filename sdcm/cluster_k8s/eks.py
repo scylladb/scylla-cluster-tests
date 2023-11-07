@@ -651,7 +651,6 @@ class EksScyllaPodContainer(BaseScyllaPodContainer):
 
 
 class EksScyllaPodCluster(ScyllaPodCluster):
-    k8s_cluster: 'EksCluster'
     PodContainerClass = EksScyllaPodContainer
     nodes: List[EksScyllaPodContainer]
 
@@ -659,7 +658,7 @@ class EksScyllaPodCluster(ScyllaPodCluster):
     def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",
-                  dc_idx: int = 0,
+                  dc_idx: int = None,
                   rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[EksScyllaPodContainer]:
         new_nodes = super().add_nodes(count=count,

@@ -288,17 +288,16 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     api_call_rate_limiter: Optional[ApiCallRateLimiter] = None
 
-    datacenter = ()
     _cert_manager_journal_thread: Optional[CertManagerLogger] = None
     _scylla_manager_journal_thread: Optional[ScyllaManagerLogger] = None
     _scylla_operator_journal_thread: Optional[ScyllaOperatorLogger] = None
     _scylla_operator_scheduling_thread: Optional[KubernetesWrongSchedulingLogger] = None
     _haproxy_ingress_log_thread: Optional[HaproxyIngressLogger] = None
     _scylla_cluster_events_threads: Dict[str, KubectlClusterEventsLogger] = {}
-
     _scylla_operator_log_monitor_thread: Optional[ScyllaOperatorLogMonitoring] = None
     _token_update_thread: Optional[TokenUpdateThread] = None
     scylla_pods_ip_change_tracker_thread: Optional[ScyllaPodsIPChangeTrackerThread] = None
+
     pools: Dict[str, CloudK8sNodePool]
     scylla_pods_ip_mapping = {}
 
@@ -1244,9 +1243,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.start_haproxy_ingress_log_thread()
 
     @log_run_info
-    def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool, namespace: str = SCYLLA_NAMESPACE,
+    def deploy_scylla_cluster(self, node_pool_name: str, namespace: str = SCYLLA_NAMESPACE,
                               cluster_name=None) -> None:
         # Calculate cpu and memory limits to occupy all available amounts by scylla pods
+        node_pool = self.pools[node_pool_name]
         cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
         if not self.params.get('k8s_scylla_cpu_limit'):
             # TODO: Remove reduction logic after
@@ -1305,7 +1305,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             values=self.get_scylla_cluster_helm_values(
                 cpu_limit=self.scylla_cpu_limit,
                 memory_limit=self.scylla_memory_limit,
-                pool_name=node_pool.name if node_pool else None,
+                pool_name=node_pool_name,
                 cluster_name=cluster_name),
             namespace=namespace,
         ))
@@ -1448,9 +1448,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     @log_run_info
     def deploy_loaders_cluster(self,
-                               node_pool: CloudK8sNodePool = None,
+                               node_pool_name: str = '',
                                namespace: str = LOADER_NAMESPACE) -> None:
         self.log.info("Create and initialize a loaders cluster in the '%s' namespace", namespace)
+        node_pool = self.pools.get(node_pool_name)
         if node_pool:
             self.deploy_node_pool(node_pool)
             cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
@@ -1486,11 +1487,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     @property
     def s3_provider_endpoint(self) -> str:
         return f"http://{self.minio_ip_address}:9000"
-
-    @property
-    def operator_pod_status(self):
-        pods = KubernetesOps.list_pods(self, namespace=SCYLLA_OPERATOR_NAMESPACE)
-        return pods[0].status if pods else None
 
     @cached_property
     def tags(self) -> Dict[str, str]:
@@ -1533,7 +1529,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     @property
     def scylla_manager_cluster(self) -> 'ManagerPodCluser':
         return ManagerPodCluser(
-            k8s_cluster=self,
+            k8s_clusters=[self],
             namespace=SCYLLA_MANAGER_NAMESPACE,
             container='scylla-manager',
             cluster_prefix='mgr-',
@@ -1779,7 +1775,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
             node_prefix=node_prefix,
             dc_idx=dc_idx,
             rack=rack)
-        self.k8s_cluster = self.parent_cluster.k8s_cluster
+        self.k8s_cluster = self.parent_cluster.k8s_clusters[self.dc_idx]
 
     @cached_property
     def pod_replace_timeout(self) -> int:
@@ -1846,7 +1842,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         return {}
 
     @property
-    def _pod_status(self):
+    def pod_status(self):
         if pod := self._pod:
             return pod.status
         return None
@@ -1871,7 +1867,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
     @property
     def _container_status(self):
-        pod_status = self._pod_status
+        pod_status = self.pod_status
         if pod_status:
             return next((x for x in pod_status.container_statuses if x.name == self.parent_cluster.container), None)
         return None
@@ -1890,7 +1886,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def _refresh_instance_state(self):
         public_ips = []
         private_ips = []
-        if pod_status := self._pod_status:
+        if pod_status := self.pod_status:
             public_ips.append(pod_status.host_ip)
             private_ips.append(pod_status.pod_ip)
         if cluster_ip_service := self._cluster_ip_service:
@@ -2100,7 +2096,8 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
     def node_name(self) -> str:  # pylint: disable=invalid-overridden-method
         return self._pod.spec.node_name
 
-    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
+    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300,
+                              ignore_status=False):
         if verify_up_before:
             self.wait_db_up(timeout=timeout)
         self.remoter.run('sh -c "supervisorctl restart scylla || supervisorctl restart scylla-server"',
@@ -2110,11 +2107,12 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
 
     @cluster.log_run_info
     def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300):
-        self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
+        self.restart_scylla_server(
+            verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
 
     @property
     def scylla_listen_address(self):
-        pod_status = self._pod_status
+        pod_status = self.pod_status
         return pod_status and pod_status.pod_ip
 
     def init(self) -> None:
@@ -2290,7 +2288,7 @@ class PodCluster(cluster.BaseCluster):
     PodContainerClass: Type[BasePodContainer] = BasePodContainer
 
     def __init__(self,
-                 k8s_cluster: KubernetesCluster,
+                 k8s_clusters: List[KubernetesCluster],
                  namespace: str = "default",
                  container: Optional[str] = None,
                  cluster_uuid: Optional[str] = None,
@@ -2299,41 +2297,29 @@ class PodCluster(cluster.BaseCluster):
                  node_type: Optional[str] = None,
                  n_nodes: Union[list, int] = 3,
                  params: Optional[dict] = None,
-                 node_pool: Optional[dict] = None,
+                 node_pool_name: Optional[str] = '',
                  add_nodes: Optional[bool] = True,
                  ) -> None:
-        self.k8s_cluster = k8s_cluster
+        self.k8s_clusters = k8s_clusters
         self.namespace = namespace
         self.container = container
-        self.node_pool = node_pool
+        self.node_pool_name = node_pool_name
 
         super().__init__(cluster_uuid=cluster_uuid,
                          cluster_prefix=cluster_prefix,
                          node_prefix=node_prefix,
                          n_nodes=n_nodes,
                          params=params,
-                         region_names=k8s_cluster.datacenter,
+                         region_names=[],
                          node_type=node_type,
                          add_nodes=add_nodes)
 
     def __str__(self):
         return f"{type(self).__name__} {self.name} | Namespace: {self.namespace}"
 
-    @property
-    def k8s_apps_v1_api(self):
-        return self.k8s_cluster.k8s_apps_v1_api
-
-    @property
-    def k8s_core_v1_api(self):
-        return self.k8s_cluster.k8s_core_v1_api
-
     @cached_property
     def pool_name(self):
-        return self.node_pool.get('name', None)
-
-    @property
-    def statefulsets(self):
-        return KubernetesOps.list_statefulsets(self.k8s_cluster, namespace=self.namespace)
+        return self.node_pool_name
 
     def _create_node(self, node_index: int, pod_name: str, dc_idx: int, rack: int) -> BasePodContainer:
         node = self.PodContainerClass(parent_cluster=self,
@@ -2360,16 +2346,17 @@ class PodCluster(cluster.BaseCluster):
         #       as 'NotReady' and will fail the pod waiter function below.
 
         # Wait while whole cluster (on all racks) including new nodes are up and running
-        self.wait_for_pods_running(pods_to_wait=count, total_pods=len(self.nodes) + count)
+        current_dc_nodes = [node for node in self.nodes if node.dc_idx == dc_idx]
+        self.wait_for_pods_running(pods_to_wait=count, total_pods=len(current_dc_nodes) + count, dc_idx=dc_idx)
 
         # Register new nodes and return whatever was registered
-        k8s_pods = KubernetesOps.list_pods(self, namespace=self.namespace)
+        k8s_pods = KubernetesOps.list_pods(self.k8s_clusters[dc_idx], namespace=self.namespace)
         nodes = []
         for pod in k8s_pods:
             if not any((x for x in pod.status.container_statuses if x.name == self.container)):
                 continue
             is_already_registered = False
-            for node in self.nodes:
+            for node in current_dc_nodes:
                 if node.name == pod.metadata.name:
                     is_already_registered = True
                     break
@@ -2377,12 +2364,13 @@ class PodCluster(cluster.BaseCluster):
                 continue
             # TBD: A rack validation might be needed
             # Register a new node
-            node = self._create_node(len(self.nodes), pod.metadata.name, dc_idx, rack)
+            node = self._create_node(len(current_dc_nodes), pod.metadata.name, dc_idx, rack)
             nodes.append(node)
             self.nodes.append(node)
         if len(nodes) != count:
             raise RuntimeError(
-                f'Requested {count} number of nodes to add, while only {len(nodes)} new nodes where found')
+                f"Requested '{count}' number of nodes to add in the '{dc_idx}' DC,"
+                f" while only '{len(nodes)}' new nodes where found")
         return nodes
 
     def node_setup(self, node, verbose=False, timeout=3600):
@@ -2394,10 +2382,11 @@ class PodCluster(cluster.BaseCluster):
     def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=arguments-differ
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
-    def wait_sts_rollout_restart(self, pods_to_wait: int):
+    def wait_sts_rollout_restart(self, pods_to_wait: int, dc_idx: int = 0):
         timeout = self.get_nodes_reboot_timeout(pods_to_wait)
-        for statefulset in self.statefulsets:
-            self.k8s_cluster.kubectl(
+        k8s_cluster = self.k8s_clusters[dc_idx]
+        for statefulset in KubernetesOps.list_statefulsets(k8s_cluster, namespace=self.namespace):
+            k8s_cluster.kubectl(
                 f"rollout status statefulset/{statefulset.metadata.name} "
                 f"--watch=true --timeout={timeout}m",
                 namespace=self.namespace,
@@ -2418,18 +2407,19 @@ class PodCluster(cluster.BaseCluster):
     def get_nodes_readiness_delay(self) -> Union[float, int]:
         return self.PodContainerClass.pod_readiness_delay
 
-    def wait_for_pods_readiness(self, pods_to_wait: int, total_pods: int, readiness_timeout: int = None):
+    def wait_for_pods_readiness(self, pods_to_wait: int, total_pods: int, readiness_timeout: int = None,
+                                dc_idx: int = 0):
         KubernetesOps.wait_for_pods_readiness(
-            kluster=self.k8s_cluster,
+            kluster=self.k8s_clusters[dc_idx],
             total_pods=total_pods,
             readiness_timeout=readiness_timeout or self.get_nodes_reboot_timeout(pods_to_wait),
             selector=self.pod_selector,
             namespace=self.namespace
         )
 
-    def wait_for_pods_running(self, pods_to_wait: int, total_pods: int | callable):
+    def wait_for_pods_running(self, pods_to_wait: int, total_pods: int | callable, dc_idx: int = 0):
         KubernetesOps.wait_for_pods_running(
-            kluster=self.k8s_cluster,
+            kluster=self.k8s_clusters[dc_idx],
             total_pods=total_pods,
             timeout=self.get_nodes_reboot_timeout(pods_to_wait),
             selector=self.pod_selector,
@@ -2439,15 +2429,18 @@ class PodCluster(cluster.BaseCluster):
     def generate_namespace(self, namespace_template: str) -> str:
         # Pick up not used namespace knowing that we may have more than 1 Scylla cluster
         with NAMESPACE_CREATION_LOCK:
-            namespaces = self.k8s_cluster.kubectl(
+            namespaces = self.k8s_clusters[0].kubectl(
                 "get namespaces --no-headers -o=custom-columns=:.metadata.name").stdout.split()
             for i in range(1, len(namespaces)):
                 candidate_namespace = f"{namespace_template}{'-' + str(i) if i > 1 else ''}"
                 if candidate_namespace not in namespaces:
-                    self.k8s_cluster.kubectl(f"create namespace {candidate_namespace}")
+                    # NOTE: the namespaces must match for all the K8S clusters
+                    for k8s_cluster in self.k8s_clusters:
+                        k8s_cluster.kubectl(f"create namespace {candidate_namespace}")
                     return candidate_namespace
                 # TODO: make it work correctly for case with reusage of multi-tenant cluster
-                if self.k8s_cluster.params.get('reuse_cluster') and self.k8s_cluster.tenants_number < 2:
+                k8s_cluster = self.k8s_clusters[0]
+                if k8s_cluster.params.get('reuse_cluster') and k8s_cluster.tenants_number < 2:
                     return namespace_template
         raise RuntimeError("No available namespace was found")
 
@@ -2456,20 +2449,22 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
     node_setup_requires_scylla_restart = False
 
     def __init__(self,
-                 k8s_cluster: KubernetesCluster,
+                 k8s_clusters: List[KubernetesCluster],
                  scylla_cluster_name: Optional[str] = None,
                  user_prefix: Optional[str] = None,
                  n_nodes: Union[list, int] = 3,
                  params: Optional[dict] = None,
-                 node_pool: CloudK8sNodePool = None,
+                 node_pool_name: str = '',
                  add_nodes: bool = True,
                  ) -> None:
-        self.k8s_cluster = k8s_cluster
+        self.k8s_clusters = k8s_clusters
         self.namespace = self.generate_namespace(namespace_template=SCYLLA_NAMESPACE)
         self.scylla_cluster_name = scylla_cluster_name
-        k8s_cluster.deploy_scylla_cluster(
-            node_pool=node_pool, namespace=self.namespace, cluster_name=self.scylla_cluster_name)
-        super().__init__(k8s_cluster=k8s_cluster,
+        for k8s_cluster in k8s_clusters:
+            k8s_cluster.deploy_scylla_cluster(
+                node_pool_name=node_pool_name,
+                namespace=self.namespace, cluster_name=self.scylla_cluster_name)
+        super().__init__(k8s_clusters=k8s_clusters,
                          namespace=self.namespace,
                          container="scylla",
                          cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'db-cluster'),
@@ -2477,15 +2472,16 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                          node_type="scylla-db",
                          n_nodes=n_nodes,
                          params=params,
-                         node_pool=node_pool,
+                         node_pool_name=node_pool_name,
                          add_nodes=add_nodes)
         # NOTE: register callbacks for the Scylla pods IP change events
-        if self.k8s_cluster.scylla_pods_ip_change_tracker_thread:
-            self.k8s_cluster.scylla_pods_ip_change_tracker_thread.register_callbacks(
-                callbacks=self.refresh_scylla_pod_ip_address,
-                namespace=self.namespace,
-                pod_name='__each__',
-                add_pod_name_as_kwarg=True)
+        for k8s_cluster in k8s_clusters:
+            if k8s_cluster.scylla_pods_ip_change_tracker_thread:
+                k8s_cluster.scylla_pods_ip_change_tracker_thread.register_callbacks(
+                    callbacks=self.refresh_scylla_pod_ip_address,
+                    namespace=self.namespace,
+                    pod_name='__each__',
+                    add_pod_name_as_kwarg=True)
 
     def refresh_scylla_pod_ip_address(self, pod_name):
         """Designed to be used as a callback for the pod IP change tracker."""
@@ -2508,11 +2504,19 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
     def pod_selector(self):
         return 'app=scylla'
 
-    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=None, sleep_time=None,
-                                     timeout=None):  # pylint: disable=too-many-arguments
-        self.wait_for_pods_readiness(pods_to_wait=len(nodes or self.nodes),
-                                     total_pods=len(self.nodes), readiness_timeout=timeout)
-        self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
+    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=None,
+                                     sleep_time=None, timeout=None):  # pylint: disable=too-many-arguments
+        dc_node_mapping, nodes = {}, (nodes or self.nodes)
+        for node in nodes:
+            dc_idx = node.dc_idx
+            if dc_idx not in dc_node_mapping:
+                dc_node_mapping[dc_idx] = []
+            dc_node_mapping[dc_idx].append(node)
+        for dc_idx, dc_nodes in dc_node_mapping.items():
+            self.wait_for_pods_readiness(
+                pods_to_wait=len(dc_nodes), total_pods=len([n for n in self.nodes if n.dc_idx == dc_idx]),
+                readiness_timeout=timeout, dc_idx=dc_idx)
+            self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
     @timeout_wrapper(timeout=300, sleep_time=3, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
                      message="Waiting for nodes to join the cluster")
@@ -2523,49 +2527,50 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
     def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, wait_for_db_logs=False, **__):  # pylint: disable=arguments-differ
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list, timeout=timeout)
-
         if wait_for_db_logs:
             super().wait_for_init(node_list=node_list, check_node_health=False)
+        for i, k8s_cluster in enumerate(self.k8s_clusters):
+            if k8s_cluster.scylla_restart_required:
+                node_list_subset = [node for node in node_list if node.dc_idx == i]
+                self.restart_scylla(nodes=node_list_subset)
+                self.wait_for_nodes_up_and_normal(nodes=node_list_subset, timeout=timeout)
 
-        if self.scylla_restart_required:
-            self.restart_scylla()
-            self.scylla_restart_required = False
-            self.wait_for_nodes_up_and_normal(nodes=node_list, timeout=timeout)
-
-    @property
-    def _k8s_scylla_cluster_api(self) -> Resource:
-        return KubernetesOps.dynamic_api(self.k8s_cluster.dynamic_client,
+    def _k8s_scylla_cluster_api(self, dc_idx: int = 0) -> Resource:
+        return KubernetesOps.dynamic_api(self.k8s_clusters[dc_idx].dynamic_client,
                                          api_version=SCYLLA_API_VERSION,
                                          kind=SCYLLA_CLUSTER_RESOURCE_KIND)
 
     @retrying(n=20, sleep_time=3, allowed_exceptions=(k8s_exceptions.ApiException, ),
               message="Failed to update ScyllaCluster's spec...")
-    def replace_scylla_cluster_value(self, path: str, value: Any) -> Optional[ANY_KUBERNETES_RESOURCE]:
-        self.k8s_cluster.log.debug(
+    def replace_scylla_cluster_value(self, path: str, value: Any,
+                                     dc_idx: int = 0) -> Optional[ANY_KUBERNETES_RESOURCE]:
+        self.k8s_clusters[dc_idx].log.debug(
             "Replace `%s' with `%s' in %s's spec", path, value, self.scylla_cluster_name)
-        return self._k8s_scylla_cluster_api.patch(body=[{"op": "replace", "path": path, "value": value}],
-                                                  name=self.scylla_cluster_name,
-                                                  namespace=self.namespace,
-                                                  content_type=JSON_PATCH_TYPE)
+        return self._k8s_scylla_cluster_api(dc_idx=dc_idx).patch(
+            body=[{"op": "replace", "path": path, "value": value}],
+            name=self.scylla_cluster_name,
+            namespace=self.namespace,
+            content_type=JSON_PATCH_TYPE)
 
-    def get_scylla_cluster_value(self, path: str) -> Optional[ANY_KUBERNETES_RESOURCE]:
+    def get_scylla_cluster_value(self, path: str, dc_idx: int = 0) -> Optional[ANY_KUBERNETES_RESOURCE]:
         """
         Get scylla cluster value from kubernetes API.
         """
-        cluster_data = self._k8s_scylla_cluster_api.get(namespace=self.namespace, name=self.scylla_cluster_name)
+        cluster_data = self._k8s_scylla_cluster_api(dc_idx=dc_idx).get(
+            namespace=self.namespace, name=self.scylla_cluster_name)
         return walk_thru_data(cluster_data, path)
 
-    def get_scylla_cluster_plain_value(self, path: str) -> Union[Dict, List, str, None]:
+    def get_scylla_cluster_plain_value(self, path: str, dc_idx: int = 0) -> Union[Dict, List, str, None]:
         """
         Get scylla cluster value from kubernetes API and converts result to basic python data types.
         Use it if you are going to modify the data.
         """
-        cluster_data = self._k8s_scylla_cluster_api.get(
+        cluster_data = self._k8s_scylla_cluster_api(dc_idx=dc_idx).get(
             namespace=self.namespace, name=self.scylla_cluster_name).to_dict()
         return walk_thru_data(cluster_data, path)
 
-    def add_scylla_cluster_value(self, path: str, element: Any):
-        init = self.get_scylla_cluster_value(path) is None
+    def add_scylla_cluster_value(self, path: str, element: Any, dc_idx: int = 0):
+        init = self.get_scylla_cluster_value(path, dc_idx=dc_idx) is None
         if path.endswith('/'):
             path = path[0:-1]
         if init:
@@ -2576,21 +2581,15 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
             operation = "add"
             path = path + "/-"
             value = element
-        self._k8s_scylla_cluster_api.patch(
-            body=[
-                {
-                    "op": operation,
-                    "path": path,
-                    "value": value
-                }
-            ],
+        self._k8s_scylla_cluster_api(dc_idx=dc_idx).patch(
+            body=[{"op": operation, "path": path, "value": value}],
             name=self.scylla_cluster_name,
             namespace=self.namespace,
             content_type=JSON_PATCH_TYPE
         )
 
-    def remove_scylla_cluster_value(self, path: str, element_name: str):
-        element_list = self.get_scylla_cluster_value(path) or []
+    def remove_scylla_cluster_value(self, path: str, element_name: str, dc_idx: int = 0):
+        element_list = self.get_scylla_cluster_value(path, dc_idx=dc_idx) or []
         found_index = None
         for index, item in enumerate(element_list):
             if item.get("name") == element_name:
@@ -2599,35 +2598,20 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         else:
             raise ValueError(f"{element_name} wasn't found in {path}")
 
-        self._k8s_scylla_cluster_api.patch(
-            body=[
-                {
-                    "op": "remove",
-                    "path": f"{path}/{found_index}",
-                }
-            ],
+        self._k8s_scylla_cluster_api(dc_idx=dc_idx).patch(
+            body=[{"op": "remove", "path": f"{path}/{found_index}"}],
             name=self.scylla_cluster_name,
             namespace=self.namespace,
-            content_type=JSON_PATCH_TYPE
-        )
+            content_type=JSON_PATCH_TYPE)
 
-    @property
-    def scylla_restart_required(self) -> bool:
-        return self.k8s_cluster.scylla_restart_required
+    def scylla_config_map(self, dc_idx: int = 0) -> ContextManager:
+        return self.k8s_clusters[dc_idx].scylla_config_map()
 
-    @scylla_restart_required.setter
-    def scylla_restart_required(self, value) -> None:
-        self.k8s_cluster.scylla_restart_required = value
+    def remote_scylla_yaml(self, dc_idx: int = 0) -> ContextManager:
+        return self.k8s_clusters[dc_idx].remote_scylla_yaml()
 
-    @property
-    def scylla_config_map(self) -> ContextManager:
-        return self.k8s_cluster.scylla_config_map
-
-    def remote_scylla_yaml(self) -> ContextManager:
-        return self.k8s_cluster.remote_scylla_yaml()
-
-    def remote_cassandra_rackdc_properties(self) -> ContextManager:
-        return self.k8s_cluster.remote_cassandra_rackdc_properties()
+    def remote_cassandra_rackdc_properties(self, dc_idx: int = 0) -> ContextManager:
+        return self.k8s_clusters[dc_idx].remote_cassandra_rackdc_properties()
 
     def update_seed_provider(self):
         pass
@@ -2648,7 +2632,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         if bundle_file := super().connection_bundle_file:
             return bundle_file
 
-        bundle_cmd_output = self.k8s_cluster.kubectl(
+        # TODO: support multiDC case
+        k8s_cluster = self.k8s_clusters[0]
+        bundle_cmd_output = k8s_cluster.kubectl(
             f"get secret/{self.scylla_cluster_name}-local-cql-connection-configs-admin"
             f" --template='{{{{ index .data \"{self.scylla_cluster_name}.sct.scylladb.com\" }}}}'",
             namespace=self.namespace, ignore_status=True)
@@ -2659,15 +2645,16 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         bundle_file = Path(tempfile.mktemp(suffix='.yaml'))
         bundle_file.write_bytes(base64.decodebytes(bytes(bundle_cmd_output.stdout.strip(), encoding='utf-8')))
 
-        lb_external_hostname = self.k8s_cluster.kubectl("get service/haproxy-kubernetes-ingress "
-                                                        "-o jsonpath='{.status.loadBalancer.ingress[0].hostname}'",
-                                                        namespace=INGRESS_CONTROLLER_NAMESPACE)
+        lb_external_hostname = k8s_cluster.kubectl(
+            "get service/haproxy-kubernetes-ingress "
+            "-o jsonpath='{.status.loadBalancer.ingress[0].hostname}'",
+            namespace=INGRESS_CONTROLLER_NAMESPACE)
 
         sni_address = None
         if not (lb_external_hostname.ok and lb_external_hostname.stdout):
-            lb_cluster_ip = self.k8s_cluster.kubectl("get service/haproxy-kubernetes-ingress "
-                                                     "--template='{{ index .spec.clusterIP }}'",
-                                                     namespace=INGRESS_CONTROLLER_NAMESPACE)
+            lb_cluster_ip = k8s_cluster.kubectl(
+                "get service/haproxy-kubernetes-ingress --template='{{ index .spec.clusterIP }}'",
+                namespace=INGRESS_CONTROLLER_NAMESPACE)
             if lb_cluster_ip.ok:
                 sni_address = lb_cluster_ip.stdout
         else:
@@ -2694,7 +2681,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
     @property
     def scylla_manager_node(self):
-        return self.k8s_cluster.scylla_manager_cluster.nodes[0]
+        # TODO: make sure we deploy scylla manager only on first K8S cluster and reuse for all
+        #       by Scylla pod IP addresses.
+        return self.k8s_clusters[0].scylla_manager_cluster.nodes[0]
 
     def get_cluster_manager(self, create_cluster_if_not_exists: bool = False) -> AnyManagerCluster:
         return super().get_cluster_manager(create_cluster_if_not_exists=create_cluster_if_not_exists)
@@ -2733,45 +2722,74 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         assert self.nodes, "DB cluster should have at least 1 node"
         self.nodes[0].is_seed = True
 
+    def _get_rack_nodes(self, rack: int, dc_idx: int) -> list:
+        return sorted(
+            [node for node in self.nodes if node.rack == rack and node.dc_idx == dc_idx], key=lambda n: n.name)
+
     def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",
-                  dc_idx: int = 0,
+                  # NOTE: 'dc_idx=None' means 'create %count% nodes on each K8S cluster'
+                  dc_idx: int = None,
                   rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
-        self._create_k8s_rack_if_not_exists(rack)
-        # TODO: 'self.get_rack_nodes(rack)' returns correct number only
-        #       when there are no decommissioned, by nodetool, nodes.
-        #       Having 1 decommissioned node we do not change node count.
-        #       Having 2 decommissioned nodes we will reduce node count.
-        current_members = len(self.get_rack_nodes(rack))
-        self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members + count)
+        if dc_idx is None:
+            dc_idx = list(range(len(self.k8s_clusters)))
+        elif isinstance(dc_idx, int):
+            dc_idx = [dc_idx]
+        if isinstance(count, str):
+            count = count.split(" ")
+        else:
+            count = [count]
+        assert len(count) in (1, len(dc_idx))
+        new_nodes = []
+        self.log.debug(
+            "'%s' configuration was taken for the 'dc_idx': %s",
+            "Single-DC" if len(dc_idx) < 2 else "Multi-DC", dc_idx)
+        for current_dc_idx in dc_idx:
+            node_count_in_dc = count[current_dc_idx] if current_dc_idx < len(count) else count[0]
+            self.log.debug(
+                "Going to provision '%s' nodes (node_count_in_dc) in DC with '%s' (dc_idx)",
+                node_count_in_dc, current_dc_idx)
+            self._create_k8s_rack_if_not_exists(rack, dc_idx=current_dc_idx)
+            # TODO: 'self._get_rack_nodes(rack)' returns correct number only
+            #       when there are no decommissioned, by nodetool, nodes.
+            #       Having 1 decommissioned node we do not change node count.
+            #       Having 2 decommissioned nodes we will reduce node count.
+            current_members = len(self._get_rack_nodes(rack, dc_idx=current_dc_idx))
+            if current_dc_idx > 0:
+                external_seeds = [node.pod_status.pod_ip for node in self.nodes if node.dc_idx == 0]
+                assert external_seeds, (
+                    "Couldn't not find IP addresses of the nodes from the first DC (dc_idx=0)"
+                    f" to be used as 'external seeds' for the pods of another DC (dc_idx={current_dc_idx})")
+                self.replace_scylla_cluster_value("/spec/externalSeeds", external_seeds, dc_idx=current_dc_idx)
+            self.replace_scylla_cluster_value(
+                f"/spec/datacenter/racks/{rack}/members", current_members + node_count_in_dc,
+                dc_idx=current_dc_idx)
+            new_nodes.extend(super().add_nodes(
+                count=node_count_in_dc, ec2_user_data=ec2_user_data, dc_idx=current_dc_idx, rack=rack,
+                enable_auto_bootstrap=enable_auto_bootstrap))
+        return new_nodes
 
-        return super().add_nodes(count=count,
-                                 ec2_user_data=ec2_user_data,
-                                 dc_idx=dc_idx,
-                                 rack=rack,
-                                 enable_auto_bootstrap=enable_auto_bootstrap)
-
-    def _create_k8s_rack_if_not_exists(self, rack: int):
-        if self.get_scylla_cluster_value(f'/spec/datacenter/racks/{rack}') is not None:
+    def _create_k8s_rack_if_not_exists(self, rack: int, dc_idx: int):
+        if self.get_scylla_cluster_value(f'/spec/datacenter/racks/{rack}', dc_idx=dc_idx) is not None:
             return
         # Create new rack of very first rack of the cluster
-        new_rack = self.get_scylla_cluster_plain_value('/spec/datacenter/racks/0')
+        new_rack = self.get_scylla_cluster_plain_value('/spec/datacenter/racks/0', dc_idx=dc_idx)
         new_rack['members'] = 0
         new_rack['name'] = f'{new_rack["name"]}-{rack}'
-        self.add_scylla_cluster_value('/spec/datacenter/racks', new_rack)
+        self.add_scylla_cluster_value('/spec/datacenter/racks', new_rack, dc_idx=dc_idx)
 
-    def _delete_k8s_rack(self, rack: int):
-        racks = self.get_scylla_cluster_plain_value('/spec/datacenter/racks/')
+    def _delete_k8s_rack(self, rack: int, dc_idx: int):
+        racks = self.get_scylla_cluster_plain_value('/spec/datacenter/racks/', dc_idx=dc_idx)
         if len(racks) == 1:
             return
         racks.pop(rack)
-        self.replace_scylla_cluster_value('/spec/datacenter/racks', racks)
+        self.replace_scylla_cluster_value('/spec/datacenter/racks', racks, dc_idx=dc_idx)
 
     def decommission(self, node: BaseScyllaPodContainer, timeout: int | float = None):
-        rack = node.rack
-        rack_nodes = self.get_rack_nodes(rack)
+        rack, dc_idx = node.rack, node.dc_idx
+        rack_nodes = self._get_rack_nodes(rack, dc_idx=dc_idx)
         assert rack_nodes[-1] == node, "Can withdraw the last node only"
         current_members = len(rack_nodes)
 
@@ -2784,13 +2802,15 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node), DbEventsFilter(
                 db_event=DatabaseLogEvent.RUNTIME_ERROR,
                 line="std::runtime_error (Operation decommission is in progress, try again)"):
-            self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members - 1)
-            self.k8s_cluster.kubectl(f"wait --timeout={timeout}s --for=delete pod {node.name}",
-                                     namespace=self.namespace,
-                                     timeout=timeout + 10)
+            self.replace_scylla_cluster_value(
+                f"/spec/datacenter/racks/{rack}/members", current_members - 1, dc_idx=dc_idx)
+            self.k8s_clusters[node.dc_idx].kubectl(
+                f"wait --timeout={timeout}s --for=delete pod {node.name}",
+                namespace=self.namespace,
+                timeout=timeout + 10)
         self.terminate_node(node, scylla_shards=scylla_shards)
         if current_members == 1:
-            self._delete_k8s_rack(rack)
+            self._delete_k8s_rack(rack, dc_idx=dc_idx)
 
         if monitors := self.test_config.tester_obj().monitors:
             monitors.reconfigure_scylla_monitoring()
@@ -2830,44 +2850,50 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         # TODO: make prometheus check be secure
         self.log.debug('Check kubernetes monitoring health')
         with ClusterHealthValidatorEvent() as kmh_event:
-            try:
-                prometheus_ip = self.k8s_cluster.get_prometheus_ip(
-                    cluster_name=self.scylla_cluster_name, namespace=self.namespace)
-                PrometheusDBStats(host=prometheus_ip, port=self.k8s_cluster.prometheus_port, protocol='https')
-                kmh_event.message = "Kubernetes monitoring health checks have successfully been finished"
-                return True
-            except Exception as exc:  # pylint: disable=broad-except
-                ClusterHealthValidatorEvent.MonitoringStatus(
-                    error=f'Failed to connect to K8S prometheus server (namespace={self.namespace}) at '
-                          f'{prometheus_ip}:{self.k8s_cluster.prometheus_port}, due to the: \n'
-                          ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-                ).publish()
-                kmh_event.message = "Kubernetes monitoring health checks have failed"
-                return False
+            for k8s_cluster in self.k8s_clusters:
+                try:
+                    prometheus_ip = k8s_cluster.get_prometheus_ip(
+                        cluster_name=self.scylla_cluster_name, namespace=self.namespace)
+                    PrometheusDBStats(host=prometheus_ip, port=k8s_cluster.prometheus_port, protocol='https')
+                    kmh_event.message = "Kubernetes monitoring health checks have successfully been finished"
+                except Exception as exc:  # pylint: disable=broad-except
+                    ClusterHealthValidatorEvent.MonitoringStatus(
+                        error=f'Failed to connect to K8S prometheus server (namespace={self.namespace}) at '
+                              f'{prometheus_ip}:{k8s_cluster.prometheus_port}, due to the: \n'
+                              ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+                    ).publish()
+                    kmh_event.message = "Kubernetes monitoring health checks have failed"
+                    return False
+            return True
 
     def restart_scylla(self, nodes=None, random_order=False):
-        # TODO: add support for the "nodes" param to have compatible logic with
-        # other backends.
-        patch_data = {"spec": {"forceRedeploymentReason": f"Triggered at {time.time()}"}}
-        self.k8s_cluster.kubectl(
-            f"patch scyllacluster {self.scylla_cluster_name} --type merge -p '{json.dumps(patch_data)}'",
-            namespace=self.namespace)
+        nodes = nodes or self.nodes
+        for i, k8s_cluster in enumerate(self.k8s_clusters):
+            current_k8s_cluster_nodes = [node for node in nodes if node.dc_idx == i]
+            if not current_k8s_cluster_nodes:
+                self.log.warning(
+                    "No DB nodes specified for the restart in the '%s' K8S cluster", k8s_cluster.name)
+                continue
+            patch_data = {"spec": {"forceRedeploymentReason": f"Triggered at {time.time()}"}}
+            k8s_cluster.kubectl(
+                f"patch scyllacluster {self.scylla_cluster_name} --type merge -p '{json.dumps(patch_data)}'",
+                namespace=self.namespace)
 
-        # NOTE: sleep for some time to avoid races.
-        #       We do not waste time here, because waiting for Scylla pods restart takes minutes.
-        time.sleep(10)
+            # NOTE: sleep for some time to avoid races.
+            #       We do not waste time here, because waiting for Scylla pods restart takes minutes.
+            time.sleep(10)
 
-        readiness_timeout = self.get_nodes_reboot_timeout(len(self.nodes))
-        statefulsets = self.statefulsets
-        if random_order:
-            random.shuffle(statefulsets)
-        for statefulset in statefulsets:
-            self.k8s_cluster.kubectl(
-                f"rollout status statefulset/{statefulset.metadata.name} "
-                f"--watch=true --timeout={readiness_timeout}m",
-                namespace=self.namespace,
-                timeout=readiness_timeout * 60 + 10)
-        self.scylla_restart_required = False
+            readiness_timeout = self.get_nodes_reboot_timeout(len(current_k8s_cluster_nodes))
+            statefulsets = KubernetesOps.list_statefulsets(k8s_cluster, namespace=self.namespace)
+            if random_order:
+                random.shuffle(statefulsets)
+            for statefulset in statefulsets:
+                k8s_cluster.kubectl(
+                    f"rollout status statefulset/{statefulset.metadata.name} "
+                    f"--watch=true --timeout={readiness_timeout}m",
+                    namespace=self.namespace,
+                    timeout=readiness_timeout * 60 + 10)
+            k8s_cluster.scylla_restart_required = False
 
     def prefill_cluster(self, dataset_name: str):
         test_data = getattr(datasets, dataset_name, None)
@@ -2906,25 +2932,22 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
 
 class ManagerPodCluser(PodCluster):  # pylint: disable=abstract-method
-    def wait_for_pods_running(self, pods_to_wait: int, total_pods: int | callable):
-        super().wait_for_pods_running(
-            pods_to_wait=pods_to_wait,
-            total_pods=lambda x: x > 1
-        )
+    def wait_for_pods_running(self, pods_to_wait: int, total_pods: int | callable, dc_idx: int = 0):
+        super().wait_for_pods_running(pods_to_wait=pods_to_wait, total_pods=(lambda x: x > 1), dc_idx=dc_idx)
 
 
 class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
     def __init__(self,
-                 k8s_cluster: KubernetesCluster,
+                 k8s_clusters: List[KubernetesCluster],
                  loader_cluster_name: Optional[str] = None,
                  user_prefix: Optional[str] = None,
                  n_nodes: Union[list, int] = 3,
                  params: Optional[dict] = None,
-                 node_pool: CloudK8sNodePool = None,
+                 node_pool_name: str = '',
                  add_nodes: bool = True,
                  ) -> None:
 
-        self.k8s_cluster = k8s_cluster
+        self.k8s_clusters = k8s_clusters
         self.loader_cluster_name = loader_cluster_name
         self.loader_cluster_created = False
         self.namespace = self.generate_namespace(namespace_template=LOADER_NAMESPACE)
@@ -2939,7 +2962,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
             raise ValueError(
                 "'k8s_loader_run_type' has unexpected value: %s" % self.k8s_loader_run_type)
         PodCluster.__init__(self,
-                            k8s_cluster=self.k8s_cluster,
+                            k8s_clusters=self.k8s_clusters,
                             namespace=self.namespace,
                             container="loader",
                             cluster_prefix=cluster.prepend_user_prefix(user_prefix, "loader-set"),
@@ -2947,7 +2970,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                             node_type="loader",
                             n_nodes=n_nodes,
                             params=params,
-                            node_pool=node_pool,
+                            node_pool_name=node_pool_name,
                             add_nodes=add_nodes,
                             )
 
@@ -2975,60 +2998,71 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
     def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",
-                  dc_idx: int = 0,
+                  # NOTE: 'dc_idx=None' means 'create %count% nodes on each K8S cluster'
+                  dc_idx: int = None,
                   rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
         if self.loader_cluster_created:
             raise NotImplementedError(
                 "Changing number of nodes in LoaderPodCluster is not supported.")
+        if dc_idx is None:
+            dc_idx = list(range(len(self.k8s_clusters)))
+        elif isinstance(dc_idx, int):
+            dc_idx = [dc_idx]
+        if isinstance(count, str):
+            count = count.split(" ")
+        else:
+            count = [count]
+        assert len(count) in (1, len(dc_idx))
+        new_nodes = []
+        for current_dc_idx in dc_idx:
+            self.k8s_clusters[current_dc_idx].deploy_loaders_cluster(
+                node_pool_name=self.node_pool_name, namespace=self.namespace)
+            node_count_in_dc = count[current_dc_idx] if current_dc_idx < len(count) else count[0]
+            if self.k8s_loader_run_type == "dynamic":
+                # TODO: if it is needed to catch coredumps of loader pods then need to create
+                #       appropriate daemonset with affinity rules for scheduling on the loader K8S nodes
+                for node_index in range(node_count_in_dc):
+                    node = self.PodContainerClass(
+                        name=f"{self.loader_cluster_name}-{node_index}",
+                        parent_cluster=self,
+                        base_logdir=self.logdir,
+                        node_prefix=self.node_prefix,
+                        node_index=node_index,
+                        dc_idx=current_dc_idx,
+                        rack=rack,
+                    )
+                    node.init()
+                    new_nodes.append(node)
+                    self.nodes.append(node)
+                continue
 
-        self.k8s_cluster.deploy_loaders_cluster(
-            node_pool=self.node_pool,
-            namespace=self.namespace)
-
-        if self.k8s_loader_run_type == "dynamic":
-            # TODO: if it is needed to catch coredumps of loader pods then need to create
-            #       appropriate daemonset with affinity rules for scheduling on the loader K8S nodes
-            for node_index in range(count):
-                node = self.PodContainerClass(
-                    name=f"{self.loader_cluster_name}-{node_index}",
-                    parent_cluster=self,
-                    base_logdir=self.logdir,
-                    node_prefix=self.node_prefix,
-                    node_index=node_index,
-                    dc_idx=dc_idx,
-                    rack=rack,
-                )
-                node.init()
-                self.nodes.append(node)
-                self.loader_cluster_created = True
-            return self.nodes
-
-        self.k8s_cluster.apply_file(
-            self.PodContainerClass.TEMPLATE_PATH,
-            modifiers=self.k8s_cluster.calculated_loader_affinity_modifiers,
-            environ={
-                "K8S_NAMESPACE": self.namespace,
-                "K8S_LOADER_CLUSTER_NAME": self.loader_cluster_name,
-                "DOCKER_IMAGE_WITH_TAG": self._get_docker_image(),
-                "N_LOADERS": count,
-                "POD_CPU_LIMIT": self.k8s_cluster.calculated_loader_cpu_limit,
-                "POD_MEMORY_LIMIT": self.k8s_cluster.calculated_loader_memory_limit,
-            },
-        )
-        self.k8s_cluster.debug(
-            "Check the '%s' loaders cluster in the '%s' namespace",
-            self.loader_cluster_name, self.namespace)
-        self.k8s_cluster.kubectl("get statefulset", namespace=self.namespace)
-        self.k8s_cluster.kubectl("get pods", namespace=self.namespace)
+            self.k8s_clusters[current_dc_idx].apply_file(
+                self.PodContainerClass.TEMPLATE_PATH,
+                modifiers=self.k8s_clusters[current_dc_idx].calculated_loader_affinity_modifiers,
+                environ={
+                    "K8S_NAMESPACE": self.namespace,
+                    "K8S_LOADER_CLUSTER_NAME": self.loader_cluster_name,
+                    "DOCKER_IMAGE_WITH_TAG": self._get_docker_image(),
+                    "N_LOADERS": node_count_in_dc,
+                    "POD_CPU_LIMIT": self.k8s_clusters[current_dc_idx].calculated_loader_cpu_limit,
+                    "POD_MEMORY_LIMIT": self.k8s_clusters[current_dc_idx].calculated_loader_memory_limit,
+                },
+            )
+            self.k8s_clusters[current_dc_idx].debug(
+                "Check the '%s' loaders cluster in the '%s' namespace",
+                self.loader_cluster_name, self.namespace)
+            self.k8s_clusters[current_dc_idx].kubectl("get statefulset", namespace=self.namespace)
+            self.k8s_clusters[current_dc_idx].kubectl("get pods", namespace=self.namespace)
+            new_nodes.extend(super().add_nodes(
+                count=node_count_in_dc,
+                ec2_user_data=ec2_user_data,
+                dc_idx=current_dc_idx,
+                rack=rack,
+                enable_auto_bootstrap=enable_auto_bootstrap))
 
         self.loader_cluster_created = True
-        return super().add_nodes(
-            count=count,
-            ec2_user_data=ec2_user_data,
-            dc_idx=dc_idx,
-            rack=rack,
-            enable_auto_bootstrap=enable_auto_bootstrap)
+        return new_nodes
 
 
 def get_tags_from_params(params: dict) -> Dict[str, str]:

@@ -52,7 +52,7 @@ class TenantMixin:  # pylint: disable=too-many-instance-attributes
         self.test_config.reuse_cluster(False)
 
     def get_str_index(self):
-        return f"{self.get_str_index_prefix}-{self.db_cluster.k8s_cluster.tenants_number}-tenants"
+        return f"{self.get_str_index_prefix}-{self.db_cluster.k8s_clusters[0].tenants_number}-tenants"
 
     def id(self):  # pylint: disable=invalid-name
         if "Longevity" in self.__class__.__name__:

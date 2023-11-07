@@ -50,7 +50,7 @@ class FakePerformanceTest(FakeTestBase):
 class FakeDbCluster:  # pylint: disable=too-few-public-methods
     def __init__(self, fake_index):
         self.fake_index = fake_index
-        self.k8s_cluster = type("FakeK8SCluster", (), {"tenants_number": 2})
+        self.k8s_clusters = [type("FakeK8SCluster", (), {"tenants_number": 2})]
         self.params = {}
 
 
