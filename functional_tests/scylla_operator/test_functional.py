@@ -63,6 +63,8 @@ from functional_tests.scylla_operator.libs.helpers import (
 
 log = logging.getLogger()
 
+# TODO: add support for multiDC setups
+
 
 @pytest.mark.readonly
 def test_single_operator_image_tag_is_everywhere(db_cluster):

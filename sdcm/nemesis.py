@@ -1287,9 +1287,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def replace_node(self, old_node_ip, host_id, rack=0):
         return self._add_and_init_new_cluster_node(old_node_ip, host_id, rack=rack)
 
-    def _verify_resharding_on_k8s(self, cpus):
+    def _verify_resharding_on_k8s(self, cpus, dc_idx):
         nodes_data = []
-        for node in reversed(self.cluster.nodes):
+        qualified_nodes = (n for n in self.cluster.nodes if n.dc_idx == dc_idx)
+        for node in reversed(qualified_nodes):
             liveness_probe_failures = node.follow_system_log(
                 patterns=["healthz probe: can't connect to JMX"])
             resharding_start = node.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_START])
@@ -1299,17 +1300,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info(
             "Update the cpu count to '%s' CPUs to make Scylla start "
             "the resharding process on all the nodes 1 by 1", cpus)
+        # TODO: properly pick up the rack. For now it assumes we have only one.
         self.tester.db_cluster.replace_scylla_cluster_value(
             "/spec/datacenter/racks/0/resources", {
-                "limits": {
-                    "cpu": cpus,
-                    "memory": self.target_node.k8s_cluster.scylla_memory_limit,
-                },
-                "requests": {
-                    "cpu": cpus,
-                    "memory": self.target_node.k8s_cluster.scylla_memory_limit,
-                },
-            })
+                "limits": {"cpu": cpus, "memory": self.cluster.k8s_clusters[dc_idx].scylla_memory_limit},
+                "requests": {"cpu": cpus, "memory": self.cluster.k8s_clusters[dc_idx].scylla_memory_limit},
+            }, dc_idx=dc_idx)
 
         # Wait for the start of the resharding.
         # In K8S it starts from the last node of a rack and then goes to previous ones.
@@ -1354,24 +1350,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_nodetool_flush_and_reshard_on_kubernetes(self):
         """Covers https://github.com/scylladb/scylla-operator/issues/894"""
+        # NOTE: To check resharding we don't need to trigger it on all the nodes,
+        #       so, pick up only one K8S cluster and only if it is EKS.
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('It is supported only on kubernetes')
-        if self.cluster.params.get('cluster_backend') != "k8s-eks" or self.cluster.nodes[0].scylla_shards < 14:
+        dc_idx = 0
+        for node in self.cluster.nodes:
+            if hasattr(node.k8s_cluster, 'eks_cluster_version') and node.scylla_shards >= 14:
+                dc_idx = node.dc_idx
+
+                # Calculate new value for the CPU cores dedicated for Scylla pods
+                current_cpus = convert_cpu_value_from_k8s_to_units(node.k8s_cluster.scylla_cpu_limit)
+                new_cpus = convert_cpu_units_to_k8s_value(current_cpus + (1 if current_cpus <= 1 else -1))
+                break
+        else:
             # NOTE: bug https://github.com/scylladb/scylla-operator/issues/1077 reproduces better
             #       on slower machines with smaller amount number of cores.
             #       So, allow it to run only on fast K8S-EKS backend having at least 14 cores per pod.
-            raise UnsupportedNemesis(
-                "Skipped due to the following bug: "
-                "https://github.com/scylladb/scylla-operator/issues/1077")
-
-        # Calculate new value for the CPU cores dedicated for Scylla pods
-        current_cpus = convert_cpu_value_from_k8s_to_units(
-            self.target_node.k8s_cluster.scylla_cpu_limit)
-        if current_cpus <= 1:
-            new_cpus = current_cpus + 1
-        else:
-            new_cpus = current_cpus - 1
-        new_cpus = convert_cpu_units_to_k8s_value(new_cpus)
+            raise UnsupportedNemesis("https://github.com/scylladb/scylla-operator/issues/1077")
 
         # Run 'nodetool flush' command
         self.target_node.run_nodetool("flush -- keyspace1")
@@ -1379,10 +1375,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         try:
             # Change number of CPUs dedicated for Scylla pods
             # and make sure that the resharding process begins and finishes
-            self._verify_resharding_on_k8s(new_cpus)
+            self._verify_resharding_on_k8s(new_cpus, dc_idx)
         finally:
             # Return the cpu count back and wait for the resharding begin and finish
-            self._verify_resharding_on_k8s(current_cpus)
+            self._verify_resharding_on_k8s(current_cpus, dc_idx)
 
     def disrupt_drain_kubernetes_node_then_replace_scylla_node(self):
         self._disrupt_kubernetes_then_replace_scylla_node('drain_k8s_node')

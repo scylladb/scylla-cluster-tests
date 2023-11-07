@@ -40,6 +40,7 @@ LOGGER = logging.getLogger(__name__)
 #
 #       Which appears when we define and use fixtures in one single module like we do here.
 
+# TODO: add support for multiDC setups
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):  # pylint: disable=unused-argument
@@ -109,6 +110,7 @@ def fixture_db_cluster(tester: ScyllaOperatorFunctionalClusterTester):
                                                        verification_node=tester.db_cluster.nodes[0])
         tester.db_cluster.wait_for_init(node_list=tester.db_cluster.nodes, wait_for_db_logs=True)
         tester.db_cluster.prefill_cluster(dataset_name)
+    tester.db_cluster.k8s_cluster = tester.db_cluster.k8s_clusters[0]
     yield tester.db_cluster
 
     if tester.healthy_flag:
@@ -224,11 +226,10 @@ def skip_if_not_supported_scylla_version(request: pytest.FixtureRequest,
 def skip_based_on_operator_version(request: pytest.FixtureRequest, tester: ScyllaOperatorFunctionalClusterTester):
     # pylint: disable=protected-access
     if required_operator := request.node.get_closest_marker('required_operator'):
-        current_version = tester.k8s_cluster._scylla_operator_chart_version.split("-")[0]
+        current_version = tester.k8s_clusters[0]._scylla_operator_chart_version.split("-")[0]
         required_version = required_operator.args[0]
         if version_utils.ComparableScyllaOperatorVersion(current_version) < required_version:
-            pytest.skip(f"require operator version: {required_operator.args[0]} , "
-                        f"current version: {tester.k8s_cluster._scylla_operator_chart_version}")
+            pytest.skip(f"require operator version: {required_version}, current version: {current_version}")
 
 
 @pytest.fixture(autouse=True)
