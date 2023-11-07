@@ -23,6 +23,7 @@ import time
 import re
 from functools import wraps, cache
 from typing import List
+import contextlib
 
 from argus.client.sct.types import Package
 
@@ -33,12 +34,15 @@ from sdcm.sct_events import Severity
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.version_utils import get_node_supported_sstable_versions
 from sdcm.sct_events.system import InfoEvent
-from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
+from sdcm.sct_events.database import (
+    IndexSpecialColumnErrorEvent,
+    DatabaseLogEvent,
+)
+from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused, \
     ignore_abort_requested_errors, decorate_with_context
 from sdcm.utils import loader_utils
 from test_lib.sla import create_sla_auth
-
 
 NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
 
@@ -109,6 +113,20 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     """
     Test a Scylla cluster upgrade.
     """
+
+    def __init__(self, *args):
+        super().__init__(*args)
+
+        self.stack = contextlib.ExitStack()
+        # ignoring those unsuppressed exceptions, till both ends of the upgrade would have https://github.com/scylladb/scylladb/pull/14681
+        # see https://github.com/scylladb/scylladb/issues/14882 for details
+        self.stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*std::runtime_error \(unknown exception\).*",
+            extra_time_to_expiration=30,
+        ))
+
     orig_ver = None
     new_ver = None
 
