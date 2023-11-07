@@ -75,6 +75,22 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: "${pipelineParams.get('builds_to_keep', '20')}",))
         }
         stages {
+            stage("Preparation") {
+                // NOTE: this stage is a workaround for the following Jenkins bug:
+                // https://issues.jenkins-ci.org/browse/JENKINS-41929
+                when { expression { env.BUILD_NUMBER == '1' } }
+                steps {
+                    script {
+                        if (currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause') != null) {
+                            currentBuild.description = ('Aborted build#1 not having parameters loaded. \n'
+                              + 'Build#2 is ready to run')
+                            currentBuild.result = 'ABORTED'
+
+                            error('Abort build#1 which only loads params')
+                        }
+                    }
+                }
+            }
             stage('Checkout') {
                 steps {
                     script {
@@ -88,21 +104,6 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage('Get test duration') {
-                steps {
-                    catchError(stageResult: 'FAILURE') {
-                        timeout(time: 10, unit: 'MINUTES') {
-                            script {
-                                wrap([$class: 'BuildUser']) {
-                                    dir('scylla-cluster-tests') {
-                                        (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
             stage('Create Argus Test Run') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
@@ -111,6 +112,21 @@ def call(Map pipelineParams) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: 5, unit: 'MINUTES') {
                                         createArgusTestRun(params)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Get test duration') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        timeout(time: 10, unit: 'MINUTES') {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
                                     }
                                 }
                             }
@@ -185,6 +201,7 @@ def call(Map pipelineParams) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: collectLogsTimeout, unit: 'MINUTES') {
                                         runCollectLogs(params, builder.region)
+                                        completed_stages['collect_logs'] = true
                                     }
                                 }
                             }
@@ -231,6 +248,7 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     cleanSctRunners(params, currentBuild)
+                                    completed_stages['clean_sct_runner'] = true
                                 }
                             }
                         }
@@ -257,9 +275,11 @@ def call(Map pipelineParams) {
         post {
             always {
                 script {
+                    def run_tests = completed_stages['run_tests']
                     def collect_logs = completed_stages['collect_logs']
                     def clean_resources = completed_stages['clean_resources']
                     def send_email = completed_stages['send_email']
+                    def clean_sct_runner = completed_stages['clean_sct_runner']
                     sh """
                         echo "$collect_logs"
                         echo "$clean_resources"
