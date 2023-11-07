@@ -62,7 +62,7 @@ def get_name(instance):
 
 @get_name.register(dict)
 def _(instance: dict):
-    get_tags(instance).get('Name')
+    return get_tags(instance).get('Name')
 
 
 @get_name.register(compute_v1.Instance)
@@ -220,7 +220,7 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
         gce_vms = list_instances_gce(tags, running=True)
 
     if len(aws_vms + gce_vms) == 1:
-        return (aws_vms + gce_vms)[0]
+        return aws_vms + gce_vms
 
     if not aws_vms and not gce_vms:
         click.echo(click.style("Found no matching instances", fg='red'))
@@ -394,7 +394,7 @@ def attach_test_sg_cmd(user, test_id, region, group_id):
     instances = select_instance_group(region=region, backends=['aws'], test_id=test_id, user=user)
 
     for i in instances:
-        aws_region: AwsRegion = AwsRegion(get_region(i))
+        aws_region: AwsRegion = AwsRegion(region or get_region(i))
         instance = aws_region.resource.Instance(i['InstanceId'])
         click.echo(click.style(f"attaching test SG to {get_name(i)}", fg='green'))
         if group_id:
