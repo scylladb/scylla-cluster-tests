@@ -460,7 +460,7 @@ class TestRemoteFile(unittest.TestCase):
         self.assertEqual(remoter.rf_dst, remoter.sf_src)
         self.assertEqual(remoter.sf_data, "test data")
         self.assertFalse(os.path.exists(remoter.sf_src))
-        self.assertEqual(remoter.command_to_run, f"mv 'temporary' '{some_file}'")
+        self.assertEqual(remoter.command_to_run, f'bash -cxe "cat \'temporary\' > \'{some_file}\'\nrm \'temporary\'\n"')
 
     def test_remote_file_preserve_ownership(self):
         remoter = self.remoter_cls()
