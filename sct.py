@@ -1409,6 +1409,7 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
         ('features-', 'SCT Feature Tests'),
         ('artifacts', 'SCT Artifacts Tests'),
         ('load-test', 'SCT Load Tests'),
+        ('jepsen', 'SCT Jepsen Tests'),
         ('repair-based-operation', "SCT RBO Tests"),
         ('scale', 'SCT Scale Tests'),
         ('operator', 'SCT Operator Tests'),
