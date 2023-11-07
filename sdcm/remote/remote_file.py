@@ -20,6 +20,7 @@ from io import StringIO
 import yaml
 
 from sdcm import wait
+from sdcm.remote import shell_script_cmd
 
 
 LOGGER = logging.getLogger(__name__)
@@ -64,7 +65,10 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
             LOGGER.debug("New content of `%s':\n%s", remote_path, content)
 
         remote_tempfile = remoter.run("mktemp").stdout.strip()
-        remote_tempfile_move_cmd = f"mv '{remote_tempfile}' '{remote_path}'"
+        remote_tempfile_move_cmd = shell_script_cmd(f"""\
+            cat '{remote_tempfile}' > '{remote_path}'
+            rm '{remote_tempfile}'
+            """)
         wait.wait_for(remoter.send_files,
                       step=10,
                       text=f"Waiting for updating of `{remote_path}' on {remoter.hostname}",
