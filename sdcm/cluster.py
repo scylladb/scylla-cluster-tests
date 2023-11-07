@@ -5564,10 +5564,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         for node in self.nodes:
             monitoring_targets = []
             for db_node in self.targets["db_cluster"].nodes:
-                monitoring_targets.append(f"[{getattr(db_node, self.DB_NODES_IP_ADDRESS)}]:9180")
+                monitoring_targets.append(f"{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}:9180")
             monitoring_targets = " ".join(monitoring_targets)
-            if self.params.get("ip_ssh_connections") != "ipv6":
-                monitoring_targets = monitoring_targets.replace("[", "").replace("]", "")
             node.remoter.sudo(shell_script_cmd(f"""\
                 cd {self.monitor_install_path}
                 mkdir -p {self.monitoring_conf_dir}
@@ -5576,7 +5574,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             """), verbose=True)
 
             with node._remote_yaml(f'{self.monitoring_conf_dir}/node_exporter_servers.yml') as exporter_yaml:  # pylint: disable=protected-access
-                exporter_yaml[0]['targets'] += [f'[{node.private_ip_address}]:9100']
+                exporter_yaml[0]['targets'] += [f'{normalize_ipv6_url(node.private_ip_address)}:9100']
                 exporter_yaml[0]['targets'] = list(set(exporter_yaml[0]['targets']))  # remove duplicates
 
             if self.params.get("cloud_prom_bearer_token"):
