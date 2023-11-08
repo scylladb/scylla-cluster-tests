@@ -248,7 +248,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(conf.get('scylla_repo'),
                          expected_repo)
         self.assertEqual(conf.get('scylla_repo_loader'),
-                         "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
+                         "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo")
 
     def test_12_scylla_version_repo_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
@@ -267,7 +267,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(conf.get('scylla_repo'),
                          expected_repo)
         self.assertEqual(conf.get('scylla_repo_loader'),
-                         "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
+                         "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo")
 
     def test_12_k8s_scylla_version_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-local-kind'
