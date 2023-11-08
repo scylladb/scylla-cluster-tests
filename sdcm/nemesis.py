@@ -82,7 +82,8 @@ from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors
                                                  ignore_scrub_invalid_errors, ignore_view_error_gate_closed_exception,
                                                  ignore_stream_mutation_fragments_errors,
                                                  ignore_ycsb_connection_refused, decorate_with_context,
-                                                 ignore_reactor_stall_errors)
+                                                 ignore_reactor_stall_errors,
+                                                 ignore_error_apply_view_update)
 from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
@@ -4631,7 +4632,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Create index on a random column (regular or static) of a table with the most number of partitions and wait until it gets build.
         Then verify it can be used in a query. Finally, drop the index.
         """
-        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+        with ignore_error_apply_view_update(), \
+                self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+
             ks_cf_list = self.cluster.get_non_system_ks_cf_list(self.target_node, filter_out_mv=True)
             if not ks_cf_list:
                 raise UnsupportedNemesis("No table found to create index on")
