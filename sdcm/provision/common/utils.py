@@ -45,8 +45,8 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
         disk_buffer_option=""
         if syslog-ng -V | grep disk; then
             disk_buffer_option="disk-buffer(
-                    mem-buf-size(100000)
-                    disk-buf-size(2000000)
+                    mem-buf-size(1048576)
+                    disk-buf-size(104857600)
                     reliable(yes)
                     dir(\\\"/tmp\\\")
                 )"
