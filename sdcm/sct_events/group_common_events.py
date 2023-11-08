@@ -207,6 +207,18 @@ def ignore_view_error_gate_closed_exception():
 
 
 @contextmanager
+def ignore_error_apply_view_update():
+    with ExitStack() as stack:
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*view - Error applying view update.*data_dictionary::no_such_column_family",
+            extra_time_to_expiration=30
+        ))
+        yield
+
+
+@contextmanager
 def ignore_stream_mutation_fragments_errors():
     with ExitStack() as stack:
         stack.enter_context(EventsSeverityChangerFilter(
@@ -230,7 +242,7 @@ def ignore_stream_mutation_fragments_errors():
         stack.enter_context(EventsSeverityChangerFilter(
             new_severity=Severity.WARNING,
             event_class=DatabaseLogEvent,
-            regex=r".*node_ops - decommission.*Operation failed.*std::runtime_error.*aborted_by_user=true, failed_because=N\/A",
+            regex=r".*node_ops \- decommission.*Operation failed.*std::runtime_error.*aborted_by_user=true, failed_because=N\/A",
             extra_time_to_expiration=30
         ))
         stack.enter_context(EventsSeverityChangerFilter(
