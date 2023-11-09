@@ -153,6 +153,18 @@ def get_first_view_with_name_like(view_name_substr: str, session) -> tuple:
     return result.one().keyspace_name, result.one().view_name, result.one().base_table_name
 
 
+def get_views_of_base_table(keyspace_name: str, base_table_name: str, session) -> list:
+    query = f"select view_name from system_schema.views " \
+            f"where keyspace_name = '{keyspace_name}' and base_table_name = '{base_table_name}' ALLOW FILTERING"
+    LOGGER.debug("Run query: %s", query)
+    result = session.execute(query)
+    views = []
+    for row in result:
+        views.append(row.view_name)
+
+    return views
+
+
 def get_entity_columns(keyspace_name: str, entity_name: str, session) -> list:
     query = f"select column_name, kind, type from system_schema.columns where keyspace_name = '{keyspace_name}' " \
             f"and table_name='{entity_name}'"
