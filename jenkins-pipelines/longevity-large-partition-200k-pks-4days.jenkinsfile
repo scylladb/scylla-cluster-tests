@@ -6,6 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
+    availability_zone: 'b',
     test_name: 'longevity_large_partition_test.LargePartitionLongevityTest.test_large_partition_longevity',
     test_config: 'test-cases/longevity/longevity-large-partition-200k_pks-4days.yaml'
 
