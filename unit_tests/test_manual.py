@@ -57,6 +57,7 @@ class DbNode:  # pylint: disable=no-init,too-few-public-methods
 class LoaderSetDummy:  # pylint: disable=no-init,too-few-public-methods
     def __init__(self):
         self.nodes = [Node()]
+        self.params = {}
 
     @staticmethod
     def get_db_auth():
