@@ -95,7 +95,7 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                update_certificates, reach_enospc_on_node, clean_enospc_on_node,
                                parse_nodetool_listsnapshots,
                                update_authenticator, ParallelObject,
-                               ParallelObjectResult, sleep_for_percent_of_duration)
+                               ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table)
 from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
 from sdcm.utils.context_managers import nodetool_context
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
@@ -3008,12 +3008,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             The snapshot may be taken for a few options:
             - for all keyspaces (with all their tables) - nodetool snapshot cmd without parameters:
                 nodetool snapshot
-            - for one kespace (with all its tables) - nodetool snapshot cmd with "-ks" parameter:
+            - for one keyspace (with all its tables) - nodetool snapshot cmd with "-ks" parameter:
                 nodetool snapshot -ks system
             - for a few keyspaces (with all their tables) - nodetool snapshot cmd with "-ks" parameter:
                 nodetool snapshot -ks system, system_schema
-            - for one kespace and few tables - nodetool snapshot cmd with "-cf" parameter like:
-                nodetool snapshot test -cf cf1,cf2
+            - for one keyspace and few tables - nodetool snapshot cmd with "-cf" parameter like:
+                nodetool snapshot test -cf cf1,cf2. In this case the snapshot will be taken for table and its MVs
 
             By parsing of nodetool_cmd is recognized with type of snapshot was created.
             This function check if all expected keyspace/tables are in the snapshot
@@ -3023,12 +3023,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         keyspace_table = []
         if len(snapshot_params) > 1:
             if snapshot_params[1] == "-kc":
+                # Example: snapshot -kc cqlstress_lwt_example
                 for ks in snapshot_params[2].split(','):
                     keyspace_table.extend([k_c.split('.') for k_c in ks_cf if k_c.startswith(f"{ks}.")])
             else:
+                # Example: snapshot cqlstress_lwt_example -cf blogposts_update_one_column_lwt_indicator_expect,blogposts
                 keyspace = snapshot_params[1]
-                keyspace_table.extend([[keyspace, cf] for cf in snapshot_params[3].split(',')])
+                with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
+                    for cf in snapshot_params[3].split(','):
+                        keyspace_table.extend([[keyspace, cf]])
+                        for view in get_views_of_base_table(keyspace_name=keyspace, base_table_name=cf, session=session):
+                            keyspace_table.extend([[keyspace, view]])
         else:
+            # Example: snapshot
             keyspace_table.extend([k_c.split('.') for k_c in ks_cf])
 
         snapshot_content_list = [[elem.keyspace_name, elem.table_name] for elem in snapshot_content]
