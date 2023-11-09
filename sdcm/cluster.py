@@ -1770,6 +1770,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @retrying(n=30, sleep_time=15, allowed_exceptions=UnexpectedExit)
     def install_package(self,
                         package_name: str,
+                        package_version: str = None,
                         wait_step: int = 30,
                         wait_timeout: int = 60,
                         wait_for_package_manager: bool = True) -> None:
@@ -1779,15 +1780,23 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                           throw_exc=False)
         if self.distro.is_rhel_like:
             pkg_cmd = 'yum'
+            package_name = f"{package_name}-{package_version}*" if package_version else package_name
         elif self.distro.is_sles:
             pkg_cmd = 'zypper'
+            package_name = f"{package_name}-{package_version}" if package_version else package_name
         else:
             pkg_cmd = 'apt-get'
-
+            version_prefix = f"={package_version}*" if package_version else ""
             # A workaround for: https://github.com/scylladb/scylla-pkg/issues/2578
             if package_name == "scylla-manager-agent":
                 self.remoter.sudo('apt --fix-broken install -y')
-
+            if version_prefix:
+                # get versioned dependencies as apt always get's the latest version which are not compatible
+                result = self.remoter.run(
+                    f'apt-cache depends --recurse {package_name}{version_prefix} | grep {package_name} | grep Depends | cut -d ":" -f 2')
+                packages_to_install = [f"{pkg}{version_prefix}" for pkg in [
+                    package_name] + list(set(result.stdout.splitlines()))]
+                package_name = " ".join(packages_to_install)
         self.remoter.sudo(f'{pkg_cmd} install -y {package_name}')
 
     def is_apt_lock_free(self) -> bool:
@@ -1932,10 +1941,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # update repo cache after upgrade
         self.update_repo_cache()
 
-    def install_scylla(self, scylla_repo):
+    def install_scylla(self, scylla_repo, scylla_version=None):
         """
         Download and install scylla on node
         :param scylla_repo: scylla repo file URL
+        :param scylla_version: optional param to specify version
         """
         self.log.info("Installing Scylla...")
         if self.is_rhel_like():
@@ -1948,7 +1958,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.download_scylla_repo(scylla_repo)
             # hack cause of broken caused by EPEL
             self.remoter.run('sudo yum install -y python36-PyYAML', ignore_status=True)
-            self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
+            version = f"-{scylla_version}*" if scylla_version else ""
+            self.remoter.run('sudo yum install -y {}{}'.format(self.scylla_pkg(), version))
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
         elif self.distro.is_sles15:
             self.remoter.sudo('zypper install -y rsync')
@@ -1961,7 +1972,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo('SUSEConnect --product sle-module-python2/15.3/x86_64')
             self.remoter.sudo('zypper install -y python2-PyYAML', ignore_status=True)
             self.remoter.sudo('zypper install -y python3-PyYAML', ignore_status=True)
-            self.remoter.sudo('zypper install -y {}'.format(self.scylla_pkg()))
+            version = f"-{scylla_version}" if scylla_version else ""
+            self.remoter.sudo('zypper install -y {}{}'.format(self.scylla_pkg(), version))
             self.remoter.sudo('zypper install -y scylla-gdb', ignore_status=True)
         else:
             if self.is_ubuntu14():
@@ -2023,7 +2035,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo apt-get install -y rsync')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
-            self.install_package(self.scylla_pkg())
+            self.install_package(self.scylla_pkg(), package_version=scylla_version)
 
     def offline_install_scylla(self, unified_package, nonroot):
         """
@@ -4640,7 +4652,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.offline_install_scylla(unified_package=self.params.get('unified_package'),
                                         nonroot=self.params.get('nonroot_offline_install'))
         else:
-            node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
+            scylla_repo = self.params.get('scylla_repo')
+            version = None
+            if ":" in scylla_repo.rsplit("/", 1)[-1]:
+                scylla_repo, version = scylla_repo.rsplit(":", 1)
+            node.install_scylla(scylla_repo=scylla_repo, scylla_version=version)
 
     @staticmethod
     def _wait_for_preinstalled_scylla(node):
