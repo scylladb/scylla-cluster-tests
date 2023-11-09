@@ -3532,22 +3532,26 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     0] for cfg in self.params.get("config_files"))
         test_status = self.get_test_status()
         backend = self.params.get("cluster_backend")
-        region_name = self.params.get('region_name') or self.params.get('gce_datacenter')
         build_id = f'#{os.environ.get("BUILD_NUMBER")}' if os.environ.get('BUILD_NUMBER', '') else ''
         scylla_version = alive_node.scylla_version_detailed if alive_node else "N/A"
         kernel_version = alive_node.kernel_version if alive_node else "N/A"
 
         if backend in ("aws", "aws-siren", "k8s-eks"):
             scylla_instance_type = self.params.get("instance_type_db") or "Unknown"
+            region_name = self.params.region_names
         elif backend in ("gce", "gce-siren", "k8s-gke"):
             scylla_instance_type = self.params.get("gce_instance_type_db") or "Unknown"
+            region_name = self.params.get("gce_datacenter")
         elif backend in ("azure"):
             scylla_instance_type = self.params.get("azure_instance_type_db") or "Unknown"
+            region_name = self.params.get("azure_region_name")
         elif backend in ("baremetal", "docker"):
             scylla_instance_type = "N/A"
+            region_name = "N/A"
         else:
             self.log.error("Don't know how to get instance type for the '%s' backend.", backend)
             scylla_instance_type = "N/A"
+            region_name = "N/A"
 
         job_name = os.environ.get('JOB_NAME').split("/")[-1] if os.environ.get('JOB_NAME') else config_file_name
         restore_monitor_job_base_link = \
