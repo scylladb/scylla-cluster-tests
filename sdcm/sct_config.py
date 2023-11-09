@@ -240,7 +240,8 @@ class SCTConfiguration(dict):
              ),
 
         dict(name="scylla_repo", env="SCT_SCYLLA_REPO", type=str,
-             help="Url to the repo of scylla version to install scylla"),
+             help="Url to the repo of scylla version to install scylla. Can provide specific version after a colon "
+                  "e.g: `https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list:2021.1.18`"),
 
         dict(name="scylla_apt_keys", env="SCT_SCYLLA_APT_KEYS", type=str_or_list,
              help="APT keys for ScyllaDB repos"),
@@ -1335,7 +1336,7 @@ class SCTConfiguration(dict):
         dict(name="append_scylla_setup_args", env="SCT_APPEND_SCYLLA_SETUP_ARGS", type=str,
              help="More arguments to append to scylla_setup command line"),
 
-        dict(name="use_preinstalled_scylla", env="SCT_USE_PREINSTALLED_SCYLLA", type=bool,
+        dict(name="use_preinstalled_scylla", env="SCT_USE_PREINSTALLED_SCYLLA", type=boolean,
              help="Don't install/update ScyllaDB on DB nodes"),
         dict(name="stress_cdclog_reader_cmd", env="SCT_STRESS_CDCLOG_READER_CMD",
              type=str,
