@@ -65,7 +65,7 @@ from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.aws_region import AwsRegion
-from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_network_configuration, get_ec2_services, \
+from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_services, \
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import format_timestamp, wait_ami_available, update_certificates, \
@@ -326,8 +326,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.test_config.keep_cluster(node_type='loader_nodes', val=post_behavior_loader_nodes)
         self.test_config.set_duration(self._duration)
         cluster_backend = self.params.get('cluster_backend')
-        if cluster_backend == 'aws':
-            self.test_config.set_multi_region(len(self.params.get('region_name').split()) > 1)
+        if cluster_backend in ('aws', 'k8s-eks'):
+            self.test_config.set_multi_region(len(self.params.region_names) > 1)
         elif cluster_backend == 'gce':
             self.test_config.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
 
@@ -850,7 +850,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.k8s_clusters and self.params.get("k8s_use_chaos_mesh"):
             for k8s_cluster in self.k8s_clusters:
-                k8s_cluster.chaos_mesh.initialize()
+                if not k8s_cluster.chaos_mesh.initialized:
+                    k8s_cluster.chaos_mesh.initialize()
 
         if self.db_cluster and not self.db_clusters_multitenant:
             self.db_clusters_multitenant = [self.db_cluster]
@@ -1690,110 +1691,48 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors = NoMonitorSet()
             self.monitors_multitenant = [self.monitors]
 
-    def get_cluster_k8s_eks(self):  # pylint: disable=too-many-statements,too-many-branches
-        self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
+    def get_cluster_k8s_eks(self, n_k8s_clusters: int):
         region_names = self.params.region_names
+        availability_zones = self.params.get('availability_zone').split(',')
+        for _ in range(n_k8s_clusters):
+            self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
+        params_for_parallel_objects = []
+        for i in range(n_k8s_clusters):
+            params_for_parallel_objects.append({
+                'region_name': region_names[i % len(region_names)],
+                'availability_zone': availability_zones[i % len(availability_zones)],
+                'cluster_uuid': (
+                    f"{self.test_config.test_id()[:8]}"
+                    if n_k8s_clusters < 2 else f"{self.test_config.test_id()[:6]}-{i + 1}"),
+                'params': self.params,
+                'credentials': self.credentials,
+            })
+        deployed_k8s_eks_clusters_results = ParallelObject(
+            timeout=3600, num_workers=n_k8s_clusters, objects=params_for_parallel_objects
+        ).run(func=eks.deploy_k8s_eks_cluster, unpack_objects=True, ignore_exceptions=False)
+        self.k8s_clusters.extend([res.result for res in deployed_k8s_eks_clusters_results])
 
-        ec2_security_group_ids, ec2_subnet_ids = get_ec2_network_configuration(
-            regions=region_names,
-            availability_zones=self.params.get('availability_zone').split(','),
-            params=self.params
-        )
-
-        k8s_cluster = eks.EksCluster(
-            eks_cluster_version=self.params.get("eks_cluster_version"),
-            ec2_security_group_ids=ec2_security_group_ids,
-            ec2_subnet_ids=ec2_subnet_ids[0],
-            credentials=self.credentials,
-            ec2_role_arn=self.params.get("eks_role_arn"),
-            nodegroup_role_arn=self.params.get("eks_nodegroup_role_arn"),
-            service_ipv4_cidr=self.params.get("eks_service_ipv4_cidr"),
-            vpc_cni_version=self.params.get("eks_vpc_cni_version"),
-            user_prefix=self.params.get("user_prefix"),
-            params=self.params,
-            region_name=self.params.region_names[0])
-        self.k8s_clusters.append(k8s_cluster)
-        k8s_cluster.deploy()
-        k8s_cluster.tune_network()
-        k8s_cluster.set_nodeselector_for_deployments(
-            pool_name=k8s_cluster.AUXILIARY_POOL_NAME, namespace="kube-system")
-
-        k8s_cluster.deploy_node_pool(
-            eks.EksNodePool(
-                name=k8s_cluster.AUXILIARY_POOL_NAME,
-                # NOTE: It should have at least 5 vCPU to be able to hold all the pods
-                num_nodes=self.params.get('k8s_n_auxiliary_nodes'),
-                instance_type=self.params.get('k8s_instance_type_auxiliary'),
-                disk_size=40,
-                role_arn=k8s_cluster.nodegroup_role_arn,
-                k8s_cluster=k8s_cluster),
-            wait_till_ready=False)
-
-        scylla_pool = eks.EksNodePool(
-            name=k8s_cluster.SCYLLA_POOL_NAME,
-            num_nodes=self.params.get("n_db_nodes"),
-            instance_type=self.params.get('instance_type_db'),
-            role_arn=self.params.get('eks_nodegroup_role_arn'),
-            disk_size=self.params.get('root_disk_size_db'),
-            k8s_cluster=k8s_cluster
-        )
-        k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
-
-        loader_pool = None
-        if self.params.get("n_loaders"):
-            loader_pool = eks.EksNodePool(
-                name=k8s_cluster.LOADER_POOL_NAME,
-                num_nodes=self.params.get("n_loaders"),
-                instance_type=self.params.get("instance_type_loader"),
-                role_arn=self.params.get('eks_nodegroup_role_arn'),
-                disk_size=self.params.get('root_disk_size_monitor'),
-                k8s_cluster=k8s_cluster)
-            k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
-
-        monitor_pool = None
-        if self.params.get('k8s_deploy_monitoring'):
-            monitor_pool = eks.EksNodePool(
-                name=k8s_cluster.MONITORING_POOL_NAME,
-                num_nodes=self.params.get("k8s_n_monitor_nodes") or self.params.get("n_monitor_nodes"),
-                instance_type=self.params.get(
-                    "k8s_instance_type_monitor") or self.params.get("instance_type_monitor"),
-                role_arn=self.params.get('eks_nodegroup_role_arn'),
-                disk_size=self.params.get('root_disk_size_monitor'),
-                k8s_cluster=k8s_cluster
-            )
-            k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)
-        k8s_cluster.wait_all_node_pools_to_be_ready()
-        k8s_cluster.configure_ebs_csi_driver()
-
-        k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
-        if self.params.get('k8s_enable_tls'):
-            k8s_cluster.deploy_ingress_controller(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
-        k8s_cluster.deploy_scylla_operator()
-        k8s_cluster.prepare_k8s_scylla_nodes(node_pools=scylla_pool)
-        if self.params.get('use_mgmt'):
-            k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
-
-        for i in range(k8s_cluster.tenants_number):
+        for i in range(self.k8s_clusters[0].tenants_number):
             self.db_clusters_multitenant.append(eks.EksScyllaPodCluster(
-                k8s_clusters=[k8s_cluster],
+                k8s_clusters=self.k8s_clusters,
                 scylla_cluster_name=self.params.get("k8s_scylla_cluster_name") + (f"-{i + 1}" if i else ""),
                 user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
                 n_nodes=self.params.get("k8s_n_scylla_pods_per_cluster") or self.params.get("n_db_nodes"),
                 params=deepcopy(self.params),
-                node_pool_name=scylla_pool.name,
+                node_pool_name=self.k8s_clusters[0].SCYLLA_POOL_NAME,
                 add_nodes=False,
             ))
         self.db_cluster = self.db_clusters_multitenant[0]
 
         if self.params.get("n_loaders"):
-            for i in range(k8s_cluster.tenants_number):
+            for i in range(self.k8s_clusters[0].tenants_number):
                 self.loaders_multitenant.append(cluster_k8s.LoaderPodCluster(
-                    k8s_clusters=[k8s_cluster],
+                    k8s_clusters=self.k8s_clusters,
                     loader_cluster_name=self.params.get("k8s_loader_cluster_name") + (f"-{i + 1}" if i else ""),
                     user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
                     n_nodes=self.params.get("k8s_n_loader_pods_per_cluster") or self.params.get("n_loaders"),
                     params=self.params,
-                    node_pool_name=loader_pool.name,
+                    node_pool_name=self.k8s_clusters[0].LOADER_POOL_NAME,
                     add_nodes=False,
                 ))
             self.loaders = self.loaders_multitenant[0]
@@ -1881,7 +1820,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         elif cluster_backend == 'k8s-gke':
             self.get_cluster_k8s_gke()
         elif cluster_backend == 'k8s-eks':
-            self.get_cluster_k8s_eks()
+            self.get_cluster_k8s_eks(n_k8s_clusters=len(self.params.region_names))
         elif cluster_backend == 'azure':
             self.get_cluster_azure(loader_info=loader_info, db_info=db_info,
                                    monitor_info=monitor_info)
