@@ -2347,7 +2347,11 @@ class PodCluster(cluster.BaseCluster):
 
         # Wait while whole cluster (on all racks) including new nodes are up and running
         current_dc_nodes = [node for node in self.nodes if node.dc_idx == dc_idx]
-        self.wait_for_pods_running(pods_to_wait=count, total_pods=len(current_dc_nodes) + count, dc_idx=dc_idx)
+        expected_dc_nodes_count = len(current_dc_nodes) + count
+        self.wait_for_pods_running(
+            pods_to_wait=count, total_pods=expected_dc_nodes_count, dc_idx=dc_idx)
+        self.wait_for_pods_readiness(
+            pods_to_wait=count, total_pods=expected_dc_nodes_count, dc_idx=dc_idx)
 
         # Register new nodes and return whatever was registered
         k8s_pods = KubernetesOps.list_pods(self.k8s_clusters[dc_idx], namespace=self.namespace)
