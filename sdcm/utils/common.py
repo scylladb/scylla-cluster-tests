@@ -1553,10 +1553,12 @@ def clean_clusters_eks(tags_dict: dict, regions: list = None, dry_run: bool = Fa
 
     def delete_cluster(cluster):
         if not dry_run:
-            LOGGER.info("Going to delete: %s", cluster.name)
+            LOGGER.info("Going to delete '%s' EKS cluster in the '%s' region.",
+                        cluster.name, cluster.region_name)
             try:
                 res = cluster.destroy()
-                LOGGER.info("%s deleted=%s", cluster.name, res)
+                LOGGER.info("'%s' EKS cluster in the '%s' region has been deleted. Response=%s",
+                            cluster.name, cluster.region_name, res)
             except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.error(exc)
 

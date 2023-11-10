@@ -29,7 +29,6 @@ from mypy_boto3_ec2.type_defs import LaunchTemplateBlockDeviceMappingRequestType
 from sdcm import sct_abs_path, cluster
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm import ec2_client
-from sdcm.utils.aws_utils import tags_as_ec2_tags, EksClusterCleanupMixin
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.common import list_instances_aws
 from sdcm.utils.k8s import TokenUpdateThread
@@ -41,6 +40,11 @@ from sdcm.cluster_k8s import (
     ScyllaPodCluster,
 )
 from sdcm.remote import LOCALRUNNER
+from sdcm.utils.aws_utils import (
+    get_ec2_network_configuration,
+    tags_as_ec2_tags,
+    EksClusterCleanupMixin,
+)
 
 
 P = ParamSpec("P")  # pylint: disable=invalid-name
@@ -50,6 +54,88 @@ R = TypeVar("R")  # pylint: disable=invalid-name
 SUPPORTED_EBS_STORAGE_CLASSES = ['gp3', ]
 
 EC2_INSTANCE_UPDATE_LOCK = Lock()
+
+
+def deploy_k8s_eks_cluster(region_name: str, availability_zone: str,
+                           params: dict, credentials: List[cluster.UserRemoteCredentials],
+                           cluster_uuid: str = None):
+    """Dedicated for the usage by the 'Tester' class which orchestrates all the resources creation.
+
+    This function creates all the needed node pools and other ecosystem workloads
+    returning the 'k8s_cluster' object ready to provision Scylla and loaders pods.
+    """
+    second_availability_zone = "b" if availability_zone == "a" else "a"
+    availability_zones = [availability_zone, second_availability_zone]
+    ec2_security_group_ids, ec2_subnet_ids = get_ec2_network_configuration(
+        regions=[region_name], availability_zones=availability_zones, params=params)
+    k8s_cluster = EksCluster(
+        eks_cluster_version=params.get("eks_cluster_version"),
+        ec2_security_group_ids=ec2_security_group_ids,
+        ec2_subnet_ids=ec2_subnet_ids[0],
+        credentials=credentials,
+        ec2_role_arn=params.get("eks_role_arn"),
+        nodegroup_role_arn=params.get("eks_nodegroup_role_arn"),
+        service_ipv4_cidr=params.get("eks_service_ipv4_cidr"),
+        vpc_cni_version=params.get("eks_vpc_cni_version"),
+        user_prefix=params.get("user_prefix"),
+        cluster_uuid=cluster_uuid,
+        params=params,
+        region_name=region_name)
+    k8s_cluster.deploy()
+    k8s_cluster.tune_network()
+    k8s_cluster.set_nodeselector_for_deployments(
+        pool_name=k8s_cluster.AUXILIARY_POOL_NAME, namespace="kube-system")
+
+    k8s_cluster.deploy_node_pool(wait_till_ready=False, pool=EksNodePool(
+        name=k8s_cluster.AUXILIARY_POOL_NAME,
+        # NOTE: It should have at least 5 vCPU to be able to hold all the pods
+        num_nodes=params.get('k8s_n_auxiliary_nodes'),
+        instance_type=params.get('k8s_instance_type_auxiliary'),
+        disk_size=40,
+        role_arn=k8s_cluster.nodegroup_role_arn,
+        k8s_cluster=k8s_cluster))
+
+    # TODO: add support for different DB nodes amount in different K8S clusters
+    scylla_pool = EksNodePool(
+        name=k8s_cluster.SCYLLA_POOL_NAME,
+        num_nodes=params.get("n_db_nodes"),
+        instance_type=params.get('instance_type_db'),
+        role_arn=params.get('eks_nodegroup_role_arn'),
+        disk_size=params.get('root_disk_size_db'),
+        k8s_cluster=k8s_cluster)
+    k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
+
+    # TODO: add support for different loaders amount in different K8S clusters
+    if params.get("n_loaders"):
+        k8s_cluster.deploy_node_pool(wait_till_ready=False, pool=EksNodePool(
+            name=k8s_cluster.LOADER_POOL_NAME,
+            num_nodes=params.get("n_loaders"),
+            instance_type=params.get("instance_type_loader"),
+            role_arn=params.get('eks_nodegroup_role_arn'),
+            disk_size=params.get('root_disk_size_monitor'),
+            k8s_cluster=k8s_cluster))
+
+    if params.get('k8s_deploy_monitoring'):
+        k8s_cluster.deploy_node_pool(wait_till_ready=False, pool=EksNodePool(
+            name=k8s_cluster.MONITORING_POOL_NAME,
+            num_nodes=params.get("k8s_n_monitor_nodes") or params.get("n_monitor_nodes"),
+            instance_type=params.get("k8s_instance_type_monitor") or params.get("instance_type_monitor"),
+            role_arn=params.get('eks_nodegroup_role_arn'),
+            disk_size=params.get('root_disk_size_monitor'),
+            k8s_cluster=k8s_cluster))
+    k8s_cluster.wait_all_node_pools_to_be_ready()
+    k8s_cluster.configure_ebs_csi_driver()
+
+    k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
+    if params.get('k8s_enable_tls'):
+        k8s_cluster.deploy_ingress_controller(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
+    k8s_cluster.deploy_scylla_operator()
+    if params.get("k8s_use_chaos_mesh"):
+        k8s_cluster.chaos_mesh.initialize()
+    k8s_cluster.prepare_k8s_scylla_nodes(node_pools=scylla_pool)
+    if params.get('use_mgmt'):
+        k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
+    return k8s_cluster
 
 
 # pylint: disable=too-many-instance-attributes
