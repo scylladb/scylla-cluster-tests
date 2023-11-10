@@ -13,6 +13,7 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+            SCT_GCE_PROJECT = "${params.gce_project}"
 		}
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
@@ -92,6 +93,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('k8s_enable_tls', '')}",
                    description: 'if true, enable operator tls, and install haproxy ingress controller',
                    name: 'k8s_enable_tls')
+            string(defaultValue: "${pipelineParams.get('gce_project', '')}",
+               description: 'Gce project to use',
+               name: 'gce_project')
         }
         options {
             timestamps()
@@ -175,7 +179,8 @@ def call(Map pipelineParams) {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
-                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
+                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",
+                                             "SCT_GCE_PROJECT=${env.SCT_GCE_PROJECT}",]) {
                                         stage("Checkout for ${sub_test}") {
                                             catchError(stageResult: 'FAILURE') {
                                                 timeout(time: 5, unit: 'MINUTES') {

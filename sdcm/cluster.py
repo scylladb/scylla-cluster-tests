@@ -1214,7 +1214,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def fstrim_scylla_disks(self):
         if not self._is_storage_virtualized():
-            self.remoter.sudo("fstrim -v /var/lib/scylla")
+            result = self.remoter.sudo("fstrim -v /var/lib/scylla", ignore_status=True)
+            if result.failed:
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method='fstrim_scylla_disks',
+                    message=f"fstrim'ming of Scylla disks was failed: stdout: {result.stdout}, stderr: {result.stderr}",
+                    severity=Severity.WARNING).publish_or_dump()
         else:
             TestFrameworkEvent(
                 source=self.__class__.__name__,
