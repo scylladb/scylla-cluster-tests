@@ -3019,12 +3019,14 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
             self.k8s_clusters[current_dc_idx].deploy_loaders_cluster(
                 node_pool_name=self.node_pool_name, namespace=self.namespace)
             node_count_in_dc = count[current_dc_idx] if current_dc_idx < len(count) else count[0]
+            k8s_loader_cluster_name = (
+                f"{self.loader_cluster_name}-{self.k8s_clusters[current_dc_idx].region_name}")
             if self.k8s_loader_run_type == "dynamic":
                 # TODO: if it is needed to catch coredumps of loader pods then need to create
                 #       appropriate daemonset with affinity rules for scheduling on the loader K8S nodes
                 for node_index in range(node_count_in_dc):
                     node = self.PodContainerClass(
-                        name=f"{self.loader_cluster_name}-{node_index}",
+                        name=f"{k8s_loader_cluster_name}-{node_index}",
                         parent_cluster=self,
                         base_logdir=self.logdir,
                         node_prefix=self.node_prefix,
@@ -3042,7 +3044,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                 modifiers=self.k8s_clusters[current_dc_idx].calculated_loader_affinity_modifiers,
                 environ={
                     "K8S_NAMESPACE": self.namespace,
-                    "K8S_LOADER_CLUSTER_NAME": self.loader_cluster_name,
+                    "K8S_LOADER_CLUSTER_NAME": k8s_loader_cluster_name,
                     "DOCKER_IMAGE_WITH_TAG": self._get_docker_image(),
                     "N_LOADERS": node_count_in_dc,
                     "POD_CPU_LIMIT": self.k8s_clusters[current_dc_idx].calculated_loader_cpu_limit,
