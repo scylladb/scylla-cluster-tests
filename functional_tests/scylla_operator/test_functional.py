@@ -140,7 +140,7 @@ def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylin
     def get_pod_names_and_ips(cluster_name: str, namespace: str):
         pod_names_and_ips = kubectl(
             "get pods --no-headers -o=custom-columns=':.metadata.name,:.status.podIP'"
-            f" -l scylla/cluster={cluster_name}",
+            f" -l scylla/cluster={cluster_name},app.kubernetes.io/name=scylla",
             namespace=namespace).stdout.split("\n")
         pod_names_and_ips = [row.strip() for row in pod_names_and_ips if row.strip()]
         assert pod_names_and_ips
