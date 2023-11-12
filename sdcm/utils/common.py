@@ -1234,10 +1234,13 @@ def filter_gce_by_tags(tags_dict, instances: list[GceInstance]) -> list[GceInsta
 
     for instance in instances:
         tags = gce_meta_to_dict(instance.metadata)
-        found_keys = set(k for k in tags_dict if k in tags and tags_dict[k] == tags[k])
+        for tag_k, tag_v in tags_dict.items():
+            if tag_k not in tags or (tags[tag_k] not in tag_v if isinstance(tag_v, list) else tags[tag_k] != tag_v):
+                break
+        else:
+            filtered_instances.append(instance)
+
         if 'Name' in tags_dict.keys() and tags_dict['Name'] == instance.name:
-            found_keys |= {"Name"}
-        if found_keys == set(tags_dict.keys()):
             filtered_instances.append(instance)
 
     return filtered_instances
@@ -1245,9 +1248,9 @@ def filter_gce_by_tags(tags_dict, instances: list[GceInstance]) -> list[GceInsta
 
 def list_instances_gce(tags_dict: Optional[dict] = None,
                        running: bool = False,
-                       verbose: bool = False) -> list[GceInstance]:
+                       verbose: bool = True) -> list[GceInstance]:
     """List all instances with specific tags GCE."""
-
+    print(tags_dict)
     instances_client, info = get_gce_compute_instances_client()
     if verbose:
         LOGGER.info("Going to get all instances from GCE")
