@@ -128,7 +128,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             return self.params.get('aws_instance_profile_name_loader')
         return None
 
-    def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0):  # pylint: disable=too-many-arguments
+    def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0, instance_type=None):  # pylint: disable=too-many-arguments
         ami_id = self._ec2_ami_id[dc_idx]
         self.log.debug(f"Creating {count} on-demand instances using AMI id '{ami_id}'... ")
         params = dict(ImageId=ami_id,
@@ -138,7 +138,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                       KeyName=self._credentials[dc_idx].key_pair_name,
                       BlockDeviceMappings=self._ec2_block_device_mappings,
                       NetworkInterfaces=interfaces,
-                      InstanceType=self._ec2_instance_type)
+                      InstanceType=instance_type or self._ec2_instance_type)
         instance_profile = self.instance_profile_name
         if instance_profile:
             params['IamInstanceProfile'] = {'Name': instance_profile}
@@ -158,12 +158,12 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.log.debug("Created instances: %s." % instances)
         return instances
 
-    def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0):  # pylint: disable=too-many-arguments
+    def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0, instance_type=None):  # pylint: disable=too-many-arguments
         # pylint: disable=too-many-locals
         ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
                                           spot_max_price_percentage=self.params.get('spot_max_price'))
         subnet_info = ec2.get_subnet_info(interfaces[0]["SubnetId"])
-        spot_params = dict(instance_type=self._ec2_instance_type,
+        spot_params = dict(instance_type=instance_type or self._ec2_instance_type,
                            image_id=self._ec2_ami_id[dc_idx],
                            region_name=subnet_info['AvailabilityZone'],
                            network_if=interfaces,
@@ -196,7 +196,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
         return instances
 
-    def _create_instances(self, count, ec2_user_data='', dc_idx=0, az_idx=0):
+    def _create_instances(self, count, ec2_user_data='', dc_idx=0, az_idx=0, instance_type=None):  # pylint: disable=too-many-arguments
         if not count:  # EC2 API fails if we request zero instances.
             return []
 
@@ -217,17 +217,21 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
         self.log.info(f"Create {self.instance_provision} instance(s)")
         if self.instance_provision == 'mixed':
-            instances = self._create_mixed_instances(count, interfaces, ec2_user_data, dc_idx)
+            instances = self._create_mixed_instances(count, interfaces, ec2_user_data, dc_idx,
+                                                     instance_type=instance_type)
         elif self.instance_provision == INSTANCE_PROVISION_ON_DEMAND:
-            instances = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
+            instances = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx,
+                                                         instance_type=instance_type)
         elif self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
-            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
+            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx,
+                                                    instance_type=instance_type)
         else:
-            instances = self.fallback_provision_type(count, interfaces, ec2_user_data, dc_idx)
+            instances = self.fallback_provision_type(count, interfaces, ec2_user_data, dc_idx,
+                                                     instance_type=instance_type)
 
         return instances
 
-    def fallback_provision_type(self, count, interfaces, ec2_user_data, dc_idx):
+    def fallback_provision_type(self, count, interfaces, ec2_user_data, dc_idx, instance_type=None):  # pylint: disable=too-many-arguments
         instances = None
 
         if self.instance_provision.lower() == 'spot' or (self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count == 1):
@@ -245,9 +249,11 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             try:
                 self.log.info(f"Create {instances_provision_type} instance(s)")
                 if instances_provision_type == INSTANCE_PROVISION_ON_DEMAND:
-                    instances = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
+                    instances = self._create_on_demand_instances(
+                        count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type)
                 else:
-                    instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
+                    instances = self._create_spot_instances(
+                        count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type)
                 break
             except (CreateSpotInstancesError, botocore.exceptions.ClientError) as cl_ex:
                 if instances_provision_type == instances_provision_fallbacks[-1]:
@@ -267,7 +273,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             return True
         return False
 
-    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx):  # pylint: disable=too-many-arguments
+    def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx, instance_type=None):  # pylint: disable=too-many-arguments
         instances = []
         max_num_on_demand = 2
         if isinstance(self, (ScyllaAWSCluster, CassandraAWSCluster)):
@@ -289,17 +295,21 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
             if count_spot > 0:
                 self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
-                instances.extend(self._create_spot_instances(count_spot, interfaces, ec2_user_data, dc_idx))
+                instances.extend(self._create_spot_instances(
+                    count_spot, interfaces, ec2_user_data, dc_idx, instance_type=instance_type))
             if count_on_demand > 0:
                 self.instance_provision = INSTANCE_PROVISION_ON_DEMAND
-                instances.extend(self._create_on_demand_instances(count_on_demand, interfaces, ec2_user_data, dc_idx))
+                instances.extend(self._create_on_demand_instances(
+                    count_on_demand, interfaces, ec2_user_data, dc_idx, instance_type=instance_type))
             self.instance_provision = 'mixed'
         elif isinstance(self, LoaderSetAWS):
             self.instance_provision = INSTANCE_PROVISION_SPOT_LOW_PRICE
-            instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
+            instances = self._create_spot_instances(
+                count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type)
         elif isinstance(self, MonitorSetAWS):
             self.instance_provision = INSTANCE_PROVISION_ON_DEMAND
-            instances.extend(self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx))
+            instances.extend(self._create_on_demand_instances(
+                count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type))
         else:
             raise Exception('Unsuported type of cluster type %s' % self)
         return instances
@@ -344,10 +354,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 ec2_user_data += ' --bootstrap false '
         return ec2_user_data
 
-    def _create_or_find_instances(self, count, ec2_user_data, dc_idx, az_idx=0):
+    def _create_or_find_instances(self, count, ec2_user_data, dc_idx, az_idx=0, instance_type=None):  # pylint: disable=too-many-arguments
         nodes = [node for node in self.nodes if node.dc_idx == dc_idx and node.rack == az_idx]
         if nodes:
-            return self._create_instances(count, ec2_user_data, dc_idx, az_idx)
+            return self._create_instances(count, ec2_user_data, dc_idx, az_idx, instance_type=instance_type)
         if self.test_config.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx, az_idx)
             assert len(instances) == count, f"Found {len(instances)} instances, while expect {count}"
@@ -357,17 +367,17 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             self.log.info('Found provisioned instances = %s', instances)
             return instances
         self.log.info('Found no provisioned instances. Provision them.')
-        return self._create_instances(count, ec2_user_data, dc_idx, az_idx)
+        return self._create_instances(count, ec2_user_data, dc_idx, az_idx, instance_type=instance_type)
 
     # pylint: disable=too-many-arguments
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         if not count:
             return []
         ec2_user_data = self.prepare_user_data(enable_auto_bootstrap=enable_auto_bootstrap)
         # if simulated_racks, create all instances in the same az
         instance_az = 0 if self.params.get("simulated_racks") else rack
         instances = self._create_or_find_instances(
-            count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx, az_idx=instance_az)
+            count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx, az_idx=instance_az, instance_type=instance_type)
         for node_index, instance in enumerate(instances):
             self._node_index += 1
             # in case rack is not specified, spread nodes to different racks
@@ -796,7 +806,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         self.version = '2.1'
 
     # pylint: disable=too-many-arguments
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         if not ec2_user_data:
             if self._ec2_user_data and isinstance(self._ec2_user_data, str):
                 ec2_user_data = re.sub(r'(--totalnodes\s)(\d*)(\s)',
@@ -821,6 +831,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             dc_idx=dc_idx,
             rack=rack,
             enable_auto_bootstrap=enable_auto_bootstrap,
+            instance_type=instance_type,
         )
         return added_nodes
 
@@ -895,7 +906,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                 raise ValueError('Unexpected cassandra.yaml. Contents:\n%s' % yaml_stream.read()) from exc
 
     # pylint: disable=too-many-arguments
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         if not ec2_user_data:
             if self.nodes:
                 seeds = ",".join(self.get_seed_nodes())
@@ -910,7 +921,9 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             count=count,
             ec2_user_data=ec2_user_data,
             dc_idx=dc_idx,
-            rack=rack)
+            rack=rack,
+            instance_type=instance_type,
+        )
         return added_nodes
 
     def node_setup(self, node, verbose=False, timeout=3600):

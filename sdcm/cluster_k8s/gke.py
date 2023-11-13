@@ -505,12 +505,14 @@ class GkeScyllaPodCluster(ScyllaPodCluster):
                   ec2_user_data: str = "",
                   dc_idx: int = None,
                   rack: int = 0,
-                  enable_auto_bootstrap: bool = False) -> List[GkeScyllaPodContainer]:
+                  enable_auto_bootstrap: bool = False,
+                  instance_type=None) -> List[GkeScyllaPodContainer]:
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,
                                       rack=rack,
-                                      enable_auto_bootstrap=enable_auto_bootstrap)
+                                      enable_auto_bootstrap=enable_auto_bootstrap,
+                                      instance_type=instance_type)
         return new_nodes
 
 

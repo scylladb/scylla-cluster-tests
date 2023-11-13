@@ -185,11 +185,11 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
                          node_type=node_type)
         self.log.debug("AzureCluster constructor")
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):  # pylint: disable=too-many-arguments
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):  # pylint: disable=too-many-arguments
         self.log.info("Adding nodes to cluster")
         nodes = []
 
-        instances = self._create_instances(count, dc_idx)
+        instances = self._create_instances(count, dc_idx, instance_type=instance_type)
 
         self.log.debug('instances: %s', instances)
         for node_index, instance in enumerate(instances, start=self._node_index + 1):
@@ -217,7 +217,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         except Exception as ex:
             raise CreateAzureNodeError('Failed to create node: %s' % ex) from ex
 
-    def _create_instances(self, count, dc_idx=0) -> List[VmInstance]:
+    def _create_instances(self, count, dc_idx=0, instance_type=None) -> List[VmInstance]:
         region = self._definition_builder.regions[dc_idx]
         assert region, "no region provided, please add `azure_region_name` param"
         pricing_model = PricingModel.SPOT if 'spot' in self.instance_provision else PricingModel.ON_DEMAND
@@ -225,7 +225,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
             definitions.append(
                 self._definition_builder.build_instance_definition(
-                    region=region, node_type=self.node_type, index=node_index)
+                    region=region, node_type=self.node_type, index=node_index, instance_type=instance_type)
             )
         return provision_instances_with_fallback(self.provisioners[dc_idx], definitions=definitions, pricing_model=pricing_model,
                                                  fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"))

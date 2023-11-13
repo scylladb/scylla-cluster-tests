@@ -746,12 +746,15 @@ class EksScyllaPodCluster(ScyllaPodCluster):
                   ec2_user_data: str = "",
                   dc_idx: int = None,
                   rack: int = 0,
-                  enable_auto_bootstrap: bool = False) -> List[EksScyllaPodContainer]:
+                  enable_auto_bootstrap: bool = False,
+                  instance_type=None
+                  ) -> List[EksScyllaPodContainer]:
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,
                                       rack=rack,
-                                      enable_auto_bootstrap=enable_auto_bootstrap)
+                                      enable_auto_bootstrap=enable_auto_bootstrap,
+                                      instance_type=instance_type)
         for node in new_nodes:
             ec2_instance_id = node.ec2_instance_id
             node.k8s_cluster.set_security_groups(ec2_instance_id)
@@ -793,8 +796,9 @@ class MonitorSetEKS(MonitorSetAWS):
         instances = sorted(instances, key=sort_by_index)
         return [ec2.get_instance(instance['InstanceId']) for instance in instances]
 
-    def _create_instances(self, count, ec2_user_data='', dc_idx=0, az_idx=0):
-        instances = super()._create_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx, az_idx=az_idx)
+    def _create_instances(self, count, ec2_user_data='', dc_idx=0, az_idx=0, instance_type=None):  # pylint: disable=too-many-arguments
+        instances = super()._create_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx,
+                                              az_idx=az_idx, instance_type=instance_type)
         for instance in instances:
             self._ec2_services[dc_idx].create_tags(
                 Resources=[instance.id],
