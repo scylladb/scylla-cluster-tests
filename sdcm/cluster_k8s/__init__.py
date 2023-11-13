@@ -2339,7 +2339,9 @@ class PodCluster(cluster.BaseCluster):
                   ec2_user_data: str = "",
                   dc_idx: int = 0,
                   rack: int = 0,
-                  enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
+                  enable_auto_bootstrap: bool = False,
+                  instance_type=None,
+                  ) -> List[BasePodContainer]:
 
         # TODO: make it work when we have decommissioned (by nodetool) nodes.
         #       Now it will fail because pod which hosts decommissioned Scylla member is reported
@@ -2732,7 +2734,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                   # NOTE: 'dc_idx=None' means 'create %count% nodes on each K8S cluster'
                   dc_idx: int = None,
                   rack: int = 0,
-                  enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
+                  enable_auto_bootstrap: bool = False,
+                  instance_type=None) -> List[BasePodContainer]:
         if dc_idx is None:
             dc_idx = list(range(len(self.k8s_clusters)))
         elif isinstance(dc_idx, int):
@@ -2742,6 +2745,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         else:
             count = [count]
         assert len(count) in (1, len(dc_idx))
+
+        assert instance_type is None, "k8s can't provision different instance types"
+
         new_nodes = []
         self.log.debug(
             "'%s' configuration was taken for the 'dc_idx': %s",
@@ -3001,7 +3007,9 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                   # NOTE: 'dc_idx=None' means 'create %count% nodes on each K8S cluster'
                   dc_idx: int = None,
                   rack: int = 0,
-                  enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
+                  enable_auto_bootstrap: bool = False,
+                  instance_type=None
+                  ) -> List[BasePodContainer]:
         if self.loader_cluster_created:
             raise NotImplementedError(
                 "Changing number of nodes in LoaderPodCluster is not supported.")
@@ -3014,6 +3022,8 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
         else:
             count = [count]
         assert len(count) in (1, len(dc_idx))
+        assert instance_type is None, "k8s can't provision different instance types"
+
         new_nodes = []
         for current_dc_idx in dc_idx:
             self.k8s_clusters[current_dc_idx].deploy_loaders_cluster(

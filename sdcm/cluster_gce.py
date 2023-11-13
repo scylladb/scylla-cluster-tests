@@ -328,7 +328,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.log.debug(gce_disk_struct)
         return gce_disk_struct
 
-    def _create_instance(self, node_index, dc_idx, spot=False, enable_auto_bootstrap=False):
+    def _create_instance(self, node_index, dc_idx, spot=False, enable_auto_bootstrap=False, instance_type=None):  # pylint: disable=too-many-arguments
         # pylint: disable=too-many-locals
 
         def set_tags_as_labels(_instance: compute_v1.Instance):
@@ -369,7 +369,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             network_tags.append("sct-allow-public")
         create_node_params = dict(
             project_id=self.project, zone=zone,
-            machine_type=self._gce_instance_type,
+            machine_type=instance_type or self._gce_instance_type,
             instance_name=name,
             network_name=self._gce_network,
             disks=gce_disk_struct,
@@ -428,11 +428,12 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
             raise gbe
 
-    def _create_instances(self, count, dc_idx=0, enable_auto_bootstrap=False):
+    def _create_instances(self, count, dc_idx=0, enable_auto_bootstrap=False, instance_type=None):
         spot = 'spot' in self.instance_provision
         instances = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
-            instances.append(self._create_instance(node_index, dc_idx, spot, enable_auto_bootstrap))
+            instances.append(self._create_instance(node_index, dc_idx, spot,
+                             enable_auto_bootstrap, instance_type=instance_type))
         return instances
 
     def _destroy_instance(self, name: str, dc_idx: int):
@@ -492,7 +493,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             raise CreateGCENodeError('Failed to create node: %s' % ex) from ex
 
     # pylint: disable=too-many-arguments
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         if count <= 0:
             return []
         self.log.info("Adding nodes to cluster")
@@ -502,7 +503,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             if not instances:
                 raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
         else:
-            instances = self._create_instances(count, dc_idx, enable_auto_bootstrap)
+            instances = self._create_instances(count, dc_idx, enable_auto_bootstrap, instance_type=instance_type)
 
         self.log.debug('instances: %s', instances)
         if instances:

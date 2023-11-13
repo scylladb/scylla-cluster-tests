@@ -415,7 +415,7 @@ class DummyCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=too-few-p
             node.config_setup(append_scylla_args=self.get_scylla_args())
 
     # pylint: disable=too-many-arguments
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         pass
 
 

@@ -67,7 +67,7 @@ class DefinitionBuilder(abc.ABC):
     def regions(self) -> List[str]:
         return self.params.get(self.REGION_MAP)
 
-    def build_instance_definition(self, region: str, node_type: NodeTypeType, index: int) -> InstanceDefinition:
+    def build_instance_definition(self, region: str, node_type: NodeTypeType, index: int, instance_type: str = None) -> InstanceDefinition:
         """Builds one instance definition of given type and index for given region"""
         user_prefix = self.params.get('user_prefix')
         common_tags = TestConfig.common_tags()
@@ -81,7 +81,7 @@ class DefinitionBuilder(abc.ABC):
         mapper = self.SCT_PARAM_MAPPER[node_type]
         return InstanceDefinition(name=name,
                                   image_id=self.params.get(mapper.image_id),
-                                  type=self.params.get(mapper.type),
+                                  type=instance_type or self.params.get(mapper.type),
                                   user_name=self.params.get(mapper.user_name),
                                   root_disk_size=self.params.get(mapper.root_disk_size),
                                   tags=tags,

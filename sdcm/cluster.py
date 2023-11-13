@@ -3372,11 +3372,12 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def wait_for_init(self):
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         """
         :param count: number of nodes to add
         :param ec2_user_data:
         :param dc_idx: datacenter index, used as an index for self.datacenter list
+        :param instance_type: type of instance to use, can override what's defined in configuration
         :return: list of Nodes
         """
         raise NotImplementedError("Derived class must implement 'add_nodes' method!")
