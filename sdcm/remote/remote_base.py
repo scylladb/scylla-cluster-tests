@@ -59,7 +59,8 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             self.extra_ssh_options = extra_ssh_options
         if auth_sleep_time is not None:
             self.auth_sleep_time = auth_sleep_time
-        self.known_hosts_file = tempfile.mkstemp()[1]
+        fd, self.known_hosts_file = tempfile.mkstemp()
+        os.close(fd)
         self._context_generation = 0
         super().__init__(hostname=hostname, user=user, password=password)
 

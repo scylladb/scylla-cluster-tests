@@ -313,7 +313,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         if html_report_path:
             html_file_path = html_report_path
         else:
-            html_file_path = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
+            html_fd, html_file_path = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")
+            os.close(html_fd)
         self.render_to_html(for_render, html_file_path=html_file_path)
         for_render["full_report"] = False
         summary_html = self.render_to_html(for_render)
