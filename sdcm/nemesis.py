@@ -1290,8 +1290,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _verify_resharding_on_k8s(self, cpus, dc_idx):
         nodes_data = []
-        qualified_nodes = (n for n in self.cluster.nodes if n.dc_idx == dc_idx)
-        for node in reversed(qualified_nodes):
+        for node in (n for n in self.cluster.nodes[::-1] if n.dc_idx == dc_idx):
             liveness_probe_failures = node.follow_system_log(
                 patterns=["healthz probe: can't connect to JMX"])
             resharding_start = node.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_START])
@@ -1357,7 +1356,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis('It is supported only on kubernetes')
         dc_idx = 0
         for node in self.cluster.nodes:
-            if hasattr(node.k8s_cluster, 'eks_cluster_version') and node.scylla_shards >= 14:
+            if hasattr(node.k8s_cluster, 'eks_cluster_version') and node.scylla_shards >= 7:
                 dc_idx = node.dc_idx
 
                 # Calculate new value for the CPU cores dedicated for Scylla pods
@@ -1367,7 +1366,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             # NOTE: bug https://github.com/scylladb/scylla-operator/issues/1077 reproduces better
             #       on slower machines with smaller amount number of cores.
-            #       So, allow it to run only on fast K8S-EKS backend having at least 14 cores per pod.
+            #       So, allow it to run only on fast K8S-EKS backend having at least 7 cores per pod.
             raise UnsupportedNemesis("https://github.com/scylladb/scylla-operator/issues/1077")
 
         # Run 'nodetool flush' command
