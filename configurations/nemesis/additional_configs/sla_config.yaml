@@ -1,0 +1,14 @@
+test_duration: 140
+prepare_write_cmd: "cassandra-stress write cl=QUORUM n=5048570 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=800 -pop seq=1..5048570 -log interval=5"
+stress_cmd:
+  - "cassandra-stress write cl=QUORUM duration=90m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=400 -pop seq=1..5048570 -log interval=5"
+  - "cassandra-stress read  cl=QUORUM duration=90m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=400 -pop seq=1..5048570 -log interval=5"
+  - "cassandra-stress read  cl=QUORUM duration=90m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=400 -pop seq=1..5048570 -log interval=5"
+
+n_loaders: 3
+instance_type_loader: "c5.2xlarge"
+sla: true
+authenticator: "PasswordAuthenticator"
+authenticator_user: "cassandra"
+authenticator_password: "cassandra"
+authorizer: "CassandraAuthorizer"

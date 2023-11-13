@@ -1,0 +1,3 @@
+# need to use public IPs because extra NIC is in the same subnet as default one.
+extra_network_interface: true
+ip_ssh_connections: 'public'

@@ -7,6 +7,8 @@ longevityPipeline(
     backend: '{{ backend }}',
     region: '{{ region }}',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/nemesis/{{ nemesis_longevity_config }}'
-
+    test_config: """{{ nemesis_longevity_config }}"""{{"," if additional_params else ""}}
+{% for key, value in additional_params.items() %}
+{{" "*4}}{{key}}: "{{value}}"{{ "," if loop.revindex != 1 else "" }}
+{% endfor %}
 )
