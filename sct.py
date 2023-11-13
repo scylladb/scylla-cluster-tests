@@ -1381,6 +1381,7 @@ def create_operator_test_release_jobs(branch, username, password, sct_branch, sc
 def create_nemesis_pipelines(base_job: str, backend: str):
     gen = NemesisJobGenerator(base_job=base_job, backend=backend)
 
+    gen.render_base_job_config()
     gen.create_test_cases_from_template()
     gen.create_job_files_from_template()
 
