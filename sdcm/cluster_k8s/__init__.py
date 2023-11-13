@@ -2646,7 +2646,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         if bundle_cmd_output.failed:
             return None
 
-        bundle_file = Path(tempfile.mktemp(suffix='.yaml'))
+        fd, file_name = tempfile.mkstemp(suffix='.yaml')
+        os.close(fd)
+        bundle_file = Path(file_name)
         bundle_file.write_bytes(base64.decodebytes(bytes(bundle_cmd_output.stdout.strip(), encoding='utf-8')))
 
         lb_external_hostname = k8s_cluster.kubectl(
