@@ -1392,7 +1392,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def _disrupt_kubernetes_then_replace_scylla_node(self, disruption_method):
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('Supported only on kubernetes')
-        self.set_target_node()
         node = self.target_node
         InfoEvent(f'Running {disruption_method} on K8S node that hosts {node} scylla pod').publish()
         old_uid = node.k8s_pod_uid
@@ -1439,6 +1438,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('Supported only on kubernetes')
         self.set_target_node(
+            # NOTE: pick up a new target node only in the same region to reduce possible confusion
+            #       during the debug process in case of a failure.
+            dc_idx=self.target_node.dc_idx,
             rack=random.choice(list(self.cluster.racks)), allow_only_last_node_in_rack=True)
         node = self.target_node
 
