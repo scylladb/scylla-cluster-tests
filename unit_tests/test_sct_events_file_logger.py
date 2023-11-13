@@ -38,7 +38,7 @@ class TestFileLogger(unittest.TestCase, EventsUtilsMixin):
         self.assertEqual(self.file_logger._registry, self.events_processes_registry)
 
     def tearDown(self) -> None:
-        self.file_logger.stop(timeout=1)
+        self.file_logger.stop(timeout=3)
         self.teardown_events_processes()
 
     def test_file_logger(self) -> None:
