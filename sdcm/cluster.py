@@ -67,6 +67,7 @@ from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuil
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.provision.helpers.certificate import install_client_certificate, install_encryption_at_rest_files
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd, RetryableNetworkException
+from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
 from sdcm import wait, mgmt
 from sdcm.sct_config import SCTConfiguration
@@ -1287,7 +1288,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                       text='Waiting until keyspace {} is available'.format(keyspace), throw_exc=False)
         # Don't need NodetoolEvent when waiting for space_node_threshold before start the nemesis, not publish it
         result = self.run_nodetool(sub_cmd='cfstats', args=keyspace, timeout=300,
-                                   warning_event_on_exception=(Failure, UnexpectedExit), publish_event=False)
+                                   warning_event_on_exception=(Failure, UnexpectedExit, Libssh2_UnexpectedExit,), publish_event=False)
 
         return self._parse_cfstats(result.stdout)
 
@@ -1767,7 +1768,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                   f"--keyserver hkp://keyserver.ubuntu.com:80 --recv-keys {apt_key}", retry=3)
             self.remoter.sudo("apt-get update", ignore_status=True)
 
-    @retrying(n=30, sleep_time=15, allowed_exceptions=UnexpectedExit)
+    @retrying(n=30, sleep_time=15, allowed_exceptions=(UnexpectedExit, Libssh2_UnexpectedExit,))
     def install_package(self,
                         package_name: str,
                         package_version: str = None,
@@ -2055,7 +2056,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo(f'yum install -y {additional_pkgs}')
             self.remoter.sudo('amazon-linux-extras install java-openjdk11')
         elif self.distro.is_rhel_like:
-            self.remoter.run(f'sudo yum install -y java-11-openjdk-headless {additional_pkgs}')
+            self.install_package(package_name=f'java-11-openjdk-headless {additional_pkgs}')
         elif self.distro.is_sles:
             raise Exception("Offline install on SLES isn't supported")
         elif self.distro.is_debian10 or self.distro.is_debian11:
@@ -4118,7 +4119,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             elif node.distro.is_ubuntu:
                 check_package_suites_distro(node, 'deb')
 
-                @retrying(n=6, sleep_time=10, allowed_exceptions=(UnexpectedExit,))
+                @retrying(n=6, sleep_time=10, allowed_exceptions=(UnexpectedExit, Libssh2_UnexpectedExit,))
                 def dpkg_force_install():
                     node.remoter.sudo(shell_script_cmd("yes Y | dpkg --force-depends -i /tmp/scylla/scylla*"),
                                       ignore_status=False, verbose=True)
