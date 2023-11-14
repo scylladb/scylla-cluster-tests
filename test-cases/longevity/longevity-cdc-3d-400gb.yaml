@@ -1,4 +1,4 @@
-test_duration: 4550
+test_duration: 4740
 
 prepare_write_cmd: ["cassandra-stress user no-warmup profile=/tmp/cdc_profile_400gb.yaml ops'(insert=1)' cl=QUORUM n=50000000 -mode cql3 native -rate threads=100",
                     "cassandra-stress user no-warmup profile=/tmp/cdc_profile_400gb_preimage.yaml ops'(insert=1)' cl=QUORUM n=50000000 -mode cql3 native -rate threads=200",
