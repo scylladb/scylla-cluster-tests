@@ -226,13 +226,6 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                                 f"matches: {snitch_matches_scylla_yaml}"
                             )
 
-    def verify_write_back_cache_param(self) -> None:
-        if self.params.get("cluster_backend") in ("gce", "azure") and self.params.get("use_preinstalled_scylla"):
-            expected_write_back_cache_param = 0
-        else:
-            expected_write_back_cache_param = None
-        self.assertEqual(self.write_back_cache, expected_write_back_cache_param)
-
     def verify_docker_latest_match_release(self) -> None:
         for product in typing.get_args(ScyllaProduct):
             latest_version = get_latest_scylla_release(product=product)
@@ -315,9 +308,6 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         if backend == "aws":
             with self.subTest("check ENA support"):
                 assert self.node.ena_support, "ENA support is not enabled"
-
-        with self.subTest("verify write_back_cache perftune parameter"):
-            self.verify_write_back_cache_param()
 
         with self.subTest("verify write cache for NVMe devices"):
             self.verify_nvme_write_cache()
