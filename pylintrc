@@ -369,6 +369,7 @@ good-names=i,
            dc,
            ks,
            cf,
+           fd,
            pytestmark,
 
 # Include a hint for the correct naming format with invalid-name.
