@@ -2065,7 +2065,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo('apt-get install -y openjdk-11-jre')
             self.remoter.sudo(f'apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
         else:
-            self.remoter.run(f'sudo apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
+            self.install_package(package_name=f'openjdk-11-jre-headless {additional_pkgs}')
             self.remoter.run('sudo update-java-alternatives --jre-headless '
                              '-s java-1.11.0-openjdk-${dpkg-architecture -q DEB_BUILD_ARCH}')
 
