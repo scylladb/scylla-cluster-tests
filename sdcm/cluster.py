@@ -1695,7 +1695,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                         package_version: str = None,
                         wait_step: int = 30,
                         wait_timeout: int = 60,
-                        wait_for_package_manager: bool = True) -> None:
+                        wait_for_package_manager: bool = True,
+                        ignore_status: bool = False) -> None:
         if self.distro.is_ubuntu and wait_for_package_manager:
             wait.wait_for(func=self.is_apt_lock_free, step=wait_step,
                           timeout=wait_timeout, text='Checking if package manager is free',
@@ -1711,15 +1712,16 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             version_prefix = f"={package_version}*" if package_version else ""
             # A workaround for: https://github.com/scylladb/scylla-pkg/issues/2578
             if package_name == "scylla-manager-agent":
-                self.remoter.sudo('apt --fix-broken install -y')
+                self.remoter.sudo('apt --fix-broken install -y', ignore_status=ignore_status)
             if version_prefix:
                 # get versioned dependencies as apt always get's the latest version which are not compatible
                 result = self.remoter.run(
-                    f'apt-cache depends --recurse {package_name}{version_prefix} | grep {package_name} | grep Depends | cut -d ":" -f 2')
+                    f'apt-cache depends --recurse {package_name}{version_prefix} | grep {package_name} | grep Depends | cut -d ":" -f 2',
+                    ignore_status=ignore_status)
                 packages_to_install = [f"{pkg}{version_prefix}" for pkg in [
                     package_name] + list(set(result.stdout.splitlines()))]
                 package_name = " ".join(packages_to_install)
-        self.remoter.sudo(f'{pkg_cmd} install -y {package_name}')
+        self.remoter.sudo(f'{pkg_cmd} install -y {package_name}', ignore_status=ignore_status)
 
     def is_apt_lock_free(self) -> bool:
         result = self.remoter.sudo("lsof /var/lib/dpkg/lock", ignore_status=True)
@@ -1870,55 +1872,27 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         :param scylla_version: optional param to specify version
         """
         self.log.info("Installing Scylla...")
+
+        self.download_scylla_repo(scylla_repo)
+        # TODO: consider moving this to cloud-init, since it's has nothing todo with scylla
+        self.install_package(package_name="rsync")
         if self.distro.is_rhel_like:
             # `screen' package is missed in CentOS/RHEL 8. Should be installed from EPEL repository.
             if (self.distro.is_centos8 or self.distro.is_rhel8 or self.distro.is_oel8 or self.distro.is_rocky8 or
                     self.distro.is_rocky9):
                 self.install_epel()
             self.remoter.run("sudo yum remove -y abrt")  # https://docs.scylladb.com/operating-scylla/admin/#core-dumps
-            self.remoter.run('sudo yum install -y rsync')
-            self.download_scylla_repo(scylla_repo)
-            # hack cause of broken caused by EPEL
-            self.remoter.run('sudo yum install -y python36-PyYAML', ignore_status=True)
             version = f"-{scylla_version}*" if scylla_version else ""
             self.remoter.run('sudo yum install -y {}{}'.format(self.scylla_pkg(), version))
-            self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
         elif self.distro.is_sles15:
-            self.remoter.sudo('zypper install -y rsync')
-            self.download_scylla_repo(scylla_repo)
-            # self.remoter.sudo('zypper mr -e Python_2_Module_x86_64:SLE-Module-Python2-15-SP3-Pool')
-            # self.remoter.sudo('zypper mr -e Python_2_Module_x86_64:SLE-Module-Python2-15-SP3-Updates')
-            # self.remoter.sudo('zypper mr -e Legacy_Module_x86_64:SLE-Module-Legacy15-SP3-Updates')
-            # self.remoter.sudo('zypper mr -e Legacy_Module_x86_64:SLE-Module-Legacy15-SP3-Pool')
             self.remoter.sudo('SUSEConnect --product sle-module-legacy/15.3/x86_64')
             self.remoter.sudo('SUSEConnect --product sle-module-python2/15.3/x86_64')
-            self.remoter.sudo('zypper install -y python2-PyYAML', ignore_status=True)
-            self.remoter.sudo('zypper install -y python3-PyYAML', ignore_status=True)
             version = f"-{scylla_version}" if scylla_version else ""
             self.remoter.sudo('zypper install -y {}{}'.format(self.scylla_pkg(), version))
-            self.remoter.sudo('zypper install -y scylla-gdb', ignore_status=True)
         else:
-            if self.distro.is_ubuntu:
-                self.install_package(package_name="software-properties-common")
-            elif self.distro.is_debian10 or self.distro.is_debian11:
-                install_debian_10_prereqs = dedent("""
-                    export DEBIAN_FRONTEND=noninteractive
-                    apt-get update
-                    apt-get install apt-transport-https -y
-                    apt-get install gnupg1-curl dirmngr -y
-                    apt-get install software-properties-common -y
-                    apt-get install openjdk-11-jre -y
-                """)
-                self.remoter.run('sudo bash -cxe "%s"' % install_debian_10_prereqs)
-
-            self.remoter.run(
-                'sudo DEBIAN_FRONTEND=noninteractive apt-get '
-                '-o Dpkg::Options::="--force-confold" '
-                '-o Dpkg::Options::="--force-confdef" '
-                'upgrade -y ')
-            self.remoter.run('sudo apt-get install -y rsync')
-            self.download_scylla_repo(scylla_repo)
-            self.remoter.run('sudo apt-get update')
+            self.install_package(package_name="software-properties-common")
+            if self.distro.is_debian:
+                self.install_package(package_name="apt-transport-https gnupg1-curl dirmngr openjdk-11-jre")
             self.install_package(self.scylla_pkg(), package_version=scylla_version)
 
     def offline_install_scylla(self, unified_package, nonroot):
@@ -1928,27 +1902,23 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # Download unified package
         self.remoter.run(f'curl {unified_package} -o ./unified_package.tar.gz')
 
-        if nonroot:
-            additional_pkgs = ''
-        else:
-            additional_pkgs = 'xfsprogs mdadm'
-
+        if not nonroot:
+            self.install_package(package_name='xfsprogs mdadm')
         # Offline install does't provide openjdk-11, it has to be installed in advance
         # https://github.com/scylladb/scylla-jmx/issues/127
         if self.distro.is_amazon2:
-            self.remoter.sudo(f'yum install -y {additional_pkgs}')
             self.remoter.sudo('amazon-linux-extras install java-openjdk11')
         elif self.distro.is_rhel_like:
-            self.install_package(package_name=f'java-11-openjdk-headless {additional_pkgs}')
+            self.install_package(package_name='java-11-openjdk-headless')
         elif self.distro.is_sles:
             raise Exception("Offline install on SLES isn't supported")
-        elif self.distro.is_debian10 or self.distro.is_debian11:
+        elif self.distro.is_debian:
             # FIXME: need to re-test and remove the following line once issue will be fixed:
             # refs to https://github.com/scylladb/scylladb/issues/15878
-            self.remoter.sudo('apt-get install -y openjdk-11-jre')
-            self.remoter.sudo(f'apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
+            self.install_package(package_name='openjdk-11-jre')
+            self.install_package(package_name='openjdk-11-jre-headless')
         else:
-            self.install_package(package_name=f'openjdk-11-jre-headless {additional_pkgs}')
+            self.install_package(package_name='openjdk-11-jre-headless')
             self.remoter.run('sudo update-java-alternatives --jre-headless '
                              '-s java-1.11.0-openjdk-${dpkg-architecture -q DEB_BUILD_ARCH}')
 
@@ -2017,15 +1987,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             f"curl -sSf get.scylladb.com/server | sudo bash -s -- --scylla-version {version} {product_type}")
 
     def install_scylla_debuginfo(self) -> None:
-        if self.distro.is_rhel_like:
-            cmd = fr"yum install -y {self.scylla_pkg()}-debuginfo-{self.scylla_version}\*"
-        elif self.distro.is_sles:
-            cmd = fr"zypper install -y {self.scylla_pkg()}-debuginfo-{self.scylla_version}\*"
+        if self.distro.is_rhel_like or self.distro.is_sles:
+            package_name = fr"{self.scylla_pkg()}-debuginfo-{self.scylla_version}\*"
         else:
-            cmd = fr"apt-get install -y {self.scylla_pkg()}-server-dbg={self.scylla_version}\*"
+            package_name = fr"{self.scylla_pkg()}-server-dbg={self.scylla_version}\*"
 
         self.log.debug("Installing Scylla debug info...")
-        self.remoter.sudo(cmd, ignore_status=True)
+        # using ignore_status=True cause of docker image doesn't have the repo/list available
+        # TODO: find a why to identify the package, otherwise we don't have debug symbols
+        self.install_package(package_name=package_name, ignore_status=True)
 
     def is_scylla_installed(self, raise_if_not_installed=False):
         if self.distro.is_rhel_like or self.distro.is_sles:
@@ -4861,11 +4831,11 @@ class BaseLoaderSet():
 
         # Install java-8 for workaround hdrhistogram
         if node.distro.is_rhel_like:
-            node.remoter.sudo('yum install -y java-1.8.0-openjdk-devel', verbose=True, ignore_status=True)
+            node.install_package(package_name='java-1.8.0-openjdk-devel')
             node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.*/jre/bin/java* /etc/alternatives/java",
                               verbose=True, ignore_status=True)
         else:
-            node.remoter.sudo('apt install -y openjdk-8-jre', verbose=True, ignore_status=True)
+            node.install_package(package_name='openjdk-8-jre')
             node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-*/bin/java* /etc/alternatives/java",
                               verbose=True, ignore_status=True)
 
@@ -4877,43 +4847,13 @@ class BaseLoaderSet():
             return
 
         elif node.distro.is_debian10 or node.distro.is_debian11:
-            node.remoter.sudo(shell_script_cmd("""\
-                apt-get update
-                apt-get install -y openjdk-11-jre openjdk-11-jre-headless
-            """))
+            node.install_package(package_name='openjdk-11-jre openjdk-11-jre-headless')
 
         scylla_repo_loader = self.params.get('scylla_repo_loader')
         if not scylla_repo_loader:
             scylla_repo_loader = self.params.get('scylla_repo')
         node.download_scylla_repo(scylla_repo_loader)
-        if node.distro.is_rhel_like:
-            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
-            node.remoter.sudo('yum install -y java-1.8.0-openjdk-devel', verbose=True, ignore_status=True)
-            node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-*/jre/bin/java /etc/alternatives/java",
-                              verbose=True, ignore_status=True)
-        else:
-            node.remoter.run('sudo apt-get update')
-            node.remoter.run('sudo apt-get install -y '
-                             ' {}-tools '.format(node.scylla_pkg()))
-            node.remoter.sudo('apt instally -y openjdk-8-jre', verbose=True, ignore_status=True)
-            node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-amd64/bin/java* /etc/alternatives/java",
-                              verbose=True, ignore_status=True)
-
-        if db_node_address is not None:
-            node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
-
-        node.wait_cs_installed(verbose=verbose)
-
-        scylla_repo_loader = self.params.get('scylla_repo_loader')
-        if not scylla_repo_loader:
-            scylla_repo_loader = self.params.get('scylla_repo')
-        node.download_scylla_repo(scylla_repo_loader)
-        if node.distro.is_rhel_like:
-            node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
-        else:
-            node.remoter.run('sudo apt-get update')
-            node.remoter.run('sudo apt-get install -y '
-                             ' {}-tools '.format(node.scylla_pkg()))
+        node.install_package(f'{node.scylla_pkg()}-tools')
 
         if db_node_address is not None:
             node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
@@ -5245,10 +5185,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         if node.distro.is_rhel_like:
             node.install_epel()
             node.update_repo_cache()
+            node.install_package(package_name="unzip wget python36 python36-pip")
             prereqs_script = dedent("""
-                yum install -y unzip wget
-                yum install -y python36
-                yum install -y python36-pip
                 python3 -m pip install --upgrade pip
                 python3 -m pip install pyyaml
                 curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
@@ -5256,29 +5194,25 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 systemctl start docker
             """)
         elif node.distro.is_ubuntu:
+            node.install_package(
+                package_name="software-properties-common python3 python3-dev python-setuptools unzip wget python3-pip")
             prereqs_script = dedent("""
                 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
                 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
                 sudo apt-get update
                 sudo apt-get install -y docker docker.io
-                apt-get install -y software-properties-common
-                apt-get install -y python3 python3-dev
-                apt-get install -y python-setuptools unzip wget
-                apt-get install -y python3-pip
                 python3 -m pip install pyyaml
                 python3 -m pip install -I -U psutil
                 systemctl start docker
             """)
-        elif node.distro.is_debian10 or node.distro.is_debian11:
-            node.remoter.run(
-                cmd="sudo apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg2")
-            node.remoter.run('curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -', retry=3)
-            node.remoter.run(
-                cmd='sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"')
-            node.remoter.run(cmd="sudo apt update")
-            node.remoter.run(cmd="sudo apt install -y docker-ce")
-            node.remoter.run(cmd="sudo DEBIAN_FRONTEND=noninteractive apt install -y python3")
-            node.remoter.run(cmd="sudo apt install -y python-setuptools wget unzip python3-pip")
+        elif node.distro.is_debian:
+            node.install_package(
+                package_name='apt-transport-https ca-certificates curl software-properties-common gnupg2')
+            node.remoter.sudo('curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -', retry=3)
+            node.remoter.sudo(
+                cmd='add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"')
+            node.remoter.sudo(cmd="apt update")
+            node.install_package('docker-ce python3 python-setuptools wget unzip python3-pip')
             prereqs_script = dedent("""
                 cat /etc/debian_version
             """)
