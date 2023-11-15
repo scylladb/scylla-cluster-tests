@@ -676,18 +676,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def is_kubernetes() -> bool:
         return False
 
-    def is_rhel_like(self):
-        deprecation("consider to use node.distro.is_rhel_like property instead")
-        return self.distro.is_rhel_like
-
-    def is_ubuntu(self):
-        deprecation("consider to use node.distro.is_ubuntu property instead")
-        return self.distro.is_ubuntu
-
-    def is_debian(self):
-        deprecation("consider to use node.distro.is_debian property instead")
-        return self.distro.is_debian
-
     @staticmethod
     def is_docker() -> bool:
         return False
@@ -707,14 +695,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return None
 
     def stop_network_interface(self, interface_name="eth1"):
-        if self.is_rhel_like():
+        if self.distro.is_rhel_like:
             shutdown_interface_command = "/sbin/ifdown {}"
         else:
             shutdown_interface_command = "ip link set {} down"
         self.remoter.sudo(shutdown_interface_command.format(interface_name))
 
     def start_network_interface(self, interface_name="eth1"):
-        if self.is_rhel_like():
+        if self.distro.is_rhel_like:
             startup_interface_command = "/sbin/ifup {}"
         elif self.distro.uses_systemd and \
                 self.remoter.run("systemctl is-active --quiet systemd-networkd.service", ignore_status=True).ok:
@@ -1100,7 +1088,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         Execute package manager command and get
         list of all installed packages
         """
-        if self.is_ubuntu() or self.is_debian():
+        if self.distro.is_ubuntu or self.distro.is_debian:
             cmd = 'dpkg-query --show'
         else:
             cmd = 'rpm -qa'
@@ -1133,7 +1121,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 f"Failed to get 'ss' binary version\n"
                 f"stdout: {ss_version_result.stdout}\n"
                 f"stderr: {ss_version_result.stderr}")
-            if self.is_rhel_like():
+            if self.distro.is_rhel_like:
                 self.remoter.sudo("yum install -y iproute", ignore_status=True)
             elif self.distro.is_sles:
                 self.remoter.sudo("zypper install -y iproute", ignore_status=True)
@@ -1655,7 +1643,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if not scylla_repo:
             self.log.error("Scylla YUM repo file url is not provided, it should be defined in configuration YAML!!!")
             return
-        if self.is_rhel_like():
+        if self.distro.is_rhel_like:
             repo_path = '/etc/yum.repos.d/scylla.repo'
             self.remoter.sudo('curl --retry 5 --retry-max-time 300 -o %s -L %s' % (repo_path, scylla_repo))
             self.remoter.sudo('chown root:root %s' % repo_path)
@@ -1791,7 +1779,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def upgrade_manager_agent(self, scylla_mgmt_address: str, start_agent_after_upgrade: bool = True) -> None:
         self.download_scylla_manager_repo(scylla_mgmt_address)
-        if self.is_rhel_like():
+        if self.distro.is_rhel_like:
             self.remoter.sudo("yum update scylla-manager-agent -y")
         elif self.distro.is_sles:
             self.remoter.sudo("zypper update scylla-manager-agent -y")
@@ -1826,7 +1814,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         Uninstall scylla
         """
         self.stop_scylla_server(verify_down=False, ignore_status=True)
-        if self.is_rhel_like():
+        if self.distro.is_rhel_like:
             self.remoter.sudo('yum remove -y scylla\\*')
         elif self.distro.is_sles:
             self.remoter.sudo('zypper remove -y scylla\\*', ignore_status=True)
@@ -1838,7 +1826,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def update_repo_cache(self):
         try:
-            if self.is_rhel_like():
+            if self.distro.is_rhel_like:
                 # The yum makecache command was removed from here since not needed and recommended.
                 # In the past it also caused ERROR 404 of yum, reference https://wiki.centos.org/yum-errors
                 # This fixes https://github.com/scylladb/scylla-cluster-tests/issues/4977
@@ -1857,7 +1845,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.error('Failed to update repo cache: %s', ex)
 
     def upgrade_system(self):
-        if self.is_rhel_like():
+        if self.distro.is_rhel_like:
             # update system to latest
             result = self.remoter.run('ls /etc/yum.repos.d/epel.repo', ignore_status=True)
             if result.exit_status == 0:
@@ -1882,7 +1870,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         :param scylla_version: optional param to specify version
         """
         self.log.info("Installing Scylla...")
-        if self.is_rhel_like():
+        if self.distro.is_rhel_like:
             # `screen' package is missed in CentOS/RHEL 8. Should be installed from EPEL repository.
             if (self.distro.is_centos8 or self.distro.is_rhel8 or self.distro.is_oel8 or self.distro.is_rocky8 or
                     self.distro.is_rocky9):
@@ -2908,7 +2896,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.extra['prefix'] = str(self)
 
     def disable_daily_triggered_services(self):
-        if self.distro.uses_systemd and (self.is_ubuntu() or self.is_debian()):
+        if self.distro.uses_systemd and (self.distro.is_ubuntu or self.distro.is_debian):
             LOGGER.debug("Disabling 'apt-daily' and 'apt-daily-upgrade' services...")
             self.remoter.sudo('systemctl disable apt-daily.timer')
             self.remoter.sudo('systemctl disable apt-daily-upgrade.timer')
@@ -4415,7 +4403,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if self.params.get('logs_transport') == 'ssh':
             node.install_package('python3')
 
-        if node.is_ubuntu():
+        if node.distro.is_ubuntu:
             result = node.remoter.sudo("pro status", ignore_status=True)
             # https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/explanations/status_columns.html
             if "ENTITLED" in result.stdout:  # Pro is enabled
@@ -4872,7 +4860,7 @@ class BaseLoaderSet():
             node.config_client_encrypt()
 
         # Install java-8 for workaround hdrhistogram
-        if node.is_rhel_like():
+        if node.distro.is_rhel_like:
             node.remoter.sudo('yum install -y java-1.8.0-openjdk-devel', verbose=True, ignore_status=True)
             node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.*/jre/bin/java* /etc/alternatives/java",
                               verbose=True, ignore_status=True)
@@ -4898,7 +4886,7 @@ class BaseLoaderSet():
         if not scylla_repo_loader:
             scylla_repo_loader = self.params.get('scylla_repo')
         node.download_scylla_repo(scylla_repo_loader)
-        if node.is_rhel_like():
+        if node.distro.is_rhel_like:
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.remoter.sudo('yum install -y java-1.8.0-openjdk-devel', verbose=True, ignore_status=True)
             node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-*/jre/bin/java /etc/alternatives/java",
@@ -4920,7 +4908,7 @@ class BaseLoaderSet():
         if not scylla_repo_loader:
             scylla_repo_loader = self.params.get('scylla_repo')
         node.download_scylla_repo(scylla_repo_loader)
-        if node.is_rhel_like():
+        if node.distro.is_rhel_like:
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
         else:
             node.remoter.run('sudo apt-get update')
@@ -5254,7 +5242,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
     @staticmethod
     def install_scylla_monitoring_prereqs(node):  # pylint: disable=invalid-name
-        if node.is_rhel_like():
+        if node.distro.is_rhel_like:
             node.install_epel()
             node.update_repo_cache()
             prereqs_script = dedent("""
@@ -5267,7 +5255,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 sh get-docker.sh
                 systemctl start docker
             """)
-        elif node.is_ubuntu():
+        elif node.distro.is_ubuntu:
             prereqs_script = dedent("""
                 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
                 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
@@ -5316,7 +5304,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             rm -rf ./tmp 2>/dev/null
         """.format(self))
         node.remoter.run("bash -ce '%s'" % install_script)
-        if node.is_ubuntu():
+        if node.distro.is_ubuntu:
             node.remoter.run(f'sed -i "s/python3/python3.6/g" {self.monitor_install_path}/*.py')
 
     @staticmethod

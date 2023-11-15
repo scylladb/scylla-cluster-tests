@@ -471,7 +471,7 @@ class AWSNode(cluster.BaseNode):
         self.log.debug('Changing hostname to %s', self.name)
         # Using https://aws.amazon.com/premiumsupport/knowledge-center/linux-static-hostname-rhel7-centos7/
         # FIXME: workaround to avoid host rename generating errors on other commands
-        if self.is_debian():
+        if self.distro.is_debian:
             return
         if wait.wait_for(func=self._set_hostname, step=10, text='Retrying set hostname on the node', timeout=300):
             self.log.debug('Hostname has been changed successfully. Apply')

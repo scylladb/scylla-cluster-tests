@@ -348,7 +348,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                 is_timesyncd_service_installed = self.check_service_existence(service_name="systemd-timesyncd")
                 # Do note: On Redhat based distributions the services are named ntpd and chronyd, while on debian based
                 # distributions they're named ntp and chrony.
-                if self.node.is_rhel_like():
+                if self.node.distro.is_rhel_like:
                     is_ntp_service_installed = self.check_service_existence(service_name="ntpd")
                     is_chrony_service_installed = self.check_service_existence(service_name="chronyd")
                 else:

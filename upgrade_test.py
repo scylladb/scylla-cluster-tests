@@ -81,7 +81,7 @@ def check_reload_systemd_config(node):
 
 
 def backup_conf(node):
-    if node.is_rhel_like():
+    if node.distro.is_rhel_like:
         node.remoter.run(
             r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ) '
             r'/etc/systemd/system/{var-lib-scylla,var-lib-systemd-coredump}.mount; '
@@ -96,7 +96,7 @@ def backup_conf(node):
 
 
 def recover_conf(node):
-    if node.is_rhel_like():
+    if node.distro.is_rhel_like:
         node.remoter.run(
             r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ) '
             r'/etc/systemd/system/{var-lib-scylla,var-lib-systemd-coredump}.mount; '
@@ -232,7 +232,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message='upgrade_node - started to create "new_scylla_repo"').publish()
             # backup the data
             node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
-            if node.is_rhel_like():
+            if node.distro.is_rhel_like:
                 node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
             else:
                 node.remoter.run('sudo cp /etc/apt/sources.list.d/scylla.list ~/scylla.list-backup')
@@ -256,7 +256,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message='upgrade_node - ended to "stop_scylla_server"').publish()
 
             orig_is_enterprise = node.is_enterprise
-            if node.is_rhel_like():
+            if node.distro.is_rhel_like:
                 result = node.remoter.run("sudo yum search scylla-enterprise 2>&1", ignore_status=True)
                 new_is_enterprise = bool('scylla-enterprise.x86_64' in result.stdout or
                                          'No matches found' not in result.stdout)
@@ -273,7 +273,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     scylla_pkg_ver += f" {scylla_pkg}-machine-image{ver_suffix}"
 
             if self.upgrade_rollback_mode == 'reinstall':
-                if node.is_rhel_like():
+                if node.distro.is_rhel_like:
                     InfoEvent(message='upgrade_node - starting to remove and install scylla on RHEL').publish()
                     node.remoter.run(r'sudo yum remove scylla\* -y')
                     node.remoter.run('sudo yum install {} -y'.format(scylla_pkg_ver))
@@ -293,7 +293,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 node.remoter.run('sudo systemctl daemon-reload')
                 InfoEvent(message='upgrade_node - ended to "daemon-reload"').publish()
             else:
-                if node.is_rhel_like():
+                if node.distro.is_rhel_like:
                     InfoEvent(message='upgrade_node - starting to "yum update"').publish()
                     node.remoter.run(r'sudo yum update {}\* -y'.format(scylla_pkg_ver))
                     InfoEvent(message='upgrade_node - ended to "yum update"').publish()
@@ -351,7 +351,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         node.run_nodetool("snapshot")
         node.stop_scylla_server(verify_down=False)
 
-        if node.is_rhel_like():
+        if node.distro.is_rhel_like:
             node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo chmod 644 /etc/yum.repos.d/scylla.repo')
@@ -364,8 +364,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if re.findall(r'\d+.\d+', self.orig_ver)[0] == re.findall(r'\d+.\d+', self.new_ver)[0]:
             self.upgrade_rollback_mode = 'minor_release'
 
-        if self.upgrade_rollback_mode == 'reinstall' or not node.is_rhel_like():
-            if node.is_rhel_like():
+        if self.upgrade_rollback_mode == 'reinstall' or not node.distro.is_rhel_like:
+            if node.distro.is_rhel_like:
                 node.remoter.run(r'sudo yum remove scylla\* -y')
                 node.remoter.run(r'sudo yum install %s -y' % node.scylla_pkg())
             else:

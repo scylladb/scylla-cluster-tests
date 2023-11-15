@@ -232,17 +232,17 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
 
     @cached_property
     def _is_pigz_installed(self):
-        if self.node.is_rhel_like():
+        if self.node.distro.is_rhel_like:
             return self.node.remoter.run('yum list installed | grep pigz', ignore_status=True).ok
-        if self.node.is_ubuntu() or self.node.is_debian():
+        if self.node.distro.is_ubuntu or self.node.distro.is_debian:
             return self.node.remoter.run('apt list --installed | grep pigz', ignore_status=True).ok
         raise RuntimeError("Distro is not supported")
 
     def _install_pigz(self):
-        if self.node.is_rhel_like():
+        if self.node.distro.is_rhel_like:
             self.node.remoter.sudo('yum install -y pigz')
             self.__dict__['is_pigz_installed'] = True
-        elif self.node.is_ubuntu() or self.node.is_debian():
+        elif self.node.distro.is_ubuntu or self.node.distro.is_debian:
             self.node.remoter.sudo('apt install -y pigz')
             self.__dict__['is_pigz_installed'] = True
         else:
@@ -466,9 +466,9 @@ class CoredumpExportFileThread(CoredumpThreadBase):
         return self.node.remoter.run('file', ignore_status=True).exited in [0, 1]
 
     def _install_file(self):
-        if self.node.is_rhel_like():
+        if self.node.distro.is_rhel_like:
             self.node.remoter.sudo('yum install -y file')
-        elif self.node.is_ubuntu() or self.node.is_debian():
+        elif self.node.distro.is_ubuntu or self.node.distro.is_debian:
             self.node.remoter.sudo('apt install -y file')
         else:
             raise RuntimeError("Distro is not supported")
