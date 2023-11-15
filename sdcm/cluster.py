@@ -676,84 +676,17 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def is_kubernetes() -> bool:
         return False
 
-    def is_centos7(self):
-        deprecation("consider to use node.distro.is_centos7 property instead")
-        return self.distro.is_centos7
-
-    def is_rhel7(self):
-        deprecation("consider to use node.distro.is_rhel7 property instead")
-        return self.distro.is_rhel7
-
     def is_rhel_like(self):
         deprecation("consider to use node.distro.is_rhel_like property instead")
         return self.distro.is_rhel_like
-
-    def is_ubuntu14(self):
-        deprecation("consider to use node.distro.is_ubuntu14 property instead")
-        return self.distro.is_ubuntu14
-
-    def is_ubuntu16(self):
-        deprecation("consider to use node.distro.is_ubuntu16 property instead")
-        return self.distro.is_ubuntu16
-
-    def is_ubuntu18(self):
-        deprecation("consider to use node.distro.is_ubuntu18 property instead")
-        return self.distro.is_ubuntu18
 
     def is_ubuntu(self):
         deprecation("consider to use node.distro.is_ubuntu property instead")
         return self.distro.is_ubuntu
 
-    def is_debian8(self):
-        deprecation("consider to use node.distro.is_debian8 property instead")
-        return self.distro.is_debian8
-
-    def is_debian9(self):
-        deprecation("consider to use node.distro.is_debian9 property instead")
-        return self.distro.is_debian9
-
     def is_debian(self):
         deprecation("consider to use node.distro.is_debian property instead")
         return self.distro.is_debian
-
-    # pylint: disable=too-many-arguments
-    def pkg_install(self, pkgs, apt_pkgs=None, ubuntu14_pkgs=None, ubuntu16_pkgs=None,
-                    debian8_pkgs=None, debian9_pkgs=None, ubuntu18_pkgs=None):
-        """
-        Support to install packages to multiple distros
-
-        :param pkgs: default package name string
-        :param apt_pkgs: special package name string for apt-get
-        """
-        # pylint: disable=too-many-return-statements
-        # install packages for special debian like system
-        if self.is_ubuntu14() and ubuntu14_pkgs:
-            self.remoter.run('sudo apt-get install -y %s' % ubuntu14_pkgs)
-            return
-        if self.is_ubuntu16() and ubuntu16_pkgs:
-            self.remoter.run('sudo apt-get install -y %s' % ubuntu16_pkgs)
-            return
-        if self.is_ubuntu18() and ubuntu18_pkgs:
-            self.remoter.run('sudo apt-get install -y %s' % ubuntu18_pkgs)
-            return
-        if self.is_ubuntu14() and ubuntu14_pkgs:
-            self.remoter.run('sudo apt-get install -y %s' % ubuntu14_pkgs)
-            return
-        if self.is_debian8() and debian8_pkgs:
-            self.remoter.run('sudo apt-get install -y %s' % debian8_pkgs)
-            return
-        if self.is_debian9() and debian9_pkgs:
-            self.remoter.run('sudo apt-get install -y %s' % debian9_pkgs)
-            return
-
-        # install general packages for debian like system
-        if apt_pkgs:
-            self.remoter.run('sudo apt-get install -y %s' % apt_pkgs)
-            return
-
-        if not self.is_rhel_like():
-            self.log.error('Install packages for unknown distro by yum')
-        self.remoter.run('sudo yum install -y %s' % pkgs)
 
     @staticmethod
     def is_docker() -> bool:
@@ -1977,46 +1910,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo('zypper install -y {}{}'.format(self.scylla_pkg(), version))
             self.remoter.sudo('zypper install -y scylla-gdb', ignore_status=True)
         else:
-            if self.is_ubuntu14():
-                self.remoter.run('sudo apt-get install software-properties-common -y')
-                self.remoter.run('sudo add-apt-repository -y ppa:openjdk-r/ppa')
-                self.remoter.run('sudo add-apt-repository -y ppa:scylladb/ppa')
-                self.remoter.run('sudo apt-get update')
-                self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
-                self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
-            elif self.distro.is_ubuntu:
+            if self.distro.is_ubuntu:
                 self.install_package(package_name="software-properties-common")
-            elif self.is_debian8():
-                self.remoter.run("sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
-                self.remoter.run(
-                    'echo "deb http://archive.debian.org/debian jessie-backports main" '
-                    '|sudo tee /etc/apt/sources.list.d/backports.list')
-                self.remoter.run(
-                    r"sudo sed -i -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian"
-                    r" jessie-backports /g' /etc/apt/sources.list.d/*.list")
-                self.remoter.run(
-                    "echo 'Acquire::Check-Valid-Until \"false\";' |sudo tee /etc/apt/apt.conf.d/99jessie-backports")
-                self.remoter.run('sudo apt-get update')
-                self.remoter.run('sudo apt-get install gnupg-curl -y')
-                self.remoter.run(
-                    'sudo apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/'
-                    'scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key')
-                self.remoter.run(
-                    'echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/'
-                    'Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list')
-                self.remoter.run('sudo apt-get update')
-                self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
-                self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
-            elif self.is_debian9():
-                install_debian_9_prereqs = dedent("""
-                    export DEBIAN_FRONTEND=noninteractive
-                    apt-get update
-                    apt-get install apt-transport-https -y
-                    apt-get install gnupg1-curl dirmngr -y
-                    apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/Release.key
-                    echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/ /' > /etc/apt/sources.list.d/scylla-3rdparty.list
-                """)
-                self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
             elif self.distro.is_debian10 or self.distro.is_debian11:
                 install_debian_10_prereqs = dedent("""
                     export DEBIAN_FRONTEND=noninteractive
@@ -2271,9 +2166,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.info('io.conf right after setup')
         self.remoter.run('sudo cat /etc/scylla.d/io.conf')
 
-        if not self.is_ubuntu14():
-            self.remoter.run('sudo systemctl enable scylla-server.service')
-            self.remoter.run('sudo systemctl enable scylla-jmx.service')
+        self.remoter.run('sudo systemctl enable scylla-server.service')
+        self.remoter.run('sudo systemctl enable scylla-jmx.service')
 
     def upgrade_mgmt(self, scylla_mgmt_address, start_manager_after_upgrade=True):
         self.log.debug("Upgrade scylla-manager via repo: %s", scylla_mgmt_address)
@@ -2423,10 +2317,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return checklist.get(abs_path, INSTALL_DIR + abs_path)
 
     def _service_cmd(self, service_name: str, cmd: str, timeout: int = 500, ignore_status=False):
-        if self.is_ubuntu14():
-            cmd = f'sudo service {service_name} {cmd}'
-        else:
-            cmd = f'{self.systemctl} {cmd} {service_name}.service'
+        cmd = f'{self.systemctl} {cmd} {service_name}.service'
         return self.remoter.run(cmd, timeout=timeout, ignore_status=ignore_status)
 
     def get_service_status(self, service_name: str, timeout: int = 500, ignore_status=False):
@@ -4997,32 +4888,6 @@ class BaseLoaderSet():
             self.log.debug('Skip loader setup for using a prepared AMI')
             return
 
-        if node.is_ubuntu14():
-            install_java_script = dedent("""
-                apt-get install software-properties-common -y
-                add-apt-repository -y ppa:openjdk-r/ppa
-                add-apt-repository -y ppa:scylladb/ppa
-                apt-get update
-                apt-get install -y openjdk-8-jre-headless
-                update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
-            """)
-            node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
-
-        elif node.is_debian8():
-            install_java_script = dedent(r"""
-                sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list
-                echo 'deb http://archive.debian.org/debian jessie-backports main' |sudo tee /etc/apt/sources.list.d/backports.list
-                sed -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list
-                echo 'Acquire::Check-Valid-Until false;' |sudo tee /etc/apt/apt.conf.d/99jessie-backports
-                apt-get update
-                apt-get install gnupg-curl -y
-                apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
-                echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /' |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list
-                apt-get update
-                apt-get install -y openjdk-8-jre-headless -t jessie-backports
-                update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
-            """)
-            node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
         elif node.distro.is_debian10 or node.distro.is_debian11:
             node.remoter.sudo(shell_script_cmd("""\
                 apt-get update
@@ -5416,7 +5281,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 python3 -m pip install -I -U psutil
                 systemctl start docker
             """)
-        elif node.distro.is_debian9 or node.distro.is_debian10 or node.distro.is_debian11:
+        elif node.distro.is_debian10 or node.distro.is_debian11:
             node.remoter.run(
                 cmd="sudo apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg2")
             node.remoter.run('curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -', retry=3)
@@ -5434,10 +5299,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
         node.remoter.run(cmd="sudo bash -ce '%s'" % prereqs_script)
         node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
-        if node.is_debian9():
-            node.reboot(hard=False)
-        else:
-            node.remoter.run(cmd='sudo systemctl restart docker', timeout=60)
+
+        node.remoter.run(cmd='sudo systemctl restart docker', timeout=60)
 
         docker_hub_login(remoter=node.remoter)
 

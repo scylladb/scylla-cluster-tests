@@ -17,14 +17,10 @@ jenkins-pipelines
 |-- artifacts-amazon2.jenkinsfile
 |-- artifacts-ami.jenkinsfile
 |-- artifacts-centos7.jenkinsfile
-|-- artifacts-centos8.jenkinsfile
-|-- artifacts-debian9.jenkinsfile
 |-- artifacts-debian10.jenkinsfile
 |-- artifacts-debian11.jenkinsfile
 |-- artifacts-docker.jenkinsfile
 |-- artifacts-oel76.jenkinsfile
-|-- artifacts-ubuntu1604.jenkinsfile
-|-- artifacts-ubuntu1804.jenkinsfile
 |-- artifacts-ubuntu2004.jenkinsfile
 `-- private-repo.jenkinsfile
 ```

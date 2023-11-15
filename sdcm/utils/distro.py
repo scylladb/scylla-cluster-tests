@@ -37,8 +37,8 @@ KNOWN_OS = (
     ("OEL", "ol", ["7", "8"], DistroBase.RHEL),
     ("AMAZON", "amzn", ["2"], DistroBase.RHEL),
     ("ROCKY", "rocky", ["8", "9"], DistroBase.RHEL),
-    ("DEBIAN", "debian", ["8", "9", "10", "11"], DistroBase.DEBIAN),
-    ("UBUNTU", "ubuntu", ["14.04", "16.04", "18.04", "20.04", "21.04", "21.10", "22.04"], DistroBase.DEBIAN),
+    ("DEBIAN", "debian", ["10", "11"], DistroBase.DEBIAN),
+    ("UBUNTU", "ubuntu", ["20.04", "21.04", "21.10", "22.04"], DistroBase.DEBIAN),
     ("SLES", "sles", ["15"], DistroBase.UNKNOWN),
     ("FEDORA", "fedora", ["34", "35", "36"], DistroBase.RHEL),
     ("MINT", "linuxmint", ["20", "21"], DistroBase.DEBIAN),
@@ -164,7 +164,7 @@ class EnumFunctionalMixin:
     @property
     def uses_systemd(self):
         # Debian uses systemd as a default init system since 8.0, Ubuntu since 15.04, and RedHat-based since 7.0
-        return self not in (self.UNKNOWN, self.UBUNTU14, )
+        return self not in (self.UNKNOWN, )
 
 
 Distro: enum.Enum = enum.Enum('Distro', enum_data, module=__name__, type=EnumFunctionalMixin)
