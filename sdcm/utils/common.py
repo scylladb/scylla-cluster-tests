@@ -3004,7 +3004,7 @@ def prepare_and_start_saslauthd_service(node):
     """
     Install and setup saslauthd service.
     """
-    if node.is_rhel_like():
+    if node.distro.is_rhel_like:
         setup_script = dedent("""
             sudo yum install -y cyrus-sasl
             sudo systemctl enable saslauthd

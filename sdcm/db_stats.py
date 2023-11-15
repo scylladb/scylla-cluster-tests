@@ -565,7 +565,7 @@ class TestStatsMixin(Stats):
                 build_id = node.scylla_version_detailed.split('with build-id ')[-1].strip()
             else:
                 build_id = node.get_scylla_build_id()
-            if node.is_rhel_like():
+            if node.distro.is_rhel_like:
                 version_cmd = 'rpm -qa |grep scylla'
             else:
                 version_cmd = "dpkg -l |grep scylla|awk '{print $2 \"-\" $3}'"

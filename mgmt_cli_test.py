@@ -69,13 +69,13 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
                 self.log.debug("cmd %s failed with error %s, will retry", cmd, ex)
 
     def install_awscli_dependencies(self, node):
-        if node.is_ubuntu() or node.is_debian():
+        if node.distro.is_ubuntu or node.distro.is_debian:
             cmd = dedent("""
             apt update
             apt install -y python3-pip
             pip install awscli==1.18.140
             """)
-        elif node.is_rhel_like():
+        elif node.distro.is_rhel_like:
             cmd = dedent("""
             yum install -y epel-release
             yum install -y python-pip
@@ -87,7 +87,7 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
         self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd(cmd))
 
     def install_gsutil_dependencies(self, node):
-        if node.is_ubuntu() or node.is_debian():
+        if node.distro.is_ubuntu or node.distro.is_debian:
             cmd = dedent("""
                 echo 'deb https://packages.cloud.google.com/apt cloud-sdk main' | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
                 curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
