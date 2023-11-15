@@ -19,18 +19,6 @@ from sdcm.utils.distro import Distro, DistroError
 
 
 DISTROS_OS_RELEASE = {
-    "Debian 9": """\
-PRETTY_NAME="Debian GNU/Linux 9 (stretch)"
-NAME="Debian GNU/Linux"
-VERSION_ID="9"
-VERSION="9 (stretch)"
-VERSION_CODENAME=stretch
-ID=debian
-HOME_URL="https://www.debian.org/"
-SUPPORT_URL="https://www.debian.org/support"
-BUG_REPORT_URL="https://bugs.debian.org/"
-""",
-
     "Debian 10": """\
 PRETTY_NAME="Debian GNU/Linux 10 (buster)"
 NAME="Debian GNU/Linux"
@@ -181,47 +169,6 @@ CPE_NAME="cpe:/o:suse:sles:15:sp3"
 DOCUMENTATION_URL="https://documentation.suse.com/"
 """,
 
-    "Ubuntu 14.04": """\
-NAME="Ubuntu"
-VERSION="14.04.6 LTS, Trusty Tahr"
-ID=ubuntu
-ID_LIKE=debian
-PRETTY_NAME="Ubuntu 14.04.6 LTS"
-VERSION_ID="14.04"
-HOME_URL="http://www.ubuntu.com/"
-SUPPORT_URL="http://help.ubuntu.com/"
-BUG_REPORT_URL="http://bugs.launchpad.net/ubuntu/"
-""",
-
-    "Ubuntu 16.04": """\
-NAME="Ubuntu"
-VERSION="16.04.6 LTS (Xenial Xerus)"
-ID=ubuntu
-ID_LIKE=debian
-PRETTY_NAME="Ubuntu 16.04.6 LTS"
-VERSION_ID="16.04"
-HOME_URL="http://www.ubuntu.com/"
-SUPPORT_URL="http://help.ubuntu.com/"
-BUG_REPORT_URL="http://bugs.launchpad.net/ubuntu/"
-VERSION_CODENAME=xenial
-UBUNTU_CODENAME=xenial
-""",
-
-    "Ubuntu 18.04": """\
-NAME="Ubuntu"
-VERSION="18.04.3 LTS (Bionic Beaver)"
-ID=ubuntu
-ID_LIKE=debian
-PRETTY_NAME="Ubuntu 18.04.3 LTS"
-VERSION_ID="18.04"
-HOME_URL="https://www.ubuntu.com/"
-SUPPORT_URL="https://help.ubuntu.com/"
-BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
-PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
-VERSION_CODENAME=bionic
-UBUNTU_CODENAME=bionic
-""",
-
     "Ubuntu 20.04": """\
 NAME="Ubuntu"
 VERSION="20.04 LTS (Focal Fossa)"
@@ -316,12 +263,6 @@ class TestDistro(unittest.TestCase):  # pylint: disable=too-many-public-methods
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Unknown"])
         self.assertTrue(distro.is_unknown)
 
-    def test_debian9(self):
-        self.assertTrue(Distro.DEBIAN9.is_debian9)
-        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 9"])
-        self.assertTrue(distro.is_debian9)
-        self.assertTrue(distro.is_debian)
-
     def test_debian10(self):
         self.assertTrue(Distro.DEBIAN10.is_debian10)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 10"])
@@ -375,24 +316,6 @@ class TestDistro(unittest.TestCase):  # pylint: disable=too-many-public-methods
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["SLES 15"])
         self.assertTrue(distro.is_sles15)
         self.assertTrue(distro.is_sles)
-
-    def test_ubuntu14(self):
-        self.assertTrue(Distro.UBUNTU14.is_ubuntu14)
-        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 14.04"])
-        self.assertTrue(distro.is_ubuntu14)
-        self.assertTrue(distro.is_ubuntu)
-
-    def test_ubuntu16(self):
-        self.assertTrue(Distro.UBUNTU16.is_ubuntu16)
-        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 16.04"])
-        self.assertTrue(distro.is_ubuntu16)
-        self.assertTrue(distro.is_ubuntu)
-
-    def test_ubuntu18(self):
-        self.assertTrue(Distro.UBUNTU18.is_ubuntu18)
-        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 18.04"])
-        self.assertTrue(distro.is_ubuntu18)
-        self.assertTrue(distro.is_ubuntu)
 
     def test_ubuntu20(self):
         self.assertTrue(Distro.UBUNTU20.is_ubuntu20)
