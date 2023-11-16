@@ -21,6 +21,7 @@ import re
 import abc
 import json
 import math
+import shutil
 import tempfile
 import time
 import base64
@@ -2821,6 +2822,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                 namespace=self.namespace,
                 timeout=timeout + 10)
         self.terminate_node(node, scylla_shards=scylla_shards)
+        shutil.move(node.system_log, os.path.join(
+            node.logdir, f"system_{datetime.now().strftime('%y_%m_%d_%H_%M_%S')}.log"))
         if current_members == 1:
             self._delete_k8s_rack(rack, dc_idx=dc_idx)
 
