@@ -5,11 +5,24 @@ scale 2
 {T
  + scylla-cluster-tests
  ++ jenkins-pipelines
- +++ longevity-10gb-3h.jenkinsfile
- +++ longevity-200GB-48h-verifier-LimitedMonkey-tls.jenkinsfile
- +++ rolling-upgrade-centos7.jenkinsfile
+ +++ longevity
+ ++++ longevity-10gb-3h.jenkinsfile
+ ++++ longevity-200GB-48h-verifier-LimitedMonkey-tls.jenkinsfile
+ +++ rolling-upgrade
+ ++++ rolling-upgrade-centos7.jenkinsfile
+ ++++ ...
+ +++ gemini
+ ++++
+ ++++ ...
+ +++ features
+ ++++
+ ++++ ...
+ +++ nemesis
+ ++++
+ ++++ ...
  +++ ...
- +++ byo-longevity.jenkinsfile
+ ++ qa-jenkins-pipelines
+ +++ static ones, which are not release based (show-monitor and such.)
  ++ vars
  +++ longevityPipeline.groovy
  +++ rollingUpgradePipeline.groovy
