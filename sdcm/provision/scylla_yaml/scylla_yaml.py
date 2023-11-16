@@ -330,6 +330,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
 
     system_key_directory: str = None  # None
     system_info_encryption: dict = None  # None
+    user_info_encryption: dict = None  # None
     kmip_hosts: dict = None  # None
     kms_hosts: dict = None  # None
 
