@@ -2181,32 +2181,32 @@ class SCTConfiguration(dict):
             assert _opt['name'] in self, "{} missing from config for {}".format(_opt['name'], backend)
 
     def _check_version_supplied(self, backend: str):
-        one_of_options_must_exist = []
+        options_must_exist = []
 
-        if not self.get('use_preinstalled_scylla'):
-            one_of_options_must_exist += ['scylla_repo']
+        if not self.get('use_preinstalled_scylla') and not backend == 'baremetal':
+            options_must_exist += ['scylla_repo']
 
         if self.get('db_type') == 'cloud_scylla':
-            one_of_options_must_exist += ['cloud_cluster_id']
+            options_must_exist += ['cloud_cluster_id']
         elif backend == 'aws':
-            one_of_options_must_exist += ['ami_id_db_scylla']
+            options_must_exist += ['ami_id_db_scylla']
         elif backend == 'gce':
-            one_of_options_must_exist += ['gce_image_db']
+            options_must_exist += ['gce_image_db']
         elif backend == 'azure':
-            one_of_options_must_exist += ['azure_image_db']
+            options_must_exist += ['azure_image_db']
         elif backend == 'docker':
-            one_of_options_must_exist += ['docker_image']
+            options_must_exist += ['docker_image']
         elif backend == 'baremetal':
-            one_of_options_must_exist += ['db_nodes_public_ip']
+            options_must_exist += ['db_nodes_public_ip']
         elif 'k8s' in backend:
-            one_of_options_must_exist += ['scylla_version']
+            options_must_exist += ['scylla_version']
 
-        if not one_of_options_must_exist:
+        if not options_must_exist:
             return
-        assert any(self.get(o) for o in one_of_options_must_exist), \
+        assert all(self.get(o) for o in options_must_exist), \
             "scylla version/repos wasn't configured correctly\n" \
-            f"configure one of the following: {one_of_options_must_exist}\n" \
-            f"or one of those environment variables: {['SCT_' + o.upper() for o in one_of_options_must_exist]}"
+            f"configure those options: {options_must_exist}\n" \
+            f"and those environment variables: {['SCT_' + o.upper() for o in options_must_exist]}"
 
     def _check_partition_range_with_data_validation_correctness(self):
         partition_range_with_data_validation = self.get('partition_range_with_data_validation')
