@@ -391,6 +391,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'user_defined_function_allocation_limit_bytes': None,
                 'user_defined_function_contiguous_allocation_limit_bytes': None,
                 'user_defined_function_time_limit_ms': None,
+                'user_info_encryption': None,
                 'view_building': None,
                 'view_hints_directory': None,
                 'virtual_dirty_soft_limit': None,

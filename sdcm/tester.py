@@ -820,6 +820,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # NOTE: the 'aws_region' will be changed per each node separately depending on it's region
             'aws_region': 'auto'
         }
+        append_scylla_yaml['user_info_encryption'] = {
+            'enabled': True,
+            'key_provider': 'KmsKeyProviderFactory',
+            'kms_host': kms_host,
+        }
+        append_scylla_yaml['system_info_encryption'] = {
+            'enabled': True,
+            'key_provider': 'KmsKeyProviderFactory',
+            'kms_host': kms_host,
+        }
+        self.log.warning("`user_info_encryption` and `system_info_encryption` are configured to use KMS by default")
         self.params["append_scylla_yaml"] = yaml.safe_dump(append_scylla_yaml)
         return None
 
