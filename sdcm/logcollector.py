@@ -790,6 +790,8 @@ class ScyllaLogCollector(LogCollector):
                                     "-u scylla-image-setup.service -u scylla-io-setup.service -u scylla-server.service "
                                     "-u scylla-jmx.service -u scylla-housekeeping-restart.service "
                                     "-u scylla-housekeeping-daily.service -o short-precise", search_locally=True),
+                    FileLog(name='system_*',
+                            search_locally=True),
                     FileLog(name='kallsyms_*',
                             search_locally=True),
                     FileLog(name='lsof_*',
