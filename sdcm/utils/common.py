@@ -78,7 +78,7 @@ from sdcm import wait
 from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.keystore import KeyStore
 from sdcm.utils.docker_utils import ContainerManager
-from sdcm.utils.gce_utils import GcloudContainerMixin
+from sdcm.utils.gce_utils import GcloudContainerMixin, gce_public_addresses
 from sdcm.remote import LocalCmdRunner
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.gce_utils import (
@@ -2422,7 +2422,7 @@ def get_gce_builders(tags=None, running=False):
 
     for gce_builder in gce_builders:
         builders.append({"builder": {
-            "public_ip": gce_builder.public_ips[0],
+            "public_ip": gce_public_addresses(gce_builder)[0],
             "name": gce_builder.name,
             "user": "scylla-test",
             "key_file": os.path.expanduser(ssh_key_path)
