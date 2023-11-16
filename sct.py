@@ -68,7 +68,6 @@ from sdcm.utils.common import (
     get_gce_images_versioned,
     gce_meta_to_dict,
     get_builder_by_test_id,
-    get_s3_scylla_repos_mapping,
     get_testrun_dir,
     list_clusters_eks,
     list_clusters_gke,
@@ -106,11 +105,11 @@ from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
 from sdcm.utils.es_index import create_index, get_mapping
+from sdcm.utils.version_utils import get_s3_scylla_repos_mapping
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
 from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
-
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]

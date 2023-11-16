@@ -90,7 +90,6 @@ from sdcm.utils.gce_utils import (
 )
 from sdcm.utils.context_managers import environment
 
-
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
@@ -1614,60 +1613,6 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, ver
     )
 
 
-_S3_SCYLLA_REPOS_CACHE = defaultdict(dict)
-
-
-def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
-    """
-    get the mapping from version prefixes to rpm .repo or deb .list files locations
-
-    :param dist_type: which distro to look up centos/ubuntu/debian
-    :param dist_version: family name of the distro version
-
-    :return: a mapping of versions prefixes to repos
-    :rtype: dict
-    """
-    if (dist_type, dist_version) in _S3_SCYLLA_REPOS_CACHE:
-        return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
-
-    s3_client: S3Client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
-    bucket = 'downloads.scylladb.com'
-
-    if dist_type == 'centos':
-        response = s3_client.list_objects(Bucket=bucket, Prefix='rpm/centos/', Delimiter='/')
-
-        for repo_file in response['Contents']:
-            filename = os.path.basename(repo_file['Key'])
-            # only if path look like 'rpm/centos/scylla-1.3.repo', we deem it formal one
-            if filename.startswith('scylla-') and filename.endswith('.repo'):
-                version_prefix = filename.replace('.repo', '').split('-')[-1]
-                _S3_SCYLLA_REPOS_CACHE[(
-                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(
-                    bucket=bucket,
-                    path=repo_file['Key'])
-
-    elif dist_type in ('ubuntu', 'debian'):
-        response = s3_client.list_objects(Bucket=bucket, Prefix='deb/{}/'.format(dist_type), Delimiter='/')
-        for repo_file in response['Contents']:
-            filename = os.path.basename(repo_file['Key'])
-
-            # only if path look like 'deb/debian/scylla-3.0-jessie.list', we deem it formal one
-            repo_regex = re.compile(r'\d+\.\d\.list')
-            if filename.startswith('scylla-') and (
-                    filename.endswith('-{}.list'.format(dist_version)) or
-                    repo_regex.search(filename)):
-                version_prefix = \
-                    filename.replace('-{}.list'.format(dist_version), '').replace('.list', '').split('-')[-1]
-                _S3_SCYLLA_REPOS_CACHE[(
-                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(
-                    bucket=bucket,
-                    path=repo_file['Key'])
-
-    else:
-        raise NotImplementedError("[{}] is not yet supported".format(dist_type))
-    return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
-
-
 ScyllaProduct = Literal['scylla', 'scylla-enterprise']
 
 
@@ -1843,69 +1788,6 @@ def can_connect_to(ip: str, port: int, timeout: int = 1) -> bool:
     result = sock.connect_ex((ip, port))
     sock.close()
     return result == 0
-
-
-def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
-    """
-    Get a repo/list of scylla, based on scylla version match
-
-    :param scylla_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:l'
-    :param dist_type: one of ['centos', 'ubuntu', 'debian']
-    :param dist_version: family name of the distro version
-    :raises: ValueError if not found
-
-    :return: str url repo/list
-    """
-    if ':' in scylla_version:
-        branch_repo = get_branched_repo(scylla_version, dist_type)
-        if branch_repo:
-            return branch_repo
-
-    repo_map = get_s3_scylla_repos_mapping(dist_type, dist_version)
-
-    # pylint: disable=useless-else-on-loop
-    for key in repo_map:
-        if scylla_version.startswith(key):
-            return repo_map[key]
-    else:
-        raise ValueError(f"repo for scylla version {scylla_version} wasn't found")
-
-
-def get_branched_repo(scylla_version: str,
-                      dist_type: Literal["centos", "ubuntu", "debian"] = "centos",
-                      bucket: str = "downloads.scylladb.com") -> Optional[str]:
-    """
-    Get a repo/list of scylla, based on scylla version match
-
-    :param scylla_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:l'
-    :param dist_type: one of ['centos', 'ubuntu', 'debian']
-    :return: str url repo/list, or None if not found
-    """
-    try:
-        branch, branch_version = scylla_version.split(':', maxsplit=1)
-    except ValueError:
-        raise ValueError(f"{scylla_version=} should be in `branch-x.y:<date>' or `branch-x.y:latest' format") from None
-
-    if dist_type == "centos":
-        prefix = f"unstable/scylla/{branch}/rpm/centos/{branch_version}/"
-        filename = "scylla.repo"
-    elif dist_type in ("ubuntu", "debian",):
-        prefix = f"unstable/scylla/{branch}/deb/unified/{branch_version}/scylladb-master/"
-        filename = "scylla.list"
-    else:
-        raise ValueError(f"Unsupported {dist_type=}")
-
-    s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION)
-    response = s3_client.list_objects(Bucket=bucket, Prefix=prefix, Delimiter='/')
-
-    for repo_file in response.get("Contents", ()):
-        if os.path.basename(repo_file['Key']) == filename:
-            return f"https://s3.amazonaws.com/{bucket}/{repo_file['Key']}"
-
-    if branch_version.isdigit():
-        LOGGER.warning("Repo path doesn't include `build-id' anymore, try to use a date.")
-
-    return None
 
 
 def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = None) -> list[EC2Image]:

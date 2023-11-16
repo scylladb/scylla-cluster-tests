@@ -33,7 +33,6 @@ from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import (
     ami_built_by_scylla,
-    find_scylla_repo,
     get_ami_tags,
     get_branched_ami,
     get_branched_gce_images,
@@ -49,6 +48,7 @@ from sdcm.utils.version_utils import (
     get_scylla_docker_repo_from_version,
     resolve_latest_repo_symlink,
     get_specific_tag_of_docker_image,
+    find_scylla_repo,
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import get_gce_image_tags
