@@ -5,8 +5,7 @@ import re
 import os
 
 from sdcm.utils.version_utils import is_enterprise, get_all_versions
-from sdcm.utils.common import get_s3_scylla_repos_mapping
-from sdcm.utils.version_utils import ComparableScyllaVersion
+from sdcm.utils.version_utils import ComparableScyllaVersion, get_s3_scylla_repos_mapping
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
