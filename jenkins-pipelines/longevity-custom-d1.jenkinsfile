@@ -7,5 +7,5 @@ longevityPipeline(
     backend: 'gce',
     region: 'us-east1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/custom_d1.yaml'
+    test_config: 'test-cases/longevity/gce_custom_d1.yaml'
 )
