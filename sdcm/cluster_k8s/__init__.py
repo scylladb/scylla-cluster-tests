@@ -1763,7 +1763,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     parent_cluster: PodCluster
 
     pod_readiness_delay = 30  # seconds
-    pod_readiness_timeout = 5  # minutes
+    pod_readiness_timeout = 10  # minutes
     pod_terminate_timeout = 5  # minutes
 
     def __init__(self, name: str, parent_cluster: PodCluster, node_prefix: str = "node", node_index: int = 1,
