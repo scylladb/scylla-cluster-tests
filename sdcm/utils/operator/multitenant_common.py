@@ -50,6 +50,7 @@ class TenantMixin:  # pylint: disable=too-many-instance-attributes
         self.start_time = self.get_test_start_time() or time.time()
         self.timeout_thread = self._init_test_timeout_thread()
         self.test_config.reuse_cluster(False)
+        self.validate_large_collections = self.params.get('validate_large_collections')
 
     def get_str_index(self):
         return f"{self.get_str_index_prefix}-{self.db_cluster.k8s_clusters[0].tenants_number}-tenants"
