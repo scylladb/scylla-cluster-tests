@@ -323,11 +323,25 @@ class AwsRegion:
                         "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow CQL for ALL'}]
                     },
                     {
+                        "FromPort": 19042,
+                        "ToPort": 19042,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow shard-aware CQL for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow shard-aware CQL for ALL'}]
+                    },
+                    {
                         "FromPort": 9142,
                         "ToPort": 9142,
                         "IpProtocol": "tcp",
                         "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow SSL CQL for ALL'}],
                         "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow SSL CQL for ALL'}]
+                    },
+                    {
+                        "FromPort": 19142,
+                        "ToPort": 19142,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow shard-aware SSL CQL for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow shard-aware SSL CQL for ALL'}]
                     },
                     {
                         "FromPort": 9100,
