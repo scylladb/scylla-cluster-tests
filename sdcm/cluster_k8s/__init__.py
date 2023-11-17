@@ -2770,18 +2770,41 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
             #       Having 1 decommissioned node we do not change node count.
             #       Having 2 decommissioned nodes we will reduce node count.
             current_members = len(self._get_rack_nodes(rack, dc_idx=current_dc_idx))
+            # NOTE: update the 'spec.externalSeeds' field only for the very first pod in a second+ region.
+            dc_podip_mapping, is_external_seeds_set = {}, False
             if current_dc_idx > 0:
-                external_seeds = [node.pod_status.pod_ip for node in self.nodes if node.dc_idx == 0]
-                assert external_seeds, (
-                    "Couldn't not find IP addresses of the nodes from the first DC (dc_idx=0)"
-                    f" to be used as 'external seeds' for the pods of another DC (dc_idx={current_dc_idx})")
-                self.replace_scylla_cluster_value("/spec/externalSeeds", external_seeds, dc_idx=current_dc_idx)
+                for node in self.nodes:
+                    if node.dc_idx not in dc_podip_mapping:
+                        dc_podip_mapping[node.dc_idx] = []
+                    dc_podip_mapping[node.dc_idx].append(node.pod_status.pod_ip)
+                if not dc_podip_mapping.get(current_dc_idx, []):
+                    assert dc_podip_mapping[0], (
+                        "Couldn't not find IP addresses of the nodes from the first DC (dc_idx=0)"
+                        f" to be used as 'external seeds' for the pods of another DC (dc_idx={current_dc_idx})")
+                    self.replace_scylla_cluster_value(
+                        "/spec/externalSeeds", dc_podip_mapping[0], dc_idx=current_dc_idx)
+                    is_external_seeds_set = True
+            total_dc_members = current_members + node_count_in_dc
             self.replace_scylla_cluster_value(
-                f"/spec/datacenter/racks/{rack}/members", current_members + node_count_in_dc,
-                dc_idx=current_dc_idx)
+                f"/spec/datacenter/racks/{rack}/members", total_dc_members, dc_idx=current_dc_idx)
             new_nodes.extend(super().add_nodes(
                 count=node_count_in_dc, ec2_user_data=ec2_user_data, dc_idx=current_dc_idx, rack=rack,
                 enable_auto_bootstrap=enable_auto_bootstrap))
+            # NOTE: remove the 'externalSeeds' values because pod IPs are ephemeral and
+            #       we are not going to keep it up-to-date making Scylla pods not try to connect to
+            #       some other test run's Scylla pods which may pick up those ephemeral IPs.
+            #       Also, avoid redundant Scylla pods roll-outs with each addition of a new node
+            #       in second+ regions.
+            if current_dc_idx > 0 and is_external_seeds_set:
+                self.replace_scylla_cluster_value("/spec/externalSeeds", [], dc_idx=current_dc_idx)
+                # NOTE: sleep for some time to avoid concurrency with the 'not-yet-started roll-out'
+                #       and 'already-finished-roll-out'. We won't waste time because roll-out takes more than
+                #       our small sleep.
+                time.sleep(10)
+                self.wait_for_pods_running(
+                    pods_to_wait=node_count_in_dc, total_pods=total_dc_members, dc_idx=current_dc_idx)
+                self.wait_for_pods_readiness(
+                    pods_to_wait=node_count_in_dc, total_pods=total_dc_members, dc_idx=current_dc_idx)
         return new_nodes
 
     def _create_k8s_rack_if_not_exists(self, rack: int, dc_idx: int):
