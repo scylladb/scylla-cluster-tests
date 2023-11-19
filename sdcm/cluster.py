@@ -142,8 +142,11 @@ from sdcm.paths import (
     SCYLLA_MANAGER_TLS_KEY_FILE,
 )
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
-from sdcm.exceptions import KillNemesis, NodeNotReady
-
+from sdcm.exceptions import (
+    KillNemesis,
+    NodeNotReady,
+    SstablesNotFound,
+)
 
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
@@ -4332,6 +4335,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     encryption_results = sstable_util.is_sstable_encrypted()
                     assert encryption_results
                     assert all(encryption_result is True for encryption_result in encryption_results)
+
+                except SstablesNotFound as exc:
+                    self.log.warning(f"Couldn't check the fact of encryption (KMS) for sstables: {exc}")
+
                 except Exception:  # pylint: disable=broad-except
                     AwsKmsEvent(
                         message="Failed to check the fact of encryption (KMS) for sstables",

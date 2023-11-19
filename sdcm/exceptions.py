@@ -71,3 +71,7 @@ class WaitForTimeoutError(Exception):
 
 class ExitByEventError(Exception):
     """Exception that would be raised if wait.wait_for stopped by event"""
+
+
+class SstablesNotFound(Exception):
+    pass
