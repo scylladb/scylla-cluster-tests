@@ -3,6 +3,10 @@ import json
 import logging
 import random
 
+from sdcm.paths import SCYLLA_YAML_PATH
+from sdcm.utils.version_utils import ComparableScyllaVersion
+from sdcm.exceptions import SstablesNotFound
+
 
 class NonDeletedTombstonesFound(Exception):
     pass
@@ -51,24 +55,41 @@ class SstableUtils:
         self.log.debug('Got %s sstables %s', len(selected_sstables), message)
         return selected_sstables
 
-    def is_sstable_encrypted(self, sstables=None) -> list:
+    def is_sstable_encrypted(self, sstables=None) -> list:  # pylint: disable=too-many-branches
         if not sstables:
             sstables = self.get_sstables()
         if isinstance(sstables, str):
             sstables = [sstables]
         sstables_encrypted_mapping = {}
+
+        if not sstables:
+            raise SstablesNotFound(f"sstables for '{self.keyspace}.{self.table}' wasn't found")
+
+        if ComparableScyllaVersion(self.db_node.scylla_version) >= '2023.2.0~rc0':
+            dump_cmd = (
+                f"{self.db_node.add_install_prefix('/usr/bin/scylla')} sstable dump-scylla-metadata"
+                f" --scylla-yaml-file {self.db_node.add_install_prefix(SCYLLA_YAML_PATH)}"
+                "  --logger-log-level scylla-sstable=debug"
+                f" --keyspace {self.keyspace} --table {self.table} --sstables"
+            )
+        else:
+            dump_cmd = 'sstabledump'
         for sstable in sstables:
             sstables_res = self.db_node.remoter.sudo(
-                f"{self.db_node.add_install_prefix('/usr/bin/scylla')} sstable dump-scylla-metadata"
-                "  --logger-log-level scylla-sstable=debug"
-                f" --sstables {sstable} --keyspace {self.keyspace} --table {self.table}",
+                f"{dump_cmd} {sstable}",
                 ignore_status=True, verbose=True)
+
             self.log.debug("sstables_res.stdout: %s", sstables_res.stdout)
             self.log.debug("sstables_res.stderr: %s", sstables_res.stderr)
             # NOTE: if we have 'stdout' then the data was successfully read and it means there was no encryption
             if sstables_res.stdout:
                 self.log.debug("Successfully read the sstable located at '%s'.", sstable)
-                sstables_encrypted_mapping[sstable] = False
+                if dump_cmd == 'sstabledump':
+                    sstables_encrypted_mapping[sstable] = False
+                else:
+                    scylla_metadata = json.loads(sstables_res.stdout)['sstables']
+                    sstables_encrypted_mapping[sstable] = all('scylla_encryption_options' in metadata.get('extension_attributes', {})
+                                                              for table, metadata in scylla_metadata.items())
             # NOTE: case when sstable exists and it is encrypted:
             #       [shard 0:main] seastar - Exiting on unhandled exception: \
             #       sstables::malformed_sstable_exception (Buffer improperly sized to hold requested data. \
@@ -80,7 +101,7 @@ class SstableUtils:
             #       [shard 0:main] seastar - Exiting on unhandled exception: \
             #       sstables::malformed_sstable_exception \
             #       (/var/.../me-3g9s_1941_4web4236cvthbyawsi-big-TOC.txt: file not found)
-            elif " file not found)" in sstables_res.stderr:
+            elif " file not found)" in sstables_res.stderr or "Cannot find file" in sstables_res.stderr:
                 self.log.debug("'%s' sstable doesn't exist anymore. Skipping it.", sstable)
             # NOTE: case when
             #       Could not load SSTable: /var/.../me-3g9w_104a_01xg12j55gjivrwtt5-big-Data.db: \
@@ -93,6 +114,9 @@ class SstableUtils:
                     "'%s' sstable cannot be loaded with 'first and last keys of summary are misordered' error. "
                     "Not representative. Skipping it.",
                     sstable)
+            elif "NullPointerException" in sstables_res.stderr or "ArrayIndexOutOfBoundsException" in sstables_res.stderr:
+                # using sstabledump
+                sstables_encrypted_mapping[sstable] = True
             # NOTE: all other unexpected cases
             else:
                 self.log.warning(
