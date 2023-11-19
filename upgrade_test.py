@@ -33,7 +33,10 @@ from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.user_profile import get_profile_content
-from sdcm.utils.version_utils import get_node_supported_sstable_versions
+from sdcm.utils.version_utils import (
+    get_node_supported_sstable_versions,
+    ComparableScyllaVersion,
+)
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import (
     IndexSpecialColumnErrorEvent,
@@ -765,11 +768,15 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         # Verify sstabledump
         InfoEvent(message='Starting sstabledump to verify correctness of sstables').publish()
+        if ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) < "2023.2" or \
+                ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) < "5.4":
+            dump_cmd = 'sstabledump'
+        else:
+            dump_cmd = f'{self.db_cluster.nodes[0].add_install_prefix("/usr/bin/scylla")} sstable dump-data --sstables'
         self.db_cluster.nodes[0].remoter.run(
             'for i in `sudo find /var/lib/scylla/data/keyspace_complex/ -type f |grep -v manifest.json |'
             'grep -v snapshots |head -n 1`; do echo $i; '
-            f'sudo {self.db_cluster.nodes[0].add_install_prefix("/usr/bin/scylla")} sstable dump-data '
-            f'--sstables $i 1>/tmp/sstabledump.output || '
+            f'sudo {dump_cmd} $i 1>/tmp/sstabledump.output || '
             'exit 1; done', verbose=True)
 
         InfoEvent(message='Step8 - Run stress and verify after upgrading entire cluster').publish()
