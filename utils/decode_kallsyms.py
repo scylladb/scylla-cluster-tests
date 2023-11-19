@@ -1,5 +1,9 @@
+#!/usr/bin/env python
+
 import bisect
 import re
+
+import click
 
 
 def kallsyms_search(kallsyms_lines: list[str], address: int):
@@ -51,3 +55,15 @@ def decode_kernel_callstacks(results_file='results.log', input_file='system.log'
                 for frame in stall:
                     append_content_to_file(file, file_content[kallsyms_search(file_content, int(frame, 16))])
             append_content_to_file(file, '#' * 76)
+
+
+@click.command(help="Decode kernel callstack")
+@click.option('-i', '--input-file', default='system.log', type=click.Path(exists=True))
+@click.option('-k', '--kallsyms-file', default='kallsyms', type=click.Path(exists=True))
+@click.option('-r', '--results-file', default='results.log', type=click.Path(exists=False))
+def decode(input_file, kallsyms_file, results_file):
+    decode_kernel_callstacks(input_file=input_file, kallsyms_file=kallsyms_file, results_file=results_file)
+
+
+if __name__ == "__main__":
+    decode()  # pylint: disable=no-value-for-parameter
