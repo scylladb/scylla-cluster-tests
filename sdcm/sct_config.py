@@ -21,6 +21,7 @@ import ast
 import logging
 import getpass
 import pathlib
+import tempfile
 from typing import List, Union, Set
 
 from distutils.util import strtobool
@@ -49,9 +50,11 @@ from sdcm.utils.version_utils import (
     resolve_latest_repo_symlink,
     get_specific_tag_of_docker_image,
     find_scylla_repo,
+    is_enterprise,
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import get_gce_image_tags
+from sdcm.remote import LOCALRUNNER, shell_script_cmd
 
 
 def _str(value: str) -> str:
@@ -1622,6 +1625,9 @@ class SCTConfiguration(dict):
     def __init__(self):
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         super().__init__()
+        self.scylla_version = None
+        self.is_enterprise = False
+
         self.log = logging.getLogger(__name__)
         env = self._load_environment_variables()
         config_files = env.get('config_files', [])
@@ -2291,6 +2297,62 @@ class SCTConfiguration(dict):
         get_branch_version_for_multiple_repositories(
             urls=(self.get(url) for url in repos_to_validate if self.get(url)))
 
+    def get_version_based_on_conf(self):  # pylint: disable=too-many-locals
+        """
+        figure out which version and if it's enterprise version
+        base on configuration only, before nodes are up and running
+        so test configuration can set up things which need to happen
+        before nodes are up
+
+        this is information is cached on the SCTConfiguration object
+        :return: tuple - (scylla_version, is_enterprise)
+        """
+        backend = self.get('cluster_backend')
+        scylla_version = None
+        _is_enterprise = False
+
+        if not self.get('use_preinstalled_scylla'):
+            scylla_repo = self.get('scylla_repo')
+            scylla_version = get_branch_version(scylla_repo)
+            _is_enterprise = is_enterprise(scylla_version)
+        elif unified_package := self.get('unified_package'):
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                LOCALRUNNER.run(shell_script_cmd(f"""
+                    cd {tmpdirname}
+                    curl {unified_package} -o ./unified_package.tar.gz
+                    tar xvfz ./unified_package.tar.gz
+                    """), verbose=False)
+
+                scylla_version = next(pathlib.Path(tmpdirname).glob('**/SCYLLA-VERSION-FILE')).read_text()
+                scylla_product = next(pathlib.Path(tmpdirname).glob('**/SCYLLA-PRODUCT-FILE')).read_text()
+                _is_enterprise = scylla_product == 'scylla-enterprise'
+
+        elif self.get('db_type') == 'cloud_scylla':
+            _is_enterpise = True
+        elif backend == 'aws':
+            amis = self.get('ami_id_db_scylla').split()
+            region_name = self.region_names[0]
+            tags = get_ami_tags(ami_id=amis[0], region_name=region_name)
+            scylla_version = tags.get('scylla_version')
+            _is_enterprise = is_enterprise(scylla_version)
+        elif backend == 'gce':
+            images = self.get('gce_image_db').split()
+            tags = get_gce_image_tags(images[0])
+            scylla_version = tags.get('scylla_version').replace('-', '.')
+            _is_enterprise = is_enterprise(scylla_version)
+        elif backend == 'azure':
+            images = self.get('azure_image_db').split()
+            tags = azure_utils.get_image_tags(images[0])
+            scylla_version = tags.get('scylla_version')
+            _is_enterprise = is_enterprise(scylla_version)
+        elif backend == 'docker' or 'k8s' in backend:
+            docker_repo = self.get('docker_image')
+            scylla_version = self.get('scylla_version')
+            _is_enterprise = 'enterprise' in docker_repo
+        self.scylla_version = scylla_version
+        self.is_enterprise = _is_enterprise
+        return scylla_version, _is_enterprise
+
     def dump_config(self):
         """
         Dump current configuration to string
@@ -2390,5 +2452,6 @@ def init_and_verify_sct_config() -> SCTConfiguration:
     sct_config.log_config()
     sct_config.verify_configuration()
     sct_config.verify_configuration_urls_validity()
+    sct_config.get_version_based_on_conf()
     sct_config.check_required_files()
     return sct_config
