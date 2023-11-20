@@ -766,14 +766,18 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
             assert all(tables_upgraded), "Failed to upgrade the sstable format {}".format(tables_upgraded)
 
-        # Verify sstabledump
+        # Verify sstabledump / scylla sstable dump-data
         InfoEvent(message='Starting sstabledump to verify correctness of sstables').publish()
-        if ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) < "2023.2" or \
-                ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) < "5.4":
+        first_node = self.db_cluster.nodes[0]
+        if first_node.is_enterprise:
+            should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "2023.2"
+        else:
+            should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "5.4"
+        if should_use_sstabledump:
             dump_cmd = 'sstabledump'
         else:
-            dump_cmd = f'{self.db_cluster.nodes[0].add_install_prefix("/usr/bin/scylla")} sstable dump-data --sstables'
-        self.db_cluster.nodes[0].remoter.run(
+            dump_cmd = f'{first_node.add_install_prefix("/usr/bin/scylla")} sstable dump-data --sstables'
+        first_node.remoter.run(
             'for i in `sudo find /var/lib/scylla/data/keyspace_complex/ -type f |grep -v manifest.json |'
             'grep -v snapshots |head -n 1`; do echo $i; '
             f'sudo {dump_cmd} $i 1>/tmp/sstabledump.output || '
