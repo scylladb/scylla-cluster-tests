@@ -2183,7 +2183,9 @@ class SCTConfiguration(dict):
     def _check_version_supplied(self, backend: str):
         options_must_exist = []
 
-        if not self.get('use_preinstalled_scylla') and not backend == 'baremetal':
+        if (not self.get('use_preinstalled_scylla') and
+                not backend == 'baremetal' and
+                not self.get('unified_package')):
             options_must_exist += ['scylla_repo']
 
         if self.get('db_type') == 'cloud_scylla':
