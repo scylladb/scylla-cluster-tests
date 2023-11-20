@@ -2970,8 +2970,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
 
 class ManagerPodCluser(PodCluster):  # pylint: disable=abstract-method
-    def wait_for_pods_running(self, pods_to_wait: int, total_pods: int | callable, dc_idx: int = 0):
-        super().wait_for_pods_running(pods_to_wait=pods_to_wait, total_pods=(lambda x: x > 1), dc_idx=dc_idx)
+    @property
+    def pod_selector(self):
+        return 'app.kubernetes.io/name=scylla-manager'
 
 
 class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
