@@ -105,7 +105,7 @@ def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylin
     target_chart_name2, namespace2 = (f"{cluster_name}-2", ) * 2
     dc_name, dc_name2 = (f"quasi-dc-{i}" for i in range(1, 3))
     k8s_cluster, kubectl = db_cluster.k8s_cluster, db_cluster.k8s_cluster.kubectl
-    operator_version = k8s_cluster._scylla_operator_chart_version  # pylint: disable=protected-access
+    operator_version = k8s_cluster.scylla_operator_chart_version
     need_to_collect_logs = True
     logdir = f"{os.path.join(k8s_cluster.logdir, 'test_deploy_quasi_multidc_db_cluster')}"
     values = HelmValues({
@@ -537,7 +537,7 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
     db_cluster.k8s_cluster.helm_install(
         target_chart_name=target_chart_name,
         source_chart_name="scylla-operator/scylla",
-        version=db_cluster.k8s_cluster._scylla_operator_chart_version,  # pylint: disable=protected-access
+        version=db_cluster.k8s_cluster.scylla_operator_chart_version,
         use_devel=True,
         values=values,
         namespace=namespace)
@@ -766,7 +766,7 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     log.debug(db_cluster.k8s_cluster.helm_install(
         target_chart_name=target_chart_name,
         source_chart_name="scylla-operator/scylla",
-        version=db_cluster.k8s_cluster._scylla_operator_chart_version,  # pylint: disable=protected-access
+        version=db_cluster.k8s_cluster.scylla_operator_chart_version,
         use_devel=True,
         namespace=namespace,
     ))

@@ -484,7 +484,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def generate_operator_packages(self) -> list[Package]:
         operator_packages = []
         if self.k8s_clusters:
-            operator_helm_chart_version = self.k8s_clusters[0]._scylla_operator_chart_version  # pylint: disable=protected-access
+            operator_helm_chart_version = self.k8s_clusters[0].scylla_operator_chart_version
             operator_packages.append(Package(name="operator-chart", date="",
                                              version=operator_helm_chart_version,
                                              revision_id="", build_id=""))
