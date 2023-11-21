@@ -559,31 +559,41 @@ class TestStatsMixin(Stats):
 
     def get_scylla_versions(self):
         versions = {}
+        node = self.db_cluster.nodes[0]
         try:
-            node = self.db_cluster.nodes[0]
             if node.scylla_version_detailed and 'build-id' in node.scylla_version_detailed:
                 build_id = node.scylla_version_detailed.split('with build-id ')[-1].strip()
             else:
                 build_id = node.get_scylla_build_id()
-            if node.distro.is_rhel_like:
-                version_cmd = 'rpm -qa |grep scylla'
+
+            # handle offline installer case
+            if self.params.get('unified_package'):
+                match = re.search(r'(([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)', node.scylla_version_detailed)
+                if match:
+                    versions['scylla-server'] = versions.get('scylla-server', {}) | {'version': match.group(2),
+                                                                                     'date': match.group(4),
+                                                                                     'commit_id': match.group(5),
+                                                                                     'build_id': build_id if build_id else ''}
             else:
-                version_cmd = "dpkg -l |grep scylla|awk '{print $2 \"-\" $3}'"
-            versions_output = node.remoter.run(version_cmd).stdout.splitlines()
-            for line in versions_output:
-                for package in ['scylla-jmx', 'scylla-server', 'scylla-tools', 'scylla-enterprise-jmx',
-                                'scylla-enterprise-server', 'scylla-enterprise-tools']:
-                    match = re.search(r'(%s-([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)' % package, line)
-                    if match:
-                        versions[package.replace('-enterprise', '')] = {'version': match.group(2),
-                                                                        'date': match.group(4),
-                                                                        'commit_id': match.group(5),
-                                                                        'build_id': build_id if build_id else ''}
+                if node.distro.is_rhel_like:
+                    version_cmd = 'rpm -qa |grep scylla'
+                else:
+                    version_cmd = "dpkg -l |grep scylla|awk '{print $2 \"-\" $3}'"
+                versions_output = node.remoter.run(version_cmd).stdout.splitlines()
+                for line in versions_output:
+                    for package in ['scylla-jmx', 'scylla-server', 'scylla-tools', 'scylla-enterprise-jmx',
+                                    'scylla-enterprise-server', 'scylla-enterprise-tools']:
+                        match = re.search(r'(%s-([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)' % package, line)
+                        if match:
+                            versions[package.replace('-enterprise', '')] = {'version': match.group(2),
+                                                                            'date': match.group(4),
+                                                                            'commit_id': match.group(5),
+                                                                            'build_id': build_id if build_id else ''}
         except Exception as ex:  # pylint: disable=broad-except
-            LOGGER.error('Failed getting scylla versions: %s', ex)
+            LOGGER.exception('Failed getting scylla versions: %s', ex)
 
         # append Scylla build mode in scylla_versions
-        versions['scylla-server']['build_mode'] = node.scylla_build_mode
+        versions['scylla-server'] = versions.get('scylla-server', {}) | {'build_mode': node.scylla_build_mode}
 
         return versions
 
