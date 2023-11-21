@@ -443,7 +443,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
             if stdout_stream is not None:
                 try:
                     stdout = reader.stdout.get(timeout=timeout_read_data_chunk)
-                    data = stdout.decode(encoding) + '\n'
+                    data = stdout.decode(encoding, errors='ignore') + '\n'
                     stdout_stream.write(data)
                     for watcher in watchers:
                         watcher.submit_line(data)
