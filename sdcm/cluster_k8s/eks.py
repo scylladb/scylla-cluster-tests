@@ -134,7 +134,9 @@ def deploy_k8s_eks_cluster(region_name: str, availability_zone: str,
         k8s_cluster.chaos_mesh.initialize()
     k8s_cluster.prepare_k8s_scylla_nodes(node_pools=scylla_pool)
     if params.get('use_mgmt'):
-        k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
+        # NOTE: deploy scylla-manager only in the first region. It will then be used by each of the regions
+        if params.region_names.index(region_name) == 0:
+            k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
     return k8s_cluster
 
 
