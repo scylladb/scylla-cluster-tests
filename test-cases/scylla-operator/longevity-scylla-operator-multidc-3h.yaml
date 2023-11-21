@@ -1,12 +1,12 @@
 test_duration: 300
 
 prepare_write_cmd: [
-  "cassandra-stress write cl=QUORUM n=10240000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1500 -col 'n=FIXED(2) size=FIXED(512)' -pop seq=1..10240000 -log interval=5",
-  "cassandra-stress write cl=QUORUM n=10240000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1500 -col 'n=FIXED(2) size=FIXED(512)' -pop seq=10240001..20480000 -log interval=5",
+  "cassandra-stress write cl=QUORUM n=5120000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1500 -col 'n=FIXED(2) size=FIXED(512)' -pop seq=1..5120000 -log interval=5",
+  "cassandra-stress write cl=QUORUM n=5120000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=1500 -col 'n=FIXED(2) size=FIXED(512)' -pop seq=5120001..10240000 -log interval=5",
 ]
 stress_cmd: [
-  "cassandra-stress mixed cl=LOCAL_QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=25 -pop 'dist=uniform(1..15360000)' -col 'n=FIXED(2) size=FIXED(512)' -log interval=5",
-  "cassandra-stress mixed cl=LOCAL_QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=25 -pop 'dist=uniform(5120001..20480000)' -col 'n=FIXED(2) size=FIXED(512)' -log interval=5",
+  "cassandra-stress mixed cl=LOCAL_QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=25 -pop 'dist=uniform(1..7680000)' -col 'n=FIXED(2) size=FIXED(512)' -log interval=5",
+  "cassandra-stress mixed cl=LOCAL_QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=25 -pop 'dist=uniform(2560001..10240000)' -col 'n=FIXED(2) size=FIXED(512)' -log interval=5",
 ]
 round_robin: true
 
@@ -24,12 +24,12 @@ nemesis_interval: 5
 user_prefix: 'long-eks-multidc-3h'
 space_node_threshold: 64424
 
+use_mgmt: true
+k8s_minio_storage_size: '200Gi'
+
 k8s_db_node_service_type: Headless
 k8s_db_node_to_node_broadcast_ip_type: PodIP
 k8s_db_node_to_client_broadcast_ip_type: PodIP
-
-# TODO: enable the scylla-manager installation when it's multi-K8S-cluster support gets added
-use_mgmt: false
 
 # EKS
 region_name: 'eu-north-1 eu-west-1'

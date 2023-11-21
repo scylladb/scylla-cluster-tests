@@ -1025,12 +1025,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 self.api_call_rate_limiter.wait_till_api_become_stable(self)
         self.wait_all_node_pools_to_be_ready()
 
-    def create_scylla_manager_agent_config(self, namespace=SCYLLA_NAMESPACE):
+    def create_scylla_manager_agent_config(self, s3_provider_endpoint: str = None, namespace: str = SCYLLA_NAMESPACE):
         data = {}
         if self.params.get('use_mgmt'):
             data["s3"] = {
                 'provider': 'Minio',
-                'endpoint': self.s3_provider_endpoint,
+                'endpoint': s3_provider_endpoint or self.s3_provider_endpoint,
                 'access_key_id': 'minio_access_key',
                 'secret_access_key': 'minio_secret_key',
             }
@@ -1245,7 +1245,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     @log_run_info
     def deploy_scylla_cluster(self, node_pool_name: str, namespace: str = SCYLLA_NAMESPACE,
-                              cluster_name=None) -> None:
+                              cluster_name: str = None, s3_provider_endpoint: str = None) -> None:
         # Calculate cpu and memory limits to occupy all available amounts by scylla pods
         node_pool = self.pools[node_pool_name]
         cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
@@ -1291,7 +1291,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                     "SCT_REUSE_CLUSTER is set, but target scylla cluster is unhealthy") from exc
 
         self.log.info("Create and initialize a Scylla cluster")
-        self.create_scylla_manager_agent_config(namespace=namespace)
+        self.create_scylla_manager_agent_config(s3_provider_endpoint=s3_provider_endpoint, namespace=namespace)
 
         # Init 'scylla-config' configMap before installation of Scylla to avoid redundant restart
         self.init_scylla_config_map(namespace=namespace)
@@ -2467,10 +2467,16 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         self.k8s_clusters = k8s_clusters
         self.namespace = self.generate_namespace(namespace_template=SCYLLA_NAMESPACE)
         self.scylla_cluster_name = scylla_cluster_name
+        # NOTE: the 'self.k8s_scylla_manager_auth_token' attr is used only in MultiDC setups
+        #       and will be updated later with the value from the first region.
+        self.k8s_scylla_manager_auth_token = None
+        kwargs = {}
         for k8s_cluster in k8s_clusters:
+            if not kwargs:
+                kwargs["s3_provider_endpoint"] = k8s_cluster.s3_provider_endpoint
             k8s_cluster.deploy_scylla_cluster(
                 node_pool_name=node_pool_name,
-                namespace=self.namespace, cluster_name=self.scylla_cluster_name)
+                namespace=self.namespace, cluster_name=self.scylla_cluster_name, **kwargs)
         super().__init__(k8s_clusters=k8s_clusters,
                          namespace=self.namespace,
                          container="scylla",
@@ -2489,6 +2495,11 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                     namespace=self.namespace,
                     pod_name='__each__',
                     add_pod_name_as_kwarg=True)
+
+    @property
+    def scylla_manager_auth_token(self) -> str:
+        raise RuntimeError(
+            "K8S uses different approach for setting up the scylla manager auth token")
 
     def refresh_scylla_pod_ip_address(self, pod_name):
         """Designed to be used as a callback for the pod IP change tracker."""
@@ -2735,7 +2746,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         return sorted(
             [node for node in self.nodes if node.rack == rack and node.dc_idx == dc_idx], key=lambda n: n.name)
 
-    def add_nodes(self,
+    def add_nodes(self,  # pylint: disable=too-many-locals,too-many-branches
                   count: int,
                   ec2_user_data: str = "",
                   # NOTE: 'dc_idx=None' means 'create %count% nodes on each K8S cluster'
@@ -2790,6 +2801,27 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
             new_nodes.extend(super().add_nodes(
                 count=node_count_in_dc, ec2_user_data=ec2_user_data, dc_idx=current_dc_idx, rack=rack,
                 enable_auto_bootstrap=enable_auto_bootstrap))
+            kubectl = self.k8s_clusters[current_dc_idx].kubectl
+            if self.params.get('use_mgmt') and current_dc_idx == 0 and (
+                    self.k8s_scylla_manager_auth_token is None):
+                self.k8s_scylla_manager_auth_token = base64.b64decode(kubectl(
+                    f"get secrets/{self.scylla_cluster_name}-auth-token"
+                    " --template='{{ index .data \"auth-token.yaml\" }}'",
+                    namespace=SCYLLA_NAMESPACE).stdout.strip()).decode('utf-8').strip()
+            elif current_dc_idx > 0 and self.k8s_scylla_manager_auth_token:
+                existing_k8s_scylla_manager_auth_token = base64.b64decode(kubectl(
+                    f"get secrets/{self.scylla_cluster_name}-auth-token"
+                    " --template='{{ index .data \"auth-token.yaml\" }}'",
+                    namespace=SCYLLA_NAMESPACE).stdout.strip()).decode('utf-8').strip()
+                if existing_k8s_scylla_manager_auth_token != self.k8s_scylla_manager_auth_token:
+                    auth_token_base64 = base64.b64encode(
+                        self.k8s_scylla_manager_auth_token.encode('utf-8')).decode('utf-8')
+                    patch_cmd = (
+                        f'patch secret/{self.scylla_cluster_name}-auth-token --type=json -p=\'['
+                        ' {"op": "replace", "path": "/data/auth-token.yaml",'
+                        f' "value": "{auth_token_base64}"'
+                        ' }]\'')
+                    kubectl(patch_cmd, namespace=SCYLLA_NAMESPACE)
             # NOTE: remove the 'externalSeeds' values because pod IPs are ephemeral and
             #       we are not going to keep it up-to-date making Scylla pods not try to connect to
             #       some other test run's Scylla pods which may pick up those ephemeral IPs.

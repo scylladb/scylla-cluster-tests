@@ -24,12 +24,12 @@ nemesis_interval: 5
 user_prefix: 'long-eks-multidc-12h'
 space_node_threshold: 64424
 
+use_mgmt: true
+k8s_minio_storage_size: '500Gi'
+
 k8s_db_node_service_type: Headless
 k8s_db_node_to_node_broadcast_ip_type: PodIP
 k8s_db_node_to_client_broadcast_ip_type: PodIP
-
-# TODO: enable the scylla-manager installation when it's multi-K8S-cluster support gets added
-use_mgmt: false
 
 # EKS
 region_name: 'eu-north-1 eu-west-1'
