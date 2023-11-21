@@ -158,7 +158,7 @@ def reinstall_scylla_manager(db_cluster: ScyllaPodCluster, manager_version: str)
         log.debug(db_cluster.k8s_cluster.helm_install(
             target_chart_name="scylla-manager",
             source_chart_name="scylla-operator/scylla-manager",
-            version=db_cluster.k8s_cluster._scylla_operator_chart_version,  # pylint: disable=protected-access
+            version=db_cluster.k8s_cluster.scylla_operator_chart_version,
             use_devel=True,
             values=values,
             namespace=SCYLLA_MANAGER_NAMESPACE,

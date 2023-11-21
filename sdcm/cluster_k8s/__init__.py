@@ -562,7 +562,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         return current_newest_version_str
 
     @cached_property
-    def _scylla_operator_chart_version(self):
+    def scylla_operator_chart_version(self):
         self.log.debug(self.helm(
             f"repo add scylla-operator {self.params.get('k8s_scylla_operator_helm_repo')}"))
 
@@ -586,7 +586,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         # Get 'appVersion' field from the Helm chart which stores image's tag
         repo = repo or self.params.get('k8s_scylla_operator_helm_repo')
         chart_name = "scylla-operator"
-        chart_version = chart_version or self._scylla_operator_chart_version
+        chart_version = chart_version or self.scylla_operator_chart_version
         chart_info = self.helm(
             f"show chart {chart_name} --devel --repo {repo} --version {chart_version}")
         for line in chart_info.split("\n"):
@@ -663,7 +663,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             self.log.debug(self.helm_install(
                 target_chart_name="scylla-manager",
                 source_chart_name="scylla-operator/scylla-manager",
-                version=self._scylla_operator_chart_version,
+                version=self.scylla_operator_chart_version,
                 use_devel=True,
                 values=values,
                 namespace=SCYLLA_MANAGER_NAMESPACE,
@@ -721,7 +721,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                     affinity_rules["affinity"]["nodeAffinity"])
             values = HelmValues(**affinity_rules)
             if ComparableScyllaOperatorVersion(
-                    self._scylla_operator_chart_version.split("-")[0]) > "1.3.0":
+                    self.scylla_operator_chart_version.split("-")[0]) > "1.3.0":
                 # NOTE: following is supported starting with operator-1.4
                 values.set("logLevel", 4)
 
@@ -746,20 +746,20 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             self.log.debug(self.helm_install(
                 target_chart_name="scylla-operator",
                 source_chart_name="scylla-operator/scylla-operator",
-                version=self._scylla_operator_chart_version,
+                version=self.scylla_operator_chart_version,
                 use_devel=True,
                 namespace=SCYLLA_OPERATOR_NAMESPACE,
                 values=values
             ))
             if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
-                    self._scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
+                    self.scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
                 patch_cmd = ('patch deployment scylla-operator --type=json -p=\'[{"op": "add",'
                              '"path": "/spec/template/spec/containers/0/args/-", '
                              '"value": "--feature-gates=AutomaticTLSCertificates=true" }]\' ')
                 self.kubectl(patch_cmd, namespace=SCYLLA_OPERATOR_NAMESPACE)
 
             if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
-                    self._scylla_operator_chart_version.split("-")[0]) >= "1.9.0":
+                    self.scylla_operator_chart_version.split("-")[0]) >= "1.9.0":
                 # around 10 keys that need to be cached per cluster
                 crypto_key_buffer_size = self.params.get('k8s_tenants_num') * 10
                 for flag in (f"--crypto-key-buffer-size-min={crypto_key_buffer_size}",
@@ -850,7 +850,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             values=values,
         ))
         if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
-                self._scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
+                self.scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
             patch_cmd = ('patch deployment scylla-operator --type=json -p=\'[{"op": "add",'
                          '"path": "/spec/template/spec/containers/0/args/-", '
                          '"value": "--feature-gates=AutomaticTLSCertificates=true" }]\' ')
@@ -925,7 +925,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         dns_domains = []
         expose_options = {}
-        if ComparableScyllaOperatorVersion(self._scylla_operator_chart_version.split("-")[0]) >= "1.11.0":
+        if ComparableScyllaOperatorVersion(self.scylla_operator_chart_version.split("-")[0]) >= "1.11.0":
             if k8s_db_node_service_type := self.params.get("k8s_db_node_service_type"):
                 expose_options["nodeService"] = {"type": k8s_db_node_service_type}
             for broadcast_direction_type in ("node", "client"):
@@ -934,7 +934,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                         expose_options["broadcastOptions"] = {}
                     expose_options["broadcastOptions"][f"{broadcast_direction_type}s"] = {"type": ip_type}
         if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
-                self._scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
+                self.scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
             dns_domains = [f"{cluster_name}.sct.scylladb.com"]
             expose_options = {"cql": {"ingress": {
                 "annotations": {
@@ -1134,7 +1134,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         self.log.info("Install DaemonSets required by scylla nodes")
         scylla_machine_image_args = '--all'
-        if ComparableScyllaOperatorVersion(self._scylla_operator_chart_version) > "1.5.0":
+        if ComparableScyllaOperatorVersion(self.scylla_operator_chart_version) > "1.5.0":
             # NOTE: operator versions newer than v1.5.0 have it's own perf tuning,
             #       so, we should not do anything else than disk setup in such a case.
             scylla_machine_image_args = '--setup-disks'
@@ -1301,7 +1301,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.log.debug(self.helm_install(
             target_chart_name="scylla",
             source_chart_name="scylla-operator/scylla",
-            version=self._scylla_operator_chart_version,
+            version=self.scylla_operator_chart_version,
             use_devel=True,
             values=self.get_scylla_cluster_helm_values(
                 cpu_limit=self.scylla_cpu_limit,

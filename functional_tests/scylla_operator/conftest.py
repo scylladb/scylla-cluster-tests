@@ -224,9 +224,8 @@ def skip_if_not_supported_scylla_version(request: pytest.FixtureRequest,
 
 @pytest.fixture(autouse=True)
 def skip_based_on_operator_version(request: pytest.FixtureRequest, tester: ScyllaOperatorFunctionalClusterTester):
-    # pylint: disable=protected-access
     if required_operator := request.node.get_closest_marker('required_operator'):
-        current_version = tester.k8s_clusters[0]._scylla_operator_chart_version.split("-")[0]
+        current_version = tester.k8s_clusters[0].scylla_operator_chart_version.split("-")[0]
         required_version = required_operator.args[0]
         if version_utils.ComparableScyllaOperatorVersion(current_version) < required_version:
             pytest.skip(f"require operator version: {required_version}, current version: {current_version}")
