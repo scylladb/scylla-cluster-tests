@@ -7,6 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/nemesis/longevity-5gb-1h-SlaReplaceUsingDropDuringLoad.yaml'
+    test_config: """['configurations/nemesis/longevity-5gb-1h-nemesis.yaml', 'configurations/nemesis/SlaReplaceUsingDropDuringLoad.yaml', 'configurations/nemesis/additional_configs/sla_config.yaml']"""
 
 )
