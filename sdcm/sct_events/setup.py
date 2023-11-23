@@ -72,7 +72,7 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
                                 '(error system:104, read: Connection reset by peer)').publish()
     EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                 event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                regex='view update generator not plugged to push updates').publish()
+                                regex='.*view update generator not plugged to push updates').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line='abort_requested_exception').publish()
