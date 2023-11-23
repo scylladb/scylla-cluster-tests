@@ -319,6 +319,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message='upgrade_node - starting to "update_scylla_yaml"').publish()
             self._update_scylla_yaml_on_node(node_to_update=node, updates=scylla_yaml_updates)
             InfoEvent(message='upgrade_node - ended to "update_scylla_yaml"').publish()
+        node.forget_scylla_version()
         InfoEvent(message='upgrade_node - starting to "start_scylla_server"').publish()
         node.start_scylla_server(verify_up_timeout=500)
         InfoEvent(message='upgrade_node - ended to "start_scylla_server"').publish()
