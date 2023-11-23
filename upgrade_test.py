@@ -329,6 +329,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         new_ver = result.stdout.strip()
         assert self.orig_ver != new_ver, "scylla-server version isn't changed"
         self.new_ver = new_ver
+        node.forget_scylla_version()
         InfoEvent(message='upgrade_node - starting to "_update_argus_upgraded_version"').publish()
         self._update_argus_upgraded_version(node, new_ver)
         InfoEvent(message='upgrade_node - ended to "_update_argus_upgraded_version"').publish()
