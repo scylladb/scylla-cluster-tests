@@ -328,8 +328,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cluster_backend = self.params.get('cluster_backend')
         if cluster_backend in ('aws', 'k8s-eks'):
             self.test_config.set_multi_region(len(self.params.region_names) > 1)
-        elif cluster_backend == 'gce':
-            self.test_config.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
+        elif cluster_backend in ('gce', 'k8s-gke'):
+            self.test_config.set_multi_region(len(self.params.gce_datacenters) > 1)
 
         if self.params.get("backup_bucket_backend") == "azure":
             self.test_config.set_backup_azure_blob_credentials()
@@ -1545,100 +1545,47 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             func=_add_and_wait_for_cluster_nodes,
             unpack_objects=True, ignore_exceptions=False)
 
-    def get_cluster_k8s_gke(self):  # pylint: disable=too-many-branches
-        self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
+    def get_cluster_k8s_gke(self, n_k8s_clusters: int):
+        gce_datacenters = self.params.gce_datacenters
+        availability_zones = self.params.get('availability_zone').split(',')
+        for _ in range(n_k8s_clusters):
+            self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
+        params_for_parallel_objects = []
+        for i in range(n_k8s_clusters):
+            params_for_parallel_objects.append({
+                'gce_datacenter': gce_datacenters[i % len(gce_datacenters)],
+                'availability_zone': availability_zones[i % len(availability_zones)],
+                'cluster_uuid': (
+                    f"{self.test_config.test_id()[:8]}"
+                    if n_k8s_clusters < 2 else f"{self.test_config.test_id()[:6]}-{i + 1}"),
+                'params': self.params,
+            })
+        deployed_k8s_gke_clusters_results = ParallelObject(
+            timeout=3600, num_workers=n_k8s_clusters, objects=params_for_parallel_objects
+        ).run(func=gke.deploy_k8s_gke_cluster, unpack_objects=True, ignore_exceptions=False)
+        self.k8s_clusters.extend([res.result for res in deployed_k8s_gke_clusters_results])
 
-        gce_datacenters = self.params.get('gce_datacenter')
-        if isinstance(gce_datacenters, str):
-            gce_datacenters = gce_datacenters.split()
-        gce_service = get_gce_compute_instances_client()
-        assert len(gce_datacenters) == 1, "Doesn't support multi DC setup for `k8s-gke' backend"
-
-        k8s_cluster = gke.GkeCluster(
-            gke_cluster_version=self.params.get("gke_cluster_version"),
-            gke_k8s_release_channel=self.params.get("gke_k8s_release_channel"),
-            gce_disk_size=self.params.get("root_disk_size_db"),
-            gce_disk_type=self.params.get("gce_root_disk_type_db"),
-            gce_network=self.params.get("gce_network"),
-            gce_service=gce_service,
-            user_prefix=self.params.get("user_prefix"),
-            gce_instance_type=self.params.get('k8s_instance_type_auxiliary'),
-            n_nodes=self.params.get('k8s_n_auxiliary_nodes'),
-            params=self.params,
-            gce_datacenter=gce_datacenters,
-        )
-        self.k8s_clusters.append(k8s_cluster)
-        k8s_cluster.deploy()
-
-        # NOTE: between GKE cluster creation and addition of new node pools we need
-        # several minutes gap to avoid "repair" status of a cluster when API server goes down.
-        # So, deploy apps specific to default-pool in between above mentioned deployment steps.
-        k8s_cluster.set_nodeselector_for_deployments(
-            pool_name=k8s_cluster.AUXILIARY_POOL_NAME, namespace="kube-system")
-        k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
-        if self.params.get('k8s_enable_tls'):
-            k8s_cluster.deploy_ingress_controller(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
-        k8s_cluster.deploy_scylla_operator()
-        if self.params.get('use_mgmt'):
-            k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
-
-        loader_pool = None
-        if self.params.get("n_loaders"):
-            loader_pool = gke.GkeNodePool(
-                name=k8s_cluster.LOADER_POOL_NAME,
-                instance_type=self.params.get("gce_instance_type_loader"),
-                num_nodes=self.params.get("n_loaders"),
-                k8s_cluster=k8s_cluster)
-            k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
-
-        monitor_pool = None
-        if self.params.get('k8s_deploy_monitoring'):
-            monitor_pool = gke.GkeNodePool(
-                name=k8s_cluster.MONITORING_POOL_NAME,
-                local_ssd_count=self.params.get("gce_n_local_ssd_disk_monitor"),
-                disk_size=self.params.get("root_disk_size_monitor"),
-                disk_type=self.params.get("gce_root_disk_type_monitor"),
-                instance_type=self.params.get(
-                    "k8s_instance_type_monitor") or self.params.get("gce_instance_type_monitor"),
-                num_nodes=self.params.get("k8s_n_monitor_nodes") or self.params.get("n_monitor_nodes"),
-                k8s_cluster=k8s_cluster)
-            k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)
-
-        scylla_pool = gke.GkeNodePool(
-            name=k8s_cluster.SCYLLA_POOL_NAME,
-            local_ssd_count=self.params.get("gce_n_local_ssd_disk_db"),
-            disk_size=self.params.get("root_disk_size_db"),
-            disk_type=self.params.get("gce_root_disk_type_db"),
-            instance_type=self.params.get("gce_instance_type_db"),
-            num_nodes=self.params.get("n_db_nodes"),
-            taints=["role=scylla-clusters:NoSchedule"],
-            k8s_cluster=k8s_cluster)
-        k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
-
-        k8s_cluster.wait_all_node_pools_to_be_ready()
-        k8s_cluster.prepare_k8s_scylla_nodes(node_pools=scylla_pool)
-
-        for i in range(k8s_cluster.tenants_number):
+        for i in range(self.k8s_clusters[0].tenants_number):
             self.db_clusters_multitenant.append(gke.GkeScyllaPodCluster(
-                k8s_clusters=[k8s_cluster],
+                k8s_clusters=self.k8s_clusters,
                 scylla_cluster_name=self.params.get("k8s_scylla_cluster_name") + (f"-{i + 1}" if i else ""),
-                user_prefix=self.params.get("user_prefix"),
+                user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
                 n_nodes=self.params.get("k8s_n_scylla_pods_per_cluster") or self.params.get("n_db_nodes"),
                 params=deepcopy(self.params),
-                node_pool_name=scylla_pool.name,
+                node_pool_name=self.k8s_clusters[0].SCYLLA_POOL_NAME,
                 add_nodes=False,
             ))
         self.db_cluster = self.db_clusters_multitenant[0]
 
         if self.params.get("n_loaders"):
-            for i in range(k8s_cluster.tenants_number):
+            for i in range(self.k8s_clusters[0].tenants_number):
                 self.loaders_multitenant.append(cluster_k8s.LoaderPodCluster(
-                    k8s_clusters=[k8s_cluster],
+                    k8s_clusters=self.k8s_clusters,
                     loader_cluster_name=self.params.get("k8s_loader_cluster_name") + (f"-{i + 1}" if i else ""),
                     user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
                     n_nodes=self.params.get("k8s_n_loader_pods_per_cluster") or self.params.get("n_loaders"),
                     params=self.params,
-                    node_pool_name=loader_pool.name,
+                    node_pool_name=self.k8s_clusters[0].LOADER_POOL_NAME,
                     add_nodes=False,
                 ))
             self.loaders = self.loaders_multitenant[0]
@@ -1649,15 +1596,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         # Deploy optional K8S-based monitoring
         if self.params.get('k8s_deploy_monitoring'):
-            k8s_cluster.deploy_prometheus_operator()
-            for db_cluster in self.db_clusters_multitenant:
-                cluster_name, namespace = db_cluster.scylla_cluster_name, db_cluster.namespace
-                k8s_cluster.deploy_scylla_cluster_monitoring(cluster_name=cluster_name, namespace=namespace)
-                k8s_cluster.register_sct_grafana_dashboard(cluster_name=cluster_name, namespace=namespace)
+            for k8s_cluster in self.k8s_clusters:
+                k8s_cluster.deploy_prometheus_operator()
+                for db_cluster in self.db_clusters_multitenant:
+                    cluster_name, namespace = db_cluster.scylla_cluster_name, db_cluster.namespace
+                    k8s_cluster.deploy_scylla_cluster_monitoring(cluster_name=cluster_name, namespace=namespace)
+                    k8s_cluster.register_sct_grafana_dashboard(cluster_name=cluster_name, namespace=namespace)
 
         # Deploy main VM-based monitoring
         if self.params.get("n_monitor_nodes") > 0:
-            for i in range(k8s_cluster.tenants_number):
+            for i in range(self.k8s_clusters[0].tenants_number):
                 self.log.debug("Create monitor for the DB cluster №%s", i + 1)
                 self.monitors_multitenant.append(gke.MonitorSetGKE(
                     gce_image=self.params.get("gce_image_monitor"),
@@ -1668,7 +1616,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     gce_instance_type=self.params.get("gce_instance_type_monitor"),
                     gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
                     gce_datacenter=gce_datacenters,
-                    gce_service=gce_service,
+                    gce_service=get_gce_compute_instances_client(),
                     credentials=self.credentials,
                     user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
                     n_nodes=self.params.get('n_monitor_nodes'),
@@ -1682,9 +1630,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 ))
                 # NOTE: add callback for the monitroing reconfiguration when
                 #       Scylla pods of the appropriate Scylla cluster get new IP addresses
-                k8s_cluster.scylla_pods_ip_change_tracker_thread.register_callbacks(
-                    callbacks=self.monitors_multitenant[i].reconfigure_scylla_monitoring,
-                    namespace=self.db_clusters_multitenant[i].namespace)
+                for k8s_cluster in self.k8s_clusters:
+                    k8s_cluster.scylla_pods_ip_change_tracker_thread.register_callbacks(
+                        callbacks=self.monitors_multitenant[i].reconfigure_scylla_monitoring,
+                        namespace=self.db_clusters_multitenant[i].namespace)
             self.monitors = self.monitors_multitenant[0]
             self._add_and_wait_for_cluster_nodes_in_parallel(self.monitors_multitenant)
         else:
@@ -1818,7 +1767,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         elif cluster_backend in ('k8s-local-kind', 'k8s-local-kind-aws', 'k8s-local-kind-gce'):
             self.get_cluster_k8s_local_kind_cluster()
         elif cluster_backend == 'k8s-gke':
-            self.get_cluster_k8s_gke()
+            self.get_cluster_k8s_gke(n_k8s_clusters=len(self.params.gce_datacenters))
         elif cluster_backend == 'k8s-eks':
             self.get_cluster_k8s_eks(n_k8s_clusters=len(self.params.region_names))
         elif cluster_backend == 'azure':

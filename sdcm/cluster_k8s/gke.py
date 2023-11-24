@@ -50,6 +50,85 @@ P = ParamSpec("P")  # pylint: disable=invalid-name
 R = TypeVar("R")  # pylint: disable=invalid-name
 
 
+def deploy_k8s_gke_cluster(gce_datacenter: str, availability_zone: str, params: dict,
+                           cluster_uuid: str = None):
+    """Dedicated for the usage by the 'Tester' class which orchestrates all the resources creation.
+
+    This function creates all the needed node pools and other ecosystem workloads
+    returning the 'k8s_cluster' object ready to provision Scylla and loaders pods.
+    """
+    gce_service = get_gce_compute_instances_client()
+
+    k8s_cluster = GkeCluster(
+        gke_cluster_version=params.get("gke_cluster_version"),
+        gke_k8s_release_channel=params.get("gke_k8s_release_channel"),
+        gce_disk_size=params.get("root_disk_size_db"),
+        gce_disk_type=params.get("gce_root_disk_type_db"),
+        gce_network=params.get("gce_network"),
+        gce_service=gce_service,
+        gce_instance_type=params.get('k8s_instance_type_auxiliary'),
+        user_prefix=params.get("user_prefix"),
+        params=params,
+        gce_datacenter=[gce_datacenter],
+        availability_zone=availability_zone,
+        cluster_uuid=cluster_uuid,
+        n_nodes=params.get('k8s_n_auxiliary_nodes'),
+    )
+    k8s_cluster.deploy()
+
+    # NOTE: between GKE cluster creation and addition of new node pools we need
+    # several minutes gap to avoid "repair" status of a cluster when API server goes down.
+    # So, deploy apps specific to default-pool in between above mentioned deployment steps.
+    k8s_cluster.set_nodeselector_for_deployments(
+        pool_name=k8s_cluster.AUXILIARY_POOL_NAME, namespace="kube-system")
+    k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
+    if params.get('k8s_enable_tls'):
+        k8s_cluster.deploy_ingress_controller(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
+    k8s_cluster.deploy_scylla_operator()
+    if params.get("k8s_use_chaos_mesh"):
+        k8s_cluster.chaos_mesh.initialize()
+    if params.get('use_mgmt'):
+        # NOTE: deploy scylla-manager only in the first dc/region
+        if params.gce_datacenters.index(gce_datacenter) == 0:
+            k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
+
+    # TODO: add support for different loaders amount in different K8S clusters
+    if params.get("n_loaders"):
+        loader_pool = GkeNodePool(
+            name=k8s_cluster.LOADER_POOL_NAME,
+            instance_type=params.get("gce_instance_type_loader"),
+            num_nodes=params.get("n_loaders"),
+            k8s_cluster=k8s_cluster)
+        k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
+
+    if params.get('k8s_deploy_monitoring'):
+        monitor_pool = GkeNodePool(
+            name=k8s_cluster.MONITORING_POOL_NAME,
+            local_ssd_count=params.get("gce_n_local_ssd_disk_monitor"),
+            disk_size=params.get("root_disk_size_monitor"),
+            disk_type=params.get("gce_root_disk_type_monitor"),
+            instance_type=params.get("k8s_instance_type_monitor") or params.get("gce_instance_type_monitor"),
+            num_nodes=params.get("k8s_n_monitor_nodes") or params.get("n_monitor_nodes"),
+            k8s_cluster=k8s_cluster)
+        k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)
+
+    # TODO: add support for different DB nodes amount in different K8S clusters
+    scylla_pool = GkeNodePool(
+        name=k8s_cluster.SCYLLA_POOL_NAME,
+        local_ssd_count=params.get("gce_n_local_ssd_disk_db"),
+        disk_size=params.get("root_disk_size_db"),
+        disk_type=params.get("gce_root_disk_type_db"),
+        instance_type=params.get("gce_instance_type_db"),
+        num_nodes=params.get("n_db_nodes"),
+        taints=["role=scylla-clusters:NoSchedule"],
+        k8s_cluster=k8s_cluster)
+    k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
+
+    k8s_cluster.wait_all_node_pools_to_be_ready()
+    k8s_cluster.prepare_k8s_scylla_nodes(node_pools=scylla_pool)
+    return k8s_cluster
+
+
 class GkeNodePool(CloudK8sNodePool):
     k8s_cluster: 'GkeCluster'
 
@@ -178,7 +257,7 @@ class GkeCluster(KubernetesCluster):
     TOKEN_UPDATE_NEEDED = False
     pools: Dict[str, GkeNodePool]
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-locals
     def __init__(self,
                  gke_cluster_version,
                  gke_k8s_release_channel,
@@ -190,6 +269,7 @@ class GkeCluster(KubernetesCluster):
                  user_prefix=None,
                  params=None,
                  gce_datacenter=None,
+                 availability_zone=None,
                  cluster_uuid=None,
                  n_nodes=2,
                  ):
@@ -206,7 +286,7 @@ class GkeCluster(KubernetesCluster):
         dc_parts = gce_datacenter[0].split("-")[:3]
         self.gce_region = "-".join(dc_parts[:2])
         self.gce_zone = f"{self.gce_region}-"
-        self.gce_zone += dc_parts[2] if len(dc_parts) == 3 else 'b'
+        self.gce_zone += availability_zone or (dc_parts[2] if len(dc_parts) == 3 else 'b')
         super().__init__(
             params=params,
             cluster_uuid=cluster_uuid,
@@ -308,7 +388,7 @@ class GkeCluster(KubernetesCluster):
         return type("GcloudCmdRunner", (GcloudContainerMixin, ), {
             "_containers": {},
             "tags": {},
-            "name": "gcloud_cmd_runner",
+            "name": f"gcloud_cmd_runner-{self.gce_zone}",
             "kube_config_path": self.kube_config_path,
         })().gcloud
 
