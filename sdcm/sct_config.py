@@ -1882,6 +1882,20 @@ class SCTConfiguration(dict):
         return output
 
     @property
+    def gce_datacenters(self) -> List[str]:
+        gce_datacenters = self.environment.get('gce_datacenter')
+        if gce_datacenters is None:
+            gce_datacenters = self.get('gce_datacenter')
+        if gce_datacenters is None:
+            gce_datacenters = ''
+        if isinstance(gce_datacenters, str):
+            gce_datacenters = gce_datacenters.split()
+        output = []
+        for gce_datacenter in gce_datacenters:
+            output.extend(gce_datacenter.split())
+        return output
+
+    @property
     def environment(self) -> dict:
         return self._load_environment_variables()
 
