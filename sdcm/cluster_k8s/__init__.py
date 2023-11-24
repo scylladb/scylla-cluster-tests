@@ -1472,6 +1472,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def gather_k8s_logs(self) -> None:
         return KubernetesOps.gather_k8s_logs(logdir_path=self.logdir, kubectl=self.kubectl)
 
+    @log_run_info
+    def gather_k8s_logs_by_operator(self) -> None:
+        return KubernetesOps.gather_k8s_logs_by_operator(kluster=self)
+
     @property
     def minio_pod(self) -> Resource:
         for pod in KubernetesOps.list_pods(self, namespace=MINIO_NAMESPACE):

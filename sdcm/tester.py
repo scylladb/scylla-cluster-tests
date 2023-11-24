@@ -105,6 +105,7 @@ from sdcm.cdclog_reader_thread import CDCLogReaderThread
 from sdcm.logcollector import (
     KubernetesAPIServerLogCollector,
     KubernetesLogCollector,
+    KubernetesMustGatherLogCollector,
     LoaderLogCollector,
     MonitorLogCollector,
     BaseSCTLogCollector,
@@ -2759,6 +2760,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # debugging info is lost
         if self.k8s_clusters:
             for k8s_cluster in self.k8s_clusters:
+                k8s_cluster.gather_k8s_logs_by_operator()
                 k8s_cluster.gather_k8s_logs()
 
         if self.params.get('collect_logs'):
@@ -3215,6 +3217,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     {"name": "k8s_cluster",
                      "nodes": [],
                      "collector": KubernetesLogCollector,
+                     "logname": "k8s_log", },
+                    {"name": "k8s_cluster_must_gather",
+                     "nodes": [],
+                     "collector": KubernetesMustGatherLogCollector,
                      "logname": "k8s_log", },
                     )
 
