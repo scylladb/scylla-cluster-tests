@@ -1260,6 +1260,19 @@ class KubernetesLogCollector(BaseSCTLogCollector):
         return super().collect_logs(local_search_path=local_search_path)
 
 
+class KubernetesMustGatherLogCollector(BaseSCTLogCollector):
+    """Gather K8S logs using the 'must-gather' scylla-operator command."""
+    log_entities = [
+        DirLog(name='must-gather/*', search_locally=True),
+    ]
+    cluster_log_type = "kubernetes-must-gather"
+    cluster_dir_prefix = "k8s-"
+    collect_timeout = 600
+
+    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
+        return super().collect_logs(local_search_path=local_search_path)
+
+
 class JepsenLogCollector(LogCollector):
     cluster_log_type = "jepsen-data"
     cluster_dir_prefix = "jepsen-data"
@@ -1390,6 +1403,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         if self.backend.startswith("k8s"):
             self.cluster_log_collectors |= {
                 KubernetesLogCollector: self.kubernetes_set,
+                KubernetesMustGatherLogCollector: self.kubernetes_set,
                 KubernetesAPIServerLogCollector: self.kubernetes_set,
             }
         self.cluster_log_collectors |= {
