@@ -1,0 +1,4 @@
+user_prefix: 'long-gke-multidc-3h'
+
+root_disk_size_db: 50
+k8s_scylla_disk_gi: 1100

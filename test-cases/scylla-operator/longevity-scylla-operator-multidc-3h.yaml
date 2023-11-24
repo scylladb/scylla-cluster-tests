@@ -35,3 +35,11 @@ k8s_db_node_to_client_broadcast_ip_type: PodIP
 region_name: 'eu-north-1 eu-west-1'
 instance_type_db: 'i4i.2xlarge'
 k8s_scylla_disk_gi: 1500
+
+# GKE
+gce_datacenter: 'us-east1 us-west1'
+gce_instance_type_db: 'n1-standard-8'
+gce_root_disk_type_db: 'pd-ssd'
+gce_n_local_ssd_disk_db: 3
+
+# NOTE: for GKE job the 'k8s_scylla_disk_gi' and 'user_prefix' options must be redefined
