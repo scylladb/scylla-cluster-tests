@@ -800,6 +800,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         )
 
     def prepare_kms_host(self) -> None:
+        if self.params.is_enterprise and self.params.get('cluster_backend') == 'aws' and not self.params.get('scylla_encryption_options'):
+            self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"  # pylint: disable=line-too-long
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
             return None
         kms_host = (yaml.safe_load(scylla_encryption_options) or {}).get("kms_host") or ''
