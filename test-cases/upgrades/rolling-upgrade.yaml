@@ -19,7 +19,7 @@ n_loaders: 1
 n_monitor_nodes: 1
 
 instance_type_db: 'i4i.2xlarge'
-instance_type_loader: 'c6.2xlarge'
+instance_type_loader: 'c7i.2xlarge'
 
 user_prefix: 'rolling-upgrade'
 
