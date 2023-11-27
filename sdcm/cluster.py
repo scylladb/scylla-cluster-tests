@@ -4776,7 +4776,8 @@ class BaseLoaderSet():
 
         # update repo cache and system after system is up
         node.update_repo_cache()
-        node.disable_daily_triggered_services()
+        if self.params.get("cluster_backend") != "azure":
+            node.disable_daily_triggered_services()
 
         if TestConfig().REUSE_CLUSTER:
             self.kill_stress_thread()
