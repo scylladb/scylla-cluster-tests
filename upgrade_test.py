@@ -771,9 +771,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message='Starting sstabledump to verify correctness of sstables').publish()
         first_node = self.db_cluster.nodes[0]
         if first_node.is_enterprise:
-            should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "2023.2"
+            should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "2023.2.0~rc0"
         else:
-            should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "5.4"
+            should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "5.4.0~rc0"
         if should_use_sstabledump:
             dump_cmd = 'sstabledump'
         else:
