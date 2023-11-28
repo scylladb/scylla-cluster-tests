@@ -75,7 +75,7 @@ from sdcm.utils.common import format_timestamp, wait_ami_available, update_certi
     change_default_password, get_partition_keys
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
-from sdcm.utils.git import get_git_commit_id
+from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
     LdapConfigurationError, LdapServerType
 from sdcm.utils.log import configure_logging, handle_exception
@@ -376,26 +376,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def init_argus_run(self):
         try:
             self.test_config.init_argus_client(self.params)
-            try:
-                status = self.test_config.argus_client().get_status()
-                is_argus_run_exists = True
-                message = f"test_id {self.test_config.test_id()} already exists in Argus with status: {status}"
-            except ArgusClientError as exc:
-                if exc.args[1] == 'DoesNotExist':
-                    message = f"test_id {self.test_config.test_id()} does not exist in Argus"
-                    is_argus_run_exists = False
-                else:
-                    raise
-            self.log.info(message)
-            if not is_argus_run_exists:
-                self.test_config.argus_client().submit_sct_run(
-                    job_name=get_job_name(),
-                    job_url=get_job_url(),
-                    started_by=get_username(),
-                    commit_id=get_git_commit_id(),
-                    sct_config=self.params,
-                )
-                self.log.info("Initialized Argus TestRun with test id %s", self.test_config.argus_client().run_id)
+            git_status = get_git_status_info()
+            self.test_config.argus_client().submit_sct_run(
+                job_name=get_job_name(),
+                job_url=get_job_url(),
+                started_by=get_username(),
+                commit_id=git_status.get('branch.oid', get_git_commit_id()),
+                origin_url=git_status.get('upstream.url'),
+                branch_name=git_status.get('branch.upstream'),
+                sct_config=self.params,
+            )
+            self.log.info("Submitted Argus TestRun with test id %s", self.test_config.argus_client().run_id)
             self.test_config.argus_client().set_sct_runner(
                 public_ip=get_sct_runner_ip(),
                 private_ip=get_my_ip(),
