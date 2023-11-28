@@ -29,6 +29,8 @@ from urllib3.exceptions import (
 
 from sdcm.cluster import TestConfig
 from sdcm import sct_abs_path
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import InfoEvent
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.common import (
     deprecation,
@@ -47,6 +49,10 @@ KEY_BASED_LOCKS = KeyBasedLock()
 
 def is_scylla_bench_command(command):
     return all((str_part in command for str_part in ("scylla-bench", " -workload=", " -mode=")))
+
+
+def is_ycsb_command(command):
+    return "ycsb " in command and (" run " in command or " load " in command)
 
 
 class KubernetesRunner(Runner):
@@ -157,12 +163,14 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
         )
 
     def run(self, cmd, **kwargs):  # pylint: disable=arguments-differ
-        if is_scylla_bench_command(cmd) and hasattr(self, "dynamic_remoter") and hasattr(
-                self, "pod_image") and "scylla-bench" not in self.pod_image:
-            LOGGER.info(
-                "Running following 'scylla-bench' command in a separate dynamic loader pod: %s",
-                cmd)
-            return self.dynamic_remoter.run(cmd, **kwargs)
+        if hasattr(self, "dynamic_remoter") and hasattr(self, "pod_image"):
+            if is_scylla_bench_command(cmd) and "scylla-bench" not in self.pod_image:
+                LOGGER.info(
+                    "Running following 'scylla-bench' command in a separate dynamic loader pod: %s", cmd)
+                return self.dynamic_remoter.run(cmd, **kwargs)
+            elif is_ycsb_command(cmd) and "ycsb" not in self.pod_image:
+                LOGGER.info("Running following 'ycsb' command in a separate dynamic loader pod: %s", cmd)
+                return self.dynamic_remoter.run(cmd, **kwargs)
         return super().run(cmd, **kwargs)
 
     def get_init_arguments(self) -> dict:
@@ -324,7 +332,27 @@ class KubernetesPodWatcher(KubernetesRunner):
                 # reset pod liveness counter when received full num of bytes
                 self.pod_counter_to_live = self.POD_COUNTER_TO_LIVE
             if isinstance(result, bytes):
-                return result.decode("utf-8")
+                try:
+                    return result.decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    # NOTE: YCSB uses special non-ascii symbol in some part of it's output and if this
+                    #       special symbol appears on the border of read bytes then it may be split
+                    #       incorrectly by the stream reader.
+                    #       As a result we will have failures for 2 stream blocks
+                    #       where special symbol's bytes are cut for pieces.
+                    #       So, to overcome it we read some more bytes and then parse the output.
+                    InfoEvent(
+                        message=f"Failure decoding 'utf-8' on the '{pod_name}' pod: {exc}",
+                        severity=Severity.WARNING).publish()
+                    addon_result = self.process.read(5)
+                    sum_result = result + addon_result
+                    try:
+                        return sum_result.decode("utf-8")
+                    except UnicodeDecodeError as exc:
+                        InfoEvent(
+                            message=f"[fallback error] Failure decoding 'utf-8' on the '{pod_name}' pod: {exc}",
+                            severity=Severity.ERROR).publish()
+                        return f"<not-decoded-{len(sum_result)}-bytes>"
             return result
 
     @retrying(n=30, sleep_time=10, allowed_exceptions=(
@@ -364,6 +392,8 @@ class KubernetesPodWatcher(KubernetesRunner):
         params = self.context.config.k8s_kluster.params
         if is_scylla_bench_command(command):
             return params.get('stress_image.scylla-bench')
+        if is_ycsb_command(command):
+            return params.get("stress_image.ycsb")
         if loader_image := params.get('stress_image.cassandra-stress'):
             return loader_image
         return f"{params.get('docker_image')}:{params.get('scylla_version')}"
@@ -511,7 +541,8 @@ class KubernetesPodWatcher(KubernetesRunner):
         environ = self.context.config.k8s_environ
         environ["K8S_POD_COMMAND"] = command
         environ["K8S_POD_NAME"] = pod_name
-        environ["DOCKER_IMAGE_WITH_TAG"] = self._get_docker_image(command)
+        if not environ.get("DOCKER_IMAGE_WITH_TAG"):
+            environ["DOCKER_IMAGE_WITH_TAG"] = self._get_docker_image(command)
 
         # NOTE: create loader pod and wait for it's readiness
         KubernetesOps.apply_file(
