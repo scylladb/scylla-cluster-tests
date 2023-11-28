@@ -21,13 +21,13 @@ H 02 * * 0</spec>
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>docker_image=scylladb/scylla-enterprise
-scylla_version=2023.1.2
+scylla_version=%(release_version)s
 k8s_scylla_operator_helm_repo=https://storage.googleapis.com/scylla-operator-charts/latest
 k8s_scylla_operator_chart_version=latest</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>longevity-scylla-operator-3h-eks,longevity-scylla-operator-multidc-12h-eks,longevity-scylla-operator-3h-multitenant-eks</projects>
+          <projects>longevity-scylla-operator-3h-eks-test,longevity-scylla-operator-multidc-12h-eks-test,longevity-scylla-operator-3h-multitenant-eks-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
@@ -42,7 +42,7 @@ k8s_scylla_operator_chart_version=latest</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>longevity-scylla-operator-3h-multitenant-eks,longevity-scylla-operator-3h-eks</projects>
+          <projects>longevity-scylla-operator-3h-multitenant-eks-test,longevity-scylla-operator-3h-eks-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>

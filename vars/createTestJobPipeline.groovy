@@ -76,7 +76,11 @@ def call() {
                                                     ./docker/env/hydra.sh create-test-release-jobs-enterprise ${params.branch} --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
                                                     echo "all jobs have been created"
                                                 fi
-
+                                                if [[ "${params.branch}" == "scylla-master" ]] ; then
+                                                    echo "start create operator test jobs for operator-master ......."
+                                                        ./docker/env/hydra.sh create-operator-test-release-jobs operator-master --triggers --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
+                                                    echo "all jobs have been created"
+                                                fi
                                                 """
                                         }
                                     }

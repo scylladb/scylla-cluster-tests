@@ -82,7 +82,8 @@ from sdcm.utils.common import (
     list_logs_by_test_id,
     list_resources_docker,
     list_parallel_timelines_report_urls,
-    search_test_id_in_latest
+    search_test_id_in_latest,
+    get_latest_scylla_release,
 )
 from sdcm.utils.nemesis import NemesisJobGenerator
 from sdcm.utils.net import get_sct_runner_ip
@@ -1355,7 +1356,9 @@ def create_operator_test_release_jobs(branch, username, password, sct_branch, sc
     server = JenkinsPipelines(
         username=username, password=password, base_job_dir=base_job_dir,
         sct_branch_name=sct_branch, sct_repo=sct_repo)
-    server.create_job_tree(f'{server.base_sct_dir}/jenkins-pipelines/operator', create_freestyle_jobs=triggers)
+    server.create_job_tree(f'{server.base_sct_dir}/jenkins-pipelines/operator',
+                           create_freestyle_jobs=triggers,
+                           template_context={'release_version': get_latest_scylla_release(product='scylla-enterprise')})
 
 
 @cli.command("create-nemesis-pipelines")
