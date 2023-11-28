@@ -11,13 +11,15 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import os
 import logging
 from pathlib import Path
 
 import jenkins
 
 from sdcm.wait import wait_for
-
+from sdcm.utils.common import get_sct_root_path
+from sdcm.keystore import KeyStore
 
 DIR_TEMPLATE = Path(__file__).parent.joinpath("folder-template.xml").read_text(encoding="utf-8")
 JOB_TEMPLATE = Path(__file__).parent.joinpath("template.xml").read_text(encoding="utf-8")
@@ -25,35 +27,77 @@ LOGGER = logging.getLogger(__name__)
 
 
 class JenkinsPipelines:
-    def __init__(self, username, password, base_job_dir, sct_branch_name, sct_repo):  # pylint: disable=too-many-arguments
+    def __init__(self, base_job_dir, sct_branch_name, sct_repo, username=None, password=None):  # pylint: disable=too-many-arguments
+        if not username and not password:
+            creds = KeyStore().get_json("jenkins.json")
+            username, password = creds.get('username'), creds.get('password')
+
         self.jenkins = jenkins.Jenkins('https://jenkins.scylladb.com', username=username, password=password)
         self.base_sct_dir = Path(__file__).parent.parent.parent
         self.base_job_dir = base_job_dir
         self.sct_branch_name = sct_branch_name
         self.sct_repo = sct_repo
 
-    def create_directory(self, name, display_name):
+    def create_directory(self, name: Path | str, display_name: str):
         try:
             dir_xml_data = DIR_TEMPLATE % dict(sct_display_name=display_name)
-            self.jenkins.create_job(f'{self.base_job_dir}/{name}', dir_xml_data)
+            if name:
+                new_path = f'{self.base_job_dir}/{name}'
+            else:
+                new_path = self.base_job_dir
+            if self.jenkins.job_exists(new_path):
+                LOGGER.info("reconfig folder [%s]", new_path)
+                self.jenkins.reconfig_job(new_path, dir_xml_data)
+            else:
+                LOGGER.info("creating folder [%s]", new_path)
+                self.jenkins.create_job(new_path, dir_xml_data)
         except jenkins.JenkinsException as ex:
             self._log_jenkins_exception(ex)
 
-    def create_pipeline_job(self, jenkins_file, group_name, job_name=None, job_name_suffix="-test"):
-        base_name = job_name or Path(jenkins_file).stem
-        sct_jenkinsfile = jenkins_file.split("scylla-cluster-tests/")[-1]
-        LOGGER.info("%s is used to create job", sct_jenkinsfile)
+    def create_freestyle_job(self, xml_temple: Path | str, group_name: Path | str, job_name: str = None, template_context: dict = None):
+        xml_temple = Path(xml_temple)
+        base_name = job_name or xml_temple.stem
+
+        context = template_context if template_context else {}
+        context = {'sct_branch': self.sct_branch_name,
+                   'sct_repo': self.sct_repo,
+                   **context}
+        base_name = base_name % context
+
+        xml_data = xml_temple.read_text(encoding='utf-8') % context
+        job_name = f'{self.base_job_dir}{group_name}/{base_name}'
+
+        try:
+            if self.jenkins.job_exists(job_name):
+                LOGGER.info("%s is used to reconfig job", job_name)
+                self.jenkins.reconfig_job(job_name, xml_data)
+            else:
+                LOGGER.info("%s is used to create job", job_name)
+                self.jenkins.create_job(job_name, xml_data)
+        except jenkins.JenkinsException as ex:
+            self._log_jenkins_exception(ex)
+
+    def create_pipeline_job(self, jenkins_file: Path | str, group_name: Path | str, job_name: str = None, job_name_suffix="-test"):
+        jenkins_file = Path(jenkins_file)
+        base_name = job_name or jenkins_file.stem
+        sct_jenkinsfile = jenkins_file.relative_to(get_sct_root_path())
         xml_data = JOB_TEMPLATE % dict(sct_display_name=f"{base_name}{job_name_suffix}",
                                        sct_description=sct_jenkinsfile,
                                        sct_repo=self.sct_repo,
                                        sct_branch_name=self.sct_branch_name,
                                        sct_jenkinsfile=sct_jenkinsfile)
+        if group_name:
+            group_name = "/" + str(group_name)
+        _job_name = f'{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}'
         try:
-            if group_name:
-                group_name = "/" + group_name
-            self.jenkins.create_job(
-                f'{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}', xml_data)
-            self.build_job_and_wait_completion(f'{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}')
+            if self.jenkins.job_exists(_job_name):
+                LOGGER.info("%s is used to reconfig job", _job_name)
+
+                self.jenkins.reconfig_job(_job_name, xml_data)
+            else:
+                LOGGER.info("%s is used to create job", _job_name)
+                self.jenkins.create_job(_job_name, xml_data)
+                self.build_job_and_wait_completion(_job_name)
         except jenkins.JenkinsException as ex:
             self._log_jenkins_exception(ex)
 
@@ -81,3 +125,28 @@ class JenkinsPipelines:
             LOGGER.info(exc)
         else:
             LOGGER.error(exc)
+
+    def create_job_tree(self, local_path: str | Path,
+                        create_freestyle_jobs: bool = True,
+                        create_pipelines_jobs: bool = True,
+                        template_context: dict | None = None):
+        for root, _, job_files in os.walk(local_path):
+            jenkins_path = Path(root).relative_to(local_path)
+
+            # get display names, if available
+            display_name = jenkins_path.name
+            if '_display_name' in job_files:
+                display_name = (Path(root) / '_display_name').read_text().strip()
+
+            if str(jenkins_path) == '.':
+                jenkins_path = ''
+                display_name = self.base_job_dir.split('/')[-1]
+
+            self.create_directory(jenkins_path, display_name=display_name)
+
+            for job_file in job_files:
+                job_file = Path(root) / job_file
+                if job_file.suffix == '.jenkinsfile' and create_pipelines_jobs:
+                    self.create_pipeline_job(job_file, group_name=jenkins_path)
+                if job_file.suffix == '.xml' and create_freestyle_jobs:
+                    self.create_freestyle_job(job_file, group_name=jenkins_path)
