@@ -32,3 +32,4 @@ custom_es_index: 'performancestatsv2'
 use_hdr_cs_histogram: true
 
 use_placement_group: true
+stop_test_on_stress_failure: false
