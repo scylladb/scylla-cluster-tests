@@ -64,9 +64,11 @@ class JenkinsPipelines:
                    **context}
         base_name = base_name % context
 
+        if group_name:
+            group_name = "/" + str(group_name)
+
         xml_data = xml_temple.read_text(encoding='utf-8') % context
         job_name = f'{self.base_job_dir}{group_name}/{base_name}'
-
         try:
             if self.jenkins.job_exists(job_name):
                 LOGGER.info("%s is used to reconfig job", job_name)
@@ -146,7 +148,7 @@ class JenkinsPipelines:
 
             for job_file in job_files:
                 job_file = Path(root) / job_file
-                if job_file.suffix == '.jenkinsfile' and create_pipelines_jobs:
+                if (job_file.suffix == '.jenkinsfile') and create_pipelines_jobs:
                     self.create_pipeline_job(job_file, group_name=jenkins_path)
-                if job_file.suffix == '.xml' and create_freestyle_jobs:
-                    self.create_freestyle_job(job_file, group_name=jenkins_path)
+                if (job_file.suffix == '.xml') and create_freestyle_jobs:
+                    self.create_freestyle_job(job_file, group_name=jenkins_path, template_context=template_context)

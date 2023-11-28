@@ -28,7 +28,7 @@ k8s_scylla_operator_chart_version=latest</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>longevity-scylla-operator-3h-gke</projects>
+          <projects>longevity-scylla-operator-3h-gke-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
