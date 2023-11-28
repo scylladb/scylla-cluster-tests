@@ -1,7 +1,7 @@
 from sdcm.remote import shell_script_cmd
 
 
-NODE_EXPORTER_VERSION = '1.5.0'
+NODE_EXPORTER_VERSION = '1.7.0'
 
 
 class NodeExporterSetup:  # pylint: disable=too-few-public-methods
