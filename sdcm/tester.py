@@ -74,7 +74,7 @@ from sdcm.utils.common import format_timestamp, wait_ami_available, update_certi
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
-from sdcm.utils.git import get_git_commit_id
+from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
     LdapConfigurationError, LdapServerType
 from sdcm.utils.log import configure_logging, handle_exception
@@ -393,11 +393,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def init_argus_run(self):
         try:
             self.test_config.init_argus_client(self.params)
+            git_status = get_git_status_info()
             self.test_config.argus_client().submit_sct_run(
                 job_name=get_job_name(),
                 job_url=get_job_url(),
                 started_by=get_username(),
-                commit_id=get_git_commit_id(),
+                commit_id=git_status.get('branch.oid', get_git_commit_id()),
+                origin_url=git_status.get('upstream.url'),
+                branch_name=git_status.get('branch.upstream'),
                 sct_config=self.params,
             )
             self.log.info("Submitted Argus TestRun with test id %s", self.test_config.argus_client().run_id)
