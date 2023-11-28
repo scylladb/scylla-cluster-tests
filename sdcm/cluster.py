@@ -5223,6 +5223,9 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         else:
             raise ValueError('Unsupported Distribution type: {}'.format(str(node.distro)))
 
+        node_exporter_setup = NodeExporterSetup()
+        node_exporter_setup.install(node)
+
         node.remoter.run(cmd="sudo bash -ce '%s'" % prereqs_script)
         node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
 
@@ -5244,14 +5247,6 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         node.remoter.run("bash -ce '%s'" % install_script)
         if node.distro.is_ubuntu:
             node.remoter.run(f'sed -i "s/python3/python3.6/g" {self.monitor_install_path}/*.py')
-
-    @staticmethod
-    def start_node_exporter(node):
-        start_node_exporter_script = dedent('''
-            docker run --restart=always -d --net="host" --pid="host" -v "/:/host:ro,rslave" --cap-add=SYS_TIME \
-            quay.io/prometheus/node-exporter --path.rootfs=/host
-        ''')
-        node.remoter.run("bash -ce '%s'" % start_node_exporter_script)
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # pylint: disable=too-many-locals
         cloud_prom_bearer_token = self.params.get('cloud_prom_bearer_token')
@@ -5462,8 +5457,6 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
     def install_scylla_monitoring(self, node):
         self.install_scylla_monitoring_prereqs(node)
         self.download_scylla_monitoring(node)
-        if not self.params.get('cluster_backend') == 'docker':
-            self.start_node_exporter(node)
 
     def get_grafana_annotations(self, node):
         annotations_url = "http://{node_ip}:{grafana_port}/api/annotations?limit=10000"
