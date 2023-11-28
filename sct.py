@@ -51,7 +51,7 @@ from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners, \
     update_sct_runner_tags
 from sdcm.utils.ci_tools import get_job_name, get_job_url
-from sdcm.utils.git import get_git_commit_id
+from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import get_argus_client
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
@@ -1678,6 +1678,7 @@ def configure_jenkins_builders(cloud_provider, regions):
 def create_argus_test_run():
     try:
         params = SCTConfiguration()
+        git_status = get_git_status_info()
         test_config = get_test_config()
         if not params.get('test_id'):
             LOGGER.error("test_id is not set")
@@ -1688,8 +1689,10 @@ def create_argus_test_run():
             job_name=get_job_name(),
             job_url=get_job_url(),
             started_by=get_username(),
-            commit_id=get_git_commit_id(),
-            sct_config=params,
+            commit_id=git_status.get('branch.oid', get_git_commit_id()),
+            origin_url=git_status.get('upstream.url'),
+            branch_name=git_status.get('branch.upstream'),
+            sct_config=None,
         )
         LOGGER.info("Initialized Argus TestRun with test id %s", get_test_config().argus_client().run_id)
     except ArgusClientError:
