@@ -29,6 +29,29 @@ spec:
         periodSeconds: 3
       command:
         # NOTE: use bash wrapper because our stress commands do not use full binary paths.
-        - /bin/bash
-        - -c
-        - "touch /tmp/keep_running ; cp /etc/scylla/cassandra/logback-tools.xml .; ${K8S_POD_COMMAND}"
+        - "/bin/bash"
+        - "-c"
+        - "--"
+      # NOTE: the 'fake' env var usage is a workaround for 'envsubst' to keep env vars for runtime.
+      #       Remove the workaround if the 'envsubst' stops getting applied to this template.
+      args:
+        - |
+          touch /tmp/keep_running ; cp /etc/scylla/cassandra/logback-tools.xml .;
+          # NOTE: following is needed by the YCSB tool to be able to work with secured port of alternator.
+          if [ -d /YCSB ]; then
+            if [ -f /tmp/alternator-ca.crt ]; then
+              if [ ! -f /tmp/alternator-ca.pem ]; then
+                  openssl x509 -in /tmp/alternator-ca.crt -out /tmp/alternator-ca.pem
+              fi
+              if ! $${fake}JAVA_HOME/bin/keytool -list -v \
+                      -keystore $${fake}JAVA_HOME/jre/lib/security/cacerts \
+                      -storepass changeit | grep -q "Alias name: alternator-ca";
+              then
+                $${fake}JAVA_HOME/bin/keytool -importcert -v -trustcacerts -alias alternator-ca \
+                    -file "/tmp/alternator-ca.pem" \
+                    -keystore $${fake}JAVA_HOME/jre/lib/security/cacerts \
+                    -storepass changeit -noprompt
+              fi
+            fi
+          fi
+          ${K8S_POD_COMMAND}

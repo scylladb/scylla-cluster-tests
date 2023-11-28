@@ -116,8 +116,15 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.ycsb"
 
-    def copy_template(self, docker):
-        if self.params.get('alternator_use_dns_routing'):
+    def copy_template(self, cmd_runner, loader_name, memo={}):  # pylint: disable=dangerous-default-value,too-many-branches
+        if loader_name in memo:
+            return None
+        web_protocol = "http"
+        is_kubernetes = self.node_list[0].is_kubernetes()
+        if is_kubernetes:
+            target_address = self.node_list[0].k8s_lb_dns_name
+            web_protocol = "http" + ("s" if self.params.get("alternator_port") == 8043 else "")
+        elif self.params.get('alternator_use_dns_routing'):
             target_address = 'alternator'
         else:
             if hasattr(self.node_list[0], 'parent_cluster'):
@@ -129,12 +136,11 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             dynamodb_teample = dedent('''
                 measurementtype=hdrhistogram
                 dynamodb.awsCredentialsFile = /tmp/aws_empty_file
-                dynamodb.endpoint = http://{0}:{1}
+                dynamodb.endpoint = {0}://{1}:{2}
                 dynamodb.connectMax = 200
                 requestdistribution = uniform
                 dynamodb.consistentReads = true
-            '''.format(target_address,
-                       self.params.get('alternator_port')))
+            '''.format(web_protocol, target_address, self.params.get('alternator_port')))
 
             dynamodb_primarykey_type = self.params.get('dynamodb_primarykey_type')
             if isinstance(dynamodb_primarykey_type, alternator.enums.YCSBSchemaTypes):
@@ -160,12 +166,26 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
                 tmp_file.write(dynamodb_teample)
                 tmp_file.flush()
-                docker.send_files(tmp_file.name, os.path.join('/tmp', 'dynamodb.properties'))
+                cmd_runner.send_files(tmp_file.name, os.path.join('/tmp', 'dynamodb.properties'))
 
             with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
                 tmp_file.write(aws_empty_file)
                 tmp_file.flush()
-                docker.send_files(tmp_file.name, os.path.join('/tmp', 'aws_empty_file'))
+                cmd_runner.send_files(tmp_file.name, os.path.join('/tmp', 'aws_empty_file'))
+            if is_kubernetes:
+                if web_protocol == "https":
+                    if ca_bundle_path := getattr(self.node_list[0], "alternator_ca_bundle_path", None):
+                        # NOTE: the '/tmp/alternator-ca.crt' path is part of the loader pod templates
+                        #       located at 'sdcm/k8s_configs/loaders/*' path.
+                        #       So, if need to change this path then do it in all the places.
+                        cmd_runner.send_files(ca_bundle_path, "/tmp/alternator-ca.crt")
+                    else:
+                        LOGGER.warning(
+                            "Alternator CA was not provided to the '%s' loader",
+                            loader_name)
+                # NOTE: running on K8S it makes no sense to copy files more than once.
+                memo[loader_name] = "done"
+        return None
 
     def build_stress_cmd(self):
         hosts = ",".join([i.cql_address for i in self.node_list])
@@ -218,43 +238,53 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         output = {k: str(v) for k, v in output.items()}
         return output
 
-    def _run_stress(self, loader, loader_idx, cpu_idx):
-        dns_options = ""
-        cpu_options = ""
-        if self.params.get('alternator_use_dns_routing'):
-            dns = RemoteDocker(loader, self.params.get('stress_image.alternator-dns'),
-                               command_line=f'python3 /dns_server.py {self.db_node_to_query(loader)} '
-                                            f'{self.params.get("alternator_port")}',
-                               extra_docker_opts=f'--label shell_marker={self.shell_marker}')
-            dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
+    def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=too-many-locals
+        if "k8s" in self.params.get("cluster_backend"):
+            cmd_runner = loader.remoter
+            cmd_runner_name = loader.name
+            if self.params.get('alternator_use_dns_routing'):
+                LOGGER.info(
+                    "Ignoring the 'alternator_use_dns_routing' option running on K8S,"
+                    " because it is always used in this case.")
+        else:
+            alternator_port = self.params.get("alternator_port")
+            dns_cmd = f'python3 /dns_server.py {self.db_node_to_query(loader)} {alternator_port}'
+            dns_image = self.params.get('stress_image.alternator-dns')
+            dns_options, cpu_options = "", ""
+            if self.stress_num > 1:
+                cpu_options = f'--cpuset-cpus="{cpu_idx}"'
+            if self.params.get('alternator_use_dns_routing'):
+                dns = RemoteDocker(loader, dns_image,
+                                   command_line=dns_cmd,
+                                   extra_docker_opts=f'--label shell_marker={self.shell_marker}')
+                dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
+            cmd_runner = RemoteDocker(
+                loader, self.docker_image_name,
+                extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}')
+            cmd_runner_name = str(loader)
 
-        if self.stress_num > 1:
-            cpu_options = f'--cpuset-cpus="{cpu_idx}"'
-
-        docker = RemoteDocker(loader, self.docker_image_name,
-                              extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}')
-        self.copy_template(docker)
+        self.copy_template(cmd_runner, loader.name)
         stress_cmd = self.build_stress_cmd()
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'ycsb-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
+        log_file_name = os.path.join(
+            loader.logdir, 'ycsb-l%s-c%s-%s.log' % (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('ycsb-stress local log: %s', log_file_name)
 
         def raise_event_callback(sentinel, line):  # pylint: disable=unused-argument
             if line:
-                YcsbStressEvent.error(node=loader, stress_cmd=stress_cmd, errors=[line, ]).publish()
+                YcsbStressEvent.error(node=cmd_runner_name, stress_cmd=stress_cmd, errors=[line, ]).publish()
 
         LOGGER.debug("running: %s", stress_cmd)
 
         node_cmd = 'cd /YCSB && {}'.format(stress_cmd)
 
-        YcsbStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
+        YcsbStressEvent.start(node=cmd_runner_name, stress_cmd=stress_cmd).publish()
 
         with YcsbStatsPublisher(loader, loader_idx, ycsb_log_filename=log_file_name):
             try:
-                result = docker.run(
+                result = cmd_runner.run(
                     cmd=node_cmd,
                     timeout=self.timeout + self.shutdown_timeout,
                     log_file=log_file_name,
@@ -272,11 +302,12 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             except Exception as exc:
                 errors_str = format_stress_cmd_error(exc)
                 YcsbStressEvent.failure(
-                    node=loader,
+                    node=cmd_runner_name,
                     stress_cmd=self.stress_cmd,
                     log_file_name=log_file_name,
                     errors=[errors_str, ],
                 ).publish()
                 raise
             finally:
-                YcsbStressEvent.finish(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()
+                YcsbStressEvent.finish(
+                    node=cmd_runner_name, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()

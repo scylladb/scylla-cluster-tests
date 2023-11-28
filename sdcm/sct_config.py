@@ -927,6 +927,8 @@ class SCTConfiguration(dict):
              help="Defines whether we enable the scylla operator TLS feature or not."),
         dict(name="k8s_enable_sni", env="SCT_K8S_ENABLE_SNI", type=boolean,
              help="Defines whether we install SNI and use it or not (serverless feature)."),
+        dict(name="k8s_enable_alternator", env="SCT_K8S_ENABLE_ALTERNATOR", type=boolean,
+             help="Defines whether we enable the alternator feature using scylla-operator or not."),
 
         dict(name="k8s_connection_bundle_file", env="SCT_K8S_CONNECTION_BUNDLE_FILE", type=_file,
              help="Serverless configuration bundle file", k8s_multitenancy_supported=True),

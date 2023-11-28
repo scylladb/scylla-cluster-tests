@@ -11,6 +11,7 @@ from mypy_boto3_dynamodb.service_resource import Table
 from sdcm.utils.alternator import schemas, enums, consts
 from sdcm.utils.alternator.consts import TABLE_NAME, NO_LWT_TABLE_NAME
 from sdcm.utils.common import normalize_ipv6_url
+from sdcm.utils.context_managers import environment
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +31,13 @@ class Alternator:
         self.alternator_apis = {}
 
     def create_endpoint_url(self, node):
-        return 'http://{}:{}'.format(normalize_ipv6_url(node.external_address), self.params.get("alternator_port"))
+        if node.is_kubernetes():
+            web_protocol = "http" + ("s" if self.params.get("alternator_port") == 8043 else "")
+            address = node.external_address
+        else:
+            web_protocol = "http"
+            address = normalize_ipv6_url(node.external_address)
+        return "{}://{}:{}".format(web_protocol, address, self.params.get("alternator_port"))
 
     def get_dynamodb_api(self, node) -> AlternatorApi:
         endpoint_url = self.create_endpoint_url(node=node)
@@ -38,9 +45,17 @@ class Alternator:
             aws_params = dict(endpoint_url=endpoint_url, aws_access_key_id=self.params.get("alternator_access_key_id"),
                               aws_secret_access_key=self.params.get("alternator_secret_access_key"),
                               region_name="None")
-            resource: DynamoDBServiceResource = boto3.resource('dynamodb', **aws_params)
-            client: DynamoDBClient = boto3.client('dynamodb', **aws_params)
-            self.alternator_apis[endpoint_url] = AlternatorApi(resource=resource, client=client)
+            # NOTE: add CA bundle info for HTTPS case
+            env_vars = {}
+            if "https" in endpoint_url:
+                if ca_bundle_path := getattr(node, "alternator_ca_bundle_path", None):
+                    env_vars["AWS_CA_BUNDLE"] = ca_bundle_path
+                else:
+                    LOGGER.warning("Alternator CA was not provided to the 'alternator' boto3 client.")
+            with environment(**env_vars):
+                resource: DynamoDBServiceResource = boto3.resource('dynamodb', **aws_params)
+                client: DynamoDBClient = boto3.client('dynamodb', **aws_params)
+                self.alternator_apis[endpoint_url] = AlternatorApi(resource=resource, client=client)
         return self.alternator_apis[endpoint_url]
 
     def set_write_isolation(self, node, isolation, table_name=consts.TABLE_NAME):

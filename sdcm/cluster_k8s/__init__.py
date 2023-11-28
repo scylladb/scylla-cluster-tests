@@ -967,9 +967,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 'name': f"{cluster_name}-member"
             },
             'alternator': {
-                'enabled': False,
-                'port': 8000,
-                'writeIsolation': 'always'
+                'enabled': self.params.get("k8s_enable_alternator") or False,
+                'insecureEnableHTTP': True,
+                'insecureDisableAuthorization': not (
+                    self.params.get("alternator_enforce_authorization") or False),
+                **({"writeIsolation": self.params.get("alternator_write_isolation")}
+                   if self.params.get("alternator_write_isolation") else {}),
             },
             'developerMode': False,
             'cpuset': True,
@@ -2212,6 +2215,27 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
         self.k8s_cluster.kubectl(
             f"exec -ti {podnames[0]} -- sh -c 'fstrim -v {scylla_disk_path}'",
             namespace=namespace)
+
+    @cached_property
+    def alternator_ca_bundle_path(self):
+        ca_bundle_cmd_output = self.k8s_cluster.kubectl(
+            f"get configmap/{self.parent_cluster.scylla_cluster_name}-alternator-local-serving-ca"
+            f" --template='{{{{ index .data \"ca-bundle.crt\" }}}}'",
+            namespace=self.parent_cluster.namespace, ignore_status=True)
+        if ca_bundle_cmd_output.failed:
+            self.k8s_cluster.log.warning(
+                "Failed to get alternator CA bundle info: %s", ca_bundle_cmd_output.stderr)
+            return None
+        fd, file_name = tempfile.mkstemp(suffix='.crt')
+        os.close(fd)
+        ca_bundle_file = Path(file_name)
+        ca_bundle_file.write_text(ca_bundle_cmd_output.stdout.strip(), encoding="utf-8")
+        return str(ca_bundle_file)
+
+    @cached_property
+    def k8s_lb_dns_name(self):
+        cluster_name, namespace = self.parent_cluster.scylla_cluster_name, self.parent_cluster.namespace
+        return f"{cluster_name}-client.{namespace}.svc"
 
 
 class LoaderPodContainer(BasePodContainer):
