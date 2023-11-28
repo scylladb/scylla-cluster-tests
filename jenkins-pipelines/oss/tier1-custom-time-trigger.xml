@@ -1,0 +1,55 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><project>
+  <actions/>
+  <description>Triggers Tier 1 master jobs using custom time</description>
+
+  <scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers>
+    <hudson.triggers.TimerTrigger>
+      <spec>00 06 * * 6</spec>
+    </hudson.triggers.TimerTrigger>
+  </triggers>
+  <concurrentBuild>false</concurrentBuild>
+  <builders/>
+  <publishers>
+    <hudson.plugins.parameterizedtrigger.BuildTrigger>
+      <configs>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+              <properties>scylla_version=%(sct_branch)s:latest
+availability_zone=c
+provision_type=on_demand
+post_behavior_db_nodes=destroy
+post_behavior_monitor_nodes=destroy
+stress_duration=1440</properties>
+              <textParamValueOnNewLine>false</textParamValueOnNewLine>
+            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+          </configs>
+          <projects>longevity/longevity-1tb-5days-azure-test,longevity/longevity-large-partition-200k-pks-4days-gce-test,longevity/longevity-mv-si-4days-test,longevity/longevity-schema-topology-changes-12h-test,longevity/longevity-twcs-48h-test,longevity/longevity-multidc-schema-topology-changes-12h-test,longevity/longevity-50gb-3days-test,longevity/longevity-150gb-asymmetric-cluster-12h-test</projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+              <properties>scylla_repo=http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list
+post_behavior_db_nodes=destroy
+post_behavior_monitor_nodes=destroy</properties>
+              <textParamValueOnNewLine>false</textParamValueOnNewLine>
+            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+          </configs>
+          <projects>jepsen/jepsen-test-all</projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+      </configs>
+    </hudson.plugins.parameterizedtrigger.BuildTrigger>
+  </publishers>
+  <buildWrappers/>
+</project>

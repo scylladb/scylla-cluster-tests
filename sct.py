@@ -19,7 +19,6 @@ import re
 import sys
 import unittest
 import logging
-import glob
 import time
 import subprocess
 import traceback
@@ -1385,64 +1384,8 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
     base_job_dir = f'{branch}'
     server = JenkinsPipelines(username=username, password=password, base_job_dir=base_job_dir,
                               sct_branch_name=sct_branch, sct_repo=sct_repo)
-    base_path = f'{server.base_sct_dir}/jenkins-pipelines'
-
-    enterprise_to_filter_out = r'ldap|ics|-sla|saslauthd|fips'
-
-    for group_name, group_desc in [
-        ('longevity', 'SCT Longevity Tests'),
-        ('rolling-upgrade', 'SCT Rolling Upgrades'),
-        ('gemini-', 'SCT Gemini Tests'),
-        ('features-', 'SCT Feature Tests'),
-        ('artifacts', 'SCT Artifacts Tests'),
-        ('load-test', 'SCT Load Tests'),
-        ('jepsen', 'SCT Jepsen Tests'),
-        ('repair-based-operation', "SCT RBO Tests"),
-        ('scale', 'SCT Scale Tests'),
-        ('operator', 'SCT Operator Tests'),
-        ('raft', 'SCT Raft Experimental'),
-        ('disabled_raft', 'SCT ConsistentClusterManagement disabled'),
-        ('nemesis', 'SCT Individual Nemesis'),
-        ('upgrade-with-raft', 'SCT Rolling Upgrades With Raft Enabled'),
-    ]:
-        server.create_directory(name=group_name, display_name=group_desc)
-
-        for jenkins_file in glob.glob(f'{base_path}/{group_name}*.jenkinsfile'):
-            if not re.search(enterprise_to_filter_out, jenkins_file):
-                server.create_pipeline_job(jenkins_file, group_name)
-        if group_name == 'load-test':
-            for jenkins_file in glob.glob(f'{base_path}/admission_control_overload*'):
-                server.create_pipeline_job(jenkins_file, group_name)
-        if group_name == 'repair-based-operation':
-            for jenkins_file in glob.glob(f'{base_path}/repair-based-operation/*'):
-                server.create_pipeline_job(jenkins_file, group_name)
-        if group_name == 'operator':
-            for jenkins_file in glob.glob(f'{base_path}/operator/functional/*aws*.jenkinsfile'):
-                server.create_pipeline_job(jenkins_file, group_name)
-        if group_name == 'raft':
-            for jenkins_file in glob.glob(f'{base_path}/raft/*'):
-                server.create_pipeline_job(jenkins_file, group_name)
-        if group_name == 'disabled_raft':
-            for jenkins_file in glob.glob(f'{base_path}/consistent_cluster_management_disabled/*'):
-                server.create_pipeline_job(jenkins_file, group_name)
-        if group_name == 'upgrade-with-raft':
-            for jenkins_file in glob.glob(f'{base_path}/{group_name}/*.jenkinsfile'):
-                server.create_pipeline_job(jenkins_file, group_name)
-        if group_name == 'nemesis':
-            for jenkins_file in glob.glob(f'{base_path}/nemesis/*'):
-                server.create_pipeline_job(jenkins_file, group_name)
-
-    server.create_directory(
-        name='artifacts-offline-install', display_name='SCT Artifacts Offline Install Tests')
-    artifacts_offline_exclude_jobs = r'-web|-ami|-image|-docker'
-
-    for jenkins_file in glob.glob(f'{base_path}/artifacts-*.jenkinsfile'):
-        if not re.search(artifacts_offline_exclude_jobs, jenkins_file):
-            server.create_pipeline_job(jenkins_file, 'artifacts-offline-install')
-    for jenkins_file in glob.glob(f'{base_path}/nonroot-offline-install/*.jenkinsfile'):
-        if not re.search(artifacts_offline_exclude_jobs, jenkins_file):
-            server.create_pipeline_job(jenkins_file, 'artifacts-offline-install',
-                                       job_name=str(Path(jenkins_file).stem) + '-nonroot')
+    base_path = f'{server.base_sct_dir}/jenkins-pipelines/oss'
+    server.create_job_tree(base_path)
 
 
 @cli.command('create-test-release-jobs-enterprise', help="Create pipeline jobs for a new branch")
@@ -1457,32 +1400,8 @@ def create_test_release_jobs_enterprise(branch, username, password, sct_branch, 
     base_job_dir = f'{branch}'
     server = JenkinsPipelines(username=username, password=password, base_job_dir=base_job_dir,
                               sct_branch_name=sct_branch, sct_repo=sct_repo)
-    base_path = f'{server.base_sct_dir}/jenkins-pipelines'
-
-    server.create_directory('SCT_Enterprise_Features', 'SCT Enterprise Features')
-    for group_name, match, group_desc in [
-        ('EncryptionAtRest', 'EaR-*', 'Encryption At Rest'),
-        ('ICS', '*ics*', 'ICS'),
-        ('Workload_Prioritization', 'features-sla-*', 'Workload Prioritization'),
-        ('LDAP', '*ldap*', 'LDAP authorization and authentication tests'),
-        ('LDAP', '*saslauthd*', 'LDAP authorization and authentication tests'),
-        ('FIPS', '*fips*', 'FIPS Encryption tests'),
-    ]:
-        current_dir = f'SCT_Enterprise_Features/{group_name}'
-        server.create_directory(name=current_dir, display_name=group_desc)
-
-        for jenkins_file in glob.glob(f'{base_path}/{match}.jenkinsfile'):
-            server.create_pipeline_job(jenkins_file, current_dir)
-
-    for group_name, feature_dir, group_desc in (
-        ('Workload_Prioritization', 'workload-prioritization', 'Workload Prioritization'),
-        ('audit', 'audit', 'Audit')
-    ):
-        current_dir = f'SCT_Enterprise_Features/{group_name}'
-        server.create_directory(name=current_dir, display_name=group_desc)
-
-        for jenkins_file in glob.glob(f'{base_path}/{feature_dir}/*.jenkinsfile'):
-            server.create_pipeline_job(jenkins_file, current_dir)
+    base_path = f'{server.base_sct_dir}/jenkins-pipelines/enterprise'
+    server.create_job_tree(base_path)
 
 
 @cli.command("prepare-regions", help="Configure all required resources for SCT runs in selected cloud region")

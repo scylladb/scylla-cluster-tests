@@ -47,7 +47,7 @@ class NemesisJobGenerator:
 
     @property
     def base_nemesis_job_dir(self) -> Path:
-        return self.base_dir / "jenkins-pipelines" / "nemesis"
+        return self.base_dir / "jenkins-pipelines" / "oss" / "nemesis"
 
     @cached_property
     def nemesis_base_config_file_template(self) -> str:

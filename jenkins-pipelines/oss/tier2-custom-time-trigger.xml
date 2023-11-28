@@ -1,0 +1,38 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><project>
+  <actions/>
+  <description>Triggers Tier 2 master jobs using custom time</description>
+
+  <scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam>
+  <disabled>true</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders/>
+  <publishers>
+    <hudson.plugins.parameterizedtrigger.BuildTrigger>
+      <configs>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+              <properties>scylla_version=%(sct_branch)s:latest
+region=us-east-1
+availability_zone=c
+provision_type=on_demand
+post_behavior_db_nodes=destroy
+post_behavior_monitor_nodes=destroy
+stress_duration=360</properties>
+              <textParamValueOnNewLine>false</textParamValueOnNewLine>
+            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+          </configs>
+          <projects>longevity/longevity-200gb-48h-network-monkey-test,longevity/longevity-cdc-8h-multi-dc-topology-changes-test,longevity/longevity-counters-multidc-test,longevity/longevity-double-cluster-with-schema-changes-test,longevity/longevity-large-collections-12h-test,longevity/longevity-large-partition-2days-reversed-queries-test,longevity/longevity-lwt-24h-gce-test,longevity/longevity-multi-keyspaces-60h-test,longevity/longevity_mv_synchronous_updates-12h-test,scale/scale-5000-tables-test</projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+      </configs>
+    </hudson.plugins.parameterizedtrigger.BuildTrigger>
+  </publishers>
+  <buildWrappers/>
+</project>
