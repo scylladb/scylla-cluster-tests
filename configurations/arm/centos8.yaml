@@ -1,5 +1,5 @@
 ami_db_scylla_user: 'centos'
-ami_id_db_scylla: 'ami-08396399fcc3968ff' # CentOS Stream 8 aarch64 20230530
+ami_id_db_scylla: 'ami-05b7b54d9a348ef3e' # CentOS Stream 8 aarch64 20231127
 region_name: 'eu-west-1'
 instance_type_db: 'im4gn.xlarge'
 use_preinstalled_scylla: false
