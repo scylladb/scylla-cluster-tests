@@ -23,6 +23,7 @@ class FakeRemoter:
     def run(self,
             cmd: str,
             timeout: int,
+            retry: int,
             ) -> Result:
         return Result(stdout=cmd, stderr="", exited=0)
 
