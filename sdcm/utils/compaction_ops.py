@@ -52,7 +52,7 @@ class CompactionOps:
 
         return self.storage_service_client.scrub_ks_cf(**params)
 
-    def trigger_cleanup_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1", timeout: int = 500) -> Result:
+    def trigger_cleanup_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1", timeout: int = 600) -> Result:
         return self.storage_service_client.cleanup_ks_cf(keyspace=keyspace, cf=cf, timeout=timeout)
 
     def trigger_validation_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1") -> Result:

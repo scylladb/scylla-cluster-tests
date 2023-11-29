@@ -747,7 +747,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         of the command in (4).
         """
         compaction_args = self._prepare_start_stop_compaction()
-        trigger_func = partial(compaction_args.compaction_ops.trigger_cleanup_compaction, timeout=500)
+        trigger_func = partial(compaction_args.compaction_ops.trigger_cleanup_compaction, timeout=600)
         watch_func = partial(compaction_args.compaction_ops.stop_on_user_compaction_logged,
                              node=compaction_args.target_node,
                              mark=compaction_args.target_node.mark_log(),
