@@ -2871,9 +2871,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         scylla_shards = node.scylla_shards
 
         timeout = timeout or (node.pod_terminate_timeout * 60)
-        with adaptive_timeout(operation=Operations.DECOMMISSION, node=node), DbEventsFilter(
-                db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                line="std::runtime_error (Operation decommission is in progress, try again)"):
+        with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
             self.replace_scylla_cluster_value(
                 f"/spec/datacenter/racks/{rack}/members", current_members - 1, dc_idx=dc_idx)
             self.k8s_clusters[node.dc_idx].kubectl(

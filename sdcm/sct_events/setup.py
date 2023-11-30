@@ -73,6 +73,13 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
     EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                 event_class=DatabaseLogEvent.RUNTIME_ERROR,
                                 regex='.*view update generator not plugged to push updates').publish()
+
+    # cause of issue https://github.com/scylladb/scylla-cluster-tests/issues/6119
+    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                                regex=r'.*sidecar/controller.go.*std::runtime_error '
+                                      r'\(Operation decommission is in progress, try again\)').publish()
+
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line='abort_requested_exception').publish()
