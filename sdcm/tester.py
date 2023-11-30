@@ -1865,6 +1865,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                           client_encrypt=self.params.get('client_encrypt'),
                                           keyspace_name=keyspace_name,
                                           stop_test_on_failure=stop_test_on_failure,
+                                          prometheus_db=self.prometheus_db,
                                           params=params or self.params).run()
         scylla_encryption_options = self.params.get('scylla_encryption_options')
         if scylla_encryption_options and 'write' in stress_cmd:

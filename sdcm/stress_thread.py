@@ -17,6 +17,7 @@ import time
 import uuid
 import logging
 import contextlib
+import threading
 from typing import Any
 from itertools import chain
 from pathlib import Path
@@ -26,6 +27,7 @@ from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.cluster import BaseLoaderSet, BaseNode
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
 from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
@@ -34,8 +36,10 @@ from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.version_utils import get_docker_image_by_version
 from sdcm.utils.remote_logger import SSHLoggerBase
 
-
 LOGGER = logging.getLogger(__name__)
+
+ANY_CS_METEIC_QUERY = ' + '.join(f'sum(sct_cassandra_stress_{stress_type}_gauge{{type="ops"}}) by (instance)'
+                                 for stress_type in ['write', 'read', 'mixed', 'user'])
 
 
 class CassandraStressEventsPublisher(FileFollowerThread):
@@ -91,10 +95,12 @@ class CSHDRFileLogger(SSHLoggerBase):
 
 class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
     DOCKER_IMAGE_PARAM_NAME = 'stress_image.cassandra-stress'
+    schema_created = threading.Event()
+    should_wait_for_schema = False
 
     def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # pylint: disable=too-many-arguments
                  profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True,
-                 params=None):
+                 params=None, prometheus_db=None):
         super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout,
                          stress_num=stress_num, node_list=node_list,  # pylint: disable=too-many-arguments
                          round_robin=round_robin, stop_test_on_failure=stop_test_on_failure, params=params)
@@ -104,6 +110,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         self.client_encrypt = client_encrypt
         self.stop_test_on_failure = stop_test_on_failure
         self.compaction_strategy = compaction_strategy
+        self.prometheus_db = prometheus_db
 
     def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):  # pylint: disable=too-many-branches
         stress_cmd = self.stress_cmd
@@ -343,11 +350,28 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         for loader_idx, loader in enumerate(self.loaders):
             for cpu_idx in range(self.stress_num):
                 for ks_idx in range(1, self.keyspace_num + 1):
+                    _wait_for_schema = CassandraStressThread.should_wait_for_schema
+                    if CassandraStressThread.should_wait_for_schema and self.prometheus_db:
+                        logging.debug(f"[{_wait_for_schema=} {loader_idx=} {cpu_idx=}] waiting for schema")
+                        self.schema_created.wait()
+                    else:
+                        CassandraStressThread.should_wait_for_schema = True
+
                     self.results_futures += [self.executor.submit(self._run_cs_stress,
                                                                   *(loader, loader_idx, cpu_idx, ks_idx))]
-                    if loader_idx == 0 and cpu_idx == 0 and self.max_workers > 1:
-                        # Wait for first stress thread to create the schema, before spawning new stress threads
-                        time.sleep(30)
+                    if not _wait_for_schema and self.prometheus_db:
+                        logging.debug(f"[{_wait_for_schema=} {loader_idx=} {cpu_idx=}]: checking metric")
+                        try:
+                            self.prometheus_db.metric_has_data(ANY_CS_METEIC_QUERY, n=10)
+                        except Exception as exc:
+                            TestFrameworkEvent(
+                                message="failed to wait for first stress to start",
+                                source=self.__class__.__name__,
+                                source_method='run',
+                                trace=exc.__traceback__.tb_frame,
+                                severity=Severity.ERROR).publish()
+                        self.schema_created.set()
+
 
         return self
 
