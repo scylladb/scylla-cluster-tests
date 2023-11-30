@@ -87,6 +87,11 @@ class NodeLoadInfoService:
             load_1, load_5, load_15 = self.remoter.run('uptime').stdout.split("load average: ")[1].split(",")
             return float(load_1), float(load_5), float(load_15)
 
+    def get_memory_available(self) -> float:
+        metrics = self._get_node_exporter_metrics()
+        mem_available = float(metrics['node_memory_MemAvailable_bytes'])
+        return mem_available
+
     @retrying(n=5, sleep_time=1, allowed_exceptions=(ValueError,))
     def _get_metrics(self, port):
         metrics = self.remoter.run(f'curl -s localhost:{port}/metrics', verbose=False).stdout

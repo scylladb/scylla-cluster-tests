@@ -23,6 +23,7 @@ import requests
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import ScyllaHousekeepingServiceEvent
 from sdcm.tester import ClusterTester
+from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices
 from sdcm.utils.housekeeping import HousekeepingDB
 from sdcm.utils.common import get_latest_scylla_release, ScyllaProduct
 
@@ -338,6 +339,11 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
         with self.subTest("check cqlsh installation"):
             self.check_cqlsh()
+
+        with self.subTest("check node_exporter liveness"):
+            node_info_service = NodeLoadInfoServices().get(self.node)
+            assert node_info_service.cpu_load_5
+            assert node_info_service.get_memory_available()
 
         # We don't install any time sync service in docker, so the test is unnecessary:
         # https://github.com/scylladb/scylla/tree/master/dist/docker/etc/supervisord.conf.d
