@@ -1,16 +1,21 @@
 test_duration: 330
 
-prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=10485760 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(512) n=FIXED(10)' -pop seq=1..10485760",
+                    "cassandra-stress write no-warmup cl=ALL n=10485760 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(512) n=FIXED(10)' -pop seq=10485760..20971520",
+                    "cassandra-stress write no-warmup cl=ALL n=10485760 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(512) n=FIXED(10)' -pop seq=20971520..31457280",
+                    "cassandra-stress write no-warmup cl=ALL n=10485760 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(512) n=FIXED(10)' -pop seq=31457280..41943040"]
 
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
              "cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
              ]
 
-n_db_nodes: 6
+n_db_nodes: 3
 n_loaders: 2
 n_monitor_nodes: 1
 seeds_num: 3
+round_robin: true
 
+instance_type_loader: 'c5.2xlarge'
 instance_type_db: 'i4i.4xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
@@ -24,7 +29,6 @@ space_node_threshold: 64424
 server_encrypt: true
 client_encrypt: true
 
-pre_create_schema: True
 sstable_size: 100
 
 hinted_handoff: 'enabled'
