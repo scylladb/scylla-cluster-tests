@@ -599,11 +599,12 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         # Gather namespace-scoped resources info
         LOGGER.info("K8S-LOGS: gathering namespace scoped resources. list of namespaces: %s",
                     ', '.join(namespaces))
-        os.makedirs(logdir / "namespaces", exist_ok=True)
+        namespace_scope_dir = "namespace-scoped-resources"
+        os.makedirs(logdir / namespace_scope_dir, exist_ok=True)
         for resource_type in kubectl(
                 "api-resources --namespaced=true --verbs=get,list -o name").stdout.split():
             LOGGER.info("K8S-LOGS: gathering '%s' resources", resource_type)
-            logfile = logdir / "namespaces" / f"{resource_type}.{output_format}"
+            logfile = logdir / namespace_scope_dir / f"{resource_type}.{output_format}"
             resources_wide = kubectl(
                 f"get {resource_type} -A -o wide 2>&1 | tee {logfile}", ignore_status=True).stdout
             if resource_type.startswith("events"):
@@ -616,7 +617,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                 LOGGER.info(
                     "K8S-LOGS: gathering '%s' resources in the '%s' namespace",
                     resource_type, namespace)
-                resource_dir = logdir / "namespaces" / namespace / resource_type
+                resource_dir = logdir / namespace_scope_dir / namespace / resource_type
                 os.makedirs(resource_dir, exist_ok=True)
                 for res in resources_wide.split("\n"):
                     if not re.match(f"{namespace} ", res):
