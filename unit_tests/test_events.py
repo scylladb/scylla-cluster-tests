@@ -421,6 +421,19 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                                "10.12.0.219: std::runtime_error (view update generator not plugged to push updates)") \
                 .publish()
 
+            DatabaseLogEvent.RUNTIME_ERROR() \
+                .add_info(node="A",
+                          line_number=22,
+                          line="E1126 06:51:09.025977       1 sidecar/controller.go:143] syncing key "
+                               "'scylla/sct-cluster-eu-north-1-rack-1-1-0' failed: [can't sync the HostID "
+                               "annotation: local host ID \"877e1a6f-1a41-41d0-9331-88223cae86e8\" not found in IP "
+                               "to hostID mapping: map[172.20.14.11:c1895157-9b21-458d-b135-2f94ca1a5c9f "
+                               "172.20.169.200:fe04409c-7077-4faf-a9bc-3fada4deea1d "
+                               "172.20.171.188:ee21eb2f-8ffe-4017-9c84-ee88de98b5ac], "
+                               "can't decommision a node: can't decommission the node: "
+                               "agent [HTTP 500] std::runtime_error (Operation decommission is in progress, try again)]") \
+                .publish()
+
         log_content = self.get_event_log_file("events.log")
 
         self.assertIn("other back trace", log_content)
