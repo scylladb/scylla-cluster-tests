@@ -29,10 +29,9 @@ import time
 import traceback
 import json
 from distutils.version import LooseVersion
-
+from contextlib import ExitStack
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial
-
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
@@ -4410,40 +4409,44 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.tester.create_keyspace("keyspace_new_dc", replication_factor={
                                     datacenters[0]: min(3, len(self.cluster.nodes))})
         node_added = False
-        try:
-            with temporary_replication_strategy_setter(node) as replication_strategy_setter:
-                new_node = self._add_new_node_in_new_dc()
-                node_added = True
-                status = self.tester.db_cluster.get_nodetool_status()
-                new_dc_list = [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")]
-                assert new_dc_list, "new datacenter was not registered"
-                new_dc_name = new_dc_list[0]
-                for keyspace in system_keyspaces + ["keyspace_new_dc"]:
-                    strategy = ReplicationStrategy.get(node, keyspace)
-                    assert isinstance(strategy, NetworkTopologyReplicationStrategy), \
-                        "Should have been already switched to NetworkStrategy"
-                    strategy.replication_factors.update({new_dc_name: 1})
-                    replication_strategy_setter(**{keyspace: strategy})
-                InfoEvent(message='execute rebuild on new datacenter').publish()
-                with wait_for_log_lines(node=new_node, start_line_patterns=["rebuild.*started with keyspaces="],
-                                        end_line_patterns=["rebuild.*finished with keyspaces="],
-                                        start_timeout=60, end_timeout=600):
-                    new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", retry=0)
-                InfoEvent(message='Running full cluster repair on each node').publish()
-                for cluster_node in self.cluster.nodes:
-                    cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
-                datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
-                self._write_read_data_to_multi_dc_keyspace(datacenters)
-            self.cluster.decommission(new_node)
-            node_added = False
+
+        with ExitStack() as context_manager, \
+                temporary_replication_strategy_setter(node) as replication_strategy_setter:
+            def finalizer(exc_type, *_):
+                # in case of test end/killed, leave the cleanup alone
+                if exc_type is not KillNemesis:
+                    with self.cluster.cql_connection_patient(node) as session:
+                        session.execute('DROP KEYSPACE IF EXISTS keyspace_new_dc')
+                    if node_added:
+                        self.cluster.decommission(new_node)
+            context_manager.push(finalizer)
+
+            new_node = self._add_new_node_in_new_dc()
+            node_added = True
+            status = self.tester.db_cluster.get_nodetool_status()
+            new_dc_list = [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")]
+            assert new_dc_list, "new datacenter was not registered"
+            new_dc_name = new_dc_list[0]
+            for keyspace in system_keyspaces + ["keyspace_new_dc"]:
+                strategy = ReplicationStrategy.get(node, keyspace)
+                assert isinstance(strategy, NetworkTopologyReplicationStrategy), \
+                    "Should have been already switched to NetworkStrategy"
+                strategy.replication_factors.update({new_dc_name: 1})
+                replication_strategy_setter(**{keyspace: strategy})
+            InfoEvent(message='execute rebuild on new datacenter').publish()
+            with wait_for_log_lines(node=new_node, start_line_patterns=["rebuild.*started with keyspaces="],
+                                    end_line_patterns=["rebuild.*finished with keyspaces="],
+                                    start_timeout=60, end_timeout=600):
+                new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", retry=0)
+            InfoEvent(message='Running full cluster repair on each node').publish()
+            for cluster_node in self.cluster.nodes:
+                cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
             datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
-            assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
-            self._verify_multi_dc_keyspace_data(consistency_level="QUORUM")
-        finally:
-            with self.cluster.cql_connection_patient(node) as session:
-                session.execute('DROP KEYSPACE IF EXISTS keyspace_new_dc')
-            if node_added:
-                self.cluster.decommission(new_node)
+            self._write_read_data_to_multi_dc_keyspace(datacenters)
+
+        datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
+        assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
+        self._verify_multi_dc_keyspace_data(consistency_level="QUORUM")
 
     def get_cassandra_stress_write_cmds(self):
         write_cmds = self.tester.params.get("prepare_write_cmd")
