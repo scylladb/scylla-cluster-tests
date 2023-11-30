@@ -617,7 +617,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         entire_write_cs_thread_pool = self.run_stress_thread(stress_cmd=write_stress_during_entire_test)
 
         # Let to write_stress_during_entire_test complete the schema changes
-        self.metric_has_data(
+        self.prometheus_db.metric_has_data(
             metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}', n=10)
 
         # Prepare keyspace and tables for truncate test
@@ -649,7 +649,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         prepare_write_stress = self.params.get('prepare_write_stress')
         prepare_write_cs_thread_pool = self.run_stress_thread(stress_cmd=prepare_write_stress)
         InfoEvent(message='Sleeping for 60s to let cassandra-stress start before the upgrade...').publish()
-        self.metric_has_data(
+        self.prometheus_db.metric_has_data(
             metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
 
         # start gemini write workload
@@ -657,7 +657,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message="Start gemini during upgrade").publish()
             gemini_thread = self.run_gemini(self.params.get("gemini_cmd"))
             # Let to write_stress_during_entire_test complete the schema changes
-            self.metric_has_data(
+            self.prometheus_db.metric_has_data(
                 metric_query='gemini_cql_requests', n=10)
 
         with ignore_upgrade_schema_errors():
@@ -1349,7 +1349,7 @@ class UpgradeCustomTest(UpgradeTest):
                 continue
 
             try:
-                self.metric_has_data(
+                self.prometheus_db.metric_has_data(
                     metric_query='sct_cassandra_stress_user_gauge{type="ops", keyspace="%s"}' % keyspace_name, n=10)
             except Exception as err:  # pylint: disable=broad-except
                 InfoEvent(

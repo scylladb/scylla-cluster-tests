@@ -444,6 +444,31 @@ class PrometheusDBStats:
         fs_size_gb = float(fs_size_res[0]["values"][0][1]) / float(GB_SIZE)
         return fs_size_gb
 
+    def metric_has_data(self, metric_query, n=80, sleep_time=60, ):  # pylint: disable=invalid-name
+        """
+        wait for any prometheus metric to have data in it
+
+        example: wait 5 mins for cassandra stress to start writing:
+
+            self.metric_has_data(metric_query='sct_cassandra_stress_write_gauge{type="ops"}', n=5)
+
+        :param metric_query:
+        :param n: number of loop to try
+        :param sleep_time: sleep time between each loop
+        :return: None
+        """
+
+        @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
+        def is_metric_has_data():
+            now = time.time()
+            results = self.query(query=metric_query, start=now - 60, end=now)
+            LOGGER.debug("metric_has_data: %s", results)
+            assert results, "No results from Prometheus"
+            if results:
+                assert any((float(v[1]) for v in results[0]["values"])) > 0, f"{metric_query} didn't has data in it"
+
+        is_metric_has_data()
+
 
 class Stats:
     """Create and update a document in Elasticsearch."""
