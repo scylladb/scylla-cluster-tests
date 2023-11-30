@@ -2332,11 +2332,7 @@ class SCTConfiguration(dict):
         scylla_version = None
         _is_enterprise = False
 
-        if not self.get('use_preinstalled_scylla'):
-            scylla_repo = self.get('scylla_repo')
-            scylla_version = get_branch_version(scylla_repo)
-            _is_enterprise = is_enterprise(scylla_version)
-        elif unified_package := self.get('unified_package'):
+        if unified_package := self.get('unified_package'):
             with tempfile.TemporaryDirectory() as tmpdirname:
                 LOCALRUNNER.run(shell_script_cmd(f"""
                     cd {tmpdirname}
@@ -2347,7 +2343,10 @@ class SCTConfiguration(dict):
                 scylla_version = next(pathlib.Path(tmpdirname).glob('**/SCYLLA-VERSION-FILE')).read_text()
                 scylla_product = next(pathlib.Path(tmpdirname).glob('**/SCYLLA-PRODUCT-FILE')).read_text()
                 _is_enterprise = scylla_product == 'scylla-enterprise'
-
+        elif not self.get('use_preinstalled_scylla'):
+            scylla_repo = self.get('scylla_repo')
+            scylla_version = get_branch_version(scylla_repo)
+            _is_enterprise = is_enterprise(scylla_version)
         elif self.get('db_type') == 'cloud_scylla':
             _is_enterpise = True
         elif backend == 'aws':
