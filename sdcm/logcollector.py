@@ -1210,7 +1210,7 @@ class KubernetesLogCollector(BaseSCTLogCollector):
         DirLog(name='*_cluster_events.log', search_locally=True),
         DirLog(name='kubectl.version', search_locally=True),
         DirLog(name='cluster-scoped-resources/*', search_locally=True),
-        DirLog(name='namespaces/*', search_locally=True),
+        DirLog(name='namespace-scoped-resources/*', search_locally=True),
     ]
     cluster_log_type = "kubernetes"
     cluster_dir_prefix = "k8s-"
