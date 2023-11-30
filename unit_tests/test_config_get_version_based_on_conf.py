@@ -154,6 +154,7 @@ def test_unified_package():
     os.environ[
         'SCT_GCE_IMAGE_DB'] = 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
 
+    os.environ['SCT_USE_PREINSTALLED_SCYLLA'] = 'false'
     conf = sct_config.SCTConfiguration()
     conf.verify_configuration()
 
