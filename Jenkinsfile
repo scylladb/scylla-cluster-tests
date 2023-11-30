@@ -194,9 +194,6 @@ pipeline {
                     return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker,test-provision-k8s-local-kind-aws,test-provision-k8s-eks,test-provision-azure") && currentBuild.result == null
                 }
             }
-            options {
-                timeout(time: 180, unit: 'MINUTES')
-            }
             steps {
                 script {
                     def sctParallelTests = [:]
@@ -217,8 +214,10 @@ pipeline {
                                             try {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir(working_dir) {
-                                                        echo "calling createSctRunner"
-                                                        createSctRunner(curr_params, 90 , builder.region)
+                                                        timeout(time: 5, unit: 'MINUTES') {
+                                                            echo "calling createSctRunner"
+                                                            createSctRunner(curr_params, 90 , builder.region)
+                                                        }
                                                     }
                                                 }
                                             } catch(Exception err) {
@@ -230,10 +229,12 @@ pipeline {
                                         try {
                                             wrap([$class: 'BuildUser']) {
                                                 env.BUILD_USER_ID=env.CHANGE_AUTHOR
-                                                dir(working_dir) {
-                                                    runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
-                                                    result = 'SUCCESS'
-                                                    pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
+                                                timeout(time: 300, unit: 'MINUTES') {
+                                                    dir(working_dir) {
+                                                        runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
+                                                        result = 'SUCCESS'
+                                                        pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
+                                                    }
                                                 }
                                             }
                                         } catch(Exception err) {
@@ -243,8 +244,10 @@ pipeline {
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
-                                                dir(working_dir) {
-                                                    runCollectLogs(curr_params, builder.region)
+                                                timeout(time: 90, unit: 'MINUTES') {
+                                                    dir(working_dir) {
+                                                        runCollectLogs(curr_params, builder.region)
+                                                    }
                                                 }
                                             }
                                         } catch(Exception err) {
@@ -252,8 +255,10 @@ pipeline {
                                         }
                                         try {
                                             wrap([$class: 'BuildUser']) {
-                                                dir(working_dir) {
-                                                    runCleanupResource(curr_params, builder.region)
+                                                timeout(time: 30, unit: 'MINUTES') {
+                                                    dir(working_dir) {
+                                                        runCleanupResource(curr_params, builder.region)
+                                                    }
                                                 }
                                             }
                                         } catch(Exception err) {
@@ -262,8 +267,10 @@ pipeline {
                                         if (!(backend in ['k8s-local-kind-aws', 'k8s-eks'])) {
                                             try {
                                                 wrap([$class: 'BuildUser']) {
-                                                    dir(working_dir) {
-                                                        runRestoreMonitoringStack()
+                                                    timeout(time: 25, unit: 'MINUTES') {
+                                                        dir(working_dir) {
+                                                            runRestoreMonitoringStack()
+                                                        }
                                                     }
                                                 }
                                             } catch(Exception err) {
