@@ -2476,7 +2476,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         self.k8s_scylla_manager_auth_token = None
         kwargs = {}
         for k8s_cluster in k8s_clusters:
-            if not kwargs:
+            if not kwargs and params.get('use_mgmt'):
                 kwargs["s3_provider_endpoint"] = k8s_cluster.s3_provider_endpoint
             k8s_cluster.deploy_scylla_cluster(
                 node_pool_name=node_pool_name,
