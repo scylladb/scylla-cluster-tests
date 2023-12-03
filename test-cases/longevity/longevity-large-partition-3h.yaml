@@ -28,9 +28,7 @@ stress_cmd: ["scylla-bench -workload=sequential -mode=write -replication-factor=
              "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=25 -clustering-row-count=5555 -partition-offset=76   -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=170m -validate-data"
             ]
 
-post_prepare_cql_cmds: ["CREATE INDEX si_text ON scylla_bench.test(v)",
-                        "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELECT * FROM scylla_bench.test where ck IS NOT NULL AND pk is not null PRIMARY KEY (pk, ck) with comment = 'TEST VIEW'"
-                       ]
+post_prepare_cql_cmds: "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELECT * FROM scylla_bench.test where ck IS NOT NULL AND pk is not null PRIMARY KEY (pk, ck) with comment = 'TEST VIEW'"
 
 n_db_nodes: 5
 n_loaders: 4
