@@ -1,0 +1,63 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><project>
+  <actions/>
+  <description/>
+  <keepDependencies>false</keepDependencies>
+  <scm class="hudson.plugins.git.GitSCM">
+    <configVersion>2</configVersion>
+    <userRemoteConfigs>
+      <hudson.plugins.git.UserRemoteConfig>
+        <url>git@github.com:scylladb/scylla-cluster-tests.git</url>
+        <credentialsId>b8a774da-0e46-4c91-9f74-09caebaea261</credentialsId>
+      </hudson.plugins.git.UserRemoteConfig>
+    </userRemoteConfigs>
+    <branches>
+      <hudson.plugins.git.BranchSpec>
+        <name>*/master</name>
+      </hudson.plugins.git.BranchSpec>
+    </branches>
+    <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+    <submoduleCfg class="empty-list"/>
+    <extensions/>
+  </scm>
+  <assignedNode>aws-sct-builders-eu-west-1-v2-asg || aws-sct-builders-us-east-1-v2-asg</assignedNode>
+  <canRoam>false</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers>
+    <hudson.triggers.TimerTrigger>
+      <spec>TZ=Asia/Jerusalem
+H 9 * * *</spec>
+    </hudson.triggers.TimerTrigger>
+  </triggers>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>./docker/env/hydra.sh cloud-usage-report --emails rnd-internal@scylladb.com,karin@scylladb.com --report-type general</command>
+      <configuredLocalRules/>
+    </hudson.tasks.Shell>
+    <hudson.tasks.Shell>
+      <command>./docker/env/hydra.sh cloud-usage-report --emails qa@scylladb.com --report-type last-7-days-qa</command>
+      <configuredLocalRules/>
+    </hudson.tasks.Shell>
+    <hudson.tasks.Shell>
+      <command>./docker/env/hydra.sh cloud-usage-report --emails karin@scylladb.com,roy@scylladb.com,jakub.troc@scylladb.com --report-type last-7-days-non-qa</command>
+      <configuredLocalRules/>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers/>
+  <buildWrappers>
+    <org.jenkinsci.plugins.credentialsbinding.impl.SecretBuildWrapper>
+      <bindings>
+        <com.cloudbees.jenkins.plugins.awscredentials.AmazonWebServicesCredentialsBinding>
+          <credentialsId>jenkins2 aws account</credentialsId>
+          <accessKeyVariable>AWS_ACCESS_KEY_ID</accessKeyVariable>
+          <secretKeyVariable>AWS_SECRET_ACCESS_KEY</secretKeyVariable>
+          <roleSessionDurationSeconds>0</roleSessionDurationSeconds>
+        </com.cloudbees.jenkins.plugins.awscredentials.AmazonWebServicesCredentialsBinding>
+      </bindings>
+    </org.jenkinsci.plugins.credentialsbinding.impl.SecretBuildWrapper>
+    <hudson.plugins.timestamper.TimestamperBuildWrapper />
+    <org.jenkinsci.plugins.builduser.BuildUser />
+  </buildWrappers>
+</project>
