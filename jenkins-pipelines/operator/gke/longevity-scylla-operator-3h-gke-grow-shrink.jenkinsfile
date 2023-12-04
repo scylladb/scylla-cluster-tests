@@ -4,6 +4,8 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'k8s-gke',
+    region: 'us-east1',
+    availability_zone: 'c',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/scylla-operator/longevity-scylla-operator-3h-grow-shrink.yaml',
     email_recipients: 'qa@scylladb.com,scylla-operator@scylladb.com',
