@@ -240,7 +240,7 @@ class GcloudTokenUpdateThread(TokenUpdateThread):
         super().__init__(kubectl_token_path=kubectl_token_path)
 
     def get_token(self) -> str:
-        return self._gcloud.run(f'config config-helper --min-expiry={self._token_min_duration * 60} --format=json')
+        return self._gcloud.run('auth print-access-token').strip()
 
 
 class GcloudException(Exception):
@@ -254,7 +254,6 @@ class GkeCluster(KubernetesCluster):
     IS_NODE_TUNING_SUPPORTED = True
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/gke/scylla-node-prepare.yaml")
     NODE_CONFIG_CRD_FILE = sct_abs_path("sdcm/k8s_configs/gke/node-config-crd.yaml")
-    TOKEN_UPDATE_NEEDED = False
     pools: Dict[str, GkeNodePool]
 
     # pylint: disable=too-many-arguments,too-many-locals

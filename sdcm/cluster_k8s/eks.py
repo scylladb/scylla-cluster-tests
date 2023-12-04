@@ -304,7 +304,7 @@ class EksTokenUpdateThread(TokenUpdateThread):
         super().__init__(kubectl_token_path=kubectl_token_path)
 
     def get_token(self) -> str:
-        return LOCALRUNNER.run(self._aws_cmd).stdout
+        return LOCALRUNNER.run(self._aws_cmd).stdout.strip()
 
 
 # pylint: disable=too-many-instance-attributes
@@ -428,7 +428,9 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
 
     def create_token_update_thread(self):
         return EksTokenUpdateThread(
-            aws_cmd=f'aws eks --region {self.region_name} get-token --cluster-name {self.short_cluster_name}',
+            aws_cmd=(
+                f'aws eks --region {self.region_name} get-token'
+                f' --cluster-name {self.short_cluster_name} --output text --query "status.token"'),
             kubectl_token_path=self.kubectl_token_path
         )
 

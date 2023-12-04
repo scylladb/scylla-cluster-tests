@@ -400,27 +400,6 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         cls.kubectl(kluster, f"delete service {pod_name}-loadbalancer", namespace=namespace, timeout=timeout)
 
     @staticmethod
-    def get_kubectl_auth_config(kluster, config):
-        for user in config["users"]:
-            if kluster.short_cluster_name not in user["name"]:
-                continue
-            for auth_type in ['exec', 'auth-provider']:
-                if auth_type in user["user"]:
-                    return auth_type, user["user"][auth_type]
-        return None, None
-
-    @classmethod
-    def patch_kubectl_auth_config(cls, config, auth_type, cmd: str, args: list):
-        if auth_type == 'exec':
-            config['command'] = cmd
-            config['args'] = args
-        elif auth_type == 'auth-provider':
-            config['config']['cmd-args'] = ' '.join(args)
-            config['config']['cmd-path'] = cmd
-        else:
-            raise ValueError(f'Unknown auth-type {auth_type}')
-
-    @staticmethod
     def wait_for_pods_with_condition(kluster, condition: str, total_pods: Union[int, Callable],
                                      timeout: float, namespace: str,
                                      selector: str = '',
@@ -504,17 +483,18 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         LOGGER.debug(
             "Patch %s to use file token %s", kube_config_path, static_token_path,
             extra={'prefix': kluster.region_name})
-
-        with open(kube_config_path, encoding="utf-8") as kube_config:
-            data = yaml.safe_load(kube_config)
-        auth_type, user_config = KubernetesOps.get_kubectl_auth_config(kluster, data)
-
-        if user_config is None:
+        with open(kube_config_path, encoding="utf-8") as kube_config_file:
+            kube_config_data = yaml.safe_load(kube_config_file)
+        for i, user in enumerate(kube_config_data["users"]):
+            if kluster.short_cluster_name not in user["name"]:
+                continue
+            kube_config_data["users"][i]["user"] = {"tokenFile": static_token_path}
+            break
+        else:
             raise RuntimeError("Unable to find user configuration at the '%s'" % kube_config_path)
-        KubernetesOps.patch_kubectl_auth_config(user_config, auth_type, "cat", [static_token_path])
 
-        with open(kube_config_path, "w", encoding="utf-8") as kube_config:
-            yaml.safe_dump(data, kube_config)
+        with open(kube_config_path, "w", encoding="utf-8") as kube_config_file:
+            yaml.safe_dump(kube_config_data, kube_config_file)
 
         LOGGER.debug('Patched kubectl config at %s with static kubectl token from %s',
                      kube_config_path, static_token_path, extra={'prefix': kluster.region_name})
@@ -775,7 +755,6 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
         while not self._termination_event.wait(wait_time):
             try:
                 self._get_token_and_save_to_temporary_location()
-                self._check_token_validity_in_temporary_location()
                 self._replace_active_token_by_token_from_temporary_location()
                 LOGGER.debug('Cloud token has been updated and stored at %s', self._kubectl_token_path)
             except Exception as exc:  # pylint: disable=broad-except
@@ -796,10 +775,6 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
                 os.unlink(self._temporary_token_path)
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.debug('Failed to cleanup temporary token: %s', exc)
-
-    def _check_token_validity_in_temporary_location(self):
-        with open(self._temporary_token_path, encoding="utf-8") as gcloud_config_file:
-            json.load(gcloud_config_file)
 
     def _get_token_and_save_to_temporary_location(self):
         token = self.get_token()

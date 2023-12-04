@@ -1589,21 +1589,15 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         if self.TOKEN_UPDATE_NEEDED:
             self.start_token_update_thread()
             KubernetesOps.patch_kube_config(self, self.kubectl_token_path)
-            wait_for(self.check_if_token_is_valid, timeout=120, throw_exc=True)
         self.start_scylla_pods_ip_change_tracker_thread()
-
-    def check_if_token_is_valid(self) -> bool:
-        with open(self.kubectl_token_path, mode='rb') as token_file:
-            return bool(json.load(token_file))
 
     def start_token_update_thread(self):
         if os.path.exists(self.kubectl_token_path):
             os.unlink(self.kubectl_token_path)
         self._token_update_thread = self.create_token_update_thread()
         self._token_update_thread.start()
-        # Wait till GcloudTokenUpdateThread get tokens and dump them to gcloud_token_path
-        wait_for(os.path.exists, timeout=30, step=5, text="Wait for gcloud token", throw_exc=True,
-                 path=self.kubectl_token_path)
+        wait_for(os.path.exists, timeout=30, step=5, text="Wait for K8S access token",
+                 throw_exc=True, path=self.kubectl_token_path)
 
     def start_scylla_pods_ip_change_tracker_thread(self):
         self.scylla_pods_ip_change_tracker_thread = ScyllaPodsIPChangeTrackerThread(
