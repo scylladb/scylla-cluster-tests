@@ -1360,6 +1360,23 @@ def create_operator_test_release_jobs(branch, username, password, sct_branch, sc
                            template_context={'release_version': get_latest_scylla_release(product='scylla-enterprise')})
 
 
+@cli.command('create-qa-tools-jobs',
+             help="Create pipeline jobs for a new scylla-operator branch/release")
+@click.argument('username', envvar='JENKINS_USERNAME', type=str, required=False)
+@click.argument('password', envvar='JENKINS_PASSWORD', type=str, required=False)
+@click.option('--sct_branch', default='master', type=str)
+@click.option('--sct_repo', default='git@github.com:scylladb/scylla-cluster-tests.git', type=str)
+@click.option('--triggers/--no-triggers', default=False)
+def create_qa_tools_jobs(username, password, sct_branch, sct_repo, triggers):
+    add_file_logger()
+
+    base_job_dir = "QA-tools"
+    server = JenkinsPipelines(
+        username=username, password=password, base_job_dir=base_job_dir,
+        sct_branch_name=sct_branch, sct_repo=sct_repo)
+    server.create_job_tree(f'{server.base_sct_dir}/jenkins-pipelines/qa', create_freestyle_jobs=triggers)
+
+
 @cli.command("create-nemesis-pipelines")
 @click.option("--base-job", default=None, type=str)
 @click.option("--backend", default=NemesisJobGenerator.BACKEND_TO_REGION.keys(), multiple=True)
