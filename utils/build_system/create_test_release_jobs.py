@@ -41,10 +41,8 @@ class JenkinsPipelines:
     def create_directory(self, name: Path | str, display_name: str):
         try:
             dir_xml_data = DIR_TEMPLATE % dict(sct_display_name=display_name)
-            if name:
-                new_path = f'{self.base_job_dir}/{name}'
-            else:
-                new_path = self.base_job_dir
+            new_path = str(Path(self.base_job_dir) / name)
+
             if self.jenkins.job_exists(new_path):
                 LOGGER.info("reconfig folder [%s]", new_path)
                 self.jenkins.reconfig_job(new_path, dir_xml_data)
@@ -144,7 +142,8 @@ class JenkinsPipelines:
                 jenkins_path = ''
                 display_name = self.base_job_dir.split('/')[-1]
 
-            self.create_directory(jenkins_path, display_name=display_name)
+            if jenkins_path and display_name:
+                self.create_directory(jenkins_path, display_name=display_name)
 
             for job_file in job_files:
                 job_file = Path(root) / job_file
