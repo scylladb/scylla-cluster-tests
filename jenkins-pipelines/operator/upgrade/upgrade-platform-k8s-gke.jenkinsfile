@@ -5,6 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 rollingOperatorUpgradePipeline(
     backend: 'k8s-gke',
     region: 'us-east1',
+    availability_zone: 'c',
     test_name: 'upgrade_test.UpgradeTest.test_kubernetes_platform_upgrade',
     test_config: '''["test-cases/scylla-operator/kubernetes-platform-upgrade.yaml", "configurations/operator/k8s-upgrade-gke.yaml"]''',
 )
