@@ -5,10 +5,10 @@ WORKDIR /gemini
 RUN apk add curl
 
 ARG version
-ENV version=${version:-1.7.6}
+ENV version=${version:-1.8.7}
 
-RUN curl -LO https://github.com/scylladb/gemini/releases/download/v${version}/gemini_${version}_Linux_x86_64.tar.gz ;\
-    tar -xvf gemini_${version}_Linux_x86_64.tar.gz ;\
+RUN curl -LO https://github.com/scylladb/gemini/releases/download/v${version}/gemini_${version}_linux_amd64.tar.gz ;\
+    tar -xvf gemini_${version}_linux_amd64.tar.gz ;\
     chmod a+x gemini
 
 FROM ubuntu:22.04
