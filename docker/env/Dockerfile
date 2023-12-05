@@ -22,8 +22,8 @@ RUN mkdir /build && \
 
 FROM python:$PYTHON_IMAGE_TAG
 ARG KUBECTL_VERSION=1.27.3
-ARG EKSCTL_VERSION=0.146.0
-ARG HELM_VERSION=3.12.1
+ARG EKSCTL_VERSION=0.165.0
+ARG HELM_VERSION=3.12.2
 ENV PYTHONWARNINGS=ignore:unclosed \
     PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
@@ -52,9 +52,9 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         docker-ce-cli && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-RUN curl -fsSLo /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v$KUBECTL_VERSION/bin/linux/amd64/kubectl && \
+RUN curl -fsSLo /usr/local/bin/kubectl https://dl.k8s.io/release/v$KUBECTL_VERSION/bin/linux/amd64/kubectl && \
     chmod +x /usr/local/bin/kubectl
-RUN curl --silent --location  "https://github.com/weaveworks/eksctl/releases/download/v$EKSCTL_VERSION/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp && \
+RUN curl --silent --location "https://github.com/eksctl-io/eksctl/releases/download/v$EKSCTL_VERSION/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp && \
     mv /tmp/eksctl /usr/local/bin
 RUN curl --silent --location  "https://get.helm.sh/helm-v$HELM_VERSION-linux-amd64.tar.gz" | tar xz -C /tmp && mv /tmp/linux-amd64/helm /usr/local/bin
 COPY --from=python_packages /build /usr/local

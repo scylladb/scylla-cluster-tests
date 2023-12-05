@@ -90,6 +90,7 @@ bcrypt==4.1.1 \
     --hash=sha256:12611c4b0a8b1c461646228344784a1089bc0c49975680a2f54f516e71e9b79e \
     --hash=sha256:12f40f78dcba4aa7d1354d35acf45fae9488862a4fb695c7eeda5ace6aae273f \
     --hash=sha256:14d41933510717f98aac63378b7956bbe548986e435df173c841d7f2bd0b2de7 \
+    --hash=sha256:196008d91201bbb1aa4e666fee5e610face25d532e433a560cabb33bfdff958b \
     --hash=sha256:24c2ebd287b5b11016f31d506ca1052d068c3f9dc817160628504690376ff050 \
     --hash=sha256:2ade10e8613a3b8446214846d3ddbd56cfe9205a7d64742f0b75458c868f7492 \
     --hash=sha256:2e197534c884336f9020c1f3a8efbaab0aa96fc798068cb2da9c671818b7fbb0 \
@@ -121,9 +122,9 @@ botocore==1.31.4 \
     #   awscli
     #   boto3
     #   s3transfer
-botocore-stubs==1.33.4 \
-    --hash=sha256:0317f2895d7202d9407b41daa881549d00bf77a690a7870c88632970ef388fb1 \
-    --hash=sha256:186b86331542f8c9a720e6b0611ccedaddb62b859620dfed377cee0a2be6a6a0
+botocore-stubs==1.33.7.post1 \
+    --hash=sha256:88f43d21dd52d9dea506591e14ed6a4df67dbb653b8576ed84119f763b8a3c9b \
+    --hash=sha256:e83cb045fdeef4b3848680e8d342bbe6951f939bebe05263792080a1aadf6a7a
     # via boto3-stubs
 build==1.0.3 \
     --hash=sha256:538aab1b64f9828977f84bc63ae570b060a8ed1be419e7870b8b4fc5e6ea553b \
@@ -398,9 +399,9 @@ google-api-python-client==2.93.0 \
     --hash=sha256:62ee28e96031a10a1c341f226a75ac6a4f16bdb1d888dc8222b2cdca133d0031 \
     --hash=sha256:f34abb671afd488bd19d30721ea20fb30d3796ddd825d6f91f26d8c718a9f07d
     # via -r requirements.in
-google-auth==2.23.4 \
-    --hash=sha256:79905d6b1652187def79d491d6e23d0cbb3a21d3c7ba0dbaa9c8a01906b13ff3 \
-    --hash=sha256:d4bbc92fe4b8bfd2f3e8d88e5ba7085935da208ee38a134fc280e7ce682a05f2
+google-auth==2.24.0 \
+    --hash=sha256:2ec7b2a506989d7dbfdbe81cb8d0ead8876caaed14f86d29d34483cbe99c57af \
+    --hash=sha256:9b82d5c8d3479a5391ea0a46d81cca698d328459da31d4a459d4e901a5d927e0
     # via
     #   google-api-core
     #   google-api-python-client
@@ -744,9 +745,9 @@ mccabe==0.6.1 \
     --hash=sha256:ab8a6258860da4b6677da4bd2fe5dc2c659cff31b3ee4f7f5d64e79735b80d42 \
     --hash=sha256:dd8d182285a0fe56bace7f45b5e7d1a6ebcbf524e8f3bd87eb0f125271b8831f
     # via pylint
-msal==1.25.0 \
-    --hash=sha256:386df621becb506bc315a713ec3d4d5b5d6163116955c7dde23622f156b81af6 \
-    --hash=sha256:f44329fdb59f4f044c779164a34474b8a44ad9e4940afbc4c3a3a2bbe90324d9
+msal==1.26.0 \
+    --hash=sha256:224756079fe338be838737682b49f8ebc20a87c1c5eeaf590daae4532b83de15 \
+    --hash=sha256:be77ba6a8f49c9ff598bbcdc5dfcf1c9842f3044300109af738e8c3e371065b5
     # via
     #   azure-identity
     #   msal-extensions
@@ -888,9 +889,9 @@ paramiko==3.0.0 \
     # via
     #   -r requirements.in
     #   fabric
-path==16.7.1 \
-    --hash=sha256:2b477f5887033f3cbea1cfd8553ee6a6a498eb2540a19f4aa082822aadcea30a \
-    --hash=sha256:57f6ac8209c2b8fd3c515cf013e3b288af43460dddacf1d0249839aabcc14517
+path==16.9.0 \
+    --hash=sha256:d78c59194bce7362aae4798540f10bafa3eede0153a477556b23e915428f707d \
+    --hash=sha256:dfd31c2af60e8889a13538bef302ade7adacdb5351836be22638e2349ddd5d7b
     # via path-py
 path-py==12.5.0 \
     --hash=sha256:8d885e8b2497aed005703d94e0fd97943401f035e42a136810308bff034529a8 \
@@ -915,9 +916,9 @@ pip-tools==6.13.0 \
     --hash=sha256:50943f151d87e752abddec8158622c34ad7f292e193836e90e30d87da60b19d9 \
     --hash=sha256:61d46bd2eb8016ed4a924e196e6e5b0a268cd3babd79e593048720db23522bb1
     # via -r requirements.in
-platformdirs==4.0.0 \
-    --hash=sha256:118c954d7e949b35437270383a3f2531e99dd93cf7ce4dc8340d3356d30f173b \
-    --hash=sha256:cb633b2bcf10c51af60beb0ab06d2f1d69064b43abf4c185ca6b28865f3f9731
+platformdirs==4.1.0 \
+    --hash=sha256:11c8f37bcca40db96d8144522d925583bdb7a31f7b0e37e3ed4318400a8e2380 \
+    --hash=sha256:906d548203468492d432bcb294d4bc2fff751bf84971fbb2c10918cc206ee420
     # via
     #   pylint
     #   virtualenv
@@ -1089,9 +1090,9 @@ pyproject-hooks==1.0.0 \
     --hash=sha256:283c11acd6b928d2f6a7c73fa0d01cb2bdc5f07c57a2eeb6e83d5e56b97976f8 \
     --hash=sha256:f271b298b97f5955d53fb12b72c1fb1948c22c1a6b70b315c54cedaca0264ef5
     # via build
-pyroute2==0.7.9 \
-    --hash=sha256:3ef5cfdd18dedf5cb156eac9c63a2e67de4c430ef48c073aac0a911374b3ca89 \
-    --hash=sha256:b69d82f140b0774317d7ba40f6c5fa1d755098ba3f3eb619982d16e750dc631a
+pyroute2==0.7.10 \
+    --hash=sha256:60ec2fb2ceceb08df7a6393f5ac122c1e14ea5a2c6f5558b162737c884f36e49 \
+    --hash=sha256:cc2f90aad1517cb0b301041f678cc8d3c3427c26e53f15c78c93c67928d89a02
     # via tcconfig
 pytest==7.2.0 \
     --hash=sha256:892f933d339f068883b6fd5a459f03d85bfcb355e4981e146d2c7616c21fef71 \
@@ -1311,9 +1312,9 @@ selenium==3.141.0 \
     --hash=sha256:2d7131d7bc5a5b99a2d9b04aaf2612c411b03b8ca1b1ee8d3de5845a9be2cb3c \
     --hash=sha256:deaf32b60ad91a4611b98d8002757f29e6f2c2d5fcaf202e1c9ad06d6772300d
     # via -r requirements.in
-simplesqlite==1.5.1 \
-    --hash=sha256:239cc418a7951840015dd5be52bcb97324e1d4321e9c2ba67b3a5cd448a4d2bb \
-    --hash=sha256:5eb109704a4f8bbf65d1bd1ea2a8b1c0d048fb3d08ecbaba503cf2bf46aa5da0
+simplesqlite==1.5.2 \
+    --hash=sha256:f62300ce1e367fd5234a959fa3a32d7c81bdf719204ebc1e70c4f3cd91672dc6 \
+    --hash=sha256:f9a25b9e43d7aa28f551d170a42cfae10139c5c81a1bcb8776f857816ef5ae0f
     # via tcconfig
 six==1.16.0 \
     --hash=sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926 \
@@ -1447,9 +1448,9 @@ urllib3==1.26.18 \
     #   kubernetes
     #   requests
     #   selenium
-virtualenv==20.24.7 \
-    --hash=sha256:69050ffb42419c91f6c1284a7b24e0475d793447e35929b488bf6a0aade39353 \
-    --hash=sha256:a18b3fd0314ca59a2e9f4b556819ed07183b3e9a3702ecfe213f593d44f7b3fd
+virtualenv==20.25.0 \
+    --hash=sha256:4238949c5ffe6876362d9c0180fc6c3a824a7b12b80604eeb8085f2ed7460de3 \
+    --hash=sha256:bf51c0d9c7dd63ea8e44086fa1e4fb1093a31e963b86959257378aef020e1f1b
     # via pre-commit
 voluptuous==0.14.1 \
     --hash=sha256:7b6e5f7553ce02461cce17fedb0e3603195496eb260ece9aca86cc4cc6625218 \
@@ -1459,9 +1460,9 @@ wcwidth==0.2.12 \
     --hash=sha256:f01c104efdf57971bcb756f054dd58ddec5204dd15fa31d6503ea57947d97c02 \
     --hash=sha256:f26ec43d96c8cbfed76a5075dac87680124fa84e0855195a6184da9c187f133c
     # via prompt-toolkit
-websocket-client==1.6.4 \
-    --hash=sha256:084072e0a7f5f347ef2ac3d8698a5e0b4ffbfcab607628cadabc650fc9a83a24 \
-    --hash=sha256:b3324019b3c28572086c4a319f91d1dcd44e6e11cd340232978c684a7650d0df
+websocket-client==1.7.0 \
+    --hash=sha256:10e511ea3a8c744631d3bd77e61eb17ed09304c413ad42cf6ddfa4c7787e8fe6 \
+    --hash=sha256:f4c3d22fec12a2461427a29957ff07d35098ee2d976d3ba244e688b8b4057588
     # via
     #   docker
     #   kubernetes
