@@ -2811,12 +2811,12 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                 self.k8s_scylla_manager_auth_token = base64.b64decode(kubectl(
                     f"get secrets/{self.scylla_cluster_name}-auth-token"
                     " --template='{{ index .data \"auth-token.yaml\" }}'",
-                    namespace=SCYLLA_NAMESPACE).stdout.strip()).decode('utf-8').strip()
+                    namespace=self.namespace).stdout.strip()).decode('utf-8').strip()
             elif current_dc_idx > 0 and self.k8s_scylla_manager_auth_token:
                 existing_k8s_scylla_manager_auth_token = base64.b64decode(kubectl(
                     f"get secrets/{self.scylla_cluster_name}-auth-token"
                     " --template='{{ index .data \"auth-token.yaml\" }}'",
-                    namespace=SCYLLA_NAMESPACE).stdout.strip()).decode('utf-8').strip()
+                    namespace=self.namespace).stdout.strip()).decode('utf-8').strip()
                 if existing_k8s_scylla_manager_auth_token != self.k8s_scylla_manager_auth_token:
                     auth_token_base64 = base64.b64encode(
                         self.k8s_scylla_manager_auth_token.encode('utf-8')).decode('utf-8')
@@ -2825,7 +2825,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                         ' {"op": "replace", "path": "/data/auth-token.yaml",'
                         f' "value": "{auth_token_base64}"'
                         ' }]\'')
-                    kubectl(patch_cmd, namespace=SCYLLA_NAMESPACE)
+                    kubectl(patch_cmd, namespace=self.namespace)
             # NOTE: remove the 'externalSeeds' values because pod IPs are ephemeral and
             #       we are not going to keep it up-to-date making Scylla pods not try to connect to
             #       some other test run's Scylla pods which may pick up those ephemeral IPs.
