@@ -26,7 +26,7 @@ else
     cd "${DOCKER_ENV_DIR}"
     REQUIREMENTS_IN=$(realpath --relative-to=${DOCKER_ENV_DIR} ${SCT_DIR}/requirements.in)
     pip-compile $REQUIREMENTS_IN --allow-unsafe --generate-hashes --resolver=backtracking > ${SCT_DIR}/${PY_PREREQS_FILE}
-    sed 's|\.\./\.\./requirements.in|requirements.in|' sed 's|\.\./\.\./requirements.in|requirements.in|' requirements.txt -i
+    sed 's|\.\./\.\./requirements.in|requirements.in|' -i  ${SCT_DIR}/requirements.txt
     cp -f ${SCT_DIR}/${PY_PREREQS_FILE} .
     docker build --network=host -t scylladb/hydra:${VERSION} .
     rm -f ${PY_PREREQS_FILE}
