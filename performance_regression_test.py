@@ -101,8 +101,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                       result['latency 95th percentile'],
                       result['latency 99th percentile'],
                       result['latency 99.9th percentile'],
-                      result['Total partitions'],
-                      result['Total errors'])
+                      result['total partitions'],
+                      result['total errors'])
 
     def get_test_xml(self, result, test_name=''):
         test_content = """
@@ -508,6 +508,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         # run a write workload
         base_cmd_w = self.params.get('stress_cmd_w')
         stress_multiplier = self.params.get('stress_multiplier')
+        round_robin = self.params.get('round_robin')
         if stress_multiplier_w := self.params.get("stress_multiplier_w"):
             stress_multiplier = stress_multiplier_w
         # create new document in ES with doc_id = test_id + timestamp
@@ -516,10 +517,15 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.run_fstrim_on_all_db_nodes()
 
         # run a workload
-        stress_queue = self.run_stress_thread(
-            stress_cmd=base_cmd_w, stress_num=stress_multiplier, stats_aggregate_cmds=False)
-        results = self.get_stress_results(queue=stress_queue)
-
+        stress_queue = []
+        if not isinstance(base_cmd_w, list):
+            base_cmd_w = [base_cmd_w]
+        for stress_cmd in base_cmd_w:
+            stress_queue.append(self.run_stress_thread(
+                stress_cmd=stress_cmd, stress_num=stress_multiplier, stats_aggregate_cmds=False, round_robin=round_robin))
+        results = []
+        for stress in stress_queue:
+            results.append(self.get_stress_results(queue=stress, store_results=True))
         self.build_histogram(PerformanceTestWorkload.WRITE, PerformanceTestType.THROUGHPUT)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_write')
@@ -535,6 +541,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
         base_cmd_r = self.params.get('stress_cmd_r')
         stress_multiplier = self.params.get('stress_multiplier')
+        round_robin = self.params.get('round_robin')
         if stress_multiplier_r := self.params.get("stress_multiplier_r"):
             stress_multiplier = stress_multiplier_r
         self.run_fstrim_on_all_db_nodes()
@@ -548,10 +555,15 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.wait_no_compactions_running(n=240, sleep_time=180)
         self.run_fstrim_on_all_db_nodes()
         # run a read workload
-        stress_queue = self.run_stress_thread(
-            stress_cmd=base_cmd_r, stress_num=stress_multiplier, stats_aggregate_cmds=False)
-        results = self.get_stress_results(queue=stress_queue)
-
+        stress_queue = []
+        if not isinstance(base_cmd_r, list):
+            base_cmd_r = [base_cmd_r]
+        for stress_cmd in base_cmd_r:
+            stress_queue.append(self.run_stress_thread(
+                stress_cmd=stress_cmd, stress_num=stress_multiplier, stats_aggregate_cmds=False, round_robin=round_robin))
+        results = []
+        for stress in stress_queue:
+            results.append(self.get_stress_results(queue=stress, store_results=True))
         self.build_histogram(PerformanceTestWorkload.READ, PerformanceTestType.THROUGHPUT)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_read')
@@ -567,6 +579,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
         base_cmd_m = self.params.get('stress_cmd_m')
         stress_multiplier = self.params.get('stress_multiplier')
+        round_robin = self.params.get('round_robin')
         if stress_multiplier_m := self.params.get("stress_multiplier_m"):
             stress_multiplier = stress_multiplier_m
         self.run_fstrim_on_all_db_nodes()
@@ -579,10 +592,15 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         # wait compactions will be finished
         self.wait_no_compactions_running(n=240, sleep_time=180)
         self.run_fstrim_on_all_db_nodes()
-        stress_queue = self.run_stress_thread(
-            stress_cmd=base_cmd_m, stress_num=stress_multiplier, stats_aggregate_cmds=False)
-        results = self.get_stress_results(queue=stress_queue)
-
+        stress_queue = []
+        if not isinstance(base_cmd_m, list):
+            base_cmd_m = [base_cmd_m]
+        for stress_cmd in base_cmd_m:
+            stress_queue.append(self.run_stress_thread(
+                stress_cmd=stress_cmd, stress_num=stress_multiplier, stats_aggregate_cmds=False, round_robin=round_robin))
+        results = []
+        for stress in stress_queue:
+            results.append(self.get_stress_results(queue=stress, store_results=True))
         self.build_histogram(PerformanceTestWorkload.MIXED, PerformanceTestType.THROUGHPUT)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_mixed')
