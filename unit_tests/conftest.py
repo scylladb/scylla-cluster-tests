@@ -53,11 +53,12 @@ def prom_address():
 
 
 @pytest.fixture(name='docker_scylla', scope='function')
-def fixture_docker_scylla(request: pytest.FixtureRequest):
+def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=too-many-locals
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
     ssl = docker_scylla_args.get('ssl')
+    docker_network = docker_scylla_args.get('docker_network')
     # make sure the path to the file is base on the host path, and not as the docker internal path i.e. /sct/
     # since we are going to mount it in a DinD (docker-inside-docker) setup
     base_dir = os.environ.get("_SCT_BASE_DIR", None)
@@ -75,13 +76,16 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):
             update_certificates()
         finally:
             os.chdir(curr_dir)
-
     ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
+    extra_docker_opts = (f'-p 8000 -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
+                         f' -v {ssl_dir}:/etc/scylla/ssl_conf'
+                         ' --entrypoint /entry.sh')
+    if docker_network:
+        extra_docker_opts += f' --network={docker_network}'
+
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
                           command_line=f"--smp 1 {alternator_flags}",
-                          extra_docker_opts=(f'-p 8000 -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
-                                             f' -v {ssl_dir}:/etc/scylla/ssl_conf'
-                                             ' --entrypoint /entry.sh'))
+                          extra_docker_opts=extra_docker_opts, docker_network=docker_network)
     DummyRemoter = collections.namedtuple('DummyRemoter', ['run', 'sudo'])
     scylla.remoter = DummyRemoter(run=scylla.run, sudo=scylla.run)
 
