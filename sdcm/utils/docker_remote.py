@@ -8,7 +8,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class RemoteDocker(BaseNode):
-    def __init__(self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts=""):  # pylint: disable=too-many-arguments
+    def __init__(self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts="", docker_network=None):  # pylint: disable=too-many-arguments
         self.node = node
         self._internal_ip_address = None
         self.log = LOGGER
@@ -17,13 +17,20 @@ class RemoteDocker(BaseNode):
             f'{self.sudo_needed} docker run {extra_docker_opts} -d {ports} {image_name} {command_line}', verbose=True)
         self.docker_id = res.stdout.strip()
         self.image_name = image_name
+        self.docker_network = docker_network
         super().__init__(name=image_name, parent_cluster=node.parent_cluster)
 
     @property
     def internal_ip_address(self):
         if not self._internal_ip_address:
-            self._internal_ip_address = self.node.remoter.run(
-                f"docker inspect --format='{{{{ .NetworkSettings.IPAddress }}}}' {self.docker_id}").stdout.strip()
+            if self.docker_network:
+                self._internal_ip_address = self.node.remoter.run(
+                    "docker inspect"
+                    f" --format='{{{{ (index .NetworkSettings.Networks \"{self.docker_network}\").IPAddress }}}}'"
+                    f" {self.docker_id}").stdout.strip()
+            else:
+                self._internal_ip_address = self.node.remoter.run(
+                    f"docker inspect --format='{{{{ .NetworkSettings.IPAddress }}}}' {self.docker_id}").stdout.strip()
         return self._internal_ip_address
 
     @property
