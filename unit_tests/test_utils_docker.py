@@ -100,6 +100,8 @@ class DummyNode:
 
     def __init__(self):
         self._containers = {}
+        # empty params, now part of ContainerManager api to allow access to SCT configuration
+        self.parent_cluster = namedtuple('cluster', field_names='params')(params={})
 
     @staticmethod
     def c3_container_run_args(**kwargs):

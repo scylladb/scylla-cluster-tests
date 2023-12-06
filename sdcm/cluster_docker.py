@@ -56,6 +56,7 @@ class NodeContainerMixin:
                     image=self.node_container_image_tag,
                     command=f'--seeds="{seed_ip}"' if seed_ip else None,
                     volumes=volumes,
+                    network=self.parent_cluster.params.get('docker_network'),
                     nano_cpus=10**9)  # Same as `docker run --cpus=1 ...' CLI command.
 
 

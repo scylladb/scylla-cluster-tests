@@ -15,6 +15,7 @@ import logging
 from pathlib import Path
 from textwrap import dedent
 from itertools import chain
+from collections import namedtuple
 
 from sdcm.utils.common import list_resources_docker
 from sdcm.utils.docker_utils import ContainerManager, DockerException
@@ -45,6 +46,9 @@ class AwsMock:
         }
         self.regions = regions
         self.test_id = test_id
+
+        # empty params, now part of ContainerManager api to allow access to SCT configuration
+        self.parent_cluster = namedtuple('cluster', field_names='params')(params={})
 
     def aws_mock_container_run_args(self) -> dict:
         return {
