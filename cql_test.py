@@ -33,7 +33,7 @@ class CQLExampleTest(ClusterTester):
             self.create_keyspace(keyspace_name='ks', replication_factor=1)
             # pylint: disable=no-member
             session.execute("""
-                CREATE TABLE test1 (
+                CREATE TABLE ks.test1 (
                     k int,
                     c1 int,
                     c2 int,
@@ -43,7 +43,7 @@ class CQLExampleTest(ClusterTester):
                 );
             """)
             time.sleep(1)
-            session.execute("INSERT INTO test1 (k, c1, c2, v1, v2) "
+            session.execute("INSERT INTO ks.test1 (k, c1, c2, v1, v2) "
                             "VALUES (1, 2, 3, 4, 5)")
-            res = session.execute("SELECT v1, v2 from test1")
-            self.log.debug(res)
+            res = session.execute("SELECT v1, v2 from ks.test1")
+            self.log.debug(list(res))
