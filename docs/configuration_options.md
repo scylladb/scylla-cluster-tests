@@ -17,7 +17,7 @@
 | **<a href="#user-content-cloud_prom_path" name="cloud_prom_path">cloud_prom_path</a>**  | scylla cloud promproxy path to federate monitoring data into our monitoring instance | N/A | SCT_CLOUD_PROM_PATH
 | **<a href="#user-content-cloud_prom_host" name="cloud_prom_host">cloud_prom_host</a>**  | scylla cloud promproxy hostname to federate monitoring data into our monitoring instance | N/A | SCT_CLOUD_PROM_HOST
 | **<a href="#user-content-ip_ssh_connections" name="ip_ssh_connections">ip_ssh_connections</a>**  | Type of IP used to connect to machine instances.<br>This depends on whether you are running your tests from a machine inside<br>your cloud provider, where it makes sense to use 'private', or outside (use 'public')<br><br>Default: Use public IPs to connect to instances (public)<br>Use private IPs to connect to instances (private)<br>Use IPv6 IPs to connect to instances (ipv6) | private | SCT_IP_SSH_CONNECTIONS
-| **<a href="#user-content-scylla_repo" name="scylla_repo">scylla_repo</a>**  | Url to the repo of scylla version to install scylla | N/A | SCT_SCYLLA_REPO
+| **<a href="#user-content-scylla_repo" name="scylla_repo">scylla_repo</a>**  | Url to the repo of scylla version to install scylla. Can provide specific version after a colon e.g: `https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list:2021.1.18` | N/A | SCT_SCYLLA_REPO
 | **<a href="#user-content-scylla_apt_keys" name="scylla_apt_keys">scylla_apt_keys</a>**  | APT keys for ScyllaDB repos | ['17723034C56D4B19', '5E08FBD8B5D6EC9C', 'D0A112E067426AB2'] | SCT_SCYLLA_APT_KEYS
 | **<a href="#user-content-unified_package" name="unified_package">unified_package</a>**  | Url to the unified package of scylla version to install scylla | N/A | SCT_UNIFIED_PACKAGE
 | **<a href="#user-content-nonroot_offline_install" name="nonroot_offline_install">nonroot_offline_install</a>**  | Install Scylla without required root priviledge | N/A | SCT_NONROOT_OFFLINE_INSTALL
@@ -29,7 +29,7 @@
 | **<a href="#user-content-scylla_linux_distro" name="scylla_linux_distro">scylla_linux_distro</a>**  | The distro name and family name to use [centos/ubuntu-xenial/debian-jessie] | ubuntu-focal | SCT_SCYLLA_LINUX_DISTRO
 | **<a href="#user-content-scylla_linux_distro_loader" name="scylla_linux_distro_loader">scylla_linux_distro_loader</a>**  | The distro name and family name to use [centos/ubuntu-xenial/debian-jessie] | centos | SCT_SCYLLA_LINUX_DISTRO_LOADER
 | **<a href="#user-content-scylla_repo_m" name="scylla_repo_m">scylla_repo_m</a>**  | Url to the repo of scylla version to install scylla from for managment tests | N/A | SCT_SCYLLA_REPO_M
-| **<a href="#user-content-scylla_repo_loader" name="scylla_repo_loader">scylla_repo_loader</a>**  | Url to the repo of scylla version to install c-s for loader | https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.6.repo | SCT_SCYLLA_REPO_LOADER
+| **<a href="#user-content-scylla_repo_loader" name="scylla_repo_loader">scylla_repo_loader</a>**  | Url to the repo of scylla version to install c-s for loader | https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo | SCT_SCYLLA_REPO_LOADER
 | **<a href="#user-content-scylla_mgmt_address" name="scylla_mgmt_address">scylla_mgmt_address</a>**  | Url to the repo of scylla manager version to install for management tests | N/A | SCT_SCYLLA_MGMT_ADDRESS
 | **<a href="#user-content-scylla_mgmt_agent_address" name="scylla_mgmt_agent_address">scylla_mgmt_agent_address</a>**  | Url to the repo of scylla manager agent version to install for management tests | N/A | SCT_SCYLLA_MGMT_AGENT_ADDRESS
 | **<a href="#user-content-manager_version" name="manager_version">manager_version</a>**  | Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml | 3.0 | SCT_MANAGER_VERSION
@@ -207,6 +207,7 @@
 | **<a href="#user-content-k8s_n_auxiliary_nodes" name="k8s_n_auxiliary_nodes">k8s_n_auxiliary_nodes</a>**  | Number of of nodes in auxiliary pool | N/A | SCT_K8S_N_AUXILIARY_NODES
 | **<a href="#user-content-mgmt_docker_image" name="mgmt_docker_image">mgmt_docker_image</a>**  | Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' | N/A | SCT_MGMT_DOCKER_IMAGE
 | **<a href="#user-content-docker_image" name="docker_image">docker_image</a>**  | Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version | N/A | SCT_DOCKER_IMAGE
+| **<a href="#user-content-docker_network" name="docker_network">docker_network</a>**  | local docker network to use, if there's need to have db cluster connect to other services running in docker | N/A | SCT_DOCKER_NETWORK
 | **<a href="#user-content-db_nodes_private_ip" name="db_nodes_private_ip">db_nodes_private_ip</a>**  |  | N/A | SCT_DB_NODES_PRIVATE_IP
 | **<a href="#user-content-db_nodes_public_ip" name="db_nodes_public_ip">db_nodes_public_ip</a>**  |  | N/A | SCT_DB_NODES_PUBLIC_IP
 | **<a href="#user-content-loaders_private_ip" name="loaders_private_ip">loaders_private_ip</a>**  |  | N/A | SCT_LOADERS_PRIVATE_IP
@@ -243,7 +244,8 @@
 | **<a href="#user-content-prepare_write_cmd" name="prepare_write_cmd">prepare_write_cmd</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_PREPARE_WRITE_CMD
 | **<a href="#user-content-stress_cmd_no_mv" name="stress_cmd_no_mv">stress_cmd_no_mv</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CMD_NO_MV
 | **<a href="#user-content-stress_cmd_no_mv_profile" name="stress_cmd_no_mv_profile">stress_cmd_no_mv_profile</a>**  |  | N/A | SCT_STRESS_CMD_NO_MV_PROFILE
-| **<a href="#user-content-cs_user_profiles" name="cs_user_profiles">cs_user_profiles</a>**  |  | N/A | SCT_CS_USER_PROFILES
+| **<a href="#user-content-cs_user_profiles" name="cs_user_profiles">cs_user_profiles</a>**  | cassandra-stress user-profiles list. Executed in test step | N/A | SCT_CS_USER_PROFILES
+| **<a href="#user-content-prepare_cs_user_profiles" name="prepare_cs_user_profiles">prepare_cs_user_profiles</a>**  | cassandra-stress user-profiles list. Executed in prepare step | N/A | SCT_PREPARE_CS_USER_PROFILES
 | **<a href="#user-content-cs_duration" name="cs_duration">cs_duration</a>**  |  | 50m | SCT_CS_DURATION
 | **<a href="#user-content-cs_debug" name="cs_debug">cs_debug</a>**  | enable debug for cassandra-stress | N/A | SCT_CS_DEBUG
 | **<a href="#user-content-stress_cmd_mv" name="stress_cmd_mv">stress_cmd_mv</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CMD_MV

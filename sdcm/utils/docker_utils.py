@@ -290,7 +290,11 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
     @classmethod
     @retrying(n=10, sleep_time=1, allowed_exceptions=(Retry, ))
     def get_ip_address(cls, instance: object, name: str) -> str:
-        ip_address = cls.get_container(instance, name).attrs["NetworkSettings"]["IPAddress"]
+        if docker_network := instance.parent_cluster.params.get('docker_network'):
+            ip_address = cls.get_container(
+                instance, name).attrs["NetworkSettings"]["Networks"][docker_network]["IPAddress"]
+        else:
+            ip_address = cls.get_container(instance, name).attrs["NetworkSettings"]["IPAddress"]
         if not ip_address:
             raise Retry
         return ip_address

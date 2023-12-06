@@ -855,6 +855,9 @@ class SCTConfiguration(dict):
         dict(name="docker_image", env="SCT_DOCKER_IMAGE", type=str,
              help="Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version"),
 
+        dict(name="docker_network", env="SCT_DOCKER_NETWORK", type=str,
+             help="local docker network to use, if there's need to have db cluster connect to other services running in docker"),
+
         # baremetal config options
 
         dict(name="db_nodes_private_ip", env="SCT_DB_NODES_PRIVATE_IP", type=str_or_list,
