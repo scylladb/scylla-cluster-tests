@@ -1,0 +1,31 @@
+@startuml
+skinparam nodesep 30
+skinparam ranksep 30
+
+
+legend
+|= |= API |
+|<back:red>   </back>| CQL |
+|<back:green>   </back>| Kafka API |
+endlegend
+
+database "DB Nodes" {
+    card [source table]
+}
+
+package "Loaders" {
+    card [cassandra-stress]
+    card [kafka-consumer]
+}
+
+package "Kafka" {
+    card [kafka]
+    card [kafka-connect]
+}
+
+
+[cassandra-stress] -[bold,#red]-> [source table]: **1)** c-s write\n
+[kafka-connect] -[bold,#red]->  [source table]: **2)** Kafka connector read CDC
+[kafka-consumer] -[bold,#green]->  [kafka]: **3)** reading from\nkafka for validation
+
+@enduml
