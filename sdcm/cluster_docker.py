@@ -414,6 +414,9 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
         # Hasn't it's own system logs, since running on the host
         pass
 
+    def disable_daily_triggered_services(self):
+        pass
+
 
 class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disable=abstract-method
     def __init__(self,
