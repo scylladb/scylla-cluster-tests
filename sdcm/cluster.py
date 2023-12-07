@@ -2710,7 +2710,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                       connect_timeout=connect_timeout, ssl_params=ssl_params)
 
         # escape double quotes, that might be on keyspace/tables names
-        command = json.dumps(command.strip())
+        command = '"{}"'.format(command.strip().replace('"', '\\"'))
 
         cqlsh_cmd = self.add_install_prefix('/usr/bin/cqlsh')
         if self.is_cqlsh_support_cloud_bundle:
