@@ -32,3 +32,12 @@ def test_01_cqlsh_check_escaping(docker_scylla, use_redundant_symbols):
     cql_cmd = 'describe keyspace "10gb_keyspace"'
     res = docker_scylla.run_cqlsh(cql_cmd)
     assert 'CREATE KEYSPACE "10gb_keyspace"' in res.stdout
+
+
+def test_02_cqlsh_check_multiline(docker_scylla):
+    cql_cmd = """
+        create keyspace if not exists "10gb_keyspace" with replication =
+        {'class': 'NetworkTopologyStrategy', 'replication_factor': 1}
+    """
+    res = docker_scylla.run_cqlsh(cql_cmd)
+    assert res.ok
