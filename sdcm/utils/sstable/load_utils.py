@@ -205,10 +205,9 @@ class SstableLoadUtils:
     @classmethod
     def create_keyspace(cls, node, keyspace_name: str = "keyspace1", strategy: str = 'NetworkTopologyStrategy',
                         replication_factor: int = 1):
-        node.run_cqlsh("""
-                CREATE KEYSPACE %s WITH replication = {'class': '%s',
-                'replication_factor': %s}
-                """ % (keyspace_name, strategy, replication_factor))
+        node.run_cqlsh(
+            "CREATE KEYSPACE %s WITH replication = {'class': '%s', 'replication_factor': %s}" % (
+                keyspace_name, strategy, replication_factor))
 
     @classmethod
     def create_table_for_load(cls, node, schema_file_and_path: str, session):
