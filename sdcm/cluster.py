@@ -2706,7 +2706,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return ComparableScyllaVersion(self.scylla_version) > '2022.3.0~dev'
         return ComparableScyllaVersion(self.scylla_version) > '5.2.0~dev'
 
-    def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
+    def _gen_cqlsh_cmd(self, command, keyspace, timeout, connect_timeout):
         """cqlsh [options] [host [port]]"""
         credentials = self.parent_cluster.get_db_auth()
         auth_params = "-u {} -p '{}'".format(*credentials) if credentials else ''
@@ -2717,6 +2717,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                       auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout,
                       connect_timeout=connect_timeout, ssl_params=ssl_params)
 
+        host = '' if self.is_docker() else self.scylla_listen_address
         # escape double quotes, that might be on keyspace/tables names
         command = '"{}"'.format(command.strip().replace('"', '\\"'))
 
@@ -2727,14 +2728,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.send_files(str(connection_bundle_file), target_connection_bundle_file)
 
             return f'{cqlsh_cmd} {options} -e {command} --cloudconf {target_connection_bundle_file}'
-        return f'{cqlsh_cmd} {options} -e {command} {host} {port}'
+        return f'{cqlsh_cmd} {options} -e {command} {host}'
 
-    def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=120, verbose=True, split=False, target_db_node=None,
-                  connect_timeout=60, num_retry_on_failure=1):
+    def run_cqlsh(self, cmd, keyspace=None, timeout=120, verbose=True, split=False, connect_timeout=60,
+                  num_retry_on_failure=1):
         """Runs CQL command using cqlsh utility"""
         cmd = self._gen_cqlsh_cmd(command=cmd, keyspace=keyspace, timeout=timeout,
-                                  host=self.scylla_listen_address if not target_db_node else target_db_node.ip_address,
-                                  port=port if port else self.CQL_PORT,
                                   connect_timeout=connect_timeout)
         while num_retry_on_failure:
             try:
