@@ -5124,12 +5124,12 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         self.mgmt_auth_token = self.monitor_id  # pylint: disable=attribute-defined-outside-init
 
         if self.test_config.REUSE_CLUSTER:
-            node.disable_daily_triggered_services()
             self.configure_scylla_monitoring(node)
             self.restart_scylla_monitoring(sct_metrics=True)
             set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
             return
 
+        node.disable_daily_triggered_services()
         self.install_scylla_monitoring(node)
         self.configure_scylla_monitoring(node)
         try:
