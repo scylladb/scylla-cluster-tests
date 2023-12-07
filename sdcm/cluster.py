@@ -4855,6 +4855,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
             return
 
+        node.disable_daily_triggered_services()
         self.install_scylla_monitoring(node)
         self.configure_scylla_monitoring(node)
         try:
