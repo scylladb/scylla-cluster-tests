@@ -530,17 +530,21 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                                         field_selector=field_selector, timeout_seconds=timeout)
 
     @classmethod
-    def gather_k8s_logs_by_operator(cls, kluster, logdir_path=None, timeout_m=10):
+    def gather_k8s_logs_by_operator(cls, kluster, logdir_path=None):
         # Docs: https://github.com/scylladb/scylla-operator/blob/master/docs/source/support/must-gather.md
         logdir_path = logdir_path or kluster.logdir
         kubeconfig = kluster.kube_config_path
-        scylla_operator_image = kluster.get_operator_image()
+        operator_namespace = kluster._scylla_operator_namespace  # pylint: disable=protected-access
+        operator_bin_path = f"/tmp/scylla-operator-{kluster.shortid}"
+        operator_pod_name = kluster.kubectl(
+            "get pods -l app.kubernetes.io/instance=scylla-operator -o custom-columns=:.metadata.name --no-headers",
+            namespace=operator_namespace).stdout.split()[1]
+        kluster.kubectl(
+            f"cp {operator_namespace}/{operator_pod_name}:/usr/bin/scylla-operator {operator_bin_path}")
+        LOCALRUNNER.run(f"chmod +x {operator_bin_path}")
         gather_logs_cmd = (
-            f'timeout -v {timeout_m}m docker run --rm --network=host'
-            f' --entrypoint=/usr/bin/scylla-operator -v="{logdir_path}:{logdir_path}:rw"'
-            f' -v="{kubeconfig}:/kubeconfig:ro" "{scylla_operator_image}" must-gather --all-resources'
-            f' --dest-dir="{logdir_path}/must-gather" --loglevel=2 --kubeconfig=/kubeconfig'
-        )
+            f'{operator_bin_path} must-gather --all-resources --loglevel=2'
+            f' --dest-dir="{logdir_path}/must-gather" --kubeconfig={kubeconfig}')
         LOGGER.info(
             "K8S-LOGS: START running 'must-gather' scylla-operator command",
             extra={'prefix': kluster.region_name})
@@ -551,8 +555,6 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             #   Error: destination directory "%logdir_path%/must-gather" is not empty
             LOCALRUNNER.run(f"mkdir -p {logdir_path}/must-gather && rm -rf {logdir_path}/must-gather/*")
             LOCALRUNNER.run(gather_logs_cmd)
-            username = getpass.getuser()
-            LOCALRUNNER.sudo(f"chown -R {username}:{username} {logdir_path}/must-gather")
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.warning(
                 "Failed to run scylla-operator's 'must gather' command: %s", exc,
@@ -561,6 +563,12 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             LOGGER.info(
                 "K8S-LOGS: END running 'must-gather' scylla-operator command",
                 extra={'prefix': kluster.region_name})
+        try:
+            LOCALRUNNER.run(f"rm {operator_bin_path}")
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.warning(
+                "Failed to delete the the scylla-operator binary located at '%s': %s",
+                operator_bin_path, exc, extra={'prefix': kluster.region_name})
 
     @classmethod
     def gather_k8s_logs(cls, logdir_path, kubectl=None, namespaces=None) -> None:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
