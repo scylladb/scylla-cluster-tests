@@ -18,9 +18,13 @@ pytestmark = [
 ]
 
 
-def test_01_cqlsh_check_escaping(docker_scylla):
-    cql_cmd = ('create keyspace if not exists "10gb_keyspace" with replication = '
-               '{\'class\': \'NetworkTopologyStrategy\', \'replication_factor\': 1}')
+@pytest.mark.parametrize("use_redundant_symbols", [True, False])
+def test_01_cqlsh_check_escaping(docker_scylla, use_redundant_symbols):
+    prefix, suffix = ("\n    ", "    \n") if use_redundant_symbols else ("", "")
+    cql_cmd = (
+        f'{prefix}create keyspace if not exists "10gb_keyspace" with replication = '
+        '{\'class\': \'NetworkTopologyStrategy\', \'replication_factor\': 1}'
+        f'{suffix}')
 
     res = docker_scylla.run_cqlsh(cql_cmd)
     assert res.ok
