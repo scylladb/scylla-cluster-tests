@@ -1704,6 +1704,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Skipping nemesis for kubernetes")
 
+        # Need to check on a live cluster with GCP and Azure how the quota configuration works / fails
+        # SCT Issue REF: https://github.com/scylladb/scylla-cluster-tests/issues/6915
+        if self.cluster.params.get('cluster_backend') != 'aws':
+            raise UnsupportedNemesis("The end of quota test only supports AWS at the moment")
+
         result = node.remoter.run('cat /proc/mounts')
         if '/var/lib/scylla' not in result.stdout:
             raise UnsupportedNemesis("Scylla doesn't use an individual storage, skip end of quota test")
