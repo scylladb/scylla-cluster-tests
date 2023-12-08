@@ -39,6 +39,7 @@ from sdcm.cluster_k8s import (
     SCYLLA_OPERATOR_NAMESPACE
 )
 from sdcm.mgmt import TaskStatus
+from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import ParallelObject
 from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
@@ -754,6 +755,16 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     Deploy Scylla using helm chart with only default values.
     Storage capacity expected to be 10Gi
     """
+    # TODO: remove this skip when https://github.com/scylladb/scylla-operator/pull/1603 gets merged
+    if "eks" in db_cluster.params.get("cluster_backend"):
+        for k8s_cluster in db_cluster.k8s_clusters:
+            instance_type_db = k8s_cluster.params.get("instance_type_db")
+            region_name = k8s_cluster.region_name
+            if get_arch_from_instance_type(instance_type=instance_type_db, region_name=region_name) == "arm64":
+                pytest.skip(
+                    "Scylla-manager default version must be 3.2.5 or greater."
+                    " See https://github.com/scylladb/scylla-operator/pull/1603")
+
     target_chart_name, namespace = ("t-default-values",) * 2
     expected_capacity = '10Gi'
     need_to_collect_logs, k8s_cluster = True, db_cluster.k8s_cluster

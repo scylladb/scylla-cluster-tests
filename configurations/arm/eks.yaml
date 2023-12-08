@@ -1,0 +1,5 @@
+k8s_instance_type_auxiliary: 't4g.large'
+k8s_instance_type_monitor: 't4g.large'
+instance_type_loader: 'c6gn.xlarge'
+instance_type_db: 'im4gn.4xlarge'
+k8s_scylla_disk_gi: 6900
