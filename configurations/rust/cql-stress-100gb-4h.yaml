@@ -1,0 +1,9 @@
+prepare_write_cmd:  "cql-stress-cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)'"
+
+stress_cmd: ["cql-stress-cassandra-stress write cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -rate threads=30 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)'",
+             "cql-stress-cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -rate threads=30 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)'"
+             ]
+
+# Encryption is not yet supported by cql-stress.
+server_encrypt: false
+client_encrypt: false
