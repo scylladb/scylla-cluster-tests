@@ -1568,20 +1568,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         availability_zones = self.params.get('availability_zone').split(',')
         for _ in range(n_k8s_clusters):
             self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
-        params_for_parallel_objects = []
         for i in range(n_k8s_clusters):
-            params_for_parallel_objects.append({
-                'gce_datacenter': gce_datacenters[i % len(gce_datacenters)],
-                'availability_zone': availability_zones[i % len(availability_zones)],
-                'cluster_uuid': (
+            self.k8s_clusters.append(gke.init_k8s_gke_cluster(
+                gce_datacenter=gce_datacenters[i % len(gce_datacenters)],
+                availability_zone=availability_zones[i % len(availability_zones)],
+                cluster_uuid=(
                     f"{self.test_config.test_id()[:8]}"
                     if n_k8s_clusters < 2 else f"{self.test_config.test_id()[:6]}-{i + 1}"),
-                'params': self.params,
-            })
-        deployed_k8s_gke_clusters_results = ParallelObject(
-            timeout=3600, num_workers=n_k8s_clusters, objects=params_for_parallel_objects
-        ).run(func=gke.deploy_k8s_gke_cluster, unpack_objects=True, ignore_exceptions=False)
-        self.k8s_clusters.extend([res.result for res in deployed_k8s_gke_clusters_results])
+                params=self.params,
+            ))
+        ParallelObject(timeout=7200, num_workers=n_k8s_clusters, objects=self.k8s_clusters).run(
+            func=gke.deploy_k8s_gke_cluster, unpack_objects=True, ignore_exceptions=False)
 
         for i in range(self.k8s_clusters[0].tenants_number):
             self.db_clusters_multitenant.append(gke.GkeScyllaPodCluster(
@@ -1663,21 +1660,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         availability_zones = self.params.get('availability_zone').split(',')
         for _ in range(n_k8s_clusters):
             self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
-        params_for_parallel_objects = []
         for i in range(n_k8s_clusters):
-            params_for_parallel_objects.append({
-                'region_name': region_names[i % len(region_names)],
-                'availability_zone': availability_zones[i % len(availability_zones)],
-                'cluster_uuid': (
+            self.k8s_clusters.append(eks.init_k8s_eks_cluster(
+                region_name=region_names[i % len(region_names)],
+                availability_zone=availability_zones[i % len(availability_zones)],
+                cluster_uuid=(
                     f"{self.test_config.test_id()[:8]}"
                     if n_k8s_clusters < 2 else f"{self.test_config.test_id()[:6]}-{i + 1}"),
-                'params': self.params,
-                'credentials': self.credentials,
-            })
-        deployed_k8s_eks_clusters_results = ParallelObject(
-            timeout=3600, num_workers=n_k8s_clusters, objects=params_for_parallel_objects
-        ).run(func=eks.deploy_k8s_eks_cluster, unpack_objects=True, ignore_exceptions=False)
-        self.k8s_clusters.extend([res.result for res in deployed_k8s_eks_clusters_results])
+                params=self.params,
+                credentials=self.credentials,
+            ))
+        ParallelObject(timeout=7200, num_workers=n_k8s_clusters, objects=self.k8s_clusters).run(
+            func=eks.deploy_k8s_eks_cluster, unpack_objects=True, ignore_exceptions=False)
 
         for i in range(self.k8s_clusters[0].tenants_number):
             self.db_clusters_multitenant.append(eks.EksScyllaPodCluster(

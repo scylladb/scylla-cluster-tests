@@ -50,22 +50,22 @@ P = ParamSpec("P")  # pylint: disable=invalid-name
 R = TypeVar("R")  # pylint: disable=invalid-name
 
 
-def deploy_k8s_gke_cluster(gce_datacenter: str, availability_zone: str, params: dict,
-                           cluster_uuid: str = None):
+def init_k8s_gke_cluster(gce_datacenter: str, availability_zone: str, params: dict,
+                         cluster_uuid: str = None):
     """Dedicated for the usage by the 'Tester' class which orchestrates all the resources creation.
 
-    This function creates all the needed node pools and other ecosystem workloads
-    returning the 'k8s_cluster' object ready to provision Scylla and loaders pods.
+    Return the 'k8s_cluster' object back to the 'Tester' as soon as possible to be able to trigger
+    logs gathering operations in case resources provisioning and/or setup fail.
+    The 'Tester' should then call the 'deploy_k8s_gke_cluster' function
+    providing initialized 'k8s_cluster' object.
     """
-    gce_service = get_gce_compute_instances_client()
-
-    k8s_cluster = GkeCluster(
+    return GkeCluster(
         gke_cluster_version=params.get("gke_cluster_version"),
         gke_k8s_release_channel=params.get("gke_k8s_release_channel"),
         gce_disk_size=params.get("root_disk_size_db"),
         gce_disk_type=params.get("gce_root_disk_type_db"),
         gce_network=params.get("gce_network"),
-        gce_service=gce_service,
+        gce_service=get_gce_compute_instances_client(),
         gce_instance_type=params.get('k8s_instance_type_auxiliary'),
         user_prefix=params.get("user_prefix"),
         params=params,
@@ -74,6 +74,15 @@ def deploy_k8s_gke_cluster(gce_datacenter: str, availability_zone: str, params: 
         cluster_uuid=cluster_uuid,
         n_nodes=params.get('k8s_n_auxiliary_nodes'),
     )
+
+
+def deploy_k8s_gke_cluster(k8s_cluster) -> None:
+    """Dedicated for the usage by the 'Tester' class which orchestrates all the resources creation.
+
+    This function creates all the needed node pools and other ecosystem workloads
+    returning the 'k8s_cluster' object ready to provision Scylla and loaders pods.
+    """
+    params = k8s_cluster.params
     k8s_cluster.deploy()
 
     # NOTE: between GKE cluster creation and addition of new node pools we need
@@ -89,7 +98,7 @@ def deploy_k8s_gke_cluster(gce_datacenter: str, availability_zone: str, params: 
         k8s_cluster.chaos_mesh.initialize()
     if params.get('use_mgmt'):
         # NOTE: deploy scylla-manager only in the first dc/region
-        if params.gce_datacenters.index(gce_datacenter) == 0:
+        if params.gce_datacenters.index(k8s_cluster.region_name) == 0:
             k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
 
     # TODO: add support for different loaders amount in different K8S clusters
