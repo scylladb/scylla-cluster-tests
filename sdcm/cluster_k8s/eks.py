@@ -41,6 +41,7 @@ from sdcm.cluster_k8s import (
 )
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.aws_utils import (
+    get_arch_from_instance_type,
     get_ec2_network_configuration,
     tags_as_ec2_tags,
     EksClusterCleanupMixin,
@@ -54,6 +55,8 @@ R = TypeVar("R")  # pylint: disable=invalid-name
 SUPPORTED_EBS_STORAGE_CLASSES = ['gp3', ]
 
 EC2_INSTANCE_UPDATE_LOCK = Lock()
+
+ARCH_TO_IMAGE_TYPE_MAPPING = {'arm64': 'AL2_ARM_64', 'x86_64': 'AL2_x86_64'}
 
 
 def init_k8s_eks_cluster(region_name: str, availability_zone: str, params: dict,
@@ -171,12 +174,16 @@ class EksNodePool(CloudK8sNodePool):
             ssh_key_pair_name: str = None,
             provision_type: Literal['ON_DEMAND', 'SPOT'] = 'ON_DEMAND',
             launch_template: str = None,
-            image_type: Literal['AL2_x86_64', 'AL2_x86_64_GPU', 'AL2_ARM_64'] = 'AL2_x86_64',
+            image_type: Literal['AL2_x86_64', 'AL2_x86_64_GPU', 'AL2_ARM_64'] = None,
             disk_type: Literal["standard", "io1", "io2", "gp2", "sc1", "st1"] = None,
             k8s_version: str = None,
             is_deployed: bool = False,
             user_data: str = None,
     ):
+        if not image_type:
+            current_arch = get_arch_from_instance_type(
+                instance_type=instance_type, region_name=k8s_cluster.region_name)
+            image_type = ARCH_TO_IMAGE_TYPE_MAPPING.get(current_arch, "AL2_x86_64")
         super().__init__(
             k8s_cluster=k8s_cluster,
             name=name,
