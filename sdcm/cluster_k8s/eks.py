@@ -56,19 +56,21 @@ SUPPORTED_EBS_STORAGE_CLASSES = ['gp3', ]
 EC2_INSTANCE_UPDATE_LOCK = Lock()
 
 
-def deploy_k8s_eks_cluster(region_name: str, availability_zone: str,
-                           params: dict, credentials: List[cluster.UserRemoteCredentials],
-                           cluster_uuid: str = None):
+def init_k8s_eks_cluster(region_name: str, availability_zone: str, params: dict,
+                         credentials: List[cluster.UserRemoteCredentials],
+                         cluster_uuid: str = None):
     """Dedicated for the usage by the 'Tester' class which orchestrates all the resources creation.
 
-    This function creates all the needed node pools and other ecosystem workloads
-    returning the 'k8s_cluster' object ready to provision Scylla and loaders pods.
+    Return the 'k8s_cluster' object back to the 'Tester' as soon as possible to be able to trigger
+    logs gathering operations in case resources provisioning and/or setup fail.
+    The 'Tester' should then call the 'deploy_k8s_eks_cluster' function
+    providing initialized 'k8s_cluster' object.
     """
     second_availability_zone = "b" if availability_zone == "a" else "a"
     availability_zones = [availability_zone, second_availability_zone]
     ec2_security_group_ids, ec2_subnet_ids = get_ec2_network_configuration(
         regions=[region_name], availability_zones=availability_zones, params=params)
-    k8s_cluster = EksCluster(
+    return EksCluster(
         eks_cluster_version=params.get("eks_cluster_version"),
         ec2_security_group_ids=ec2_security_group_ids,
         ec2_subnet_ids=ec2_subnet_ids[0],
@@ -81,6 +83,15 @@ def deploy_k8s_eks_cluster(region_name: str, availability_zone: str,
         cluster_uuid=cluster_uuid,
         params=params,
         region_name=region_name)
+
+
+def deploy_k8s_eks_cluster(k8s_cluster) -> None:
+    """Dedicated for the usage by the 'Tester' class which orchestrates all the resources creation.
+
+    This function accepts the initialized 'k8s_cluster' object
+    and then creates all the needed node pools and other ecosystem workloads.
+    """
+    params = k8s_cluster.params
     k8s_cluster.deploy()
     k8s_cluster.tune_network()
     k8s_cluster.set_nodeselector_for_deployments(
@@ -135,7 +146,7 @@ def deploy_k8s_eks_cluster(region_name: str, availability_zone: str,
     k8s_cluster.prepare_k8s_scylla_nodes(node_pools=scylla_pool)
     if params.get('use_mgmt'):
         # NOTE: deploy scylla-manager only in the first region. It will then be used by each of the regions
-        if params.region_names.index(region_name) == 0:
+        if params.region_names.index(k8s_cluster.region_name) == 0:
             k8s_cluster.deploy_scylla_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
     return k8s_cluster
 
