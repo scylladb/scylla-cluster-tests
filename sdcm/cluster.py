@@ -1731,6 +1731,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.sudo(f'{pkg_cmd} install -y {package_name}', ignore_status=ignore_status)
 
     def is_apt_lock_free(self) -> bool:
+        # NOTE: dockerized Scylla doesn't have the 'lsof' package by default
+        result = self.remoter.sudo("which lsof || apt-get install -y lsof", ignore_status=True)
         result = self.remoter.sudo("lsof /var/lib/dpkg/lock", ignore_status=True)
         return result.exit_status == 1
 
