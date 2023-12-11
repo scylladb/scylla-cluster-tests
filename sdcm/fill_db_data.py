@@ -142,8 +142,7 @@ class FillDatabaseData(ClusterTester):
                                 firstname ascii,
                                 lastname ascii,
                                 age int
-                            ) WITH COMPACT STORAGE
-                            AND compaction = {'class': 'TimeWindowCompactionStrategy'}"""],
+                            ) WITH  compaction = {'class': 'TimeWindowCompactionStrategy'}"""],
             'truncates': ['TRUNCATE noncomposite_static_cf_test'],
             'inserts': [
                 "INSERT INTO noncomposite_static_cf_test (userid, firstname, lastname, age) VALUES "
@@ -170,8 +169,7 @@ class FillDatabaseData(ClusterTester):
                                 firstname ascii,
                                 lastname ascii,
                                 age int
-                            ) WITH COMPACT STORAGE
-                            AND compaction = {'class': 'SizeTieredCompactionStrategy'}"""],
+                            ) WITH compaction = {'class': 'SizeTieredCompactionStrategy'}"""],
             'truncates': ['TRUNCATE noncomposite_static_cf_test_batch'],
             'inserts': [
                 "INSERT INTO noncomposite_static_cf_test_batch (userid, firstname, lastname, age) VALUES "
@@ -200,8 +198,7 @@ class FillDatabaseData(ClusterTester):
                                 url text,
                                 time bigint,
                                 PRIMARY KEY (userid, url)
-                            ) WITH COMPACT STORAGE
-                            AND compaction = {'class': 'LeveledCompactionStrategy'}"""],
+                            ) WITH compaction = {'class': 'LeveledCompactionStrategy'}"""],
             'truncates': ['TRUNCATE dynamic_cf_test'],
             'inserts': [
                 "INSERT INTO dynamic_cf_test (userid, url, time) VALUES (550e8400-e29b-41d4-a716-446655440000, 'http://foo.bar', 42)",
@@ -233,8 +230,7 @@ class FillDatabaseData(ClusterTester):
                                       port int,
                                       time bigint,
                                       PRIMARY KEY (userid, ip, port)
-                                      ) WITH COMPACT STORAGE
-                                      AND compaction = {'class': 'TimeWindowCompactionStrategy'}"""],
+                                      ) WITH compaction = {'class': 'TimeWindowCompactionStrategy'}"""],
             'truncates': ['TRUNCATE dense_cf_test'],
             'inserts': [
                 "INSERT INTO dense_cf_test (userid, ip, port, time) VALUES (550e8400-e29b-41d4-a716-446655440000, '192.168.0.1', 80, 42)",
@@ -242,8 +238,10 @@ class FillDatabaseData(ClusterTester):
                 "INSERT INTO dense_cf_test (userid, ip, port, time) VALUES (550e8400-e29b-41d4-a716-446655440000, '192.168.0.2', 90, 42)",
                 "UPDATE dense_cf_test SET time = 24 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479 "
                 "AND ip = '192.168.0.2' AND port = 80",
-                "INSERT INTO dense_cf_test (userid, ip, time) VALUES (f47ac10b-58cc-4372-a567-0e02b2c3d479, '192.168.0.3', 42)",
-                "UPDATE dense_cf_test SET time = 42 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479 AND ip = '192.168.0.4'"],
+                # Without COMPACT STORAGE insert without define all PRIMARY KEYs is not allowed
+                "INSERT INTO dense_cf_test (userid, ip, port, time) VALUES (f47ac10b-58cc-4372-a567-0e02b2c3d479, '192.168.0.3', 90, 42)",
+                "UPDATE dense_cf_test SET time = 42 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479 AND ip = '192.168.0.4' "
+                "AND port = 90"],
             'queries': [
                 "SELECT ip, port, time FROM dense_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000",
                 "SELECT ip, port, time FROM dense_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000 and ip >= '192.168.0.2'",
@@ -262,10 +260,12 @@ class FillDatabaseData(ClusterTester):
                         [['192.168.0.2', 80, 24], ['192.168.0.2', 90, 42]],
                         [['192.168.0.2', 80, 24], ['192.168.0.2', 90, 42]],
                         [],
-                        [['192.168.0.3', None, 42]],
-                        [['192.168.0.4', None, 42]],
+                        # Without COMPACT STORAGE insert without define all PRIMARY KEYs is not allowed
+                        [['192.168.0.3', 90, 42]],
+                        [['192.168.0.4', 90, 42]],
                         [],
                         [[UUID('550e8400-e29b-41d4-a716-446655440000'), '192.168.0.1', 80, 42],
+                         [UUID('550e8400-e29b-41d4-a716-446655440000'), '192.168.0.2', 80, None],
                          [UUID('550e8400-e29b-41d4-a716-446655440000'), '192.168.0.2', 90, 42]],
                         [],
                         [],
@@ -320,7 +320,7 @@ class FillDatabaseData(ClusterTester):
                                 url text,
                                 time bigint,
                                 PRIMARY KEY (userid, url)
-                            ) WITH COMPACT STORAGE"""],
+                            ) """],
             'truncates': ['TRUNCATE limit_ranges_test'],
             'inserts': [
                 "INSERT INTO limit_ranges_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id, tld)
@@ -341,7 +341,7 @@ class FillDatabaseData(ClusterTester):
                                 url text,
                                 time bigint,
                                 PRIMARY KEY (userid, url)
-                            ) WITH COMPACT STORAGE"""],
+                            ) """],
             'truncates': ['TRUNCATE limit_multiget_test'],
             'inserts': [
                 "INSERT INTO limit_multiget_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id,
@@ -410,7 +410,7 @@ class FillDatabaseData(ClusterTester):
                 url text,
                 total counter,
                 PRIMARY KEY (userid, url)
-            ) WITH COMPACT STORAGE"""],
+            ) """],
             'truncates': ['TRUNCATE counters_test'],
             'inserts': [
                 "UPDATE counters_test SET total = total + 1 WHERE userid = 1 AND url = 'http://foo.com'",
@@ -520,7 +520,7 @@ class FillDatabaseData(ClusterTester):
                                   c int,
                                   v int,
                                   PRIMARY KEY (k, c)
-                                    ) WITH COMPACT STORAGE"""],
+                                    ) """],
             'truncates': ['TRUNCATE exclusive_slice_test'],
             'inserts': [
                 """BEGIN BATCH
@@ -563,13 +563,13 @@ class FillDatabaseData(ClusterTester):
                                                         k int,
                                                         c int,
                                                         v int,
-                                                        PRIMARY KEY (k, c)) WITH COMPACT STORAGE""",
+                                                        PRIMARY KEY (k, c))""",
                               """CREATE TABLE in_clause_wide_rows_test2 (
                                         k int,
                                         c1 int,
                                         c2 int,
                                         v int,
-                                        PRIMARY KEY (k, c1, c2)) WITH COMPACT STORAGE"""
+                                        PRIMARY KEY (k, c1, c2))"""
                               ],
             'truncates': ['TRUNCATE in_clause_wide_rows_test1', 'TRUNCATE in_clause_wide_rows_test2'],
             'inserts': [
@@ -614,7 +614,7 @@ class FillDatabaseData(ClusterTester):
                                 c int,
                                 v int,
                                 PRIMARY KEY (k, c)
-                            ) WITH COMPACT STORAGE""",
+                            ) """,
                               """CREATE TABLE order_by_test2 (
                 k int,
                 c1 int,
@@ -669,14 +669,14 @@ class FillDatabaseData(ClusterTester):
                                 number int,
                                 string text,
                                 PRIMARY KEY (row, number)
-                            ) WITH COMPACT STORAGE""",
+                            )""",
                               """CREATE COLUMNFAMILY more_order_by_test2 (
                 row text,
                 number int,
                 number2 int,
                 string text,
                 PRIMARY KEY (row, number, number2)
-            ) WITH COMPACT STORAGE"""],
+            ) """],
             'truncates': ['TRUNCATE more_order_by_test1'],
             'inserts': [
                 "INSERT INTO more_order_by_test1 (row, number, string) VALUES ('row', 1, 'one');",
@@ -904,7 +904,7 @@ class FillDatabaseData(ClusterTester):
                 name varchar,
                 stuff varchar,
                 PRIMARY KEY(username, id, name)
-            ) WITH COMPACT STORAGE"""],
+            ) """],
             'truncates': ['TRUNCATE deletion_test1', 'TRUNCATE deletion_test2'],
             'inserts': [
                 "INSERT INTO deletion_test1 (username, id, name, stuff) VALUES ('abc', 2, 'rst', 'some value')",
@@ -1440,7 +1440,7 @@ class FillDatabaseData(ClusterTester):
                             k int,
                             c int,
                             PRIMARY KEY (k, c)
-                        ) WITH COMPACT STORAGE
+                        )
                     """],
             'truncates': ["TRUNCATE only_pk_test1", "TRUNCATE only_pk_test2"],
             'inserts': ["INSERT INTO only_pk_test1 (k, c) VALUES (%s, %s)" % (k, c) for k in range(0, 2) for c in
@@ -1737,14 +1737,13 @@ class FillDatabaseData(ClusterTester):
                 c int,
                 v int,
                 PRIMARY KEY (k, c)
-            ) WITH COMPACT STORAGE
-              AND CLUSTERING ORDER BY (c DESC)""", """
+            ) WITH CLUSTERING ORDER BY (c DESC)""", """
                     CREATE TABLE reversed_compact_test2 (
                         k text,
                         c int,
                         v int,
                         PRIMARY KEY (k, c)
-                    ) WITH COMPACT STORAGE
+                    )
                 """],
             'truncates': ["TRUNCATE reversed_compact_test1", "TRUNCATE reversed_compact_test2"],
             'inserts': [
@@ -1788,8 +1787,7 @@ class FillDatabaseData(ClusterTester):
                 c2 int,
                 value text,
                 PRIMARY KEY(key, c1, c2)
-                ) WITH COMPACT STORAGE
-                  AND CLUSTERING ORDER BY(c1 DESC, c2 DESC)
+                ) WITH CLUSTERING ORDER BY(c1 DESC, c2 DESC)
         """],
             'truncates': ["TRUNCATE reversed_compact_multikey_test"],
             'inserts': [
@@ -2139,7 +2137,7 @@ class FillDatabaseData(ClusterTester):
                 fips_regions int,
                 city text,
                 PRIMARY KEY(group,zipcode,state,fips_regions)
-            )  WITH COMPACT STORAGE"""],
+            )  """],
             'truncates': ["TRUNCATE multi_in_compact_test"],
             'inserts': [
                 "INSERT INTO multi_in_compact_test (group, zipcode, state, fips_regions, city) VALUES ('%s', '%s', '%s', %s, '%s')" % d
@@ -2199,7 +2197,7 @@ class FillDatabaseData(ClusterTester):
                 c int,
                 v int,
                 PRIMARY KEY (key, c)
-            ) WITH COMPACT STORAGE"""],
+            ) """],
             'truncates': ["TRUNCATE multi_in_compact_non_composite_test"],
             'inserts': [
                 "INSERT INTO multi_in_compact_non_composite_test (key, c, v) VALUES (0, 0, 0)",
@@ -2234,7 +2232,7 @@ class FillDatabaseData(ClusterTester):
                 """CREATE TABLE compact_metadata_test (
                 id int primary key,
                 i int
-            ) WITH COMPACT STORAGE"""],
+            ) """],
             'truncates': ["TRUNCATE compact_metadata_test"],
             'inserts': ["INSERT INTO compact_metadata_test (id, i) VALUES (1, 2);"],
             'queries': ["SELECT * FROM compact_metadata_test"],
@@ -2518,7 +2516,7 @@ class FillDatabaseData(ClusterTester):
             'name': 'empty_in_test',
             'create_tables': [
                 "CREATE TABLE empty_in_test1 (k1 int, k2 int, v int, PRIMARY KEY (k1, k2))",
-                "CREATE TABLE empty_in_test2 (k1 int, k2 int, v int, PRIMARY KEY (k1, k2)) WITH COMPACT STORAGE"],
+                "CREATE TABLE empty_in_test2 (k1 int, k2 int, v int, PRIMARY KEY (k1, k2)) "],
             'truncates': ["TRUNCATE empty_in_test1", "TRUNCATE empty_in_test2"],
             'inserts': ["INSERT INTO empty_in_test1 (k1, k2, v) VALUES (%d, %d, %d)" % (i, j, i + j) for i in
                         range(0, 2) for j in range(0, 2)] +
@@ -2571,8 +2569,8 @@ class FillDatabaseData(ClusterTester):
             'name': 'select_distinct_test',
             'create_tables': [
                 "CREATE TABLE select_distinct_test1 (pk0 int, pk1 int, ck0 int, val int, PRIMARY KEY((pk0, pk1), ck0))",
-                "CREATE TABLE select_distinct_test2 (pk0 int, pk1 int, val int, PRIMARY KEY((pk0, pk1))) WITH COMPACT STORAGE",
-                "CREATE TABLE select_distinct_test3 (pk int, name text, val int, PRIMARY KEY(pk, name)) WITH COMPACT STORAGE"],
+                "CREATE TABLE select_distinct_test2 (pk0 int, pk1 int, val int, PRIMARY KEY((pk0, pk1))) ",
+                "CREATE TABLE select_distinct_test3 (pk int, name text, val int, PRIMARY KEY(pk, name)) "],
             'truncates': ["TRUNCATE select_distinct_test1", "TRUNCATE select_distinct_test2",
                           "TRUNCATE select_distinct_test3"],
             'inserts': ['INSERT INTO select_distinct_test1 (pk0, pk1, ck0, val) VALUES (%d, %d, 0, 0)' % (i, i) for
@@ -3006,7 +3004,7 @@ class FillDatabaseData(ClusterTester):
                 key text,
                 owner text,
                 PRIMARY KEY (partition, key)
-            ) WITH COMPACT STORAGE
+            )
         """],
             'truncates': ["TRUNCATE cas_and_compact_test"],
             'inserts': ["INSERT INTO cas_and_compact_test(partition, key, owner) VALUES ('a', 'b', null)"],
