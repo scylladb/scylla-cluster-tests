@@ -404,7 +404,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             for col_idx in range(col_num):
                 cs_key = '"C'+str(col_idx)+'"'
                 columns[cs_key] = 'blob'
-            self.create_table(name='standard1', keyspace_name=keyspace_name, key_type='blob', read_repair=0.0, compact_storage=True,
+            self.create_table(name='standard1', keyspace_name=keyspace_name, key_type='blob', read_repair=0.0,
                               columns=columns,
                               scylla_encryption_options=scylla_encryption_options,
                               compaction=compaction_strategy, sstable_size=sstable_size)

@@ -294,7 +294,6 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                     cs_key = '"C' + str(col_idx) + '"'
                     columns[cs_key] = 'blob'
                 self.create_table(name='standard1', keyspace_name=keyspace_name, key_type='blob', read_repair=0.0,
-                                  compact_storage=True,
                                   columns=columns,
                                   scylla_encryption_options=scylla_encryption_options,
                                   compaction=compaction_strategy, sstable_size=sstable_size)
