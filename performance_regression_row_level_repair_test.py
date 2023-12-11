@@ -52,7 +52,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
             self.log.debug('{} Created'.format(keyspace_name))
             table_name = "{}.standard1".format(keyspace_name)
-            self.create_table(name=table_name, key_type='blob', read_repair=0.0, compact_storage=True,
+            self.create_table(name=table_name, key_type='blob', read_repair=0.0,
                               columns={'"C0"': 'blob'},
                               scylla_encryption_options=scylla_encryption_options)
 

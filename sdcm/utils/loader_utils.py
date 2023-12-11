@@ -48,8 +48,7 @@ class LoaderUtilsMixin:
                     "C2" counter,
                     "C3" counter,
                     "C4" counter
-                ) WITH COMPACT STORAGE
-                    AND bloom_filter_fp_chance = 0.01
+                ) WITH bloom_filter_fp_chance = 0.01
                     AND caching = '{"keys":"ALL","rows_per_partition":"ALL"}'
                     AND comment = ''
                     AND compaction = {'class': 'SizeTieredCompactionStrategy'}
