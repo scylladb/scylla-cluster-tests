@@ -36,6 +36,7 @@ from sdcm.utils.user_profile import get_profile_content
 from sdcm.utils.version_utils import (
     get_node_supported_sstable_versions,
     ComparableScyllaVersion,
+    is_enterprise,
 )
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import (
@@ -395,6 +396,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             recover_conf(node)
             node.remoter.run('sudo systemctl daemon-reload')
 
+        result = node.remoter.run('scylla --version')
+        new_ver = result.stdout.strip()
+
         node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
         result = node.remoter.run('sudo find /var/lib/scylla/data/system')
         snapshot_name = re.findall(r"system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
@@ -404,8 +408,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         #     r"    sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; "
         #     r"done" % (snapshot_name[0], snapshot_name[0]))
 
-        # recover the system tables
-        if self.params.get('recover_system_tables'):
+        # recover the system tables - if it's downgrade from enterprise to OSS
+        if (self.params.get('recover_system_tables') or
+                (is_enterprise(orig_ver) and not is_enterprise(new_ver))):
             node.remoter.send_files('./data_dir/recover_system_tables.sh', '/tmp/')
             node.remoter.run('bash /tmp/recover_system_tables.sh %s' % snapshot_name[0], verbose=True)
         if self.params.get('test_sst3'):
@@ -418,8 +423,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
         node.run_scylla_sysconfig_setup()
         node.start_scylla_server(verify_up_timeout=500)
-        result = node.remoter.run('scylla --version')
-        new_ver = result.stdout.strip()
+
         InfoEvent(message='original scylla-server version is %s, latest: %s' % (orig_ver, new_ver)).publish()
         assert orig_ver != new_ver, "scylla-server version isn't changed"
 
