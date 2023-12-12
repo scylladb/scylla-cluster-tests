@@ -1,18 +1,19 @@
 test_duration: 300
 
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -pop seq=1..100000000"
-prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=100000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -pop seq=1..100000000"
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=15m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=IncrementalCompactionStrategy)' -rate threads=400 -mode cql3 native connectionsPerHost=120 -col 'n=FIXED(5) size=FIXED(200)' -pop seq=1..6000M"
+prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=100000000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=300 -pop seq=1..100000000"
 stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=300 -pop 'dist=gauss(1..100000000,50000000,5000000)' "
 stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=150 -pop 'dist=gauss(1..100000000,50000000,5000000)' "
 stress_multiplier_w: 4
 stress_multiplier_r: 1
 stress_multiplier_m: 2
-
+gce_network: 'qa-vpc'
+scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-2023.1.repo'
 # NOTE: following is needed for the K8S case
 k8s_loader_run_type: 'static'
-
+use_prepared_loaders: true
 n_db_nodes: 3
-n_loaders: 20
+n_loaders: 5
 n_monitor_nodes: 1
 
 # AWS
@@ -26,7 +27,7 @@ use_preinstalled_scylla: false
 gce_instance_type_db: 'z3-highmem-88'
 gce_root_disk_type_db: 'pd-ssd'
 gce_n_local_ssd_disk_db: 0
-gce_instance_type_loader: 'c3-highcpu-8'
+gce_instance_type_loader: 'z3-highmem-88'
 gce_root_disk_type_loader: 'pd-ssd'
 root_disk_size_loader: 50
 gce_instance_type_monitor: 'n2-highmem-16'
