@@ -27,7 +27,21 @@ from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
-ARM_ARCH_PREFIXES = ('im4', 'is4', 'a1.', 'inf', 'm6', 'c6g', 'r6', 'm7', 'c7g', 'r7')
+# NOTE: non storage-optimized instance types may be used for K8S auxiliary/loader nodes
+ARM_ARCH_PREFIXES = (
+    # General purpose
+    'm7g.', 'm6g.', 't4g.',
+    # Compute-optimized
+    'c7g.', 'c7gn.', 'c6g.', 'c6gn.',
+    # Memory-optimized
+    'r8g.', 'r7g.', 'r6g.', 'x2gd.',
+    # Accelerated computing
+    'g5g.',
+    # Storage-optimized
+    'i4g.', 'im4gn.', 'is4gen.',
+    # High performance computing (HPC) optimized
+    'hpc7g.',
+)
 AwsArchType = Literal['x86_64', 'arm64']
 
 
