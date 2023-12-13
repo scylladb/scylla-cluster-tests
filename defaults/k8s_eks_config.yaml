@@ -17,7 +17,6 @@ eks_nodegroup_role_arn: 'arn:aws:iam::797456418907:role/helm-test-worker-nodes-N
 eks_vpc_cni_version: 'v1.15.3-eksbuild.1'
 
 scylla_version: '5.2.11'
-scylla_mgmt_agent_version: '3.1.0'
 k8s_cert_manager_version: '1.8.0'
 
 k8s_deploy_monitoring: false
@@ -56,7 +55,6 @@ k8s_instance_type_auxiliary: 't3.large'
 #       '--blocked-reactor-notify-ms 100' cannot be set, because it gets set by operator itself
 append_scylla_args: '--abort-on-lsa-bad-alloc 1 --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1'
 docker_image: ''
-mgmt_docker_image: 'scylladb/scylla-manager:3.1.0'
 
 backup_bucket_backend: 's3'
 backup_bucket_location: 'minio-bucket'

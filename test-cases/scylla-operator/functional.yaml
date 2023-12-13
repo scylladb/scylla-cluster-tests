@@ -10,8 +10,6 @@ k8s_loader_cluster_name: 'sct-loaders'
 
 n_monitor_nodes: 0
 
-mgmt_docker_image: 'scylladb/scylla-manager:3.0.0'
-scylla_mgmt_agent_version: '3.0.0'
 scylla_version: '4.6.3'
 
 k8s_cert_manager_version: '1.8.0'
