@@ -379,6 +379,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 job_url=get_job_url(),
                 started_by=get_username(),
                 commit_id=get_git_commit_id(),
+                branch_name="#None",
+                origin_url="#None",
                 sct_config=self.params,
             )
             self.test_config.argus_client().set_sct_runner(
