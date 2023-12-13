@@ -10,15 +10,16 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-
+import functools
 import time
 import logging
 from functools import cached_property
-from typing import List, Dict, Literal
+from typing import List, Dict
 
 import boto3
 from botocore.exceptions import ClientError
-from mypy_boto3_ec2 import EC2ServiceResource
+from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
+from mypy_boto3_ec2.literals import ArchitectureTypeType
 
 from sdcm.utils.decorators import retrying
 from sdcm.utils.aws_region import AwsRegion
@@ -27,8 +28,7 @@ from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
-ARM_ARCH_PREFIXES = ('im4', 'is4', 'a1.', 'inf', 'm6', 'c6g', 'r6', 'm7', 'c7g', 'r7')
-AwsArchType = Literal['x86_64', 'arm64']
+AwsArchType = ArchitectureTypeType | str
 
 
 class EksClusterCleanupMixin:
@@ -363,10 +363,16 @@ def ec2_ami_get_root_device_name(image_id, region):
     return None
 
 
-def get_arch_from_instance_type(instance_type: str) -> AwsArchType:
-    if any((prefix in instance_type for prefix in ARM_ARCH_PREFIXES)):
-        return 'arm64'
-    return 'x86_64'
+@functools.cache
+def get_arch_from_instance_type(instance_type: str, region_name: str) -> AwsArchType:
+    client: EC2Client = boto3.client('ec2', region_name=region_name)
+    instance_type_info = client.describe_instance_types(InstanceTypes=[instance_type])
+    arch = 'x86_64'
+    try:
+        arch = instance_type_info['InstanceTypes'][0].get('ProcessorInfo', {}).get('SupportedArchitectures')[0]
+    except (IndexError, KeyError):
+        pass
+    return arch
 
 
 def get_scylla_images_ec2_resource(region_name: str) -> EC2ServiceResource:

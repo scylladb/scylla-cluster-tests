@@ -1708,9 +1708,9 @@ class SCTConfiguration(dict):
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
                 self._replace_docker_image_latest_tag()
             elif not self.get('ami_id_db_scylla') and self.get('cluster_backend') == 'aws':
-                aws_arch = get_arch_from_instance_type(self.get('instance_type_db'))
                 ami_list = []
                 for region in region_names:
+                    aws_arch = get_arch_from_instance_type(self.get('instance_type_db'), region_name=region)
                     try:
                         if ':' in scylla_version:
                             ami = get_branched_ami(scylla_version=scylla_version, region_name=region, arch=aws_arch)[0]
@@ -1778,9 +1778,9 @@ class SCTConfiguration(dict):
         if (oracle_scylla_version := self.get('oracle_scylla_version')) \
            and self.get("db_type") == "mixed_scylla":  # pylint: disable=too-many-nested-blocks
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
-                aws_arch = get_arch_from_instance_type(self.get('instance_type_db'))
                 ami_list = []
                 for region in region_names:
+                    aws_arch = get_arch_from_instance_type(self.get('instance_type_db'), region_name=region)
                     try:
                         if ':' in oracle_scylla_version:
                             ami = get_branched_ami(
