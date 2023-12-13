@@ -20,6 +20,7 @@ import pytest
 from sdcm import sct_config
 from sdcm.utils import loader_utils
 from sdcm.utils.common import get_latest_scylla_release
+from sdcm.utils.aws_utils import get_ssm_ami
 
 RPM_URL = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/' \
           '9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1' \
@@ -39,7 +40,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         cls.setup_default_env()
 
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         cls.conf = sct_config.SCTConfiguration()
 
         cls.clear_sct_env_variables()
@@ -66,7 +67,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         logging.debug(self.conf.dump_config())
 
     def test_02_verify_config(self):
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
 
         self.conf.verify_configuration()
         self.conf.check_required_files()
@@ -83,14 +84,14 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
         os.environ['SCT_N_DB_NODES'] = '2 2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb ami-eae4f795'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.dump_config()
 
-        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-06f919eb ami-eae4f795')
+        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-dummy ami-dummy2')
 
     def test_05_docker(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
@@ -170,7 +171,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     @pytest.mark.integration
     def test_10_mananger_regression(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb ami-eae4f795'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
 
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = sct_config.SCTConfiguration()
@@ -191,8 +192,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_12_scylla_version_ami_case1(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = '4.4.3'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb ami-eae4f795'
+        os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
 
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = sct_config.SCTConfiguration()
@@ -219,18 +219,17 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_12_scylla_version_repo_case1(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
     @pytest.mark.integration
     def test_12_scylla_version_repo_case2(self):  # pylint: disable=invalid-name
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
 
-        self.assertRaisesRegex(ValueError, r"repo for scylla version 99.0.3 wasn't found", sct_config.SCTConfiguration)
+        self.assertRaisesRegex(
+            ValueError, r"AMIs for scylla_version='99.0.3' not found in eu-west-1 arch=x86_64", sct_config.SCTConfiguration)
 
     def test_12_scylla_version_repo_ubuntu(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
@@ -310,7 +309,9 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_conf_check_required_files(self):  # pylint: disable=no-self-use
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        ami_id = get_ssm_ami(
+            '/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id', region_name='eu-west-1')
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = ami_id
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
         os.environ['SCT_STRESS_CMD'] = """cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml \
             ops'(insert=100)' no-warmup cl=ONE duration=10m -mode cql3 native -rate threads=3000 -errors ignore"""
@@ -444,7 +445,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     @pytest.mark.integration
     def test_16_default_oracle_scylla_version_eu_west_1(self):
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_REGION_NAME'] = 'eu-west-1'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
@@ -460,7 +461,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_ORACLE_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
         os.environ['SCT_REGION_NAME'] = 'us-east-1'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-eae4f795'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
         os.environ["SCT_DB_TYPE"] = "mixed_scylla"
 
@@ -471,7 +472,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     @pytest.mark.integration
     def test_16_oracle_scylla_version_eu_west_1(self):
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_ORACLE_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
         os.environ['SCT_REGION_NAME'] = 'eu-west-1'
@@ -488,7 +489,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_REGION_NAME'] = 'eu-west-1'
         os.environ['SCT_ORACLE_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
-        os.environ['SCT_AMI_ID_DB_ORACLE'] = 'ami-0535c88b85b914499'
+        os.environ['SCT_AMI_ID_DB_ORACLE'] = 'ami-dummy'
         os.environ["SCT_DB_TYPE"] = "mixed_scylla"
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
 
@@ -499,7 +500,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_17_verify_scylla_bench_required_parameters_in_command(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         os.environ['SCT_STRESS_CMD'] = "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
         os.environ["SCT_STRESS_READ_CMD"] = "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=100"
 
@@ -512,7 +513,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     @pytest.mark.integration
     def test_17_1_raise_error_if_scylla_bench_command_dont_have_workload(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         os.environ['SCT_STRESS_CMD'] = "scylla-bench -mode=write -replication-factor=3 -partition-count=100"
         os.environ["SCT_STRESS_READ_CMD"] = "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=100"
 
@@ -527,7 +528,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     @pytest.mark.integration
     def test_17_2_raise_error_if_scylla_bench_command_dont_have_mode(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         os.environ['SCT_STRESS_CMD'] = "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
         os.environ["SCT_STRESS_READ_CMD"] = "scylla-bench -workload=uniform -replication-factor=3 -partition-count=100"
 
@@ -599,7 +600,10 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     @pytest.mark.integration
     def test_20_user_data_format_version_aws_2(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-08396399fcc3968ff'  # run image which isn't scylla
+
+        ami_id = get_ssm_ami(
+            '/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id', region_name='eu-west-1')
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = ami_id  # run image which isn't scylla
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
@@ -690,7 +694,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_23_1_include_nemesis_selector_one_list(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/minimal_test_case.yaml", \
                                              "internal_test_data/nemesis_selector_list.yaml"]'''
 
@@ -704,7 +708,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_REGION_NAME'] = 'eu-west-1'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/minimal_test_case.yaml", \
                                              "internal_test_data/nemesis_selector_list_of_list.yaml"]'''
         os.environ['SCT_NEMESIS_CLASS_NAME'] = "NemesisClass1 NemesisClass2"
@@ -776,7 +780,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_REGION_NAME'] = 'eu-west-1 eu-west-2 us-east-1'
         os.environ['SCT_AVAILABILITY_ZONE'] = 'a,b,c'
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = "['ami-06f919eb', 'ami-06f919eb', 'ami-06f919eb']"
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = "['ami-dummy', 'ami-dummy', 'ami-dummy']"
         with self.assertRaises(AssertionError) as context:
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
@@ -801,7 +805,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_REGION_NAME'] = '["eu-west-1"]'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/cs_user_profile.yaml'
 
         conf = sct_config.SCTConfiguration()
