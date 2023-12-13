@@ -756,21 +756,23 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     """
     target_chart_name, namespace = ("t-default-values",) * 2
     expected_capacity = '10Gi'
+    need_to_collect_logs, k8s_cluster = True, db_cluster.k8s_cluster
+    logdir = f"{os.path.join(k8s_cluster.logdir, 'test_deploy_helm_with_default_values')}"
 
-    db_cluster.k8s_cluster.create_namespace(namespace=namespace)
-    db_cluster.k8s_cluster.create_scylla_manager_agent_config(namespace=namespace)
+    k8s_cluster.create_namespace(namespace=namespace)
+    k8s_cluster.create_scylla_manager_agent_config(namespace=namespace)
 
     log.debug('Deploy cluster with default storage capacity (expected "%s")', expected_capacity)
-    log.debug(db_cluster.k8s_cluster.helm_install(
+    log.debug(k8s_cluster.helm_install(
         target_chart_name=target_chart_name,
         source_chart_name="scylla-operator/scylla",
-        version=db_cluster.k8s_cluster.scylla_operator_chart_version,
+        version=k8s_cluster.scylla_operator_chart_version,
         use_devel=True,
         namespace=namespace,
     ))
 
     try:
-        db_cluster.k8s_cluster.kubectl_wait(
+        k8s_cluster.kubectl_wait(
             "--all --for=condition=Ready pod",
             namespace=namespace,
             timeout=1200,
@@ -794,17 +796,22 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
                 f"Expected capacity is {expected_capacity}, actual capacity of pod "
                 f"'{pod_name_and_status['name']}' is {storage_capacity[0]['capacity']}")
 
-            scylla_version = db_cluster.k8s_cluster.kubectl(f"exec {pod_name_and_status['name']} "
-                                                            f"-c scylla -- scylla --version", namespace=namespace)
+            scylla_version = k8s_cluster.kubectl(
+                f"exec {pod_name_and_status['name']} -c scylla -- scylla --version",
+                namespace=namespace)
             assert not scylla_version.stderr, (
                 f"Failed to get scylla version from {pod_name_and_status['name']}. Error: {scylla_version.stderr}")
             assert scylla_version.stdout, (
                 f"Failed to get scylla version from {pod_name_and_status['name']}. "
                 f"Output of command 'scylla --version' is empty")
+        need_to_collect_logs = False
 
     finally:
-        db_cluster.k8s_cluster.helm(f"uninstall {target_chart_name} --timeout 120s", namespace=namespace)
-        db_cluster.k8s_cluster.kubectl(f"delete namespace {namespace}")
+        if need_to_collect_logs:
+            KubernetesOps.gather_k8s_logs(
+                logdir_path=logdir, kubectl=k8s_cluster.kubectl, namespaces=[namespace])
+        k8s_cluster.helm(f"uninstall {target_chart_name} --timeout 120s", namespace=namespace)
+        k8s_cluster.kubectl(f"delete namespace {namespace}")
 
 
 @pytest.mark.restart_is_used
