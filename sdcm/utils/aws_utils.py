@@ -383,3 +383,18 @@ def get_scylla_images_ec2_resource(region_name: str) -> EC2ServiceResource:
                                 aws_session_token=response['Credentials']['SessionToken'])
 
     return new_session.resource("ec2", region_name=region_name)
+
+
+def get_ssm_ami(parameter: str, region_name) -> str:
+    """
+    get AMIs from SSM parameters
+
+    examples:
+    - '/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id'
+    - '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+    Ref: https://discourse.ubuntu.com/t/finding-ubuntu-images-with-the-aws-ssm-parameter-store/15507
+    """
+    client = boto3.client('ssm', region_name=region_name)
+    value = client.get_parameter(Name=parameter)
+    return value['Parameter']['Value']

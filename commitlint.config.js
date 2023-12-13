@@ -17,5 +17,10 @@ module.exports = {
         'body-min-length': [2, 'always', 30],
         'body-max-line-length': [2, 'always', 100],
         'body-leading-blank': [2, 'always'],
+    },
+    parserPreset: {
+      parserOpts: {
+        noteKeywords: ['\\[\\d+\\]']
+      }
     }
 };
