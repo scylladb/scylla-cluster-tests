@@ -60,12 +60,13 @@ def parse_cdc_blob_settings(blob: bytes) -> Dict[str, Union[bool, str]]:
     for regexp in CDC_SETTINGS_REGEXP:
         res = re.search(regexp, blob.decode())
         if res:
-            for key, value in res.groupdict().items():
-                if value in ("false", "off"):
+            for key, _value in res.groupdict().items():
+                if _value in ("false", "off"):
                     value = False
-                elif value == 'true':
+                elif _value == 'true':
                     value = True
-
+                else:
+                    value = _value
                 cdc_settings[key] = value
 
     return cdc_settings

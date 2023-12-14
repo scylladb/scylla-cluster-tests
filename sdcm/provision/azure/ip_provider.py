@@ -37,7 +37,7 @@ class IpAddressProvider:
         try:
             ips = self._azure_service.network.public_ip_addresses.list(self._resource_group_name)
             for ip in ips:
-                ip = self._azure_service.network.public_ip_addresses.get(self._resource_group_name, ip.name)
+                ip = self._azure_service.network.public_ip_addresses.get(self._resource_group_name, ip.name)  # noqa: PLW2901
                 self._cache[ip.name] = ip
         except ResourceNotFoundError:
             pass

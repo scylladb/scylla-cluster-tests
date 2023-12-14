@@ -625,10 +625,10 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                     resource_type, namespace)
                 resource_dir = logdir / namespace_scope_dir / namespace / resource_type
                 os.makedirs(resource_dir, exist_ok=True)
-                for res in resources_wide.split("\n"):
-                    if not re.match(f"{namespace} ", res):
+                for _res in resources_wide.split("\n"):
+                    if not re.match(f"{namespace} ", _res):
                         continue
-                    res = res.split()[1]
+                    res = _res.split()[1]
                     logfile = resource_dir / f"{res}.yaml"
                     res_stdout = kubectl(
                         f"get {resource_type}/{res} -o yaml 2>&1 | tee {logfile}",
@@ -1068,7 +1068,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
 
         for callback in callbacks:
             if callable(callback):
-                callback = [callback, [], {}]
+                callback = [callback, [], {}]  # noqa: PLW2901
             if (isinstance(callback, (tuple, list))
                     and len(callback) == 3
                     and callable(callback[0])

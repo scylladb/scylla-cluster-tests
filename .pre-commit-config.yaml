@@ -39,11 +39,10 @@ repos:
         types: [python]
         exclude: '\.sh$'
 
-    -   id: pylint
-        name: pylint
-        entry: pylint -j 2 -d consider-using-f-string
+    -   id: ruff
+        name: ruff
+        entry: ruff check --fix
         language: system
-        exclude: ^docker/alternator-dns/.*$
         types: [python]
 
 - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook

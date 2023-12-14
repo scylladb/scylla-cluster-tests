@@ -327,7 +327,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 self._pre_create_templated_user_schema(batch_start=extra_tables_idx,
                                                        batch_end=extra_tables_idx+num_of_newly_created_tables)
                 for i in range(num_of_newly_created_tables):
-                    batch += self.create_templated_user_stress_params(extra_tables_idx + i, cs_profile=cs_profile)
+                    batch.append(self.create_templated_user_stress_params(extra_tables_idx + i, cs_profile=cs_profile))
 
             nodes_ips = self.all_node_ips_for_stress_command
             for params in batch:

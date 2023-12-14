@@ -178,7 +178,7 @@ class JenkinsPipelines:
                 self.create_directory(jenkins_path, display_name=display_name)
 
             for job_file in job_files:
-                job_file = Path(root) / job_file
+                job_file = Path(root) / job_file  # noqa: PLW2901
                 if (job_file.suffix == '.jenkinsfile') and create_pipelines_jobs:
                     self.create_pipeline_job(job_file, group_name=jenkins_path, job_name_suffix=job_name_suffix)
                 if (job_file.suffix == '.xml') and create_freestyle_jobs:

@@ -548,7 +548,7 @@ class ManagerCluster(ScyllaManagerBase):
         LOGGER.debug("Created task id is: {}".format(task_id))
         return RestoreTask(task_id=task_id, cluster_id=self.id, manager_node=self.manager_node)
 
-    def create_backup_task(self, dc_list=None,  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
+    def create_backup_task(self, dc_list=None,  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches  # noqa: PLR0913
                            dry_run=None, interval=None, keyspace_list=None, cron=None,
                            location_list=None, num_retries=None, rate_limit_list=None, retention=None, show_tables=None,
                            snapshot_parallel_list=None, start_date=None, upload_parallel_list=None, legacy_args=None):
