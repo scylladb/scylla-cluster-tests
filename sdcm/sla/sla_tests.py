@@ -106,10 +106,7 @@ class Steps(SlaUtils):
 
     # pylint: disable=too-many-arguments
     def attach_sl_and_validate_scheduler_runtime(self, tester, new_service_level, role_for_attach,
-                                                 read_roles, prometheus_stats, sleep=600,
-                                                 # restart_scylla parameter is temporary - wWorkaround for issue
-                                                 # https://github.com/scylladb/scylla-enterprise/issues/2572
-                                                 restart_scylla=False):
+                                                 read_roles, prometheus_stats, sleep=600):
         @retrying(n=15, sleep_time=1, message="Wait for service level has been attached to the role",
                   allowed_exceptions=(Exception, ValueError,))
         def validate_role_service_level_attributes_against_db():
@@ -123,12 +120,31 @@ class Steps(SlaUtils):
                 role_for_attach.attach_service_level(new_service_level)
                 role_for_attach.validate_role_service_level_attributes_against_db()
 
-                # Workaround for issue https://github.com/scylladb/scylla-enterprise/issues/2572
-                if restart_scylla:
-                    nodes_for_restart = [node for node in tester.db_cluster.nodes if node.jmx_up() and node.db_up()
-                                         and not node.running_nemesis]
-                    tester.db_cluster.restart_binary_protocol(nodes=nodes_for_restart)
-                # End workaround
+                # Fix for issue https://github.com/scylladb/scylla-enterprise/issues/2572
+                for node in tester.db_cluster.nodes:
+                    if node.db_up():
+                        node.remoter.run(
+                            "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
+                            " http://127.0.0.1:10000/service_levels/switch_tenants"
+                        )
+
+                # Wait for tenant switch
+                # The above call to '/service_levels/switch_tenants' only marks
+                # all of the CQL connections to switch tenant (it's scheduling group).
+                # The actual switch on a connection will happen when the connection finshes processing current request.
+                time.sleep(5*60)
+
+                # Print connections map on each node to validate connections' scheduling groups
+                for node in tester.db_cluster.nodes:
+                    if node.db_up():
+                        result = node.remoter.run(
+                            "curl -X GET --header 'Content-Type: application/json' --header 'Accept: application/json'"
+                            " http://127.0.0.1:10000/service_levels/count_connections"
+                        )
+
+                        connections_map = result.stdout.strip()
+                        LOGGER.debug("[NODE {}] {}".format(node.private_ip_address, connections_map))
+                # End fix
 
                 start_time = time.time() + 60
                 time.sleep(sleep)
@@ -255,8 +271,7 @@ class SlaTests(Steps):
                                                                   role_for_attach=role_low,
                                                                   read_roles=read_roles,
                                                                   prometheus_stats=prometheus_stats,
-                                                                  sleep=600,
-                                                                  restart_scylla=True))
+                                                                  sleep=600))
 
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
@@ -438,8 +453,7 @@ class SlaTests(Steps):
                                                                   role_for_attach=role_high,
                                                                   read_roles=read_roles,
                                                                   prometheus_stats=prometheus_stats,
-                                                                  sleep=600,
-                                                                  restart_scylla=True))
+                                                                  sleep=600))
 
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
@@ -515,8 +529,7 @@ class SlaTests(Steps):
                                                                   role_for_attach=role_low,
                                                                   read_roles=read_roles,
                                                                   prometheus_stats=prometheus_stats,
-                                                                  sleep=600,
-                                                                  restart_scylla=True))
+                                                                  sleep=600))
 
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
