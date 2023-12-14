@@ -1,0 +1,34 @@
+test_duration: 60
+pre_create_keyspace: [
+  "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 };",
+  "CREATE TABLE IF NOT EXISTS keyspace1.standard1 (key blob PRIMARY KEY, \"C0\" blob, \"C1\" blob, \"C2\" blob, \"C3\" blob, \"C4\" blob) WITH  cdc = {'enabled': true, 'preimage': false, 'postimage': true, 'ttl': 600}"
+]
+
+stress_cmd: ["cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..10000000 -log interval=5",
+             ]
+
+n_loaders: 1
+n_monitor_nodes: 1
+n_db_nodes: 1
+
+instance_type_runner: c7i.2xlarge
+instance_type_db: i4i.large
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_interval: 1
+nemesis_filter_seeds: false
+
+user_prefix: 'kafka'
+use_mgmt: false
+
+docker_network: 'kafka-stack-docker-compose_default'
+
+kafka_backend: 'localstack'
+
+kafka_connectors:
+  - version: 'hub:scylladb/scylla-cdc-source-connector:1.1.2'
+    name: "QuickstartConnector"
+    config:
+      "connector.class": "com.scylladb.cdc.debezium.connector.ScyllaConnector"
+      "scylla.name": "SCTConnectorNamespace"
+      "scylla.table.names": 'keyspace1.standard1'

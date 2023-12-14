@@ -89,13 +89,14 @@ def get_git_status_info() -> GitStatus:
     return git_status
 
 
-def clone_repo(remoter, repo_url: str, destination_dir_name: str = "", clone_as_root=True):
+def clone_repo(remoter, repo_url: str, destination_dir_name: str = "", clone_as_root=True, branch=None):
     # pylint: disable=broad-except
     try:
         LOGGER.debug("Cloning from %s...", repo_url)
         rm_cmd = f"rm -rf ./{repo_url.split('/')[-1].split('.')[0]}"
         remoter.sudo(rm_cmd, ignore_status=False)
-        clone_cmd = f"git clone {repo_url} {destination_dir_name}"
+        branch = f'--branch {branch}' if branch else ''
+        clone_cmd = f"git clone {branch} {repo_url} {destination_dir_name}"
         if clone_as_root:
             remoter.sudo(clone_cmd)
         else:

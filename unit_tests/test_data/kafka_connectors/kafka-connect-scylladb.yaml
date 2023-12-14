@@ -1,0 +1,16 @@
+kafka_backend: localstack
+
+kafka_connectors:
+  - source: 'https://github.com/scylladb/kafka-connect-scylladb/releases/download/1.1.1/scylladb-kafka-connect-scylladb-1.1.1.zip'
+    name: "scylladb-sink-connector-url"
+    config:
+      "connector.class": "io.connect.scylladb.ScyllaDbSinkConnector"
+      "scylladb.keyspace": 'keyspace1'
+      topics: "topic1"
+
+  - source: 'hub:scylladb/kafka-connect-scylladb:1.1.1'
+    name: "scylladb-sink-connector"
+    config:
+      "connector.class": "io.connect.scylladb.ScyllaDbSinkConnector"
+      "scylladb.keyspace": 'keyspace1'
+      topics: "topic1"

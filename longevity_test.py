@@ -132,6 +132,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         self.run_pre_create_keyspace()
         self.run_pre_create_schema()
 
+        self.kafka_configure()
+
         if scan_operation_params := self._get_scan_operation_params():
             for scan_param in scan_operation_params:
                 self.log.info("Starting fullscan operation thread with the following params: %s", scan_param)
