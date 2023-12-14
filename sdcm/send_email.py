@@ -581,7 +581,7 @@ class PerfSimpleQueryReporter(BaseEmailReporter):
     email_template_file = "results_perf_simple_query.html"
 
 
-def build_reporter(name: str,
+def build_reporter(name: str,  # noqa: PLR0911
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
     # pylint: disable=too-many-return-statements,too-many-branches

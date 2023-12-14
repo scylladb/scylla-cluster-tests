@@ -137,7 +137,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             if result.exited:
                 gemini_stress_event.add_result(result=result)
                 gemini_stress_event.severity = Severity.ERROR
-            else:
+            else:  # noqa: PLR5501
                 if result.stderr:
                     gemini_stress_event.add_result(result=result)
                     gemini_stress_event.severity = Severity.WARNING
