@@ -514,7 +514,7 @@ class IntegrationTests(unittest.TestCase):
              'Ebs': {'DeleteOnTermination': True,
                      'SnapshotId': 'snap-0717a2bee0a38bc84',
                      'VolumeSize': 30,
-                     'VolumeType': 'gp2',
+                     'VolumeType': 'gp3',
                      'Encrypted': False}},
             {'DeviceName': '/dev/sdb',
              'VirtualName': 'ephemeral0'},

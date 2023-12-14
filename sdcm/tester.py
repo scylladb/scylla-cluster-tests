@@ -1264,7 +1264,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                                region=regions[0]),
                     "Ebs": {
                         "VolumeSize": loader_info['disk_size'],
-                        "VolumeType": "gp2"
+                        "VolumeType": "gp3"
                     }
                 }]
             else:
