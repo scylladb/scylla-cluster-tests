@@ -248,7 +248,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     """
     _gce_service: compute_v1.InstancesClient
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  cluster_uuid=None, gce_instance_type='n1-standard-1', gce_region_names=None,
                  gce_n_local_ssd=1, gce_image_username='root', cluster_prefix='cluster',
                  node_prefix='node', n_nodes=3, add_disks=None, params=None, node_type=None,
@@ -336,7 +336,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, dc_idx=dc_idx))
         if self._add_disks:
             for disk_type, disk_size in self._add_disks.items():
-                disk_size = int(disk_size)
+                disk_size = int(disk_size)  # noqa: PLW2901
                 if disk_size:
                     gce_disk_struct.append(self._get_persistent_disk_struct(name=name, disk_size=disk_size,
                                                                             disk_type=disk_type, dc_idx=dc_idx))
@@ -542,7 +542,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
 class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
                  user_prefix=None, n_nodes=3, add_disks=None, params=None, gce_datacenter=None, service_accounts=None):
@@ -578,7 +578,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
 
 class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
                  user_prefix=None, n_nodes=10, add_disks=None, params=None, gce_datacenter=None):
@@ -609,7 +609,7 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
 
 class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', user_prefix=None, n_nodes=1,
                  targets=None, add_disks=None, params=None, gce_datacenter=None,

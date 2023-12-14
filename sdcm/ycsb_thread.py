@@ -103,9 +103,9 @@ class YcsbStatsPublisher(FileFollowerThread):
                             for key, value in match.groupdict().items():
                                 if not key == 'count':
                                     try:
-                                        value = float(value) / 1000.0
+                                        value = float(value) / 1000.0  # noqa: PLW2901
                                     except ValueError:
-                                        value = float(0)
+                                        value = float(0)  # noqa: PLW2901
                                 self.set_metric(operation, key, float(value))
 
                 except Exception:  # pylint: disable=broad-except
@@ -126,7 +126,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             web_protocol = "http" + ("s" if self.params.get("alternator_port") == 8043 else "")
         elif self.params.get('alternator_use_dns_routing'):
             target_address = 'alternator'
-        else:
+        else:  # noqa: PLR5501
             if hasattr(self.node_list[0], 'parent_cluster'):
                 target_address = self.node_list[0].parent_cluster.get_node().cql_address
             else:

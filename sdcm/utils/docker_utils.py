@@ -176,8 +176,8 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         if not name_only_lookup:
             attr_candidate_list.append((attr, ()))
 
-        for attr_candidate, args in attr_candidate_list:
-            attr_candidate = getattr(instance, attr_candidate, None)
+        for _attr_candidate, args in attr_candidate_list:
+            attr_candidate = getattr(instance, _attr_candidate, None)
             if callable(attr_candidate):
                 attr_candidate = attr_candidate(*args)
             if attr_candidate is not None:

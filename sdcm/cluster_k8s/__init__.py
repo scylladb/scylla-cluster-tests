@@ -2783,7 +2783,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         return sorted(
             [node for node in self.nodes if node.rack == rack and node.dc_idx == dc_idx], key=lambda n: n.name)
 
-    def add_nodes(self,  # pylint: disable=too-many-locals,too-many-branches
+    def add_nodes(self,  # pylint: disable=too-many-locals,too-many-branches  noqa: PLR0913
                   count: int,
                   ec2_user_data: str = "",
                   # NOTE: 'dc_idx=None' means 'create %count% nodes on each K8S cluster'

@@ -579,8 +579,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         try:
             logs_to_save = []
             for name, link in log_links.items():
-                link = LogLink(log_name=name, log_link=link)
-                logs_to_save.append(link)
+                argus_link = LogLink(log_name=name, log_link=link)
+                logs_to_save.append(argus_link)
             self.test_config.argus_client().submit_sct_logs(logs_to_save)
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error saving logs to Argus", exc_info=True)
@@ -1119,7 +1119,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug("Nemesis threads %s", nemesis_threads)
         return nemesis_threads
 
-    def get_cluster_gce(self, loader_info, db_info, monitor_info):
+    def get_cluster_gce(self, loader_info, db_info, monitor_info):  # noqa: PLR0912
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
         if loader_info['n_nodes'] is None:
             n_loader_nodes = self.params.get('n_loaders')
@@ -1897,7 +1897,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
     # pylint: disable=too-many-arguments,too-many-return-statements
-    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments
+    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments  # noqa: PLR0911, PLR0913
                           round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, compaction_strategy='',
                           use_single_loader=False,
                           stop_test_on_failure=True):
@@ -1940,7 +1940,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
 
     # pylint: disable=too-many-arguments
-    def run_stress_cassandra_thread(
+    def run_stress_cassandra_thread(  # noqa: PLR0913
             self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', round_robin=False,
             stats_aggregate_cmds=True, keyspace_name=None, compaction_strategy='', stop_test_on_failure=True, params=None, **_):
         # pylint: disable=too-many-locals
@@ -1974,7 +1974,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return cs_thread
 
     # pylint: disable=too-many-arguments
-    def run_cql_stress_cassandra_thread(
+    def run_cql_stress_cassandra_thread(  # noqa: PLR0913
             self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', round_robin=False,
             stats_aggregate_cmds=True, keyspace_name=None, compaction_strategy='', stop_test_on_failure=True, params=None, **_):
         # pylint: disable=too-many-locals
@@ -2358,7 +2358,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             does_keyspace_exist = self.wait_validate_keyspace_existence(session, keyspace_name)
         return does_keyspace_exist
 
-    def create_table(self, name, key_type="varchar",  # pylint: disable=too-many-arguments,too-many-branches
+    def create_table(self, name, key_type="varchar",  # pylint: disable=too-many-arguments,too-many-branches  # noqa: PLR0913
                      speculative_retry=None, read_repair=None, compression=None,
                      gc_grace=None, columns=None, compaction=None,
                      compact_storage=False, scylla_encryption_options=None, keyspace_name=None,
@@ -2419,7 +2419,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as ex:  # pylint: disable=broad-except
             self.log.debug('Failed to truncate base table {0}.{1}. Error: {2}'.format(ks_name, table_name, str(ex)))
 
-    def create_materialized_view(self, ks_name, base_table_name, mv_name, mv_partition_key, mv_clustering_key, session,
+    def create_materialized_view(self, ks_name, base_table_name, mv_name, mv_partition_key, mv_clustering_key, session,  # noqa: PLR0913
                                  # pylint: disable=too-many-arguments
                                  mv_columns='*', speculative_retry=None, read_repair=None, compression=None,
                                  gc_grace=None, compact_storage=False):
@@ -3501,12 +3501,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         nemesis_stats = {}
         if self.create_stats:
             nemesis_stats = self.get_doc_data(key='nemesis')
+        elif self.db_cluster:
+            for nem in self.db_cluster.nemesis:
+                nemesis_stats.update(nem.stats)
         else:
-            if self.db_cluster:
-                for nem in self.db_cluster.nemesis:
-                    nemesis_stats.update(nem.stats)
-            else:
-                self.log.warning("No nemesises as cluster was not created")
+            self.log.warning("No nemesises as cluster was not created")
 
         if nemesis_stats:
             for detail in nemesis_stats.values():
