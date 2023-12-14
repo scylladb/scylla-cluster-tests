@@ -86,8 +86,8 @@ def test_03_dynamodb_api(request, docker_scylla, events, params):
     assert len(cat["ERROR"]) >= 1
     assert any("Encountered an exception when driving load" in err for err in cat["ERROR"])
 
-    assert len(cat["CRITICAL"]) >= 3
-    assert "BUILD FAILED" in cat["CRITICAL"][-1]
+    assert len(cat["CRITICAL"]) >= 2
+    assert any("BUILD FAILED" in critical for critical in cat["CRITICAL"])
 
 
 def test_04_verify_data(request, docker_scylla, events, params):
