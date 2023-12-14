@@ -248,3 +248,6 @@ teardown_validators:
     timeout: 1200
     keyspace: ''
     table: ''
+
+kafka_backend: null
+kafka_connectors: []
