@@ -621,7 +621,7 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):  # pylint: dis
         clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_placement_groups_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         if cluster_backend == 'aws':
-            clean_aws_kms_alias(tags_dict, config.region_names)
+            clean_aws_kms_alias(tags_dict, aws_regions or all_aws_regions())
     if cluster_backend in ('gce', 'k8s-gke', ''):
         for project in gce_projects:
             with environment(SCT_GCE_PROJECT=project):
