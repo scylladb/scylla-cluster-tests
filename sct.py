@@ -321,7 +321,7 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
 @sct_option('--test-id', 'test_id', help='test id to filter by')
 @click.option('--verbose', is_flag=True, default=False, help='if enable, will log progress')
 @click.pass_context
-def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
+def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):  # noqa: PLR0912, PLR0915
     # pylint: disable=too-many-locals,too-many-arguments,too-many-branches,too-many-statements
 
     add_file_logger()
@@ -1270,7 +1270,7 @@ def get_test_results_for_failed_test(test_status, start_time):
 @click.option('--runner-ip', type=str, required=False, help="Sct runner ip for the running test")
 @click.option('--email-recipients', help="Send email to next recipients")
 @click.option('--logdir', help='Directory where to find testrun folder')
-def send_email(test_id=None, test_status=None, start_time=None, started_by=None, runner_ip=None,
+def send_email(test_id=None, test_status=None, start_time=None, started_by=None, runner_ip=None,  # noqa: PLR0912
                email_recipients=None, logdir=None):
     if started_by is None:
         started_by = get_username()
@@ -1475,11 +1475,11 @@ def prepare_regions(cloud_provider, regions):
 
     for region in regions:
         if cloud_provider == "aws":
-            region = AwsRegion(region_name=region)
+            region = AwsRegion(region_name=region)  # noqa: PLW2901
         elif cloud_provider == "azure":
-            region = AzureRegion(region_name=region)
+            region = AzureRegion(region_name=region)  # noqa: PLW2901
         elif cloud_provider == "gce":
-            region = GceRegion(region_name=region)
+            region = GceRegion(region_name=region)  # noqa: PLW2901
         else:
             raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
         region.configure()

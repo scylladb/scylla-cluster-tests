@@ -573,7 +573,7 @@ class KubernetesWrongSchedulingLogger(CommandClusterLoggerBase):
         return f"echo \"I`date -u +\"%m%d %H:%M:%S\"`              {message}\" >> {self._target_log_file} 2>&1"
 
 
-def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint: disable=too-many-return-statements
+def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint: disable=too-many-return-statements  # noqa: PLR0911
     if logs_transport == 'docker':
         return DockerGeneralLogger(node, target_log_file)
     if logs_transport == 'kubectl':

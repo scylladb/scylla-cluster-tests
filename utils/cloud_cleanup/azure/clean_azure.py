@@ -146,12 +146,11 @@ def clean_azure_instances(dry_run=False):
             if should_keep(creation_time=get_vm_creation_time(v_m, resource_group.name), keep_hours=get_keep_hours(v_m)):
                 LOGGER.info("Keeping VM: %s in resource group: %s", v_m.name, resource_group.name)
                 clean_group = False  # skip cleaning group if there's at least one VM to keep
+            elif get_keep_action(v_m) == "terminate":
+                vms_to_process.append((delete_virtual_machine, v_m.name))
             else:
-                if get_keep_action(v_m) == "terminate":
-                    vms_to_process.append((delete_virtual_machine, v_m.name))
-                else:
-                    vms_to_process.append((stop_virtual_machine, v_m.name))
-                    clean_group = False  # skip cleaning group if there's at least one VM to stop
+                vms_to_process.append((stop_virtual_machine, v_m.name))
+                clean_group = False  # skip cleaning group if there's at least one VM to stop
 
         if clean_group:
             delete_resource_group(resource_group.name, dry_run=dry_run)

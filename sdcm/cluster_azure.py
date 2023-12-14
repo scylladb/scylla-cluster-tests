@@ -174,7 +174,7 @@ class AzureNode(cluster.BaseNode):
 
 
 class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-attributes
-    def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments, too-many-locals
+    def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments, too-many-locals  # noqa: PLR0913
                  provisioners: List[AzureProvisioner], credentials,
                  cluster_uuid=None, instance_type='Standard_L8s_v3', region_names=None,
                  user_name='root', cluster_prefix='cluster',

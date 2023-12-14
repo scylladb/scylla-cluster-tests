@@ -217,14 +217,13 @@ class ClassWithVersiondMethods:  # pylint: disable=too-few-public-methods
             node_scylla_version = "2023.1.dev"
         elif scylla_version.startswith('master:') or scylla_version == "":
             node_scylla_version = "4.7.dev"
+        elif ":" in scylla_version:
+            node_scylla_version = scylla_version.split(":")[0]
+            if node_scylla_version.count(".") < 1:
+                node_scylla_version += ".0"
+            node_scylla_version += ".dev"
         else:
-            if ":" in scylla_version:
-                node_scylla_version = scylla_version.split(":")[0]
-                if node_scylla_version.count(".") < 1:
-                    node_scylla_version += ".0"
-                node_scylla_version += ".dev"
-            else:
-                node_scylla_version = scylla_version
+            node_scylla_version = scylla_version
         nodes = [type("Node", (object,), {"scylla_version": node_scylla_version})]
         if nemesis_like_class:
             self.cluster = type("Cluster", (object,), {

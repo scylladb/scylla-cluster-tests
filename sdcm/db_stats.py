@@ -607,17 +607,16 @@ class TestStatsMixin(Stats):
         for key, value in test_params:
             if key in exclude_details or (isinstance(key, str) and key.startswith('stress_cmd')):  # pylint: disable=no-else-continue
                 continue
+            elif is_gce and key in \
+                    ['instance_type_loader',  # pylint: disable=no-else-continue
+                     'instance_type_monitor',
+                     'instance_type_db']:
+                # exclude these params from gce run
+                continue
+            elif key == 'n_db_nodes' and isinstance(value, str) and re.search(r'\s', value):  # multidc
+                setup_details['n_db_nodes'] = sum([int(i) for i in value.split()])
             else:
-                if is_gce and key in \
-                        ['instance_type_loader',  # pylint: disable=no-else-continue
-                         'instance_type_monitor',
-                         'instance_type_db']:
-                    # exclude these params from gce run
-                    continue
-                elif key == 'n_db_nodes' and isinstance(value, str) and re.search(r'\s', value):  # multidc
-                    setup_details['n_db_nodes'] = sum([int(i) for i in value.split()])
-                else:
-                    setup_details[key] = value
+                setup_details[key] = value
 
         if self.params.get('cluster_backend') == 'aws':
             setup_details["ami_tags_db_scylla"] = []

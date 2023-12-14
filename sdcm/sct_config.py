@@ -1669,7 +1669,7 @@ class SCTConfiguration(dict):
     ami_id_params = ['ami_id_db_scylla', 'ami_id_loader', 'ami_id_monitor', 'ami_id_db_cassandra', 'ami_id_db_oracle']
     aws_supported_regions = ['eu-west-1', 'eu-west-2', 'us-west-2', 'us-east-1', 'eu-north-1', 'eu-central-1']
 
-    def __init__(self):
+    def __init__(self):  # noqa: PLR0912, PLR0915
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         super().__init__()
         self.scylla_version = None
@@ -2113,7 +2113,7 @@ class SCTConfiguration(dict):
                 if not stress_cmd:
                     continue
                 if not isinstance(stress_cmd, list):
-                    stress_cmd = [stress_cmd]
+                    stress_cmd = [stress_cmd]  # noqa: PLW2901
                 for cmd in stress_cmd:
                     if stress_tool := cmd.split(maxsplit=2)[0]:
                         stress_tools.add(stress_tool)
@@ -2133,9 +2133,9 @@ class SCTConfiguration(dict):
                 if not stress_cmd:
                     continue
                 if not isinstance(stress_cmd, list):
-                    stress_cmd = [stress_cmd]
+                    stress_cmd = [stress_cmd]  # noqa: PLW2901
                 for cmd in stress_cmd:
-                    cmd = cmd.strip(' ')
+                    cmd = cmd.strip(' ')  # noqa: PLW2901
                     if cmd.startswith('latte'):
                         script_name_regx = re.compile(r'([/\w-]*\.rn)')
                         script_name = script_name_regx.search(cmd).group(1)
@@ -2146,7 +2146,7 @@ class SCTConfiguration(dict):
                         continue
                     for option in cmd.split():
                         if option.startswith('profile='):
-                            option = option.split('=', 1)
+                            option = option.split('=', 1)  # noqa: PLW2901
                             if len(option) < 2:
                                 continue
                             profile_path = option[1]
@@ -2581,9 +2581,9 @@ class SCTConfiguration(dict):
                 if not stress_cmd:
                     continue
                 if not isinstance(stress_cmd, list):
-                    stress_cmd = [stress_cmd]
+                    stress_cmd = [stress_cmd]  # noqa: PLW2901
                 for cmd in stress_cmd:
-                    cmd = cmd.strip(' ')
+                    cmd = cmd.strip(' ')  # noqa: PLW2901
                     if not cmd.startswith('scylla-bench'):
                         continue
                     if "-mode=" not in cmd:

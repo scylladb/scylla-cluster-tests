@@ -607,9 +607,8 @@ class LocalKindCluster(LocalMinimalClusterBase):
         images_to_cache.extend(self.cert_manager_images)
         if self.params.get("k8s_local_volume_provisioner_type") != 'static':
             images_to_cache.append(self.dynamic_local_volume_provisioner_image)
-        else:
-            if provisioner_image := self.static_local_volume_provisioner_image:
-                images_to_cache.append(provisioner_image)
+        elif provisioner_image := self.static_local_volume_provisioner_image:
+            images_to_cache.append(provisioner_image)
         if self.params.get("k8s_use_chaos_mesh"):
             chaos_mesh_version = ChaosMesh.VERSION
             if not chaos_mesh_version.startswith("v"):

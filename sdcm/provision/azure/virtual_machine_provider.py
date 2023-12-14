@@ -43,8 +43,8 @@ class VirtualMachineProvider:
         """Discover existing virtual machines for resource group."""
         try:
             v_ms = self._azure_service.compute.virtual_machines.list(self._resource_group_name)
-            for v_m in v_ms:
-                v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, v_m.name)
+            for _v_m in v_ms:
+                v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, _v_m.name)
                 if v_m.provisioning_state != "Deleting":
                     self._cache[v_m.name] = v_m
         except ResourceNotFoundError:

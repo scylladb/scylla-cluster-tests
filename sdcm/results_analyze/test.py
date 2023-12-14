@@ -437,7 +437,7 @@ class TestResultClass(ClassBase):
     def _get_es_filters(cls, depth=2):
         tmp = []
         for es_filter in cls._get_all_es_data_mapping().values():
-            es_filter = '.'.join(es_filter.split('.')[:depth])
+            es_filter = '.'.join(es_filter.split('.')[:depth])  # noqa: PLW2901
             if es_filter not in tmp:
                 tmp.append(es_filter)
         return ['hits.hits.' + es_filter for es_filter in tmp]
@@ -459,11 +459,11 @@ class TestResultClass(ClassBase):
     def _get_es_query_from_es_data(cls, es_data: dict):
         filters = []
         for es_data_path, data_value in es_data.items():
-            es_data_path = es_data_path.split('.')
+            es_data_path = es_data_path.split('.')  # noqa: PLW2901
             if es_data_path[0] == '_source':
-                es_data_path = es_data_path[1:]
-            es_data_path = '.'.join(es_data_path)
-            es_data_path = cls._escape_filter_key(es_data_path)
+                es_data_path = es_data_path[1:]  # noqa: PLW2901
+            es_data_path = '.'.join(es_data_path)  # noqa: PLW2901
+            es_data_path = cls._escape_filter_key(es_data_path)  # noqa: PLW2901
             if isinstance(data_value, str) and es_data_path not in cls._es_field_indexes and data_value != '*':
                 filters.append(f'{es_data_path}.keyword: \"{data_value}\"')
             elif isinstance(data_value, bool):
