@@ -80,7 +80,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     Cluster of Node objects, started on Amazon EC2.
     """
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  services, credentials, cluster_uuid=None,
                  ec2_instance_type='c6i.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
@@ -358,7 +358,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 ec2_user_data.replace('--bootstrap false', '--bootstrap true')
             else:
                 ec2_user_data += ' --bootstrap true '
-        else:
+        else:  # noqa: PLR5501
             if '--bootstrap ' in ec2_user_data:
                 ec2_user_data.replace('--bootstrap true', '--bootstrap false')
             else:
@@ -848,7 +848,7 @@ class AWSNode(cluster.BaseNode):
 
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  services, credentials, ec2_instance_type='c6i.xlarge',
                  ec2_ami_username='centos',
                  ec2_block_device_mappings=None,
@@ -1055,7 +1055,7 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
 
 class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  services, credentials, ec2_instance_type='c6i.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',

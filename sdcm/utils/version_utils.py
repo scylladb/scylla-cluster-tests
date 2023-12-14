@@ -556,7 +556,7 @@ def resolve_latest_repo_symlink(url: str) -> str:
     continuation_token = "BEGIN"
     while continuation_token:
         for build in s3_objects.get("CommonPrefixes", []):
-            build = build.get("Prefix", "").rstrip("/").rsplit("/", 1)[-1]
+            build = build.get("Prefix", "").rstrip("/").rsplit("/", 1)[-1]  # noqa: PLW2901
             if build == LATEST_SYMLINK_NAME:
                 continue
             timestamp = NO_TIMESTAMP
@@ -704,13 +704,13 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
             self.VERSIONS[(func.__name__, func.__code__.co_filename)] = {}
         for min_v, max_v in self.min_max_version_pairs:
             scylla_type = "enterprise" if any((is_enterprise(v) for v in (min_v, max_v) if v)) else "oss"
-            min_v = min_v or ("3.0.0" if scylla_type == "oss" else "2019.1.rc0")
-            max_v = max_v or ("99.99.99" if scylla_type == "oss" else "2099.99.99")
+            min_v = min_v or ("3.0.0" if scylla_type == "oss" else "2019.1.rc0")  # noqa: PLW2901
+            max_v = max_v or ("99.99.99" if scylla_type == "oss" else "2099.99.99")  # noqa: PLW2901
             if max_v.count(".") == 1:
                 # NOTE: version parse function considers 4.4 as lower than 4.4.1,
                 #       but we expect it to be any of the 4.4.x versions.
                 #       So, update all such short versions with the patch part and make it to be huge.
-                max_v = f"{max_v}.999"
+                max_v = f"{max_v}.999"  # noqa: PLW2901
             self.VERSIONS[(func.__name__, func.__code__.co_filename)].update({(min_v, max_v): func})
 
         @wraps(func)
@@ -828,7 +828,7 @@ def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
     for key in repo_map:
         if scylla_version.startswith(key):
             return repo_map[key]
-    else:
+    else:  # noqa: PLW0120
         raise ValueError(f"repo for scylla version {scylla_version} wasn't found")
 
 

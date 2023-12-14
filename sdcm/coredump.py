@@ -424,7 +424,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         #
         # Coredump could be absent when file was removed
         for line in coredump_info:
-            line = line.strip()
+            line = line.strip()  # noqa: PLW2901
             if line.startswith('Executable:'):
                 executable = line[12:].strip()
             elif line.startswith('Command Line:'):
@@ -434,7 +434,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                 # Storage: /var/lib/systemd/coredump/core.vi.1000.6c4de4c206a0476e88444e5ebaaac482.18554.1578994298000000.lz4 (inaccessible)
                 if "inaccessible" in line:
                     continue
-                line = line.replace('(present)', '')
+                line = line.replace('(present)', '')  # noqa: PLW2901
                 corefile = line[line.find(':') + 1:].strip()
             elif line.startswith('Timestamp:'):
                 timestring = None

@@ -57,7 +57,7 @@ class CqlStressCassandraStressEventsPublisher(FileFollowerThread):
 class CqlStressCassandraStressThread(CassandraStressThread):
     DOCKER_IMAGE_PARAM_NAME = 'stress_image.cql-stress-cassandra-stress'
 
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # pylint: disable=too-many-arguments
+    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True,
                  params=None):
         super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout,

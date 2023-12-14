@@ -2293,15 +2293,14 @@ def download_dir_from_cloud(url):
     LOGGER.info("Downloading [%s] to [%s]", url, tmp_dir)
     if os.path.isdir(tmp_dir) and os.listdir(tmp_dir):
         LOGGER.warning("[{}] already exists, skipping download".format(tmp_dir))
+    elif url.startswith('s3://'):
+        s3_download_dir(parsed.hostname, parsed.path, tmp_dir)
+    elif url.startswith('gs://'):
+        gce_download_dir(parsed.hostname, parsed.path, tmp_dir)
+    elif os.path.isdir(url):
+        tmp_dir = url
     else:
-        if url.startswith('s3://'):
-            s3_download_dir(parsed.hostname, parsed.path, tmp_dir)
-        elif url.startswith('gs://'):
-            gce_download_dir(parsed.hostname, parsed.path, tmp_dir)
-        elif os.path.isdir(url):
-            tmp_dir = url
-        else:
-            raise ValueError("Unsupported url schema or non-existing directory [{}]".format(url))
+        raise ValueError("Unsupported url schema or non-existing directory [{}]".format(url))
     if not tmp_dir.endswith('/'):
         tmp_dir += '/'
     LOGGER.info("Finished downloading [%s]", url)
@@ -2957,7 +2956,7 @@ def walk_thru_data(data, path: str, separator: str = '/') -> Any:
         if not name:
             continue
         if name[0] == '[' and name[-1] == ']':
-            name = name[1:-1]
+            name = name[1:-1]  # noqa: PLW2901
         if name.isalnum() and isinstance(current_value, (list, tuple, set)):
             try:
                 current_value = current_value[int(name)]

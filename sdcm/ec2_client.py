@@ -69,7 +69,7 @@ class EC2ClientWrapper():
             boto3.setup_default_session(region_name=region_name)
             return self._get_ec2_client()
 
-    def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',  # pylint: disable=too-many-arguments
+    def _request_spot_instance(self, instance_type, image_id, region_name, network_if, spot_price, key_pair='',  # pylint: disable=too-many-arguments  # noqa: PLR0913
                                user_data='', count=1, duration=0, request_type='one-time', block_device_mappings=None,
                                aws_instance_profile=None, placement_group_name=None):
         """

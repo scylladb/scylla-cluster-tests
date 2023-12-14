@@ -65,7 +65,7 @@ class CassandraStressEventsPublisher(FileFollowerThread):
 
                     if pattern.search(line):
                         if event.severity == Severity.CRITICAL and not self.stop_test_on_failure:
-                            event = event.clone()  # so we don't change the severity to other stress threads
+                            event = event.clone()  # so we don't change the severity to other stress threads  # noqa: PLW2901
                             event.severity = Severity.ERROR
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
                         break  # Stop iterating patterns to avoid creating two events for one line of the log
@@ -93,7 +93,7 @@ class CSHDRFileLogger(SSHLoggerBase):
 class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
     DOCKER_IMAGE_PARAM_NAME = 'stress_image.cassandra-stress'
 
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # pylint: disable=too-many-arguments
+    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True,
                  params=None):
         super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout,
@@ -233,7 +233,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 cs_log_option = match.group(1)
                 if "hdrfile" not in cs_log_option:
                     stress_cmd = stress_cmd.replace("-log", f"-log hdrfile={hdr_log_name}")
-                else:
+                else:  # noqa: PLR5501
                     if replacing_hdr_file := re.search(r"hdrfile=(.*?)\s", cs_log_option):
                         stress_cmd = stress_cmd.replace(
                             f"hdrfile={replacing_hdr_file.group(1)}", f"hdrfile={hdr_log_name}")

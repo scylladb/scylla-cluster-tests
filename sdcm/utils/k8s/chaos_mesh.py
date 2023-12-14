@@ -165,7 +165,7 @@ class ChaosMeshExperiment:
         self._end_time = time.time() + self._timeout
 
     # pylint: disable=too-many-return-statements
-    def get_status(self) -> ExperimentStatus:
+    def get_status(self) -> ExperimentStatus:  # noqa: PLR0911
         """Gets status of chaos-mesh experiment."""
         result = self._k8s_cluster.kubectl(
             f"get {self.CHAOS_KIND} {self._name} -n {self._namespace} -o jsonpath='{{.status.conditions}}'", verbose=False)
