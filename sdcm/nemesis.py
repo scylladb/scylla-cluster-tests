@@ -4858,14 +4858,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             errors = []
             audit_start = datetime.datetime.now() - datetime.timedelta(seconds=5)
             InfoEvent(message='Writing/Reading data from audited keyspace').publish()
-            write_cmd = f"cassandra-stress write no-warmup cl=ALL n=1000 -schema" \
+            write_cmd = f"cassandra-stress write no-warmup cl=ONE n=1000 -schema" \
                         f" 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)" \
                         f" keyspace={audit_keyspace}' -mode cql3 native -rate 'threads=1 throttle=1000/s'" \
                         f" -pop seq=1..1000 -col 'n=FIXED(1) size=FIXED(128)' -log interval=5"
             write_thread = self.tester.run_stress_thread(
                 stress_cmd=write_cmd, round_robin=True, stop_test_on_failure=False)
             self.tester.verify_stress_thread(cs_thread_pool=write_thread)
-            read_cmd = f"cassandra-stress read no-warmup cl=ALL n=1000 " \
+            read_cmd = f"cassandra-stress read no-warmup cl=ONE n=1000 " \
                        f" -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)" \
                        f" keyspace={audit_keyspace}' -mode cql3 native -rate 'threads=1 throttle=1000/s'" \
                        f" -pop seq=1..1000 -col 'n=FIXED(1) size=FIXED(128)' -log interval=5"
