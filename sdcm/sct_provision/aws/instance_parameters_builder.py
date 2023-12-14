@@ -48,7 +48,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
                     DeviceName=self._root_device_name,
                     Ebs=AWSDiskMappingEbsInfo(
                         VolumeSize=self._root_device_size,
-                        VolumeType='gp2',
+                        VolumeType='gp3',
                     )
                 )
             )

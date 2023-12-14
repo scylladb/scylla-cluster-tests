@@ -224,7 +224,7 @@ def init_monitoring_info_from_params(monitor_info: dict, params: dict, regions: 
                                                            region=regions[0]),
                 "Ebs": {
                     "VolumeSize": monitor_info['disk_size'],
-                    "VolumeType": "gp2"
+                    "VolumeType": "gp3"
                 }
             }]
         else:
@@ -254,7 +254,7 @@ def init_db_info_from_params(db_info: dict, params: dict, regions: List, root_de
                 "DeviceName": root_device,
                 "Ebs": {
                     "VolumeSize": db_info['disk_size'],
-                    "VolumeType": "gp2"
+                    "VolumeType": "gp3"
                 }
             }]
         else:
