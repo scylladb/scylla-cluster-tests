@@ -83,8 +83,8 @@ class TopPartitionCmd(ABC):
 
     def verify_output(self, output: str):
         toppartition_result = self._parse_toppartitions_output(output)
-        for sampler in self._built_args['samplers'].split(','):
-            sampler = sampler.upper()
+        for _sampler in self._built_args['samplers'].split(','):
+            sampler = _sampler.upper()
             assert sampler in toppartition_result, "{} sampler not found in result".format(sampler)
             assert toppartition_result[sampler]['toppartitions'] == self._built_args['toppartition'], \
                 "Wrong expected and actual top partitions number for {} sampler".format(sampler)

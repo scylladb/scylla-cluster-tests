@@ -73,8 +73,8 @@ class FakeResourceGroups:
         }
         res_group.update(**parameters)
         (self.path / resource_group_name).mkdir(exist_ok=True)
-        with open(self.path / resource_group_name / "resource_group.json", "w", encoding="utf-8") as file:
-            json.dump(res_group, fp=file, indent=2)
+        with open(self.path / resource_group_name / "resource_group.json", "w", encoding="utf-8") as file_obj:
+            json.dump(res_group, fp=file_obj, indent=2)
         return ResourceGroup.deserialize(res_group)
 
     def get(self, name) -> ResourceGroup:
@@ -109,9 +109,9 @@ class FakeNetworkSecurityGroup:
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
-        for file in files:
-            with open(self.path / resource_group_name / file, "r", encoding="utf-8") as file:
-                elements.append(NetworkSecurityGroup.deserialize(json.load(file)))
+        for file_name in files:
+            with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
+                elements.append(NetworkSecurityGroup.deserialize(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(self, resource_group_name: str, network_security_group_name: str,
@@ -179,9 +179,9 @@ class FakeVirtualNetwork:
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
-        for file in files:
-            with open(self.path / resource_group_name / file, "r", encoding="utf-8") as file:
-                elements.append(VirtualNetwork.deserialize(json.load(file)))
+        for file_name in files:
+            with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
+                elements.append(VirtualNetwork.deserialize(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(self, resource_group_name: str, virtual_network_name: str, parameters: Dict[str, Any]
@@ -230,9 +230,9 @@ class FakeSubnet:
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
-        for file in files:
-            with open(self.path / resource_group_name / file, "r", encoding="utf-8") as file:
-                elements.append(Subnet.deserialize(json.load(file)))
+        for file_name in files:
+            with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
+                elements.append(Subnet.deserialize(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(self, resource_group_name: str, virtual_network_name: str, subnet_name: str,
@@ -280,9 +280,9 @@ class FakeIpAddress:
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
-        for file in files:
-            with open(self.path / resource_group_name / file, "r", encoding="utf-8") as file:
-                elements.append(PublicIPAddress.deserialize(json.load(file)))
+        for file_name in files:
+            with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
+                elements.append(PublicIPAddress.deserialize(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(self, resource_group_name: str, public_ip_address_name: str, parameters: Dict[str, Any]
@@ -310,8 +310,8 @@ class FakeIpAddress:
                 "provisioningState": "Succeeded"
             }
         }
-        with open(self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "w", encoding="utf-8") as file:
-            json.dump(base, fp=file, indent=2)
+        with open(self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "w", encoding="utf-8") as file_obj:
+            json.dump(base, fp=file_obj, indent=2)
         return WaitableObject()
 
     def get(self, resource_group_name: str, public_ip_address_name: str) -> PublicIPAddress:
@@ -337,9 +337,9 @@ class FakeNetworkInterface:
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
-        for file in files:
-            with open(self.path / resource_group_name / file, "r", encoding="utf-8") as file:
-                elements.append(NetworkInterface.deserialize(json.load(file)))
+        for file_name in files:
+            with open(self.path / resource_group_name / file_name, "r", encoding="utf-8") as file_obj:
+                elements.append(NetworkInterface.deserialize(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(self, resource_group_name: str, network_interface_name: str, parameters: Dict[str, Any]
@@ -584,7 +584,7 @@ class FakeVirtualMachines:
     # pylint: disable=unused-argument,no-self-use
     def begin_run_command(self, resource_group_name, vm_name, parameters) -> ResultableObject:
         result = subprocess.run(parameters.script[0], shell=True, capture_output=True,  # pylint: disable=subprocess-run-check
-                                text=True)
+                                text=True, check=False)
         return ResultableObject(result.stdout, result.stderr)
 
 

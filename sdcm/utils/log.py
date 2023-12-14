@@ -79,14 +79,14 @@ def replace_vars(obj, variables, obj_type=None):
     if issubclass(obj_type, dict):
         output = {}
         for attr_name, attr_value in obj.items():
-            attr_name = replace_vars(attr_name, variables)
-            attr_value = replace_vars(attr_value, variables)
+            attr_name = replace_vars(attr_name, variables)  # noqa: PLW2901
+            attr_value = replace_vars(attr_value, variables)  # noqa: PLW2901
             output[attr_name] = attr_value  # deepcode ignore UnhashableKey: you get same keys type as source
         return output
     if issubclass(obj_type, list):
         output = []
         for element in obj:
-            element = replace_vars(element, variables)
+            element = replace_vars(element, variables)  # noqa: PLW2901
             output.append(element)  # deepcode ignore InfiniteLoopByCollectionModification: Not even close
         return output
     if issubclass(obj_type, tuple):

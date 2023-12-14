@@ -836,7 +836,7 @@ class SlaPerUserTest(LongevityTest):
 
         assert len(workloads_results) == 2, \
             "Expected workload_results length to be 2, got: %s. workload_results: %s" % (
-                len(workloads_results), workloads_results)
+            len(workloads_results), workloads_results)
         comparison_results = {}
         try:
             for item, target_margin in comparison_axis.items():

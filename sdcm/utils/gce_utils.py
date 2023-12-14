@@ -370,7 +370,7 @@ def disk_from_image(  # pylint: disable=too-many-arguments
     return boot_disk
 
 
-def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
+def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements  # noqa: PLR0913
     project_id: str,
     zone: str,
     instance_name: str,

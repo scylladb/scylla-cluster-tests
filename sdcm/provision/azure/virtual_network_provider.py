@@ -36,8 +36,8 @@ class VirtualNetworkProvider:
         """Discover existing virtual networks for resource group."""
         try:
             vnets = self._azure_service.network.virtual_networks.list(self._resource_group_name)
-            for vnet in vnets:
-                vnet = self._azure_service.network.virtual_networks.get(self._resource_group_name, vnet.name)
+            for _vnet in vnets:
+                vnet = self._azure_service.network.virtual_networks.get(self._resource_group_name, _vnet.name)
                 self._cache[vnet.name] = vnet
         except ResourceNotFoundError:
             pass

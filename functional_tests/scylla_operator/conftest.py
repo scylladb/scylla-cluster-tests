@@ -70,7 +70,7 @@ def fixture_harvest_test_results(request, tester: ScyllaOperatorFunctionalCluste
 
 @pytest.fixture(autouse=True, scope='package', name="tester")
 def fixture_tester() -> ScyllaOperatorFunctionalClusterTester:
-    global TESTER  # pylint: disable=global-statement
+    global TESTER  # pylint: disable=global-statement  # noqa: PLW0603
     os.chdir(sct_abs_path())
     tester_inst = ScyllaOperatorFunctionalClusterTester()
     TESTER = tester_inst  # putting tester global, so we can report skipped test (one with mark.skip)

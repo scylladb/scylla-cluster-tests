@@ -277,9 +277,8 @@ def validate_previous_task_details(task, previous_task_details):
             # and as a result it could be a BIT imprecise
             if abs(delta.total_seconds()) > 60:
                 mismatched_details_name_list.append(detail_name)
-        else:
-            if current_value != previous_task_details[detail_name]:
-                mismatched_details_name_list.append(detail_name)
+        elif current_value != previous_task_details[detail_name]:
+            mismatched_details_name_list.append(detail_name)
     complete_error_description = _create_mismatched_details_error_message(previous_task_details,
                                                                           current_task_details,
                                                                           mismatched_details_name_list)

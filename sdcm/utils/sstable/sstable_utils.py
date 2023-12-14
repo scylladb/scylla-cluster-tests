@@ -57,6 +57,7 @@ class SstableUtils:
 
     def check_that_sstables_are_encrypted(self, sstables=None,  # pylint: disable=too-many-branches
                                           expected_bool_value: bool = True) -> list:
+
         if not sstables:
             sstables = self.get_sstables()
         if isinstance(sstables, str):

@@ -223,7 +223,7 @@ class OperatorManagerCluster(ManagerCluster):
             throw_exc=True,
         )
 
-    def _create_operator_backup_task(self, dc_list=None, interval=None, keyspace_list=None, location_list=None,
+    def _create_operator_backup_task(self, dc_list=None, interval=None, keyspace_list=None, location_list=None,  # noqa: PLR0913
                                      num_retries=None, rate_limit_list=None, retention=None, cron=None,
                                      snapshot_parallel_list=None, start_date=None, upload_parallel_list=None,
                                      name=None) -> ScyllaOperatorBackupTask:
@@ -254,7 +254,7 @@ class OperatorManagerCluster(ManagerCluster):
         return so_backup_task
 
     # pylint: disable=too-many-locals
-    def create_backup_task(
+    def create_backup_task(  # noqa: PLR0913
             self,
             dc_list=None,
             dry_run=None,

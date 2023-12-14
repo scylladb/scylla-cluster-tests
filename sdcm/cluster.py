@@ -908,15 +908,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self._journal_thread:
             self.log.debug("Use %s as logging daemon", type(self._journal_thread).__name__)
             self._journal_thread.start()
+        elif logs_transport == 'syslog-ng':
+            self.log.debug("Use no logging daemon since log transport is syslog-ng")
         else:
-            if logs_transport == 'syslog-ng':
-                self.log.debug("Use no logging daemon since log transport is syslog-ng")
-            else:
-                TestFrameworkEvent(
-                    source=self.__class__.__name__,
-                    source_method='start_journal_thread',
-                    message="Got no logging daemon by unknown reason"
-                ).publish_or_dump()
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                source_method='start_journal_thread',
+                message="Got no logging daemon by unknown reason"
+            ).publish_or_dump()
 
     def start_coredump_thread(self):
         self._coredump_thread = CoredumpExportSystemdThread(self, self._maximum_number_of_cores_to_publish)
@@ -2623,7 +2622,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     if node := node_ip_map.get(node_ip):
                         nodes_status[node] = {'status': node_properties['state'],
                                               'dc': dc, 'rack': node_properties['rack']}
-                    else:
+                    else:  # noqa: PLR5501
                         if node_ip:
                             LOGGER.error("Get nodes statuses. Failed to find a node in cluster by IP: %s", node_ip)
 
@@ -3400,7 +3399,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         ssl_context.load_verify_locations(cafile=truststore)
         return ssl_context
 
-    def _create_session(self, node, keyspace, user, password, compression, protocol_version, load_balancing_policy=None, port=None,
+    def _create_session(self, node, keyspace, user, password, compression, protocol_version, load_balancing_policy=None, port=None,  # noqa: PLR0913
                         ssl_context=None, node_ips=None, connect_timeout=None, verbose=True, connection_bundle_file=None):
         if not port:
             port = node.CQL_PORT
@@ -4981,7 +4980,7 @@ class BaseLoaderSet():
         if self.nodes and self.nodes[0].is_kubernetes():
             for node in self.nodes:
                 node.remoter.stop()
-        else:
+        else:  # noqa: PLR5501
             if self.params.get("use_prepared_loaders"):
                 self.kill_cassandra_stress_thread()
             else:
@@ -5033,7 +5032,7 @@ class BaseLoaderSet():
         enable_parse = False
 
         for line in lines:
-            line = line.strip()
+            line = line.strip()  # noqa: PLW2901
             if not line:
                 continue
             # Parse loader & cpu info

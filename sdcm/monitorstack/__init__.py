@@ -37,7 +37,7 @@ class ErrorUploadAnnotations(Exception):
     pass
 
 
-def restore_monitoring_stack(test_id, date_time=None):  # pylint: disable=too-many-return-statements,too-many-locals
+def restore_monitoring_stack(test_id, date_time=None):  # pylint: disable=too-many-return-statements,too-many-locals  # noqa: PLR0911
     if not is_docker_available():
         return False
 

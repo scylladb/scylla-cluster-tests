@@ -166,7 +166,7 @@ _EVENTS_PROCESSES: Optional[EventsProcessesRegistry] = None
 
 
 def create_default_events_process_registry(log_dir: Union[str, Path]):
-    global _EVENTS_PROCESSES  # pylint: disable=global-statement
+    global _EVENTS_PROCESSES  # pylint: disable=global-statement  # noqa: PLW0603
 
     with _EVENTS_PROCESSES_LOCK:
         if _EVENTS_PROCESSES is None:

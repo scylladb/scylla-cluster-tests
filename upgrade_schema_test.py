@@ -258,8 +258,8 @@ class UpgradeSchemaTest(ClusterTester):
 
     def test_upgrade_schema(self):
 
-        global thrift_client
-        global cql_client
+        global thrift_client  # noqa: PLW0603
+        global cql_client  # noqa: PLW0603
         ips = []
         for node in self.db_cluster.nodes:
             ips.append(node.public_ip_address)

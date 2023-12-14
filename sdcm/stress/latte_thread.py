@@ -86,9 +86,9 @@ class LatteStatsPublisher(FileFollowerThread):
                 try:
                     match = regex.search(line)
                     if match:
-                        for key, value in match.groupdict().items():
-                            value = float(value)
-                            self.set_metric(self.operation, key, float(value))
+                        for key, _value in match.groupdict().items():
+                            value = float(_value)
+                            self.set_metric(self.operation, key, value)
 
                 except Exception:  # pylint: disable=broad-except
                     LOGGER.exception("fail to send metric")

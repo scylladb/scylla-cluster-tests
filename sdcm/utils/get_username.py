@@ -24,7 +24,7 @@ def get_email_user(email_addr: str) -> str:
     return email_addr.strip().split("@")[0]
 
 
-def get_username() -> str:  # pylint: disable=too-many-return-statements
+def get_username() -> str:  # pylint: disable=too-many-return-statements  # noqa: PLR0911
     # First check that we running on Jenkins try to get user email
     email = os.environ.get('BUILD_USER_EMAIL')
     if is_email_in_scylladb_domain(email):

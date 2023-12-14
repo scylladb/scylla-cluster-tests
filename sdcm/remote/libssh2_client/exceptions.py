@@ -102,11 +102,10 @@ class Failure(Exception):
             stdout = self.result.tail("stdout")
         if self.result.pty:
             stderr = " n/a (PTYs have no stderr)"
+        elif "stderr" not in self.result.hide:
+            stderr = already_printed
         else:
-            if "stderr" not in self.result.hide:
-                stderr = already_printed
-            else:
-                stderr = self.result.tail("stderr")
+            stderr = self.result.tail("stderr")
         return stdout, stderr
 
     def __repr__(self) -> str:

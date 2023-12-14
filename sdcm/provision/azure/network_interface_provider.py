@@ -36,7 +36,7 @@ class NetworkInterfaceProvider:
         try:
             nics = self._azure_service.network.network_interfaces.list(self._resource_group_name)
             for nic in nics:
-                nic = self._azure_service.network.network_interfaces.get(self._resource_group_name, nic.name)
+                nic = self._azure_service.network.network_interfaces.get(self._resource_group_name, nic.name)  # noqa: PLW2901
                 self._cache[nic.name] = nic
         except ResourceNotFoundError:
             pass

@@ -98,7 +98,7 @@ class DbLogReader(Process):
             for index, line in enumerate(db_file, start=self._last_line_no + 1):
                 if len(line) > LOG_LINE_MAX_PROCESSING_SIZE:
                     # trim to avoid filling the memory when lot of long line is writen
-                    line = line[:LOG_LINE_MAX_PROCESSING_SIZE]
+                    line = line[:LOG_LINE_MAX_PROCESSING_SIZE]  # noqa: PLW2901
 
                 # Postpone processing line with no ending in case if half of line is written to the disc
                 if line[-1] == '\n' or self._skipped_end_line > 20:
@@ -115,7 +115,7 @@ class DbLogReader(Process):
                             pass
 
                     if self._log_lines:
-                        line = line.strip()
+                        line = line.strip()  # noqa: PLW2901
                         for pattern in self.EXCLUDE_FROM_LOGGING:
                             if pattern in line:
                                 break

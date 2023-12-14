@@ -372,7 +372,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
                     if not isinstance(attr_value, dict):
                         raise ValueError("Unexpected data `%s` in attribute `%s`" % (
                             type(attr_value), attr_name))
-                    attr_value = attr_info.type(**attr_value)
+                    attr_value = attr_info.type(**attr_value)  # noqa: PLW2901
             setattr(self, attr_name, attr_value)
 
     def update(self, *objects: Union['ScyllaYaml', dict]):

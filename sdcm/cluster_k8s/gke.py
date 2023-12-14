@@ -142,7 +142,7 @@ class GkeNodePool(CloudK8sNodePool):
     k8s_cluster: 'GkeCluster'
 
     # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
             self,
             k8s_cluster: 'KubernetesCluster',
             name: str,
@@ -267,7 +267,7 @@ class GkeCluster(KubernetesCluster):
     pools: Dict[str, GkeNodePool]
 
     # pylint: disable=too-many-arguments,too-many-locals
-    def __init__(self,
+    def __init__(self,  # noqa: PLR0913
                  gke_cluster_version,
                  gke_k8s_release_channel,
                  gce_disk_size,
