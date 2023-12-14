@@ -195,7 +195,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
     @decorate_with_context(ignore_abort_requested_errors)
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
-    def _upgrade_node(self, node, upgrade_sstables=True, new_scylla_repo=None, new_version=None):
+    def _upgrade_node(self, node, upgrade_sstables=True, new_scylla_repo=None, new_version=None):  # noqa: PLR0915
         # pylint: disable=too-many-branches,too-many-statements
         new_scylla_repo = new_scylla_repo or self.params.get('new_scylla_repo')
         new_version = new_version or self.params.get('new_version')
@@ -310,7 +310,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 InfoEvent(message='upgrade_node - starting to "daemon-reload"').publish()
                 node.remoter.run('sudo systemctl daemon-reload')
                 InfoEvent(message='upgrade_node - ended to "daemon-reload"').publish()
-            else:
+            else:  # noqa: PLR5501
                 if node.distro.is_rhel_like:
                     InfoEvent(message='upgrade_node - starting to "yum update"').publish()
                     node.remoter.run(r'sudo yum update {}\* -y'.format(scylla_pkg_ver))
@@ -605,7 +605,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         with node_to_update.remote_scylla_yaml() as scylla_yaml:
             scylla_yaml.update(updates)
 
-    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
+    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0915
         """
         Upgrade half of nodes in the cluster, and start special read workload
         during the stage. Checksum method is changed to xxhash from Scylla 2.2,

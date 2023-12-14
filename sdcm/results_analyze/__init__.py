@@ -1138,9 +1138,9 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     def _mark_best_tests(self, prior_subtests, metrics, tests_info, main_test_id):
         main_tests_by_id = MagicList(tests_info.keys()).group_by('test_id')
-        for _, prior_tests in prior_subtests.items():
+        for _, _prior_tests in prior_subtests.items():
             prior_tests = MagicList(
-                [prior_test for prior_test in prior_tests if prior_test.main_test_id != main_test_id])
+                [prior_test for prior_test in _prior_tests if prior_test.main_test_id != main_test_id])
             if not prior_tests:
                 continue
             for metric_path in metrics:
@@ -1235,7 +1235,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                 for num in sorted(to_delete, reverse=True):
                     prior_tests.pop(num)
 
-    def check_regression_multi_baseline(
+    def check_regression_multi_baseline(  # noqa: PLR0912, PLR0915
             self,
             test_id,
             subtests_info: list = None,

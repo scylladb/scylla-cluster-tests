@@ -68,7 +68,7 @@ def start_metrics_server():
 
 
 def nemesis_metrics_obj(metric_name_suffix=''):
-    global NM_OBJ  # pylint: disable=global-statement,global-variable-not-assigned
+    global NM_OBJ  # pylint: disable=global-statement,global-variable-not-assigned  # noqa: PLW0602
     if not NM_OBJ.get(metric_name_suffix):
         NM_OBJ[metric_name_suffix] = NemesisMetrics(metric_name_suffix)
     return NM_OBJ[metric_name_suffix]
@@ -184,7 +184,7 @@ class PrometheusAlertManagerListener(threading.Thread):
         for alert in alerts.values():
             if not alert.get('endsAt', None):
                 alert['endsAt'] = time.strftime("%Y-%m-%dT%H:%M:%S.0Z", time.gmtime())
-            alert = updated_dict.get(alert['fingerprint'], alert)
+            alert = updated_dict.get(alert['fingerprint'], alert)  # noqa: PLW2901
             labels = alert.get("labels") or {}
             alert_name = labels.get("alertname", "")
             node = labels.get("instance", "N/A")

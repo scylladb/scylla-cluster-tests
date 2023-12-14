@@ -1274,7 +1274,6 @@ def _manage_runner_keep_tag_value(utc_now: datetime,
         return sct_runner_info
 
     LOGGER.info("No changes to make to runner tags.")
-    return sct_runner_info
 
 
 def clean_sct_runners(test_status: str,
@@ -1316,9 +1315,9 @@ def clean_sct_runners(test_status: str,
         LOGGER.info("UTC now: %s", utc_now)
 
         if not dry_run and test_runner_ip:
-            sct_runner_info = _manage_runner_keep_tag_value(test_status=test_status, utc_now=utc_now,
-                                                            timeout_flag=timeout_flag, sct_runner_info=sct_runner_info,
-                                                            dry_run=dry_run)
+            _manage_runner_keep_tag_value(test_status=test_status, utc_now=utc_now,
+                                          timeout_flag=timeout_flag, sct_runner_info=sct_runner_info,
+                                          dry_run=dry_run)
 
         if sct_runner_info.keep:
             if "alive" in str(sct_runner_info.keep):

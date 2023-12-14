@@ -848,6 +848,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             keyspace_repair_percentage = per_keyspace_progress.get(keyspace_name, None)
             assert keyspace_repair_percentage is not None, \
                 "The keyspace {} was not included in the repair!".format(keyspace_name)
+
             assert keyspace_repair_percentage == 100, \
                 "The repair of the keyspace {} stopped at {}%".format(
                     keyspace_name, keyspace_repair_percentage)

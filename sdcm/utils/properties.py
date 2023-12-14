@@ -49,11 +49,11 @@ def deserialize(data: Union[str, TextIO]) -> PropertiesDict:
         if not line.strip() or line.lstrip()[0] == '#':
             output[line] = None
             continue
-        line = line.split('=', 1)
-        if len(line) == 2:
-            value = line[1]
+        line_splitted = line.split('=', 1)
+        if len(line_splitted) == 2:
+            value = line_splitted[1]
             comment_pos = value.find('#')
             if comment_pos >= 0:
                 value = value[0:value]
-            output[line[0].strip()] = value.strip().strip('"').strip("'")
+            output[line_splitted[0].strip()] = value.strip().strip('"').strip("'")
     return output

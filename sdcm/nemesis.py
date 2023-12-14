@@ -261,10 +261,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if not isinstance(stress_cmds, list):
                 stress_cmds = [stress_cmds]
             for stress_cmd in stress_cmds:
-                stress_cmd = stress_cmd.split()
+                stress_cmd_splitted = stress_cmd.split()
                 # In case background load has writes, we can delete all available partitions,
                 # since they are rewritten. Otherwise, we can only delete some of them.
-                if 'scylla-bench' in stress_cmd and '-mode=write' in stress_cmd:
+                if 'scylla-bench' in stress_cmd_splitted and '-mode=write' in stress_cmd_splitted:
                     self.num_deletions_factor = 1
                     break
 
@@ -480,7 +480,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return isinstance(getattr(self.tester, "db_cluster", None), PodCluster)
 
     # pylint: disable=too-many-arguments,unused-argument
-    def get_list_of_methods_by_flags(  # pylint: disable=too-many-locals
+    def get_list_of_methods_by_flags(  # pylint: disable=too-many-locals  # noqa: PLR0913
             self,
             disruptive: Optional[bool] = None,
             run_with_gemini: Optional[bool] = None,
@@ -1373,9 +1373,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             # Check that liveness probe didn't report any errors
             # https://github.com/scylladb/scylla-operator/issues/894
-            liveness_probe_failures = list(liveness_probe_failures)
-            assert not liveness_probe_failures, (
-                f"There are liveness probe failures: {liveness_probe_failures}")
+            liveness_probe_failures_return = list(liveness_probe_failures)
+            assert not liveness_probe_failures_return, (
+                f"There are liveness probe failures: {liveness_probe_failures_return}")
 
         self.log.info("Resharding has successfully ended on whole Scylla cluster.")
 
@@ -2739,12 +2739,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     current_size = 3
                 else:
                     current_size += 10
+            elif (current_size // 60) > 10:
+                current_unit = "HOURS"
+                current_size = 11
             else:
-                if (current_size // 60) > 10:
-                    current_unit = "HOURS"
-                    current_size = 11
-                else:
-                    current_size += 35
+                current_size += 35
 
             settings["gc"] = current_size * multiplier * expected_sstable_number // 2
             settings["dttl"] = current_size * multiplier * expected_sstable_number
@@ -5009,7 +5008,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise
 
 
-def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
+def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements  # noqa: PLR0915
     """
     Log time elapsed for method to run
 
@@ -5576,17 +5575,17 @@ class CategoricalMonkey(Nemesis):
         weights: List[float] = []
         listed_methods: Set[str] = set()
 
-        for name, weight in dist.items():
-            name = str(name)
+        for _name, _weight in dist.items():
+            name = str(_name)
             prefixed_name = prefixed('disrupt_', name)
             if prefixed_name not in all_methods:
                 raise ValueError(f"'{name}' is not a valid disruption. All methods: {all_methods.keys()}")
 
-            if not is_nonnegative_number(weight):
+            if not is_nonnegative_number(_weight):
                 raise ValueError("Each disruption weight must be a non-negative number."
                                  " '{weight}' is not a valid weight.")
 
-            weight = float(weight)
+            weight = float(_weight)
             if weight > 0:
                 population.append(all_methods[prefixed_name])
                 weights.append(weight)

@@ -162,7 +162,7 @@ class EksNodePool(CloudK8sNodePool):
     disk_type: Literal["standard", "io1", "io2", "gp2", "gp3", "sc1", "st1"]
 
     # pylint: disable=too-many-arguments,too-many-locals
-    def __init__(
+    def __init__(  # noqa: PLR0913
             self,
             k8s_cluster: 'EksCluster',
             name: str,
@@ -340,7 +340,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
     short_cluster_name: str
 
     # pylint: disable=too-many-arguments
-    def __init__(self,
+    def __init__(self,  # noqa: PLR0913
                  eks_cluster_version,
                  ec2_security_group_ids,
                  ec2_subnet_ids,
