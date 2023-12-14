@@ -56,6 +56,7 @@ from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
+from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
@@ -840,6 +841,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.params["append_scylla_yaml"] = yaml.safe_dump(append_scylla_yaml)
         return None
 
+    def kafka_configure(self):
+        if self.kafka_cluster:
+            for connector_config in self.params.get('kafka_connectors'):
+                self.kafka_cluster.create_connector(db_cluster=self.db_cluster,
+                                                    connector_config=connector_config)
+
     @teardown_on_exception
     @log_run_info
     def setUp(self):  # pylint: disable=too-many-branches,too-many-statements
@@ -856,6 +863,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.loaders = None
         self.monitors = None
         self.siren_manager = None
+        self.kafka_cluster = None
         self.k8s_clusters = []
         self.connections = []
         make_threads_be_daemonic_by_default()
@@ -1554,6 +1562,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             self.monitors = NoMonitorSet()
 
+    def get_cluster_kafka(self):
+        if kafka_backend := self.params.get('kafka_backend'):
+            if kafka_backend == 'localstack':
+                self.kafka_cluster = LocalKafkaCluster()
+                self.kafka_cluster.start()
+            else:
+                raise NotImplementedError(f"{kafka_backend=} not implemented")
+
     @staticmethod
     def _add_and_wait_for_cluster_nodes_in_parallel(clusters):
         def _add_and_wait_for_cluster_nodes(cluster):
@@ -1778,6 +1794,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cluster_backend = self.params.get('cluster_backend')
         if cluster_backend is None:
             cluster_backend = 'aws'
+
+        self.get_cluster_kafka()
 
         if cluster_backend in ('aws', 'aws-siren'):
             self.get_cluster_aws(loader_info=loader_info, db_info=db_info,
@@ -2795,6 +2813,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 k8s_cluster.gather_k8s_logs_by_operator()
                 k8s_cluster.gather_k8s_logs()
 
+        if self.kafka_cluster:
+            with silence(parent=self, name='stopping kafka'):
+                self.kafka_cluster.stop()
         if self.params.get('collect_logs'):
             self.collect_logs()
         self.clean_resources()
