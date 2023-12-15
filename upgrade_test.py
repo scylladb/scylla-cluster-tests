@@ -1076,7 +1076,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             namespace=self.k8s_cluster._scylla_operator_namespace  # pylint: disable=protected-access
         ).stdout.strip().split(":")[-1]
 
-    def test_kubernetes_operator_upgrade(self):
+    def test_kubernetes_operator_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message='Step1 - Populate DB with data').publish()
@@ -1092,6 +1092,13 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))))
 
         InfoEvent(message='Step4 - Upgrade scylla-operator').publish()
+        old_scylla_pods_uids = {}
+        for scylla_pod in self.db_cluster.nodes:
+            old_scylla_pods_uids[scylla_pod.name] = scylla_pod.k8s_pod_uid
+        progressing_last_transition_time_before_upgrade = self.k8s_cluster.kubectl(
+            f"get --no-headers scyllacluster {self.params.get('k8s_scylla_cluster_name')}"
+            " -o jsonpath='{.status.conditions[?(@.type==\"Progressing\")].lastTransitionTime}'",
+            namespace=self.db_cluster.namespace).stdout.strip()
         base_docker_image_tag = self._get_current_operator_image_tag()
         upgrade_docker_image = self.params.get('k8s_scylla_operator_upgrade_docker_image') or ''
         self.k8s_cluster.upgrade_scylla_operator(
@@ -1111,16 +1118,46 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.assertEqual(expected_docker_image_tag, actual_docker_image_tag)
 
         InfoEvent(message='Step6 - Wait for the update of Scylla cluster').publish()
-        # NOTE: rollout starts with some delay which may take even 20 seconds.
-        #       Also rollout itself takes more than 10 minutes for 3 Scylla members.
-        #       So, sleep for some time to avoid race with presence of existing rollout process.
-        time.sleep(60)
-        self.k8s_cluster.kubectl(
-            f"rollout status statefulset/{self.params.get('k8s_scylla_cluster_name')}-"
-            f"{self.k8s_cluster.region_name}-{self.k8s_cluster.rack_name}"
-            " --watch=true --timeout=20m",
-            timeout=1205,
-            namespace=self.db_cluster.namespace)
+        for scylla_pod in self.db_cluster.nodes[::-1]:
+            scylla_pod.wait_till_k8s_pod_get_uid(
+                ignore_uid=old_scylla_pods_uids[scylla_pod.name], throw_exc=True, timeout=900)
+        for scylla_pod in self.db_cluster.nodes[::-1]:
+            scylla_pod.wait_for_pod_readiness()
+
+        for condition in ("Available=True", "Progressing=False", "Degraded=False"):
+            self.k8s_cluster.kubectl_wait(
+                f"scyllacluster {self.params.get('k8s_scylla_cluster_name')} --for=condition={condition}",
+                namespace=self.db_cluster.namespace, timeout=600)
+        scylla_cluster_conditions = json.loads(self.k8s_cluster.kubectl(
+            f"get scyllacluster {self.params.get('k8s_scylla_cluster_name')} -o json",
+            namespace=self.db_cluster.namespace).stdout.strip())["status"]["conditions"]
+        for condition in scylla_cluster_conditions:
+            if condition["type"] == "Progressing":
+                assert condition["lastTransitionTime"] > progressing_last_transition_time_before_upgrade
+            assert condition["reason"] != "Error", "'ScyllaCluster' failed to be updated: %s" % condition
+
+        pods_with_wrong_image_tags = []
+        pods = json.loads(self.k8s_cluster.kubectl(
+            "get pods -o json", namespace=self.db_cluster.namespace).stdout.strip())["items"]
+        for pod in pods:
+            # NOTE: in pods we have 'containers' and 'initContainers'. So, walk over the both types
+            #       and check that the 'scylla-operator' images are updated.
+            for container_type in ("c", "initC"):
+                for container in pod.get("status", {}).get(f"{container_type}ontainerStatuses", []):
+                    image = container["image"].split("/")[-1]
+                    image_name, image_tag = image.split(":")
+                    if image_name == "scylla-operator" and image_tag != expected_docker_image_tag:
+                        pods_with_wrong_image_tags.append({
+                            "namespace": self.db_cluster.namespace,
+                            "pod_name": pod["metadata"]["name"],
+                            "container_name": container["name"],
+                            "image": image,
+                        })
+        assert not pods_with_wrong_image_tags, (
+            f"Found pods that have unexpected scylla-operator image tags.\n"
+            f"Expected is '{expected_docker_image_tag}'.\n"
+            f"Pods: {json.dumps(pods_with_wrong_image_tags, indent=2)}")
+
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message='Step7 - Add new member to the Scylla cluster').publish()
