@@ -55,7 +55,7 @@ data:
     local-raid-disks:
        volumeMode: Filesystem
        fsType: xfs
-       namePattern: pv-
+       namePattern: "pv-*"
        hostDir: "/mnt/raid-disks/disk0/"
        mountDir: "/mnt/raid-disks/disk0/"
 ---
@@ -92,7 +92,7 @@ spec:
         value: scylla-clusters
         effect: NoSchedule
       containers:
-        - image: "quay.io/external_storage/local-volume-provisioner:v2.3.4"
+        - image: "k8s.gcr.io/sig-storage/local-volume-provisioner:v2.5.0"
           imagePullPolicy: IfNotPresent
           name: provisioner
           securityContext:

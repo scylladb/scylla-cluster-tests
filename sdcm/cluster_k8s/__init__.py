@@ -1132,30 +1132,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         if not isinstance(node_pools, list):
             node_pools = [node_pools]
 
-        self.log.info("Install DaemonSets required by scylla nodes")
-        scylla_machine_image_args = '--all'
-        if ComparableScyllaOperatorVersion(self.scylla_operator_chart_version) > "1.5.0":
-            # NOTE: operator versions newer than v1.5.0 have it's own perf tuning,
-            #       so, we should not do anything else than disk setup in such a case.
-            scylla_machine_image_args = '--setup-disks'
-
-        def scylla_machine_image_args_modifier(obj):
-            if obj["kind"] != "DaemonSet":
-                return
-            for container_data in obj["spec"]["template"]["spec"]["containers"]:
-                if "scylla-machine-image:" not in container_data["image"]:
-                    continue
-                replacement_substr = "${SCYLLA_MACHINE_IMAGE_ARGS}"
-                for i, _arg in enumerate(container_data["args"]):
-                    if replacement_substr not in _arg:
-                        continue
-                    container_data["args"][i] = container_data["args"][i].replace(
-                        replacement_substr, scylla_machine_image_args)
-
-        def node_config_remove_local_disk_setup(obj):
+        def node_config_change_mount_point(obj):
             if obj["kind"] != "NodeConfig":
                 return
-            obj["spec"].pop("localDiskSetup", None)
+            # NOTE: this modifier must run only for 'static' local volume provisioner
+            obj["spec"]['localDiskSetup']['mounts'][0]['mountPoint'] = '/mnt/raid-disks/disk0'
 
         def node_setup_for_dynamic_local_volume_provisioner_modifier(obj):
             if obj["kind"] != "DaemonSet":
@@ -1168,10 +1149,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         modifiers = [affinity_modifier
                      for current_pool in node_pools
-                     for affinity_modifier in current_pool.affinity_modifiers
-                     ] + [scylla_machine_image_args_modifier]
+                     for affinity_modifier in current_pool.affinity_modifiers]
         if self.params.get("k8s_local_volume_provisioner_type") != 'static':
             modifiers.append(node_setup_for_dynamic_local_volume_provisioner_modifier)
+        self.log.info("Install DaemonSets required by scylla nodes")
         self.apply_file(self.NODE_PREPARE_FILE, modifiers=modifiers, envsubst=False)
 
         # Tune performance of the Scylla nodes
@@ -1190,10 +1171,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             modifiers = [affinity_modifier
                          for current_pool in node_pools
                          for affinity_modifier in current_pool.affinity_modifiers]
-            if self.params.get("k8s_local_volume_provisioner_type") == 'static':
-                modifiers.append(node_config_remove_local_disk_setup)
-            self.apply_file(self.NODE_CONFIG_CRD_FILE, modifiers=modifiers, envsubst=False)
-            time.sleep(30)
+        if self.params.get("k8s_local_volume_provisioner_type") == 'static':
+            modifiers.append(node_config_change_mount_point)
+        self.apply_file(self.NODE_CONFIG_CRD_FILE, modifiers=modifiers, envsubst=False)
+        time.sleep(30)
 
         if self.params.get("k8s_local_volume_provisioner_type") == 'static':
             self.install_static_local_volume_provisioner(node_pools=node_pools)
