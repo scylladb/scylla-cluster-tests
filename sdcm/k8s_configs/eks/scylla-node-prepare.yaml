@@ -79,7 +79,7 @@ spec:
       serviceAccountName: node-setup-daemonset
       containers:
       - name: cpu-policy
-        image: bitnami/kubectl:1.21.4
+        image: bitnami/kubectl:1.26.11
         imagePullPolicy: Always
         env:
           - name: NODE
@@ -174,8 +174,9 @@ spec:
         app: node-pkg-installer
     spec:
       containers:
-      # NOTE: image is built on Feb 1, 2023 -> scylla-operator:1.9.0-alpha.1
-      - image: "scylladb/scylla-operator@sha256:10e3e7dddc2de1bbd473710223a4be5e8c5ef5dc9bb1a61d81fdc398d9dcd74c"
+      # TODO: set the following image to some static tag that supports also ARM arch (when appears)
+      #       As of Dec 15, 2023 only the 'latest' tag does support ARM.
+      - image: "scylladb/scylla-operator:latest"
         imagePullPolicy: "Always"
         name: node-pkg-installer
         command:
@@ -217,41 +218,9 @@ spec:
       hostIPC: true
       serviceAccountName: node-setup-daemonset
       containers:
-      - name: node-setup
-        image: scylladb/scylla-machine-image:k8s-aws-666.development-20201023.0c4dfa1
-        imagePullPolicy: Always
-        env:
-          - name: ROOT_DISK
-            value: /mnt/hostfs/mnt/raid-disks/disk0
-          - name: SCYLLAD_CONF_MOUNT
-            value: /mnt/scylla.d/
-        command:
-          - "/bin/bash"
-          - "-c"
-          - "--"
-        args:
-          - |
-            # NOTE: following is needed to avoid package installation failures caused
-            #       by the absent scylla package repositories.
-            yum-config-manager --disable scylla --disable scylla-generic --disable scylladb-scylla-3rdparty
-            # NOTE: 'args' will be updated in the code
-            #        when perf tuning is disabled it is ['--all']
-            #        when perf tuning is enabled it is ['--setup-disks']
-            /opt/scylladb/scylla-machine-image/scylla_k8s_node_setup ${SCYLLA_MACHINE_IMAGE_ARGS}
-        securityContext:
-          privileged: true
-        volumeMounts:
-          - name: hostfs
-            mountPath: /mnt/hostfs
-            mountPropagation: Bidirectional
-          - name: hostetcscyllad
-            mountPath: /mnt/scylla.d
-            mountPropagation: Bidirectional
-          - name: hostirqbalanceconfig
-            mountPath: /etc/conf.d/irqbalance
-            mountPropagation: Bidirectional
+      # NOTE: the 'pv-setup' is needed only for the 'static' local volume provisioner
       - name: pv-setup
-        image: bitnami/kubectl:1.21.4
+        image: bitnami/kubectl:1.26.11
         imagePullPolicy: Always
         env:
           - name: HOSTFS

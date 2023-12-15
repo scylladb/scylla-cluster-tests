@@ -55,55 +55,8 @@ spec:
         value: scylla-clusters
         effect: NoSchedule
       containers:
-      # NOTE: the 'node-setup' container's script was taken from the following place:
-      #       https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/local-ssd#run-local-volume-static-provisioner
-      #       https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner/blob/be7c6372/examples/gke-daemonset-raid-disks.yaml
-      - name: node-setup
-        image: gcr.io/google-containers/startup-script:v1
-        securityContext:
-          privileged: true
-        env:
-          - name: STARTUP_SCRIPT
-            value: |
-              set -o errexit
-              set -o nounset
-              set -o pipefail
-
-              devices=()
-              for ssd in /dev/disk/by-id/google-local-ssd-block*; do
-                if [ -e "${ssd}" ]; then
-                  devices+=("${ssd}")
-                fi
-              done
-              if [ "${#devices[@]}" -eq 0 ]; then
-                echo "No Local NVMe SSD disks found."
-                exit 0
-              fi
-
-              seen_arrays=(/dev/md/*)
-              device=${seen_arrays[0]}
-              echo "Setting RAID array with Local SSDs on device ${device}"
-              if [ ! -e "$device" ]; then
-                device="/dev/md/0"
-                echo "y" | mdadm --create "${device}" --level=0 --force --raid-devices=${#devices[@]} "${devices[@]}"
-              fi
-
-              if ! tune2fs -l "${device}" ; then
-                echo "Formatting '${device}'"
-                mkfs.xfs "${device}"
-              fi
-
-              mountpoint=/mnt/raid-disks/disk0
-              mkdir -p "${mountpoint}"
-              echo "Mounting '${device}' at '${mountpoint}'"
-              mount -o discard,defaults "${device}" "${mountpoint}"
-              chmod a+w "${mountpoint}"
-        volumeMounts:
-          - name: hostfs
-            mountPath: /mnt/hostfs
-            mountPropagation: Bidirectional
       - name: pv-setup
-        image: bitnami/kubectl:1.21.4
+        image: bitnami/kubectl:1.26.11
         imagePullPolicy: Always
         env:
           - name: HOSTFS
@@ -139,7 +92,7 @@ spec:
 
             # Create directories for each Scylla cluster on each K8S node which will host PVs
             while true; do
-              if [[ -z $(mount | grep  "/dev/md0") ]]; then
+              if [[ -z $(mount | grep  "raid-disks/disk0") ]]; then
                 sleep 5;
                 continue
               fi
