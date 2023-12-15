@@ -1890,7 +1890,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def k8s_pod_name(self) -> str:
         return str(self._pod.metadata.name)
 
-    def wait_till_k8s_pod_get_uid(self, timeout: int = None, ignore_uid=None) -> str:
+    def wait_till_k8s_pod_get_uid(self, timeout: int = None, ignore_uid=None, throw_exc=False) -> str:
         """
         Wait till pod get any valid uid.
         If ignore_uid is provided it wait till any valid uid different from ignore_uid
@@ -1898,7 +1898,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         if timeout is None:
             timeout = self.pod_replace_timeout
         wait_for(lambda: self.k8s_pod_uid and self.k8s_pod_uid != ignore_uid, timeout=timeout,
-                 text=f"Wait till host {self} get uid", throw_exc=False)
+                 text=f"Wait till host {self} get uid", throw_exc=throw_exc)
         return self.k8s_pod_uid
 
     def wait_for_k8s_node_readiness(self):
