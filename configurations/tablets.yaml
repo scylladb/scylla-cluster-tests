@@ -1,0 +1,4 @@
+append_scylla_yaml: |
+  experimental_features:
+    - tablets
+    - consistent-topology-changes
