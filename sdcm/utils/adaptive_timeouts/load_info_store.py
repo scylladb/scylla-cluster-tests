@@ -81,7 +81,7 @@ class NodeLoadInfoService:
             load_5 = float(metrics['node_load5'])
             load_15 = float(metrics['node_load15'])
             return load_1, load_5, load_15
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.debug("Couldn't get node load from prometheus metrics. Error: %s", exc)
             # fallback to uptime
             load_1, load_5, load_15 = self.remoter.run('uptime').stdout.split("load average: ")[1].split(",")
@@ -204,7 +204,7 @@ class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
         try:
             self._es = ES()
             self._index = "sct-adaptive-timeouts"
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("Couldn't initialize ESAdaptiveTimeoutStore: %s", exc)
             self._es = None
 

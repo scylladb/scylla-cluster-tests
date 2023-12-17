@@ -94,7 +94,7 @@ class EventsFilter(BaseFilter):
     def _regex(self):
         try:
             return self.regex and re.compile(self.regex, self.regex_flags)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             raise ValueError(f'Compilation of the regexp "{self.regex}" failed with error: {exc}') from None
 
     def cancel_filter(self) -> None:

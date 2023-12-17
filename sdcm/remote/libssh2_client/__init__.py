@@ -76,7 +76,7 @@ class SSHReaderThread(Thread):  # pylint: disable=too-many-instance-attributes
         try:
             self._read_output(self._session, self._channel, self._timeout,
                               self._timeout_read_data, self.stdout, self.stderr)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.raised = exc
 
     def _read_output(  # pylint: disable=too-many-arguments,too-many-branches
@@ -150,7 +150,7 @@ class KeepAliveThread(Thread):
             try:
                 time_to_wait = self._session.eagain(
                     self._session.keepalive_send, timeout=self._keepalive_timeout)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 time_to_wait = self._keepalive_timeout
             sleep(time_to_wait)
 
@@ -356,7 +356,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 with self.session.lock:
                     self.session.agent_auth(self.user)
                 return
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pass
         self._password_auth()
 
@@ -386,7 +386,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
             self.session.eagain(
                 self.session.userauth_password,
                 args=(self.user, self.password), timeout=self.timings.auth_timeout)
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
             raise AuthenticationException("Password authentication failed") from error
 
     @staticmethod
@@ -403,7 +403,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
         if self.sock:
             try:
                 self.sock.close()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pass
         family = self._get_socket_family(host)
         if family is None:
@@ -447,7 +447,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                     stdout_stream.write(data)
                     for watcher in watchers:
                         watcher.submit_line(data)
-                except Exception:  # pylint: disable=broad-except
+                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                     pass
             if stderr_stream is not None:
                 if reader.stderr.qsize():
@@ -457,7 +457,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                         stderr_stream.write(data)
                         for watcher in watchers:
                             watcher.submit_line(data)
-                    except Exception:  # pylint: disable=broad-except
+                    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                         pass
         return True
 
@@ -502,7 +502,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
             try:
                 with self.flood_preventing.get_lock(self):
                     self._connect()
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.disconnect()
                 raise ConnectError(str(exc)) from exc
             return
@@ -517,7 +517,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 except AuthenticationError:
                     self.disconnect()
                     raise  # pylint: disable=broad-except
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     self.disconnect()
                     if perf_counter() > end_time:
                         ex_msg = f'Failed to connect in {timeout} seconds, last error: ({type(exc).__name__}){str(exc)}'
@@ -540,14 +540,14 @@ class Client:  # pylint: disable=too-many-instance-attributes
         if self.session is not None:
             try:
                 self.session.eagain(self.session.disconnect)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pass
             del self.session
             self.session = None
         if self.sock is not None:
             try:
                 self.sock.close()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pass
             self.sock = None
 
@@ -587,12 +587,12 @@ class Client:  # pylint: disable=too-many-instance-attributes
             if self.session is None:
                 self.connect()
             channel = self.open_channel()
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             return self._complete_run(
                 channel, FailedToRunCommand(result, exc), timeout_reached, timeout, result, warn, stdout, stderr)
         try:
             self._apply_env(channel, env)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             return self._complete_run(
                 channel, FailedToRunCommand(result, exc), timeout_reached, timeout, result, warn, stdout, stderr)
         if watchers:
@@ -602,7 +602,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 self.execute(command, channel=channel, use_pty=False)
                 self._process_output(watchers, encoding, stdout, stderr, reader, timeout,
                                      self.timings.interactive_read_data_chunk_timeout)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 exception = FailedToReadCommandOutput(result, exc)
             if reader.is_alive():
                 reader.stop()
@@ -615,7 +615,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 timeout_reached = not self._process_output_no_watchers(
                     self.session, channel, encoding, stdout, stderr, timeout,
                     self.timings.read_data_chunk_timeout)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 exception = FailedToReadCommandOutput(result, exc)
         return self._complete_run(channel, exception, timeout_reached, timeout, result, warn, stdout, stderr)
 
@@ -637,11 +637,11 @@ class Client:  # pylint: disable=too-many-instance-attributes
             try:
                 with self.session.lock:
                     channel.close()
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 print(f'Failed to close channel due to the following error: {exc}')
             try:
                 self.session.eagain(channel.wait_closed, timeout=self.timings.channel_close_timeout)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 print(f'Failed to close channel due to the following error: {exc}')
             exit_status = channel.get_exit_status()
             self.session.drop_channel(channel)
@@ -679,7 +679,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 chan = self.session.eagain(self.session.open_session)
                 if chan != LIBSSH2_ERROR_EAGAIN:
                     break
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pass
             delay = next(delay_iter, delay)
             sleep(delay)

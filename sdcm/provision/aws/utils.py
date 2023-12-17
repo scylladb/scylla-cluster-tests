@@ -145,7 +145,7 @@ def wait_for_provision_request_done(
 def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str]) -> Optional[List[str]]:
     try:
         resp = ec2_clients[region_name].describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
         return []
     for req in resp['SpotFleetRequestConfigs']:
         if req['SpotFleetRequestState'] == 'active' and req.get('ActivityStatus', None) == STATUS_FULFILLED:
@@ -168,7 +168,7 @@ def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str])
     for request_id in request_ids:
         try:
             resp = ec2_clients[region_name].describe_spot_fleet_instances(SpotFleetRequestId=request_id)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             return None
         provisioned_instances.extend([inst['InstanceId'] for inst in resp['ActiveInstances']])
     return provisioned_instances
@@ -182,7 +182,7 @@ def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) 
     """
     try:
         resp = ec2_clients[region_name].describe_spot_instance_requests(SpotInstanceRequestIds=request_ids)
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
         return []
     provisioned = []
     for req in resp['SpotInstanceRequests']:

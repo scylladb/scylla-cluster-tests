@@ -111,6 +111,6 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                                               f'{self.docker_image_name} '
                                               f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
                                           timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=stress_event, exc=exc)
             return None

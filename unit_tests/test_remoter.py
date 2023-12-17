@@ -98,12 +98,12 @@ class TestRemoteCmdRunners(unittest.TestCase):
                 pod_name='sct-cluster-dc-1-kind-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
         remoter.stop()
@@ -120,13 +120,13 @@ class TestRemoteCmdRunners(unittest.TestCase):
                 pod_name='sct-cluster-dc-1-kind-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
         remoter._reconnect()  # pylint: disable=protected-access
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
         remoter.stop()
@@ -135,13 +135,13 @@ class TestRemoteCmdRunners(unittest.TestCase):
     def _create_and_run_in_separate_thread(remoter, stmt, kwargs, paramiko_thread_results):
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
         remoter._reconnect()  # pylint: disable=protected-access
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
         remoter.stop()
@@ -211,7 +211,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
             'timeout': timeout}
         try:
             expected = LocalCmdRunner().run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             expected = exc
 
         if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
@@ -223,12 +223,12 @@ class TestRemoteCmdRunners(unittest.TestCase):
                 pod_name='sct-cluster-dc-1-kind-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             result = exc
         remoter._reconnect()  # pylint: disable=protected-access
         try:
             result2 = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             result2 = exc
         remoter.stop()
 
@@ -249,7 +249,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         self.log.info(repr({stmt: stmt, **kwargs}))
         try:
             expected = LocalCmdRunner().run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             expected = exc
 
         paramiko_thread_results = []
@@ -276,7 +276,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         self.log.info(repr({stmt: stmt, **kwargs}))
         try:
             expected = LocalCmdRunner().run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             expected = exc
 
         # Paramiko fails too often when it is invoked like that, that is why it is not in the test
@@ -332,7 +332,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         self.log.info(repr({stmt: stmt, **kwargs}))
         try:
             expected = LocalCmdRunner().run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             expected = exc
 
         libssh2_thread_results = []

@@ -126,5 +126,5 @@ class RemoteBrowser:
                 LOGGER.debug("Destroy %s (%s) container", name, self)
                 ContainerManager.destroy_container(self.node, name, ignore_keepalive=True)
                 LOGGER.info("%s (%s) destroyed", name, self)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("%s: some exception raised during container '%s' destroying", self, name, exc_info=exc)

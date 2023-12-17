@@ -65,7 +65,7 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             self.log.debug("%s: sleeping %s seconds before next retry", auth_exception, self.auth_sleep_time)
             self.ssh_up_thread_termination.wait(self.auth_sleep_time)
             return False
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.debug(details)
             return False
 

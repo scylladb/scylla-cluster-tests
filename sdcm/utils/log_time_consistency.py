@@ -96,7 +96,7 @@ class DbLogTimeConsistencyAnalyzer(LogTimeConsistencyAnalyzerBase):  # pylint: d
                     continue
             try:
                 current_time = datetime.datetime.fromisoformat(line.split()[0]).timestamp()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 continue
             current_time_shift = prior_time - current_time
             if bucket_name := cls._get_timeshift_bucket_name(current_time_shift):
@@ -132,7 +132,7 @@ class SctLogTimeConsistencyAnalyzer(LogTimeConsistencyAnalyzerBase):  # pylint: 
                 sct_time, event_time = match.groups()
                 sct_time = datetime.datetime.fromisoformat(sct_time).timestamp()
                 event_time = datetime.datetime.fromisoformat(event_time).timestamp()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 continue
             current_time_shift = sct_time - event_time
             if bucket_name := cls._get_timeshift_bucket_name(time_shift=current_time_shift):

@@ -134,7 +134,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
                             event.append(line)
                 if event:
                     events_bucket.append("\n".join(event))
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 error_msg = f"{self}: failed to read {log_file}: {exc}"
                 LOGGER.error(error_msg)
                 if not events_bucket:

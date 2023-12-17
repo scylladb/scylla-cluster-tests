@@ -38,7 +38,7 @@ def record_sub_test_result(func: Callable):
         try:
             func(*args, **kwargs)
             return {test_name: ["SUCCESS", []]}
-        except Exception as exc:  # pylint:disable=broad-except
+        except Exception as exc:  # pylint:disable=broad-except  # noqa: BLE001
             LOGGER.error(exc)
             return {test_name: ["FAILURE", [exc]]}
     return wrapper
@@ -375,7 +375,7 @@ class StopCompactionTest(ClusterTester):
 
         try:
             email_data = self._get_common_email_data()
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Error in gathering common email data: Error:\n%s", error)
 
         email_data.update({"test_statuses": self.test_statuses,

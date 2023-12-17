@@ -312,7 +312,7 @@ class EksNodePool(CloudK8sNodePool):
             self.k8s_cluster.eks_client.delete_nodegroup(
                 clusterName=self.k8s_cluster.short_cluster_name,
                 nodegroupName=self.name)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.k8s_cluster.log.debug(
                 "Failed to delete nodegroup %s/%s, due to the following error:\n%s",
                 self.k8s_cluster.short_cluster_name, self.name, exc)

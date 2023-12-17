@@ -213,7 +213,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 cmd=f'cassandra-stress help {option} | grep "^Usage:"',
                 timeout=self.timeout,
                 ignore_status=True).stdout
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             return []
         findings = re.findall(r' *\[([\w-]+?)[=?]*] *', result)
         _cache[option] = findings
@@ -367,7 +367,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 soft_timeout = self.timeout + int(self.timeout * 0.05)
                 with SoftTimeoutContext(timeout=soft_timeout, operation="cassandra-stress"):
                     result = cmd_runner.run(cmd=node_cmd, timeout=hard_timeout, log_file=log_file_name, retry=0)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=cs_stress_event, exc=exc)
 
         return loader, result, cs_stress_event
@@ -399,7 +399,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 node_cs_res = BaseLoaderSet._parse_cs_summary(lines)  # pylint: disable=protected-access
                 if node_cs_res:
                     ret.append(node_cs_res)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 event.add_error([f"Failed to process stress summary due to {exc}"])
                 event.severity = Severity.CRITICAL
                 event.event_error()

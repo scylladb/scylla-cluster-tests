@@ -540,7 +540,7 @@ class AWSNode(cluster.BaseNode):
             result = self.remoter.run(
                 'curl http://169.254.169.254/latest/meta-data/spot/instance-action', verbose=False)
             status = result.stdout.strip()
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning('Error during getting spot termination notification %s', details)
             return 0
 
@@ -955,7 +955,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             conf_dict = yaml.safe_load(yaml_stream)
             try:
                 return conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 raise ValueError('Unexpected cassandra.yaml. Contents:\n%s' % yaml_stream.read()) from exc
 
     # pylint: disable=too-many-arguments

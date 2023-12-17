@@ -147,7 +147,7 @@ class GcloudContextManager:
         except Exception as exc:
             try:
                 ContainerManager.destroy_container(self._instance, self._name)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pass
             raise exc from None
 
@@ -157,7 +157,7 @@ class GcloudContextManager:
             return
         try:
             ContainerManager.destroy_container(self._instance, self._name)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
         self._container = None
 

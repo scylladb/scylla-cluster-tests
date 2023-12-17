@@ -122,7 +122,7 @@ class EksClusterCleanupMixin:
                 if attachment_id := attachment.get('AttachmentId'):
                     try:
                         self.ec2_client.detach_network_interface(AttachmentId=attachment_id, Force=True)
-                    except Exception as exc:  # pylint: disable=broad-except
+                    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                         LOGGER.debug("Failed to detach network interface (%s) attachment %s:\n%s",
                                      network_interface_id, attachment_id, exc)
 
@@ -132,7 +132,7 @@ class EksClusterCleanupMixin:
             network_interface_id = interface_description['NetworkInterfaceId']
             try:
                 self.ec2_client.delete_network_interface(NetworkInterfaceId=network_interface_id)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.debug("Failed to delete network interface %s :\n%s", network_interface_id, exc)
 
     def destroy_attached_security_groups(self):
@@ -140,7 +140,7 @@ class EksClusterCleanupMixin:
         # even when cluster is gone
         try:
             sg_list = self.attached_security_group_ids
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.debug("Failed to get list of security groups:\n%s", exc)
             return
 
@@ -150,12 +150,12 @@ class EksClusterCleanupMixin:
             # In this case you need to forcefully detach interfaces and delete them to make nodegroup deletion possible.
             try:
                 self.delete_network_interfaces_of_sg(security_group_id)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.debug("destroy_attached_security_groups: %s", exc)
 
             try:
                 self.ec2_client.delete_security_group(GroupId=security_group_id)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.debug("Failed to delete security groups %s, due to the following error:\n%s",
                              security_group_id, exc)
 
@@ -165,7 +165,7 @@ class EksClusterCleanupMixin:
             for node_group_name in self._get_attached_nodegroup_names(status=status):
                 try:
                     self.eks_client.delete_nodegroup(clusterName=self.short_cluster_name, nodegroupName=node_group_name)
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     LOGGER.debug("Failed to delete nodegroup %s/%s, due to the following error:\n%s",
                                  self.short_cluster_name, node_group_name, exc)
             time.sleep(10)
@@ -180,7 +180,7 @@ class EksClusterCleanupMixin:
     def destroy_cluster(self):
         try:
             self.eks_client.delete_cluster(name=self.short_cluster_name)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.debug("Failed to delete cluster %s, due to the following error:\n%s",
                          self.short_cluster_name, exc)
 
@@ -204,7 +204,7 @@ class EksClusterCleanupMixin:
                 LOGGER.warning(
                     "Couldn't find any OIDC provider associated with the '%s' EKS cluster",
                     self.short_cluster_name)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning(
                 "Failed to delete OIDC provider for the '%s' cluster due to "
                 "the following error:\n%s",

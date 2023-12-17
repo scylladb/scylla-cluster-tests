@@ -155,7 +155,7 @@ class FullscanOperationBase:
                         self.fetch_result_pages(result=result, read_pages=self.fullscan_stats.read_pages)
                     if not scan_op_event.message:
                         scan_op_event.message = f"{type(self).__name__} operation ended successfully"
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     self.log.error(traceback.format_exc())
                     msg = repr(exc)
                     self.current_operation_stat.exceptions.append(repr(exc))
@@ -244,7 +244,7 @@ class FullPartitionScanOperation(FullscanOperationBase):
                 session.default_consistency_level = ConsistencyLevel.ONE
                 return get_table_clustering_order(ks_cf=self.fullscan_params.ks_cf,
                                                   ck_name=self.fullscan_params.ck_name, session=session)
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error(traceback.format_exc())
             self.log.error('Failed getting table %s clustering order through node %s : %s',
                            self.fullscan_params.ks_cf, node.name,

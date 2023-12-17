@@ -44,7 +44,7 @@ class Login:
             login_button.click()
             self.skip_set_new_password()
             LOGGER.info("Logged in succesful")
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Authentication failed: %s", details)
 
     def skip_set_new_password(self):

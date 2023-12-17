@@ -54,11 +54,11 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):  # p
             try:
                 if self.connection.check_if_alive(timeout):
                     return True
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 try:
                     self.connection.close()
                     self.connection.open(timeout)
-                except Exception:  # pylint: disable=broad-except
+                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                     pass
         return False
 
@@ -68,11 +68,11 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):  # p
             self.log.debug('Reestablish the session...')
             try:
                 self.connection.disconnect()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pass
             try:
                 self.connection.connect()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pass
         if self._is_error_retryable(str(exc)) or isinstance(exc, self.exception_retryable):
             raise RetryableNetworkException(str(exc), original=exc)

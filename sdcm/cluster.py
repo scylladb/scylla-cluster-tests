@@ -472,7 +472,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if not self._short_hostname:
             try:
                 self._short_hostname = self.remoter.run('hostname -s').stdout.strip()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 return "no_booted_yet"
         return self._short_hostname
 
@@ -539,7 +539,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         try:
             result = self.remoter.run("nproc", ignore_status=True)
             return int(result.stdout)
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Failed to get number of cores due to the %s", details)
         return None
 
@@ -555,7 +555,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         shards = self.smp or self.cpuset or self.cpu_cores
         try:
             return int(shards)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Failed to convert to integer shards value: %s", shards)
             return 0
 
@@ -581,7 +581,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             #   'CPUSET="--cpuset 1-7,9-15,17-23,25-31 "'
             # And so on...
             cpuset_file_lines = self.remoter.run("cat /etc/scylla.d/cpuset.conf").stdout
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error(f"Failed to get CPUSET. Error: {exc}")
             return ''
 
@@ -619,7 +619,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         try:
             grep_result = self.remoter.sudo(f'grep "^SCYLLA_ARGS=" {self.scylla_server_sysconfig_path}')
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error(f"Failed to get SCYLLA_ARGS. Error: {exc}")
             return ''
 
@@ -664,7 +664,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
             try:
                 node_seeds = conf_dict['seed_provider'][0]['parameters'][0].get('seeds')
-            except Exception as details:
+            except Exception as details:  # noqa: BLE001
                 self.log.debug('Loaded YAML data structure: %s', conf_dict)
                 raise ValueError('Exception determining seed node ips') from details
 
@@ -695,7 +695,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def file_exists(self, file_path: str) -> Optional[bool]:
         try:
             return self.remoter.sudo(f"test -e '{file_path}'", ignore_status=True).ok
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Error checking if file %s exists: %s", file_path, details)
             return None
 
@@ -959,7 +959,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def soft_reboot(self):  # pylint: disable=no-self-use
         try:
             self.remoter.run('sudo reboot', ignore_status=True, retry=0)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
 
     def restart_binary_protocol(self, verify_up=True):
@@ -1002,7 +1002,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             except SSHException as ex:
                 self.log.debug("Network isn't available, reboot might already start, %s" % ex)
                 return False
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.debug('Failed to get uptime during reboot, %s' % ex)
                 return False
 
@@ -1118,7 +1118,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         try:
             result = self.remoter.run(cmd, verbose=False)
             return result.stdout.strip()
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error('Error retrieving installed packages: %s',
                            details)
             return None
@@ -1166,7 +1166,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # Can't avoid the header by using `-H' option because of ss' core on Ubuntu 18.04.
             cmd = f"PATH=/bin:/usr/sbin ss -ln '( sport = :{port} )'"
             return len(self.remoter.run(cmd, verbose=False).stdout.splitlines()) > 1
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
             return False
 
@@ -1283,7 +1283,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.db_init_finished = True
         try:
             self._report_housekeeping_uuid(verbose=True)
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error('Failed to report housekeeping uuid. Error details: %s', details)
 
     def is_manager_agent_up(self, port=None):
@@ -1341,7 +1341,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         try:
             result = self.remoter.run('sudo lsof /var/lib/dpkg/lock', ignore_status=True)
             return result.exit_status == 0
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error('Failed to check if APT is running in the background. Error details: %s', details)
             return False
 
@@ -1454,7 +1454,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 event.backtrace = output.stdout
             except queue.Empty:
                 pass
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.error("failed to decode backtrace %s", details)
             finally:
                 if event:
@@ -1870,7 +1870,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.sudo('rm -rf /var/cache/apt/')
                 self.remoter.sudo('apt-get update', retry=3)
                 self.remoter.run("echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections")
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error('Failed to update repo cache: %s', ex)
 
     def upgrade_system(self):
@@ -2216,7 +2216,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self.is_docker():
             try:
                 self.remoter.run("echo no | sudo scyllamgr_setup")
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.warning(ex)
         else:
             self.remoter.run("echo yes | sudo scyllamgr_setup")
@@ -2354,7 +2354,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.wait_db_up(timeout=timeout)
         try:
             self.stop_service(service_name='scylla-server', timeout=timeout, ignore_status=ignore_status)
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             if isinstance(details, RetryableNetworkException):
                 details = details.original
             if details.__class__.__name__.endswith("CommandTimedOut"):
@@ -2539,7 +2539,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
                 nodetool_event.duration = result.duration
                 return result
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 if isinstance(details, RetryableNetworkException):
                     details = details.original
                 if coredump_on_timeout and details.__class__.__name__.endswith("CommandTimedOut"):
@@ -2626,7 +2626,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                         if node_ip:
                             LOGGER.error("Get nodes statuses. Failed to find a node in cluster by IP: %s", node_ip)
 
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
             ClusterHealthValidatorEvent.NodeStatus(
                 severity=Severity.WARNING,
                 node=self.name,
@@ -2757,7 +2757,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 cqlsh_out = self.remoter.run(cmd, timeout=timeout + 120,  # we give 30 seconds to cqlsh timeout mechanism to work
                                              verbose=verbose)
                 break
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 num_retry_on_failure -= 1
                 if not num_retry_on_failure:
                     raise
@@ -2846,7 +2846,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if verbose:
                 self.log.debug(f'{config_param_name} parameter value: {request_out.stdout}')
             return request_out.stdout
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error(f'Failed to retreive value of {config_param_name} parameter. Error: {e}')
             return None
 
@@ -3020,7 +3020,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return []
         try:
             result_json = json.loads(result.stdout)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning("Error getting token-ring data: %s", exc)
             return []
 
@@ -3578,7 +3578,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                                    publish_event=False, retry=3)
                         cf_stats = db_node._parse_cfstats(res.stdout)  # pylint: disable=protected-access
                         has_data = bool(cf_stats['Number of partitions (estimate)'])
-                    except Exception as exc:  # pylint: disable=broad-except
+                    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                         self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
 
                     if not has_data:
@@ -3606,7 +3606,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             result = session.execute(SimpleStatement(f"SELECT * FROM {table_name}", fetch_size=10))
             return result and bool(len(result.one())), None
 
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
             return False, exc
 
@@ -3729,11 +3729,11 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             exception_details = None
             try:
                 cl_inst.node_setup(_node, **setup_kwargs)
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                 exception_details = (str(ex), traceback.format_exc())
             try:
                 _node.update_shards_in_argus()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.warning("Failure settings shards for node %s in Argus.", _node)
                 LOGGER.debug("Exception details:\n", exc_info=True)
             _queue.put((_node, exception_details))
@@ -4388,7 +4388,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 time.sleep(kms_key_rotation_interval * 60)
                 try:
                     aws_kms.rotate_kms_key(kms_key_alias_name=kms_key_alias_name)
-                except Exception:  # pylint: disable=broad-except
+                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                     AwsKmsEvent(
                         message=f"Failed to rotate AWS KMS key for the '{kms_key_alias_name}' alias",
                         traceback=traceback.format_exc()).publish()
@@ -4414,7 +4414,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     AwsKmsEvent(
                         message="Failed to get any table for the KMS key rotation thread",
                         traceback=traceback.format_exc()).publish()
-                except Exception:  # pylint: disable=broad-except
+                except Exception:  # pylint: disable=broad-except # noqa: BLE001
                     AwsKmsEvent(
                         message="Failed to check the fact of encryption (KMS) for sstables",
                         traceback=traceback.format_exc()).publish()
@@ -4582,7 +4582,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         install_mode = self.params.get('install_mode')
         try:
             mode = InstallMode(install_mode)
-        except Exception as ex:
+        except Exception as ex:  # noqa: BLE001
             raise ValueError(f'Invalid install mode: {install_mode}, err: {ex}') from ex
 
         if mode == InstallMode.WEB:
@@ -4737,7 +4737,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 for nodes_ips in status.values():
                     ip_node_list.extend(nodes_ips.keys())
                 return ip_node_list
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.error(str(details))
                 return None
 
@@ -4880,7 +4880,7 @@ class BaseLoaderSet():
                                                    f'gemini --version', ignore_status=True)
                 if result.ok:
                     self._gemini_version = get_gemini_version(result.stdout)
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.error("Error get gemini version: %s", details)
         return self._gemini_version
 
@@ -5008,7 +5008,7 @@ class BaseLoaderSet():
                     wait.wait_for(kill_cs_process, text="Search and kill c-s processes", timeout=30, throw_exc=False,
                                   loader=loader, filter_cmd=search_cmd)
 
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.warning("failed to kill stress-command on [%s]: [%s]",
                                  str(loader), str(ex))
 
@@ -5017,7 +5017,7 @@ class BaseLoaderSet():
             try:
                 loader.remoter.run(cmd='docker ps -a -q | xargs docker rm -f', verbose=True, ignore_status=True)
                 self.log.info("Killed docker loader on node: %s", loader.name)
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.warning("failed to kill docker stress command on [%s]: [%s]",
                                  str(loader), str(ex))
 
@@ -5554,7 +5554,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                                                           grafana_port=self.grafana_port))
             if res.ok:
                 return res.content
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("unable to get grafana annotations [%s]", str(ex))
         return ""
 
@@ -5645,7 +5645,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             if snapshot_archive := PrometheusSnapshots(name='prometheus_snapshot').collect(self.nodes[0], self.logdir):
                 self.log.debug("Snapshot local path: %s", snapshot_archive)
                 return upload_archive_to_s3(snapshot_archive, self.monitor_id)
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Error downloading prometheus data dir: %s", details)
         return ""
 

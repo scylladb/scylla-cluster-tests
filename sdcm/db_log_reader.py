@@ -111,7 +111,7 @@ class DbLogReader(Process):
                     if line[0] == '{':
                         try:
                             json_log = json.loads(line)
-                        except Exception:  # pylint: disable=broad-except
+                        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                             pass
 
                     if self._log_lines:
