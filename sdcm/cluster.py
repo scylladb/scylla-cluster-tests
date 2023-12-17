@@ -716,16 +716,21 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.sudo(startup_interface_command.format(interface_name))
 
     @cached_property
-    def is_enterprise(self):
+    def is_enterprise(self) -> bool | None:
+        _is_enterprise = None
         if self.distro.is_rhel_like:
-            result = self.remoter.sudo("yum search scylla-enterprise 2>&1", ignore_status=True).stdout
-            if 'One of the configured repositories failed (Extra Packages for Enterprise Linux 7 - x86_64)' in result:
-                return "enterprise" in self.remoter.sudo("cat /etc/yum.repos.d/scylla.repo").stdout
-            return "scylla-enterprise.x86_64" in result or "No matches found" not in result
+            result = self.remoter.sudo("yum search scylla-enterprise 2>&1", ignore_status=True)
+            if result.ok:
+                _is_enterprise = "scylla-enterprise.x86_64" in result.stdout or "No matches found" not in result.stdout
         elif self.distro.is_sles:
-            result = self.remoter.sudo("zypper search scylla-enterprise 2>&1", ignore_status=True).stdout
-            return "scylla-enterprise" in result or "No matching items found" not in result
-        return "scylla-enterprise" in self.remoter.sudo("apt-cache search scylla-enterprise", ignore_status=True).stdout
+            result = self.remoter.sudo("zypper search scylla-enterprise 2>&1", ignore_status=True)
+            if result.ok:
+                _is_enterprise = "scylla-enterprise" in result.stdout or "No matching items found" not in result.stdout
+        elif self.distro.is_debian_like:
+            result = self.remoter.sudo("apt-cache search scylla-enterprise", ignore_status=True)
+            if result.ok:
+                _is_enterprise = "scylla-enterprise" in result.stdout
+        return _is_enterprise
 
     @property
     def public_ip_address(self) -> Optional[str]:
@@ -2078,6 +2083,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def forget_scylla_version(self) -> None:
         self.__dict__.pop("scylla_version_detailed", None)
         self.__dict__.pop("scylla_version", None)
+        self.__dict__.pop('is_enterprise', None)
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
