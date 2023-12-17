@@ -747,7 +747,7 @@ def get_relocatable_pkg_url(scylla_version: str) -> str:
             get_pkgs_cmd = f'curl -s -X POST http://backtrace.scylladb.com/index.html -d "build_id={scylla_build_id}&backtrace="'
             res = LOCALRUNNER.run(get_pkgs_cmd)
             relocatable_pkg = re.findall(fr"{scylla_build_id}.+(http:[/\w.:-]*\.tar\.gz)", res.stdout)[0]
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("Couldn't get relocatable_pkg link due to: %s", exc)
     return relocatable_pkg
 

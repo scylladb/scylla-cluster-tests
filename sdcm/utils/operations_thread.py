@@ -149,7 +149,7 @@ class OperationThread:
 
             self.log.debug("Thread operations queue depleted.")
 
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error(traceback.format_exc())
             self.log.error("Encountered exception while performing a operation:\n%s", exc)
 

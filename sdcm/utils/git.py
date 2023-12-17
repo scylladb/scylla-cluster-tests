@@ -103,5 +103,5 @@ def clone_repo(remoter, repo_url: str, destination_dir_name: str = "", clone_as_
             remoter.run(clone_cmd)
 
         LOGGER.debug("Finished cloning from %s.", repo_url)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Failed to clone from %s. Failed with: %s", repo_url, exc)

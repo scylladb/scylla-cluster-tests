@@ -213,7 +213,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 )
                 return self.parse_final_output(result)
 
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=latte_stress_event, exc=exc)
 
         return {}

@@ -210,7 +210,7 @@ class SCTCapacityReservation:
                 **additional_params
             )
             return response['CapacityReservation']['CapacityReservationId']
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.info("Failed to create capacity reservation for %s. Error: %s", instance_type, exc)
             return None
 

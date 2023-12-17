@@ -187,7 +187,7 @@ class TestScyllaBenchEvent(unittest.TestCase):
 
         try:
             raise ValueError('Stress command completed with bad status 1')
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             scylla_bench_event.severity = Severity.ERROR
             scylla_bench_event.add_error([str(exc)])
 

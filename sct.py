@@ -797,7 +797,7 @@ def _run_yaml_test(backend, full_path, env):
         config = SCTConfiguration()
         config.verify_configuration()
         config.check_required_files()
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         output.append(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
         error = True
     return error, output
@@ -817,7 +817,7 @@ def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many
             continue
         try:
             exclude_filters.append(re.compile(flt))
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             raise ValueError(f'Exclude filter "{flt}" compiling failed with: {exc}') from exc
 
     include_filters = []
@@ -826,7 +826,7 @@ def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many
             continue
         try:
             include_filters.append(re.compile(flt))
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             raise ValueError(f'Include filter "{flt}" compiling failed with: {exc}') from exc
 
     original_env = {**os.environ}
@@ -967,7 +967,7 @@ def show_monitor(test_id, date_time, kill, cluster_name):
     containers = {}
     try:
         containers = restore_monitoring_stack(test_id, date_time)
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error(details)
 
     if not containers:
@@ -1350,7 +1350,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
             sys.exit(1)
         try:
             reporter.send_report(test_results)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
             build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
                 "job_url": os.environ.get("BUILD_URL"),
