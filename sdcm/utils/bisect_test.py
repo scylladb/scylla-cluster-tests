@@ -111,7 +111,7 @@ def bisect_test(test_func):  # pylint: disable=too-many-statements
                         raise ValueError('failed to get version from node: ', node.name)
                     logger.info('successfully updated binaries to version: %s', version)
 
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 logger.warning('error during upgrade: %s \n verifying next closest version.', exc)
                 del repo_urls[mid]
                 high -= 1

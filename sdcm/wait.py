@@ -69,7 +69,7 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, stop_event=N
         )
         res = retry(func, **kwargs)
 
-    except Exception as ex:  # pylint: disable=broad-except
+    except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
         err = f"Wait for: {text or func.__name__}: timeout - {timeout} seconds - expired"
         raising_exc = WaitForTimeoutError(err)
         if stop_event and stop_event.is_set():

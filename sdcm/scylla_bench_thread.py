@@ -233,7 +233,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     log_file=log_file_name,
                     retry=0,
                 )
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=scylla_bench_event, exc=exc)
 
         return loader, result

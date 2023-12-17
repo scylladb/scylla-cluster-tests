@@ -100,7 +100,7 @@ def stop_instance(instance):
                 }
             ])
             instance.stop()
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         eprint("stop instance %s error: %s" % (instance.id, str(exc)))
 
 
@@ -113,7 +113,7 @@ def remove_protection(instance):
                     'Value': False
                 })
             print_instance(instance, "Disabling API Termination protection")
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         eprint("DisableApiTermination protection %s error: %s" % (instance.id, str(exc)))
 
 
@@ -127,7 +127,7 @@ def terminate_instance(instance):
                 }
             ])
             instance.terminate()
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         eprint("terminate instance %s error: %s" % (instance.id, str(exc)))
 
 
@@ -230,7 +230,7 @@ def delete_volume(volume):
         print_volume(volume, "deleting")
         if not DRY_RUN:
             volume.delete()
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
         pass
 
 
@@ -281,7 +281,7 @@ def release_address(eip_dict, client):
                 client.release_address(AllocationId=eip_dict['AllocationId'])
             elif "PublicIp" in eip_dict:
                 client.release_address(PublicIp=eip_dict['PublicIp'])
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         print(exc)
 
 

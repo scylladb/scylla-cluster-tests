@@ -464,13 +464,9 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
-        email_data = {}
         grafana_dataset = {}
 
-        try:
-            email_data = self._get_common_email_data()
-        except Exception as error:  # pylint: disable=broad-except
-            self.log.exception("Error in gathering common email data: Error:\n%s", error, exc_info=error)
+        email_data = self._get_common_email_data()
 
         try:
             grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(

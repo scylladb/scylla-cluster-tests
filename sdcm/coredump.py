@@ -114,7 +114,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             try:
                 self.main_cycle_body()
                 exceptions_count = 0
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.error("Following error occurred: %s", exc)
                 exceptions_count += 1
                 if exceptions_count == self.max_coredump_thread_exceptions:
@@ -172,7 +172,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                 if result:
                     uploaded.append(core_info)
                     self.publish_event(core_info)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pass
 
     @abstractmethod
@@ -182,7 +182,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
     def publish_event(self, core_info: CoreDumpInfo):
         try:
             core_info.publish_event()
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error(f"Failed to publish coredump event due to the: {str(exc)}")
 
     def extract_info_from_core_pids(
@@ -261,7 +261,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             coredump += '.gz'
         except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
             raise
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning("Failed to compress coredump '%s': %s", coredump, ex)
         return coredump
 
@@ -295,7 +295,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         try:
             systemd_version = get_systemd_version(self.node.remoter.run(
                 "systemctl --version", ignore_status=True).stdout)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning("failed to get systemd version:", exc_info=True)
         return systemd_version
 
@@ -430,7 +430,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                     else:
                         raise ValueError(f'Date has unknown format: {timestring}')
                     event_timestamp = datetime.strptime(timestring, fmt).timestamp()
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     self.log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {str(exc)}")
         core_info.update(executable=executable, command_line=command_line, corefile=corefile,
                          source_timestamp=event_timestamp, coredump_info="\n".join(coredump_info)+"\n")

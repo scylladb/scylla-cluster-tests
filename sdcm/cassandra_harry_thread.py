@@ -103,7 +103,7 @@ class CassandraHarryThread(DockerBasedStressThread):
                                                retry=0,
                                                )
                 result = self._parse_harry_summary(docker_run_result.stdout.splitlines())
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 errors_str = format_stress_cmd_error(exc)
                 if "timeout" in errors_str:
                     event_type = CassandraHarryEvent.timeout

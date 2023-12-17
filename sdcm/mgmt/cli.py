@@ -1326,7 +1326,7 @@ class ScyllaMgmt:
             raise Exception(err_msg)
         try:
             return json.loads(resp.content)
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error('Failed load data from json %s, error: %s', resp.content, ex)
         return resp.content
 

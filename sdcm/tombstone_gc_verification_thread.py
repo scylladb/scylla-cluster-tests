@@ -74,7 +74,7 @@ class TombstoneGcVerificationThread:
             try:
                 self.tombstone_gc_verification()
                 tombstone_event.message = "Tombstone GC verification ended successfully"
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 msg = str(exc)
                 msg = f"{msg} while running Nemesis: {db_node.running_nemesis}" if db_node.running_nemesis else msg
                 tombstone_event.message = msg
