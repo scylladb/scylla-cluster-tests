@@ -345,7 +345,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
                     continue
                 try:
                     return doc["spec"]["template"]["spec"]["containers"][0]["image"]
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     self.log.warning(
                         "Could not read the static local volume provisioner image: %s", exc)
         return ""
@@ -377,7 +377,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
                         for container in doc["spec"]["template"]["spec"]["containers"]:
                             try:
                                 ingress_images.add(container["image"])
-                            except Exception as exc:  # pylint: disable=broad-except
+                            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                                 self.log.warning(
                                     "Could not read the ingress controller related image: %s", exc)
         return ingress_images
@@ -688,7 +688,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
                     f"docker cp kind-control-plane:{src_container_path} {self.logdir} "
                     f"&& mkdir -p {self.logdir}/{dst_subdir} "
                     f"&& mv {self.logdir}/*/{log_prefix}* {self.logdir}/{dst_subdir}")
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.warning(
                     "Failed to copy K8S apiserver audit logs located at '%s'. Exception: \n%s",
                     src_container_path, exc)

@@ -188,7 +188,7 @@ class GCENode(cluster.BaseNode):
                         GceInstanceEvent(entry).publish()
                     case _:
                         GceInstanceEvent(entry, severity=Severity.WARNING).publish()
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning('Error during getting spot termination notification %s', details)
             self._last_logs_fetch_time = since
         return SPOT_TERMINATION_CHECK_DELAY
@@ -505,7 +505,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            rack=rack)
             node.init()
             return node
-        except Exception as ex:
+        except Exception as ex:  # noqa: BLE001
             raise CreateGCENodeError('Failed to create node: %s' % ex) from ex
 
     # pylint: disable=too-many-arguments

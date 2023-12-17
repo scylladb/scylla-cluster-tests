@@ -126,7 +126,7 @@ def get_stress_cmd_params(cmd):
                 del cmd_params['rate']
 
         return cmd_params
-    except Exception as ex:
+    except Exception as ex:  # noqa: BLE001
         raise CassandraStressCmdParseError(cmd=cmd, ex=ex) from None
 
 
@@ -349,7 +349,7 @@ class PrometheusDBStats:
         for item in results:
             try:
                 res[item['metric']['group']] = {int(i[1]) for i in item['values']}
-            except Exception as error:  # pylint: disable=broad-except
+            except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
                 # average value may be returned not integer. Ignore it
                 LOGGER.error("Failed to analyze results of query: %s\nResults: %s\nError: %s", query, results, error)
         return res
@@ -727,7 +727,7 @@ class TestStatsMixin(Stats):
             stat["stdev"] = stddev(ops_filtered)
             self.log.debug("Stats: %s", stat)
             return stat
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Exception when calculating PrometheusDB stats: %s" % ex)
             return {}
 
@@ -773,7 +773,7 @@ class TestStatsMixin(Stats):
             return 0
         try:
             return float(stress_result[stat])
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning("Error in conversion of '%s' for stat '%s': '%s'"
                              "Discarding stat." % (stress_result[stat], stat, details))
         return 0

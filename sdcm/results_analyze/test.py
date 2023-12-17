@@ -495,7 +495,7 @@ class TestResultClass(ClassBase):
                 size=10000,
                 filter_path=filter_path,
             )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("Unable to find ES data: %s", exc)
             es_data = None
 
@@ -566,7 +566,7 @@ class TestResultClass(ClassBase):
                 filter_path=filter_path,
             )
             es_result = es_result.get('hits', {}).get('hits', None) if es_result else None
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("Unable to find ES data: %s", exc)
             es_result = None
 

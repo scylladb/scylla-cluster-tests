@@ -107,7 +107,7 @@ class SSHLoggerBase(LoggerBase):
                 ignore_status=True,
                 log_file=self._target_log_file,
             )
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self._log.error("Error retrieving remote node DB service log: %s", details)
 
     @cached_property
@@ -198,7 +198,7 @@ class SSHGeneralFileLogger(SSHLoggerBase):
     def _is_file_exist(self, file_path: str) -> bool:
         try:
             return self._remoter.run(cmd=f"sudo test -e {file_path}", ignore_status=True).ok
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self._log.error("Error checking if file %s exists: %s", file_path, details)
         return False
 
@@ -245,7 +245,7 @@ class CommandLoggerBase(LoggerBase):
                 if started:
                     # Update last time only if command successfully started
                     self._last_time_completed = time.time()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pass
 
     def start(self):
@@ -460,7 +460,7 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
                 self._log.debug(
                     "'_read_log_line()': failed to read from pod %s log stream:%s", self._pod_name, exc)
                 self._open_stream()
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self._log.error(
                     "'_read_log_line()': failed to read from pod %s log stream:%s", self._pod_name, exc)
                 self._open_stream()
@@ -562,7 +562,7 @@ class KubernetesWrongSchedulingLogger(CommandClusterLoggerBase):
                 else:
                     wrong_scheduled_pods_on_scylla_node.append(
                         f"{pod.metadata.name} ({pod.spec.node_name} node)")
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self._log.warning("Failed to get pods list: %s", str(details))
 
         if not wrong_scheduled_pods_on_scylla_node:

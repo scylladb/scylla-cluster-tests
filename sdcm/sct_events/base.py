@@ -323,7 +323,7 @@ class SctEvent:
             warning = f"[SCT internal warning] {self} has not been published or dumped, maybe you missed .publish()"
             try:
                 LOGGER.warning(warning)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 print(f"Exception while printing {warning}. Full exception: {exc}")
 
 

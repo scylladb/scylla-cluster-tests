@@ -91,14 +91,14 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=to
     def db_up():
         try:
             return scylla.is_port_used(port=BaseNode.CQL_PORT, service_name="scylla-server")
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
     def db_alternator_up():
         try:
             return scylla.is_port_used(port=8000, service_name="scylla-server")
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 

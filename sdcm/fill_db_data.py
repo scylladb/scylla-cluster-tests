@@ -3327,7 +3327,7 @@ class FillDatabaseData(ClusterTester):
             try:
                 session.set_keyspace(self.base_ks)
                 self.truncate_tables(session)
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.debug("Found error in truncate tables: '%s'", ex)
 
             # Insert data to the tables according to the "inserts" and flush to disk in several cases (nodetool flush)

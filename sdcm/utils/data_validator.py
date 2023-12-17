@@ -619,7 +619,7 @@ class LongevityDataValidator:
 
                 try:
                     row_data.update({key: list(session.execute(query % (select_columns, table)))})
-                except Exception as error:  # pylint: disable=broad-except
+                except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
                     LOGGER.error("Query %s failed. Error: %s", query % table, error)
 
             row_data.update({'source_all_columns': list(session.execute(query % (columns_for_validation,

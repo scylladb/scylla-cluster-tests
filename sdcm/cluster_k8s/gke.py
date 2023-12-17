@@ -231,7 +231,7 @@ class GkeNodePool(CloudK8sNodePool):
                     f'--cluster {self.k8s_cluster.short_cluster_name}')
             ).get('instanceGroupUrls')[0]
             return group_link.split('/')[-1]
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             raise RuntimeError(f"Can't get instance group name due to the: {exc}") from exc
 
     def remove_instance(self, instance_name: str):

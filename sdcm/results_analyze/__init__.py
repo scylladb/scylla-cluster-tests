@@ -348,7 +348,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                                                                    key=lambda version: version,
                                                                    reverse=True)}
             return best_results
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Search best results per version failed. Error: %s", exc)
             return {}
 
@@ -403,7 +403,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                     best['average_time_operation_in_sec_diff'] = _calculate_relative_change_magnitude(
                         current_result[nemesis]['average_time_operation_in_sec'],
                         best['average_time_operation_in_sec'])
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Compare results failed: %s", exc)
 
     def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, email_subject_postfix=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-arguments

@@ -54,7 +54,7 @@ class ScyllaOperatorLogEvent(LogEvent):
             self.source_timestamp = datetime.datetime(
                 year=year, month=month, day=day, hour=int(hour), minute=int(minute), second=int(second),
                 microsecond=int(milliseconds), tzinfo=datetime.timezone.utc).timestamp()
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
         self.event_timestamp = time.time()
         self.node = str(node)
