@@ -884,13 +884,13 @@ class SlaPerUserTest(LongevityTest):
 
         try:
             email_data = self._get_common_email_data()
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Error in gathering common email data: Error:\n%s", error)
 
         try:
             grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
                 self.start_time) if self.monitors else {}
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Error in gathering Grafana screenshots and snapshots. Error:\n%s", error)
 
         email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),

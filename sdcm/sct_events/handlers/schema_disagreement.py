@@ -48,7 +48,7 @@ class SchemaDisagreementHandler(EventHandler):
                 try:
                     link = upload_sstables_to_s3(node, keyspace='system_schema', test_id=tester_obj.test_id)
                     event.add_sstable_link(link)
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     LOGGER.error("failed to upload system_schema sstables for node %s: %s", node.name, exc)
             event.add_gossip_info(gossip_info)
             event.add_peers_info(peers_info)

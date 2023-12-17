@@ -303,7 +303,7 @@ def get_monitoring_stack_scylla_version(monitoring_stack_dir):
             scylla_version = 'master'
 
         return monitoring_version, scylla_version
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
         return 'branch-3.0', 'master'
 
 
@@ -313,7 +313,7 @@ def restore_grafana_dashboards_and_annotations(monitoring_dockers_dir, grafana_d
         status.append(restore_sct_dashboards(grafana_docker_port=grafana_docker_port,
                                              sct_dashboard_file=sct_dashboard_file))
         status.append(restore_annotations_data(monitoring_dockers_dir, grafana_docker_port=grafana_docker_port))
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error("Error during uploading sct monitoring data %s", details)
         status.append(False)
 
@@ -323,7 +323,7 @@ def restore_grafana_dashboards_and_annotations(monitoring_dockers_dir, grafana_d
 def run_monitoring_stack_containers(monitoring_stack_dir, monitoring_data_dir, scylla_version, tenants_number=1):
     try:
         return start_dockers(monitoring_stack_dir, monitoring_data_dir, scylla_version, tenants_number)
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error("Dockers are not started. Error: %s", details)
         return {}
 
@@ -504,7 +504,7 @@ def verify_grafana_is_available(grafana_docker_port=GRAFANA_DOCKER_PORT):
                                                             title=dashboard.title)
             grafana_statuses.append(result)
             LOGGER.info("Dashboard {} is available".format(dashboard.title))
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Dashboard %s is not available. Error: %s", dashboard.title, details)
             grafana_statuses.append(False)
 
@@ -535,7 +535,7 @@ def verify_prometheus_is_available(prometheus_docker_port=PROMETHEUS_DOCKER_PORT
         prom_client.get_throughput(time_start, time_end)
         LOGGER.info("Prometheus is up")
         return True
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error("Error requesting prometheus %s", details)
         return False
 

@@ -322,7 +322,7 @@ def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
                 time.sleep(4)
                 db_cluster.nodes[0].run_cqlsh(cmd=f"DROP KEYSPACE IF EXISTS {current_ks_name}", timeout=60)
                 time.sleep(4)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 # NOTE: we don't care if some of the queries fail.
                 #       At first, there are redundant ones and, at second, they are utilitary.
                 log.warning("Utilitary CQL query has failed: %s", exc)
@@ -646,7 +646,7 @@ def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
                 # NOTE: increase the value only when the sysctl spec update is successful
                 #       to avoid false negative results in further assertions
                 expected_aio_max_nr_value += 1
-            except Exception as error:  # pylint: disable=broad-except
+            except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
                 str_error = str(error)
                 log.debug("Change /spec/sysctls value to %d failed. Error: %s",
                           expected_aio_max_nr_value, str_error)

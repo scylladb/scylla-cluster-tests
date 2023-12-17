@@ -20,7 +20,7 @@ def get_thread_stacktrace(thread):  # pylint: disable=no-self-use
             if line:
                 output.append("  %s" % (line.strip()))
         return '\n'.join(output)
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error('Failed to get stack trace due to the: %s', exc)
         return 'FAILED TO GET STACKTRACE'
 
@@ -28,7 +28,7 @@ def get_thread_stacktrace(thread):  # pylint: disable=no-self-use
 def get_source(source: Any):
     try:
         return inspect.getsource(source)
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error('Failed to source due to the: %s', exc)
         return 'NO SOURCE AVAILABLE'
 

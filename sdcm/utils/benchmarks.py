@@ -202,7 +202,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                                         margins=Margins(sysbench_eps=0.03,
                                                         cassandra_fio_read_bw=0.01,
                                                         cassandra_fio_write_bw=0.01)))
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.warning(
                     "Failed to generate comparable result for the following item:\n%s"
                     "\nException:%s", runner.benchmark_results, exc)
@@ -236,7 +236,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                     cassandra_fio_read_bw=item["cassandra_fio_lcs_64k_read"]["read"]["bw"],
                     cassandra_fio_write_bw=item["cassandra_fio_lcs_64k_write"]["write"]["bw"]
                 ))
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.warning(
                     "Failed to generate comparable result for the following item:\n%s"
                     "\nException:%s", item, exc)
@@ -296,7 +296,7 @@ class ScyllaNodeBenchmarkRunner:
             for pkg in package_list:
                 self._node.install_package(pkg)
             LOGGER.info("Ubuntu prerequisites for the node benchmarks installed.")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Failed to install Ubuntu prerequisites for the node benchmarking tools. "
                            "Exception:\n%s", exc)
 
@@ -342,7 +342,7 @@ class ScyllaNodeBenchmarkRunner:
             for job in cassandra_fio_jobs:
                 jsoned_output.update({f'cassandra_fio_{job["jobname"]}': job})
             self.benchmark_results.update(jsoned_output)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Failed to get cassandra-fio result for node %s with exception:\n%s", self.node_name, exc)
 
     def run_benchmarks(self):
