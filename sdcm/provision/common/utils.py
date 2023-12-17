@@ -69,8 +69,6 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
             );
         }};
 
-        destination d_system {{ file("/var/log/system.log"); }};
-        log {{ source($source_name); destination(d_system); }};
         EOF
         fi
 
