@@ -15,14 +15,15 @@ import abc
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
-    configure_rsyslog_target_script, configure_sshd_script, restart_sshd_service, restart_rsyslog_service,
-    install_syslogng_service, configure_syslogng_target_script, restart_syslogng_service,
-    configure_rsyslog_rate_limits_script, configure_rsyslog_set_hostname_script, configure_ssh_accept_rsa)
+    configure_sshd_script,
+    restart_sshd_service,
+    install_syslogng_service,
+    configure_syslogng_target_script,
+    restart_syslogng_service,
+    configure_ssh_accept_rsa)
 
 
-RSYSLOG_SSH_TUNNEL_LOCAL_PORT = 5000
-RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL = 600
-RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST = 20000
+SYSLOGNG_SSH_TUNNEL_LOCAL_PORT = 5000
 SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
 
 
@@ -66,9 +67,6 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         script = ''
         if self.logs_transport == 'syslog-ng':
             script += install_syslogng_service()
-            script += 'if [ -z "$SYSLOG_NG_INSTALLED" ]; then\n'
-            script += self._rsyslog_configuration_script()
-            script += 'else\n'
             script += configure_syslogng_target_script(
                 host=self.syslog_host_port[0],
                 port=self.syslog_host_port[1],
@@ -76,9 +74,6 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
                 hostname=self.hostname,
             )
             script += restart_syslogng_service()
-            script += 'fi\n'
-        elif self.logs_transport == 'rsyslog':
-            script += self._rsyslog_configuration_script()
 
         if self.configure_sshd:
             script += configure_sshd_script()
@@ -86,18 +81,4 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
             script += restart_sshd_service()
         elif self.disable_ssh_while_running:
             script += 'systemctl start sshd || true\n'
-        return script
-
-    def _rsyslog_configuration_script(self):
-        script = configure_rsyslog_rate_limits_script(
-            interval=RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL,
-            burst=RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST,
-        )
-        script += configure_rsyslog_target_script(
-            host=self.syslog_host_port[0],
-            port=self.syslog_host_port[1],
-        )
-        if self.hostname:
-            script += configure_rsyslog_set_hostname_script(self.hostname)
-        script += restart_rsyslog_service()
         return script

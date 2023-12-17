@@ -11,13 +11,11 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import logging
 from typing import Optional
 
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.k8s import HelmContainerMixin
-from sdcm.utils.rsyslog import RSyslogContainerMixin
 from sdcm.utils.gce_utils import GcloudContainerMixin
 from sdcm.utils.ldap import LDAP_PORT, LDAP_SSL_PORT, LdapContainerMixin
 from sdcm.utils.syslogng import SyslogNGContainerMixin
@@ -25,7 +23,7 @@ from sdcm.utils.syslogng import SyslogNGContainerMixin
 LOGGER = logging.getLogger(__name__)
 
 
-class LocalHost(SyslogNGContainerMixin, RSyslogContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin):
+class LocalHost(SyslogNGContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin):
     def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
         self._containers = {}
         self.tags = {}
@@ -38,7 +36,3 @@ class LocalHost(SyslogNGContainerMixin, RSyslogContainerMixin, GcloudContainerMi
 
     def destroy(self) -> None:
         ContainerManager.destroy_all_containers(self)
-        try:
-            os.remove(self.rsyslog_confpath)
-        except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.warning("Unable to delete `%s': %s", self.rsyslog_confpath, exc)

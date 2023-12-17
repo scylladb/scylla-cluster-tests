@@ -63,8 +63,6 @@ print_kernel_callstack: true
 update_db_packages: ''
 
 logs_transport: "syslog-ng"
-rsyslog_imjournal_rate_limit_interval: 60  # max. 65535 till rsyslog v8.34
-rsyslog_imjournal_rate_limit_burst: 50000  # max. 65535 till rsyslog v8.34
 
 store_perf_results: false
 send_email: false

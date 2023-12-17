@@ -359,13 +359,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.init_argus_run()
         self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
         self.localhost = self._init_localhost()
-        self.test_config.set_rsyslog_imjournal_rate_limit(
-            interval=self.params.get("rsyslog_imjournal_rate_limit_interval"),
-            burst=self.params.get("rsyslog_imjournal_rate_limit_burst"),
-        )
-        if self.params.get("logs_transport") == 'rsyslog':
-            self.test_config.configure_rsyslog(self.localhost, enable_ngrok=False)
-        elif self.params.get("logs_transport") == 'syslog-ng':
+
+        if self.params.get("logs_transport") == 'syslog-ng':
             self.test_config.configure_syslogng(self.localhost)
 
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
