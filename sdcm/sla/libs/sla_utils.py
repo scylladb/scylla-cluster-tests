@@ -383,7 +383,7 @@ class SlaUtils:
                 if auth:
                     try:
                         auth.drop()
-                    except Exception as error:  # pylint: disable=broad-except
+                    except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
                         LOGGER.error("Failed to drop '%s'. Error: %s", auth.name, error)
 
     @staticmethod

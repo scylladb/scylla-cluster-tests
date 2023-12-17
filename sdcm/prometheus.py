@@ -61,7 +61,7 @@ def start_metrics_server():
         ip = get_my_ip()
         LOGGER.info('prometheus API server running on port: %s', port)
         return '{}:{}'.format(ip, port)
-    except Exception as ex:  # pylint: disable=broad-except
+    except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error('Cannot start local http metrics server: %s', ex)
 
     return None
@@ -97,7 +97,7 @@ class NemesisMetrics:
     def create_counter(name, desc, param_list):
         try:
             return prometheus_client.Counter(name, desc, param_list)
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error('Cannot create metrics counter: %s', ex)
         return None
 
@@ -105,7 +105,7 @@ class NemesisMetrics:
     def create_gauge(name, desc, param_list):
         try:
             return prometheus_client.Gauge(name, desc, param_list)
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error('Cannot create metrics gauge: %s', ex)
         return None
 
@@ -138,7 +138,7 @@ class PrometheusAlertManagerListener(threading.Thread):
     def is_alert_manager_up(self):
         try:
             return requests.get(f"{self._alert_manager_url}/status", timeout=3).json()['cluster']['status'] == 'ready'
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             return False
 
     @log_run_info

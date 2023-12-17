@@ -208,7 +208,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
         try:
             resp = self._ec2_client(provision_parameters).describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
             LOGGER.info("%s: - %s", request_ids, resp)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.info("%s: - failed to get status: %s", request_ids, exc)
             return []
         for req in resp['SpotFleetRequestConfigs']:

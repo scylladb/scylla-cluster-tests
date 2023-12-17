@@ -595,7 +595,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def __str__(self):
         try:
             return str(self.__class__).split("'")[1]
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             return str(self.__class__)
 
     def _kill_scylla_daemon(self):
@@ -1029,7 +1029,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         try:
             file_name_template = re.search(r"([^-]+-[^-]+)-", file_name).group(1)
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.debug('File name "{file_name}" is not as expected for Scylla data files. '
                            'Search files for "{ks_cf_for_destroy}" table'.format(file_name=file_name,
                                                                                  ks_cf_for_destroy=ks_cf_for_destroy))
@@ -2133,7 +2133,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with self.cluster.cql_connection_patient(self.target_node, keyspace=ks) as session:
                 session.default_consistency_level = consistency_level
                 session.execute(cmd)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.debug(f"Add/Remove Column Nemesis: CQL query '{cmd}' execution has failed with error '{str(exc)}'")
             return False
         return True
@@ -2242,7 +2242,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 cmd = f"select ck from {ks_cf} where pk={partition_key} order by ck desc limit 1"
                 try:
                     result = session.execute(SimpleStatement(cmd, fetch_size=1), timeout=300)
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     self.log.error(str(exc))
                     continue
 
@@ -3244,7 +3244,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             nodetool_cmd = snapshot_option[0]() if len(snapshot_option) == 1 else snapshot_option[0](snapshot_option[1])
             if not nodetool_cmd:
                 raise ValueError("Failed to get nodetool command.")
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             raise ValueError(f"Failed to get nodetool command. Error: {exc}") from exc
 
         self.log.debug(f'Take snapshot with command: {nodetool_cmd}')
@@ -3511,7 +3511,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for node in up_normal_nodes:
                 try:
                     self.repair_nodetool_repair(node=node, publish_event=False)
-                except Exception as details:  # pylint: disable=broad-except
+                except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                     self.log.error(f"failed to execute repair command "
                                    f"on node {node} due to the following error: {str(details)}")
 
@@ -3733,7 +3733,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 cmd_executed[cmd_num] = True
                 if wait_time:
                     time.sleep(wait_time)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 cmd_executed[cmd_num] = False
                 self.log.error(
                     f"{name}: failed to execute start command "
@@ -3743,7 +3743,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for cmd_num, cmd in enumerate(cleanup_commands):
             try:
                 node.remoter.run(cmd)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.debug(f"{name}: failed to execute cleanup command "
                                f"{cmd} on node {node} due to the following error: {str(exc)}")
 
@@ -3830,7 +3830,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             except Group0MembersNotConsistentWithTokenRingMembersException as exc:
                 self.log.error("Cluster state could be not predictable due to ghost members in raft group0: %s", exc)
                 raise
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.error('Unexpected exception raised in checking decommission status: %s', exc)
 
             self.log.info('Decommission might complete before stopping it. Re-add a new node')
@@ -4014,7 +4014,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 InfoEvent(f'StartEvent - ShrinkCluster started decommissioning a node {self.target_node}').publish()
                 self.decommission_node(self.target_node)
                 InfoEvent(f'FinishEvent - ShrinkCluster has done decommissioning a node {self.target_node}').publish()
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 InfoEvent(f'FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error '
                           f'{str(exc)}').publish()
 
@@ -5078,7 +5078,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     args[0].tester.data_validator.validate_range_not_expected_to_change(session, during_nemesis=True)
                     args[0].tester.data_validator.validate_range_expected_to_change(session, during_nemesis=True)
                     args[0].tester.data_validator.validate_deleted_rows(session, during_nemesis=True)
-        except Exception as err:  # pylint: disable=broad-except
+        except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
             args[0].log.debug(f'Data validator error: {err}')
 
     @wraps(method)
@@ -5148,7 +5148,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                         log_info.update({'subtype': 'skipped', 'skip_reason': skip_reason})
                         nemesis_event.skip(skip_reason=skip_reason)
                     raise
-                except Exception as details:  # pylint: disable=broad-except
+                except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                     nemesis_event.add_error([str(details)])
                     nemesis_event.full_traceback = traceback.format_exc()
                     nemesis_event.severity = Severity.ERROR
@@ -5177,7 +5177,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     except ElasticSearchConnectionTimeout as err:
                         args[0].log.warning(f"Connection timed out when attempting to update elasticsearch statistics:\n"
                                             f"{err}")
-                    except Exception as err:  # pylint: disable=broad-except
+                    except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
                         args[0].log.warning(f"Unexpected error when attempting to update elasticsearch statistics:\n"
                                             f"{err}")
                     args[0].log.info(f"log_info: {log_info}")

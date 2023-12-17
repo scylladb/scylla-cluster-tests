@@ -93,7 +93,7 @@ def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
         return [str(value), ]
 
@@ -102,7 +102,7 @@ def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
         for val in value:
             try:
                 ret_values += [ast.literal_eval(val)]
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 ret_values += [str(val)]
         return ret_values
 
@@ -113,7 +113,7 @@ def int_or_list(value):
     try:
         value = int(value)
         return value
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
         pass
 
     if isinstance(value, str):
@@ -121,11 +121,11 @@ def int_or_list(value):
             values = value.split()
             [int(v) for v in values]  # pylint: disable=expression-not-assigned
             return value
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
 
     raise ValueError("{} isn't int or list".format(value))
@@ -135,7 +135,7 @@ def dict_or_str(value):
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
     if isinstance(value, dict):
         return value
@@ -1750,7 +1750,7 @@ class SCTConfiguration(dict):
                             ami = get_branched_ami(scylla_version=scylla_version, region_name=region, arch=aws_arch)[0]
                         else:
                             ami = get_scylla_ami_versions(version=scylla_version, region_name=region, arch=aws_arch)[0]
-                    except Exception as ex:
+                    except Exception as ex:  # noqa: BLE001
                         raise ValueError(f"AMIs for scylla_version='{scylla_version}' not found in {region} "
                                          f"arch={aws_arch}") from ex
                     self.log.debug("Found AMI %s(%s) for scylla_version='%s' in %s",
@@ -1764,7 +1764,7 @@ class SCTConfiguration(dict):
                     else:
                         # gce_image.name format examples: scylla-4-3-6 or scylla-enterprise-2021-1-2
                         gce_image = get_scylla_gce_images_versions(version=scylla_version)[0]
-                except Exception as ex:
+                except Exception as ex:  # noqa: BLE001
                     raise ValueError(f"GCE image for scylla_version='{scylla_version}' was not found") from ex
 
                 self.log.debug("Found GCE image %s for scylla_version='%s'", gce_image.name, scylla_version)
@@ -1828,7 +1828,7 @@ class SCTConfiguration(dict):
                         else:
                             ami = get_scylla_ami_versions(version=oracle_scylla_version,
                                                           region_name=region, arch=aws_arch)[0]
-                    except Exception as ex:
+                    except Exception as ex:  # noqa: BLE001
                         raise ValueError(f"AMIs for oracle_scylla_version='{scylla_version}' not found in {region} "
                                          f"arch={aws_arch}") from ex
 
@@ -2007,7 +2007,7 @@ class SCTConfiguration(dict):
             if opt['env'] in os.environ:
                 try:
                     environment_vars[opt['name']] = opt['type'](os.environ[opt['env']])
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                     raise ValueError(
                         "failed to parse {} from environment variable".format(opt['env'])) from ex
             nested_keys = [key for key in os.environ if key.startswith(opt['env'] + '.')]
@@ -2060,7 +2060,7 @@ class SCTConfiguration(dict):
         opt['is_k8s_multitenant_value'] = False
         try:
             opt['type'](self.get(opt['name']))
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
             if not (self.get("cluster_backend").startswith("k8s")
                     and self.get("k8s_tenants_num") > 1
                     and opt.get("k8s_multitenancy_supported")
@@ -2072,7 +2072,7 @@ class SCTConfiguration(dict):
             for list_element in self.get(opt['name']):
                 try:
                     opt['type'](list_element)
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                     raise ValueError("failed to validate {}".format(opt['name'])) from ex
             opt['is_k8s_multitenant_value'] = True
 

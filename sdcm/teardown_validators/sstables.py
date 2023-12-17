@@ -72,7 +72,7 @@ class SstablesValidator(TeardownValidator):  # pylint: disable=too-few-public-me
             parallel_obj = ParallelObject(objects=self.cluster.nodes, timeout=timeout)
             parallel_obj.run(run_scrub, ignore_exceptions=False, unpack_objects=True)
             LOGGER.info("Nodetool scrub validation finished")
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Error during nodetool scrub validation: %s", exc)
             ValidatorEvent(
                 message=f'Error during nodetool scrub validation: {exc}', severity=Severity.ERROR).publish()

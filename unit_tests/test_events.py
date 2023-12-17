@@ -785,7 +785,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                 nemesis_event.duration = 15
                 raise
 
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pytest.fail("we shouldn't reach this code path")
 
         assert nemesis_event.errors_formatted == ''

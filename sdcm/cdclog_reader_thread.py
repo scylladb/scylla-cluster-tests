@@ -79,7 +79,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
                                                stress_cmd=self.stress_cmd,
                                                errors=result.stderr.split("\n")).publish()
                 return result
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             CDCReaderStressEvent.failure(node=loader,
                                          stress_cmd=self.stress_cmd,
                                          errors=[format_stress_cmd_error(exc), ]).publish()

@@ -176,7 +176,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             with open(os.path.join(self.logdir, 'jenkins_perf_PerfPublisher.xml'), 'w', encoding="utf-8") as pref_file:
                 content = """<report name="%s report" categ="none">%s</report>""" % (test_name, test_xml)
                 pref_file.write(content)
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.debug('Failed to display results: {0}'.format(results))
             self.log.debug('Exception: {0}'.format(ex))
 

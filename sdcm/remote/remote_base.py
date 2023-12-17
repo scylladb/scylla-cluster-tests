@@ -606,7 +606,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             except self.exception_retryable as exc:
                 if self._run_on_retryable_exception(exc, new_session):
                     raise
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 if self._run_on_exception(exc, verbose, ignore_status):
                     raise
             return None
