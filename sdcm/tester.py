@@ -96,7 +96,10 @@ from sdcm.utils.operations_thread import ThreadParams
 from sdcm.utils.replication_strategy_utils import LocalReplicationStrategy, NetworkTopologyReplicationStrategy
 from sdcm.utils.threads_and_processes_alive import gather_live_processes_and_dump_to_file, \
     gather_live_threads_and_dump_to_file
-from sdcm.utils.version_utils import get_relocatable_pkg_url
+from sdcm.utils.version_utils import (
+    get_relocatable_pkg_url,
+    ComparableScyllaVersion,
+)
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.ndbench_thread import NdBenchStressThread
 from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
@@ -800,7 +803,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         )
 
     def prepare_kms_host(self) -> None:
-        if self.params.is_enterprise and self.params.get('cluster_backend') == 'aws' and not self.params.get('scylla_encryption_options'):
+        if (self.params.is_enterprise and ComparableScyllaVersion(self.params.scylla_version) >= '2023.2.0~rc0'
+                and self.params.get('cluster_backend') == 'aws'
+                and not self.params.get('scylla_encryption_options')):
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"  # pylint: disable=line-too-long
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
             return None
