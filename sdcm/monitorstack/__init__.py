@@ -1,21 +1,25 @@
+import datetime
+import json
 import logging
 import os
 import tarfile
-import zipfile
 import tempfile
-import json
-import datetime
 import time
-from textwrap import dedent
+import zipfile
 from pathlib import Path
+from textwrap import dedent
 
 import requests
 import yaml
 
 from sdcm.remote import LocalCmdRunner
-from sdcm.utils.common import list_logs_by_test_id, S3Storage, remove_files, get_free_port
+from sdcm.utils.common import (
+    S3Storage,
+    get_free_port,
+    list_logs_by_test_id,
+    remove_files,
+)
 from sdcm.utils.decorators import retrying
-
 
 LOGGER = logging.getLogger(name='monitoringstack')
 
@@ -163,15 +167,13 @@ def create_monitoring_data_dir(base_dir, archive, tenant_dir=""):
     if tenant_dir:
         monitoring_data_base_dir = os.path.join(monitoring_data_base_dir, tenant_dir)
 
-    cmd = dedent("""
-        mkdir -p {data_dir}
-        cd {data_dir}
+    cmd = dedent(f"""
+        mkdir -p {monitoring_data_base_dir}
+        cd {monitoring_data_base_dir}
         cp {archive} ./
-        tar -xvf {archive_name}
-        chmod -R 777 {data_dir}
-        """.format(data_dir=monitoring_data_base_dir,
-                   archive=archive,
-                   archive_name=os.path.basename(archive)))
+        tar -xvf {os.path.basename(archive)}
+        chmod -R 777 {monitoring_data_base_dir}
+        """)
     result = LocalCmdRunner().run(cmd, timeout=COMMAND_TIMEOUT, ignore_status=True)
     if result.exited > 0:
         LOGGER.error("Error during extracting prometheus snapshot. Switch to next archive")
@@ -203,14 +205,12 @@ def get_nemesis_dashboard_file_for_cluster(base_dir, archive, file_name_for_sear
 
 
 def create_monitoring_stack_dir(base_dir, archive):
-    cmd = dedent("""
-        cd {data_dir}
+    cmd = dedent(f"""
+        cd {base_dir}
         cp {archive} ./
-        tar -xvf {archive_name}
-        chmod -R 777 {data_dir}
-        """.format(data_dir=base_dir,
-                   archive_name=os.path.basename(archive),
-                   archive=archive))
+        tar -xvf {os.path.basename(archive)}
+        chmod -R 777 {base_dir}
+        """)
 
     result = LocalCmdRunner().run(cmd, timeout=COMMAND_TIMEOUT, ignore_status=True)
     if result.exited > 0:
@@ -354,9 +354,7 @@ def restore_sct_dashboards(grafana_docker_port, sct_dashboard_file):
 
         if res.status_code != 200:
             LOGGER.info('Error uploading dashboard %s. Error message %s', sct_dashboard_file, res.text)
-            raise ErrorUploadSCTDashboard('Error uploading dashboard {}. Error message {}'.format(
-                sct_dashboard_file,
-                res.text))
+            raise ErrorUploadSCTDashboard(f'Error uploading dashboard {sct_dashboard_file}. Error message {res.text}')
         LOGGER.info('Dashboard %s loaded successfully', sct_dashboard_file)
         return True
     except Exception as details:  # pylint: disable=broad-except
@@ -382,8 +380,7 @@ def restore_annotations_data(monitoring_stack_dir, grafana_docker_port):
             res = requests.post(annotations_url, data=json.dumps(an), headers={'Content-Type': 'application/json'})
             if res.status_code != 200:
                 LOGGER.info('Error during uploading annotation %s. Error message %s', an, res.text)
-                raise ErrorUploadAnnotations('Error during uploading annotation {}. Error message {}'.format(an,
-                                                                                                             res.text))
+                raise ErrorUploadAnnotations(f'Error during uploading annotation {an}. Error message {res.text}')
         LOGGER.info('Annotations loaded successfully')
         return True
     except Exception as details:  # pylint: disable=broad-except
@@ -487,7 +484,7 @@ def verify_grafana_is_available(grafana_docker_port=GRAFANA_DOCKER_PORT):
                                                             port=grafana_docker_port,
                                                             title=dashboard.title)
             grafana_statuses.append(result)
-            LOGGER.info("Dashboard {} is available".format(dashboard.title))
+            LOGGER.info(f"Dashboard {dashboard.title} is available")
         except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Dashboard %s is not available. Error: %s", dashboard.title, details)
             grafana_statuses.append(False)

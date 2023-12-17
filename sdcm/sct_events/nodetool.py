@@ -10,9 +10,9 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from json import JSONEncoder
-from typing import Any, Type
+from typing import Any
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.continuous_event import ContinuousEvent
@@ -65,5 +65,5 @@ class NodetoolEvent(ContinuousEvent):
             fmt += "\n{0.full_traceback}"
         return fmt
 
-    def to_json(self, encoder: Type[JSONEncoder] = NodetoolEventEncoder) -> str:
+    def to_json(self, encoder: type[JSONEncoder] = NodetoolEventEncoder) -> str:
         return super().to_json(encoder=encoder)

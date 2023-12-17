@@ -15,10 +15,12 @@
 
 import time
 
+from sdcm.nemesis import (
+    CorruptThenRebuildMonkey,
+    CorruptThenRepairMonkey,
+    DrainerMonkey,
+)
 from sdcm.tester import ClusterTester
-from sdcm.nemesis import DrainerMonkey
-from sdcm.nemesis import CorruptThenRepairMonkey
-from sdcm.nemesis import CorruptThenRebuildMonkey
 
 
 class MaintainanceTest(ClusterTester):

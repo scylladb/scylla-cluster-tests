@@ -13,12 +13,12 @@
 
 # pylint: disable=too-few-public-methods
 
+import logging
 import os
 import shutil
-import logging
 
+from sdcm.cluster import BaseCluster, BaseNode, BaseScyllaCluster
 from sdcm.remote import LocalCmdRunner
-from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 
 
 class DummyOutput:

@@ -1,11 +1,9 @@
-
 import abc
-from typing import Dict, Any, List, Union
+from typing import Any
 
 from pydantic import BaseModel  # pylint: disable=no-name-in-module
 
-
-TagsType = Dict[str, str]
+TagsType = dict[str, str]
 
 
 class ProvisionParameters(BaseModel):  # pylint: disable=too-few-public-methods
@@ -31,8 +29,8 @@ class InstanceProvisionerBase(BaseModel, metaclass=abc.ABCMeta):  # pylint: disa
     def provision(  # pylint: disable=too-many-arguments
             self,
             provision_parameters: ProvisionParameters,
-            instance_parameters: InstanceParamsBase | List[InstanceParamsBase],
+            instance_parameters: InstanceParamsBase | list[InstanceParamsBase],
             count: int,
-            tags: Union[List[TagsType], TagsType] = None,
-            names: List[str] = None) -> List[Any]:
+            tags: list[TagsType] | TagsType = None,
+            names: list[str] = None) -> list[Any]:
         pass

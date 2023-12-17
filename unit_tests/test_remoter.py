@@ -11,21 +11,26 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import getpass
-import unittest
+import os
 import threading
-from typing import Union, Optional
+import unittest
 from logging import getLogger
 
-# from parameterized import parameterized
-
-from sdcm.remote import RemoteLibSSH2CmdRunner, RemoteCmdRunner, LocalCmdRunner, RetryableNetworkException, \
-    SSHConnectTimeoutError, shell_script_cmd
-from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
-from sdcm.remote.base import CommandRunner, Result
-from sdcm.remote.remote_file import remote_file
 from sdcm.cluster_k8s import KubernetesCluster
+
+# from parameterized import parameterized
+from sdcm.remote import (
+    LocalCmdRunner,
+    RemoteCmdRunner,
+    RemoteLibSSH2CmdRunner,
+    RetryableNetworkException,
+    SSHConnectTimeoutError,
+    shell_script_cmd,
+)
+from sdcm.remote.base import CommandRunner, Result
+from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
+from sdcm.remote.remote_file import remote_file
 
 
 class FakeKluster(KubernetesCluster):
@@ -89,7 +94,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
 
     @staticmethod
     def _create_and_run_twice_in_same_thread(remoter_type, key_file, stmt, kwargs, paramiko_thread_results):
-        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+        if issubclass(remoter_type, RemoteCmdRunner | RemoteLibSSH2CmdRunner):
             remoter = remoter_type(hostname='127.0.0.1', user=getpass.getuser(), key_file=key_file)
         else:
             remoter = KubernetesCmdRunner(
@@ -111,7 +116,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
     # pylint: disable=too-many-arguments
     @staticmethod
     def _create_and_run_in_same_thread(remoter_type, host, key_file, stmt, kwargs, paramiko_thread_results):
-        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+        if issubclass(remoter_type, RemoteCmdRunner | RemoteLibSSH2CmdRunner):
             remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=key_file)
         else:
             remoter = KubernetesCmdRunner(
@@ -202,7 +207,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
     @unittest.skip('To be ran manually')
     def test_run_in_mainthread(  # pylint: disable=too-many-arguments
             self, remoter_type, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool, retry: int,
-            timeout: Union[float, None]):
+            timeout: float | None):
         kwargs = {
             'verbose': verbose,
             'ignore_status': ignore_status,
@@ -214,7 +219,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             expected = exc
 
-        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+        if issubclass(remoter_type, RemoteCmdRunner | RemoteLibSSH2CmdRunner):
             remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=self.key_file)
         else:
             remoter = KubernetesCmdRunner(
@@ -239,7 +244,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
     @unittest.skip('To be ran manually')
     def test_create_and_run_in_same_thread(  # pylint: disable=too-many-arguments,too-many-locals
             self, remoter_type, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool,
-            retry: int, timeout: Union[float, None]):
+            retry: int, timeout: float | None):
         kwargs = {
             'verbose': verbose,
             'ignore_status': ignore_status,
@@ -266,7 +271,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
     @unittest.skip('To be ran manually')
     def test_create_and_run_in_separate_thread(  # pylint: disable=too-many-arguments
             self, remoter_type, host: str, stmt: str, verbose: bool, ignore_status: bool,
-            new_session: bool, retry: int, timeout: Union[float, None]):
+            new_session: bool, retry: int, timeout: float | None):
         kwargs = {
             'verbose': verbose,
             'ignore_status': ignore_status,
@@ -281,7 +286,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
 
         # Paramiko fails too often when it is invoked like that, that is why it is not in the test
 
-        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+        if issubclass(remoter_type, RemoteCmdRunner | RemoteLibSSH2CmdRunner):
             remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=self.key_file)
         else:
             remoter = KubernetesCmdRunner(
@@ -390,7 +395,7 @@ class TestSudoAndRunShellScript(unittest.TestCase):
             def _create_connection(self):
                 pass
 
-            def is_up(self, timeout: Optional[float] = None) -> bool:
+            def is_up(self, timeout: float | None = None) -> bool:
                 return True
 
         cls.remoter_cls = _Runner

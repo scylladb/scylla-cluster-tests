@@ -5,8 +5,12 @@ from enum import Enum
 from typing import Any
 
 from sdcm.sct_events.system import SoftTimeoutEvent
-from sdcm.utils.adaptive_timeouts.load_info_store import NodeLoadInfoService, AdaptiveTimeoutStore, ESAdaptiveTimeoutStore, \
-    NodeLoadInfoServices
+from sdcm.utils.adaptive_timeouts.load_info_store import (
+    AdaptiveTimeoutStore,
+    ESAdaptiveTimeoutStore,
+    NodeLoadInfoService,
+    NodeLoadInfoServices,
+)
 
 LOGGER = logging.getLogger(__name__)
 

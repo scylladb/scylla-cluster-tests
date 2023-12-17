@@ -18,12 +18,11 @@ import logging
 import os
 import re
 from functools import cached_property
-from multiprocessing import Process, Event, Queue
-from typing import Optional
+from multiprocessing import Event, Process, Queue
 
 from sdcm.remote.base import CommandRunner
 from sdcm.sct_events.base import LogEvent
-from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping, BACKTRACE_RE
+from sdcm.sct_events.database import BACKTRACE_RE, get_pattern_to_event_to_func_mapping
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.common import make_threads_be_daemonic_by_default
 
@@ -60,7 +59,7 @@ class DbLogReader(Process):
                  remoter: CommandRunner,
                  node_name: str,
                  system_event_patterns: list,
-                 decoding_queue: Optional[Queue],
+                 decoding_queue: 'Queue | None',
                  log_lines: bool,
                  ):
         self._system_log = system_log
@@ -245,7 +244,7 @@ class DbLogReader(Process):
         """
         # first try default location
         scylla_debug_info = '/usr/lib/debug/bin/scylla.debug'
-        results = self._remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
+        results = self._remoter.run(f'[[ -f {scylla_debug_info} ]]', ignore_status=True)
         if results.ok:
             return scylla_debug_info
 
@@ -256,8 +255,8 @@ class DbLogReader(Process):
 
         # then look it up base on the build id
         if build_id := self.get_scylla_build_id():
-            scylla_debug_info = "/usr/lib/debug/.build-id/{0}/{1}.debug".format(build_id[:2], build_id[2:])
-            results = self._remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
+            scylla_debug_info = f"/usr/lib/debug/.build-id/{build_id[:2]}/{build_id[2:]}.debug"
+            results = self._remoter.run(f'[[ -f {scylla_debug_info} ]]', ignore_status=True)
             if results.ok:
                 return scylla_debug_info
 

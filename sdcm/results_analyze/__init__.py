@@ -12,31 +12,36 @@
 # Copyright (c) 2021 ScyllaDB
 
 # pylint: disable=too-many-lines
-import json
-import os
-import math
-import pprint
-import logging
 import collections
+import json
+import logging
+import math
+import os
+import pprint
 import re
-
 from datetime import datetime, timedelta
 from typing import Any
-from sortedcontainers import SortedDict
 
 import jinja2
+from sortedcontainers import SortedDict
 
-from sdcm.es import ES
-from sdcm.test_config import TestConfig
 from sdcm.db_stats import TestStatsMixin
-from sdcm.send_email import Email, BaseEmailReporter
+from sdcm.es import ES
 from sdcm.sct_events import Severity
+from sdcm.send_email import BaseEmailReporter, Email
+from sdcm.test_config import TestConfig
 from sdcm.utils.common import format_timestamp
-from sdcm.utils.es_queries import QueryFilter, PerformanceFilterYCSB, PerformanceFilterScyllaBench, \
-    PerformanceFilterCS, CDCQueryFilterCS, LatencyWithNemesisQueryFilter
+from sdcm.utils.es_queries import (
+    CDCQueryFilterCS,
+    LatencyWithNemesisQueryFilter,
+    PerformanceFilterCS,
+    PerformanceFilterScyllaBench,
+    PerformanceFilterYCSB,
+    QueryFilter,
+)
 from test_lib.utils import MagicList, get_data_by_path
-from .test import TestResultClass
 
+from .test import TestResultClass
 
 LOGGER = logging.getLogger(__name__)
 PP = pprint.PrettyPrinter(indent=2)
@@ -69,7 +74,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         :return: test results in json format
         """
         if not self._es.exists(index=self._es_index, doc_type=self._es_doc_type, id=test_id):
-            self.log.error('Test results not found: {}'.format(test_id))
+            self.log.error(f'Test results not found: {test_id}')
             return None
         return self._es.get(index=self._es_index, doc_type=self._es_doc_type, id=test_id)
 
@@ -179,7 +184,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
 
     def send_email(self, subject, content, html=True, files=()):
         if self._email_recipients:
-            self.log.debug('Send email to {}'.format(self._email_recipients))
+            self.log.debug(f'Send email to {self._email_recipients}')
             email = Email()
             email.send(subject, content, html=html, recipients=self._email_recipients, files=files)
         else:
@@ -194,7 +199,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         return report_file
 
     def gen_kibana_dashboard_url(self, dashboard_path=""):
-        return "%s/%s" % (self._conf.get('kibana_url'), dashboard_path)
+        return "{}/{}".format(self._conf.get('kibana_url'), dashboard_path)
 
     def save_email_data_file(self, subject, email_data, file_path='email_data.json'):
         file_path = os.path.join(TestConfig.logdir(), file_path)
@@ -203,7 +208,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
                 with open(file_path, encoding="utf-8") as file:
                     data = file.read().strip()
                     file_content = json.loads(data or '{}')
-            except EnvironmentError as err:
+            except OSError as err:
                 self.log.error('Failed to read file %s with error %s', file_path, err)
         else:
             file_content = {}
@@ -211,7 +216,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         try:
             with open(file_path, 'w', encoding="utf-8") as file:
                 json.dump(file_content, file)
-        except EnvironmentError as err:
+        except OSError as err:
             self.log.error('Failed to write %s to file %s with error %s', file_content, file_path, err)
         else:
             self.log.debug('Successfully wrote %s to file %s', file_content, file_path)
@@ -521,7 +526,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
         # get test res
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error('Cannot find test by id: {}!'.format(test_id))
+            self.log.error(f'Cannot find test by id: {test_id}!')
             return False
 
         test_stats = self._test_stats(doc)
@@ -543,10 +548,10 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
             size=self._limit,
             filter_path=filter_path,
         )
-        self.log.debug("Filtered tests found are: {}".format(tests_filtered))
+        self.log.debug(f"Filtered tests found are: {tests_filtered}")
 
         if not tests_filtered:
-            self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
+            self.log.info(f'Cannot find tests with the same parameters as {test_id}')
             return False
         cur_test_version = None
         tested_params = stats.keys()
@@ -572,7 +577,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                 continue
             version_info = tag_row['_source']['versions']['scylla-server']
             version = version_info['version']
-            self.log.debug("version_info={} version={}".format(version_info, version))
+            self.log.debug(f"version_info={version_info} version={version}")
 
             if tag_row['_id'] == test_id:  # save the current test values
                 cur_test_version = version
@@ -599,7 +604,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                         else:
                             group_by_version[version][param].append(tag_row['_source'][param])
 
-            self.log.debug("group_by_version={}".format(group_by_version))
+            self.log.debug(f"group_by_version={group_by_version}")
 
         if not cur_test_version:
             raise ValueError("Could not retrieve current test details from database")
@@ -610,18 +615,15 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                 param_avg = sum(list_param_stats) / float(len(list_param_stats))
                 deviation_limit = param_avg * allowed_deviation
                 self.log.info(
-                    "Performance result for: {} is: {}. (average statistics deviation limit is: {}".format(param,
-                                                                                                           cur_test_param_result,
-                                                                                                           deviation_limit))
+                    f"Performance result for: {param} is: {cur_test_param_result}. (average statistics deviation limit is: {deviation_limit}")
                 for version, group in group_by_version.items():
                     if param in group:
                         list_param_results = group[param]
                         version_avg = sum(list_param_results) / float(len(list_param_results))
-                        self.log.info("Performance average of {} results for: {} on version: {} is: {}".format(
-                            len(list_param_results), param, version, version_avg))
+                        self.log.info(
+                            f"Performance average of {len(list_param_results)} results for: {param} on version: {version} is: {version_avg}")
                 assert float(
-                    cur_test_param_result) < deviation_limit, "Current test performance for: {} exceeds allowed deviation ({})".format(
-                    param, deviation_limit)
+                    cur_test_param_result) < deviation_limit, f"Current test performance for: {param} exceeds allowed deviation ({deviation_limit})"
         return True
 
 
@@ -704,8 +706,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     "status": status,
                 }
             except TypeError:
-                self.log.exception('Failed to compare {} results: {} vs {}, version {}'.format(
-                    param, src[param], dst[param], version_dst))
+                self.log.exception(
+                    f'Failed to compare {param} results: {src[param]} vs {dst[param]}, version {version_dst}')
         return cmp_res
 
     # pylint: disable=too-many-arguments
@@ -725,7 +727,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         # get test res
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error('Cannot find test by id: {}!'.format(test_id))
+            self.log.error(f'Cannot find test by id: {test_id}!')
             return False
         self.log.debug(PP.pformat(doc))
 
@@ -747,7 +749,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                                          size=self._limit, request_timeout=30)
 
         if not tests_filtered:
-            self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
+            self.log.info(f'Cannot find tests with the same parameters as {test_id}')
             return False
         # get the best res for all versions of this job
         group_by_version = {}
@@ -816,7 +818,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         for version, group in group_by_version.items():
             if version == test_version and not group_by_version[test_version]['tests']:
-                self.log.info('No previous tests in the current version {} to compare'.format(test_version))
+                self.log.info(f'No previous tests in the current version {test_version} to compare')
                 continue
             cmp_res = self.cmp(test_stats, group['stats_best'], version, group['best_test_id'])
             latest_version_test = group["tests"].peekitem(index=-1)[1]
@@ -904,7 +906,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error('Cannot find test by id: {}!'.format(test_id))
+            self.log.error(f'Cannot find test by id: {test_id}!')
             return False
         self.log.debug(PP.pformat(doc))
 
@@ -933,7 +935,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         )
 
         if not tests_filtered:
-            self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
+            self.log.info(f'Cannot find tests with the same parameters as {test_id}')
             return False
         # get the best res for all versions of this job
         group_by_version_sub_type = SortedDict()
@@ -1047,7 +1049,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             cmp_res = {}
             for sub_type, tests in group.items():
                 if not tests['tests']:
-                    self.log.info('No previous tests in the current version {} to compare'.format(test_version))
+                    self.log.info(f'No previous tests in the current version {test_version} to compare')
                     continue
                 if sub_type not in current_tests:
                     continue
@@ -1107,7 +1109,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         if rp_main_test:
             rp_main_test = rp_main_test[0]
         if not rp_main_test or not rp_main_test.is_valid():
-            self.log.error('Cannot find main_test by id: {}!'.format(test_id))
+            self.log.error(f'Cannot find main_test by id: {test_id}!')
             return None
         return rp_main_test
 
@@ -1275,12 +1277,12 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         rp_main_test = self.get_test_instance_by_id(test_id)
 
         if not rp_main_test:
-            self.log.error('Cannot find test with id: {}!'.format(test_id))
+            self.log.error(f'Cannot find test with id: {test_id}!')
             return False
 
         if subject is None:
-            subject = 'Performance Regression Compare Results - {test.test_name} - ' \
-                '{test.software.scylla_server_any.version.as_string}'.format(test=rp_main_test)
+            subject = f'Performance Regression Compare Results - {rp_main_test.test_name} - ' \
+                f'{rp_main_test.software.scylla_server_any.version.as_string}'
         else:
             subject = subject.format(test=rp_main_test)
 
@@ -1298,7 +1300,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         ])
 
         if not prior_main_tests:
-            self.log.error('Cannot find prior runs for test with id: {}!'.format(test_id))
+            self.log.error(f'Cannot find prior runs for test with id: {test_id}!')
             return False
 
         # Get all subtests of the current main test and sort them by subtest name
@@ -1308,7 +1310,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         ]).sort_by('subtest_name')
 
         if not rp_subtests_of_current_test:
-            self.log.error('Cannot find subtests for test id: {}!'.format(test_id))
+            self.log.error(f'Cannot find subtests for test id: {test_id}!')
             return False
 
         if not subtests_info:

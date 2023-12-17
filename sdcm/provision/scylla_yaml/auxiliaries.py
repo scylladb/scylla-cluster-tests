@@ -13,14 +13,13 @@
 
 
 import logging
-from typing import Literal, List, Union, Optional
+from typing import Literal
 
-from pydantic import Field, validator, BaseModel  # pylint: disable=no-name-in-module
+from pydantic import BaseModel, Field, validator  # pylint: disable=no-name-in-module
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.sct_config import SCTConfiguration
-
 
 SEED_PROVIDERS = [
     'org.apache.cassandra.locator.SimpleSeedProvider',
@@ -55,7 +54,7 @@ class SeedProvider(BaseModel):  # pylint: disable=too-few-public-methods
         'GoogleCloudSnitch',
         'RackInferringSnitch',
     ]
-    parameters: List[dict] = None
+    parameters: list[dict] = None
 
     # pylint: disable=no-self-argument,no-self-use
     @validator("class_name", pre=True, always=True)
@@ -110,7 +109,7 @@ EndPointSnitchType = Literal[
 
 
 class ScyllaYamlAttrBuilderBase(AttrBuilder):
-    params: Union[SCTConfiguration, dict] = Field(as_dict=False)
+    params: SCTConfiguration | dict = Field(as_dict=False)
 
     @property
     def _cluster_backend(self) -> str:
@@ -128,7 +127,7 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         return None
 
     @property
-    def _regions(self) -> List[str]:
+    def _regions(self) -> list[str]:
         if self._cloud_provider == 'aws':
             regions = self.params.get('region_name')
         elif self._cloud_provider == 'gce':
@@ -161,7 +160,7 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         return self.params.get('intra_node_comm_public')
 
     @property
-    def _authenticator(self) -> Optional[str]:
+    def _authenticator(self) -> str | None:
         return self.params.get('authenticator')
 
     @property
@@ -169,7 +168,7 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         return self._authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator', SASLAUTHD_AUTHENTICATOR]
 
     @property
-    def _authorizer(self) -> Optional[str]:
+    def _authorizer(self) -> str | None:
         return self.params.get('authorizer')
 
     @property

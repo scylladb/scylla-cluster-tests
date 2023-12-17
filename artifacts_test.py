@@ -11,21 +11,21 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import datetime
+import json
 import pprint
 import re
 import typing
 from functools import cached_property
-import json
 
-import yaml
 import requests
+import yaml
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import ScyllaHousekeepingServiceEvent
 from sdcm.tester import ClusterTester
 from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices
+from sdcm.utils.common import ScyllaProduct, get_latest_scylla_release
 from sdcm.utils.housekeeping import HousekeepingDB
-from sdcm.utils.common import get_latest_scylla_release, ScyllaProduct
 
 STRESS_CMD: str = "/usr/bin/cassandra-stress"
 
@@ -285,7 +285,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             scylla_encryption_options = self.params.get('scylla_encryption_options')
             self.log.debug('Pre Creating Schema for c-s with %s keyspaces', keyspace_num)
             for i in range(1, keyspace_num+1):
-                keyspace_name = 'keyspace{}'.format(i)
+                keyspace_name = f'keyspace{i}'
                 self.create_keyspace(keyspace_name=keyspace_name, replication_factor=replication_factor)
                 self.log.debug('%s Created', keyspace_name)
                 col_num = 5

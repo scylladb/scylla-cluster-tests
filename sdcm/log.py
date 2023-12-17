@@ -21,4 +21,4 @@ class SDCMAdapter(logging.LoggerAdapter):
     """
 
     def process(self, msg, kwargs):
-        return '%s: %s' % (self.extra['prefix'], msg), kwargs
+        return '{}: {}'.format(self.extra['prefix'], msg), kwargs

@@ -14,7 +14,10 @@
 import contextlib
 
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.sct_events.group_common_events import ignore_operation_errors, ignore_alternator_client_errors
+from sdcm.sct_events.group_common_events import (
+    ignore_alternator_client_errors,
+    ignore_operation_errors,
+)
 from sdcm.utils import alternator
 
 

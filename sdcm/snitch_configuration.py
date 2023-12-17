@@ -12,13 +12,12 @@
 # Copyright (c) 2023 ScyllaDB
 
 import re
-from typing import List
 
 
 class SnitchConfig:  # pylint: disable=too-few-public-methods
     """Keeps all cassandra-rackdc.properties settings and function to apply them"""
 
-    def __init__(self, node: "sdcm.cluster.BaseNode", datacenters: List[str]):
+    def __init__(self, node: "sdcm.cluster.BaseNode", datacenters: list[str]):
         self._node = node
         self._is_multi_dc = len(datacenters) > 1
         self._rack = f"RACK{node.rack}"
@@ -36,7 +35,7 @@ class SnitchConfig:  # pylint: disable=too-few-public-methods
         if self._is_multi_dc:
             ret = re.findall('-([a-z]+).*-', self._datacenter)
             if ret:
-                dc_suffix = 'scylla_node_{}'.format(ret[0])
+                dc_suffix = f'scylla_node_{ret[0]}'
             else:
                 dc_suffix = self._dc_prefix.replace('-', '_')
             return dc_suffix

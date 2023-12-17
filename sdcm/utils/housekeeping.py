@@ -12,12 +12,12 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
-from typing import Sequence, Optional, Any
+from collections.abc import Sequence
+from typing import Any
 
 import mysql.connector
 
 from sdcm.keystore import KeyStore
-
 
 DB_NAME = "housekeeping"
 
@@ -52,7 +52,7 @@ class HousekeepingDB:
                                                    database=db_name)
         self._cursor = self._connection.cursor()
 
-    def execute(self, query: str, args: Optional[Sequence[Any]] = None) -> Sequence[Row]:
+    def execute(self, query: str, args: Sequence[Any] | None = None) -> Sequence[Row]:
         LOGGER.debug("Query: `%s', Args: %s", query, args)
         self._connection.reconnect()
         self._cursor.execute(query, args)
@@ -70,11 +70,11 @@ class HousekeepingDB:
             self._connection.close()
             self._connection = None
 
-    def get_most_recent_record(self, query: str, args: Optional[Sequence[Any]] = None) -> Optional[Row]:
+    def get_most_recent_record(self, query: str, args: Sequence[Any] | None = None) -> Row | None:
         result = self.execute(query + " ORDER BY -dt LIMIT 1", args)
         LOGGER.debug("Housekeeping DB saved info, query '%s': %s", query, result)
         return result[0] if result else None
 
-    def get_new_records(self, query: str, args: Optional[Sequence[Any]] = None, last_id: int = 0) -> Sequence[Row]:
+    def get_new_records(self, query: str, args: Sequence[Any] | None = None, last_id: int = 0) -> Sequence[Row]:
         args = (tuple(args) if args else ()) + (last_id, )
         return self.execute(query + " id > ", args)

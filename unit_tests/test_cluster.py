@@ -14,30 +14,28 @@
 # pylint: disable=too-few-public-methods
 
 import json
-import time
-import shutil
 import logging
 import os.path
+import shutil
 import tempfile
+import time
 import unittest
 from datetime import datetime
 from functools import cached_property
-from typing import List
 from weakref import proxy as weakproxy
 
 import pytest
 from invoke import Result
 
-from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet, BaseScyllaCluster
+from sdcm.cluster import BaseCluster, BaseMonitorSet, BaseNode, BaseScyllaCluster
 from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
-from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.sct_events.system import InstanceStatusEvent
 from sdcm.utils.common import get_keyspace_partition_ranges, keyspace_min_max_tokens
 from sdcm.utils.distro import Distro
-
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.test_utils_common import DummyNode
@@ -444,7 +442,7 @@ class NodetoolDummyNode(BaseNode):  # pylint: disable=abstract-method
 
 
 class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=abstract-method
-    nodes: List['NodetoolDummyNode']
+    nodes: list['NodetoolDummyNode']
 
     def __init__(self, params):  # pylint: disable=super-init-not-called
         self.nodes = params

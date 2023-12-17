@@ -14,15 +14,22 @@
 # pylint: disable=too-few-public-methods,too-many-statements,protected-access,attribute-defined-outside-init
 # pylint: disable=too-many-public-methods,too-many-instance-attributes
 
-from __future__ import absolute_import
 
 import os
 import unittest
-from unittest.mock import Mock, patch, mock_open, sentinel, call
 from collections import namedtuple
+from unittest.mock import Mock, call, mock_open, patch, sentinel
 
-from sdcm.utils.docker_utils import _Name, ContainerManager, \
-    DockerException, NotFound, ImageNotFound, NullResource, Retry, ContainerAlreadyRegistered
+from sdcm.utils.docker_utils import (
+    ContainerAlreadyRegistered,
+    ContainerManager,
+    DockerException,
+    ImageNotFound,
+    NotFound,
+    NullResource,
+    Retry,
+    _Name,
+)
 
 
 class DummyDockerClient:

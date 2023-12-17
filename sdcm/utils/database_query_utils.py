@@ -13,12 +13,11 @@
 
 # pylint: disable=too-many-lines
 
-from __future__ import absolute_import, annotations
+from __future__ import annotations
 
 import logging
 import os
 import sys
-from typing import List
 
 from cassandra import ConsistencyLevel
 
@@ -126,8 +125,8 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
                     return None
 
                 partitions[i] = pk_rows_num_result
-                stats_file.write('{i}:{rows}, '.format(i=i, rows=partitions[i]))
-        LOGGER.info('File with partitions row data: {}'.format(partitions_stats_file))
+                stats_file.write(f'{i}:{partitions[i]}, ')
+        LOGGER.info(f'File with partitions row data: {partitions_stats_file}')
         if save_into_file_name == self.PARTITIONS_ROWS_BEFORE:
             self.partitions_rows_collected = True
         return partitions
@@ -181,7 +180,7 @@ def get_table_clustering_order(ks_cf: str, ck_name: str, session) -> str:
     return clustering_order
 
 
-def get_partition_keys(ks_cf: str, session, pk_name: str = 'pk', limit: int = None) -> List[str]:
+def get_partition_keys(ks_cf: str, session, pk_name: str = 'pk', limit: int = None) -> list[str]:
     """
     Return list of partitions from a requested table
     :param session:

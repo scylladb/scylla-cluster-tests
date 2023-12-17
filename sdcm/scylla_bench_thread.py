@@ -11,22 +11,21 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import contextlib
+import logging
 import os
 import re
-import uuid
 import time
-import logging
-import contextlib
+import uuid
 from enum import Enum
 
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
-from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
+from sdcm.sct_events.loaders import SCYLLA_BENCH_ERROR_EVENTS_PATTERNS, ScyllaBenchEvent
 from sdcm.stress_thread import DockerBasedStressThread
+from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.wait import wait_for
-
 
 LOGGER = logging.getLogger(__name__)
 

@@ -14,8 +14,6 @@
 import logging
 from dataclasses import dataclass, field
 
-from typing import Dict, List
-
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.network.models import NetworkInterface
 
@@ -29,7 +27,7 @@ class NetworkInterfaceProvider:
     _resource_group_name: str
     _region: str
     _azure_service: AzureService = AzureService()
-    _cache: Dict[str, NetworkInterface] = field(default_factory=dict)
+    _cache: dict[str, NetworkInterface] = field(default_factory=dict)
 
     def __post_init__(self):
         """Discover existing network interfaces for resource group."""
@@ -44,7 +42,7 @@ class NetworkInterfaceProvider:
     def get(self, name: str) -> NetworkInterface:
         return self._cache[self.get_nic_name(name)]
 
-    def get_or_create(self, subnet_id: str, ip_addresses_ids: List[str], names: List[str]) -> List[NetworkInterface]:
+    def get_or_create(self, subnet_id: str, ip_addresses_ids: list[str], names: list[str]) -> list[NetworkInterface]:
         """Creates or gets (if already exists) network interface"""
         nics = []
         pollers = []

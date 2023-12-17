@@ -12,17 +12,15 @@
 # Copyright (c) 2020 ScyllaDB
 #
 
-import os
-import threading
-import multiprocessing
-import pstats
-import cProfile
-import shutil
 import atexit
+import cProfile
 import marshal
+import multiprocessing
+import os
+import pstats
+import shutil
+import threading
 import time
-from typing import List
-
 
 TIMERS = {
     'perf': time.perf_counter,
@@ -283,7 +281,7 @@ class ProcessProfile(ProfileBase):
     def send_stats_to_main_process(self, stats):
         self._queue.put(stats)
 
-    def get_stats_holders(self) -> List[StatsHolder]:
+    def get_stats_holders(self) -> list[StatsHolder]:
         """
         Get slave's stats via queue, make list of StatsHolder of them and return it.
         """

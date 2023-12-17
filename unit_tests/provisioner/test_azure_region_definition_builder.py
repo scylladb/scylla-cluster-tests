@@ -14,7 +14,6 @@ import os
 from collections import namedtuple
 from pathlib import Path
 
-
 from sdcm.keystore import KeyStore
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration

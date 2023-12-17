@@ -11,29 +11,37 @@
 #
 # Copyright (c) 2019 ScyllaDB
 
+import contextlib
+import logging
 import os
 import re
 import time
 import uuid
-import logging
-import contextlib
-from typing import Any
+from functools import cached_property
 from itertools import chain
 from pathlib import Path
-from functools import cached_property
+from typing import Any
 
-from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.cluster import BaseLoaderSet, BaseNode
+from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
-from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
-from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
-from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
+from sdcm.sct_events.loaders import (
+    CS_ERROR_EVENTS_PATTERNS,
+    CS_NORMAL_EVENTS_PATTERNS,
+    CassandraStressEvent,
+)
 from sdcm.stress.base import DockerBasedStressThread
+from sdcm.utils.common import (
+    FileFollowerThread,
+    SoftTimeoutContext,
+    get_data_dir_path,
+    time_period_str_to_seconds,
+)
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.utils.version_utils import get_docker_image_by_version
 from sdcm.utils.remote_logger import SSHLoggerBase
-
+from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
+from sdcm.utils.version_utils import get_docker_image_by_version
 
 LOGGER = logging.getLogger(__name__)
 
@@ -114,9 +122,9 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
     def adjust_cmd_keyspace_name(self, stress_cmd, keyspace_idx):
         if self.keyspace_name:
-            stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(self.keyspace_name))
+            stress_cmd = stress_cmd.replace(" -schema ", f" -schema keyspace={self.keyspace_name} ")
         elif 'keyspace=' not in stress_cmd:  # if keyspace is defined in the command respect that
-            stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace{} ".format(keyspace_idx))
+            stress_cmd = stress_cmd.replace(" -schema ", f" -schema keyspace=keyspace{keyspace_idx} ")
         return stress_cmd
 
     def adjust_cmd_compaction_strategy(self, stress_cmd):
@@ -423,7 +431,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 cs_summary.append(node_cs_res)
             for line in lines:
                 if 'java.io.IOException' in line:
-                    errors += ['%s: %s' % (node, line.strip())]
+                    errors += [f'{node}: {line.strip()}']
 
         return cs_summary, errors
 

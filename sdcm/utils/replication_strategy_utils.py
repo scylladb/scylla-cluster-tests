@@ -1,8 +1,7 @@
 import ast
 import re
-
+from collections.abc import Callable
 from contextlib import ContextDecorator
-from typing import Callable, Dict
 
 from sdcm.cluster import BaseNode
 
@@ -76,7 +75,7 @@ class temporary_replication_strategy_setter(ContextDecorator):  # pylint: disabl
 
     def __init__(self, node: BaseNode) -> None:
         self.node = node
-        self.preserved: Dict[str, ReplicationStrategy] = {}
+        self.preserved: dict[str, ReplicationStrategy] = {}
 
     def __enter__(self) -> Callable[..., None]:
         return self

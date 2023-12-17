@@ -17,7 +17,6 @@ import pytest
 
 from sdcm.utils.aws_region import AwsRegion
 
-
 AWS_REGION = "us-east-1"
 
 

@@ -32,7 +32,7 @@ def get_time(line_content):
 
 input_dir = Path.cwd()
 Path(input_dir / "parts").mkdir(exist_ok=True)
-with open(input_dir / "sct.log", "r", encoding="utf-8") as sct_log:
+with open(input_dir / "sct.log", encoding="utf-8") as sct_log:
     idx = 0  # pylint: disable=invalid-name
     line = sct_log.readline()
     time = get_time(line)

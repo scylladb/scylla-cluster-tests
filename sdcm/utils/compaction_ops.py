@@ -1,10 +1,11 @@
-import time
 import logging
-from typing import Callable, Optional, NamedTuple, Union
+import time
+from collections.abc import Callable
+from typing import NamedTuple, Optional, Union
 
 from fabric.runners import Result
 
-from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
+from sdcm.cluster import BaseCluster, BaseNode, BaseScyllaCluster
 from sdcm.rest.storage_service_client import StorageServiceClient
 
 LOGGER = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ class CompactionOps:
     NODETOOL_CMD = NodetoolCommands()
     SCRUB_MODES = ScrubModes()
 
-    def __init__(self, cluster: Union[BaseCluster, BaseScyllaCluster], node: Optional[BaseNode] = None):
+    def __init__(self, cluster: BaseCluster | BaseScyllaCluster, node: BaseNode | None = None):
         self.cluster = cluster
         self.node = node if node else self.cluster.nodes[0]
         self.storage_service_client = StorageServiceClient(node=self.node)
@@ -49,7 +50,7 @@ class CompactionOps:
     def trigger_scrub_compaction(self,
                                  keyspace: str = "keyspace1",
                                  cf: str = "standard1",
-                                 scrub_mode: Optional[str] = None) -> Result:
+                                 scrub_mode: str | None = None) -> Result:
         params = {"keyspace": keyspace, "cf": cf, "scrub_mode": scrub_mode}
 
         return self.storage_service_client.scrub_ks_cf(**params)
@@ -87,7 +88,7 @@ class CompactionOps:
     def stop_validation_compaction(self) -> Result:
         return self.stop_scrub_compaction()
 
-    def disable_autocompaction_on_ks_cf(self, node: BaseNode,  keyspace: str = "", cf: Optional[str] = ""):
+    def disable_autocompaction_on_ks_cf(self, node: BaseNode,  keyspace: str = "", cf: str = ""):
         node = node if node else self.node
         node.run_nodetool(f'disableautocompaction {keyspace} {cf}')
 
@@ -97,7 +98,7 @@ class CompactionOps:
 
     @staticmethod
     def stop_on_user_compaction_logged(node: BaseNode, watch_for: str, timeout: int,
-                                       stop_func: Callable, mark: Optional[int] = None) -> Result:
+                                       stop_func: Callable, mark: int | None = None) -> Result:
         LOGGER.info("Starting to watch for user compaction logged...")
         start_time = time.time()
         with open(node.system_log, encoding="utf-8") as log_file:

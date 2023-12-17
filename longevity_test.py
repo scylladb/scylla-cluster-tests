@@ -12,28 +12,29 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
+import contextlib
+import itertools
 import json
 import os
 import re
 import string
 import tempfile
-import itertools
-import contextlib
 
 import yaml
 from cassandra import AlreadyExists, InvalidRequest
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
-from sdcm.sct_events.group_common_events import \
-    ignore_large_collection_warning, \
-    ignore_max_memory_for_unlimited_query_soft_limit
+from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
+from sdcm.sct_events import Severity
+from sdcm.sct_events.group_common_events import (
+    ignore_large_collection_warning,
+    ignore_max_memory_for_unlimited_query_soft_limit,
+)
+from sdcm.sct_events.system import InfoEvent
 from sdcm.tester import ClusterTester
 from sdcm.utils import loader_utils
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.operations_thread import ThreadParams
-from sdcm.sct_events.system import InfoEvent
-from sdcm.sct_events import Severity
-from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
 
 
 class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
@@ -97,7 +98,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self._pre_create_keyspace()
 
     def _run_validate_large_collections_in_system(self, node, table='table_with_large_collection'):
-        self.log.info("Verifying large collections in system tables on node: {}".format(node))
+        self.log.info(f"Verifying large collections in system tables on node: {node}")
         with self.db_cluster.cql_connection_exclusive(node=node) as session:
             query = "SELECT * from system.large_cells WHERE keyspace_name='large_collection_test'" \
                     f" AND table_name='{table}' ALLOW FILTERING"
@@ -107,11 +108,11 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 InfoEvent("Did not find expected row in system.large_cells", severity=Severity.ERROR)
 
     def _run_validate_large_collections_warning_in_logs(self, node):
-        self.log.info("Verifying warning for large collections in logs on node: {}".format(node))
+        self.log.info(f"Verifying warning for large collections in logs on node: {node}")
         msg = "Writing large collection"
         res = list(node.follow_system_log(patterns=[msg], start_from_beginning=True))
         if not res:
-            InfoEvent("Did not find expected log message warning: {}".format(msg), severity=Severity.ERROR)
+            InfoEvent(f"Did not find expected log message warning: {msg}", severity=Severity.ERROR)
 
     def test_custom_time(self):
         """
@@ -173,8 +174,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         if customer_profiles:
             cs_duration = self.params.get('cs_duration')
             for cs_profile in customer_profiles:
-                assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
-                self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
+                assert os.path.exists(cs_profile), f'File not found: {cs_profile}'
+                self.log.debug(f'Run stress test with user profile {cs_profile}, duration {cs_duration}')
                 profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
                 with open(cs_profile, encoding="utf-8") as pconf:
                     cont = pconf.readlines()
@@ -184,7 +185,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                         for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
                             stress_cmd = (cmd.format(profile_dst, cs_duration))
                             params = {'stress_cmd': stress_cmd, 'profile': cs_profile}
-                            self.log.debug('Stress cmd: {}'.format(stress_cmd))
+                            self.log.debug(f'Stress cmd: {stress_cmd}')
                             self._run_all_stress_cmds(stress_queue, params)
 
         # Check if we shall wait for total_used_space or if nemesis wasn't started
@@ -286,8 +287,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             duration = int(cs_duration.translate(str.maketrans('', '', string.ascii_letters)))
 
             for cs_profile in customer_profiles:
-                assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
-                self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
+                assert os.path.exists(cs_profile), f'File not found: {cs_profile}'
+                self.log.debug(f'Run stress test with user profile {cs_profile}, duration {cs_duration}')
 
                 user_profile_table_count = self.params.get('user_profile_table_count')  # pylint: disable=invalid-name
 
@@ -392,13 +393,13 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         cassandra-stress.
         """
 
-        self.log.debug('Pre Creating Schema for c-s with {} keyspaces'.format(keyspace_num))
+        self.log.debug(f'Pre Creating Schema for c-s with {keyspace_num} keyspaces')
         compaction_strategy = self.params.get('compaction_strategy')
         sstable_size = self.params.get('sstable_size')
         for i in range(1, keyspace_num+1):
-            keyspace_name = 'keyspace{}'.format(i)
+            keyspace_name = f'keyspace{i}'
             self.create_keyspace(keyspace_name=keyspace_name, replication_factor=3)
-            self.log.debug('{} Created'.format(keyspace_name))
+            self.log.debug(f'{keyspace_name} Created')
             col_num = self._get_prepare_write_cmd_columns_num() or 5
             columns = {}
             for col_idx in range(col_num):
@@ -429,28 +430,28 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 try:
                     session.execute(keyspace_definition)
                 except AlreadyExists:
-                    self.log.debug("keyspace [{}] exists".format(keyspace_name))
+                    self.log.debug(f"keyspace [{keyspace_name}] exists")
 
                 if batch_start is not None and batch_end is not None:
                     table_range = range(batch_start, batch_end)
                 else:
                     table_range = range(user_profile_table_count)
-                self.log.debug('Pre Creating Schema for c-s with {} user tables'.format(user_profile_table_count))
+                self.log.debug(f'Pre Creating Schema for c-s with {user_profile_table_count} user tables')
                 for i in table_range:
-                    table_name = 'table{}'.format(i)
+                    table_name = f'table{i}'
                     query = table_template.substitute(table_name=table_name)
                     try:
                         session.execute(query)
                     except AlreadyExists:
-                        self.log.debug('table [{}] exists'.format(table_name))
-                    self.log.debug('{} Created'.format(table_name))
+                        self.log.debug(f'table [{table_name}] exists')
+                    self.log.debug(f'{table_name} Created')
 
                     for definition in profile_yaml.get('extra_definitions', []):
                         query = string.Template(definition).substitute(table_name=table_name)
                         try:
                             session.execute(query)
                         except (AlreadyExists, InvalidRequest) as exc:
-                            self.log.debug('extra definition for [{}] exists [{}]'.format(table_name, str(exc)))
+                            self.log.debug(f'extra definition for [{table_name}] exists [{str(exc)}]')
 
     def _flush_all_nodes(self):
         """
@@ -508,7 +509,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
                 stress_cmd = (cmd.format(profile_dst, cs_duration))
                 params = {'stress_cmd': stress_cmd, 'profile': profile_dst}
-                self.log.debug('Stress cmd: {}'.format(stress_cmd))
+                self.log.debug(f'Stress cmd: {stress_cmd}')
                 params_list.append(params)
 
         return params_list

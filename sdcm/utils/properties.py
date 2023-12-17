@@ -1,4 +1,4 @@
-from typing import Union, TextIO
+from typing import TextIO
 
 
 class PropertiesDict(dict):
@@ -27,7 +27,7 @@ class PropertiesDict(dict):
             yield value
 
 
-def serialize(data: Union[dict, PropertiesDict]) -> str:
+def serialize(data: dict | PropertiesDict) -> str:
     output = []
     items = data.all_items() if isinstance(data, PropertiesDict) else data.items()
     for key, value in items:
@@ -41,7 +41,7 @@ def serialize(data: Union[dict, PropertiesDict]) -> str:
     return '\n'.join(output)
 
 
-def deserialize(data: Union[str, TextIO]) -> PropertiesDict:
+def deserialize(data: str | TextIO) -> PropertiesDict:
     if not isinstance(data, str):
         data = data.read()
     output = PropertiesDict()

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import datetime
 import logging
 import random
@@ -7,25 +5,40 @@ import tempfile
 import threading
 import time
 import traceback
-from pathlib import Path
 from abc import abstractmethod
+from pathlib import Path
 from string import Template
-from typing import Optional, Type, NamedTuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
-from pytz import utc
 from cassandra import ConsistencyLevel, OperationTimedOut, ReadTimeout
-from cassandra.cluster import ResponseFuture, ResultSet  # pylint: disable=no-name-in-module
+from cassandra.cluster import (  # pylint: disable=no-name-in-module
+    ResponseFuture,
+    ResultSet,
+)
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from pytz import utc
 
+from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
-from sdcm.sct_events.database import FullScanEvent, FullPartitionScanReversedOrderEvent, FullPartitionScanEvent, \
-    FullScanAggregateEvent
-from sdcm.utils.database_query_utils import get_table_clustering_order, get_partition_keys
-from sdcm.utils.operations_thread import OperationThreadStats, OneOperationStat, OperationThread, ThreadParams
-from sdcm.db_stats import PrometheusDBStats
+from sdcm.sct_events.database import (
+    FullPartitionScanEvent,
+    FullPartitionScanReversedOrderEvent,
+    FullScanAggregateEvent,
+    FullScanEvent,
+)
 from sdcm.test_config import TestConfig
-from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.database_query_utils import (
+    get_partition_keys,
+    get_table_clustering_order,
+)
+from sdcm.utils.decorators import Retry, retrying
+from sdcm.utils.operations_thread import (
+    OneOperationStat,
+    OperationThread,
+    OperationThreadStats,
+    ThreadParams,
+)
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
@@ -91,8 +104,8 @@ class ScanOperationThread(OperationThread):
 
 class FullscanOperationBase:
     def __init__(self, generator: random.Random, thread_params: ThreadParams, thread_stats: OperationThreadStats,
-                 scan_event: Type[FullScanEvent] | Type[FullPartitionScanEvent]
-                 | Type[FullPartitionScanReversedOrderEvent] | Type[FullScanAggregateEvent]):
+                 scan_event: type[FullScanEvent] | type[FullPartitionScanEvent]
+                 | type[FullPartitionScanReversedOrderEvent] | type[FullScanAggregateEvent]):
         """
         Base class for performing fullscan operations.
         """
@@ -117,7 +130,7 @@ class FullscanOperationBase:
 
     def execute_query(
             self, session, cmd: str,
-            event: Type[FullScanEvent | FullPartitionScanEvent
+            event: type[FullScanEvent | FullPartitionScanEvent
                         | FullPartitionScanReversedOrderEvent]) -> ResultSet:
         # pylint: disable=unused-argument
         self.log.debug('Will run command %s', cmd)
@@ -128,7 +141,7 @@ class FullscanOperationBase:
         )
 
     def run_scan_event(self, cmd: str,
-                       scan_event: Type[FullScanEvent | FullPartitionScanEvent
+                       scan_event: type[FullScanEvent | FullPartitionScanEvent
                                         | FullPartitionScanReversedOrderEvent] = None) -> OneOperationStat:
         scan_event = scan_event or self.scan_event
         cmd = cmd or self.randomly_form_cql_statement()
@@ -251,7 +264,7 @@ class FullPartitionScanOperation(FullscanOperationBase):
                            error)
         raise Exception('Failed getting table clustering order from all db nodes')
 
-    def randomly_form_cql_statement(self) -> Optional[tuple[str, str]]:  # pylint: disable=too-many-branches
+    def randomly_form_cql_statement(self) -> tuple[str, str] | None:  # pylint: disable=too-many-branches
         """
         The purpose of this method is to form a random reversed-query out of all options, like:
             select * from scylla_bench.test where pk = 1234 and ck < 4721 and ck > 2549 order by ck desc
@@ -346,7 +359,7 @@ class FullPartitionScanOperation(FullscanOperationBase):
 
     def execute_query(
             self, session, cmd: str,
-            event: Type[FullScanEvent | FullPartitionScanEvent
+            event: type[FullScanEvent | FullPartitionScanEvent
                         | FullPartitionScanReversedOrderEvent]) -> ResponseFuture:
         self.log.debug('Will run command "%s"', cmd)
         session.default_fetch_size = self.fullscan_params.page_size
@@ -456,7 +469,7 @@ class FullScanAggregatesOperation(FullscanOperationBase):
         return cmd
 
     def execute_query(self, session, cmd: str,
-                      event: Type[FullScanEvent | FullPartitionScanEvent
+                      event: type[FullScanEvent | FullPartitionScanEvent
                                   | FullPartitionScanReversedOrderEvent]) -> None:
         self.log.debug('Will run command %s', cmd)
         validate_forward_service_requests_start_time = time.time()

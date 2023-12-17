@@ -15,13 +15,17 @@ import os
 import pickle
 import tempfile
 import unittest
-from typing import Optional, Type, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 from unittest.mock import patch
 
-from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import \
-    SctEvent, SctEventTypesRegistry, BaseFilter, LogEvent, LogEventProtocol
-
+from sdcm.sct_events import SctEventProtocol, Severity
+from sdcm.sct_events.base import (
+    BaseFilter,
+    LogEvent,
+    LogEventProtocol,
+    SctEvent,
+    SctEventTypesRegistry,
+)
 
 Y = None  # define a global name for pickle.
 
@@ -40,7 +44,7 @@ class SctEventTestCase(unittest.TestCase):
                        b"Y.T.S: CRITICAL\n"
                        b"Z.T.S: NORMAL\n"
                        b"W.T.S: NORMAL\n")
-    severities_conf: Optional[str] = None
+    severities_conf: str | None = None
     _registry_bu = None
 
     @classmethod
@@ -210,10 +214,10 @@ class TestSctEvent(SctEventTestCase):
     def test_add_subevent_type_all_levels_not_abstract(self):
         @runtime_checkable
         class YT(SctEventProtocol, Protocol):
-            S: Type[SctEventProtocol]
+            S: type[SctEventProtocol]
 
         class Y(SctEvent):
-            T: Type[YT]
+            T: type[YT]
 
         Y.add_subevent_type("T")
         self.assertFalse(Y.T.is_abstract())
@@ -233,10 +237,10 @@ class TestSctEvent(SctEventTestCase):
     def test_add_subevent_type_abstract_level_in_the_middle(self):
         @runtime_checkable
         class ZT(SctEventProtocol, Protocol):
-            S: Type[SctEventProtocol]
+            S: type[SctEventProtocol]
 
         class Z(SctEvent):
-            T: Type[ZT]
+            T: type[ZT]
 
         self.assertRaisesRegex(ValueError, "no max severity", Z.add_subevent_type, "T")
         Z.add_subevent_type("T", abstract=True)
@@ -257,10 +261,10 @@ class TestSctEvent(SctEventTestCase):
     def test_add_subevent_type_subtype_is_not_abstract_only(self):
         @runtime_checkable
         class WT(SctEventProtocol, Protocol):
-            S: Type[SctEventProtocol]
+            S: type[SctEventProtocol]
 
         class W(SctEvent, abstract=True):
-            T: Type[WT]
+            T: type[WT]
 
         self.assertRaisesRegex(ValueError, "no max severity", W.add_subevent_type, "T")
         W.add_subevent_type("T", abstract=True)
@@ -281,10 +285,10 @@ class TestSctEvent(SctEventTestCase):
     def test_add_subevent_type_assertions(self):
         @runtime_checkable
         class YT(SctEventProtocol, Protocol):
-            S: Type[SctEventProtocol]
+            S: type[SctEventProtocol]
 
         class Y(SctEvent):
-            T: Type[YT]
+            T: type[YT]
 
         self.assertRaisesRegex(AssertionError, "valid Python identifier", Y.add_subevent_type, "123")
         self.assertRaisesRegex(AssertionError, "valid Python identifier", Y.add_subevent_type, "T.S")
@@ -300,10 +304,10 @@ class TestSctEvent(SctEventTestCase):
     def test_add_subevent_type_mixin_with_init(self):
         @runtime_checkable
         class YT(SctEventProtocol, Protocol):
-            S: Type[SctEventProtocol]
+            S: type[SctEventProtocol]
 
         class Y(SctEvent):
-            T: Type[YT]
+            T: type[YT]
 
         # pylint: disable=too-few-public-methods
         class Mixin:
@@ -354,7 +358,7 @@ class TestSctEvent(SctEventTestCase):
             attr1: str
 
         class Y(SctEvent):
-            T: Type[YT]
+            T: type[YT]
 
             def __init__(self, attr1):
                 self.attr1 = attr1
@@ -375,7 +379,7 @@ class TestSctEvent(SctEventTestCase):
         global Y  # pylint: disable=global-variable-not-assigned; assigned by class definition  # noqa: PLW0603
 
         class Y(SctEvent):
-            T: Type[SctEvent]
+            T: type[SctEvent]
 
         Y.add_subevent_type("T")
 
@@ -557,7 +561,7 @@ class TestLogEvent(SctEventTestCase):
 
     def test_msgfmt(self):
         class Y(LogEvent):
-            T: Type[LogEventProtocol]
+            T: type[LogEventProtocol]
 
         Y.add_subevent_type("T", regex="r1")
 

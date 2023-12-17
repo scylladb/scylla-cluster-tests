@@ -15,10 +15,11 @@ from gc import collect as gc_collect
 from select import select
 from threading import Lock
 
-from ssh2.session import Session as LibSSH2Session, LIBSSH2_SESSION_BLOCK_INBOUND, LIBSSH2_SESSION_BLOCK_OUTBOUND  # pylint: disable=no-name-in-module
-from ssh2.exceptions import SocketRecvError  # pylint: disable=no-name-in-module
-from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN  # pylint: disable=no-name-in-module
 from ssh2.channel import Channel  # pylint: disable=no-name-in-module
+from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN  # pylint: disable=no-name-in-module
+from ssh2.exceptions import SocketRecvError  # pylint: disable=no-name-in-module
+from ssh2.session import LIBSSH2_SESSION_BLOCK_INBOUND, LIBSSH2_SESSION_BLOCK_OUTBOUND
+from ssh2.session import Session as LibSSH2Session  # pylint: disable=no-name-in-module
 
 from .timings import NullableTiming
 

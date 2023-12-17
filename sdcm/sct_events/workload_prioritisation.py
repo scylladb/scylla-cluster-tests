@@ -11,22 +11,21 @@
 #
 # Copyright (c) 2021 ScyllaDB
 import logging
-from typing import Type, Optional
 
-from sdcm.sct_events import Severity, SctEventProtocol
+from sdcm.sct_events import SctEventProtocol, Severity
 from sdcm.sct_events.base import InformationalEvent
 
 LOGGER = logging.getLogger(__name__)
 
 
 class WorkloadPrioritisationEvent(InformationalEvent, abstract=True):
-    CpuNotHighEnough: Type[SctEventProtocol]
-    RatioValidationEvent: Type[SctEventProtocol]
-    SlaTestResult: Type[SctEventProtocol]
-    EmptyPrometheusData: Type[SctEventProtocol]
+    CpuNotHighEnough: type[SctEventProtocol]
+    RatioValidationEvent: type[SctEventProtocol]
+    SlaTestResult: type[SctEventProtocol]
+    EmptyPrometheusData: type[SctEventProtocol]
 
     def __init__(self,
-                 message: Optional[str] = None,
+                 message: str | None = None,
                  severity=Severity.ERROR) -> None:
         super().__init__(severity=severity)
         self.message = message if message else ""

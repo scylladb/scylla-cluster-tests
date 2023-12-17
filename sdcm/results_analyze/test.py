@@ -11,16 +11,16 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import logging
 import re
 import typing
 from datetime import datetime
-import logging
 
 from sdcm.es import ES
 from test_lib.utils import get_class_by_path
-from .base import ClassBase, __DEFAULT__
-from .metrics import ScyllaTestMetrics
 
+from .base import __DEFAULT__, ClassBase
+from .metrics import ScyllaTestMetrics
 
 LOGGER = logging.getLogger(__name__)
 
@@ -239,7 +239,7 @@ class SoftwareVersions(ClassBase):
     scylla_enterprise_server: ScyllaEnterpriseVersionInfo = None
 
     @property
-    def scylla_server_any(self) -> typing.Union[ScyllaVersionInfo, ScyllaEnterpriseVersionInfo]:
+    def scylla_server_any(self) -> ScyllaVersionInfo | ScyllaEnterpriseVersionInfo:
         return self.scylla_server if self.scylla_server else self.scylla_enterprise_server
 
     def is_valid(self):
@@ -520,7 +520,7 @@ class TestResultClass(ClassBase):
     def gen_kibana_dashboard_url(
             dashboard_path="app/kibana#/dashboard/03414b70-0e89-11e9-a976-2fe0f5890cd0?_g=()"
     ):
-        return "%s/%s" % (ES()._conf.get('kibana_url'), dashboard_path)  # pylint: disable=protected-access
+        return "{}/{}".format(ES()._conf.get('kibana_url'), dashboard_path)  # pylint: disable=protected-access
 
     def get_subtests(self):
         return self.get_by_params(es_index=self.es_index, main_test_id=self.test_id, subtest_name='*')
@@ -555,7 +555,7 @@ class TestResultClass(ClassBase):
             ])
         return self._get_es_query_from_self(list_of_attributes)
 
-    def get_prior_tests(self, filter_path=None) -> typing.List['TestResultClass']:
+    def get_prior_tests(self, filter_path=None) -> list['TestResultClass']:
         output = []
         try:
             es_query = self.get_same_tests_query()

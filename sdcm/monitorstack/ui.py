@@ -1,15 +1,12 @@
 import logging
 
-from typing import Tuple, List
-
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.common import exceptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.common import exceptions
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from sdcm.utils.ci_tools import get_test_name
-
 
 LOGGER = logging.getLogger(__name__)
 UI_ELEMENT_LOAD_TIMEOUT = 180
@@ -120,8 +117,8 @@ class Dashboard:
     name: str
     path: str
     resolution: str
-    scroll_ready_locator: Tuple[By, str] = (By.XPATH, "//div[@class='scrollbar-view']")
-    panels: List[Panel]
+    scroll_ready_locator: tuple[By, str] = (By.XPATH, "//div[@class='scrollbar-view']")
+    panels: list[Panel]
     scroll_step: int = 1000
     title: str
 

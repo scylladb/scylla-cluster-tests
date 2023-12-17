@@ -14,7 +14,6 @@
 import abc
 from dataclasses import dataclass, field
 from textwrap import dedent
-from typing import List, Dict
 
 import yaml
 
@@ -58,10 +57,10 @@ class UserDataObject(abc.ABC):
 @dataclass
 class UserDataBuilder:
     """Generates content for cloud-init"""
-    user_data_objects: List[UserDataObject] = field(default_factory=list)
+    user_data_objects: list[UserDataObject] = field(default_factory=list)
 
     @property
-    def yum_repos(self) -> Dict:
+    def yum_repos(self) -> dict:
         return {
             "yum_repos":
                 {
@@ -77,7 +76,7 @@ class UserDataBuilder:
         }
 
     @property
-    def apt_configuration(self) -> Dict:
+    def apt_configuration(self) -> dict:
         return yaml.safe_load(dedent("""
                                         apt:
                                           conf: |

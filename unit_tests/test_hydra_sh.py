@@ -4,8 +4,8 @@ import os
 import re
 import tempfile
 import unittest
+from collections.abc import Iterable, Sequence
 from functools import cached_property
-from typing import Dict, Union, Tuple, Iterable, Sequence, List
 
 from parameterized import parameterized
 
@@ -57,10 +57,10 @@ class HydraTestCaseTmpDir:
 class HydraTestCaseParams:
     name: str
     cmd: str
-    expected: List[Union[str, re.Pattern]]
-    not_expected: List[Union[str, re.Pattern]]
+    expected: list[str | re.Pattern]
+    not_expected: list[str | re.Pattern]
     return_code: int
-    env: Dict[str, str]
+    env: dict[str, str]
 
     def __str__(self):
         return self.name
@@ -219,7 +219,7 @@ class LongevityPipelineTest:
         return 'gce' in self.backend or 'gke' in self.backend
 
     @property
-    def get_longevity_env(self) -> Dict[str, str]:
+    def get_longevity_env(self) -> dict[str, str]:
         longevity_end = {
             'SCT_TEST_ID': self.test_id,
             'HOME': self.test_home_dir,
@@ -354,7 +354,7 @@ class LongevityPipelineTest:
         ), self.test_tmp_dir
 
     @property
-    def hydra_test_cases(self) -> Iterable[Tuple[HydraTestCaseParams, HydraTestCaseTmpDir]]:
+    def hydra_test_cases(self) -> Iterable[tuple[HydraTestCaseParams, HydraTestCaseTmpDir]]:
         """
         Creates list of test case parameters that represent steps in longevity pipeline steps
         """
@@ -387,8 +387,8 @@ class TestHydraSh(unittest.TestCase):
     def validate_result(
             result,
             expected_status: int,
-            expected: Sequence[Union[str, re.Pattern]],
-            not_expected: Sequence[Union[str, re.Pattern]],
+            expected: Sequence[str | re.Pattern],
+            not_expected: Sequence[str | re.Pattern],
     ):
         errors = []
         if expected_status is not None:

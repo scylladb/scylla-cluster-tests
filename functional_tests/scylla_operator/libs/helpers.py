@@ -12,17 +12,16 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from enum import Enum
 import logging
 import time
-from typing import Union
-import yaml
+from enum import Enum
 
+import yaml
 from kubernetes.client import exceptions as k8s_exceptions
 
 from sdcm.cluster import (
-    DB_LOG_PATTERN_RESHARDING_START,
     DB_LOG_PATTERN_RESHARDING_FINISH,
+    DB_LOG_PATTERN_RESHARDING_START,
 )
 from sdcm.cluster_k8s import (
     SCYLLA_MANAGER_NAMESPACE,
@@ -169,7 +168,7 @@ def reinstall_scylla_manager(db_cluster: ScyllaPodCluster, manager_version: str)
         log.info("Scylla Manager '%s' has successfully been installed", manager_version)
 
 
-def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: Union[str, int, float]):
+def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: str | int | float):
     nodes_data = []
     for node in reversed(db_cluster.nodes):
         liveness_probe_failures = node.follow_system_log(

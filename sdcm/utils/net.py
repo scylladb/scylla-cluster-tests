@@ -2,9 +2,9 @@
 Utility functions related to network information
 """
 import ipaddress
-
 import os
 import socket
+
 import requests
 
 

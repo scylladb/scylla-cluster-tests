@@ -11,11 +11,11 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
-from itertools import cycle
 import logging
+from itertools import cycle
 
-import botocore
 import boto3
+import botocore
 
 LOGGER = logging.getLogger(__name__)
 

@@ -11,35 +11,39 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from textwrap import dedent
-from typing import List, Dict, ParamSpec, TypeVar
-from functools import cached_property
-from collections.abc import Callable
-
-import tempfile
 import json
-import yaml
+import tempfile
+from collections.abc import Callable
+from functools import cached_property
+from textwrap import dedent
+from typing import ParamSpec, TypeVar
+
 import tenacity
+import yaml
 from google.cloud import compute_v1
 
-from sdcm import sct_abs_path, cluster
-from sdcm.wait import exponential_retry
-from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
-from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
+from sdcm import cluster, sct_abs_path
+from sdcm.cluster_gce import MonitorSetGCE
+from sdcm.cluster_k8s import (
+    BaseScyllaPodContainer,
+    CloudK8sNodePool,
+    KubernetesCluster,
+    ScyllaPodCluster,
+)
+from sdcm.keystore import KeyStore
+from sdcm.remote import LOCALRUNNER
+from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.common import gce_meta_to_dict, list_instances_gce
 from sdcm.utils.gce_utils import (
     GcloudContainerMixin,
     GcloudContextManager,
+    gce_private_addresses,
+    gce_public_addresses,
     get_gce_compute_instances_client,
     wait_for_extended_operation,
-    gce_public_addresses,
-    gce_private_addresses,
 )
-from sdcm.utils.ci_tools import get_test_name
-from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
-from sdcm.cluster_gce import MonitorSetGCE
-from sdcm.keystore import KeyStore
-from sdcm.remote import LOCALRUNNER
-
+from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
+from sdcm.wait import exponential_retry
 
 GKE_API_CALL_RATE_LIMIT = 5  # ops/s
 GKE_API_CALL_QUEUE_SIZE = 1000  # ops
@@ -264,7 +268,7 @@ class GkeCluster(KubernetesCluster):
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/gke/scylla-node-prepare.yaml")
     NODE_CONFIG_CRD_FILE = sct_abs_path("sdcm/k8s_configs/gke/node-config-crd.yaml")
     TOKEN_UPDATE_NEEDED = False
-    pools: Dict[str, GkeNodePool]
+    pools: dict[str, GkeNodePool]
 
     # pylint: disable=too-many-arguments,too-many-locals
     def __init__(self,  # noqa: PLR0913
@@ -598,7 +602,7 @@ class GkeScyllaPodCluster(ScyllaPodCluster):
                   dc_idx: int = None,
                   rack: int = 0,
                   enable_auto_bootstrap: bool = False,
-                  instance_type=None) -> List[GkeScyllaPodContainer]:
+                  instance_type=None) -> list[GkeScyllaPodContainer]:
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,

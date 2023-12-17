@@ -1,12 +1,9 @@
-from typing import Union
+from .cli import ManagerCluster, ScyllaManagerToolNonRedhat, ScyllaManagerToolRedhatLike
+from .common import HostRestStatus, HostSsl, HostStatus, ScyllaManagerError, TaskStatus
+from .operator import OperatorManagerCluster, ScyllaManagerToolOperator
 
-from .common import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
-from .cli import ScyllaManagerToolRedhatLike, ScyllaManagerToolNonRedhat, ManagerCluster
-from .operator import ScyllaManagerToolOperator, OperatorManagerCluster
-
-
-AnyManagerTool = Union[ScyllaManagerToolOperator, ScyllaManagerToolRedhatLike, ScyllaManagerToolNonRedhat]
-AnyManagerCluster = Union[OperatorManagerCluster, ManagerCluster]
+AnyManagerTool = ScyllaManagerToolOperator | ScyllaManagerToolRedhatLike | ScyllaManagerToolNonRedhat
+AnyManagerCluster = OperatorManagerCluster | ManagerCluster
 
 
 def get_scylla_manager_tool(manager_node, scylla_cluster=None) -> AnyManagerTool:

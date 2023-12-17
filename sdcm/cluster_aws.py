@@ -26,7 +26,7 @@ from contextlib import ExitStack
 from datetime import datetime
 from functools import cached_property
 from textwrap import dedent
-from typing import Dict, Optional, ParamSpec, TypeVar
+from typing import ParamSpec, TypeVar
 
 import boto3
 import botocore.exceptions
@@ -35,20 +35,18 @@ import yaml
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import EC2ServiceResource
 
-from sdcm import ec2_client, cluster, wait
+from sdcm import cluster, ec2_client, wait
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
-from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration, is_ip_ssh_connections_ipv6, \
-    network_interfaces_count, ssh_connection_ip_type
+from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration, is_ip_ssh_connections_ipv6, network_interfaces_count, ssh_connection_ip_type
 from sdcm.provision.scylla_yaml import SeedProvider
-from sdcm.sct_provision.aws.cluster import PlacementGroup
-
-from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
+from sdcm.remote import NETWORK_EXCEPTIONS, LocalCmdRunner, shell_script_cmd
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
+from sdcm.sct_provision.aws.cluster import PlacementGroup
+from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, tags_as_ec2_tags
 from sdcm.utils.common import list_instances_aws
 from sdcm.utils.decorators import retrying
 from sdcm.wait import exponential_retry
@@ -118,9 +116,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                          )
 
     def __str__(self):
-        return 'Cluster %s (AMI: %s Type: %s)' % (self.name,
-                                                  self._ec2_ami_id,
-                                                  self._ec2_instance_type)
+        return f'Cluster {self.name} (AMI: {self._ec2_ami_id} Type: {self._ec2_instance_type})'
 
     @property
     def instance_profile_name(self) -> str | None:
@@ -278,7 +274,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx, instance_type=None):  # pylint: disable=too-many-arguments
         instances = []
         max_num_on_demand = 2
-        if isinstance(self, (ScyllaAWSCluster, CassandraAWSCluster)):
+        if isinstance(self, ScyllaAWSCluster | CassandraAWSCluster):
             if count > 2:
                 count_on_demand = max_num_on_demand
             elif count == 2:
@@ -437,7 +433,7 @@ class AWSNode(cluster.BaseNode):
         else:
             node_private_ip = self.private_ip_address
 
-        return 'Node %s [%s | %s%s] (seed: %s)' % (
+        return 'Node {} [{} | {}{}] (seed: {})'.format(
             self.name,
             self.public_ip_address,
             node_private_ip,
@@ -470,7 +466,7 @@ class AWSNode(cluster.BaseNode):
         return interfaces
 
     def init(self):
-        LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
+        LOGGER.debug(f"Waiting until instance {self._instance} starts running...")
         self._instance_wait_safe(self._instance.wait_until_running)
 
         if not self.test_config.REUSE_CLUSTER:
@@ -500,7 +496,7 @@ class AWSNode(cluster.BaseNode):
         return self.name
 
     @cached_property
-    def tags(self) -> Dict[str, str]:
+    def tags(self) -> dict[str, str]:
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
 
@@ -586,7 +582,7 @@ class AWSNode(cluster.BaseNode):
             'curl http://169.254.169.254/latest/meta-data/local-hostname', verbose=False)
         return result.stdout.strip()
 
-    def _get_ipv6_ip_address(self) -> Optional[str]:
+    def _get_ipv6_ip_address(self) -> str | None:
         return self.scylla_network_configuration.interface_ipv6_address
 
     def refresh_network_interfaces_info(self):
@@ -739,7 +735,7 @@ class AWSNode(cluster.BaseNode):
                         self.remoter.sudo(create_devices_file)
                         break
                 else:
-                    raise IOError("scylla_create_devices file isn't found")
+                    raise OSError("scylla_create_devices file isn't found")
 
                 self.start_scylla_server(verify_up=False)
 
@@ -804,7 +800,7 @@ class AWSNode(cluster.BaseNode):
             tc_command = LOCAL_CMD_RUNNER.run("tcdel eth1 --tc-command", ignore_status=True).stdout
             self.remoter.run('sudo bash -cxe "%s"' % tc_command, ignore_status=True)
         else:
-            tc_command = LOCAL_CMD_RUNNER.run("tcset eth1 {} --tc-command".format(tcconfig_params)).stdout
+            tc_command = LOCAL_CMD_RUNNER.run(f"tcset eth1 {tcconfig_params} --tc-command").stdout
             self.remoter.run('sudo bash -cxe "%s"' % tc_command)
 
     def install_traffic_control(self):
@@ -863,11 +859,11 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         if not ec2_user_data:
             if self._ec2_user_data and isinstance(self._ec2_user_data, str):
                 ec2_user_data = re.sub(r'(--totalnodes\s)(\d*)(\s)',
-                                       r'\g<1>{}\g<3>'.format(len(self.nodes) + count), self._ec2_user_data)
+                                       rf'\g<1>{len(self.nodes) + count}\g<3>', self._ec2_user_data)
             elif self._ec2_user_data and isinstance(self._ec2_user_data, dict):
                 ec2_user_data = self._ec2_user_data
             else:
-                ec2_user_data = ('--clustername %s --totalnodes %s ' % (self.name, count))
+                ec2_user_data = (f'--clustername {self.name} --totalnodes {count} ')
         if self.nodes and isinstance(ec2_user_data, str):
             node_ips = [node.ip_address for node in self.nodes if node.is_seed]
             seeds = ",".join(node_ips)
@@ -924,10 +920,10 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'cs-db-node')
         node_type = 'cs-db'
         shortid = str(cluster_uuid)[:8]
-        name = '%s-%s' % (cluster_prefix, shortid)
-        user_data = ('--clustername %s '
-                     '--totalnodes %s --version community '
-                     '--release 2.1.15' % (name, sum(n_nodes)))
+        name = f'{cluster_prefix}-{shortid}'
+        user_data = (f'--clustername {name} '
+                     f'--totalnodes {sum(n_nodes)} --version community '
+                     '--release 2.1.15')
         # pylint: disable=unexpected-keyword-arg
         super().__init__(
             ec2_ami_id=ec2_ami_id,
@@ -963,12 +959,10 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         if not ec2_user_data:
             if self.nodes:
                 seeds = ",".join(self.get_seed_nodes())
-                ec2_user_data = ('--clustername %s '
-                                 '--totalnodes %s --seeds %s '
+                ec2_user_data = (f'--clustername {self.name} '
+                                 f'--totalnodes {count} --seeds {seeds} '
                                  '--version community '
-                                 '--release 2.1.15' % (self.name,
-                                                       count,
-                                                       seeds))
+                                 '--release 2.1.15')
         ec2_user_data = self.update_bootstrap(ec2_user_data, enable_auto_bootstrap)
         added_nodes = super().add_nodes(
             count=count,
@@ -1008,8 +1002,7 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         node_type = 'loader'
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
-        user_data = ('--clustername %s --totalnodes %s --bootstrap false --stop-services' %
-                     (cluster_prefix, n_nodes))
+        user_data = (f'--clustername {cluster_prefix} --totalnodes {n_nodes} --bootstrap false --stop-services')
         cluster.BaseLoaderSet.__init__(self,
                                        params=params)
 

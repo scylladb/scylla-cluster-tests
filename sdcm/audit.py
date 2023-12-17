@@ -12,10 +12,13 @@
 # Copyright (c) 2023 ScyllaDB
 import logging
 from dataclasses import dataclass
-from datetime import datetime, date
-from typing import Literal, Optional, List
+from datetime import date, datetime
+from typing import Literal
 
-from cassandra.util import uuid_from_time, datetime_from_uuid1  # pylint: disable=no-name-in-module
+from cassandra.util import (  # pylint: disable=no-name-in-module
+    datetime_from_uuid1,
+    uuid_from_time,
+)
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent
@@ -30,9 +33,9 @@ class AuditConfiguration:
     """https://enterprise.docs.scylladb.com/stable/operating-scylla/security/auditing.html"""
 
     store: AuditStore  # if store is none, then audit is disabled
-    categories: List[AuditCategory]
-    tables: List[str]
-    keyspaces: List[str]
+    categories: list[AuditCategory]
+    tables: list[str]
+    keyspaces: list[str]
 
     @classmethod
     def from_scylla_yaml(cls, scylla_yaml):
@@ -63,21 +66,21 @@ class AuditLogReader:  # pylint: disable=too-few-public-methods
     def __init__(self, cluster):
         self._cluster = cluster
 
-    def read(self, from_datetime: Optional[datetime] = None,
-             category: Optional[AuditCategory] = None,
-             operation: Optional[str] = None,
+    def read(self, from_datetime: datetime | None = None,
+             category: AuditCategory | None = None,
+             operation: str | None = None,
              limit_rows: int = 1000
-             ) -> List[AuditLogRow]:
+             ) -> list[AuditLogRow]:
         raise NotImplementedError()
 
 
 class TableAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
 
-    def read(self, from_datetime: Optional[datetime] = None,
-             category: Optional[AuditCategory] = None,
-             operation: Optional[str] = None,
+    def read(self, from_datetime: datetime | None = None,
+             category: AuditCategory | None = None,
+             operation: str | None = None,
              limit_rows: int = 1000
-             ) -> List[AuditLogRow]:
+             ) -> list[AuditLogRow]:
         """Return audit log rows based on the given filters."""
         where_list = []
         if from_datetime:
@@ -109,11 +112,11 @@ class TableAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-met
 
 
 def get_audit_log_rows(node,  # pylint: disable=too-many-locals
-                       from_datetime: Optional[datetime] = None,
-                       category: Optional[AuditCategory] = None,
-                       operation: Optional[str] = None,
+                       from_datetime: datetime | None = None,
+                       category: AuditCategory | None = None,
+                       operation: str | None = None,
                        limit_rows: int = 1000
-                       ) -> List[AuditLogRow]:
+                       ) -> list[AuditLogRow]:
     with node.open_system_log(on_datetime=from_datetime) as log_file:
         found_rows = 0
         for line in log_file:
@@ -154,9 +157,9 @@ def get_audit_log_rows(node,  # pylint: disable=too-many-locals
 
 class SyslogAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
 
-    def read(self, from_datetime: Optional[datetime] = None, category: Optional[AuditCategory] = None,
-             operation: Optional[str] = None,
-             limit_rows: int = 1000) -> List:
+    def read(self, from_datetime: datetime | None = None, category: AuditCategory | None = None,
+             operation: str | None = None,
+             limit_rows: int = 1000) -> list:
         """Return audit log rows from syslog based on the given filters."""
         rows = []
         for node in self._cluster.nodes:
@@ -203,9 +206,9 @@ class Audit:
         LOGGER.debug("Audit configuration completed")
         self._configuration = audit_configuration
 
-    def get_audit_log(self, from_datetime: Optional[datetime] = None, category: Optional[AuditCategory] = None,
-                      operation: Optional[str] = None,
-                      limit_rows: int = 1000) -> List:
+    def get_audit_log(self, from_datetime: datetime | None = None, category: AuditCategory | None = None,
+                      operation: str | None = None,
+                      limit_rows: int = 1000) -> list:
         """Return audit log rows based on the given filters."""
         reader: AuditLogReader
         if not self.is_enabled():

@@ -11,22 +11,21 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import os
 import re
+import tempfile
 import time
 import uuid
-import tempfile
-import logging
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.remote import FailuresWatcher
+from sdcm.sct_events.loaders import YcsbStressEvent
+from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
 from sdcm.utils import alternator
-from sdcm.utils.common import FileFollowerThread
+from sdcm.utils.common import FileFollowerThread, generate_random_string
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.utils.common import generate_random_string
-from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
 
 LOGGER = logging.getLogger(__name__)
 
@@ -129,7 +128,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             dynamodb_teample = dedent('''
                 measurementtype=hdrhistogram
                 dynamodb.awsCredentialsFile = /tmp/aws_empty_file
-                dynamodb.endpoint = http://{0}:{1}
+                dynamodb.endpoint = http://{}:{}
                 dynamodb.connectMax = 200
                 requestdistribution = uniform
                 dynamodb.consistentReads = true
@@ -238,8 +237,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'ycsb-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
+        log_file_name = os.path.join(loader.logdir, f'ycsb-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
         LOGGER.debug('ycsb-stress local log: %s', log_file_name)
 
         def raise_event_callback(sentinel, line):  # pylint: disable=unused-argument
@@ -248,7 +246,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
         LOGGER.debug("running: %s", stress_cmd)
 
-        node_cmd = 'cd /YCSB && {}'.format(stress_cmd)
+        node_cmd = f'cd /YCSB && {stress_cmd}'
 
         YcsbStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
 

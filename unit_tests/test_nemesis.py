@@ -5,16 +5,15 @@ from dataclasses import dataclass, field
 import pytest
 
 import sdcm.utils.cloud_monitor  # pylint: disable=unused-import # import only to avoid cyclic dependency
-from sdcm.nemesis import Nemesis, CategoricalMonkey, SisyphusMonkey, ToggleGcModeMonkey
 from sdcm.cluster import BaseScyllaCluster
-from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
-from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
-from sdcm.cluster_k8s.eks import EksScyllaPodCluster
-from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_docker import ScyllaDockerCluster
+from sdcm.cluster_gce import ScyllaGCECluster
+from sdcm.cluster_k8s.eks import EksScyllaPodCluster
+from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
+from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
+from sdcm.nemesis import CategoricalMonkey, Nemesis, SisyphusMonkey, ToggleGcModeMonkey
 from unit_tests.test_tester import ClusterTesterForTests
-
 
 PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False)
 LOGGER = logging.getLogger(__name__)

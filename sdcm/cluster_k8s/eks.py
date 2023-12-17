@@ -12,43 +12,44 @@
 # Copyright (c) 2020 ScyllaDB
 import base64
 import os
-import time
 import pprint
+import time
+from collections.abc import Callable
+from functools import cached_property
 from textwrap import dedent
 from threading import Lock
-from typing import List, Dict, Literal, ParamSpec, TypeVar
-from functools import cached_property
-from collections.abc import Callable
+from typing import Literal, ParamSpec, TypeVar
 
 import boto3
 import tenacity
-from mypy_boto3_ec2.type_defs import LaunchTemplateBlockDeviceMappingRequestTypeDef, \
-    LaunchTemplateEbsBlockDeviceRequestTypeDef, RequestLaunchTemplateDataTypeDef, \
-    LaunchTemplateTagSpecificationRequestTypeDef
+from mypy_boto3_ec2.type_defs import (
+    LaunchTemplateBlockDeviceMappingRequestTypeDef,
+    LaunchTemplateEbsBlockDeviceRequestTypeDef,
+    LaunchTemplateTagSpecificationRequestTypeDef,
+    RequestLaunchTemplateDataTypeDef,
+)
 
-from sdcm import sct_abs_path, cluster
+from sdcm import cluster, ec2_client, sct_abs_path
 from sdcm.cluster_aws import MonitorSetAWS
-from sdcm import ec2_client
-from sdcm.utils.ci_tools import get_test_name
-from sdcm.utils.common import list_instances_aws
-from sdcm.utils.k8s import TokenUpdateThread
-from sdcm.wait import wait_for, exponential_retry
 from sdcm.cluster_k8s import (
+    SCYLLA_AGENT_CONFIG_NAME,
+    SCYLLA_NAMESPACE,
     BaseScyllaPodContainer,
     CloudK8sNodePool,
     KubernetesCluster,
     ScyllaPodCluster,
-    SCYLLA_AGENT_CONFIG_NAME,
-    SCYLLA_NAMESPACE,
 )
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.aws_utils import (
+    EksClusterCleanupMixin,
     get_arch_from_instance_type,
     get_ec2_network_configuration,
     tags_as_ec2_tags,
-    EksClusterCleanupMixin,
 )
-
+from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.common import list_instances_aws
+from sdcm.utils.k8s import TokenUpdateThread
+from sdcm.wait import exponential_retry, wait_for
 
 P = ParamSpec("P")  # pylint: disable=invalid-name
 R = TypeVar("R")  # pylint: disable=invalid-name
@@ -62,7 +63,7 @@ ARCH_TO_IMAGE_TYPE_MAPPING = {'arm64': 'AL2_ARM_64', 'x86_64': 'AL2_x86_64'}
 
 
 def init_k8s_eks_cluster(region_name: str, availability_zone: str, params: dict,
-                         credentials: List[cluster.UserRemoteCredentials],
+                         credentials: list[cluster.UserRemoteCredentials],
                          cluster_uuid: str = None):
     """Dedicated for the usage by the 'Tester' class which orchestrates all the resources creation.
 
@@ -171,8 +172,8 @@ class EksNodePool(CloudK8sNodePool):
             instance_type: str,
             role_arn: str,
             labels: dict = None,
-            security_group_ids: List[str] = None,
-            ec2_subnet_ids: List[str] = None,
+            security_group_ids: list[str] = None,
+            ec2_subnet_ids: list[str] = None,
             ssh_key_pair_name: str = None,
             provision_type: Literal['ON_DEMAND', 'SPOT'] = 'ON_DEMAND',
             launch_template: str = None,
@@ -336,7 +337,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/eks/scylla-node-prepare.yaml")
     NODE_CONFIG_CRD_FILE = sct_abs_path("sdcm/k8s_configs/eks/node-config-crd.yaml")
     STORAGE_CLASS_FILE = sct_abs_path("sdcm/k8s_configs/eks/storageclass_gp3.yaml")
-    pools: Dict[str, EksNodePool]
+    pools: dict[str, EksNodePool]
     short_cluster_name: str
 
     # pylint: disable=too-many-arguments
@@ -789,7 +790,7 @@ class EksScyllaPodContainer(BaseScyllaPodContainer):
 
 class EksScyllaPodCluster(ScyllaPodCluster):
     PodContainerClass = EksScyllaPodContainer
-    nodes: List[EksScyllaPodContainer]
+    nodes: list[EksScyllaPodContainer]
 
     # pylint: disable=too-many-arguments
     def add_nodes(self,
@@ -799,7 +800,7 @@ class EksScyllaPodCluster(ScyllaPodCluster):
                   rack: int = 0,
                   enable_auto_bootstrap: bool = False,
                   instance_type=None
-                  ) -> List[EksScyllaPodContainer]:
+                  ) -> list[EksScyllaPodContainer]:
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,

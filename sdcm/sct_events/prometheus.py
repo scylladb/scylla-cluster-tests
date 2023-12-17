@@ -20,16 +20,15 @@ we are using the GrafanaAnnotator
 
 import logging
 import threading
-from typing import Tuple, Any
+from typing import Any
 
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events.events_processes import BaseEventsProcess, verbose_suppress
 
-
 LOGGER = logging.getLogger(__name__)
 
 
-class PrometheusDumper(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
+class PrometheusDumper(BaseEventsProcess[tuple[str, Any], None], threading.Thread):
     def run(self) -> None:
         events_gauge = \
             nemesis_metrics_obj().create_gauge("sct_events_gauge",

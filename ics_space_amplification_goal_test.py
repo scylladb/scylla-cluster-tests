@@ -22,7 +22,7 @@ from sdcm.db_stats import AVAIL_SIZE_METRIC, AVAIL_SIZE_METRIC_OLD, GB_SIZE
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.utils.common import ParallelObject
-from test_lib.compaction import CompactionStrategy, LOGGER
+from test_lib.compaction import LOGGER, CompactionStrategy
 
 KEYSPACE_NAME = 'keyspace1'
 TABLE_NAME = 'standard1'
@@ -122,15 +122,15 @@ class IcsSpaceAmplificationTest(LongevityTest):
 
         yaml_file = "/etc/scylla/scylla.yaml"
         tmp_yaml_file = "/tmp/scylla.yaml"
-        set_enforce_min_threshold = dedent("""
-                                                    grep -v compaction_enforce_min_threshold {0} > {1}
-                                                    echo compaction_enforce_min_threshold: true >> {1}
-                                                    cp -f {1} {0}
-                                                """.format(yaml_file, tmp_yaml_file))
+        set_enforce_min_threshold = dedent(f"""
+                                                    grep -v compaction_enforce_min_threshold {yaml_file} > {tmp_yaml_file}
+                                                    echo compaction_enforce_min_threshold: true >> {tmp_yaml_file}
+                                                    cp -f {tmp_yaml_file} {yaml_file}
+                                                """)
         for node in self.db_cluster.nodes:  # set compaction_enforce_min_threshold on all nodes
             node.remoter.run('sudo bash -cxe "%s"' % set_enforce_min_threshold)
-            self.log.debug("Scylla YAML configuration read from: {} {} is:".format(node.public_ip_address, yaml_file))
-            node.remoter.run('sudo cat {}'.format(yaml_file))
+            self.log.debug(f"Scylla YAML configuration read from: {node.public_ip_address} {yaml_file} is:")
+            node.remoter.run(f'sudo cat {yaml_file}')
 
             node.stop_scylla_server()
             node.start_scylla_server()

@@ -12,16 +12,14 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
-import uuid
 import pprint
+import uuid
 from pathlib import Path
-from typing import List, Dict
 
 from sdcm.sct_events.loaders import CDCReaderStressEvent
-from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
-
+from sdcm.utils.docker_remote import RemoteDocker
 
 LOGGER = logging.getLogger(__name__)
 
@@ -88,7 +86,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
         return None
 
     @staticmethod
-    def _parse_cdcreaderstressor_results(lines: List[str]) -> Dict:
+    def _parse_cdcreaderstressor_results(lines: list[str]) -> dict:
         """parse result of cdcreader results
         lines:
             Results:
@@ -148,7 +146,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
         LOGGER.debug(result)
         return result
 
-    def get_results(self) -> List[Dict]:
+    def get_results(self) -> list[dict]:
         """Return results of cdclog readers
 
         return list of dicts:

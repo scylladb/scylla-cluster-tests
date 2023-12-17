@@ -13,8 +13,8 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
-from sdcm.tester import ClusterTester
 from sdcm import nemesis
+from sdcm.tester import ClusterTester
 
 
 class CorruptThenRebuildTest(ClusterTester):

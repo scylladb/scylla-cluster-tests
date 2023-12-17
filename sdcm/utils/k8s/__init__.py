@@ -13,39 +13,38 @@
 
 # pylint: disable=too-many-arguments,too-many-lines
 import abc
-import getpass
+import contextlib
 import json
-import os
-import time
-import queue
 import logging
+import multiprocessing
+import os
+import queue
 import re
 import threading
-import multiprocessing
-import contextlib
-from tempfile import NamedTemporaryFile
-from typing import Iterator, Optional, Union, Callable, List
+import time
+from collections.abc import Callable, Iterator
 from functools import cached_property, partialmethod
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import kubernetes as k8s
 import yaml
 from paramiko.config import invoke
-from urllib3.util.retry import Retry
 from urllib3.exceptions import (
     IncompleteRead,
     ProtocolError,
     ReadTimeoutError,
 )
+from urllib3.util.retry import Retry
 
-from sdcm.log import SDCMAdapter
 from sdcm import sct_abs_path
+from sdcm.log import SDCMAdapter
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.common import walk_thru_data
-from sdcm.utils.decorators import timeout as timeout_decor, retrying
-from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
+from sdcm.utils.decorators import retrying
+from sdcm.utils.decorators import timeout as timeout_decor
+from sdcm.utils.docker_utils import Container, ContainerManager
 from sdcm.wait import wait_for
-
 
 KUBECTL_BIN = "kubectl"
 HELM_IMAGE = "alpine/helm:3.8.0"
@@ -300,16 +299,16 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         return " ".join(cmd)
 
     @classmethod
-    def kubectl(cls, kluster, *command, namespace: Optional[str] = None, timeout: int = KUBECTL_TIMEOUT,
-                remoter: Optional['KubernetesCmdRunner'] = None, ignore_status: bool = False, verbose: bool = True):
+    def kubectl(cls, kluster, *command, namespace: str | None = None, timeout: int = KUBECTL_TIMEOUT,
+                remoter: 'KubernetesCmdRunner | None' = None, ignore_status: bool = False, verbose: bool = True):
         cmd = cls.kubectl_cmd(kluster, *command, namespace=namespace, ignore_k8s_server_url=bool(remoter))
         if remoter is None:
             remoter = LOCALRUNNER
         return remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
 
     @classmethod
-    def kubectl_multi_cmd(cls, kluster, *command, namespace: Optional[str] = None, timeout: int = KUBECTL_TIMEOUT,
-                          remoter: Optional['KubernetesCmdRunner'] = None, ignore_status: bool = False,
+    def kubectl_multi_cmd(cls, kluster, *command, namespace: str | None = None, timeout: int = KUBECTL_TIMEOUT,
+                          remoter: 'KubernetesCmdRunner | None' = None, ignore_status: bool = False,
                           verbose: bool = True):
         total_command = ' '.join(command)
         final_command = []
@@ -327,7 +326,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
     @classmethod
     def apply_file(cls, kluster, config_path, namespace=None,  # pylint: disable=too-many-locals,too-many-branches
                    timeout=KUBECTL_TIMEOUT, environ=None, envsubst=True,
-                   modifiers: List[Callable] = None, server_side=False):
+                   modifiers: list[Callable] = None, server_side=False):
         if environ:
             environ_str = (' '.join([f'{name}="{value}"' for name, value in environ.items()])) + ' '
         else:
@@ -421,11 +420,11 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             raise ValueError(f'Unknown auth-type {auth_type}')
 
     @staticmethod
-    def wait_for_pods_with_condition(kluster, condition: str, total_pods: Union[int, Callable],
+    def wait_for_pods_with_condition(kluster, condition: str, total_pods: int | Callable,
                                      timeout: float, namespace: str,
                                      selector: str = '',
                                      sleep_between_retries: int = 10):
-        assert isinstance(total_pods, (int, float)) or callable(total_pods), (
+        assert isinstance(total_pods, int | float) or callable(total_pods), (
             "total_pods should be number or callable")
         waiter_message = (
             f"{kluster.region_name}: Wait for the '{total_pods}' pod(s) "
@@ -441,7 +440,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                 namespace=namespace,
                 timeout=timeout * 60 // 5 + 10)
             count = result.stdout.count('condition met')
-            if isinstance(total_pods, (int, float)):
+            if isinstance(total_pods, int | float):
                 if total_pods != count:
                     raise RuntimeError('Not all pods reported')
             elif callable(total_pods):
@@ -453,7 +452,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         wait_for_condition(kluster, condition, total_pods, timeout, namespace, selector)
 
     @staticmethod
-    def wait_for_pods_readiness(kluster, total_pods: Union[int, Callable], readiness_timeout: float,
+    def wait_for_pods_readiness(kluster, total_pods: int | Callable, readiness_timeout: float,
                                 namespace: str, selector: str = '',
                                 sleep_between_retries: int = 10):
         KubernetesOps.wait_for_pods_with_condition(kluster, condition='condition=Ready',
@@ -464,7 +463,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                                                    sleep_between_retries=sleep_between_retries)
 
     @staticmethod
-    def wait_for_pods_running(kluster, total_pods: Union[int, Callable], timeout: float,
+    def wait_for_pods_running(kluster, total_pods: int | Callable, timeout: float,
                               namespace: str, selector: str = '',
                               sleep_between_retries: int = 10):
         KubernetesOps.wait_for_pods_with_condition(kluster, condition="jsonpath='{.status.phase}'=Running",
@@ -595,8 +594,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
 
         if not namespaces:
             # Read all the namespaces from already saved file
-            with open(logdir / cluster_scope_dir / "namespaces.wide",
-                      mode="r", encoding="utf-8") as namespaces_file:
+            with open(logdir / cluster_scope_dir / "namespaces.wide", encoding="utf-8") as namespaces_file:
                 # Reverse order of namespaces because preferred ones are there
                 namespaces = [n.split()[0] for n in namespaces_file.readlines()[1:]][::-1]
         elif isinstance(namespaces, str):
@@ -690,7 +688,7 @@ class HelmContainerMixin:
     def _helm_container(self) -> Container:
         return ContainerManager.run_container(self, "helm")
 
-    def helm(self, kluster, *command: str, namespace: Optional[str] = None, values: 'HelmValues' = None, prepend_command=None) -> str:  # pylint: disable=no-self-use
+    def helm(self, kluster, *command: str, namespace: str | None = None, values: 'HelmValues' = None, prepend_command=None) -> str:  # pylint: disable=no-self-use
         cmd = [
             f"HELM_CONFIG_HOME={kluster.helm_dir_path}",
             "helm",
@@ -737,9 +735,9 @@ class HelmContainerMixin:
                                  use_devel: bool = False,
                                  debug: bool = True,
                                  values: 'HelmValues' = None,
-                                 namespace: Optional[str] = None,
+                                 namespace: str | None = None,
                                  atomic: bool = False,
-                                 timeout: Optional[str] = None) -> str:
+                                 timeout: str | None = None) -> str:
         command = [operation_type, target_chart_name, source_chart_name]
         prepend_command = []
         if version:
@@ -954,7 +952,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
             # NOTE: following condition allows to skip processing of all the
             #       load-balancer/headless endpoints that do not refer to any Scylla pod.
             labels = metadata.get('labels', {})
-            if not all((key in labels.keys() for key in self.SCYLLA_PODS_EXPECTED_LABEL_KEYS)):
+            if not all(key in labels.keys() for key in self.SCYLLA_PODS_EXPECTED_LABEL_KEYS):
                 return None
 
             if name := metadata.get('name'):
@@ -1017,7 +1015,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
                     callback=callback[:-1], namespace=namespace, pod_name=pod_name,
                     add_pod_name_as_kwarg=callback[-1])
 
-    def register_callbacks(self, callbacks: Union[Callable, list[Callable]],
+    def register_callbacks(self, callbacks: Callable | list[Callable],
                            namespace: str, pod_name: str = '__each__',
                            add_pod_name_as_kwarg: bool = False) -> None:
         """Register callbacks to be called after a Scylla pod IP change.
@@ -1069,10 +1067,10 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
         for callback in callbacks:
             if callable(callback):
                 callback = [callback, [], {}]  # noqa: PLW2901
-            if (isinstance(callback, (tuple, list))
+            if (isinstance(callback, tuple | list)
                     and len(callback) == 3
                     and callable(callback[0])
-                    and isinstance(callback[1], (tuple, list))
+                    and isinstance(callback[1], tuple | list)
                     and isinstance(callback[2], dict)):
                 self.mapper_dict[namespace][pod_name]['callbacks'].append(
                     (callback[0], callback[1], callback[2], add_pod_name_as_kwarg))
@@ -1081,14 +1079,14 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
                     "Unexpected type (%s) of the callback: %s. Skipping", type(callback), callback)
 
 
-def convert_cpu_units_to_k8s_value(cpu: Union[float, int]) -> str:
+def convert_cpu_units_to_k8s_value(cpu: float | int) -> str:
     if isinstance(cpu, float):
         if not cpu.is_integer():
             return f'{int(cpu * 1000)}m'
     return f'{int(cpu)}'
 
 
-def convert_memory_units_to_k8s_value(memory: Union[float, int]) -> str:
+def convert_memory_units_to_k8s_value(memory: float | int) -> str:
     if isinstance(memory, float):
         if not memory.is_integer():
             return f'{int(memory * 1024)}Mi'
@@ -1264,7 +1262,7 @@ class HelmValues:
     def as_dict(self):
         return self._data
 
-    def __eq__(self, other: Union['HelmValues', dict]):
+    def __eq__(self, other: 'HelmValues | dict'):
         if isinstance(other, HelmValues):
             return self._data == other._data
         return self._data == other

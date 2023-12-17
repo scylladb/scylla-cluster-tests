@@ -14,9 +14,8 @@ import time
 import unittest
 import unittest.mock
 
-
 from sdcm.sct_events.event_handler import start_events_handler
-from sdcm.sct_events.events_processes import get_events_process, EVENTS_HANDLER_ID
+from sdcm.sct_events.events_processes import EVENTS_HANDLER_ID, get_events_process
 from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.test_config import TestConfig

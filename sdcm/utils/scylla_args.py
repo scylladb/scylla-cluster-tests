@@ -11,11 +11,11 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import re
-import logging
 import argparse
-from typing import Text, NoReturn, Callable
-
+import logging
+import re
+from collections.abc import Callable
+from typing import NoReturn, Text
 
 # Regexp for parsing arguments from the output of `scylla --help' command:
 # $ scylla --help
@@ -40,12 +40,12 @@ class ScyllaArgParser(argparse.ArgumentParser):
     def __init__(self, prog: str) -> None:
         super().__init__(prog=prog, argument_default=argparse.SUPPRESS, add_help=False)
 
-    def error(self, message: Text) -> NoReturn:
+    def error(self, message: str) -> NoReturn:
         LOGGER.error(message)
         raise ScyllaArgError(message)
 
     @classmethod
-    def from_scylla_help(cls, help_text: Text, duplicate_cb: Callable = None) -> "ScyllaArgParser":
+    def from_scylla_help(cls, help_text: str, duplicate_cb: Callable = None) -> "ScyllaArgParser":
         parser = cls(prog="scylla")
         duplicates = set()
         for *args, val in SCYLLA_ARG.findall(help_text):

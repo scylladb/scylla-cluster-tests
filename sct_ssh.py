@@ -18,22 +18,22 @@ from functools import singledispatch
 
 import click
 import questionary
-from questionary import Choice
 from google.cloud import compute_v1
+from questionary import Choice
 
+from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.common import (
-    list_instances_aws,
-    get_free_port,
-    list_instances_gce,
     gce_meta_to_dict,
+    get_free_port,
+    list_instances_aws,
+    list_instances_gce,
 )
 from sdcm.utils.gce_utils import (
-    gce_public_addresses,
     gce_private_addresses,
-    get_gce_compute_instances_client,
+    gce_public_addresses,
     gce_set_tags,
+    get_gce_compute_instances_client,
 )
-from sdcm.utils.aws_region import AwsRegion
 
 
 def get_region(instance: dict) -> str:

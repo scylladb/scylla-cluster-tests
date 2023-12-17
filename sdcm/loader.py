@@ -11,16 +11,20 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import logging
 import os
 import re
-from abc import abstractmethod, ABCMeta
 import time
-import logging
+from abc import ABCMeta, abstractmethod
 from typing import NamedTuple
 
 from sdcm.prometheus import NemesisMetrics
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
-from sdcm.utils.csrangehistogram import CSHistogramTags, CSWorkloadTypes, make_cs_range_histogram_summary_from_log_line
+from sdcm.utils.csrangehistogram import (
+    CSHistogramTags,
+    CSWorkloadTypes,
+    make_cs_range_histogram_summary_from_log_line,
+)
 
 LOGGER = logging.getLogger(__name__)
 

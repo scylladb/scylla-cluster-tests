@@ -14,12 +14,15 @@
 import logging
 import threading
 from functools import partial
-from typing import Tuple, Any
+from typing import Any
 
 from sdcm.cluster import TestConfig
-from sdcm.sct_events.events_processes import \
-    EVENTS_HANDLER_ID, BaseEventsProcess, \
-    start_events_process, verbose_suppress
+from sdcm.sct_events.events_processes import (
+    EVENTS_HANDLER_ID,
+    BaseEventsProcess,
+    start_events_process,
+    verbose_suppress,
+)
 from sdcm.sct_events.handlers.schema_disagreement import SchemaDisagreementHandler
 
 LOGGER = logging.getLogger(__name__)
@@ -29,7 +32,7 @@ class TestFailure(Exception):
     pass
 
 
-class EventsHandler(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
+class EventsHandler(BaseEventsProcess[tuple[str, Any], None], threading.Thread):
     """Runs handlers for events (according to EventsHandler.handlers mapping dict).
 
      Handlers are created to gather additional information for issue investigation purposes."""

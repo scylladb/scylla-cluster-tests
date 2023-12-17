@@ -11,13 +11,18 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import unittest
 import re
+import unittest
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
-from sdcm.sct_events.database import \
-    DatabaseLogEvent, FullScanEvent, IndexSpecialColumnErrorEvent, TOLERABLE_REACTOR_STALL, SYSTEM_ERROR_EVENTS
+from sdcm.sct_events.database import (
+    SYSTEM_ERROR_EVENTS,
+    TOLERABLE_REACTOR_STALL,
+    DatabaseLogEvent,
+    FullScanEvent,
+    IndexSpecialColumnErrorEvent,
+)
 
 
 class TestDatabaseLogEvent(unittest.TestCase):

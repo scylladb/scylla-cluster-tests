@@ -11,25 +11,30 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import os
 import re
-import logging
 import warnings
+from functools import cache
 from pprint import pformat
 from types import SimpleNamespace  # pylint: disable=no-name-in-module
-from typing import List, Optional, Union, Any, Tuple, Protocol
-from functools import cache
+from typing import Any, Protocol
 
 import docker
-from docker.errors import DockerException, NotFound, ImageNotFound, NullResource, BuildError
-from docker.models.images import Image
+from docker.errors import (
+    BuildError,
+    DockerException,
+    ImageNotFound,
+    NotFound,
+    NullResource,
+)
 from docker.models.containers import Container
-
+from docker.models.images import Image
+from sdcm.keystore import KeyStore, pub_key_from_private_key_file
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.base import CommandRunner
 from sdcm.remote.remote_file import remote_file
-from sdcm.keystore import pub_key_from_private_key_file, KeyStore
-from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.decorators import Retry, retrying
 
 DOCKER_API_CALL_TIMEOUT = 180  # seconds
 
@@ -53,11 +58,11 @@ class DockerClient(docker.DockerClient):
     def __call__(self, cmd, timeout=10):
         deprecation("consider to use Docker Python module instead of using Docker CLI commands")
 
-        res = LOCALRUNNER.run('docker {}'.format(cmd), ignore_status=True, timeout=timeout)
+        res = LOCALRUNNER.run(f'docker {cmd}', ignore_status=True, timeout=timeout)
         if res.exit_status:
             if 'No such container:' in res.stderr:
                 raise NotFound(res.stderr)
-            raise DockerException('command: {}, error: {}, output: {}'.format(cmd, res.stderr, res.stdout))
+            raise DockerException(f'command: {cmd}, error: {res.stderr}, output: {res.stdout}')
         return res
 
 
@@ -67,7 +72,7 @@ _docker = DockerClient.from_env(timeout=DOCKER_API_CALL_TIMEOUT)  # pylint: disa
 class _Name(SimpleNamespace):
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, name: Optional[str]) -> None:
+    def __init__(self, name: str) -> None:
         family, *member = (None, ) if name is None else name.split(":", 1)
         super().__init__(full=name, family=family, member=member[0] if member else None, member_as_args=tuple(member))
 
@@ -148,7 +153,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
     default_docker_client = _docker
 
     @classmethod
-    def get_docker_client(cls, instance: INodeWithContainerManager, name: Optional[str] = None) -> DockerClient:
+    def get_docker_client(cls, instance: INodeWithContainerManager, name: str | None = None) -> DockerClient:
         container = None if name is None else cls.get_container(instance, name, raise_not_found_exc=False)
         if container is None:
             return cls._get_docker_client_for_new_container(instance, _Name(name))
@@ -162,8 +167,8 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
     def _get_attr_for_name(instance: INodeWithContainerManager,
                            name: _Name,
                            attr: str,
-                           default: Optional[Any] = None,
-                           name_only_lookup: bool = False) -> Optional[Any]:
+                           default: Any | None = None,
+                           name_only_lookup: bool = False) -> Any | None:
         attr_candidate_list = []
 
         # Try to get attribute value for container family.
@@ -184,7 +189,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return default
 
     @classmethod
-    def get_container(cls, instance: INodeWithContainerManager, name, raise_not_found_exc: bool = True) -> Optional[Container]:
+    def get_container(cls, instance: INodeWithContainerManager, name, raise_not_found_exc: bool = True) -> Container | None:
         assert name is not None, "None is not allowed as a container name"
 
         container = instance._containers.get(name)
@@ -319,7 +324,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return ip_address
 
     @classmethod
-    def get_container_port(cls, instance: INodeWithContainerManager, name: str, port: Union[int, str]) -> Optional[int]:
+    def get_container_port(cls, instance: INodeWithContainerManager, name: str, port: int | str) -> int | None:
         container = cls.get_container(instance, name)
         try:
             return int(container.ports[f"{port}/tcp"][0]["HostPort"])
@@ -343,7 +348,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
     def get_environ(cls, instance: INodeWithContainerManager, name: str) -> dict:
         container = cls.get_container(instance, name)
 
-        def normalize(key: Any, value: Any = None) -> Tuple[Any, Any]:
+        def normalize(key: Any, value: Any = None) -> tuple[Any, Any]:
             return (key, value, )
         return dict(normalize(*(item.split("=", 1))) for item in container.attrs["Config"]["Env"])
 
@@ -415,11 +420,11 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return image
 
     @classmethod
-    def _get_container_image_tag(cls, instance: INodeWithContainerManager, name: _Name) -> Optional[str]:
+    def _get_container_image_tag(cls, instance: INodeWithContainerManager, name: _Name) -> str | None:
         return cls._get_attr_for_name(instance, name, "container_image_tag", name_only_lookup=True)
 
     @classmethod
-    def _get_container_image_dockerfile_args(cls, instance: INodeWithContainerManager, name: _Name) -> Optional[dict]:
+    def _get_container_image_dockerfile_args(cls, instance: INodeWithContainerManager, name: _Name) -> dict | None:
         return cls._get_attr_for_name(instance, name, "container_image_dockerfile_args", name_only_lookup=True)
 
     @staticmethod
@@ -427,7 +432,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         return kwargs
 
     @classmethod
-    def get_containers_by_prefix(cls, prefix: str, docker_client: DockerClient = None) -> List[Container]:
+    def get_containers_by_prefix(cls, prefix: str, docker_client: DockerClient = None) -> list[Container]:
         docker_client = docker_client or cls.default_docker_client
         return docker_client.containers.list(all=True, filters={"name": f'{prefix}*'})
 

@@ -15,12 +15,13 @@ from __future__ import annotations
 import logging
 import time
 import traceback
-from typing import Optional, List, Iterable, Any
+from collections.abc import Iterable
+from typing import Any
 
 from dateutil.relativedelta import relativedelta
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, EventPeriod
+from sdcm.sct_events.base import EventPeriod, SctEvent
 from sdcm.utils.metaclasses import Singleton
 
 LOGGER = logging.getLogger(__name__)
@@ -37,8 +38,7 @@ class ContinuousEventsRegistry(metaclass=Singleton):
     @property
     def continuous_events(self) -> Iterable[ContinuousEvent]:
         for hash_bucket in self.hashed_continuous_events.values():
-            for event in hash_bucket:
-                yield event
+            yield from hash_bucket
 
     def add_event(self, event: ContinuousEvent):
         if not issubclass(type(event), ContinuousEvent):
@@ -80,7 +80,7 @@ class ContinuousEventsRegistry(metaclass=Singleton):
 class ContinuousEvent(SctEvent, abstract=True):
     # Event filter does not create object of the class (not initialize it), so "_duration" attribute should
     # exist without initialization
-    _duration: Optional[int] = None
+    _duration: int | None = None
     continuous_hash_fields: tuple[str] = ('event_id',)
     log_file_name: str = None
 
@@ -203,7 +203,7 @@ class ContinuousEvent(SctEvent, abstract=True):
             self._ready_to_publish = True
             self.publish()
 
-    def add_error(self, errors: Optional[List[str]]) -> None:
+    def add_error(self, errors: list[str] | None) -> None:
         if not isinstance(self.errors, list):
             self.errors = []
 
@@ -221,5 +221,5 @@ class ContinuousEvent(SctEvent, abstract=True):
     def publish(self, warn_not_ready: bool = True) -> None:
         super().publish(warn_not_ready=warn_not_ready)
 
-    def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None:
+    def publish_or_dump(self, default_logger: logging.Logger | None = None, warn_not_ready: bool = True) -> None:
         super().publish_or_dump(default_logger=default_logger, warn_not_ready=warn_not_ready)

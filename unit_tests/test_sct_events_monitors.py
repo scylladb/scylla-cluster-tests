@@ -17,7 +17,6 @@ import unittest
 from sdcm.sct_events import Severity
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 
-
 RAW_ALERT = dict(
     annotations=dict(
         description="[10.0.201.178] has been down for more than 30 seconds.",

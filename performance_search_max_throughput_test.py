@@ -1,6 +1,5 @@
-import re
 import json
-
+import re
 from collections import defaultdict
 from typing import Any
 

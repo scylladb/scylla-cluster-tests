@@ -15,27 +15,33 @@
 
 from __future__ import annotations
 
+import fnmatch
 import json
+import logging
+import pickle
 import time
 import uuid
-import pickle
-import fnmatch
-import logging
-from enum import Enum
-from json import JSONEncoder
-from types import new_class  # pylint: disable=no-name-in-module
-from typing import \
-    Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable
-from keyword import iskeyword
-from weakref import proxy as weakproxy
+from collections.abc import Callable
 from datetime import datetime, timezone
-from functools import partialmethod, cached_property
+from enum import Enum
+from functools import cached_property, partialmethod
+from json import JSONEncoder
+from keyword import iskeyword
+from types import new_class  # pylint: disable=no-name-in-module
+from typing import (
+    Any,
+    Generic,
+    Protocol,
+    TypeVar,
+    runtime_checkable,
+)
+from weakref import proxy as weakproxy
 
-import yaml
 import dateutil.parser
+import yaml
 
 from sdcm import sct_abs_path
-from sdcm.sct_events import Severity, SctEventProtocol
+from sdcm.sct_events import SctEventProtocol, Severity
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
 
 DEFAULT_SEVERITIES = sct_abs_path("defaults/severities.yaml")
@@ -43,19 +49,19 @@ FILTER_EVENT_DECAY_TIME = 600.0
 LOGGER = logging.getLogger(__name__)
 
 
-class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):  # pylint: disable=too-few-public-methods
+class SctEventTypesRegistry(dict[str, type["SctEvent"]]):  # pylint: disable=too-few-public-methods
     def __init__(self, severities_conf: str = DEFAULT_SEVERITIES):
         super().__init__()
         with open(severities_conf, encoding="utf-8") as fobj:
             self.max_severities = {event_t: Severity[sev] for event_t, sev in yaml.safe_load(fobj).items()}
         self.limit_rules = []
 
-    def __setitem__(self, key: str, value: Type[SctEvent]):
+    def __setitem__(self, key: str, value: type[SctEvent]):
         if not value.is_abstract() and key not in self.max_severities:
             raise ValueError(f"There is no max severity configured for {key}")
         super().__setitem__(key, weakproxy(value))  # pylint: disable=no-member; pylint doesn't know about Dict
 
-    def __set_name__(self, owner: Type[SctEvent], name: str) -> None:
+    def __set_name__(self, owner: type[SctEvent], name: str) -> None:
         self[owner.__name__] = owner  # add owner class to the registry.
 
 
@@ -79,20 +85,20 @@ LOG_LEVEL_MAPPING = {
 
 class SctEvent:
     _sct_event_types_registry: SctEventTypesRegistry = SctEventTypesRegistry()
-    _events_processes_registry: Optional[EventsProcessesRegistry] = None
+    _events_processes_registry: EventsProcessesRegistry | None = None
 
     _abstract: bool = True  # this attribute set by __init_subclass__()
     base: str = "SctEvent"  # this attribute set by __init_subclass__()
-    type: Optional[str] = None  # this attribute set by add_subevent_type()
-    subtype: Optional[str] = None  # this attribute set by add_subevent_type()
-    subcontext: Optional[List[dict]] = None  # this attribute keeps context of event
+    type: str | None = None  # this attribute set by add_subevent_type()
+    subtype: str | None = None  # this attribute set by add_subevent_type()
+    subcontext: list[dict] | None = None  # this attribute keeps context of event
 
     period_type: str = EventPeriod.NOT_DEFINED.value  # attribute possible values are from EventTypes enum
 
     formatter: Callable[[str, SctEvent], str] = staticmethod(str.format)
 
-    event_timestamp: Optional[float] = None  # actual value should be set using __init__()
-    source_timestamp: Optional[float] = None
+    event_timestamp: float | None = None  # actual value should be set using __init__()
+    source_timestamp: float | None = None
     severity: Severity = Severity.UNKNOWN  # actual value should be set using __init__()
 
     _ready_to_publish: bool = False  # set it to True in __init__() and to False in publish() to prevent double-publish
@@ -115,7 +121,7 @@ class SctEvent:
 
     def __init__(self, severity: Severity = Severity.UNKNOWN):
         self.event_timestamp = time.time()
-        self.source_timestamp: Optional[float] = None
+        self.source_timestamp: float | None = None
         self.severity = severity
         self._ready_to_publish = True
         self.event_id = str(uuid.uuid4())
@@ -131,7 +137,7 @@ class SctEvent:
                           name: str,
                           /, *,
                           abstract: bool = False,
-                          mixin: Optional[Type] = None,
+                          mixin: type | None = None,
                           **kwargs) -> None:
 
         # Check if we can add a new sub-event type:
@@ -253,7 +259,7 @@ class SctEvent:
         get_events_main_device(_registry=self._events_processes_registry).publish_event(self)
         self._ready_to_publish = False
 
-    def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None:
+    def publish_or_dump(self, default_logger: logging.Logger | None = None, warn_not_ready: bool = True) -> None:
         # pylint: disable=import-outside-toplevel; to avoid cyclic imports
         from sdcm.sct_events.events_device import get_events_main_device
 
@@ -290,7 +296,7 @@ class SctEvent:
         """
         return []
 
-    def to_json(self, encoder: Type[JSONEncoder] = JSONEncoder) -> str:
+    def to_json(self, encoder: type[JSONEncoder] = JSONEncoder) -> str:
         return json.dumps({
             **self.attribute_with_value_for_json(attributes_list=["base", "type", "subtype"]),
             **self.__getstate__(),
@@ -335,7 +341,7 @@ class InformationalEvent(SctEvent, abstract=True):
         self.add_subcontext()
 
 
-def add_severity_limit_rules(rules: List[str]) -> None:
+def add_severity_limit_rules(rules: list[str]) -> None:
     for rule in rules:
         if not rule:
             continue
@@ -347,7 +353,7 @@ def add_severity_limit_rules(rules: List[str]) -> None:
             LOGGER.exception("Unable to add a max severity limit rule `%s'", rule)
 
 
-def _max_severity(keys: Tuple[str, ...], name: str) -> Severity:
+def _max_severity(keys: tuple[str, ...], name: str) -> Severity:
     for pattern, severity in SctEvent._sct_event_types_registry.limit_rules:
         if fnmatch.filter(keys, pattern):
             return severity
@@ -419,10 +425,10 @@ T_log_event = TypeVar("T_log_event", bound="LogEvent")  # pylint: disable=invali
 class LogEventProtocol(SctEventProtocol, Protocol[T_log_event]):
     regex: str
     node: Any
-    line: Optional[str]
+    line: str | None
     line_number: int
-    backtrace: Optional[str]
-    raw_backtrace: Optional[str]
+    backtrace: str | None
+    raw_backtrace: str | None
 
     def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event:
         ...

@@ -13,7 +13,6 @@
 import json
 import logging
 from functools import cached_property
-from typing import Dict, List
 
 from sdcm import cluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
@@ -68,7 +67,7 @@ class AzureNode(cluster.BaseNode):
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
 
     @cached_property
-    def tags(self) -> Dict[str, str]:
+    def tags(self) -> dict[str, str]:
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
 
@@ -170,11 +169,11 @@ class AzureNode(cluster.BaseNode):
 
 class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-attributes
     def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments, too-many-locals  # noqa: PLR0913
-                 provisioners: List[AzureProvisioner], credentials,
+                 provisioners: list[AzureProvisioner], credentials,
                  cluster_uuid=None, instance_type='Standard_L8s_v3', region_names=None,
                  user_name='root', cluster_prefix='cluster',
                  node_prefix='node', n_nodes=3, params=None, node_type=None):
-        self.provisioners: List[AzureProvisioner] = provisioners
+        self.provisioners: list[AzureProvisioner] = provisioners
         self._image_id = image_id
         self._root_disk_size = root_disk_size
         self._credentials = credentials
@@ -224,7 +223,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         except Exception as ex:  # noqa: BLE001
             raise CreateAzureNodeError('Failed to create node: %s' % ex) from ex
 
-    def _create_instances(self, count, dc_idx=0, instance_type=None) -> List[VmInstance]:
+    def _create_instances(self, count, dc_idx=0, instance_type=None) -> list[VmInstance]:
         region = self._definition_builder.regions[dc_idx]
         assert region, "no region provided, please add `azure_region_name` param"
         pricing_model = PricingModel.SPOT if 'spot' in self.instance_provision else PricingModel.ON_DEMAND
@@ -253,7 +252,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
 class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 
     def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments
-                 provisioners: List[AzureProvisioner], credentials,
+                 provisioners: list[AzureProvisioner], credentials,
                  instance_type='Standard_L8s_v3',
                  user_name='ubuntu',
                  user_prefix=None, n_nodes=3, params=None, region_names=None):

@@ -12,9 +12,9 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
+import sys
 from datetime import datetime
 from functools import cached_property
-import sys
 
 from elasticsearch import Elasticsearch
 

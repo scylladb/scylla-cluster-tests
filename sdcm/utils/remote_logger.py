@@ -13,17 +13,18 @@
 
 from __future__ import annotations
 
-import time
-import socket
 import logging
+import socket
 import subprocess
-from abc import abstractmethod, ABCMeta
+import time
+from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from functools import cached_property
-from threading import Thread, Event as ThreadEvent
-from typing import TYPE_CHECKING
-from multiprocessing import Process, Event
+from multiprocessing import Event, Process
 from textwrap import dedent
+from threading import Event as ThreadEvent
+from threading import Thread
+from typing import TYPE_CHECKING
 
 import kubernetes as k8s
 from dateutil.parser import isoparse
@@ -37,11 +38,11 @@ from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events import Severity
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.decorators import retrying
+from sdcm.utils.k8s import KubernetesOps
 
 if TYPE_CHECKING:
-    from typing import Generator
+    from collections.abc import Generator
 
     from sdcm.cluster import BaseNode
 
@@ -306,7 +307,7 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
     RECONNECT_DELAY = 30
     CHUNK_SIZE = 64
 
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", target_log_file: str):
+    def __init__(self, pod: sdcm.cluster_k8s.BasePodContainer, target_log_file: str):
         """
         Reads logs from a k8s pod using k8s client API and forwards it to a file.
 

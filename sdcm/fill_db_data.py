@@ -19,23 +19,20 @@ __author__ = 'Roy Dahan'
 import contextlib
 import logging
 import random
-import time
 import re
-
+import time
 from collections import OrderedDict
 from uuid import UUID
 
-from cassandra import InvalidRequest
-from cassandra.util import sortedset, SortedSet  # pylint: disable=no-name-in-module
-from cassandra import ConsistencyLevel
+from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.protocol import ProtocolException  # pylint: disable=no-name-in-module
+from cassandra.util import SortedSet, sortedset  # pylint: disable=no-name-in-module
 
 from sdcm.tester import ClusterTester
+from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
 from sdcm.utils.database_query_utils import fetch_all_rows
 from sdcm.utils.decorators import retrying
-from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
 from sdcm.utils.version_utils import ComparableScyllaVersion
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -323,7 +320,7 @@ class FillDatabaseData(ClusterTester):
                             ) """],
             'truncates': ['TRUNCATE limit_ranges_test'],
             'inserts': [
-                "INSERT INTO limit_ranges_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id, tld)
+                f"INSERT INTO limit_ranges_test (userid, url, time) VALUES ({_id}, 'http://foo.{tld}', 42)"
                 for _id in range(0, 4) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_ranges_test WHERE token(userid) >= token(2) LIMIT 1",
@@ -344,8 +341,7 @@ class FillDatabaseData(ClusterTester):
                             ) """],
             'truncates': ['TRUNCATE limit_multiget_test'],
             'inserts': [
-                "INSERT INTO limit_multiget_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id,
-                                                                                                              tld)
+                f"INSERT INTO limit_multiget_test (userid, url, time) VALUES ({_id}, 'http://foo.{tld}', 42)"
                 for _id in range(0, 100) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_multiget_test WHERE userid IN (48, 2) LIMIT 1"],
@@ -391,8 +387,7 @@ class FillDatabaseData(ClusterTester):
             )"""],
             'truncates': ['TRUNCATE limit_sparse_test'],
             'inserts': [
-                "INSERT INTO limit_sparse_test (userid, url, day, month, year) VALUES ({}, 'http://foo.{}', 1, 'jan', 2012)".format(
-                    _id, tld) for _id in range(0, 100) for tld in ['com', 'org', 'net']],
+                f"INSERT INTO limit_sparse_test (userid, url, day, month, year) VALUES ({_id}, 'http://foo.{tld}', 1, 'jan', 2012)" for _id in range(0, 100) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_sparse_test LIMIT 4"],
             'results': [
@@ -772,9 +767,9 @@ class FillDatabaseData(ClusterTester):
             'results': [
                 [[x, x] for x in range(0, 10)],
                 [[x, x] for x in range(9, -1, -1)],
-                [[x, y, '{}{}'.format(x, y)] for x in range(0, 10) for y in range(9, -1, -1)],
-                [[x, y, '{}{}'.format(x, y)] for x in range(0, 10) for y in range(9, -1, -1)],
-                [[x, y, '{}{}'.format(x, y)] for x in range(9, -1, -1) for y in range(0, 10)]],
+                [[x, y, f'{x}{y}'] for x in range(0, 10) for y in range(9, -1, -1)],
+                [[x, y, f'{x}{y}'] for x in range(0, 10) for y in range(9, -1, -1)],
+                [[x, y, f'{x}{y}'] for x in range(9, -1, -1) for y in range(0, 10)]],
             'invalid_queries': [
                 "SELECT c1, c2, v FROM reversed_comparator_test2 WHERE k = 0 ORDER BY c1 ASC, c2 ASC",
                 "SELECT c1, c2, v FROM reversed_comparator_test2 WHERE k = 0 ORDER BY c1 DESC, c2 DESC",
@@ -1217,11 +1212,11 @@ class FillDatabaseData(ClusterTester):
                             PRIMARY KEY (fn, ln)
                         )"""],
             'truncates': ["TRUNCATE set_test"],
-            'inserts': ["UPDATE set_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + { 'foo' }",
-                        "UPDATE set_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + { 'bar' }",
-                        "UPDATE set_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + { 'foo' }",
-                        "UPDATE set_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + { 'foobar' }",
-                        "UPDATE set_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags - { 'bar' }"],
+            'inserts': ["UPDATE set_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("tags = tags + { 'foo' }"),
+                        "UPDATE set_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("tags = tags + { 'bar' }"),
+                        "UPDATE set_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("tags = tags + { 'foo' }"),
+                        "UPDATE set_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("tags = tags + { 'foobar' }"),
+                        "UPDATE set_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("tags = tags - { 'bar' }")],
             'queries': ["SELECT tags FROM set_test",
                         "UPDATE set_test SET {} WHERE fn='Bilbo' AND ln='Baggins'".format(
                             "tags = { 'a', 'c', 'b' }"),
@@ -1252,17 +1247,19 @@ class FillDatabaseData(ClusterTester):
                         PRIMARY KEY (fn, ln)
                     )"""],
             'truncates': ["TRUNCATE map_test"],
-            'inserts': ["UPDATE map_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "m['foo'] = 3",
-                        "UPDATE map_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "m['bar'] = 4",
-                        "UPDATE map_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "m['woot'] = 5",
-                        "UPDATE map_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "m['bar'] = 6",
+            'inserts': ["UPDATE map_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("m['foo'] = 3"),
+                        "UPDATE map_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("m['bar'] = 4"),
+                        "UPDATE map_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("m['woot'] = 5"),
+                        "UPDATE map_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("m['bar'] = 6"),
                         "DELETE m['foo'] FROM map_test WHERE fn='Tom' AND ln='Bombadil'"],
             'queries': ["SELECT m FROM map_test",
-                        "UPDATE map_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "m = { 'a' : 4 , 'c' : 3, 'b' : 2 }",
+                        "UPDATE map_test SET {} WHERE fn='Bilbo' AND ln='Baggins'".format(
+                            "m = { 'a' : 4 , 'c' : 3, 'b' : 2 }"),
                         "SELECT m FROM map_test WHERE fn='Bilbo' AND ln='Baggins'",
-                        "UPDATE map_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "m = { 'm' : 4 , 'n' : 1, 'o' : 2 }",
+                        "UPDATE map_test SET {} WHERE fn='Bilbo' AND ln='Baggins'".format(
+                            "m = { 'm' : 4 , 'n' : 1, 'o' : 2 }"),
                         "SELECT m FROM map_test WHERE fn='Bilbo' AND ln='Baggins'",
-                        "UPDATE map_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "m = {}",
+                        "UPDATE map_test SET {} WHERE fn='Bilbo' AND ln='Baggins'".format("m = {}"),
                         "SELECT m FROM map_test WHERE fn='Bilbo' AND ln='Baggins'"
                         ],
             'results': [[[{'woot': 5, 'bar': 6}]],
@@ -1285,20 +1282,23 @@ class FillDatabaseData(ClusterTester):
                             PRIMARY KEY (fn, ln)
                         )"""],
             'truncates': ["TRUNCATE list_test"],
-            'inserts': ["UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'foo' ]",
-                        "UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'bar' ]",
-                        "UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'foo' ]",
-                        "UPDATE list_test SET %s WHERE fn='Tom' AND ln='Bombadil'" % "tags = tags + [ 'foobar' ]"],
+            'inserts': ["UPDATE list_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("tags = tags + [ 'foo' ]"),
+                        "UPDATE list_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("tags = tags + [ 'bar' ]"),
+                        "UPDATE list_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("tags = tags + [ 'foo' ]"),
+                        "UPDATE list_test SET {} WHERE fn='Tom' AND ln='Bombadil'".format("tags = tags + [ 'foobar' ]")],
             'queries': ["SELECT tags FROM list_test",
-                        "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags = [ 'a', 'c', 'b', 'c' ]",
+                        "UPDATE list_test SET {} WHERE fn='Bilbo' AND ln='Baggins'".format(
+                            "tags = [ 'a', 'c', 'b', 'c' ]"),
                         "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
-                        "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags = [ 'm', 'n' ] + tags",
+                        "UPDATE list_test SET {} WHERE fn='Bilbo' AND ln='Baggins'".format(
+                            "tags = [ 'm', 'n' ] + tags"),
                         "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
-                        "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags[2] = 'foo', tags[4] = 'bar'",
+                        "UPDATE list_test SET {} WHERE fn='Bilbo' AND ln='Baggins'".format(
+                            "tags[2] = 'foo', tags[4] = 'bar'"),
                         "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
                         "DELETE tags[2] FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
                         "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'",
-                        "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags = tags - [ 'bar' ]",
+                        "UPDATE list_test SET {} WHERE fn='Bilbo' AND ln='Baggins'".format("tags = tags - [ 'bar' ]"),
                         "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'"
                         ],
             'results': [[[['foo', 'bar', 'foo', 'foobar']]],
@@ -1443,7 +1443,7 @@ class FillDatabaseData(ClusterTester):
                         )
                     """],
             'truncates': ["TRUNCATE only_pk_test1", "TRUNCATE only_pk_test2"],
-            'inserts': ["INSERT INTO only_pk_test1 (k, c) VALUES (%s, %s)" % (k, c) for k in range(0, 2) for c in
+            'inserts': [f"INSERT INTO only_pk_test1 (k, c) VALUES ({k}, {c})" for k in range(0, 2) for c in
                         range(0, 2)],
             'queries': ["#SORTED SELECT * FROM only_pk_test1",
                         "INSERT INTO only_pk_test2(k, c) VALUES(0, 0)",
@@ -1466,7 +1466,7 @@ class FillDatabaseData(ClusterTester):
             'name': 'no_clustering_test',
             'create_tables': ["CREATE TABLE no_clustering_test (k int PRIMARY KEY, v int)"],
             'truncates': [],
-            'inserts': ["INSERT INTO no_clustering_test (k, v) VALUES (%s, %s)" % (i, i) for i in range(10)],
+            'inserts': [f"INSERT INTO no_clustering_test (k, v) VALUES ({i}, {i})" for i in range(10)],
             'queries': ["#SORTED SELECT * FROM no_clustering_test"],
             'results': [[[i, i] for i in range(10)]],
             'disable_paging': True,
@@ -1747,7 +1747,7 @@ class FillDatabaseData(ClusterTester):
                 """],
             'truncates': ["TRUNCATE reversed_compact_test1", "TRUNCATE reversed_compact_test2"],
             'inserts': [
-                "INSERT INTO %s(k, c, v) VALUES ('foo', %s, %s)" % (k, i, i) for i in range(0, 10) for k in
+                f"INSERT INTO {k}(k, c, v) VALUES ('foo', {i}, {i})" for i in range(0, 10) for k in
                 ['reversed_compact_test1', 'reversed_compact_test2']
             ],
             'queries': ["SELECT c FROM reversed_compact_test1 WHERE c > 2 AND c < 6 AND k = 'foo'",
@@ -2027,7 +2027,7 @@ class FillDatabaseData(ClusterTester):
                         range(0, 30)] + [
                 f"DELETE FROM range_with_deletes_test WHERE k = {i}" for i in
                 random.sample(range(30), 5)],
-            'queries': ["#LENGTH SELECT * FROM range_with_deletes_test LIMIT {}".format(15)],
+            'queries': [f"#LENGTH SELECT * FROM range_with_deletes_test LIMIT {15}"],
             'results': [15],
             'min_version': '',
             'max_version': '',
@@ -2077,7 +2077,8 @@ class FillDatabaseData(ClusterTester):
             )"""],
             'truncates': ["TRUNCATE multi_in_test"],
             'inserts': [
-                "INSERT INTO multi_in_test (group, zipcode, state, fips_regions, city) VALUES ('%s', '%s', '%s', %s, '%s')" % d
+                "INSERT INTO multi_in_test (group, zipcode, state, fips_regions, city) VALUES ('{}', '{}', '{}', {}, '{}')".format(
+                    *d)
                 for d in [
                     ('test', '06029', 'CT', 9, 'Ellington'),
                     ('test', '06031', 'CT', 9, 'Falls Village'),
@@ -2140,7 +2141,8 @@ class FillDatabaseData(ClusterTester):
             )  """],
             'truncates': ["TRUNCATE multi_in_compact_test"],
             'inserts': [
-                "INSERT INTO multi_in_compact_test (group, zipcode, state, fips_regions, city) VALUES ('%s', '%s', '%s', %s, '%s')" % d
+                "INSERT INTO multi_in_compact_test (group, zipcode, state, fips_regions, city) VALUES ('{}', '{}', '{}', {}, '{}')".format(
+                    *d)
                 for d in [
                     ('test', '06029', 'CT', 9, 'Ellington'),
                     ('test', '06031', 'CT', 9, 'Falls Village'),
@@ -2617,11 +2619,9 @@ class FillDatabaseData(ClusterTester):
             'create_tables': ["CREATE TABLE cas_simple_test (tkn int, consumed boolean, PRIMARY KEY (tkn))"],
             'truncates': ["TRUNCATE cas_simple_test"],
             'inserts': [],
-            'queries': [[["INSERT INTO cas_simple_test (tkn, consumed) VALUES ({},FALSE);".format(k),
-                          "UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {} IF consumed = FALSE;".format(
-                              k),
-                          "UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {} IF consumed = FALSE;".format(
-                              k).format(i)] for k in range(1, 10)][j][i] for j in range(0, 9) for i in
+            'queries': [[[f"INSERT INTO cas_simple_test (tkn, consumed) VALUES ({k},FALSE);",
+                          f"UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {k} IF consumed = FALSE;",
+                          f"UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {k} IF consumed = FALSE;".format(i)] for k in range(1, 10)][j][i] for j in range(0, 9) for i in
                         range(0, 3)],
             'results': [[], [[True]], [[False, True]]] * 3,
             'min_version': '',

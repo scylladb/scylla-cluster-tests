@@ -11,23 +11,23 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
+import logging
 import os
 import re
 import time
 import uuid
-import logging
 from pathlib import Path
 
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events.loaders import LatteStressEvent
+from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.common import (
     FileFollowerThread,
     generate_random_string,
-    get_sct_root_path,
     get_data_dir_path,
+    get_sct_root_path,
 )
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.stress.base import DockerBasedStressThread
 
 LOGGER = logging.getLogger(__name__)
 
@@ -178,8 +178,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'latte-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
+        log_file_name = os.path.join(loader.logdir, f'latte-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
         LOGGER.debug('latter-stress local log: %s', log_file_name)
 
         LOGGER.debug("running: %s", stress_cmd)

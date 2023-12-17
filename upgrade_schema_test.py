@@ -22,11 +22,11 @@ from unittest import TestCase
 
 from cassandra.cluster import Cluster
 from thrift.transport import TSocket
+from thrift_bindings.v22.Cassandra import *
+from thrift_bindings.v22.ttypes import NotFoundException
 
 from sdcm.nemesis import UpgradeNemesisOneNode
 from sdcm.tester import ClusterTester
-from thrift_bindings.v22.Cassandra import *
-from thrift_bindings.v22.ttypes import NotFoundException
 
 tests = []
 ks_name = 'test_upgrade_schema_ks'
@@ -303,7 +303,7 @@ class UpgradeSchemaTest(ClusterTester):
         # upgrade all the nodes in random order
         for i in indexes:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
-            self.log.info("started upgrade node {0}".format(self.db_cluster.node_to_upgrade))
+            self.log.info(f"started upgrade node {self.db_cluster.node_to_upgrade}")
             self.db_cluster.add_nemesis(nemesis=UpgradeNemesisOneNode,
                                         tester_obj=self)
             self.db_cluster.start_nemesis(interval=15)

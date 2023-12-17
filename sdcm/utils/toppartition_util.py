@@ -1,9 +1,7 @@
-import random
 import logging
+import random
 import re
-
-from typing import List, Tuple
-from abc import abstractmethod, ABC
+from abc import ABC, abstractmethod
 from collections import OrderedDict
 
 LOGGER = logging.getLogger(__name__)
@@ -11,7 +9,7 @@ LOGGER = logging.getLogger(__name__)
 
 class TopPartitionCmd(ABC):
 
-    def __init__(self, ks_cf_list: List[str]):
+    def __init__(self, ks_cf_list: list[str]):
         self.ks_cf_list = ks_cf_list
         self._built_args = {}
 
@@ -85,16 +83,16 @@ class TopPartitionCmd(ABC):
         toppartition_result = self._parse_toppartitions_output(output)
         for _sampler in self._built_args['samplers'].split(','):
             sampler = _sampler.upper()
-            assert sampler in toppartition_result, "{} sampler not found in result".format(sampler)
+            assert sampler in toppartition_result, f"{sampler} sampler not found in result"
             assert toppartition_result[sampler]['toppartitions'] == self._built_args['toppartition'], \
-                "Wrong expected and actual top partitions number for {} sampler".format(sampler)
+                f"Wrong expected and actual top partitions number for {sampler} sampler"
             assert toppartition_result[sampler]['capacity'] == self._built_args['capacity'], \
-                "Wrong expected and actual capacity number for {} sampler".format(sampler)
+                f"Wrong expected and actual capacity number for {sampler} sampler"
             assert len(toppartition_result[sampler]['partitions'].keys()) <= int(self._built_args['toppartition']), \
-                "Wrong number of requested and expected toppartitions for {} sampler".format(sampler)
+                f"Wrong number of requested and expected toppartitions for {sampler} sampler"
 
     @abstractmethod
-    def _filter_ks_cf(self) -> List[Tuple[str, str]]:
+    def _filter_ks_cf(self) -> list[tuple[str, str]]:
         ...
 
     @abstractmethod
@@ -119,7 +117,7 @@ class NewApiTopPartitionCmd(TopPartitionCmd):
             'cf_filters': ','.join([f"{ks}:{cf}" for ks, cf in filtered_ks_cf])
         }
 
-    def _filter_ks_cf(self) -> List[Tuple[str, str]]:
+    def _filter_ks_cf(self) -> list[tuple[str, str]]:
         filter_ks_cf = []
         try:
             for _ in range(random.randint(1, len(self.ks_cf_list))):
@@ -128,7 +126,7 @@ class NewApiTopPartitionCmd(TopPartitionCmd):
         except IndexError as details:
             LOGGER.error('Keyspace and ColumnFamily are not found %s.', self.ks_cf_list)
             LOGGER.debug('Error during choosing keyspace and column family %s', details)
-            raise Exception('Keyspace and ColumnFamily are not found. \n{}'.format(details)) from IndexError
+            raise Exception(f'Keyspace and ColumnFamily are not found. \n{details}') from IndexError
 
         return filter_ks_cf
 
@@ -150,14 +148,14 @@ class OldApiTopPartitionCmd(TopPartitionCmd):
             'cf': cf,
         }
 
-    def _filter_ks_cf(self) -> List[Tuple[str, str]]:
+    def _filter_ks_cf(self) -> list[tuple[str, str]]:
         try:
             keyspace, table_name = random.choice(self.ks_cf_list).split('.', maxsplit=1)
             return [(keyspace, table_name)]
         except IndexError as details:
             LOGGER.error('Keyspace and ColumnFamily are not found %s.', self.ks_cf_list)
             LOGGER.debug('Error during choosing keyspace and column family %s', details)
-            raise Exception('Keyspace and ColumnFamily are not found. \n{}'.format(details)) from IndexError
+            raise Exception(f'Keyspace and ColumnFamily are not found. \n{details}') from IndexError
 
     def get_cmd_args(self) -> str:
         return "{ks} {cf} {duration} -s {capacity} -k {toppartition} -a {samplers}".format(**self._built_args)

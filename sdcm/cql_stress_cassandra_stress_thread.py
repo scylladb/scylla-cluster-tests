@@ -11,19 +11,19 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
-import logging
-import re
-import os
-import time
 import contextlib
+import logging
+import os
+import re
+import time
 from typing import Any
+
 from sdcm.loader import CqlStressCassandraStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events.loaders import CQL_STRESS_CS_ERROR_EVENTS_PATTERNS, CqlStressCassandraStressEvent
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.common import FileFollowerThread, SoftTimeoutContext
 from sdcm.utils.docker_remote import RemoteDocker
-
 
 LOGGER = logging.getLogger(__name__)
 

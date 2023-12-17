@@ -14,48 +14,47 @@
 """
 Handling Scylla-cluster-test configuration loading
 """
+import ast
+import getpass
 import json
+import logging
+
 # pylint: disable=too-many-lines
 import os
-import re
-import ast
-import logging
-import getpass
 import pathlib
+import re
 import tempfile
-from typing import List, Union, Set
-
 from distutils.util import strtobool
 
 import anyconfig
 
-from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
+from sdcm import sct_abs_path
+from sdcm.remote import LOCALRUNNER, shell_script_cmd
+from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import (
     ami_built_by_scylla,
+    convert_name_to_ami_if_needed,
     get_ami_tags,
     get_branched_ami,
     get_branched_gce_images,
+    get_sct_root_path,
     get_scylla_ami_versions,
     get_scylla_gce_images_versions,
-    convert_name_to_ami_if_needed,
-    get_sct_root_path,
 )
+from sdcm.utils.gce_utils import get_gce_image_tags
 from sdcm.utils.operations_thread import ConfigParams
 from sdcm.utils.version_utils import (
+    find_scylla_repo,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
     get_scylla_docker_repo_from_version,
-    resolve_latest_repo_symlink,
     get_specific_tag_of_docker_image,
-    find_scylla_repo,
     is_enterprise,
+    resolve_latest_repo_symlink,
 )
-from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
-from sdcm.utils.gce_utils import get_gce_image_tags
-from sdcm.remote import LOCALRUNNER, shell_script_cmd
 
 
 def _str(value: str) -> str:
@@ -71,7 +70,7 @@ def _file(value: str) -> str:
     raise ValueError(f"{value} isn't an existing file")
 
 
-def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:
+def str_or_list(value: str | list[str] | list[list[str]]) -> list[str]:
     if isinstance(value, str):
         return [value]
     if isinstance(value, list):
@@ -84,7 +83,7 @@ def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:
     raise ValueError(f"{value} isn't a string or a list of strings.")
 
 
-def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
+def str_or_list_or_eval(value: str | list[str]) -> list[str]:
     """Convert an environment variable into a Python's list."""
 
     if isinstance(value, str):
@@ -125,7 +124,7 @@ def int_or_list(value):
         except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
 
-    raise ValueError("{} isn't int or list".format(value))
+    raise ValueError(f"{value} isn't int or list")
 
 
 def dict_or_str(value):
@@ -137,7 +136,7 @@ def dict_or_str(value):
     if isinstance(value, dict):
         return value
 
-    raise ValueError('"{}" isn\'t a dict'.format(value))
+    raise ValueError(f'"{value}" isn\'t a dict')
 
 
 def boolean(value):
@@ -146,7 +145,7 @@ def boolean(value):
     elif isinstance(value, str):
         return bool(strtobool(value))
     else:
-        raise ValueError("{} isn't a boolean".format(type(value)))
+        raise ValueError(f"{type(value)} isn't a boolean")
 
 
 class SCTConfiguration(dict):
@@ -1683,7 +1682,7 @@ class SCTConfiguration(dict):
                         if key not in self.keys():
                             self[key] = value
                         elif len(self[key].split()) < len(region_names):
-                            self[key] += " {}".format(value)
+                            self[key] += f" {value}"
             else:
                 for region in region_names:
                     if region not in self.aws_supported_regions:
@@ -1824,7 +1823,7 @@ class SCTConfiguration(dict):
         version_tag = self.get('ami_id_db_scylla_desc') or getpass.getuser()
         user_prefix = self.get('user_prefix') or getpass.getuser()
         if version_tag != user_prefix:
-            self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
+            self['user_prefix'] = f"{user_prefix}-{version_tag}"[:35]
         else:
             self['user_prefix'] = user_prefix[:35]
 
@@ -1913,7 +1912,7 @@ class SCTConfiguration(dict):
         self.log.info(self.dump_config())
 
     @property
-    def region_names(self) -> List[str]:
+    def region_names(self) -> list[str]:
         region_names = self.environment.get('region_name')
         if region_names is None:
             region_names = self.get('region_name')
@@ -1927,7 +1926,7 @@ class SCTConfiguration(dict):
         return output
 
     @property
-    def gce_datacenters(self) -> List[str]:
+    def gce_datacenters(self) -> list[str]:
         gce_datacenters = self.environment.get('gce_datacenter')
         if gce_datacenters is None:
             gce_datacenters = self.get('gce_datacenter')
@@ -2042,11 +2041,11 @@ class SCTConfiguration(dict):
                     opt['name'], cur_val_element, choices)
 
     @property
-    def list_of_stress_tools(self) -> Set[str]:
+    def list_of_stress_tools(self) -> set[str]:
         stress_tools = set()
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
-            if not (isinstance(stress_cmds, (list, str)) and stress_cmds):
+            if not (isinstance(stress_cmds, list | str) and stress_cmds):
                 continue
             if isinstance(stress_cmds, str):
                 stress_cmds = [stress_cmds]
@@ -2159,7 +2158,7 @@ class SCTConfiguration(dict):
         env_keys = {o.split('.')[0] for o in os.environ if o.startswith('SCT_')}
         unknown_env_keys = env_keys.difference(config_keys)
         if unknown_env_keys:
-            output = ["{}={}".format(key, os.environ.get(key)) for key in unknown_env_keys]
+            output = [f"{key}={os.environ.get(key)}" for key in unknown_env_keys]
             raise ValueError("Unsupported environment variables were used:\n\t - {}".format("\n\t - ".join(output)))
 
         # check for unsupported configuration
@@ -2169,7 +2168,7 @@ class SCTConfiguration(dict):
         if unsupported_option:
             res = "Unsupported config option/s found:\n"
             for option in unsupported_option:
-                res += "\t * '{}: {}'\n".format(option, self[option])
+                res += f"\t * '{option}: {self[option]}'\n"
             raise ValueError(res)
 
     def _validate_sct_variable_values(self):
@@ -2190,7 +2189,7 @@ class SCTConfiguration(dict):
             else:
                 region_count[opt] = 1
         if not all(region_count[current_region_param_name] == x for x in region_count.values()):
-            raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
+            raise ValueError(f"not all multi region values are equal: \n\t{region_count}")
 
     def _validate_seeds_number(self):
         seeds_num = self.get('seeds_num')
@@ -2236,7 +2235,7 @@ class SCTConfiguration(dict):
                 backend += "-siren"
             self._check_backend_defaults(backend, self.backend_required_params[backend])
         else:
-            raise ValueError("Unsupported backend [{}]".format(backend))
+            raise ValueError(f"Unsupported backend [{backend}]")
 
     def _check_backend_defaults(self, backend, required_params):
         opts = [o for o in self.config_options if o['name'] in required_params]
@@ -2460,7 +2459,7 @@ class SCTConfiguration(dict):
         ret = ""
         for opt in self.config_options:
             if opt['help']:
-                help_text = '\n'.join(["# {}".format(l.strip()) for l in opt['help'].splitlines() if l.strip()]) + '\n'
+                help_text = '\n'.join([f"# {l.strip()}" for l in opt['help'].splitlines() if l.strip()]) + '\n'
             else:
                 help_text = ''
             default = self.get_default_value(opt['name'])

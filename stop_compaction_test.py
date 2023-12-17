@@ -15,19 +15,24 @@
 import functools
 import logging
 import re
+from collections.abc import Callable
 from functools import partial
-from typing import Callable
 
 from sdcm.cluster import BaseNode
-from sdcm.nemesis import StartStopMajorCompaction, StartStopScrubCompaction, StartStopCleanupCompaction, \
-    StartStopValidationCompaction
+from sdcm.nemesis import (
+    StartStopCleanupCompaction,
+    StartStopMajorCompaction,
+    StartStopScrubCompaction,
+    StartStopValidationCompaction,
+)
 from sdcm.rest.compaction_manager_client import CompactionManagerClient
 from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.sct_events.group_common_events import ignore_compaction_stopped_exceptions
 from sdcm.send_email import FunctionalEmailReporter
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import ParallelObject
-from sdcm.utils.compaction_ops import CompactionOps, COMPACTION_TYPES
+from sdcm.utils.compaction_ops import COMPACTION_TYPES, CompactionOps
+
 LOGGER = logging.getLogger(__name__)
 
 

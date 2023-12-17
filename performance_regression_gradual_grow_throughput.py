@@ -1,8 +1,8 @@
-import os
-from enum import Enum
-from collections import defaultdict
-
 import json
+import os
+from collections import defaultdict
+from enum import Enum
+
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.results_analyze import ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer
 
@@ -120,7 +120,7 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
             params.update({'stress_cmd': stress_cmd})
             # Run all stress commands
             params.update(dict(stats_aggregate_cmds=False))
-            self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
+            self.log.debug(f'RUNNING stress cmd: {stress_cmd}')
             stress_queue.append(self.run_stress_thread(**params))
 
         for stress in stress_queue:

@@ -11,17 +11,15 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-import os
 import logging
-from typing import Optional
+import os
 
 import click
 
 import __main__
-
 from sdcm.cluster import TestConfig
-from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.azure_region import region_name_to_location
+from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.common import (
     all_aws_regions,
     get_all_gce_regions,
@@ -42,7 +40,7 @@ def get_all_regions(cloud_provider: str) -> list[str] | None:
 class CloudRegion(click.ParamType):
     name = "cloud_region"
 
-    def __init__(self, cloud_provider: Optional[str] = None):
+    def __init__(self, cloud_provider: str | None = None):
         super().__init__()
         self.cloud_provider = cloud_provider
 

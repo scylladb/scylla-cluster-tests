@@ -14,8 +14,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from sdcm.utils.data_validator import LongevityDataValidator
 from sdcm import sct_config
+from sdcm.utils.data_validator import LongevityDataValidator
 
 
 @dataclass

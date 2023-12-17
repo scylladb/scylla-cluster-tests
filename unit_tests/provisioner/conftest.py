@@ -18,11 +18,13 @@ from pathlib import Path
 
 import pytest
 
-from sdcm.utils.sct_cmd_helpers import get_test_config
 from sdcm.sct_config import SCTConfiguration
 from sdcm.test_config import TestConfig
 from sdcm.utils.azure_utils import AzureService  # pylint: disable=import-error
-from unit_tests.provisioner.fake_azure_service import FakeAzureService  # pylint: disable=import-error
+from sdcm.utils.sct_cmd_helpers import get_test_config
+from unit_tests.provisioner.fake_azure_service import (
+    FakeAzureService,  # pylint: disable=import-error
+)
 
 
 @pytest.fixture(scope="session")

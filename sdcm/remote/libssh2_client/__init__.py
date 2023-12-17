@@ -11,28 +11,36 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import List, Optional, Dict
-from time import perf_counter, sleep
-from os.path import normpath, expanduser, exists
-from sys import float_info
-from io import StringIO
-from warnings import warn
-from socket import socket, AF_INET, AF_INET6, SOCK_STREAM, gaierror, gethostbyname, error as sock_error
-from threading import Thread, Lock, Event, BoundedSemaphore
-from abc import abstractmethod, ABC
-from queue import SimpleQueue as Queue
 import ipaddress
+from abc import ABC, abstractmethod
+from io import StringIO
+from os.path import exists, expanduser, normpath
+from queue import SimpleQueue as Queue
+from socket import AF_INET, AF_INET6, SOCK_STREAM, gaierror, gethostbyname, socket
+from sys import float_info
+from threading import BoundedSemaphore, Event, Lock, Thread
+from time import perf_counter, sleep
+from warnings import warn
 
 from ssh2.channel import Channel  # pylint: disable=no-name-in-module
-from ssh2.exceptions import AuthenticationError  # pylint: disable=no-name-in-module
 from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN  # pylint: disable=no-name-in-module
+from ssh2.exceptions import AuthenticationError  # pylint: disable=no-name-in-module
 
-from .exceptions import AuthenticationException, UnknownHostException, ConnectError, PKeyFileError, UnexpectedExit, \
-    CommandTimedOut, FailedToReadCommandOutput, ConnectTimeout, FailedToRunCommand, OpenChannelTimeout
+from .exceptions import (
+    AuthenticationException,
+    CommandTimedOut,
+    ConnectError,
+    ConnectTimeout,
+    FailedToReadCommandOutput,
+    FailedToRunCommand,
+    OpenChannelTimeout,
+    PKeyFileError,
+    UnexpectedExit,
+    UnknownHostException,
+)
 from .result import Result
 from .session import Session
-from .timings import Timings, NullableTiming
-
+from .timings import NullableTiming, Timings
 
 __all__ = ['Session', 'Timings', 'Client', 'Channel', 'FailedToRunCommand']
 
@@ -309,8 +317,8 @@ class Client:  # pylint: disable=too-many-instance-attributes
         if flood_preventing is not None:
             self.flood_preventing = flood_preventing
         self.channel_lock = Lock()
-        self.session: Optional[Session] = None
-        self.sock: Optional[socket] = None
+        self.session: Session | None = None
+        self.sock: socket | None = None
 
     def __reduce__(self):
         return self.__class__, (
@@ -368,7 +376,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 self.password if self.password is not None else ''))
 
     @staticmethod
-    def _validate_pkey_path(pkey: str, host: str = None) -> Optional[str]:
+    def _validate_pkey_path(pkey: str, host: str = None) -> str | None:
         if pkey is None:
             return None
         pkey = normpath(expanduser(pkey))
@@ -416,14 +424,14 @@ class Client:  # pylint: disable=too-many-instance-attributes
         try:
             self.sock.connect((host, port))
         except gaierror as ex:
-            raise UnknownHostException("Unknown host %s - %s" % (host, str(ex.args[1]))) from ex
-        except sock_error as ex:
+            raise UnknownHostException(f"Unknown host {host} - {str(ex.args[1])}") from ex
+        except OSError as ex:
             error_type = ex.args[1] if len(ex.args) > 1 else ex.args[0]
-            raise ConnectError("Error connecting to host '%s:%s' - %s" % (host, port, str(error_type))) from ex
+            raise ConnectError(f"Error connecting to host '{host}:{port}' - {str(error_type)}") from ex
 
     @staticmethod
     def _process_output(  # pylint: disable=too-many-arguments, too-many-branches
-            watchers: List[StreamWatcher], encoding: str, stdout_stream: StringIO, stderr_stream: StringIO,
+            watchers: list[StreamWatcher], encoding: str, stdout_stream: StringIO, stderr_stream: StringIO,
             reader: SSHReaderThread, timeout: NullableTiming, timeout_read_data_chunk: NullableTiming):
         """Separate different approach for the case when watchers are present, since watchers are slow,
           we can loose data due to the socket buffer limit, if endpoint sending it faster than watchers can read it.
@@ -582,7 +590,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
             stdout='',
             stderr=''
         )
-        channel: Optional[Channel] = None
+        channel: Channel | None = None
         try:
             if self.session is None:
                 self.connect()
@@ -620,7 +628,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
         return self._complete_run(channel, exception, timeout_reached, timeout, result, warn, stdout, stderr)
 
     @staticmethod
-    def _apply_env(channel: Channel, env: Dict[str, str]):
+    def _apply_env(channel: Channel, env: dict[str, str]):
         if env:
             for var, val in env.items():
                 channel.setenv(str(var), str(val))

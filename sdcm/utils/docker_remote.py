@@ -1,6 +1,6 @@
 import logging
 import shlex
-from functools import cached_property, cache
+from functools import cache, cached_property
 from pathlib import Path
 
 from sdcm.cluster import BaseNode

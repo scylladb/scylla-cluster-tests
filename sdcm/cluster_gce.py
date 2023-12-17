@@ -11,40 +11,39 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import os
 import re
 import time
-import logging
-from typing import Dict, Any, ParamSpec, TypeVar
-from textwrap import dedent
-from functools import cached_property, cache
 from collections.abc import Callable
+from functools import cache, cached_property
+from textwrap import dedent
+from typing import Any, ParamSpec, TypeVar
 
-import tenacity
 import google.api_core.exceptions
+import tenacity
 from google.cloud import compute_v1
 
 from sdcm import cluster
+from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
+from sdcm.sct_events.system import SpotTerminationEvent
+from sdcm.utils.common import gce_meta_to_dict, list_instances_gce
+from sdcm.utils.decorators import retrying
 from sdcm.utils.gce_utils import (
     GceLoggingClient,
     create_instance,
     disk_from_image,
-    get_gce_compute_disks_client,
-    wait_for_extended_operation,
     gce_private_addresses,
     gce_public_addresses,
-    random_zone,
     gce_set_labels,
+    get_gce_compute_disks_client,
+    random_zone,
+    wait_for_extended_operation,
 )
 from sdcm.wait import exponential_retry
-from sdcm.keystore import pub_key_from_private_key_file
-from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
-from sdcm.utils.decorators import retrying
-
 
 SPOT_TERMINATION_CHECK_DELAY = 5 * 60
 
@@ -110,7 +109,7 @@ class GCENode(cluster.BaseNode):
         super().init()
 
     @cached_property
-    def tags(self) -> Dict[str, str]:
+    def tags(self) -> dict[str, str]:
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
 
@@ -276,21 +275,21 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def __str__(self):
         identifier = 'GCE Cluster %s | ' % self.name
         identifier += 'Image: %s | ' % os.path.basename(self._gce_image)
-        identifier += 'Root Disk: %s %s GB | ' % (self._gce_image_type, self._gce_image_size)
+        identifier += f'Root Disk: {self._gce_image_type} {self._gce_image_size} GB | '
         if self._gce_n_local_ssd:
             identifier += 'Local SSD: %s | ' % self._gce_n_local_ssd
         if self._add_disks:
             for disk_type, disk_size in self._add_disks.items():
                 if int(disk_size):
-                    identifier += '%s: %s | ' % (disk_type, disk_size)
+                    identifier += f'{disk_type}: {disk_size} | '
         identifier += 'Type: %s' % self._gce_instance_type
         return identifier
 
     def _get_disk_url(self, disk_type='pd-standard', dc_idx=0):
-        return "projects/%s/zones/%s/diskTypes/%s" % (self.project, self._gce_zone_names[dc_idx], disk_type)
+        return f"projects/{self.project}/zones/{self._gce_zone_names[dc_idx]}/diskTypes/{disk_type}"
 
     def _get_root_disk_struct(self, name, disk_type='pd-standard', dc_idx=0):
-        device_name = '%s-root-%s' % (name, disk_type)
+        device_name = f'{name}-root-{disk_type}'
         return disk_from_image(disk_type=self._get_disk_url(disk_type, dc_idx=dc_idx),
                                disk_size_gb=self._gce_image_size,
                                boot=True,
@@ -301,7 +300,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                )
 
     def _get_local_ssd_disk_struct(self, name, index, interface='NVME', dc_idx=0):
-        device_name = '%s-data-local-ssd-%s' % (name, index)
+        device_name = f'{name}-data-local-ssd-{index}'
         return disk_from_image(disk_type=self._get_disk_url('local-ssd', dc_idx=dc_idx),
                                boot=False,
                                auto_delete=True,
@@ -311,7 +310,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                )
 
     def _get_persistent_disk_struct(self, name, disk_size, disk_type='pd-ssd', dc_idx=0):
-        device_name = '%s-data-%s' % (name, disk_type)
+        device_name = f'{name}-data-{disk_type}'
         return disk_from_image(disk_type=self._get_disk_url(disk_type, dc_idx=dc_idx),
                                disk_size_gb=disk_size,
                                boot=False,
@@ -509,7 +508,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if self.test_config.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx)
             if not instances:
-                raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
+                raise RuntimeError(f"No nodes found for testId {self.test_config.test_id()} ")
         else:
             instances = self._create_instances(count, dc_idx, enable_auto_bootstrap, instance_type=instance_type)
 

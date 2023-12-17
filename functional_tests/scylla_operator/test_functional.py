@@ -14,54 +14,53 @@
 # Copyright (c) 2021 ScyllaDB
 
 #  pylint: disable=too-many-lines
+import base64
 import logging
 import os
 import random
+import ssl
 import threading
 import time
-import ssl
-import base64
+
 import invoke
 import path
-
 import pytest
 import yaml
 from cassandra.cluster import (  # pylint: disable=no-name-in-module
+    EXEC_PROFILE_DEFAULT,
     Cluster,
     ExecutionProfile,
-    EXEC_PROFILE_DEFAULT,
 )
 from cassandra.policies import WhiteListRoundRobinPolicy
 
-from sdcm.cluster_k8s import (
-    ScyllaPodCluster,
-    SCYLLA_NAMESPACE,
-    SCYLLA_MANAGER_NAMESPACE,
-    SCYLLA_OPERATOR_NAMESPACE
-)
-from sdcm.mgmt import TaskStatus
-from sdcm.utils.aws_utils import get_arch_from_instance_type
-from sdcm.utils.common import ParallelObject
-from sdcm.utils.k8s import (
-    convert_cpu_units_to_k8s_value,
-    convert_cpu_value_from_k8s_to_units,
-    HelmValues,
-    KubernetesOps,
-)
-from sdcm.utils.k8s.chaos_mesh import PodFailureExperiment
-
 from functional_tests.scylla_operator.libs.helpers import (
-    get_scylla_sysctl_value,
-    get_orphaned_services,
-    get_pods_without_probe,
-    get_pods_and_statuses,
-    get_pod_storage_capacity,
     PodStatuses,
+    get_orphaned_services,
+    get_pod_storage_capacity,
+    get_pods_and_statuses,
+    get_pods_without_probe,
+    get_scylla_sysctl_value,
     reinstall_scylla_manager,
     set_scylla_sysctl_value,
     verify_resharding_on_k8s,
     wait_for_resource_absence,
 )
+from sdcm.cluster_k8s import (
+    SCYLLA_MANAGER_NAMESPACE,
+    SCYLLA_NAMESPACE,
+    SCYLLA_OPERATOR_NAMESPACE,
+    ScyllaPodCluster,
+)
+from sdcm.mgmt import TaskStatus
+from sdcm.utils.aws_utils import get_arch_from_instance_type
+from sdcm.utils.common import ParallelObject
+from sdcm.utils.k8s import (
+    HelmValues,
+    KubernetesOps,
+    convert_cpu_units_to_k8s_value,
+    convert_cpu_value_from_k8s_to_units,
+)
+from sdcm.utils.k8s.chaos_mesh import PodFailureExperiment
 
 log = logging.getLogger()
 
@@ -405,8 +404,7 @@ def test_mgmt_repair(db_cluster, manager_version):
     mgr_task = mgr_cluster.create_repair_task()
     assert mgr_task, "Failed to create repair task"
     task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
-    assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
-        mgr_task.id, str(mgr_task.status))
+    assert task_final_status == TaskStatus.DONE, f'Task: {mgr_task.id} final status is: {str(mgr_task.status)}.'
 
     mgr_cluster.delete_task(task=mgr_task)
 

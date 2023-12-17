@@ -12,25 +12,40 @@
 # Copyright (c) 2020 ScyllaDB
 #
 
-import time
-import threading
-from threading import Thread
 import multiprocessing
-from multiprocessing import Process
-import unittest
 import os.path
 import shutil
-from sdcm.utils.common import generate_random_string
+import threading
+import time
+import unittest
+from multiprocessing import Process
+from threading import Thread
+
 from sdcm.prometheus import PrometheusAlertManagerListener
-from unit_tests.lib.test_profiler.lib import LibMultiprocessingProcessCustomClass, LibProcessCustomClass, \
-    LibMultiprocessingProcessCustomClassWithRun, LibProcessCustomClassWithRun, LibThreadCustomClass, \
-    LibThreadCustomClassWithRun, LibThreadingThreadCustomClass, LibThreadingThreadCustomClassWithRun, LibThread, LibProcess
-
-from unit_tests.lib.test_profiler.lib2 import LibProfileableProcessCustomClass, \
-    LibProfileableProcessCustomClassWithRun, LibProfileableThreadCustomClass, LibProfileableThreadCustomClassWithRun, \
-    LibProfileableThread, LibProfileableProcess
-
-from sdcm.utils.profiler import ProfilerFactory, ProfileableProcess as pp, ProfileableThread as pt  # pylint: disable=ungrouped-imports
+from sdcm.utils.common import generate_random_string
+from sdcm.utils.profiler import ProfileableProcess as pp
+from sdcm.utils.profiler import ProfileableThread as pt
+from sdcm.utils.profiler import ProfilerFactory  # pylint: disable=ungrouped-imports
+from unit_tests.lib.test_profiler.lib import (
+    LibMultiprocessingProcessCustomClass,
+    LibMultiprocessingProcessCustomClassWithRun,
+    LibProcess,
+    LibProcessCustomClass,
+    LibProcessCustomClassWithRun,
+    LibThread,
+    LibThreadCustomClass,
+    LibThreadCustomClassWithRun,
+    LibThreadingThreadCustomClass,
+    LibThreadingThreadCustomClassWithRun,
+)
+from unit_tests.lib.test_profiler.lib2 import (
+    LibProfileableProcess,
+    LibProfileableProcessCustomClass,
+    LibProfileableProcessCustomClassWithRun,
+    LibProfileableThread,
+    LibProfileableThreadCustomClass,
+    LibProfileableThreadCustomClassWithRun,
+)
 
 
 def function_sleep():

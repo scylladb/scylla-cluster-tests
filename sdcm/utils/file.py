@@ -11,8 +11,9 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, TextIO, List, Union, AnyStr, Iterable
+from collections.abc import Iterable
 from re import Pattern
+from typing import AnyStr, TextIO
 
 
 # pylint: disable=too-few-public-methods
@@ -35,8 +36,8 @@ class File:
     """
 
     # pylint: disable=too-many-arguments
-    def __init__(self, path: str, mode: str = 'r', buffering: Optional[int] = None,
-                 encoding: Optional[str] = None, errors: Optional[str] = None, newline: Optional[str] = None,
+    def __init__(self, path: str, mode: str = 'r', buffering: int | None = None,
+                 encoding: str | None = None, errors: str | None = None, newline: str | None = None,
                  closefd: bool = True):
         self.path = path
         self.mode = mode
@@ -89,7 +90,7 @@ class File:
         self._io.write(any_str)
         return self
 
-    def writelines(self, list_of_any_str: List[AnyStr]) -> 'File':
+    def writelines(self, list_of_any_str: list[AnyStr]) -> 'File':
         self._io.writelines(list_of_any_str)
         return self
 
@@ -103,10 +104,10 @@ class File:
     def readline(self, limit: int = -1) -> AnyStr:
         return self._io.readline(limit)
 
-    def readlines(self, hint: int = -1) -> List[AnyStr]:
+    def readlines(self, hint: int = -1) -> list[AnyStr]:
         return self._io.readlines(hint)
 
-    def read_lines_filtered(self, *patterns: Union[Pattern]) -> Iterable[str]:
+    def read_lines_filtered(self, *patterns: Pattern) -> Iterable[str]:
         """
         Read lines from the file, filter them and yield
         :param patterns: List of patterns
@@ -123,8 +124,7 @@ class File:
 
     def iterate_lines(self) -> Iterable[str]:
         def generator():
-            for line in self._io:
-                yield line
+            yield from self._io
         return ReiterableGenerator(generator=generator)
 
     def __getattr__(self, item):

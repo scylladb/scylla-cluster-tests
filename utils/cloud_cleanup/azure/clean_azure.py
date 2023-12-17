@@ -16,8 +16,8 @@
 import argparse
 import os
 import sys
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Callable
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 

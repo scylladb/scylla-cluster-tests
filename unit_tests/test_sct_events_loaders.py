@@ -13,17 +13,29 @@
 
 import pickle
 import unittest
-
 from itertools import chain
 
 from invoke.runners import Result
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
-from sdcm.sct_events.loaders import \
-    GeminiStressEvent, CassandraStressEvent, ScyllaBenchEvent, YcsbStressEvent, NdBenchStressEvent, CDCReaderStressEvent, \
-    KclStressEvent, CassandraStressLogEvent, ScyllaBenchLogEvent, GeminiStressLogEvent, \
-    CS_ERROR_EVENTS, CS_NORMAL_EVENTS, SCYLLA_BENCH_ERROR_EVENTS, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
+from sdcm.sct_events.loaders import (
+    CS_ERROR_EVENTS,
+    CS_ERROR_EVENTS_PATTERNS,
+    CS_NORMAL_EVENTS,
+    CS_NORMAL_EVENTS_PATTERNS,
+    SCYLLA_BENCH_ERROR_EVENTS,
+    CassandraStressEvent,
+    CassandraStressLogEvent,
+    CDCReaderStressEvent,
+    GeminiStressEvent,
+    GeminiStressLogEvent,
+    KclStressEvent,
+    NdBenchStressEvent,
+    ScyllaBenchEvent,
+    ScyllaBenchLogEvent,
+    YcsbStressEvent,
+)
 
 
 class TestGeminiEvent(unittest.TestCase):

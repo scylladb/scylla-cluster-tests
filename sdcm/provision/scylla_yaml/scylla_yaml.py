@@ -10,16 +10,20 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from difflib import unified_diff
-from typing import List, Literal, Union
-
 import logging
+from difflib import unified_diff
+from typing import Literal
+
 import yaml
-from pydantic import validator, BaseModel, Extra  # pylint: disable=no-name-in-module
+from pydantic import BaseModel, Extra, validator  # pylint: disable=no-name-in-module
 
-from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
-    ServerEncryptionOptions, ClientEncryptionOptions
-
+from sdcm.provision.scylla_yaml.auxiliaries import (
+    ClientEncryptionOptions,
+    EndPointSnitchType,
+    RequestSchedulerOptions,
+    SeedProvider,
+    ServerEncryptionOptions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +47,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     listen_interface: str = None  # "eth0"
     listen_interface_prefer_ipv6: bool = None  # False
     commitlog_directory: str = None  # ""
-    data_file_directories: List[str] = None  # None
+    data_file_directories: list[str] = None  # None
     hints_directory: str = None  # ""
     view_hints_directory: str = None  # ""
     saved_caches_directory: str = None  # ""
@@ -64,7 +68,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     rpc_interface: str = None  # "eth1"
     rpc_interface_prefer_ipv6: bool = None  # False
     # [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider')]
-    seed_provider: List[SeedProvider] = None
+    seed_provider: list[SeedProvider] = None
     consistent_cluster_management: bool = None  # False
     compaction_throughput_mb_per_sec: int = None  # 0
     compaction_large_partition_warning_threshold_mb: int = None  # 1000
@@ -345,14 +349,14 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     def dict(  # pylint: disable=arguments-differ
         self,
         *,
-        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
-        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
+        include: 'MappingIntStrAny | AbstractSetIntStr' = None,
+        exclude: 'MappingIntStrAny | AbstractSetIntStr' = None,
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
         exclude_unset: bool = False,
-        explicit: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
+        explicit: 'AbstractSetIntStr | MappingIntStrAny' = None,
     ) -> 'DictStrAny':
         to_dict = super().dict(
             include=include, exclude=exclude, by_alias=by_alias, skip_defaults=skip_defaults,
@@ -370,12 +374,11 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
             if attr_info and hasattr(attr_info.type_, "__attrs_attrs__"):
                 if attr_value is not None:
                     if not isinstance(attr_value, dict):
-                        raise ValueError("Unexpected data `%s` in attribute `%s`" % (
-                            type(attr_value), attr_name))
+                        raise ValueError(f"Unexpected data `{type(attr_value)}` in attribute `{attr_name}`")
                     attr_value = attr_info.type(**attr_value)  # noqa: PLW2901
             setattr(self, attr_name, attr_value)
 
-    def update(self, *objects: Union['ScyllaYaml', dict]):
+    def update(self, *objects: 'ScyllaYaml | dict'):
         """
         Do the same as dict.update, with one exception.
         It ignores whatever key if it's value equal to default

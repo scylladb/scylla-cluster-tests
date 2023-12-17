@@ -22,7 +22,7 @@ from sdcm.utils.decorators import timeout
 from sdcm.utils.docker_utils import running_in_docker
 from sdcm.ycsb_thread import YcsbStressThread
 from unit_tests.dummy_remote import LocalLoaderSetDummy
-from unit_tests.lib.alternator_utils import ALTERNATOR_PORT, ALTERNATOR, TEST_PARAMS
+from unit_tests.lib.alternator_utils import ALTERNATOR, ALTERNATOR_PORT, TEST_PARAMS
 
 pytestmark = [
     pytest.mark.usefixtures("events", "create_table", "create_cql_ks_and_table"),
@@ -97,7 +97,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
 
     @timeout(timeout=60)
     def check_metrics():
-        output = requests.get("http://{}/metrics".format(prom_address)).text
+        output = requests.get(f"http://{prom_address}/metrics").text
         regex = re.compile(r"^sct_ycsb_read_gauge.*?([0-9\.]*?)$", re.MULTILINE)
         assert "sct_ycsb_read_gauge" in output
         assert "sct_ycsb_update_gauge" in output
@@ -156,7 +156,7 @@ def test_02_dynamodb_api_dataintegrity(
     # 4. wait for expected metrics to be available
     @timeout(timeout=120)
     def check_metrics():
-        output = requests.get("http://{}/metrics".format(prom_address)).text
+        output = requests.get(f"http://{prom_address}/metrics").text
         regex = re.compile(r"^sct_ycsb_verify_gauge.*?([0-9\.]*?)$", re.MULTILINE)
 
         assert "sct_ycsb_verify_gauge" in output
@@ -199,7 +199,7 @@ def test_03_cql(request, docker_scylla, prom_address, params):
 
     @timeout(timeout=60)
     def check_metrics():
-        output = requests.get("http://{}/metrics".format(prom_address)).text
+        output = requests.get(f"http://{prom_address}/metrics").text
         regex = re.compile(r"^sct_ycsb_read_gauge.*?([0-9\.]*?)$", re.MULTILINE)
         assert "sct_ycsb_read_gauge" in output
         assert "sct_ycsb_update_gauge" in output

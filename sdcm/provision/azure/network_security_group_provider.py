@@ -12,9 +12,8 @@
 # Copyright (c) 2022 ScyllaDB
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-
-from typing import Dict, Iterable, Union, List
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.network.models import NetworkSecurityGroup
@@ -24,7 +23,7 @@ from sdcm.utils.azure_utils import AzureService
 LOGGER = logging.getLogger(__name__)
 
 
-def rules_to_payload(rules: Iterable) -> List[Dict[str, Union[str, int]]]:
+def rules_to_payload(rules: Iterable) -> list[dict[str, str | int]]:
     """convert iterable rules to format accepted by provisioner"""
     template = {
         "name": "",
@@ -53,7 +52,7 @@ class NetworkSecurityGroupProvider:
     _resource_group_name: str
     _region: str
     _azure_service: AzureService = AzureService()
-    _cache: Dict[str, NetworkSecurityGroup] = field(default_factory=dict)
+    _cache: dict[str, NetworkSecurityGroup] = field(default_factory=dict)
 
     def __post_init__(self):
         """Discover existing security groups for resource group."""

@@ -1,8 +1,9 @@
 import logging
 from uuid import UUID
 
-from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
+from argus.client.sct.client import ArgusSCTClient
+
 from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)

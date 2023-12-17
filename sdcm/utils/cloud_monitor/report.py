@@ -14,10 +14,9 @@ import abc
 import os
 import tempfile
 from abc import abstractmethod
-
-from datetime import datetime, timedelta
 from collections import defaultdict
 from copy import deepcopy
+from datetime import datetime, timedelta
 
 import jinja2
 import pytz

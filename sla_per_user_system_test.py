@@ -21,7 +21,7 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.es import ES
 from sdcm.sct_events import Severity
 from sdcm.sct_events.workload_prioritisation import WorkloadPrioritisationEvent
-from test_lib.sla import ServiceLevel, Role, User
+from test_lib.sla import Role, ServiceLevel, User
 
 
 # pylint: disable=too-many-public-methods
@@ -101,14 +101,14 @@ class SlaPerUserTest(LongevityTest):
         for node_ip in self.db_cluster.get_node_private_ips():
             # Temporary solution
             scheduler_shares = self.prometheus_stats.get_scylla_scheduler_shares_per_sla(start_time, end_time, node_ip)
-            self.log.debug('SCHEDULERS SHARES FROM PROMETHEUS: {}'.format(scheduler_shares))
+            self.log.debug(f'SCHEDULERS SHARES FROM PROMETHEUS: {scheduler_shares}')
             # this default scheduler that is not under test - ignore it
             if 'sl:default' in scheduler_shares:
                 scheduler_shares.pop('sl:default')
 
             test_users_to_sg = self.role_to_scheduler_group(test_users=roles_with_shares,
                                                             scheduler_shares=scheduler_shares)
-            self.log.debug('ROLE - SERVICE LEVEL - SCHEDULER: {}'.format(test_users_to_sg))
+            self.log.debug(f'ROLE - SERVICE LEVEL - SCHEDULER: {test_users_to_sg}')
             # End Temporary solution
 
             # Query 'scylla_scheduler_runtime_ms' from prometheus. If no data returned, try to increase the step time
@@ -137,7 +137,7 @@ class SlaPerUserTest(LongevityTest):
                         len(shards_time_per_sla[node_ip][val[1]])
                 else:
                     runtime_per_role[rolename] = 0
-            self.log.debug('RUN TIME PER ROLE: {}'.format(runtime_per_role))
+            self.log.debug(f'RUN TIME PER ROLE: {runtime_per_role}')
             actual_shares_ratio = self.calculate_metrics_ratio_per_user(two_users_list=read_users,
                                                                         metrics=runtime_per_role)
             self.validate_deviation(expected_ratio=expected_ratio, actual_ratio=actual_shares_ratio,
@@ -835,8 +835,7 @@ class SlaPerUserTest(LongevityTest):
             workloads_results.update({result[0].get("username"): result[0]})
 
         assert len(workloads_results) == 2, \
-            "Expected workload_results length to be 2, got: %s. workload_results: %s" % (
-            len(workloads_results), workloads_results)
+            f"Expected workload_results length to be 2, got: {len(workloads_results)}. workload_results: {workloads_results}"
         comparison_results = {}
         try:
             for item, target_margin in comparison_axis.items():
@@ -906,7 +905,7 @@ class SlaPerUserTest(LongevityTest):
     def get_test_status(self) -> str:
         if self._comparison_results:
             try:
-                if all((item["within_margin"] for item in self._comparison_results.values())):
+                if all(item["within_margin"] for item in self._comparison_results.values()):
                     return "SUCCESS"
                 else:
                     return "FAILED"
@@ -947,8 +946,8 @@ class SlaPerUserTest(LongevityTest):
         grafana_screenshots = grafana_dataset.get('screenshots', [])
         grafana_snapshots = grafana_dataset.get('snapshots', [])
 
-        self.log.debug('GRAFANA SCREENSHOTS: {}'.format(grafana_screenshots))
-        self.log.debug('GRAFANA SNAPSHOTS: {}'.format(grafana_snapshots))
+        self.log.debug(f'GRAFANA SCREENSHOTS: {grafana_screenshots}')
+        self.log.debug(f'GRAFANA SNAPSHOTS: {grafana_snapshots}')
 
         # Compare latency of two runs
         self.log.debug('Test results:\n---------------------\n')
@@ -965,9 +964,9 @@ class SlaPerUserTest(LongevityTest):
         result_print_str = '\nTest results:\n---------------------\n'
         result_print_str += '\nWorkload                  |      Latency 99%'
         result_print_str += '\n========================= | ================='
-        result_print_str += '\nLatency only              |      {}'.format(latency_99_latency_workload)
-        result_print_str += '\nLatency and throughput    |      {}'.format(latency_99_mixed_workload)
+        result_print_str += f'\nLatency only              |      {latency_99_latency_workload}'
+        result_print_str += f'\nLatency and throughput    |      {latency_99_mixed_workload}'
         result_print_str += '\n------------------------- | -----------------'
-        result_print_str += '\nLatency 99 is {} in {}%'.format(latency_change, deviation)
+        result_print_str += f'\nLatency 99 is {latency_change} in {deviation}%'
 
         return latency_99_latency_workload, latency_99_mixed_workload, result_print_str

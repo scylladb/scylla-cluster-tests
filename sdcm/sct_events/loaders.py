@@ -11,18 +11,22 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
 import json
-import time
 import logging
-from typing import Type, Optional, List, Tuple, Any
+import re
+import time
+from typing import Any
 
 import dateutil.parser
 from invoke.runners import Result
 
-from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import LogEvent, LogEventProtocol, T_log_event, SctEvent
-from sdcm.sct_events.stress_events import BaseStressEvent, StressEvent, StressEventProtocol
+from sdcm.sct_events import SctEventProtocol, Severity
+from sdcm.sct_events.base import LogEvent, LogEventProtocol, SctEvent, T_log_event
+from sdcm.sct_events.stress_events import (
+    BaseStressEvent,
+    StressEvent,
+    StressEventProtocol,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,7 +35,7 @@ class GeminiStressEvent(BaseStressEvent):
     # pylint: disable=too-many-arguments, too-many-instance-attributes
     def __init__(self, node: Any,
                  cmd: str,
-                 log_file_name: Optional[str] = None,
+                 log_file_name: str | None = None,
                  severity: Severity = Severity.NORMAL,
                  publish_event: bool = True):
         self.node = str(node)
@@ -40,7 +44,7 @@ class GeminiStressEvent(BaseStressEvent):
         self.result = ""
         super().__init__(severity=severity, publish_event=publish_event)
 
-    def add_result(self, result: Optional[Result]):
+    def add_result(self, result: Result | None):
         if result != "":
             self.result += f"Exit code: {result.exited}\n"
             if result.stdout:
@@ -83,11 +87,11 @@ class CqlStressCassandraStressEvent(StressEvent):
 
 
 class CassandraHarryEvent(StressEvent, abstract=True):
-    failure: Type[StressEventProtocol]
-    error: Type[SctEventProtocol]
-    timeout: Type[StressEventProtocol]
-    start: Type[StressEventProtocol]
-    finish: Type[StressEventProtocol]
+    failure: type[StressEventProtocol]
+    error: type[SctEventProtocol]
+    timeout: type[StressEventProtocol]
+    start: type[StressEventProtocol]
+    finish: type[StressEventProtocol]
 
     @property
     def msgfmt(self):
@@ -105,30 +109,30 @@ class BaseYcsbStressEvent(StressEvent, abstract=True):
 
 
 class YcsbStressEvent(BaseYcsbStressEvent, abstract=True):
-    failure: Type[StressEventProtocol]
-    error: Type[StressEventProtocol]
-    start: Type[StressEventProtocol]
-    finish: Type[StressEventProtocol]
+    failure: type[StressEventProtocol]
+    error: type[StressEventProtocol]
+    start: type[StressEventProtocol]
+    finish: type[StressEventProtocol]
 
 
 YcsbStressEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR)
 
 
 class CDCReaderStressEvent(BaseYcsbStressEvent, abstract=True):
-    failure: Type[StressEventProtocol]
-    error: Type[StressEventProtocol]
-    start: Type[StressEventProtocol]
-    finish: Type[StressEventProtocol]
+    failure: type[StressEventProtocol]
+    error: type[StressEventProtocol]
+    start: type[StressEventProtocol]
+    finish: type[StressEventProtocol]
 
 
 CDCReaderStressEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR)
 
 
 class NdBenchStressEvent(StressEvent, abstract=True):
-    failure: Type[StressEventProtocol]
-    error: Type[StressEventProtocol]
-    start: Type[StressEventProtocol]
-    finish: Type[StressEventProtocol]
+    failure: type[StressEventProtocol]
+    error: type[StressEventProtocol]
+    start: type[StressEventProtocol]
+    finish: type[StressEventProtocol]
 
 
 NdBenchStressEvent.add_stress_subevents(start=Severity.NORMAL,
@@ -138,8 +142,8 @@ NdBenchStressEvent.add_stress_subevents(start=Severity.NORMAL,
 
 
 class NdBenchErrorEvent(LogEvent, abstract=True):
-    Error: Type[LogEventProtocol]
-    Failure: Type[LogEventProtocol]
+    Error: type[LogEventProtocol]
+    Failure: type[LogEventProtocol]
 
 
 NdBenchErrorEvent.add_subevent_type("Error", severity=Severity.ERROR, regex=r"ERROR")
@@ -155,9 +159,9 @@ NDBENCH_ERROR_EVENTS_PATTERNS = [(re.compile(event.regex), event) for event in N
 
 
 class KclStressEvent(StressEvent, abstract=True):
-    failure: Type[StressEventProtocol]
-    start: Type[StressEventProtocol]
-    finish: Type[StressEventProtocol]
+    failure: type[StressEventProtocol]
+    start: type[StressEventProtocol]
+    finish: type[StressEventProtocol]
 
 
 KclStressEvent.add_stress_subevents(failure=Severity.ERROR)
@@ -168,12 +172,12 @@ class NoSQLBenchStressEvent(StressEvent):
 
 
 class CassandraStressLogEvent(LogEvent, abstract=True):
-    IOException: Type[LogEventProtocol]
-    ConsistencyError: Type[LogEventProtocol]
-    OperationOnKey: Type[LogEventProtocol]
-    TooManyHintsInFlight: Type[LogEventProtocol]
-    ShardAwareDriver: Type[LogEventProtocol]
-    SchemaDisagreement: Type[LogEventProtocol]
+    IOException: type[LogEventProtocol]
+    ConsistencyError: type[LogEventProtocol]
+    OperationOnKey: type[LogEventProtocol]
+    TooManyHintsInFlight: type[LogEventProtocol]
+    ShardAwareDriver: type[LogEventProtocol]
+    SchemaDisagreement: type[LogEventProtocol]
 
 
 class SchemaDisagreementErrorEvent(SctEvent):
@@ -234,15 +238,15 @@ CS_ERROR_EVENTS = (
 )
 CS_NORMAL_EVENTS = (CassandraStressLogEvent.ShardAwareDriver(), )
 
-CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+CS_ERROR_EVENTS_PATTERNS: list[tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in CS_ERROR_EVENTS]
 
-CS_NORMAL_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+CS_NORMAL_EVENTS_PATTERNS: list[tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in CS_NORMAL_EVENTS]
 
 
 class CqlStressCassandraStressLogEvent(LogEvent, abstract=True):
-    ReadValidationError: Type[LogEventProtocol]
+    ReadValidationError: type[LogEventProtocol]
 
 
 CqlStressCassandraStressLogEvent.add_subevent_type(
@@ -252,14 +256,14 @@ CqlStressCassandraStressLogEvent.add_subevent_type(
 CQL_STRESS_CS_ERROR_EVENTS = (
     CqlStressCassandraStressLogEvent.ReadValidationError(),
 )
-CQL_STRESS_CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+CQL_STRESS_CS_ERROR_EVENTS_PATTERNS: list[tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in CQL_STRESS_CS_ERROR_EVENTS]
 
 
 class ScyllaBenchLogEvent(LogEvent, abstract=True):
-    ConsistencyError: Type[LogEventProtocol]
-    DataValidationError: Type[LogEventProtocol]
-    ParseDistributionError: Type[LogEventProtocol]
+    ConsistencyError: type[LogEventProtocol]
+    DataValidationError: type[LogEventProtocol]
+    ParseDistributionError: type[LogEventProtocol]
 
 
 ScyllaBenchLogEvent.add_subevent_type("ConsistencyError", severity=Severity.ERROR, regex=r"received only")
@@ -276,12 +280,12 @@ SCYLLA_BENCH_ERROR_EVENTS = (
     ScyllaBenchLogEvent.DataValidationError(),
     ScyllaBenchLogEvent.ParseDistributionError(),
 )
-SCYLLA_BENCH_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+SCYLLA_BENCH_ERROR_EVENTS_PATTERNS: list[tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in SCYLLA_BENCH_ERROR_EVENTS]
 
 CASSANDRA_HARRY_ERROR_EVENTS = (
 )
-CASSANDRA_HARRY_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+CASSANDRA_HARRY_ERROR_EVENTS_PATTERNS: list[tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in CASSANDRA_HARRY_ERROR_EVENTS]
 
 
@@ -294,7 +298,7 @@ class GeminiStressLogEvent(LogEvent[T_log_event], abstract=True):  # pylint: dis
         "FATAL": "CRITICAL",
     }
 
-    GeminiEvent: Type[LogEventProtocol]
+    GeminiEvent: type[LogEventProtocol]
 
     def __init__(self, verbose=False):
         super().__init__(regex="", severity=Severity.CRITICAL)
@@ -344,9 +348,9 @@ GeminiStressLogEvent.add_subevent_type("GeminiEvent")
 
 
 class NoSQLBenchStressLogEvents(LogEvent, abstract=True):
-    ProgressIndicatorStoppedEvent: Type[LogEventProtocol]
-    ProgressIndicatorRunningEvent: Type[LogEventProtocol]
-    ProgressIndicatorFinishedEvent: Type[LogEventProtocol]
+    ProgressIndicatorStoppedEvent: type[LogEventProtocol]
+    ProgressIndicatorRunningEvent: type[LogEventProtocol]
+    ProgressIndicatorFinishedEvent: type[LogEventProtocol]
 
 
 NoSQLBenchStressLogEvents.add_subevent_type(

@@ -1,12 +1,12 @@
 import glob
-import os.path
-import sys
 import logging
 import multiprocessing
-from typing import Any
-from enum import Enum
-from dataclasses import asdict, dataclass, make_dataclass
+import os.path
+import sys
 from concurrent.futures.process import ProcessPoolExecutor
+from dataclasses import asdict, dataclass, make_dataclass
+from enum import Enum
+from typing import Any
 
 from hdrh.histogram import HdrHistogram
 from hdrh.log import HistogramLogReader

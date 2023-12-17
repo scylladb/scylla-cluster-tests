@@ -132,19 +132,17 @@
 #     running stress.
 #
 import json
+import logging
 import os
 import re
-import logging
 import uuid
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 from sdcm.sct_events import Severity
+from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.test_config import TestConfig
 from sdcm.utils.database_query_utils import fetch_all_rows
-
 from sdcm.utils.user_profile import get_profile_content
-from sdcm.sct_events.health import DataValidatorEvent
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -153,8 +151,8 @@ class DataForValidation(NamedTuple):
     views: tuple  # list of view names with data for validation
     actual_data: list
     expected_data: list
-    before_update_rows: Optional[list]
-    after_update_rows: Optional[list]
+    before_update_rows: list | None
+    after_update_rows: list | None
 
 
 # pylint: disable=too-many-instance-attributes, too-many-public-methods
@@ -465,8 +463,7 @@ class LongevityDataValidator:
         elif not during_nemesis:
             assert len(actual_result) == len(expected_result), \
                 'One or more rows are not as expected, suspected LWT wrong update. ' \
-                'Actual dataset length: {}, Expected dataset length: {}'.format(len(actual_result),
-                                                                                len(expected_result))
+                f'Actual dataset length: {len(actual_result)}, Expected dataset length: {len(expected_result)}'
 
             assert actual_result == expected_result, \
                 'One or more rows are not as expected, suspected LWT wrong update'
@@ -497,7 +494,7 @@ class LongevityDataValidator:
                         self._validate_updated_per_view, ))
 
     def fetch_data_for_validation_after_update(self, during_nemesis: bool, views_set: tuple, session) -> \
-            Optional[DataForValidation]:
+            DataForValidation | None:
         # views_set[0] - view name with rows before update
         # views_set[1] - view name with rows after update
         # views_set[2] - view name with all expected partition keys
@@ -789,5 +786,4 @@ class LongevityDataValidator:
             ).publish()
         else:
             LOGGER.warning('Deleted row were not found. May be issue #6181. '
-                           'Actual dataset length: {}, Expected dataset length: {}'.format(len(actual_result),
-                                                                                           self.rows_before_deletion))
+                           f'Actual dataset length: {len(actual_result)}, Expected dataset length: {self.rows_before_deletion}')

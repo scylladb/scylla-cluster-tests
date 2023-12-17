@@ -11,16 +11,18 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List
-import os
-import time
 import getpass
+import os
 import socket
+import time
+
 from fabric import Connection
-from invoke.exceptions import UnexpectedExit, Failure
+from invoke.exceptions import Failure, UnexpectedExit
 from invoke.runners import Result
 from invoke.watchers import StreamWatcher
+
 from sdcm.utils.decorators import retrying
+
 from .base import CommandRunner, RetryableNetworkException
 
 
@@ -44,9 +46,9 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
     def is_up(self, timeout: float = None) -> bool:  # pylint: disable=no-self-use
         return True
 
-    def run(self, cmd: str, timeout: Optional[float] = None, ignore_status: bool = False,  # pylint: disable=too-many-arguments
-            verbose: bool = True, new_session: bool = False, log_file: Optional[str] = None, retry: int = 1,
-            watchers: Optional[List[StreamWatcher]] = None, change_context: bool = False) -> Result:
+    def run(self, cmd: str, timeout: float | None = None, ignore_status: bool = False,  # pylint: disable=too-many-arguments
+            verbose: bool = True, new_session: bool = False, log_file: str | None = None, retry: int = 1,
+            watchers: list[StreamWatcher] | None = None, change_context: bool = False) -> Result:
 
         watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 

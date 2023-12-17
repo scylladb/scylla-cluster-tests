@@ -16,7 +16,10 @@ import time
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.handlers import EventHandler
-from sdcm.sct_events.loaders import CassandraStressLogEvent, SchemaDisagreementErrorEvent
+from sdcm.sct_events.loaders import (
+    CassandraStressLogEvent,
+    SchemaDisagreementErrorEvent,
+)
 from sdcm.utils.sstable.s3_uploader import upload_sstables_to_s3
 
 LOGGER = logging.getLogger(__name__)

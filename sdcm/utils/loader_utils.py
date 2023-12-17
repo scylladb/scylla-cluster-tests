@@ -100,11 +100,11 @@ class LoaderUtilsMixin:
             if 'compression' in stress_cmd:
                 if 'keyspace_name' not in stress_params:
                     compression_prefix = re.search('compression=(.*)Compressor', stress_cmd).group(1)
-                    keyspace_name = "keyspace_{}".format(compression_prefix.lower())
+                    keyspace_name = f"keyspace_{compression_prefix.lower()}"
                     stress_params.update({'keyspace_name': keyspace_name})
 
             # Run all stress commands
-            self.log.debug('stress cmd: {}'.format(stress_cmd))
+            self.log.debug(f'stress cmd: {stress_cmd}')
             if stress_cmd.startswith('scylla-bench'):
                 stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd,
                                                            stats_aggregate_cmds=False,
@@ -163,7 +163,7 @@ class LoaderUtilsMixin:
 
         round_robin = self.params.get('round_robin')
         for i, cs_profile in enumerate(cs_profiles):
-            assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
+            assert os.path.exists(cs_profile), f'File not found: {cs_profile}'
             self.log.debug('Run stress with user profile %s', cs_profile)
             profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
             with open(cs_profile, encoding="utf-8") as file:
@@ -174,7 +174,7 @@ class LoaderUtilsMixin:
                     params = {'stress_cmd': stress_cmd, 'profile': cs_profile, 'round_robin': round_robin}
                     stress_params = dict(params)
 
-                    self.log.debug('stress cmd: {}'.format(stress_cmd))
+                    self.log.debug(f'stress cmd: {stress_cmd}')
                     stress_queue.append(self.run_stress_thread(**stress_params))
 
         return stress_queue
@@ -191,7 +191,7 @@ class LoaderUtilsMixin:
 
     @staticmethod
     def _get_keyspace_name(ks_number, keyspace_pref='keyspace'):
-        return '{}{}'.format(keyspace_pref, ks_number)
+        return f'{keyspace_pref}{ks_number}'
 
     def _run_cql_commands(self, cmds, node=None):
         node = node if node else self.db_cluster.nodes[0]
@@ -287,15 +287,15 @@ class LoaderUtilsMixin:
             if roles and "<sla credentials " in cmd:
                 if 'user=' in cmd:
                     # if stress command is not defined as expected, stop the tests and fix it. Then re-run
-                    raise EnvironmentError("Stress command is defined wrong. Credentials already applied. Remove "
-                                           f"unnecessary and re-run the test. Command: {cmd}")
+                    raise OSError("Stress command is defined wrong. Credentials already applied. Remove "
+                                  f"unnecessary and re-run the test. Command: {cmd}")
 
                 index = re.search(r"<sla credentials (\d+)>", cmd)
                 role_index = int(index.groups(0)[0]) if index else None
                 if role_index is None:
                     # if stress command is not defined as expected, stop the tests and fix it. Then re-run
-                    raise EnvironmentError("Stress command is defined wrong. Expected pattern '<credentials \\d>' was "
-                                           f"not found. Fix the command and re-run the test. Command: {cmd}")
+                    raise OSError("Stress command is defined wrong. Expected pattern '<credentials \\d>' was "
+                                  f"not found. Fix the command and re-run the test. Command: {cmd}")
                 sla_role_name = roles[role_index].name.replace('"', '')
                 sla_role_password = roles[role_index].password
                 return re.sub(r'<sla credentials \d+>', f'user={sla_role_name} password={sla_role_password}', cmd)
@@ -322,6 +322,6 @@ class LoaderUtilsMixin:
                         stress_cmds.append(_set_credentials_to_cmd(cmd=stress_cmd))
 
                 params[stress_op] = stress_cmds
-        except EnvironmentError as error_message:
+        except OSError as error_message:
             TestFrameworkEvent(source=parent_class_name, message=error_message, severity=Severity.CRITICAL).publish()
             raise

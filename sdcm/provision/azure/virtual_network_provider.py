@@ -14,8 +14,6 @@
 import logging
 from dataclasses import dataclass, field
 
-from typing import Dict
-
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.network.models import VirtualNetwork
 
@@ -30,7 +28,7 @@ class VirtualNetworkProvider:
     _region: str
     _az: str
     _azure_service: AzureService = AzureService()
-    _cache: Dict[str, VirtualNetwork] = field(default_factory=dict)
+    _cache: dict[str, VirtualNetwork] = field(default_factory=dict)
 
     def __post_init__(self):
         """Discover existing virtual networks for resource group."""

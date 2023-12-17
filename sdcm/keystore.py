@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import json
+import os
 from collections import namedtuple
 
 import boto3

@@ -11,25 +11,22 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import datetime
-import re
 import logging
+import re
 import time
 
-from typing import List, Tuple, Type
-
 from sdcm.sct_events import Severity
-from sdcm.utils.remote_logger import KubernetesWrongSchedulingLogger
 from sdcm.sct_events.base import LogEvent, LogEventProtocol, T_log_event
-
+from sdcm.utils.remote_logger import KubernetesWrongSchedulingLogger
 
 LOGGER = logging.getLogger(__name__)
 
 
 class ScyllaOperatorLogEvent(LogEvent):
-    REAPPLY: Type[LogEventProtocol]
-    TLS_HANDSHAKE_ERROR: Type[LogEventProtocol]
-    OPERATOR_STARTED_INFO: Type[LogEventProtocol]
-    WRONG_SCHEDULED_PODS: Type[LogEventProtocol]
+    REAPPLY: type[LogEventProtocol]
+    TLS_HANDSHAKE_ERROR: type[LogEventProtocol]
+    OPERATOR_STARTED_INFO: type[LogEventProtocol]
+    WRONG_SCHEDULED_PODS: type[LogEventProtocol]
 
     def __init__(self, regex: str = None, severity=Severity.NORMAL):
         super().__init__(regex=regex, severity=severity)
@@ -86,7 +83,7 @@ SCYLLA_OPERATOR_EVENTS = [
 ]
 
 
-SCYLLA_OPERATOR_EVENT_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+SCYLLA_OPERATOR_EVENT_PATTERNS: list[tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex, re.IGNORECASE), event) for event in SCYLLA_OPERATOR_EVENTS]
 
 

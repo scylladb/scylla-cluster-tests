@@ -4,7 +4,6 @@ import pytest
 
 from unit_tests.test_cluster import DummyDbCluster, DummyNode, DummyRemote
 
-
 log = logging.getLogger(__name__)
 
 

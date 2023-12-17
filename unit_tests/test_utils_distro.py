@@ -11,12 +11,10 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from __future__ import absolute_import
 
 import unittest
 
 from sdcm.utils.distro import Distro, DistroError
-
 
 DISTROS_OS_RELEASE = {
     "Debian 10": """\

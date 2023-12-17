@@ -17,7 +17,6 @@ from ssh2.exceptions import SocketRecvError  # pylint: disable=no-name-in-module
 
 from .result import Result
 
-
 __all__ = (
     'AuthenticationException', 'UnknownHostException', 'ConnectError', 'ConnectTimeout', 'PKeyFileError',
     'UnexpectedExit', 'CommandTimedOut', 'FailedToReadCommandOutput', 'OpenChannelTimeout', 'Failure',
@@ -121,7 +120,7 @@ class Failure(Exception):
         rest = ""
         if kwargs:
             rest = " " + " ".join(
-                "{}={}".format(key, value) for key, value in kwargs.items()
+                f"{key}={value}" for key, value in kwargs.items()
             )
         return template.format(
             self.__class__.__name__, self.result.command, rest

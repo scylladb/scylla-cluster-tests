@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import getpass
+import os
 import subprocess
 
 
@@ -54,7 +54,7 @@ def get_username() -> str:  # pylint: disable=too-many-return-statements  # noqa
         return get_email_user(res.stdout)
 
     # We didn't find email, fallback to current user with unknown email user identifier
-    return "linux_user={}".format(current_linux_user)
+    return f"linux_user={current_linux_user}"
 
 
 if __name__ == "__main__":

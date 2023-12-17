@@ -11,9 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-from typing import Type, Optional
-
-from sdcm.sct_events import Severity, SctEventProtocol
+from sdcm.sct_events import SctEventProtocol, Severity
 from sdcm.sct_events.base import InformationalEvent
 from sdcm.sct_events.continuous_event import ContinuousEvent
 
@@ -28,18 +26,18 @@ class ClusterHealthValidatorSubEvents(InformationalEvent, abstract=True):
 
 
 class ClusterHealthValidatorEvent(ContinuousEvent):
-    MonitoringStatus: Type[SctEventProtocol]
-    NodeStatus: Type[SctEventProtocol]
-    NodePeersNulls: Type[SctEventProtocol]
-    NodeSchemaVersion: Type[SctEventProtocol]
-    NodesNemesis: Type[SctEventProtocol]
-    ScyllaCloudClusterServerDiagnostic: Type[SctEventProtocol]
-    Group0TokenRingInconsistency: Type[SctEventProtocol]
+    MonitoringStatus: type[SctEventProtocol]
+    NodeStatus: type[SctEventProtocol]
+    NodePeersNulls: type[SctEventProtocol]
+    NodeSchemaVersion: type[SctEventProtocol]
+    NodesNemesis: type[SctEventProtocol]
+    ScyllaCloudClusterServerDiagnostic: type[SctEventProtocol]
+    Group0TokenRingInconsistency: type[SctEventProtocol]
 
     def __init__(self,
                  node=None,
-                 message: Optional[str] = None,
-                 error: Optional[str] = None,
+                 message: str | None = None,
+                 error: str | None = None,
                  severity=Severity.NORMAL) -> None:
         self.node = str(node) if node else ""
         self.error = error if error else ""
@@ -81,14 +79,14 @@ ClusterHealthValidatorEvent.add_subevent_type("Group0TokenRingInconsistency", se
 
 
 class DataValidatorEvent(InformationalEvent, abstract=True):
-    DataValidator: Type[SctEventProtocol]
-    ImmutableRowsValidator: Type[SctEventProtocol]
-    UpdatedRowsValidator: Type[SctEventProtocol]
-    DeletedRowsValidator: Type[SctEventProtocol]
+    DataValidator: type[SctEventProtocol]
+    ImmutableRowsValidator: type[SctEventProtocol]
+    UpdatedRowsValidator: type[SctEventProtocol]
+    DeletedRowsValidator: type[SctEventProtocol]
 
     def __init__(self,
-                 message: Optional[str] = None,
-                 error: Optional[str] = None,
+                 message: str | None = None,
+                 error: str | None = None,
                  severity: Severity = Severity.ERROR) -> None:
         super().__init__(severity=severity)
 

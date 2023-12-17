@@ -1,15 +1,14 @@
 import contextlib
 import logging
 import random
-
-from enum import Enum
-from typing import Protocol, NamedTuple, Mapping, Iterable
 from collections import namedtuple
+from collections.abc import Iterable, Mapping
+from enum import Enum
+from typing import NamedTuple, Protocol
 
+from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
-from sdcm.sct_events import Severity
-
 
 LOGGER = logging.getLogger(__name__)
 

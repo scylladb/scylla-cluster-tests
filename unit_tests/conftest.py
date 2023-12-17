@@ -11,25 +11,23 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import logging
 import collections
+import logging
+import os
 from pathlib import Path
 
 import pytest
 
-from sdcm import wait, sct_config
+from sdcm import sct_config, wait
 from sdcm.cluster import BaseNode
 from sdcm.prometheus import start_metrics_server
 from sdcm.provision import provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
-from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.common import update_certificates
-
+from sdcm.utils.docker_remote import RemoteDocker
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
-
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder

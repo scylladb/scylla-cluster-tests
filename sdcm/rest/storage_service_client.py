@@ -11,8 +11,6 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-from typing import Optional
-
 from fabric.runners import Result
 
 from sdcm.cluster import BaseNode
@@ -23,19 +21,19 @@ class StorageServiceClient(RemoteCurlClient):
     def __init__(self, node: BaseNode):
         super().__init__(host="localhost:10000", endpoint="storage_service", node=node)
 
-    def compact_ks_cf(self, keyspace: str, cf: Optional[str] = None) -> Result:
+    def compact_ks_cf(self, keyspace: str, cf: str | None = None) -> Result:
         params = {"cf": cf} if cf else {}
         path = f"keyspace_compaction/{keyspace}"
 
         return self.run_remoter_curl(method="POST", path=path, params=params, timeout=360)
 
-    def cleanup_ks_cf(self, keyspace: str, cf: Optional[str] = None, timeout: int = 600) -> Result:
+    def cleanup_ks_cf(self, keyspace: str, cf: str | None = None, timeout: int = 600) -> Result:
         params = {"cf": cf} if cf else {}
         path = f"keyspace_cleanup/{keyspace}"
 
         return self.run_remoter_curl(method="POST", path=path, params=params, timeout=timeout)
 
-    def scrub_ks_cf(self, keyspace: str, cf: Optional[str] = None, scrub_mode: Optional[str] = None) -> Result:
+    def scrub_ks_cf(self, keyspace: str, cf: str | None = None, scrub_mode: str | None = None) -> Result:
         params = {"cf": cf} if cf else {}
 
         if scrub_mode:
@@ -45,7 +43,7 @@ class StorageServiceClient(RemoteCurlClient):
 
         return self.run_remoter_curl(method="GET", path=path, params=params)
 
-    def upgrade_sstables(self, keyspace: str = "ks", cf: Optional[str] = None):
+    def upgrade_sstables(self, keyspace: str = "ks", cf: str | None = None):
         params = {"cf": cf} if cf else {}
         path = f"keyspace_upgrade_sstables/{keyspace}"
 

@@ -13,13 +13,13 @@
 
 from __future__ import annotations
 
-import os
+import binascii
 import enum
 import logging
-import binascii
-from typing import TYPE_CHECKING
-from functools import cached_property
+import os
 from contextlib import suppress
+from functools import cached_property
+from typing import TYPE_CHECKING
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.compute.models import TargetRegion
@@ -28,7 +28,6 @@ from sdcm.utils.azure_utils import AzureService
 
 if TYPE_CHECKING:
     # pylint: disable=ungrouped-imports
-    from typing import Optional
 
     from azure.mgmt.compute.models import Gallery, GalleryImageVersion, VirtualMachine
     from azure.mgmt.network.models import (
@@ -129,13 +128,13 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
     def sct_subnet_name(self) -> str:  # pylint: disable=no-self-use; pylint doesn't now about cached_property
         return "default"
 
-    def common_parameters(self, location: Optional[str] = None, tags: Optional[dict] = None) -> dict:
+    def common_parameters(self, location: str | None = None, tags: dict | None = None) -> dict:
         return {
             "location": location or self.location,
             "tags": tags or {},
         }
 
-    def create_sct_resource_group(self, tags: Optional[dict] = None) -> None:
+    def create_sct_resource_group(self, tags: dict | None = None) -> None:
         LOGGER.info("Going to create SCT resource group...")
         if self.azure_service.resource.resource_groups.check_existence(
             resource_group_name=self.sct_resource_group_name,
@@ -155,7 +154,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
             gallery_name=self.sct_gallery_name,
         )
 
-    def create_sct_gallery(self, tags: Optional[dict] = None) -> None:
+    def create_sct_gallery(self, tags: dict | None = None) -> None:
         LOGGER.info("Going to create SCT shared image gallery...")
         with suppress(ResourceNotFoundError):
             LOGGER.info("Gallery `%s' already exists", self.sct_gallery.name)
@@ -175,7 +174,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
             network_security_group_name=self.sct_network_security_group_name,
         )
 
-    def create_sct_network_security_group(self, tags: Optional[dict] = None) -> None:
+    def create_sct_network_security_group(self, tags: dict | None = None) -> None:
         LOGGER.info("Going to create SCT network security group...")
         with suppress(ResourceNotFoundError):
             LOGGER.info("Network security group `%s' already exists in resource group `%s'",
@@ -206,7 +205,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
             virtual_network_name=self.sct_virtual_network_name,
         )
 
-    def create_sct_virtual_network(self, tags: Optional[dict] = None) -> None:
+    def create_sct_virtual_network(self, tags: dict | None = None) -> None:
         LOGGER.info("Going to create SCT virtual network...")
         with suppress(ResourceNotFoundError):
             LOGGER.info("Virtual network `%s' already exists in resource group `%s'",
@@ -250,7 +249,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
 
     def create_public_ip_address(self,
                                  public_ip_address_name: str,
-                                 tags: Optional[dict] = None) -> PublicIPAddress:
+                                 tags: dict | None = None) -> PublicIPAddress:
         return self.azure_service.network.public_ip_addresses.begin_create_or_update(
             resource_group_name=self.sct_resource_group_name,
             public_ip_address_name=public_ip_address_name,
@@ -265,7 +264,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
 
     def create_network_interface(self,
                                  network_interface_name: str,
-                                 tags: Optional[dict] = None,
+                                 tags: dict | None = None,
                                  create_public_ip_address: bool = True) -> NetworkInterface:
         parameters = self.common_parameters(tags=tags) | {
             "ip_configurations": [{
@@ -294,11 +293,11 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
                                vm_size: str,
                                image: dict[str, str],
                                os_state: AzureOsState = AzureOsState.GENERALIZED,
-                               computer_name: Optional[str] = None,
-                               admin_username: Optional[str] = None,
-                               admin_public_key: Optional[str] = None,
-                               disk_size: Optional[int] = None,
-                               tags: Optional[dict] = None,
+                               computer_name: str | None = None,
+                               admin_username: str | None = None,
+                               admin_public_key: str | None = None,
+                               disk_size: int | None = None,
+                               tags: dict | None = None,
                                create_public_ip_address: bool = True,
                                spot: bool = False) -> VirtualMachine:
         if os_state is AzureOsState.GENERALIZED:
@@ -366,7 +365,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
     def create_gallery_image(self,
                              gallery_image_name: str,
                              os_state: AzureOsState,
-                             tags: Optional[dict] = None) -> None:
+                             tags: dict | None = None) -> None:
         with suppress(ResourceNotFoundError):
             gallery_image = self.azure_service.compute.gallery_images.get(
                 resource_group_name=self.sct_gallery_resource_group_name,
@@ -406,7 +405,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
                                      gallery_image_name: str,
                                      gallery_image_version_name: str,
                                      source_id: str,
-                                     tags: Optional[dict] = None) -> None:
+                                     tags: dict | None = None) -> None:
         self.azure_service.compute.gallery_image_versions.begin_create_or_update(
             resource_group_name=self.sct_gallery_resource_group_name,
             gallery_name=self.sct_gallery_name,
@@ -438,7 +437,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
             gallery_image_version=gallery_image_version,
         ).wait()
 
-    def configure(self, tags: Optional[dict] = None) -> None:
+    def configure(self, tags: dict | None = None) -> None:
         LOGGER.info("Configuring `%s' region...", self.region_name)
         self.create_sct_resource_group(tags=tags)
         self.create_sct_network_security_group(tags=tags)

@@ -13,23 +13,29 @@
 
 import abc
 from functools import cached_property
-from typing import Union, List, Optional, Tuple
 
 from pydantic import Field
 
 from sdcm.cluster import UserRemoteCredentials
-from sdcm.provision.aws.instance_parameters import AWSDiskMapping, AWSPlacementInfo, AWSDiskMappingEbsInfo
+from sdcm.provision.aws.instance_parameters import (
+    AWSDiskMapping,
+    AWSDiskMappingEbsInfo,
+    AWSPlacementInfo,
+)
 from sdcm.provision.aws.instance_parameters_builder import AWSInstanceParamsBuilderBase
 from sdcm.provision.common.user_data import UserDataBuilderBase
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.aws_utils import ec2_ami_get_root_device_name, get_ec2_network_configuration
+from sdcm.utils.aws_utils import (
+    ec2_ami_get_root_device_name,
+    get_ec2_network_configuration,
+)
 
 
 class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMeta):
-    params: Union[SCTConfiguration, dict] = Field(as_dict=False)
+    params: SCTConfiguration | dict = Field(as_dict=False)
     region_id: int = Field(as_dict=False)
-    user_data_raw: Union[str, UserDataBuilderBase] = Field(as_dict=False)
+    user_data_raw: str | UserDataBuilderBase = Field(as_dict=False)
     availability_zone: int = 0
     placement_group: str = None
 
@@ -39,7 +45,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     _INSTANCE_PROFILE_PARAM_NAME: str = None
 
     @property
-    def BlockDeviceMappings(self) -> List[AWSDiskMapping]:  # pylint: disable=invalid-name
+    def BlockDeviceMappings(self) -> list[AWSDiskMapping]:  # pylint: disable=invalid-name
         if not self.ImageId:
             return []
         device_mappings = []
@@ -56,7 +62,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return device_mappings
 
     @property
-    def ImageId(self) -> Optional[str]:  # pylint: disable=invalid-name
+    def ImageId(self) -> str | None:  # pylint: disable=invalid-name
         if not self._image_ids:
             return None
         return self._image_ids[self.region_id]
@@ -66,7 +72,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return self._credentials[self.region_id].key_pair_name
 
     @property
-    def NetworkInterfaces(self) -> List[dict]:  # pylint: disable=invalid-name
+    def NetworkInterfaces(self) -> list[dict]:  # pylint: disable=invalid-name
         output = [{'DeviceIndex': 0, **self._network_interface_params}]
         # TODO: handle case when more then 1 additional interface should be added
         if network_interfaces_count(self.params) > 1:
@@ -84,13 +90,13 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return self.params.get(self._INSTANCE_TYPE_PARAM_NAME)
 
     @property
-    def Placement(self) -> Optional[AWSPlacementInfo]:  # pylint: disable=invalid-name
+    def Placement(self) -> AWSPlacementInfo | None:  # pylint: disable=invalid-name
         return AWSPlacementInfo(
             AvailabilityZone=self._region_name + self._availability_zones[self.availability_zone],
             GroupName=self.placement_group)
 
     @property
-    def UserData(self) -> Optional[str]:  # pylint: disable=invalid-name
+    def UserData(self) -> str | None:  # pylint: disable=invalid-name
         if not self.user_data_raw:
             return None
         if isinstance(self.user_data_raw, UserDataBuilderBase):
@@ -106,15 +112,15 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return self.params.get(self._ROOT_DISK_SIZE_PARAM_NAME)
 
     @cached_property
-    def _image_ids(self) -> List[str]:
+    def _image_ids(self) -> list[str]:
         return self.params.get(self._IMAGE_ID_PARAM_NAME).split()
 
     @cached_property
-    def _availability_zones(self) -> List[str]:
+    def _availability_zones(self) -> list[str]:
         return self.params.get('availability_zone').split(',')
 
     @cached_property
-    def _ec2_network_configuration(self) -> Tuple[List[str], List[List[str]]]:
+    def _ec2_network_configuration(self) -> tuple[list[str], list[list[str]]]:
         return get_ec2_network_configuration(
             regions=self.params.region_names,
             availability_zones=self._availability_zones,
@@ -122,11 +128,11 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         )
 
     @cached_property
-    def _ec2_subnet_ids(self) -> List[str]:
+    def _ec2_subnet_ids(self) -> list[str]:
         return self._ec2_network_configuration[1]
 
     @cached_property
-    def _ec2_security_group_ids(self) -> List[str]:
+    def _ec2_security_group_ids(self) -> list[str]:
         return self._ec2_network_configuration[0]
 
     @property
@@ -153,7 +159,7 @@ class ScyllaInstanceParamsBuilder(AWSInstanceParamsBuilder):
     _INSTANCE_PROFILE_PARAM_NAME = 'aws_instance_profile_name_db'
 
     @property
-    def BlockDeviceMappings(self) -> List[AWSDiskMapping]:
+    def BlockDeviceMappings(self) -> list[AWSDiskMapping]:
         device_mappings = super().BlockDeviceMappings
         volume_type = self.params.get('data_volume_disk_type')
         disk_num = self.params.get('data_volume_disk_num')

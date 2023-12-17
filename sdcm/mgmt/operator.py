@@ -12,20 +12,18 @@
 # Copyright (c) 2021 ScyllaDB
 
 import logging
-from typing import List, Optional
-from dataclasses import dataclass, asdict, fields
+from dataclasses import asdict, dataclass, fields
 
 from sdcm.mgmt.cli import (
     BackupTask,
     HealthcheckTask,
     ManagerCluster,
+    ManagerTask,
     RepairTask,
     ScyllaManagerTool,
-    ManagerTask,
 )
 from sdcm.mgmt.common import TaskStatus
 from sdcm.wait import wait_for
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -72,7 +70,7 @@ class ScyllaOperatorTaskBaseClass(BaseClass):
 class ScyllaOperatorRepairTask(ScyllaOperatorTaskBaseClass):
     # DC list of datacenter glob patterns, e.g. 'dc1', '!otherdc*' used to specify the DCs
     # to include or exclude from backup.
-    dc: List[str] = None
+    dc: list[str] = None
     # fail_fast stop repair on first error.
     fail_fast: bool = None
     # Intensity integer >= 1 or a decimal between (0,1), higher values may result in higher speed and cluster load.
@@ -83,7 +81,7 @@ class ScyllaOperatorRepairTask(ScyllaOperatorTaskBaseClass):
     parallel: int = None
     # Keyspace a list of keyspace/tables glob patterns, e.g. 'keyspace,!keyspace.table_prefix_*'
     # used to include or exclude keyspaces from repair.
-    keyspace: List[str] = None
+    keyspace: list[str] = None
     # small_table_threshold enable small table optimization for tables of size lower than given threshold.
     # Supported units [B, MiB, GiB, TiB] (default "1GiB").
     small_table_threshold: str = None
@@ -111,7 +109,7 @@ class ScyllaOperatorRepairTaskStatus(ScyllaOperatorRepairTask):
 class ScyllaOperatorBackupTask(ScyllaOperatorTaskBaseClass):
     # DC list of datacenter glob patterns, e.g. 'dc1', '!otherdc*' used to specify the DCs
     # to include or exclude from backup.
-    dc: List[str] = None
+    dc: list[str] = None
     # fail_fast stop repair on first error.
     fail_fast: bool = None
     # Intensity integer >= 1 or a decimal between (0,1), higher values may result in higher speed and cluster load.
@@ -122,29 +120,29 @@ class ScyllaOperatorBackupTask(ScyllaOperatorTaskBaseClass):
     parallel: int = None
     # Keyspace a list of keyspace/tables glob patterns, e.g. 'keyspace,!keyspace.table_prefix_*'
     # used to include or exclude keyspaces from repair.
-    keyspace: List[str] = None
+    keyspace: list[str] = None
     # small_table_threshold enable small table optimization for tables of size lower than given threshold.
     # Supported units [B, MiB, GiB, TiB] (default "1GiB").
     small_table_threshold: str = None
     # List of locations where backup is going to be stored, location is string in following format:
     # <provider>:<path> , where provider could be gcs or s3
-    location: List[str] = None
+    location: list[str] = None
     # RateLimit a list of megabytes (MiB) per second rate limits expressed in the format [<dc>:]<limit>.
     # The <dc>: part is optional and only needed when different datacenters need different upload limits.
     # Set to 0 for no limit (default 100).
-    rate_limit: List[str] = None
+    rate_limit: list[str] = None
     # Retention The number of backups which are to be stored (default 3).
     retention: int = None
     # SnapshotParallel a list of snapshot parallelism limits in the format [<dc>:]<limit>.
     # The <dc>: part is optional and allows for specifying different limits in selected datacenters.
     # If The <dc>: part is not set, the limit is global (e.g. 'dc1:2,5') the runs are parallel in n nodes (2 in dc1)
     # and n nodes in all the other datacenters.
-    snapshot_parallel: List[str] = None
+    snapshot_parallel: list[str] = None
     # UploadParallel a list of upload parallelism limits in the format [<dc>:]<limit>.
     # The <dc>: part is optional and allows for specifying different limits in selected datacenters.
     # If The <dc>: part is not set the limit is global (e.g. 'dc1:2,5') the runs are parallel in n nodes (2 in dc1)
     # and n nodes in all the other datacenters.
-    upload_parallel: List[str] = None
+    upload_parallel: list[str] = None
 
 
 @dataclass
@@ -212,7 +210,7 @@ class OperatorManagerCluster(ManagerCluster):
         # | healthcheck_rest/uuid-quuz      |           | 06 May 22 12:28:30 UTC (+1m)  | DONE   |
         # +---------------------------------+-----------+-------------------------------+--------+
         healthchecks = self._get_task_list_filtered(prefix="healthcheck", task_class=HealthcheckTask)
-        return all((healthcheck.status == TaskStatus.DONE for healthcheck in healthchecks))
+        return all(healthcheck.status == TaskStatus.DONE for healthcheck in healthchecks)
 
     def wait_for_healthchecks(self):
         wait_for(
@@ -325,7 +323,7 @@ class OperatorManagerCluster(ManagerCluster):
                                                            intensity=intensity, parallel=parallel, name=name)
         return wait_for(lambda: self.get_mgr_repair_task(so_task), step=2, timeout=300)
 
-    def get_mgr_repair_task(self, so_repair_task: ScyllaOperatorRepairTask) -> Optional[RepairTask]:
+    def get_mgr_repair_task(self, so_repair_task: ScyllaOperatorRepairTask) -> RepairTask | None:
         so_repair_task_status = wait_for(
             func=self.get_operator_repair_task_status,
             text=f"Waiting until operator repair task: {so_repair_task.name} get it's status",
@@ -338,7 +336,7 @@ class OperatorManagerCluster(ManagerCluster):
                 return mgr_task
         return None
 
-    def get_mgr_backup_task(self, so_backup_task: ScyllaOperatorBackupTask) -> Optional[BackupTask]:
+    def get_mgr_backup_task(self, so_backup_task: ScyllaOperatorBackupTask) -> BackupTask | None:
         so_backup_task_status = wait_for(
             func=self.get_operator_backup_task_status,
             text=f"Waiting until operator backup task '{so_backup_task.name}' get it's status",
@@ -351,13 +349,13 @@ class OperatorManagerCluster(ManagerCluster):
                 return mgr_task
         return None
 
-    def get_operator_repair_task_status(self, task_name: str) -> Optional[ScyllaOperatorRepairTaskStatus]:
+    def get_operator_repair_task_status(self, task_name: str) -> ScyllaOperatorRepairTaskStatus | None:
         for task_status in self.operator_repair_task_statuses:
             if task_status.name == task_name:
                 return task_status
         return None
 
-    def get_operator_backup_task_status(self, task_name: str) -> Optional[ScyllaOperatorBackupTaskStatus]:
+    def get_operator_backup_task_status(self, task_name: str) -> ScyllaOperatorBackupTaskStatus | None:
         for task_status in self.operator_backup_task_statuses:
             if task_status.name == task_name:
                 return task_status
@@ -370,19 +368,19 @@ class OperatorManagerCluster(ManagerCluster):
         return [entity_class.from_dict(task_status) for task_status in repair_task_status_infos]
 
     @property
-    def operator_repair_task_statuses(self) -> List[ScyllaOperatorRepairTaskStatus]:
+    def operator_repair_task_statuses(self) -> list[ScyllaOperatorRepairTaskStatus]:
         return self._get_list_of_entities_from_operator('/status/repairs', ScyllaOperatorRepairTaskStatus)
 
     @property
-    def operator_backup_task_statuses(self) -> List[ScyllaOperatorBackupTaskStatus]:
+    def operator_backup_task_statuses(self) -> list[ScyllaOperatorBackupTaskStatus]:
         return self._get_list_of_entities_from_operator('/status/backups', ScyllaOperatorBackupTaskStatus)
 
     @property
-    def operator_repair_tasks(self) -> List[ScyllaOperatorRepairTask]:
+    def operator_repair_tasks(self) -> list[ScyllaOperatorRepairTask]:
         return self._get_list_of_entities_from_operator('/spec/repairs', ScyllaOperatorRepairTask)
 
     @property
-    def operator_backup_tasks(self) -> List[ScyllaOperatorBackupTask]:
+    def operator_backup_tasks(self) -> list[ScyllaOperatorBackupTask]:
         return self._get_list_of_entities_from_operator('/spec/backups', ScyllaOperatorBackupTask)
 
     def update(self, name=None, host=None, client_encrypt=None):

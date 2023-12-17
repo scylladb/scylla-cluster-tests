@@ -10,11 +10,13 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-from typing import Dict
 
 from sdcm.keystore import SSHKey
 from sdcm.sct_provision.common.types import NodeTypeType
-from sdcm.sct_provision.region_definition_builder import ConfigParamsMap, DefinitionBuilder
+from sdcm.sct_provision.region_definition_builder import (
+    ConfigParamsMap,
+    DefinitionBuilder,
+)
 
 db_map = ConfigParamsMap(image_id="fake_image_db",
                          type="fake_instance_type_db",
@@ -31,7 +33,7 @@ monitor_map = ConfigParamsMap(image_id="fake_image_monitor",
                               user_name="ami_monitor_user",
                               root_disk_size="root_disk_size_monitor")
 
-mapper: Dict[NodeTypeType, ConfigParamsMap] = {"scylla-db": db_map,
+mapper: dict[NodeTypeType, ConfigParamsMap] = {"scylla-db": db_map,
                                                "loader": loader_map,
                                                "monitor": monitor_map}
 

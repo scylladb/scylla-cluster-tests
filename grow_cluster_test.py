@@ -13,14 +13,13 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-import time
 import datetime
 import random
+import time
 
+from sdcm import nemesis, prometheus
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import get_data_dir_path
-from sdcm import nemesis
-from sdcm import prometheus
 
 
 class GrowClusterTest(ClusterTester):
@@ -65,11 +64,10 @@ class GrowClusterTest(ClusterTester):
             duration = self.params.get('test_duration')
         threads = self.params.get('cassandra_stress_threads')
 
-        return ("cassandra-stress %s cl=QUORUM duration=%sm "
+        return (f"cassandra-stress {mode} cl=QUORUM duration={duration}m "
                 "-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -col 'size=FIXED(2) n=FIXED(1)' "
-                "-mode cql3 native -rate threads=%s "
-                "-pop seq=1..%s -node %s" %
-                (mode, duration, threads, population_size, ip))
+                f"-mode cql3 native -rate threads={threads} "
+                f"-pop seq=1..{population_size} -node {ip}")
 
     def add_nodes(self, add_node_cnt):
         self.metrics_srv.event_start('add_node')

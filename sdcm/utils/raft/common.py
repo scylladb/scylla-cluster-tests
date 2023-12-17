@@ -1,16 +1,18 @@
-import logging
 import contextlib
-
-from typing import Iterable, Callable
+import logging
+from collections.abc import Callable, Iterable
 from functools import partial
 
+from sdcm.cluster import BaseMonitorSet, BaseNode, BaseScyllaCluster
 from sdcm.exceptions import BootstrapStreamErrorFailure
-from sdcm.cluster import BaseNode, BaseScyllaCluster, BaseMonitorSet
-from sdcm.wait import wait_for
-from sdcm.sct_events.group_common_events import decorate_with_context, \
-    ignore_stream_mutation_fragments_errors, ignore_ycsb_connection_refused
+from sdcm.sct_events.group_common_events import (
+    decorate_with_context,
+    ignore_stream_mutation_fragments_errors,
+    ignore_ycsb_connection_refused,
+)
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import ParallelObject
+from sdcm.wait import wait_for
 
 LOGGER = logging.getLogger(__name__)
 

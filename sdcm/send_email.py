@@ -11,15 +11,15 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import smtplib
-import os.path
-import subprocess
-import logging
-import tempfile
-import json
 import copy
+import json
+import logging
+import os.path
+import smtplib
+import subprocess
+import tempfile
 import traceback
-from typing import Optional, Sequence, Tuple
+from collections.abc import Sequence
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -28,7 +28,12 @@ from functools import cached_property
 import jinja2
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.common import list_instances_gce, list_instances_aws, list_resources_docker, format_timestamp
+from sdcm.utils.common import (
+    format_timestamp,
+    list_instances_aws,
+    list_instances_gce,
+    list_resources_docker,
+)
 from sdcm.utils.gce_utils import gce_public_addresses
 
 LOGGER = logging.getLogger(__name__)
@@ -48,7 +53,7 @@ class BodySizeExceeded(Exception):
         super().__init__()
 
 
-class Email():
+class Email:
     #  pylint: disable=too-many-instance-attributes
     """
     Responsible for sending emails
@@ -73,7 +78,7 @@ class Email():
         self._password = creds["password"]
 
     def _connect(self):
-        self.conn = smtplib.SMTP(host=self._server_host, port=self._server_port)
+        self.conn = smtplib.SMTP(host=self._server_host, port=int(self._server_port))
         self.conn.ehlo()
         self.conn.starttls()
         self.conn.login(user=self._user, password=self._password)
@@ -168,7 +173,7 @@ class BaseEmailReporter:
         self.logdir = logdir if logdir else tempfile.mkdtemp()
 
     @cached_property
-    def fields(self) -> Tuple[str, ...]:
+    def fields(self) -> tuple[str, ...]:
         return self.COMMON_EMAIL_FIELDS + self._fields
 
     def build_data_for_report(self, results):
@@ -573,7 +578,7 @@ class PerfSimpleQueryReporter(BaseEmailReporter):
 
 def build_reporter(name: str,  # noqa: PLR0911
                    email_recipients: Sequence[str] = (),
-                   logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
+                   logdir: str | None = None) -> BaseEmailReporter | None:
     # pylint: disable=too-many-return-statements,too-many-branches
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)

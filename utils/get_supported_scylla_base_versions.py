@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 import logging
-import sys
-import re
 import os
+import re
+import sys
 
-from sdcm.utils.version_utils import is_enterprise, get_all_versions
-from sdcm.utils.version_utils import ComparableScyllaVersion, get_s3_scylla_repos_mapping
+from sdcm.utils.version_utils import (
+    ComparableScyllaVersion,
+    get_all_versions,
+    get_s3_scylla_repos_mapping,
+    is_enterprise,
+)
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 

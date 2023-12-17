@@ -13,11 +13,11 @@
 
 from textwrap import dedent
 
-
 # pylint: disable=anomalous-backslash-in-string
 
+
 def configure_syslogng_target_script(host: str, port: int, throttle_per_second: int, hostname: str = "") -> str:
-    return dedent("""
+    return dedent(f"""
         source_name=`cat /etc/syslog-ng/syslog-ng.conf | tr -d "\\n" | tr -d "\\r" | sed -r "s/\\}};/\\}};\\n/g; \
         s/source /\\nsource /g" | grep -P "^source.*system\\(\\)" | cut -d" " -f2`
         disk_buffer_option=""
@@ -63,7 +63,7 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
                 sed -i -r "s/destination\\(remote_sct\\);[ \\t]*\\}};/destination\\(remote_sct\\); rewrite\\(r_host\\); \\}};/" /etc/syslog-ng/syslog-ng.conf
             fi
         fi
-        """.format(host=host, port=port, hostname=hostname, throttle_per_second=throttle_per_second))
+        """)
 
 
 def configure_hosts_set_hostname_script(hostname: str) -> str:

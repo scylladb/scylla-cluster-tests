@@ -23,7 +23,7 @@ def cut_addresses_from_log_line_kernel_callstack(line):
 
 def get_lines_from_log(file_path):
     file_content = {}
-    with open(file_path, 'r') as file:  # pylint: disable=unspecified-encoding
+    with open(file_path) as file:  # pylint: disable=unspecified-encoding
         for line in file:
             if ('kernel callstack' in line and '0x' in line) or 'Reactor stalled for' in line:
                 file_content[line] = cut_addresses_from_log_line_kernel_callstack(line)
@@ -31,7 +31,7 @@ def get_lines_from_log(file_path):
 
 
 def get_kallsyms(path_to_kallsyms):
-    with open(path_to_kallsyms, 'r') as file:  # pylint: disable=unspecified-encoding
+    with open(path_to_kallsyms) as file:  # pylint: disable=unspecified-encoding
         file_content = file.readlines()
     return file_content
 

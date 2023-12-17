@@ -1,17 +1,18 @@
-import logging
-import datetime
-import time
 import base64
+import datetime
+import logging
+import time
 
 import boto3
+from botocore.exceptions import ClientError, NoRegionError
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Instance
-from botocore.exceptions import ClientError, NoRegionError
 
-from sdcm.utils.decorators import retrying
-from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.test_config import TestConfig
+from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.utils.common import list_placement_groups_aws
+from sdcm.utils.decorators import retrying
+
 LOGGER = logging.getLogger(__name__)
 
 STATUS_FULFILLED = 'fulfilled'
@@ -47,7 +48,7 @@ class CreateSpotFleetError(ClientError):
     pass
 
 
-class EC2ClientWrapper():
+class EC2ClientWrapper:
 
     def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None, spot_max_price_percentage=None):
         self._client = self._get_ec2_client(region_name)
@@ -146,7 +147,9 @@ class EC2ClientWrapper():
         :return: spot bid price
         """
         LOGGER.info('Calculating spot price based on OnDemand price')
-        from sdcm.utils.pricing import AWSPricing  # pylint: disable=import-outside-toplevel
+        from sdcm.utils.pricing import (
+            AWSPricing,  # pylint: disable=import-outside-toplevel
+        )
         aws_pricing = AWSPricing()
         on_demand_price = float(aws_pricing.get_on_demand_instance_price(self.region_name, instance_type))
 
@@ -293,7 +296,7 @@ class EC2ClientWrapper():
 
         LOGGER.info('Spot instances: %s', instance_ids)
         for ind, instance_id in enumerate(instance_ids):
-            self.add_tags(instance_id, {'Name': 'spot_{}_{}'.format(instance_id, ind)})
+            self.add_tags(instance_id, {'Name': f'spot_{instance_id}_{ind}'})
 
         self._client.cancel_spot_instance_requests(SpotInstanceRequestIds=request_ids)
 
@@ -332,7 +335,7 @@ class EC2ClientWrapper():
 
         LOGGER.info('Spot instances: %s', instance_ids)
         for ind, instance_id in enumerate(instance_ids):
-            self.add_tags(instance_id, {'Name': 'spot_fleet_{}_{}'.format(instance_id, ind)})
+            self.add_tags(instance_id, {'Name': f'spot_fleet_{instance_id}_{ind}'})
 
         self._client.cancel_spot_fleet_requests(SpotFleetRequestIds=[request_id], TerminateInstances=False)
 

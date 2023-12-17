@@ -1,9 +1,8 @@
 import pprint
 import time
 
-from sdcm.cluster import BaseNode, UnexpectedExit, Failure
 from performance_regression_test import PerformanceRegressionTest
-
+from sdcm.cluster import BaseNode, Failure, UnexpectedExit
 
 PP = pprint.PrettyPrinter(indent=2)
 

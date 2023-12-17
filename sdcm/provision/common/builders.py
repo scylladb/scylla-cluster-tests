@@ -11,12 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-from typing import Union
-
 from pydantic import BaseModel  # pylint: disable=no-name-in-module
-
-
-OptionalType = type(Union[str, None])
 
 
 class AttrBuilder(BaseModel):
@@ -35,8 +30,8 @@ class AttrBuilder(BaseModel):
     def dict(
         self,
         *,
-        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
-        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
+        include: 'MappingIntStrAny | AbstractSetIntStr' = None,
+        exclude: 'MappingIntStrAny | AbstractSetIntStr' = None,
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_unset: bool = False,

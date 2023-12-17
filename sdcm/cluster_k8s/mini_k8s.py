@@ -15,11 +15,11 @@ import getpass
 import logging
 import os
 import re
-from typing import Tuple, Optional, Callable
-from textwrap import dedent
+from collections.abc import Callable
 from functools import cached_property
-import yaml
+from textwrap import dedent
 
+import yaml
 from invoke.exceptions import UnexpectedExit
 
 from sdcm import (
@@ -27,13 +27,7 @@ from sdcm import (
     sct_abs_path,
 )
 from sdcm.cluster import LocalK8SHostNode
-from sdcm.remote import LOCALRUNNER
-from sdcm.remote.base import CommandRunner
 from sdcm.cluster_k8s import (
-    CloudK8sNodePool,
-    KubernetesCluster,
-    BaseScyllaPodContainer,
-    ScyllaPodCluster,
     COMMON_CONTAINERS_RESOURCES,
     INGRESS_CONTROLLER_CONFIG_PATH,
     K8S_LOCAL_VOLUME_PROVISIONER_VERSION,
@@ -43,13 +37,18 @@ from sdcm.cluster_k8s import (
     SCYLLA_MANAGER_AGENT_RESOURCES,
     SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER,
     SCYLLA_VERSION_IN_SCYLLA_MANAGER,
+    BaseScyllaPodContainer,
+    CloudK8sNodePool,
+    KubernetesCluster,
+    ScyllaPodCluster,
 )
-from sdcm.utils.k8s import TokenUpdateThread, HelmValues
-from sdcm.utils.k8s.chaos_mesh import ChaosMesh
+from sdcm.remote import LOCALRUNNER
+from sdcm.remote.base import CommandRunner
+from sdcm.utils import version_utils
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import docker_hub_login
-from sdcm.utils import version_utils
-
+from sdcm.utils.k8s import HelmValues, TokenUpdateThread
+from sdcm.utils.k8s.chaos_mesh import ChaosMesh
 
 SRC_APISERVER_AUDIT_POLICY = sct_abs_path("sdcm/k8s_configs/local-kind/audit-policy.yaml")
 DST_APISERVER_AUDIT_POLICY = "/etc/kubernetes/policies/audit-policy.yaml"
@@ -75,7 +74,7 @@ class MinimalK8SNodePool(CloudK8sNodePool):
         pass
 
     @cached_property
-    def cpu_and_memory_capacity(self) -> Tuple[float, float]:
+    def cpu_and_memory_capacity(self) -> tuple[float, float]:
         cpu_per_member = 1
         # NOTE: Setting '1' to 'memory_for_cpu_multiplier' we will get failure incresing CPUs
         #       Setting '2' to 'memory_for_cpu_multiplier' we will be able to add 1 CPU per member
@@ -282,7 +281,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
 
     @property
     @abc.abstractmethod
-    def _target_user(self) -> Optional[str]:
+    def _target_user(self) -> str | None:
         pass
 
     @property
@@ -331,7 +330,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
 
     @cached_property
     def minio_images(self):
-        with open(LOCAL_MINIO_DIR + '/values.yaml', mode='r', encoding='utf8') as minio_config_stream:
+        with open(LOCAL_MINIO_DIR + '/values.yaml', encoding='utf8') as minio_config_stream:
             minio_config = yaml.safe_load(minio_config_stream)
             return [
                 f"{minio_config['image']['repository']}:{minio_config['image']['tag']}",
@@ -340,7 +339,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
 
     @cached_property
     def static_local_volume_provisioner_image(self):
-        with open(LOCAL_PROVISIONER_FILE, mode='r', encoding='utf8') as provisioner_config_stream:
+        with open(LOCAL_PROVISIONER_FILE, encoding='utf8') as provisioner_config_stream:
             for doc in yaml.safe_load_all(provisioner_config_stream):
                 if doc["kind"] != "DaemonSet":
                     continue
@@ -371,7 +370,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
             for subfile in subfiles:
                 if not subfile.endswith('yaml'):
                     continue
-                with open(os.path.join(root, subfile), mode='r', encoding='utf8') as file_stream:
+                with open(os.path.join(root, subfile), encoding='utf8') as file_stream:
                     for doc in yaml.safe_load_all(file_stream):
                         if doc["kind"] != "Deployment":
                             continue
@@ -459,7 +458,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
     docker_pull: Callable
     docker_tag: Callable
     host_node: 'BaseNode'
-    scylla_image: Optional[str]
+    scylla_image: str | None
     software_version: str
     _target_user: str
     _create_kubectl_config_cmd: str = '/var/tmp/kind export kubeconfig'
@@ -578,7 +577,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
             if not target_route_regex.match(route_line):
                 continue
             route_parts = route_line.split()
-            route_cmd = "ip ro add {0} via {1} || ip ro change {0} via {1}".format(route_parts[0], route_parts[2])
+            route_cmd = f"ip ro add {route_parts[0]} via {route_parts[2]} || ip ro change {route_parts[0]} via {route_parts[2]}"
             self.host_node.remoter.run(f"sudo bash -c '{route_cmd}'")
 
     def stop_k8s_software(self):

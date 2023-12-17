@@ -12,15 +12,17 @@
 # Copyright (c) 2021 ScyllaDB
 
 import logging
-from time import sleep
 from datetime import datetime, timedelta
+from time import sleep
 
-from sdcm.tester import ClusterTester
-from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
-from sdcm.mgmt.cli import RepairTask
-from sdcm.mgmt.common import get_manager_repo_from_defaults, create_cron_list_from_timedelta
 from mgmt_cli_test import BackupFunctionsMixIn
-
+from sdcm.mgmt import TaskStatus, get_scylla_manager_tool
+from sdcm.mgmt.cli import RepairTask
+from sdcm.mgmt.common import (
+    create_cron_list_from_timedelta,
+    get_manager_repo_from_defaults,
+)
+from sdcm.tester import ClusterTester
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,7 +72,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             node_ip = scylla_manager_yaml["http"].split(":", maxsplit=1)[0]
             scylla_manager_yaml["http"] = f"{node_ip}:{new_manager_http_port}"
             scylla_manager_yaml["prometheus"] = f"{node_ip}:{self.params.get('manager_prometheus_port')}"
-            LOGGER.info("The new Scylla Manager is:\n{}".format(scylla_manager_yaml))
+            LOGGER.info(f"The new Scylla Manager is:\n{scylla_manager_yaml}")
         manager_node.restart_manager_server(port=new_manager_http_port)
         manager_tool = get_scylla_manager_tool(manager_node=manager_node)
         manager_tool.add_cluster(name="cluster_under_test", db_cluster=self.db_cluster,

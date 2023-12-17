@@ -11,20 +11,17 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from __future__ import annotations
-
 import abc
-import queue
 import ctypes
 import logging
-import threading
 import multiprocessing
-from typing import Union, Generator, Protocol, TypeVar, Generic, Type, Optional, cast
-from pathlib import Path
+import queue
+import threading
+from collections.abc import Generator
 from contextlib import contextmanager
-
+from pathlib import Path
+from typing import Generic, Protocol, TypeAlias, TypeVar, cast
 from weakref import proxy as weakproxy
-
 
 EVENTS_MAIN_DEVICE_ID = "MainDevice"
 EVENTS_FILE_LOGGER_ID = "EVENTS_FILE_LOGGER"
@@ -40,8 +37,7 @@ EVENTS_PROCESS_PIPE_OUTBOUND_QUEUE_EVENTS_RATE: float = 0
 
 LOGGER = logging.getLogger(__name__)
 
-
-StopEvent = Union[multiprocessing.Event, threading.Event]
+StopEvent: TypeAlias = 'multiprocessing.Event | threading.Event'
 
 T_inbound_event = TypeVar("T_inbound_event")  # pylint: disable=invalid-name
 T_outbound_event = TypeVar("T_outbound_event")  # pylint: disable=invalid-name
@@ -63,7 +59,7 @@ class BaseEventsProcess(Generic[T_inbound_event, T_outbound_event], abc.ABC):
     inbound_events_process = EVENTS_MAIN_DEVICE_ID
     stop_event: StopEvent
 
-    def __init__(self, _registry: EventsProcessesRegistry):
+    def __init__(self, _registry: 'EventsProcessesRegistry'):
         self._registry = _registry
         self._events_counter = multiprocessing.Value(ctypes.c_uint32, 0)
 
@@ -111,7 +107,7 @@ class EventsProcessPipe(BaseEventsProcess[T_inbound_event, T_outbound_event], th
     outbound_queue_wait_timeout = EVENTS_PROCESS_PIPE_OUTBOUND_QUEUE_WAIT_TIMEOUT
     outbound_queue_events_rate = EVENTS_PROCESS_PIPE_OUTBOUND_QUEUE_EVENTS_RATE
 
-    def __init__(self, _registry: EventsProcessesRegistry):
+    def __init__(self, _registry: 'EventsProcessesRegistry'):
         self.outbound_queue = queue.SimpleQueue()
 
         super().__init__(_registry=_registry)
@@ -134,18 +130,18 @@ class EventsProcessThread(BaseEventsProcess[T_inbound_event, T_outbound_event], 
     ...
 
 
-EventsProcess = Union[EventsProcessProcess, EventsProcessThread]
+EventsProcess = EventsProcessProcess | EventsProcessThread
 
 
 class EventsProcessesRegistry:
-    def __init__(self, log_dir: Union[str, Path], _default: bool = False):
+    def __init__(self, log_dir: str | Path, _default: bool = False):
         self.log_dir = Path(log_dir)
         self.default = _default
         self._registry_dict_lock = threading.RLock()
         self._registry_dict = {}
         LOGGER.debug("New events processes registry created: %s", self)
 
-    def start_events_process(self, name: str, klass: Type[EventsProcess]) -> None:
+    def start_events_process(self, name: str, klass: type[EventsProcess]) -> None:
         with self._registry_dict_lock:
             self._registry_dict[name] = process = klass(_registry=weakproxy(self))
         process.start()
@@ -162,10 +158,10 @@ class EventsProcessesRegistry:
 
 
 _EVENTS_PROCESSES_LOCK = threading.RLock()
-_EVENTS_PROCESSES: Optional[EventsProcessesRegistry] = None
+_EVENTS_PROCESSES: EventsProcessesRegistry | None = None
 
 
-def create_default_events_process_registry(log_dir: Union[str, Path]):
+def create_default_events_process_registry(log_dir: str | Path):
     global _EVENTS_PROCESSES  # pylint: disable=global-statement  # noqa: PLW0603
 
     with _EVENTS_PROCESSES_LOCK:
@@ -176,7 +172,7 @@ def create_default_events_process_registry(log_dir: Union[str, Path]):
     raise RuntimeError("Try to create default EventsProcessRegistry second time")
 
 
-def get_default_events_process_registry(_registry: Optional[EventsProcessesRegistry] = None) -> EventsProcessesRegistry:
+def get_default_events_process_registry(_registry: EventsProcessesRegistry | None = None) -> EventsProcessesRegistry:
     if _registry is not None:
         return _registry
     with _EVENTS_PROCESSES_LOCK:
@@ -185,11 +181,11 @@ def get_default_events_process_registry(_registry: Optional[EventsProcessesRegis
         return _EVENTS_PROCESSES
 
 
-def start_events_process(name, klass, _registry: Optional[EventsProcessesRegistry] = None) -> None:
+def start_events_process(name, klass, _registry: EventsProcessesRegistry | None = None) -> None:
     get_default_events_process_registry(_registry=_registry).start_events_process(name=name, klass=klass)
 
 
-def get_events_process(name: str, _registry: Optional[EventsProcessesRegistry] = None) -> EventsProcess:
+def get_events_process(name: str, _registry: EventsProcessesRegistry | None = None) -> EventsProcess:
     return get_default_events_process_registry(_registry=_registry).get_events_process(name=name)
 
 

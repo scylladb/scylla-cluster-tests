@@ -1,5 +1,5 @@
 [tool.ruff]
-lint.select = ["PL", "YTT", "BLE"]
+lint.select = ["PL", "YTT", "BLE", "I", "UP"]
 
 lint.ignore = ["E501", "PLR2004"]
 

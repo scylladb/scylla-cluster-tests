@@ -1,6 +1,6 @@
-import typing
-import functools
 import collections
+import functools
+import typing
 
 
 class __DEFAULT__:  # pylint: disable=invalid-name,too-few-public-methods
@@ -12,7 +12,7 @@ class __DEFAULT2__:  # pylint: disable=invalid-name,too-few-public-methods
 
 
 def get_data_by_path(
-        data: typing.Union[list, dict, object, typing.Type[object]],
+        data: list | dict | object | type[object],
         data_path: str,
         default: typing.Any = __DEFAULT__):
     """
@@ -50,7 +50,7 @@ def get_data_by_path(
 
 
 def get_class_by_path(
-        cls: typing.Type[object],
+        cls: type[object],
         class_path: str,
         default: typing.Any = __DEFAULT__):
     """
@@ -78,7 +78,7 @@ def get_class_by_path(
     return current
 
 
-GroupByType = typing.Dict[typing.Any, typing.Union['GroupByType', 'MagicList']]
+GroupByType = dict[typing.Any, 'GroupByType | MagicList']
 
 
 class MagicList(list):

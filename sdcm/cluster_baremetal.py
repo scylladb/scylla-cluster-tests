@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 from invoke import UnexpectedExit
 
@@ -54,7 +54,7 @@ class PhysicalMachineNode(cluster.BaseNode):
         self.set_hostname()
         self.run_startup_script()
 
-    def _get_public_ip_address(self) -> Optional[str]:
+    def _get_public_ip_address(self) -> str | None:
         return self._public_ip
 
     @property
@@ -72,7 +72,7 @@ class PhysicalMachineNode(cluster.BaseNode):
                 return
             raise exc
 
-    def _get_private_ip_address(self) -> Optional[str]:
+    def _get_private_ip_address(self) -> str | None:
         return self._private_ip
 
     def set_hostname(self):
@@ -125,7 +125,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         assert instance_type is None, "baremetal can provision diffrent types"
         for node_index in range(count):
-            node_name = '%s-%s' % (self.node_prefix, node_index)
+            node_name = f'{self.node_prefix}-{node_index}'
             self.nodes.append(self._create_node(node_name,
                                                 self._node_public_ips[node_index],
                                                 self._node_private_ips[node_index]))

@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 
 import os
 import unittest
@@ -9,6 +8,13 @@ import requests
 
 import sdcm
 from sdcm.utils.version_utils import (
+    SCYLLA_VERSION_GROUPED_RE,
+    VERSION_NOT_FOUND_ERROR,
+    ComparableScyllaOperatorVersion,
+    ComparableScyllaVersion,
+    MethodVersionNotFound,
+    RepositoryDetails,
+    ScyllaFileType,
     assume_version,
     get_all_versions,
     get_branch_version,
@@ -19,13 +25,6 @@ from sdcm.utils.version_utils import (
     get_specific_tag_of_docker_image,
     is_enterprise,
     scylla_versions,
-    ComparableScyllaOperatorVersion,
-    ComparableScyllaVersion,
-    MethodVersionNotFound,
-    RepositoryDetails,
-    ScyllaFileType,
-    SCYLLA_VERSION_GROUPED_RE,
-    VERSION_NOT_FOUND_ERROR,
 )
 
 BASE_S3_DOWNLOAD_URL = 'https://s3.amazonaws.com/downloads.scylladb.com'
@@ -335,8 +334,8 @@ def test_scylla_versions_decorator_negative(scylla_version, method):
                 scylla_version=scylla_version, nemesis_like_class=nemesis_like_class)
             getattr(cls_instance, method)()
         except MethodVersionNotFound as exc:
-            assert "Method '{}' with version '{}' is not supported in '{}'!".format(
-                method, scylla_version, cls_instance.__class__.__name__) in str(exc)
+            assert f"Method '{method}' with version '{scylla_version}' is not supported in '{cls_instance.__class__.__name__}'!" in str(
+                exc)
         else:
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
 
@@ -353,8 +352,8 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_nodes():
                 cls_instance.nodes = []
             cls_instance.oss_method()
         except MethodVersionNotFound as exc:
-            assert "Method 'oss_method' with version 'n/a' is not supported in '{}'!".format(
-                cls_instance.__class__.__name__) in str(exc)
+            assert f"Method 'oss_method' with version 'n/a' is not supported in '{cls_instance.__class__.__name__}'!" in str(
+                exc)
         else:
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
 
@@ -371,8 +370,8 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_attr():
                 delattr(cls_instance.nodes[0], "scylla_version")
             cls_instance.oss_method()
         except MethodVersionNotFound as exc:
-            assert "Method 'oss_method' with version 'n/a' is not supported in '{}'!".format(
-                cls_instance.__class__.__name__) in str(exc)
+            assert f"Method 'oss_method' with version 'n/a' is not supported in '{cls_instance.__class__.__name__}'!" in str(
+                exc)
         else:
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
 

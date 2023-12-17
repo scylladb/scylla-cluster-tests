@@ -1,13 +1,14 @@
 #!/usr/bin/env python
-import sys
-import os.path
 import datetime
 import logging
 import logging.config
+import os.path
+import sys
 
 import click
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import scan
+
 from sdcm.keystore import KeyStore
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))

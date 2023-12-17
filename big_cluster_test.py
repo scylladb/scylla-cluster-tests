@@ -18,8 +18,7 @@
 
 import logging
 
-from sdcm.tester import ClusterTester
-from sdcm.tester import teardown_on_exception
+from sdcm.tester import ClusterTester, teardown_on_exception
 
 
 class HugeClusterTest(ClusterTester):

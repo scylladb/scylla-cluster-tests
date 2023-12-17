@@ -14,7 +14,6 @@
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.resource.resources.models import ResourceGroup
@@ -31,7 +30,7 @@ class ResourceGroupProvider:
     _region: str
     _az: str
     _azure_service: AzureService = AzureService()
-    _cache: Optional[ResourceGroup] = field(default=None)
+    _cache: ResourceGroup | None = field(default=None)
 
     def __post_init__(self):
         """Discover existing resource group for this provider."""

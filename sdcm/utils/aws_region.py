@@ -12,8 +12,8 @@
 # Copyright (c) 2021 ScyllaDB
 
 import logging
+from functools import cache, cached_property
 from ipaddress import ip_network
-from functools import cached_property, cache
 
 import boto3
 import botocore
@@ -43,7 +43,9 @@ class AwsRegion:
         self.resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
 
         # cause import straight from common create cyclic dependency
-        from sdcm.utils.common import all_aws_regions  # pylint: disable=import-outside-toplevel
+        from sdcm.utils.common import (
+            all_aws_regions,  # pylint: disable=import-outside-toplevel
+        )
 
         region_index = all_aws_regions(cached=True).index(self.region_name)
         cidr = ip_network(self.SCT_VPC_CIDR_TMPL.format(region_index))

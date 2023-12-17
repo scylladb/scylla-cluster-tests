@@ -13,15 +13,19 @@
 
 # pylint: disable=too-many-arguments; looks like we need to increase DESIGN.max_args to 10 in our pylintrc
 # pylint: disable=invalid-overridden-method; pylint doesn't know that cached_property is property
+import logging
 import os
 import re
-import logging
-from typing import Optional, Union, Dict
 from functools import cached_property
 
 from sdcm import cluster
 from sdcm.remote import LOCALRUNNER
-from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
+from sdcm.utils.docker_utils import (
+    Container,
+    ContainerManager,
+    DockerException,
+    get_docker_bridge_gateway,
+)
 from sdcm.utils.health_checker import check_nodes_status
 from sdcm.utils.net import get_my_public_ip
 
@@ -63,10 +67,10 @@ class NodeContainerMixin:
 class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstract-method
     def __init__(self,  # pylint: disable=too-many-arguments
                  parent_cluster: "DockerCluster",
-                 container: Optional[Container] = None,
+                 container: Container | None = None,
                  node_prefix: str = "node",
-                 base_logdir: Optional[str] = None,
-                 ssh_login_info: Optional[dict] = None,
+                 base_logdir: str | None = None,
+                 ssh_login_info: dict | None = None,
                  node_index: int = 1) -> None:
         super().__init__(name=f"{node_prefix}-{node_index}",
                          parent_cluster=parent_cluster,
@@ -96,14 +100,14 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         return True
 
     @cached_property
-    def tags(self) -> Dict[str, str]:
+    def tags(self) -> dict[str, str]:
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
 
-    def _get_public_ip_address(self) -> Optional[str]:
+    def _get_public_ip_address(self) -> str | None:
         return ContainerManager.get_ip_address(self, "node")
 
-    def _get_private_ip_address(self) -> Optional[str]:
+    def _get_private_ip_address(self) -> str | None:
         return self.public_ip_address
 
     def _refresh_instance_state(self):
@@ -208,11 +212,11 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
     def __init__(self,
                  docker_image: str = DEFAULT_SCYLLA_DB_IMAGE,
                  docker_image_tag: str = DEFAULT_SCYLLA_DB_IMAGE_TAG,
-                 node_key_file: Optional[str] = None,
+                 node_key_file: str | None = None,
                  cluster_prefix: str = "cluster",
                  node_prefix: str = "node",
-                 node_type: Optional[str] = None,
-                 n_nodes: Union[list, int] = 3,
+                 node_type: str | None = None,
+                 n_nodes: list | int = 3,
                  params: dict = None) -> None:
         self.source_image = f"{docker_image}:{docker_image_tag}"
         self.node_container_image_tag = f"scylla-sct:{node_type}-{str(self.test_config.test_id())[:8]}"
@@ -283,9 +287,9 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
     def __init__(self,
                  docker_image: str = DEFAULT_SCYLLA_DB_IMAGE,
                  docker_image_tag: str = DEFAULT_SCYLLA_DB_IMAGE_TAG,
-                 node_key_file: Optional[str] = None,
-                 user_prefix: Optional[str] = None,
-                 n_nodes: Union[list, str] = 3,
+                 node_key_file: str | None = None,
+                 user_prefix: str | None = None,
+                 n_nodes: list | str = 3,
                  params: dict = None) -> None:
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
@@ -349,9 +353,9 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
     def __init__(self,
                  docker_image: str = DEFAULT_SCYLLA_DB_IMAGE,
                  docker_image_tag: str = DEFAULT_SCYLLA_DB_IMAGE_TAG,
-                 node_key_file: Optional[str] = None,
-                 user_prefix: Optional[str] = None,
-                 n_nodes: Union[list, str] = 3,
+                 node_key_file: str | None = None,
+                 user_prefix: str | None = None,
+                 n_nodes: list | str = 3,
                  params: dict = None) -> None:
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
@@ -385,9 +389,9 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
     def __init__(self,
                  parent_cluster: "MonitorSetDocker",
                  node_prefix: str = "monitor-node",
-                 base_logdir: Optional[str] = None,
+                 base_logdir: str | None = None,
                  node_index: int = 1,
-                 ssh_login_info: Optional[dict] = None) -> None:
+                 ssh_login_info: dict | None = None) -> None:
         super().__init__(name=f"{node_prefix}-{node_index}",
                          parent_cluster=parent_cluster,
                          base_logdir=base_logdir,
@@ -436,8 +440,8 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
 class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disable=abstract-method
     def __init__(self,
                  targets: dict,
-                 user_prefix: Optional[str] = None,
-                 n_nodes: Union[list, int] = 3,
+                 user_prefix: str | None = None,
+                 n_nodes: list | int = 3,
                  params: dict = None) -> None:
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')

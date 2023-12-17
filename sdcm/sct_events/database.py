@@ -11,16 +11,26 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
 import logging
+import re
+from collections.abc import Callable
 from functools import partial
-from typing import Type, List, Tuple, Generic, Optional, NamedTuple, Pattern, Callable, Match
+from re import Match, Pattern
+from typing import (
+    Generic,
+    NamedTuple,
+)
 
-from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent, \
-    EventPeriod
-
-from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEvent
+from sdcm.sct_events import SctEventProtocol, Severity
+from sdcm.sct_events.base import (
+    EventPeriod,
+    InformationalEvent,
+    LogEvent,
+    LogEventProtocol,
+    SctEvent,
+    T_log_event,
+)
+from sdcm.sct_events.continuous_event import ContinuousEvent, ContinuousEventsRegistry
 from sdcm.sct_events.system import TestFrameworkEvent
 
 TOLERABLE_REACTOR_STALL: int = 500  # ms
@@ -29,39 +39,39 @@ LOGGER = logging.getLogger(__name__)
 
 
 class DatabaseLogEvent(LogEvent, abstract=True):
-    WARNING: Type[LogEventProtocol]
-    NO_SPACE_ERROR: Type[LogEventProtocol]
-    UNKNOWN_VERB: Type[LogEventProtocol]
-    CLIENT_DISCONNECT: Type[LogEventProtocol]
-    SEMAPHORE_TIME_OUT: Type[LogEventProtocol]
-    LDAP_CONNECTION_RESET: Type[LogEventProtocol]
-    SYSTEM_PAXOS_TIMEOUT: Type[LogEventProtocol]
-    SERVICE_LEVEL_CONTROLLER: Type[LogEventProtocol]
-    GATE_CLOSED: Type[LogEventProtocol]
-    RESTARTED_DUE_TO_TIME_OUT: Type[LogEventProtocol]
-    EMPTY_NESTED_EXCEPTION: Type[LogEventProtocol]
-    BAD_ALLOC: Type[LogEventProtocol]
-    SCHEMA_FAILURE: Type[LogEventProtocol]
-    RUNTIME_ERROR: Type[LogEventProtocol]
-    DIRECTORY_NOT_EMPTY: Type[LogEventProtocol]
-    FILESYSTEM_ERROR: Type[LogEventProtocol]
-    STACKTRACE: Type[LogEventProtocol]
-    RAFT_TRANSFER_SNAPSHOT_ERROR: Type[LogEventProtocol]
-    DISK_ERROR: Type[LogEventProtocol]
-    COMPACTION_STOPPED: Type[LogEventProtocol]
+    WARNING: type[LogEventProtocol]
+    NO_SPACE_ERROR: type[LogEventProtocol]
+    UNKNOWN_VERB: type[LogEventProtocol]
+    CLIENT_DISCONNECT: type[LogEventProtocol]
+    SEMAPHORE_TIME_OUT: type[LogEventProtocol]
+    LDAP_CONNECTION_RESET: type[LogEventProtocol]
+    SYSTEM_PAXOS_TIMEOUT: type[LogEventProtocol]
+    SERVICE_LEVEL_CONTROLLER: type[LogEventProtocol]
+    GATE_CLOSED: type[LogEventProtocol]
+    RESTARTED_DUE_TO_TIME_OUT: type[LogEventProtocol]
+    EMPTY_NESTED_EXCEPTION: type[LogEventProtocol]
+    BAD_ALLOC: type[LogEventProtocol]
+    SCHEMA_FAILURE: type[LogEventProtocol]
+    RUNTIME_ERROR: type[LogEventProtocol]
+    DIRECTORY_NOT_EMPTY: type[LogEventProtocol]
+    FILESYSTEM_ERROR: type[LogEventProtocol]
+    STACKTRACE: type[LogEventProtocol]
+    RAFT_TRANSFER_SNAPSHOT_ERROR: type[LogEventProtocol]
+    DISK_ERROR: type[LogEventProtocol]
+    COMPACTION_STOPPED: type[LogEventProtocol]
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
-    REACTOR_STALLED: Type[LogEventProtocol]
-    KERNEL_CALLSTACK: Type[LogEventProtocol]
-    ABORTING_ON_SHARD: Type[LogEventProtocol]
-    SEGMENTATION: Type[LogEventProtocol]
-    CORRUPTED_SSTABLE: Type[LogEventProtocol]
-    INTEGRITY_CHECK: Type[LogEventProtocol]
-    SUPPRESSED_MESSAGES: Type[LogEventProtocol]
-    stream_exception: Type[LogEventProtocol]
-    RPC_CONNECTION: Type[LogEventProtocol]
-    DATABASE_ERROR: Type[LogEventProtocol]
-    BACKTRACE: Type[LogEventProtocol]
+    REACTOR_STALLED: type[LogEventProtocol]
+    KERNEL_CALLSTACK: type[LogEventProtocol]
+    ABORTING_ON_SHARD: type[LogEventProtocol]
+    SEGMENTATION: type[LogEventProtocol]
+    CORRUPTED_SSTABLE: type[LogEventProtocol]
+    INTEGRITY_CHECK: type[LogEventProtocol]
+    SUPPRESSED_MESSAGES: type[LogEventProtocol]
+    stream_exception: type[LogEventProtocol]
+    RPC_CONNECTION: type[LogEventProtocol]
+    DATABASE_ERROR: type[LogEventProtocol]
+    BACKTRACE: type[LogEventProtocol]
 
 
 MILLI_RE = re.compile(r"(\d+) ms")
@@ -192,7 +202,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.DATABASE_ERROR(),
     DatabaseLogEvent.BACKTRACE(),
 )
-SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+SYSTEM_ERROR_EVENTS_PATTERNS: list[tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex, re.IGNORECASE), event) for event in SYSTEM_ERROR_EVENTS]
 
 # BACKTRACE_RE should match those:
@@ -203,11 +213,11 @@ BACKTRACE_RE = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-9a-f]*$)|'
 
 
 class ScyllaHelpErrorEvent(SctEvent, abstract=True):
-    duplicate: Type[SctEventProtocol]
-    filtered: Type[SctEventProtocol]
+    duplicate: type[SctEventProtocol]
+    filtered: type[SctEventProtocol]
     message: str
 
-    def __init__(self, message: Optional[str] = None, severity=Severity.WARNING):
+    def __init__(self, message: str | None = None, severity=Severity.WARNING):
         super().__init__(severity=severity)
 
         # Don't include `message' to the state if it's None.
@@ -266,7 +276,7 @@ class ScyllaServerEventPattern(NamedTuple):
 
 class ScyllaServerEventPatternFuncs(NamedTuple):
     pattern: Pattern
-    event_class: Type[ContinuousEvent]
+    event_class: type[ContinuousEvent]
     period_func: Callable
 
 
@@ -306,7 +316,7 @@ class BootstrapEvent(ScyllaDatabaseContinuousEvent):
 
 
 class FullScanEvent(ScyllaDatabaseContinuousEvent):
-    def __init__(self, node: str, ks_cf: str, message: Optional[str] = None, severity=Severity.NORMAL,
+    def __init__(self, node: str, ks_cf: str, message: str | None = None, severity=Severity.NORMAL,
                  **kwargs):
         self.ks_cf = ks_cf
         self.message = message
@@ -327,7 +337,7 @@ class FullScanEvent(ScyllaDatabaseContinuousEvent):
 
 
 class FullPartitionScanReversedOrderEvent(ScyllaDatabaseContinuousEvent):
-    def __init__(self, node: str, ks_cf: str, message: Optional[str] = None, severity=Severity.NORMAL, **__):
+    def __init__(self, node: str, ks_cf: str, message: str | None = None, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
         self.ks_cf = ks_cf
         self.message = message
@@ -341,7 +351,7 @@ class FullPartitionScanReversedOrderEvent(ScyllaDatabaseContinuousEvent):
 
 
 class FullPartitionScanEvent(ScyllaDatabaseContinuousEvent):
-    def __init__(self, node: str, ks_cf: str, message: Optional[str] = None, severity=Severity.NORMAL, **__):
+    def __init__(self, node: str, ks_cf: str, message: str | None = None, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
         self.ks_cf = ks_cf
         self.message = message
@@ -355,7 +365,7 @@ class FullPartitionScanEvent(ScyllaDatabaseContinuousEvent):
 
 
 class TombstoneGcVerificationEvent(ScyllaDatabaseContinuousEvent):
-    def __init__(self, node: str, ks_cf: str, message: Optional[str] = None, severity=Severity.NORMAL, **__):
+    def __init__(self, node: str, ks_cf: str, message: str | None = None, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
         self.ks_cf = ks_cf
         self.message = message
@@ -438,7 +448,7 @@ class ScyllaSysconfigSetupEvent(ScyllaDatabaseContinuousEvent):
 
 
 class ScyllaYamlUpdateEvent(InformationalEvent):
-    def __init__(self, node_name: str, message: Optional[str] = None, diff: dict | None = None,
+    def __init__(self, node_name: str, message: str | None = None, diff: dict | None = None,
                  severity=Severity.NORMAL, **__):
         super().__init__(severity=severity)
         self.message = message or f"Updating scylla.yaml contents on node: {node_name}. Diff: {diff}"
@@ -457,7 +467,7 @@ SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
 
 
 def get_pattern_to_event_to_func_mapping(node: str) \
-        -> List[ScyllaServerEventPatternFuncs]:
+        -> list[ScyllaServerEventPatternFuncs]:
     """
     This function maps regex patterns, event classes and begin / end
     functions into ScyllaServerEventPatternFuncs object. Helper
@@ -467,13 +477,13 @@ def get_pattern_to_event_to_func_mapping(node: str) \
     mapping = []
     event_registry = ContinuousEventsRegistry()
 
-    def _add_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
+    def _add_event(event_type: type[ScyllaDatabaseContinuousEvent], match: Match):
         kwargs = match.groupdict()
         if "shard" in kwargs:
             kwargs["shard"] = int(kwargs["shard"])
         event_type(node=node, **kwargs).begin_event()
 
-    def _end_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
+    def _end_event(event_type: type[ScyllaDatabaseContinuousEvent], match: Match):
         kwargs = match.groupdict()
         continuous_hash = event_type.get_continuous_hash_from_dict({'node': node, **kwargs})
         if begin_event := event_registry.find_continuous_events_by_hash(continuous_hash):

@@ -10,9 +10,9 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from typing import Any, Optional, List, Protocol
+from typing import Any, Protocol
 
-from sdcm.sct_events import Severity, SctEventProtocol
+from sdcm.sct_events import SctEventProtocol, Severity
 from sdcm.sct_events.continuous_event import ContinuousEvent
 
 
@@ -20,12 +20,12 @@ class BaseStressEvent(ContinuousEvent, abstract=True):
     # pylint: disable=too-many-arguments
     @classmethod
     def add_stress_subevents(cls,
-                             failure: Optional[Severity] = None,
-                             error: Optional[Severity] = None,
-                             timeout: Optional[Severity] = None,
-                             start: Optional[Severity] = Severity.NORMAL,
-                             finish: Optional[Severity] = Severity.NORMAL,
-                             warning: Optional[Severity] = None) -> None:
+                             failure: Severity | None = None,
+                             error: Severity | None = None,
+                             timeout: Severity | None = None,
+                             start: Severity | None = Severity.NORMAL,
+                             finish: Severity | None = Severity.NORMAL,
+                             warning: Severity | None = None) -> None:
         if failure is not None:
             cls.add_subevent_type("failure", severity=failure)
         if error is not None:
@@ -42,9 +42,9 @@ class BaseStressEvent(ContinuousEvent, abstract=True):
 
 class StressEventProtocol(SctEventProtocol, Protocol):
     node: str
-    stress_cmd: Optional[str]
-    log_file_name: Optional[str]
-    errors: Optional[List[str]]
+    stress_cmd: str | None
+    log_file_name: str | None
+    errors: list[str] | None
 
     @property
     def errors_formatted(self):
@@ -55,9 +55,9 @@ class StressEvent(BaseStressEvent, abstract=True):
     # pylint: disable=too-many-arguments
     def __init__(self,
                  node: Any,
-                 stress_cmd: Optional[str] = None,
-                 log_file_name: Optional[str] = None,
-                 errors: Optional[List[str]] = None,
+                 stress_cmd: str | None = None,
+                 log_file_name: str | None = None,
+                 errors: list[str] | None = None,
                  severity: Severity = Severity.NORMAL,
                  publish_event: bool = True):
         self.node = str(node)

@@ -18,7 +18,6 @@ import jenkins
 
 from sdcm.wait import wait_for
 
-
 DIR_TEMPLATE = Path(__file__).parent.joinpath("folder-template.xml").read_text(encoding="utf-8")
 JOB_TEMPLATE = Path(__file__).parent.joinpath("template.xml").read_text(encoding="utf-8")
 LOGGER = logging.getLogger(__name__)

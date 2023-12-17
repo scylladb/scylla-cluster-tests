@@ -4,12 +4,14 @@ import unittest
 from typing import NamedTuple
 
 from sdcm.cluster import BaseNode
+from sdcm.sla.libs.sla_utils import SchedulerRuntimeUnexpectedValue, SlaUtils
 from sdcm.utils.distro import Distro
-from sdcm.utils.loader_utils import (STRESS_ROLE_NAME_TEMPLATE,
-                                     STRESS_ROLE_PASSWORD_TEMPLATE,
-                                     SERVICE_LEVEL_NAME_TEMPLATE)
-from sdcm.sla.libs.sla_utils import SlaUtils, SchedulerRuntimeUnexpectedValue
-from test_lib.sla import Role, UserRoleBase, ServiceLevel
+from sdcm.utils.loader_utils import (
+    SERVICE_LEVEL_NAME_TEMPLATE,
+    STRESS_ROLE_NAME_TEMPLATE,
+    STRESS_ROLE_PASSWORD_TEMPLATE,
+)
+from test_lib.sla import Role, ServiceLevel, UserRoleBase
 from unit_tests.test_cluster import DummyDbCluster
 
 logging.basicConfig(level=logging.DEBUG)

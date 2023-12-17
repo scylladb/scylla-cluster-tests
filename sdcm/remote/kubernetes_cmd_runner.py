@@ -15,11 +15,11 @@ import inspect
 import logging
 import threading
 import time
-from typing import Optional, Callable, Iterator, List
-import yaml
+from collections.abc import Callable, Iterator
 
 import kubernetes as k8s
-from invoke import Runner, Context, Config
+import yaml
+from invoke import Config, Context, Runner
 from invoke.exceptions import ThreadException
 from urllib3.exceptions import (
     MaxRetryError,
@@ -27,15 +27,15 @@ from urllib3.exceptions import (
     ReadTimeoutError,
 )
 
-from sdcm.cluster import TestConfig
 from sdcm import sct_abs_path
-from sdcm.utils.k8s import KubernetesOps
+from sdcm.cluster import TestConfig
 from sdcm.utils.common import (
+    KeyBasedLock,
     deprecation,
     generate_random_string,
-    KeyBasedLock,
 )
 from sdcm.utils.decorators import retrying
+from sdcm.utils.k8s import KubernetesOps
 from sdcm.wait import wait_for
 
 from .base import RetryableNetworkException
@@ -46,7 +46,7 @@ KEY_BASED_LOCKS = KeyBasedLock()
 
 
 def is_scylla_bench_command(command):
-    return all((str_part in command for str_part in ("scylla-bench", " -workload=", " -mode=")))
+    return all(str_part in command for str_part in ("scylla-bench", " -workload=", " -mode="))
 
 
 class KubernetesRunner(Runner):
@@ -105,7 +105,7 @@ class KubernetesRunner(Runner):
     def process_is_finished(self) -> bool:
         return not self.process.is_open()
 
-    def returncode(self) -> Optional[int]:
+    def returncode(self) -> int | None:
         try:
             return self.process.returncode
         except (TypeError, KeyError, ValueError):
@@ -128,7 +128,7 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
     default_run_retry = 8
 
     def __init__(self, kluster, pod_image: str,  # pylint: disable=too-many-arguments
-                 pod_name: str, container: Optional[str] = None,
+                 pod_name: str, container: str | None = None,
                  namespace: str = "default") -> None:
         self.kluster = kluster
         self.pod_image = pod_image
@@ -187,9 +187,9 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
                                                           "k8s_namespace": self.namespace, })))
 
     # pylint: disable=too-many-arguments
-    def _run_execute(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
+    def _run_execute(self, cmd: str, timeout: float | None = None,  # pylint: disable=too-many-arguments
                      ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-                     watchers: Optional[List[StreamWatcher]] = None):
+                     watchers: list[StreamWatcher] | None = None):
         # TODO: This should be removed than sudo calls will be done in more organized way.
         tmp = cmd.split(maxsplit=3)
         if tmp[0] == 'sudo':
@@ -375,7 +375,7 @@ class KubernetesPodWatcher(KubernetesRunner):
             namespace=self.context.config.k8s_namespace).stdout.strip()
         return yaml.safe_load(result_raw) or {}
 
-    def returncode(self, status: dict | None = None) -> Optional[int]:  # pylint: disable=arguments-differ
+    def returncode(self, status: dict | None = None) -> int | None:  # pylint: disable=arguments-differ
         if status is None:
             status = self._get_pod_status()
         # NOTE: logic is based on the following conditions:
@@ -626,8 +626,8 @@ class KubernetesPodRunner(KubernetesCmdRunner):
                     return None
                 # Different src file, but the same 'dst' means we do something really wrong
                 raise ValueError(
-                    "Cannot mount '%s' src file to the '%s' dst. "
-                    "It is already used by another src file -> '%s'." % (src, dst, existing_src))
+                    f"Cannot mount '{src}' src file to the '{dst}' dst. "
+                    f"It is already used by another src file -> '{existing_src}'.")
 
             # Generate name for the configMap
             cm_name = f"cm--{self.pod_name_template}--{generate_random_string(5).lower()}"

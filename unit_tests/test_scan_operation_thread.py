@@ -6,19 +6,25 @@ test_scan_positive - positive scenario
 test_scan_negative_operation_timed_out - getting operation_timed_out in scan execution
 test_scan_negative_exception - getting operation_timed_out in scan execution (with and without nemesis)
 """
-from pathlib import Path
 import os
-from threading import Event
 from importlib import reload
+from pathlib import Path
+from threading import Event
 from unittest.mock import MagicMock, patch
+
 import pytest
 from cassandra import OperationTimedOut, ReadTimeout
 
+import sdcm.scan_operation_thread
+from sdcm.scan_operation_thread import (
+    PrometheusDBStats,
+    ScanOperationThread,
+    ThreadParams,
+)
+from sdcm.utils.decorators import Retry, retrying
+
 # from sdcm.utils.operations_thread import ThreadParams
 from unit_tests.test_cluster import DummyDbCluster, DummyNode
-from sdcm.utils.decorators import retrying, Retry
-import sdcm.scan_operation_thread
-from sdcm.scan_operation_thread import ScanOperationThread, ThreadParams, PrometheusDBStats
 
 
 def mock_retrying_decorator(*args, **kwargs):  # pylint: disable=unused-argument

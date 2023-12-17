@@ -16,20 +16,21 @@ import json
 import os
 import tempfile
 import unittest
-from typing import List
 from unittest.mock import patch
 
 from parameterized import parameterized
 
-from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
+from sdcm.cluster import BaseCluster, BaseNode, BaseScyllaCluster
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration, ssh_connection_ip_type
-from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder, ScyllaYamlClusterAttrBuilder, ScyllaYaml
+from sdcm.provision.scylla_yaml import (
+    ScyllaYaml,
+    ScyllaYamlClusterAttrBuilder,
+    ScyllaYamlNodeAttrBuilder,
+)
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase
 from sdcm.sct_config import SCTConfiguration
 from sdcm.test_config import TestConfig
-
 from sdcm.utils.distro import Distro
-
 
 __builtin__ = [].__class__.__module__
 
@@ -403,7 +404,7 @@ class ObjectDict(dict):
 
 
 class DummyCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=too-few-public-methods
-    nodes: List['DummyNode']
+    nodes: list['DummyNode']
 
     def __init__(self, params):  # pylint: disable=super-init-not-called
         self.nodes = []

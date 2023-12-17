@@ -11,13 +11,12 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
 import logging
-from typing import Generator
+import time
+from collections.abc import Generator
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
-
 
 CHECK_NODE_HEALTH_RETRIES = 3
 CHECK_NODE_HEALTH_RETRY_DELAY = 45

@@ -11,16 +11,16 @@
 #
 # Copyright (c) 2023 ScyllaDB
 import logging
+import re
 import time
 import uuid
 from collections import defaultdict
 from datetime import datetime
 from functools import cached_property
-import re
 from typing import Any
 
 import yaml
-from cachetools import cached, TTLCache
+from cachetools import TTLCache, cached
 
 from sdcm.es import ES
 from sdcm.remote import RemoteCmdRunner

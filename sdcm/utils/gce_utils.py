@@ -11,24 +11,22 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import re
 import json
-import random
 import logging
+import os
+import random
+import re
 import time
-from typing import Any, List, Literal
+from typing import Any, Literal
 
-from google.oauth2 import service_account
-from google.cloud import compute_v1
-from google.cloud.compute_v1 import Image
-from google.cloud import storage
 from google.api_core.extended_operation import ExtendedOperation
+from google.cloud import compute_v1, storage
+from google.cloud.compute_v1 import Image
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
-
+from sdcm.utils.docker_utils import Container, ContainerManager, DockerException
 
 # NOTE: we cannot use neither 'slim' nor 'alpine' versions because we need the 'beta' component be installed.
 GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:437.0.1"
@@ -374,14 +372,14 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
     project_id: str,
     zone: str,
     instance_name: str,
-    disks: List[compute_v1.AttachedDisk],
+    disks: list[compute_v1.AttachedDisk],
     machine_type: str = "n1-standard-1",
     network_name: str = None,
     subnetwork_link: str = None,
     internal_ip: str = None,
     external_access: bool = False,
     external_ipv4: str = None,
-    accelerators: List[compute_v1.AcceleratorConfig] = None,
+    accelerators: list[compute_v1.AcceleratorConfig] = None,
     spot: bool = False,
     instance_termination_action: str = "STOP",
     custom_hostname: str = None,

@@ -1,8 +1,14 @@
 from collections import namedtuple
+
 import pytest
 
-from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
-    SimpleReplicationStrategy, NetworkTopologyReplicationStrategy, ReplicationStrategy, LocalReplicationStrategy
+from sdcm.utils.replication_strategy_utils import (
+    LocalReplicationStrategy,
+    NetworkTopologyReplicationStrategy,
+    ReplicationStrategy,
+    SimpleReplicationStrategy,
+    temporary_replication_strategy_setter,
+)
 
 
 class TestReplicationStrategies:
@@ -75,7 +81,7 @@ class Cluster:  # pylint: disable=unused-argument,too-few-public-methods
         return Cluster.Session()
 
 
-class Node():  # pylint: disable=too-few-public-methods
+class Node:  # pylint: disable=too-few-public-methods
 
     def __init__(self):
         self.parent_cluster = Cluster()

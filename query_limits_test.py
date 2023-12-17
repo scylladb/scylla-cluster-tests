@@ -15,8 +15,7 @@
 
 import logging
 
-from sdcm.tester import ClusterTester
-from sdcm.tester import teardown_on_exception
+from sdcm.tester import ClusterTester, teardown_on_exception
 
 
 class QueryLimitsTest(ClusterTester):
@@ -81,7 +80,7 @@ class QueryLimitsTest(ClusterTester):
     def test_connection_limits(self):
         ips = self.db_cluster.get_node_private_ips()
         params = " --servers %s --duration 600 --queries 1000000" % (ips[0])
-        cmd = '%s %s' % (self.payload, params)
+        cmd = f'{self.payload} {params}'
         result = self.loaders.nodes[0].remoter.run(cmd, ignore_status=True)
         if result.exit_status != 0:
             self.fail('Payload failed:\n%s' % result)

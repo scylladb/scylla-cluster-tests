@@ -11,19 +11,17 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import sys
-import time
-import logging
 import datetime
 import json
+import logging
 import os
+import sys
+import time
+from collections.abc import Callable
+from functools import cached_property, partial, wraps
 
-from functools import wraps, partial, cached_property
-from typing import Optional, Callable
 from sdcm.sct_events.database import DatabaseLogEvent
-
 from sdcm.sct_events.event_counter import EventCounterContextManager
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -113,7 +111,7 @@ def log_run_info(arg):
             class_name = ""
             if args and func.__name__ in dir(args[0]):
                 class_name = " <%s>" % args[0].__class__.__name__
-            action = "%s%s" % (msg, class_name)
+            action = f"{msg}{class_name}"
             start_time = datetime.datetime.now()
             LOGGER.debug("BEGIN: %s", action)
             res = func(*args, **kwargs)
@@ -155,7 +153,7 @@ def measure_time(func):
     return wrapped
 
 
-def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None):
+def latency_calculator_decorator(original_function: Callable | None = None, *, legend: str | None = None):
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
 

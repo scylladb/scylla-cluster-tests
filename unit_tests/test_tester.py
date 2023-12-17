@@ -11,22 +11,22 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import os
 import shutil
-import logging
 import tempfile
 import time
 import unittest.mock
 from time import sleep
 
-from sdcm.sct_events import Severity
-from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.tester import ClusterTester, silence, TestResultEvent
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.log import MultilineMessagesFormatter, configure_logging
-from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.sct_events.file_logger import get_events_grouped_by_category
+from sdcm.sct_events import Severity
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
+from sdcm.sct_events.file_logger import get_events_grouped_by_category
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
+from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.tester import ClusterTester, TestResultEvent, silence
+from sdcm.utils.log import MultilineMessagesFormatter, configure_logging
 
 
 class FakeSCTConfiguration(SCTConfiguration):

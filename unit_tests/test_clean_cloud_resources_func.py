@@ -15,11 +15,15 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.common import \
-    clean_cloud_resources, \
-    clean_instances_aws, clean_elastic_ips_aws, clean_clusters_gke, clean_instances_gce, clean_resources_docker
+from sdcm.utils.common import (
+    clean_cloud_resources,
+    clean_clusters_gke,
+    clean_elastic_ips_aws,
+    clean_instances_aws,
+    clean_instances_gce,
+    clean_resources_docker,
+)
 from sdcm.utils.context_managers import environment
-
 
 SCT_RUNNER_AWS = {
     "Tags": [{"Key": "NodeType", "Value": "sct-runner"}],

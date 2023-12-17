@@ -13,23 +13,29 @@
 
 # pylint: disable=no-member; disable `no-member' messages because of zmq.
 
-import time
-import queue
 import ctypes
-import pickle
 import logging
 import multiprocessing
-from typing import Optional, Generator, Any, Tuple, Callable, cast, Dict
-from pathlib import Path
+import pickle
+import queue
+import time
+from collections.abc import Callable, Generator
 from functools import cached_property, partial
+from pathlib import Path
+from typing import Any, cast
 from uuid import UUID
 
 import zmq
 
-from sdcm.sct_events.events_processes import \
-    EVENTS_MAIN_DEVICE_ID, StopEvent, EventsProcessesRegistry, \
-    start_events_process, get_events_process, verbose_suppress, suppress_interrupt
-
+from sdcm.sct_events.events_processes import (
+    EVENTS_MAIN_DEVICE_ID,
+    EventsProcessesRegistry,
+    StopEvent,
+    get_events_process,
+    start_events_process,
+    suppress_interrupt,
+    verbose_suppress,
+)
 
 EVENTS_DEVICE_START_DELAY: float = 0  # seconds
 EVENTS_DEVICE_START_TIMEOUT: float = 30  # seconds
@@ -76,7 +82,7 @@ class EventsDevice(multiprocessing.Process):
     def raw_events_log(self) -> Path:
         return self.events_log_base_dir / RAW_EVENTS_LOG
 
-    def stop(self, timeout: Optional[float] = None) -> None:
+    def stop(self, timeout: float | None = None) -> None:
         self._running.clear()
         self.join(timeout)
 
@@ -143,12 +149,12 @@ class EventsDevice(multiprocessing.Process):
     # pylint: disable=import-outside-toplevel
     def outbound_events(self,
                         stop_event: StopEvent,
-                        events_counter: multiprocessing.Value) -> Generator[Tuple[str, Any], None, None]:
+                        events_counter: multiprocessing.Value) -> Generator[tuple[str, Any], None, None]:
         from sdcm.sct_events.base import max_severity
-        from sdcm.sct_events.system import SystemEvent
         from sdcm.sct_events.filters import BaseFilter
+        from sdcm.sct_events.system import SystemEvent
 
-        filters: Dict[UUID, BaseFilter] = {}
+        filters: dict[UUID, BaseFilter] = {}
         filters_gc_next_hit = time.perf_counter() + FILTERS_GC_PERIOD
 
         with suppress_interrupt():

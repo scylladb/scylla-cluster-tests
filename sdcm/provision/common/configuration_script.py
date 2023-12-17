@@ -14,14 +14,7 @@
 import abc
 
 from sdcm.provision.common.builders import AttrBuilder
-from sdcm.provision.common.utils import (
-    configure_sshd_script,
-    restart_sshd_service,
-    install_syslogng_service,
-    configure_syslogng_target_script,
-    restart_syslogng_service,
-    configure_ssh_accept_rsa)
-
+from sdcm.provision.common.utils import configure_ssh_accept_rsa, configure_sshd_script, configure_syslogng_target_script, install_syslogng_service, restart_sshd_service, restart_syslogng_service
 
 SYSLOGNG_SSH_TUNNEL_LOCAL_PORT = 5000
 SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000

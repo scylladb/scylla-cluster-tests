@@ -13,7 +13,6 @@
 import logging
 import socket
 from os.path import expanduser
-from typing import List
 
 import boto3
 from botocore.response import StreamingBody
@@ -40,7 +39,7 @@ class SshOutAsFile(StreamingBody):
         return buff
 
 
-def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str],  # pylint: disable=too-many-arguments
+def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: list[str],  # pylint: disable=too-many-arguments
                                        s3_bucket: str, s3_key: str, max_size_gb: int = 400, public_read_acl: bool = False):
     """Streams given remote files/directories straight to S3 as tar.gz file. Returns download link."""
 
