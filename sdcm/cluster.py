@@ -367,14 +367,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def _init_port_mapping(self):
         if self.test_config.IP_SSH_CONNECTIONS == 'public':
-            if self.test_config.RSYSLOG_ADDRESS:
-                try:
-                    ContainerManager.destroy_container(self, "auto_ssh:rsyslog", ignore_keepalive=True)
-                except NotFound:
-                    pass
-                ContainerManager.run_container(self, "auto_ssh:rsyslog",
-                                               local_port=self.test_config.RSYSLOG_ADDRESS[1],
-                                               remote_port=self.test_config.RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
             if self.test_config.LDAP_ADDRESS and self.parent_cluster.node_type == "scylla-db":
                 try:
                     ContainerManager.destroy_container(self, "auto_ssh:ldap", ignore_keepalive=True)
@@ -480,11 +472,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def system_log(self):
         orig_log_path = os.path.join(self.logdir, 'system.log')
 
-        if self.test_config.RSYSLOG_ADDRESS:
-            rsys_log_path = os.path.join(self.test_config.logdir(), 'hosts', self.short_hostname, 'messages.log')
-            if os.path.exists(rsys_log_path) and (not os.path.islink(orig_log_path)):
-                os.symlink(os.path.relpath(rsys_log_path, self.logdir), orig_log_path)
-            return rsys_log_path
+        if self.test_config.SYSLOGNG_ADDRESS:
+            syslogng_log_path = os.path.join(self.test_config.logdir(), 'hosts', self.short_hostname, 'messages.log')
+            if os.path.exists(syslogng_log_path) and (not os.path.islink(orig_log_path)):
+                os.symlink(os.path.relpath(syslogng_log_path, self.logdir), orig_log_path)
+            return syslogng_log_path
         else:
             return orig_log_path
 
@@ -896,9 +888,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.debug("Use %s as logging daemon", type(self._journal_thread).__name__)
             self._journal_thread.start()
         else:
-            if logs_transport == 'rsyslog':
-                self.log.debug("Use no logging daemon since log transport is rsyslog")
-            elif logs_transport == 'syslog-ng':
+            if logs_transport == 'syslog-ng':
                 self.log.debug("Use no logging daemon since log transport is syslog-ng")
             else:
                 TestFrameworkEvent(
@@ -918,7 +908,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             node_name=str(self.name),
             system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
             decoding_queue=self.test_config.DECODING_QUEUE,
-            log_lines=self.parent_cluster.params.get('logs_transport') in ['rsyslog', 'syslog-ng']
+            log_lines=self.parent_cluster.params.get('logs_transport') in ['syslog-ng',]
         )
         self._db_log_reader_thread.start()
 
@@ -2794,7 +2784,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.warning('Method set_hostname is not implemented for %s' % self.__class__.__name__)
 
     def configure_remote_logging(self):
-        if self.parent_cluster.params.get('logs_transport') not in ['rsyslog', 'syslog-ng']:
+        if self.parent_cluster.params.get('logs_transport') not in ['syslog-ng',]:
             return
         script = ConfigurationScriptBuilder(
             syslog_host_port=self.test_config.get_logging_service_host_port(),

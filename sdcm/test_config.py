@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Optional, Dict
 from unittest.mock import MagicMock
 
-import requests
 from argus.client.sct.client import ArgusSCTClient
 
 
@@ -29,10 +28,8 @@ LOGGER = logging.getLogger(__name__)
 class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-methods
     TEST_DURATION = 60
     TEST_WARMUP_TEARDOWN = 60
-    RSYSLOG_SSH_TUNNEL_LOCAL_PORT = 5000
-    RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL = 600
-    RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST = 20000
     SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
+    SYSLOGNG_SSH_TUNNEL_LOCAL_PORT = 5000
     IP_SSH_CONNECTIONS = 'private'
     KEEP_ALIVE_DB_NODES = False
     KEEP_ALIVE_LOADER_NODES = False
@@ -43,7 +40,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     MULTI_REGION = False
     BACKTRACE_DECODING = False
     INTRA_NODE_COMM_PUBLIC = False
-    RSYSLOG_ADDRESS = None
+    SYSLOGNG_ADDRESS = None
     LDAP_ADDRESS = None
     DECODING_QUEUE = None
 
@@ -224,33 +221,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         port = node.syslogng_port
         LOGGER.info("syslog-ng listen on port %s (config: %s)", port, node.syslogng_confpath)
         address = get_my_ip()
-        cls.RSYSLOG_ADDRESS = (address, port)
-
-    @classmethod
-    def configure_rsyslog(cls, node, enable_ngrok=False):
-        ContainerManager.run_container(node, "rsyslog", logdir=cls.logdir())
-        cls._link_running_syslog_logdir(node.rsyslog_log_dir)
-        port = node.rsyslog_port
-        LOGGER.info("rsyslog listen on port %s (config: %s)", port, node.rsyslog_confpath)
-
-        if enable_ngrok:
-            requests.delete('http://localhost:4040/api/tunnels/rsyslogd')
-
-            tunnel = {
-                "addr": port,
-                "proto": "tcp",
-                "name": "rsyslogd",
-                "bind_tls": False
-            }
-            res = requests.post('http://localhost:4040/api/tunnels', json=tunnel)
-            assert res.ok, "failed to add a ngrok tunnel [{}, {}]".format(res, res.text)
-            ngrok_address = res.json()['public_url'].replace('tcp://', '')
-
-            address, port = ngrok_address.split(':')
-        else:
-            address = get_my_ip()
-
-        cls.RSYSLOG_ADDRESS = (address, port)
+        cls.SYSLOGNG_ADDRESS = (address, port)
 
     @classmethod
     def get_startup_script(cls) -> str:
@@ -259,20 +230,20 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             host_port = None
         return ConfigurationScriptBuilder(
             syslog_host_port=host_port,
-            logs_transport=cls._tester_obj.params.get('logs_transport') if cls._tester_obj else "rsyslog",
+            logs_transport=cls._tester_obj.params.get('logs_transport') if cls._tester_obj else "syslog-ng",
             disable_ssh_while_running=True,
         ).to_string()
 
     @classmethod
     def get_logging_service_host_port(cls) -> tuple[str, int] | None:
-        if not cls.RSYSLOG_ADDRESS:
+        if not cls.SYSLOGNG_ADDRESS:
             return None
         if cls.IP_SSH_CONNECTIONS == "public":
-            rsyslog_host = "127.0.0.1"
-            rsyslog_port = cls.RSYSLOG_SSH_TUNNEL_LOCAL_PORT
+            syslogng_host = "127.0.0.1"
+            syslogng_port = cls.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT
         else:
-            rsyslog_host, rsyslog_port = cls.RSYSLOG_ADDRESS  # pylint: disable=unpacking-non-sequence
-        return rsyslog_host, rsyslog_port
+            syslogng_host, syslogng_port = cls.SYSLOGNG_ADDRESS  # pylint: disable=unpacking-non-sequence
+        return syslogng_host, syslogng_port
 
     @classmethod
     def set_ip_ssh_connections(cls, ip_type):
@@ -281,11 +252,6 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     @classmethod
     def set_duration(cls, duration):
         cls.TEST_DURATION = duration
-
-    @classmethod
-    def set_rsyslog_imjournal_rate_limit(cls, interval: int, burst: int) -> None:
-        cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL = interval
-        cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST = burst
 
     @classmethod
     def argus_client(cls) -> ArgusSCTClient | MagicMock:

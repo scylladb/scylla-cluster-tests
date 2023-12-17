@@ -16,28 +16,6 @@ from textwrap import dedent
 
 # pylint: disable=anomalous-backslash-in-string
 
-
-def configure_rsyslog_rate_limits_script(interval: int, burst: int) -> str:
-    # Configure rsyslog.  Use obsolete legacy format here because it's easier to redefine imjournal parameters.
-    return dedent(fr"""
-    if ! grep imjournalRatelimitInterval /etc/rsyslog.conf; then
-        cat <<EOF >> /etc/rsyslog.conf
-        #
-        # The following configuration was added by SCT.
-        #
-        \$ModLoad imjournal
-        \$imjournalRatelimitInterval {interval}
-        \$imjournalRatelimitBurst {burst}
-    EOF
-    fi
-    """)
-
-
-def configure_rsyslog_target_script(host: str, port: int) -> str:
-    return f'echo "action(type=\\"omfwd\\" Target=\\"{host}\\" Port=\\"{port}\\" Protocol=\\"tcp\\" ' \
-           f'TCP_Framing=\\"octet-counted\\" Template=\\"RSYSLOG_SyslogProtocol23Format\\")" >> /etc/rsyslog.conf\n'
-
-
 def configure_syslogng_target_script(host: str, port: int, throttle_per_second: int, hostname: str = "") -> str:
     return dedent("""
         source_name=`cat /etc/syslog-ng/syslog-ng.conf | tr -d "\\n" | tr -d "\\r" | sed -r "s/\\}};/\\}};\\n/g; \
@@ -88,17 +66,6 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
         """.format(host=host, port=port, hostname=hostname, throttle_per_second=throttle_per_second))
 
 
-def configure_rsyslog_set_hostname_script(hostname: str) -> str:
-    return dedent(f"""
-    if grep "\\$LocalHostname {hostname}" /etc/rsyslog.conf; then
-        sed -ei "s/\\$LocalHostname  \(.*\)$/\\$LocalHostname  {hostname}/" /etc/rsyslog.conf || true
-    else
-        echo "" >> /etc/rsyslog.conf
-        echo "\\$LocalHostname {hostname}" >> /etc/rsyslog.conf
-    fi
-    """)
-
-
 def configure_hosts_set_hostname_script(hostname: str) -> str:
     return f'grep -P "127.0.0.1[^\\\\n]+{hostname}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+' \
            f'localhost[^\\n]*)$/\\1\\t{hostname}/" /etc/hosts\n'
@@ -135,10 +102,6 @@ def configure_ssh_accept_rsa():
 
 def restart_sshd_service():
     return "systemctl restart sshd || true\n"
-
-
-def restart_rsyslog_service():
-    return "systemctl restart rsyslog || true\n"
 
 
 def restart_syslogng_service():

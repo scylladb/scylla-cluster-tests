@@ -845,7 +845,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             node.set_web_listen_address()
 
     def _reuse_cluster_setup(self, node):
-        node.run_startup_script()  # Reconfigure rsyslog.
+        node.run_startup_script()  # Reconfigure syslog-ng.
 
     def destroy(self):
         self.stop_nemesis()
@@ -931,7 +931,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node.wait_db_up(verbose=verbose)
 
         if self.test_config.REUSE_CLUSTER:
-            # for reconfigure rsyslog
+            # for reconfigure syslog-ng
             node.run_startup_script()
             return
 

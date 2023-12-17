@@ -204,10 +204,7 @@ def provision_resources(backend, test_name: str, config: str):
         raise ValueError("No test_id was provided. Aborting provisioning.")
     localhost = LocalHost(user_prefix=params.get("user_prefix"), test_id=test_config.test_id())
 
-    if params.get("logs_transport") == 'rsyslog':
-        click.echo("Provision rsyslog logging service")
-        test_config.configure_rsyslog(localhost, enable_ngrok=False)
-    elif params.get("logs_transport") == 'syslog-ng':
+    if params.get("logs_transport") == 'syslog-ng':
         click.echo("Provision syslog-ng logging service")
         test_config.configure_syslogng(localhost)
     else:
