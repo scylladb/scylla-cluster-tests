@@ -36,7 +36,7 @@ class Steps(SlaUtils):
                                                 possible_issue={'less resources': 'scylla-enterprise#2717'}
                                                 )
                 return None
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 wp_event.add_error([str(details)])
                 wp_event.full_traceback = traceback.format_exc()
                 wp_event.severity = Severity.ERROR
@@ -66,7 +66,7 @@ class Steps(SlaUtils):
                                                 db_cluster=tester.db_cluster,
                                                 possible_issue={'less resources': "scylla-enterprise#949"})
                 return None
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 wp_event.add_error([str(details)])
                 wp_event.full_traceback = traceback.format_exc()
                 wp_event.severity = Severity.ERROR
@@ -82,7 +82,7 @@ class Steps(SlaUtils):
                 role_with_sl_to_detach.detach_service_level()
                 time.sleep(sleep)
                 return None
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 wp_event.add_error([str(details)])
                 wp_event.full_traceback = traceback.format_exc()
                 wp_event.severity = Severity.ERROR
@@ -98,7 +98,7 @@ class Steps(SlaUtils):
                 role_with_sl_to_drop.reset_service_level()
                 time.sleep(sleep)
                 return None
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 wp_event.add_error([str(details)])
                 wp_event.full_traceback = traceback.format_exc()
                 wp_event.severity = Severity.ERROR
@@ -158,7 +158,7 @@ class Steps(SlaUtils):
                                                                 'scylla-enterprise#2572 or scylla-enterprise#2717'}
                                                 )
                 return None
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 wp_event.add_error([str(details)])
                 wp_event.full_traceback = traceback.format_exc()
                 wp_event.severity = Severity.ERROR
@@ -204,7 +204,7 @@ class SlaTests(Steps):
         for stress in stress_queue:
             try:
                 tester.verify_stress_thread(cs_thread_pool=stress)
-            except Exception as error:  # pylint: disable=broad-except
+            except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.error("Stress verifying failed. Error: %s", error)
 
     @staticmethod

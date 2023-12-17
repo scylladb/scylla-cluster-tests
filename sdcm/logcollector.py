@@ -150,7 +150,7 @@ class BaseMonitoringEntity(BaseLogEntity):
                 return None, None, None
             result = node.remoter.run(
                 f"cat {basedir}/{name}/monitor_version", ignore_status=True, verbose=False)
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Failed to get monitoring version: %s", details)
             return None, None, None
 
@@ -389,7 +389,7 @@ class MonitoringStack(BaseMonitoringEntity):
             res = requests.get(f"http://{grafana_ip}:{self.grafana_port}/api/annotations")
             if res.ok:
                 return res.text
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("Unable to get Grafana annotations [%s]", details)
         return ""
 
@@ -511,7 +511,7 @@ class GrafanaScreenShot(GrafanaEntity):
 
             return screenshots
 
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Error taking monitor screenshot: %s, traceback: %s", details, traceback.format_exc())
             return []
 
@@ -577,7 +577,7 @@ class LogCollector:
                     'Remote storing folder not created.\n{}'.format(result))
                 remote_dir = self.node_remote_dir
 
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Error during creating remote directory %s", details)
             remote_dir = self.node_remote_dir
 
@@ -622,7 +622,7 @@ class LogCollector:
             for log_entity in self.log_entities:
                 try:
                     log_entity.collect(node, local_node_dir, remote_node_dir, local_search_path=local_search_path)
-                except Exception as details:  # pylint: disable=unused-variable, broad-except
+                except Exception as details:  # pylint: disable=unused-variable, broad-except  # noqa: BLE001
                     LOGGER.error("Error occured during collecting on host: %s\n%s", node.name, details)
 
         LOGGER.debug("Nodes list %s", [node.name for node in self.nodes])
@@ -635,7 +635,7 @@ class LogCollector:
             try:
                 ParallelObject(self.nodes, num_workers=workers_number, timeout=self.collect_timeout).run(
                     collect_logs_per_node, ignore_exceptions=True)
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.error('Error occured during collecting logs %s', details)
 
         if not os.listdir(self.local_dir):
@@ -685,7 +685,7 @@ class LogCollector:
                 src_name = src_name.replace(extension, f"-{self.test_id.split('-')[0]}{extension}")
         try:
             return self._compress_file(src_path, src_name)
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Error during archive creation. Details: \n%s", details)
             return None
 
@@ -769,7 +769,7 @@ def save_kallsyms_map(node):
 
         try:
             log_entity.collect(node, node.logdir, remote_node_dir)
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Error occurred during collecting kallsyms on host: %s\n%s", node.name, details)
 
 
@@ -796,7 +796,7 @@ def collect_log_entities(node, log_entities: List[BaseLogEntity]):
             try:
                 log_entity.collect(node, node.logdir, remote_node_dir)
                 LOGGER.debug("Diagnostic file '%s' collected", log_entity.name)
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.error("Error occurred during collecting diagnostics data on host: %s\n%s", node.name, details)
 
 
@@ -1179,7 +1179,7 @@ class KubernetesLogCollector(BaseSCTLogCollector):
                                     k8s_logdir, '.kube', current_k8s_logdir_sub_file)):
                                 KubernetesOps.gather_k8s_logs(k8s_logdir)
                                 break
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("Got following failure processing the K8S logs: %s", exc)
         return super().collect_logs(local_search_path=local_search_path)
 
@@ -1376,7 +1376,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             instance = get_manager_instance_by_cluster_id(cluster_id=cloud_cluster_id)
             if not instance:
                 raise ValueError(f"Cloud manager for the cluster {cloud_cluster_id} not found")
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Failed to get cloud manager instance. Error: %s", exc)
             return
 

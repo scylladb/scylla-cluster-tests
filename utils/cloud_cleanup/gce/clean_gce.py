@@ -57,7 +57,7 @@ def clean_gce_instances(instances_client, project_id, dry_run):
                                                       zone=instance.zone.split('/')[-1])
                         res.done()
                         LOGGER.info("%s terminated", instance.name)
-                    except Exception as exc:  # pylint: disable=broad-except
+                    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                         LOGGER.error("error while terminating instance %s: %s", instance.name, exc)
                 else:
                     LOGGER.info("dry run: would terminate instance %s, creation time: %s",
@@ -72,7 +72,7 @@ def clean_gce_instances(instances_client, project_id, dry_run):
                                                     zone=instance.zone.split('/')[-1])
                         res.done()
                         LOGGER.info("%s stopped", instance.name)
-                    except Exception as exc:  # pylint: disable=broad-except
+                    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                         LOGGER.error("error while stopping instance %s: %s", instance.name, exc)
                 else:
                     LOGGER.info("dry run: would stop instance %s, creation time: %s", instance.name, vm_creation_time)

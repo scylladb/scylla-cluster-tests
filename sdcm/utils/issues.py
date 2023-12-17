@@ -141,7 +141,7 @@ class SkipPerIssues:
             # this would mean that we would assume issue is open, and enable the skips needed, without having the
             # actual data of the issue
             return github.Issue.Issue(requester=None, headers={}, attributes=dict(state='open'), completed=True)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             logging.warning("failed to get issue: %s", issue)
             TestFrameworkEvent(source=self.__class__.__name__,
                                message=f"failed to get issue {issue}",

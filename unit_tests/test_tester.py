@@ -216,7 +216,7 @@ class CriticalErrorNotCaughtTest(ClusterTesterForTests):
             end_time = time.time() + 2
             while time.time() < end_time:
                 time.sleep(0.1)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
 
     def _validate_results(self):

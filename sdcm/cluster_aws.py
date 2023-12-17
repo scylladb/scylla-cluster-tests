@@ -574,7 +574,7 @@ class AWSNode(cluster.BaseNode):
 
                 return max(next_check_delay - SPOT_TERMINATION_CHECK_OVERHEAD, 0)
 
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning('Error during getting spot termination notification %s', details)
 
         return SPOT_TERMINATION_CHECK_DELAY
@@ -978,7 +978,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             conf_dict = yaml.safe_load(yaml_stream)
             try:
                 return conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 raise ValueError('Unexpected cassandra.yaml. Contents:\n%s' % yaml_stream.read()) from exc
 
     # pylint: disable=too-many-arguments

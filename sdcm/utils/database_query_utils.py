@@ -93,7 +93,7 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
                 session.default_consistency_level = ConsistencyLevel.QUORUM
                 pk_list = sorted(get_partition_keys(ks_cf=self.table_name, session=session,
                                                     pk_name=self.primary_key_column))
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             TestFrameworkEvent(source=self.__class__.__name__, message=error_message.format(exc),
                                severity=Severity.ERROR).publish()
             return None
@@ -120,7 +120,7 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
                                                                   statement=count_pk_rows_cmd, retries=1, timeout=600,
                                                                   raise_on_exceeded=True, verbose=False)
                         pk_rows_num_result = pk_rows_num_query_result[0].count
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     TestFrameworkEvent(source=self.__class__.__name__, message=error_message.format(exc),
                                        severity=Severity.ERROR).publish()
                     return None
