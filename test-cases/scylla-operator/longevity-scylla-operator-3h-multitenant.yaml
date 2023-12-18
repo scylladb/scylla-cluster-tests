@@ -35,5 +35,3 @@ nemesis_during_prepare: false
 space_node_threshold: [64424, 64423]
 
 user_prefix: 'longevity-scylla-operator-3h-multitenant'
-
-k8s_enable_tls: true
