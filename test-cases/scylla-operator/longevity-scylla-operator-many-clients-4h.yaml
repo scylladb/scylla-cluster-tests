@@ -27,7 +27,6 @@ use_mgmt: false
 k8s_deploy_monitoring: false
 k8s_enable_performance_tuning: true
 k8s_loader_run_type: 'static'
-k8s_enable_tls: true
 
 user_prefix: 'operator-many-clients-4h'
 space_node_threshold: 64424
