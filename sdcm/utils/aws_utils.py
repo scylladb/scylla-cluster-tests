@@ -28,7 +28,7 @@ from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
-AwsArchType = ArchitectureTypeType | str
+AwsArchType = ArchitectureTypeType
 
 
 class EksClusterCleanupMixin:
