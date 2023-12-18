@@ -227,12 +227,6 @@ def ignore_compaction_stopped_exceptions():
 
 
 @contextmanager
-def ignore_view_error_gate_closed_exception():
-    with EventsFilter(event_class=DatabaseLogEvent, regex='.*view - Error applying view update.*gate_closed_exception'):
-        yield
-
-
-@contextmanager
 def ignore_large_collection_warning():
     with ExitStack() as stack:
         stack.enter_context(DbEventsFilter(
@@ -248,18 +242,6 @@ def ignore_max_memory_for_unlimited_query_soft_limit():
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.WARNING,
             line="mutation_partition - Memory usage of unpaged query exceeds soft limit"
-        ))
-        yield
-
-
-@contextmanager
-def ignore_error_apply_view_update():
-    with ExitStack() as stack:
-        stack.enter_context(EventsSeverityChangerFilter(
-            new_severity=Severity.WARNING,
-            event_class=DatabaseLogEvent,
-            regex=r".*view - Error applying view update.*data_dictionary::no_such_column_family",
-            extra_time_to_expiration=30
         ))
         yield
 

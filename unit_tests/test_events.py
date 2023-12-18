@@ -404,7 +404,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertNotIn("this is filtered", log_content)
 
     def test_default_filters(self):
-        with self.wait_for_n_events(self.get_events_logger(), count=3):
+        with self.wait_for_n_events(self.get_events_logger(), count=5):
             DatabaseLogEvent.BACKTRACE() \
                 .add_info(node="A",
                           line_number=22,
@@ -434,6 +434,14 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                                "agent [HTTP 500] std::runtime_error (Operation decommission is in progress, try again)]") \
                 .publish()
 
+            DatabaseLogEvent.DATABASE_ERROR().add_info(
+                node="A",
+                line_number=22,
+                line="ERROR 2023-12-18 12:45:25,673 [shard 5] view - Error applying view update to 172.20.196.153 "
+                     "(view: keyspace1.standard1_c4_nemesis_index, base token: 3003228260188484921, view token: "
+                     "-268424650415671818): data_dictionary::no_such_column_family (Can't find a column family with "
+                     "UUID 277dc241-9da2-11ee-a7ab-9c797a34c82c)"
+            ).publish()
         log_content = self.get_event_log_file("events.log")
 
         self.assertIn("other back trace", log_content)
@@ -441,8 +449,11 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
 
         warnings_log_content = self.get_event_log_file("warning.log")
         assert 'std::runtime_error' in warnings_log_content
+        assert 'data_dictionary::no_such_column_family' in warnings_log_content
+
         error_log_content = self.get_event_log_file("error.log")
         assert 'RUNTIME_ERROR' not in error_log_content
+        assert 'data_dictionary::no_such_column_family' not in error_log_content
 
     def test_failed_stall_during_filter(self):
         with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):

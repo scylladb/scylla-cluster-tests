@@ -14,7 +14,6 @@
 import logging
 import random
 import time
-from contextlib import nullcontext
 
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
@@ -77,20 +76,15 @@ def wait_for_index_to_be_built(node: BaseNode, ks, index_name, timeout=300) -> N
 def wait_for_view_to_be_built(node: BaseNode, ks, view_name, timeout=300) -> None:
     LOGGER.info('waiting for view/index %s to be built', view_name)
     start_time = time.time()
-    with (EventsFilter(  # ignore apply view errors when multiple nemesis are running scylladb/scylla-cluster-tests#6469
-            event_class=DatabaseLogEvent.DATABASE_ERROR,
-            regex=".*view - Error applying view update to.*",
-            extra_time_to_expiration=180,
-    ) if node.parent_cluster.nemesis_count > 1 else nullcontext()):
-        while time.time() - start_time < timeout:
-            result = node.run_nodetool(f"viewbuildstatus {ks}.{view_name}",
-                                       ignore_status=True, verbose=False, publish_event=False)
-            if f"{ks}.{view_name}_index has finished building" in result.stdout:
-                InfoEvent(message=f"Index {ks}.{view_name} was built").publish()
-            if f"{ks}.{view_name} has finished building" in result.stdout:
-                InfoEvent(message=f"View/index {ks}.{view_name} was built").publish()
-                return
-            time.sleep(30)
+    while time.time() - start_time < timeout:
+        result = node.run_nodetool(f"viewbuildstatus {ks}.{view_name}",
+                                   ignore_status=True, verbose=False, publish_event=False)
+        if f"{ks}.{view_name}_index has finished building" in result.stdout:
+            InfoEvent(message=f"Index {ks}.{view_name} was built").publish()
+        if f"{ks}.{view_name} has finished building" in result.stdout:
+            InfoEvent(message=f"View/index {ks}.{view_name} was built").publish()
+            return
+        time.sleep(30)
     raise TimeoutError(f"Timeout error while creating view/index {view_name}. "
                        f"stdout\n: {result.stdout}\n"
                        f"stderr\n: {result.stderr}")
@@ -125,12 +119,7 @@ def verify_query_by_index_works(session, ks, cf, column) -> None:
 
 def drop_index(session, ks, index_name) -> None:
     InfoEvent(message=f"Starting dropping index: {ks}.{index_name}").publish()
-    with EventsFilter(
-            event_class=DatabaseLogEvent.DATABASE_ERROR,
-            regex=".*view - Error applying view update to.*",
-            extra_time_to_expiration=180,  # errors can happen only within few minutes after index drop scylladb/#12977
-    ):
-        session.execute(f'DROP INDEX {ks}.{index_name}')
+    session.execute(f'DROP INDEX {ks}.{index_name}')
 
 
 def drop_materialized_view(session, ks, view_name) -> None:
