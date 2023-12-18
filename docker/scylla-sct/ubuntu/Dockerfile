@@ -37,4 +37,4 @@ COPY ./etc/sshd-service.sh /sshd-service.sh
 
 RUN export SSH_VERSION=$(ssh -V 2>&1 | cut -f 1  --delimiter=' ' | cut -f 2 --delimiter='_') && \
     dpkg --compare-versions "$SSH_VERSION" ">=" "8.8p1" && \
-    echo $'PubkeyAcceptedAlgorithms +ssh-rsa\nHostKeyAlgorithms +ssh-rsa' >> /etc/ssh/sshd_config
+    echo $'PubkeyAcceptedAlgorithms +ssh-rsa\nHostKeyAlgorithms +ssh-rsa' >> /etc/ssh/sshd_config || true
