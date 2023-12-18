@@ -80,6 +80,14 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
                                 regex=r'.*sidecar/controller.go.*std::runtime_error '
                                       r'\(Operation decommission is in progress, try again\)').publish()
 
+    # TODO: remove when those issues are solved:
+    # https://github.com/scylladb/scylladb/issues/16206
+    # https://github.com/scylladb/scylladb/issues/16259
+    # https://github.com/scylladb/scylladb/issues/15598
+    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                event_class=DatabaseLogEvent,
+                                regex=r".*view - Error applying view update.*").publish()
+
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line='abort_requested_exception').publish()
