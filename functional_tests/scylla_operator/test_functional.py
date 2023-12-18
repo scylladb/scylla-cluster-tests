@@ -21,6 +21,7 @@ import threading
 import time
 import ssl
 import base64
+import invoke
 import path
 
 import pytest
@@ -218,7 +219,10 @@ def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylin
             KubernetesOps.gather_k8s_logs(
                 logdir_path=logdir, kubectl=kubectl, namespaces=[namespace, namespace2])
         k8s_cluster.helm(f"uninstall {target_chart_name} --timeout 120s", namespace=namespace)
-        kubectl(f"delete namespace {namespace}", ignore_status=True, timeout=120)
+        try:
+            kubectl(f"delete namespace {namespace}", ignore_status=True, timeout=120)
+        except invoke.exceptions.CommandTimedOut as exc:
+            log.warning("Deletion of the '%s' namespace timed out: %s", namespace, exc)
 
 
 @pytest.mark.restart_is_used
