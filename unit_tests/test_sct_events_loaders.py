@@ -446,6 +446,8 @@ class TestCassandraStressLogEvent(unittest.TestCase):
 class TestScyllaBenchLogEvent(unittest.TestCase):
     def test_known_scylla_bench_errors(self):
         self.assertTrue(issubclass(ScyllaBenchLogEvent.ConsistencyError, ScyllaBenchLogEvent))
+        self.assertTrue(issubclass(ScyllaBenchLogEvent.DataValidationError, ScyllaBenchLogEvent))
+        self.assertTrue(issubclass(ScyllaBenchLogEvent.ParseDistributionError, ScyllaBenchLogEvent))
 
     def test_scylla_bench_error_events_list(self):
         self.assertSetEqual(set(dir(ScyllaBenchLogEvent)) - set(dir(LogEvent)),

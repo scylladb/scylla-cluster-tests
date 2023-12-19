@@ -89,6 +89,8 @@ CassandraStressLogEvent.ShardAwareDriver: NORMAL
 CassandraStressLogEvent.SchemaDisagreement: WARNING
 SchemaDisagreementErrorEvent: ERROR
 ScyllaBenchLogEvent.ConsistencyError: ERROR
+ScyllaBenchLogEvent.DataValidationError: CRITICAL
+ScyllaBenchLogEvent.ParseDistributionError: CRITICAL
 GeminiStressLogEvent.GeminiEvent: CRITICAL
 PrometheusAlertManagerEvent: CRITICAL
 ScyllaOperatorLogEvent: ERROR
