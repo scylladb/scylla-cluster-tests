@@ -608,6 +608,7 @@ def test_comparable_scylla_operator_versions_compare(version_string_left, versio
     ("1.9.0-alpha.1-nightly", "1.9.0-alpha.1"),
     ("1.9.0-alpha.1-2-g3321624", "1.9.0-alpha.1-2-g3321624"),
     ("1.9.0-alpha.1-2-g3321624-nightly", "1.9.0-alpha.1-2-g3321624"),
+    ("2024.2.0.dev.0.20231219.c7cdb16538f2.1", "2024.2.0-dev.0.20231219.c7cdb16538f2.1"),
 ))
 def test_comparable_scylla_operator_versions_to_str(version_string_input, version_string_output):
     assert str(ComparableScyllaOperatorVersion(version_string_input)) == version_string_output
