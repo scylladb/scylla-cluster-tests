@@ -239,13 +239,23 @@ CS_NORMAL_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
 
 class ScyllaBenchLogEvent(LogEvent, abstract=True):
     ConsistencyError: Type[LogEventProtocol]
+    DataValidationError: Type[LogEventProtocol]
+    ParseDistributionError: Type[LogEventProtocol]
 
 
 ScyllaBenchLogEvent.add_subevent_type("ConsistencyError", severity=Severity.ERROR, regex=r"received only")
+# Scylla-bench data validation was added by https://github.com/scylladb/scylla-bench/commit/3eb53d8ce11e5ad26062bcc662edb31dda521ccf
+ScyllaBenchLogEvent.add_subevent_type("DataValidationError", severity=Severity.CRITICAL,
+                                      regex=r"doesn't match |failed to validate data|failed to verify checksum|corrupt checksum or data|"
+                                            r"data corruption")
+ScyllaBenchLogEvent.add_subevent_type("ParseDistributionError", severity=Severity.CRITICAL,
+                                      regex=r"missing parameter|unexpected parameter|unsupported|invalid")
 
 
 SCYLLA_BENCH_ERROR_EVENTS = (
     ScyllaBenchLogEvent.ConsistencyError(),
+    ScyllaBenchLogEvent.DataValidationError(),
+    ScyllaBenchLogEvent.ParseDistributionError(),
 )
 SCYLLA_BENCH_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in SCYLLA_BENCH_ERROR_EVENTS]
