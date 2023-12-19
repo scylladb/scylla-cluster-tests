@@ -5384,7 +5384,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         for node in self.nodes:
             monitoring_targets = []
             for db_node in self.targets["db_cluster"].nodes:
-                monitoring_targets.append(f"{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}:9180")
+                monitoring_targets.append(f"{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}")
             monitoring_targets = " ".join(monitoring_targets)
             node.remoter.sudo(shell_script_cmd(f"""\
                 cd {self.monitor_install_path}
