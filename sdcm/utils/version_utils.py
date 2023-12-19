@@ -140,6 +140,10 @@ class ComparableScyllaVersion:
         _scylla_version = _scylla_version.replace('-aarch64', '')
         _scylla_version = _scylla_version.replace('-x86_64', '')
 
+        # NOTE: transform gce-image version like '2024.2.0.dev.0.20231219.c7cdb16538f2.1'
+        if gce_image_v_match := re.search(r"(\d+\.\d+\.\d+\.)([a-z]+\.)(.*)", _scylla_version):
+            _scylla_version = f"{gce_image_v_match[1][:-1]}-{gce_image_v_match[2][:-1]}-{gce_image_v_match[3]}"
+
         # NOTE: make short scylla version like '5.2' be correct semver string
         _scylla_version_parts = _scylla_version.split('.')
         if len(_scylla_version_parts) == 2:
@@ -157,7 +161,7 @@ class ComparableScyllaVersion:
 
         # NOTE: replace '.' with '+' symbol between build date and build commit
         #       to satisfy semver structure
-        if dotted_build_id_match := re.search(r"(.*\.20[0-9]{6})(\.)(\d\w+)", _scylla_version):
+        if dotted_build_id_match := re.search(r"(.*\.20[0-9]{6})(\.)([\.\d\w]+)", _scylla_version):
             _scylla_version = f"{dotted_build_id_match[1]}+{dotted_build_id_match[3]}"
 
         if match := SEMVER_REGEX.match(_scylla_version):
