@@ -213,6 +213,60 @@ class AwsBuilder:
         self.associate_elastic_ip()
         self.add_to_jenkins()
 
+    @property
+    def launch_template_name(self):
+        return "aws-sct-builders"
+
+    def get_root_ebs_info_from_ami(self, ami_id: str) -> str:
+        res = self.region.resource.Image(ami_id)
+        return res.block_device_mappings[0].get('Ebs', {})
+
+    def get_launch_template_data(self, runner: AwsSctRunner) -> dict:
+        return dict(
+            LaunchTemplateData={
+                'BlockDeviceMappings': [
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": self.get_root_ebs_info_from_ami(runner.image.id) | {
+                            "Iops": 3000,
+                            "VolumeType": "gp3",
+                            "Throughput": 125
+                        }
+                    }
+                ],
+                'ImageId': runner.image.id,
+                'KeyName': self.region.SCT_KEY_PAIR_NAME,
+                'SecurityGroupIds': [self.region.sct_ssh_security_group.id],
+            }
+        )
+
+    def update_launch_template_if_needed(self, runner):
+        click.secho(f"{self.region.region_name}: checking if template needs update")
+
+        launch_template_data = self.get_launch_template_data(runner)
+
+        res = self.region.client.describe_launch_template_versions(
+            LaunchTemplateName="aws-sct-builders",
+        )
+        default_version = [ver for ver in res['LaunchTemplateVersions'] if ver.get('DefaultVersion')][0]
+        curr_launch_template_data = default_version.get('LaunchTemplateData')
+
+        if launch_template_data.get('LaunchTemplateData') != curr_launch_template_data:
+            try:
+                click.secho(f"{self.region.region_name}: updating template")
+                res = self.region.client.create_launch_template_version(
+                    LaunchTemplateName=self.launch_template_name,
+                    SourceVersion=str(default_version.get('VersionNumber')),
+                    **launch_template_data
+                )
+                version_number = res.get('LaunchTemplateVersion', {}).get('VersionNumber')
+                self.region.client.modify_launch_template(LaunchTemplateName="aws-sct-builders",
+                                                          DefaultVersion=str(version_number))
+            except botocore.exceptions.ClientError as error:
+                LOGGER.debug(error.response)
+                if not error.response['Error']['Code'] == 'InvalidLaunchTemplateName.AlreadyExistsException':
+                    raise
+
     def create_launch_template(self):
         click.secho(f"{self.region.region_name}: create_launch_template")
         runner = AwsSctRunner(region_name=self.region.region_name, availability_zone='a')
@@ -220,12 +274,7 @@ class AwsBuilder:
             runner.create_image()
         try:
             self.region.client.create_launch_template(
-                LaunchTemplateName="aws-sct-builders",
-                LaunchTemplateData={
-                    'ImageId': runner.image.id,
-                    'KeyName': self.region.SCT_KEY_PAIR_NAME,
-                    'SecurityGroupIds': [self.region.sct_ssh_security_group.id],
-                },
+                LaunchTemplateName=self.launch_template_name,
                 TagSpecifications=[
                     {
                         'ResourceType': 'launch-template',
@@ -237,10 +286,13 @@ class AwsBuilder:
                         ]
                     },
                 ],
+                **self.get_launch_template_data(runner)
             )
         except botocore.exceptions.ClientError as error:
             LOGGER.debug(error.response)
-            if not error.response['Error']['Code'] == 'InvalidLaunchTemplateName.AlreadyExistsException':
+            if error.response['Error']['Code'] == 'InvalidLaunchTemplateName.AlreadyExistsException':
+                self.update_launch_template_if_needed(runner)
+            else:
                 raise
 
     def create_auto_scaling_group(self):
@@ -254,7 +306,7 @@ class AwsBuilder:
                                                  MixedInstancesPolicy={
                                                      "LaunchTemplate": {
                                                          "LaunchTemplateSpecification": {
-                                                             "LaunchTemplateName": "aws-sct-builders",
+                                                             "LaunchTemplateName": self.launch_template_name,
                                                              "Version": "$Latest"
                                                          },
                                                          "Overrides": [
