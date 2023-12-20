@@ -10,6 +10,5 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i4i.2xlarge'
 instance_type_loader: 'c5.4xlarge'
-instance_type_monitor: 't2.small'
 
 user_prefix: 'cases-dns'
