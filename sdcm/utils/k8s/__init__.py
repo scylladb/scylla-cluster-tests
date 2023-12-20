@@ -534,13 +534,11 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
         # Docs: https://github.com/scylladb/scylla-operator/blob/master/docs/source/support/must-gather.md
         logdir_path = logdir_path or kluster.logdir
         kubeconfig = kluster.kube_config_path
-        operator_namespace = kluster._scylla_operator_namespace  # pylint: disable=protected-access
         operator_bin_path = f"/tmp/scylla-operator-{kluster.shortid}"
-        operator_pod_name = kluster.kubectl(
-            "get pods -l app.kubernetes.io/instance=scylla-operator -o custom-columns=:.metadata.name --no-headers",
-            namespace=operator_namespace).stdout.split()[1]
-        kluster.kubectl(
-            f"cp {operator_namespace}/{operator_pod_name}:/usr/bin/scylla-operator {operator_bin_path}")
+        operator_image = kluster.get_operator_image()
+        LOCALRUNNER.run(
+            f"timeout -v 15m docker cp $(docker create --name mustgather {operator_image}):"
+            f"/usr/bin/scylla-operator {operator_bin_path} && docker rm mustgather")
         LOCALRUNNER.run(f"chmod +x {operator_bin_path}")
         gather_logs_cmd = (
             f'{operator_bin_path} must-gather --all-resources --loglevel=2'
