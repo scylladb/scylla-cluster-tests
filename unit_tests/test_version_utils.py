@@ -460,6 +460,7 @@ def test_get_docker_image_by_version_fallback_on_errors():
     ("5.2.0-dev-0.20230109.08b3a9c786d9-x86_64", (5, 2, 0, "dev-0.20230109", "08b3a9c786d9")),
     ("5.2.0-dev-0.20230109.08b3a9c786d9-aarch64", (5, 2, 0, "dev-0.20230109", "08b3a9c786d9")),
     ("2024.2.0.dev.0.20231219.c7cdb16538f2.1", (2024, 2, 0, "dev-0.20231219", "c7cdb16538f2.1")),
+    ("2024.1.0.rc2.0.20231218.a063c2c16185.1", (2024, 1, 0, "rc2-0.20231218", "a063c2c16185.1")),
 ))
 def test_comparable_scylla_version_init_positive(version_string, expected):
     comparable_scylla_version = ComparableScyllaVersion(version_string)

@@ -141,7 +141,7 @@ class ComparableScyllaVersion:
         _scylla_version = _scylla_version.replace('-x86_64', '')
 
         # NOTE: transform gce-image version like '2024.2.0.dev.0.20231219.c7cdb16538f2.1'
-        if gce_image_v_match := re.search(r"(\d+\.\d+\.\d+\.)([a-z]+\.)(.*)", _scylla_version):
+        if gce_image_v_match := re.search(r"(\d+\.\d+\.\d+\.)([0-9a-z]+\.)(.*)", _scylla_version):
             _scylla_version = f"{gce_image_v_match[1][:-1]}-{gce_image_v_match[2][:-1]}-{gce_image_v_match[3]}"
 
         # NOTE: make short scylla version like '5.2' be correct semver string
