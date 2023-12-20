@@ -47,6 +47,7 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused, \
     ignore_abort_requested_errors, decorate_with_context
 from sdcm.utils import loader_utils
+from sdcm.paths import SCYLLA_YAML_PATH
 from test_lib.sla import create_sla_auth
 
 NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
@@ -774,6 +775,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # Verify sstabledump / scylla sstable dump-data
         InfoEvent(message='Starting sstabledump to verify correctness of sstables').publish()
         first_node = self.db_cluster.nodes[0]
+        keyspace = "keyspace_complex"
+        table = "user_with_ck"
         if first_node.is_enterprise:
             should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "2023.2.0~rc0"
         else:
@@ -781,9 +784,13 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if should_use_sstabledump:
             dump_cmd = 'sstabledump'
         else:
-            dump_cmd = f'{first_node.add_install_prefix("/usr/bin/scylla")} sstable dump-data --sstables'
+            dump_cmd = (f'{first_node.add_install_prefix("/usr/bin/scylla")} sstable dump-data '
+                        f'--scylla-yaml-file {first_node.add_install_prefix(SCYLLA_YAML_PATH)} '
+                        f'--keyspace {keyspace} '
+                        f'--table {table} '
+                        '--sstables')
         first_node.remoter.run(
-            'for i in `sudo find /var/lib/scylla/data/keyspace_complex/ -type f |grep -v manifest.json |'
+            f'for i in `sudo find /var/lib/scylla/data/{keyspace}/ -type f |grep -v manifest.json |'
             'grep -v snapshots |head -n 1`; do echo $i; '
             f'sudo {dump_cmd} $i 1>/tmp/sstabledump.output || '
             'exit 1; done', verbose=True)
