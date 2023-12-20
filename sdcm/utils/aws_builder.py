@@ -51,7 +51,6 @@ config = [
 // https://github.com/jenkinsci/ec2-fleet-plugin/blob/master/src/main/java/com/amazon/jenkins/ec2fleet/EC2FleetCloud.java
 EC2FleetCloud ec2FleetCloud = new EC2FleetCloud(
   config.name, // fleetCloudName
-  "", // OldId
   "jenkins2 aws account", // awsCredentialsId
   "", // credentialsId
   config.region,
@@ -75,9 +74,10 @@ EC2FleetCloud ec2FleetCloud = new EC2FleetCloud(
   true, // disableTaskResubmit,
   600, // initOnlineTimeoutSec,
   60, // initOnlineCheckIntervalSec,
-  false, // scaleExecutorsByWeight,
   60, // cloudStatusIntervalSec,
   true, // noDelayProvision
+  false, // scaleExecutorsByWeight
+  new EC2FleetCloud.NoScaler(), // EC2FleetCloud.ExecutorScaler executorScaler
 )
 
 // get Jenkins instance
