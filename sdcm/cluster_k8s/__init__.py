@@ -126,7 +126,7 @@ MINIO_NAMESPACE = "minio"
 SCYLLA_CONFIG_NAME = "scylla-config"
 SCYLLA_AGENT_CONFIG_NAME = "scylla-agent-config"
 
-K8S_LOCAL_VOLUME_PROVISIONER_VERSION = "0.3.0-alpha.1"  # without 'v' prefix
+K8S_LOCAL_VOLUME_PROVISIONER_VERSION = "0.3.0"  # without 'v' prefix
 # NOTE: these values are taken from the default values of the "scylla-manager" helm chart.
 #       Needs to be defined separately to be able to reuse for image caching running on local K8S
 SCYLLA_VERSION_IN_SCYLLA_MANAGER = "5.2.11"
