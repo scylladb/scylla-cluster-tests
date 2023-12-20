@@ -804,10 +804,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def prepare_kms_host(self) -> None:
         if (self.params.is_enterprise and ComparableScyllaVersion(self.params.scylla_version) >= '2023.2.0~rc0'
-                and self.params.get('cluster_backend') == 'aws'
-                and not self.params.get('scylla_encryption_options')
-                and self.params.get("db_type") != "mixed_scylla"  # oracle probably doesn't support KMS
-            ):
+                    and self.params.get('cluster_backend') == 'aws'
+                    and not self.params.get('scylla_encryption_options')
+                    and self.params.get("db_type") != "mixed_scylla"  # oracle probably doesn't support KMS
+                ):
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"  # pylint: disable=line-too-long
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
             return None
@@ -1880,12 +1880,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                           keyspace_name=keyspace_name,
                                           stop_test_on_failure=stop_test_on_failure,
                                           params=params or self.params).run()
-        scylla_encryption_options = self.params.get('scylla_encryption_options')
-        if scylla_encryption_options and 'write' in stress_cmd:
-            # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
-            time.sleep(60)
-            self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
-            self.db_cluster.wait_for_schema_agreement()
+        self.alter_test_tables_encryption(stress_command=stress_cmd)
+
         return cs_thread
 
     # pylint: disable=too-many-arguments,unused-argument
@@ -1915,11 +1911,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             params=self.params,
         )
         bench_thread.run()
-        scylla_encryption_options = self.params.get('scylla_encryption_options')
-        if scylla_encryption_options and 'write' in stress_cmd:
-            # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
-            time.sleep(60)
-            self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
+
+        self.alter_test_tables_encryption(stress_command=stress_cmd)
         return bench_thread
 
     def run_stress_thread_harry(self, stress_cmd, duration=None,
@@ -2926,10 +2919,22 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.alter_table_encryption(
             table, scylla_encryption_options="{'key_provider': 'none'}", upgradesstables=upgradesstables)
 
-    def alter_test_tables_encryption(self, scylla_encryption_options=None, upgradesstables=True):
-        for table in self.db_cluster.get_non_system_ks_cf_list(self.db_cluster.nodes[0], filter_out_mv=True):
-            self.alter_table_encryption(
-                table, scylla_encryption_options=scylla_encryption_options, upgradesstables=upgradesstables)
+    def alter_test_tables_encryption(self, upgradesstables=True, stress_command=''):
+        """
+        Configure encryption at-rest for all test tables if needed,
+        sleep a while to wait the workload starts and test tables are created
+        """
+        append_scylla_yaml = yaml.safe_load(self.params.get("append_scylla_yaml") or '') or {}
+
+        if (scylla_encryption_options := self.params.get('scylla_encryption_options')
+            and 'write' in stress_command
+                and 'user_info_encryption' not in append_scylla_yaml):
+
+            time.sleep(60)  # waiting enough time for stress to start and have the schema created
+            for table in self.db_cluster.get_non_system_ks_cf_list(self.db_cluster.nodes[0], filter_out_mv=True):
+                self.alter_table_encryption(
+                    table, scylla_encryption_options=scylla_encryption_options, upgradesstables=upgradesstables)
+            self.db_cluster.wait_for_schema_agreement()
 
     def get_num_of_hint_files(self, node):
         result = node.remoter.run("sudo find {0.scylla_hints_dir} -name *.log -type f| wc -l".format(self),
