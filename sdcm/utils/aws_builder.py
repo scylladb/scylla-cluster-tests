@@ -43,7 +43,7 @@ config = [
     idleMinutes: 10,
     minSize: {min_size},
     maxSize: {max_size},
-    numExecutors: 4,
+    numExecutors: {num_executors},
     labels: "{jenkins_labels}",
 ]
 
@@ -96,6 +96,7 @@ jenkins.save()
 
 class AwsBuilder:
     NUM_CPUS = 2
+    NUM_EXECUTORS = 4
 
     def __init__(self, region: AwsRegion, number=1):
         self.region = region
@@ -364,6 +365,7 @@ class AwsBuilder:
         res = requests.post(url=f"{self.jenkins_info['url']}/scriptText",
                             auth=(self.jenkins_info['username'], self.jenkins_info['password']),
                             params=dict(script=ASG_CONFIG_FORMAT.format(name=self.name,
+                                                                        num_executors=self.NUM_EXECUTORS,
                                                                         region_name=self.region.region_name,
                                                                         min_size=0,
                                                                         max_size=100,
@@ -388,6 +390,7 @@ class AwsBuilder:
 
 class AwsCiBuilder(AwsBuilder):
     NUM_CPUS = 2
+    NUM_EXECUTORS = 1
 
     @cached_property
     def name(self):
