@@ -4914,7 +4914,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         bootstrapabortmanager = NodeBootstrapAbortManager(bootstrap_node=new_node, verification_node=self.target_node)
 
-        bootstrapabortmanager.run_bootsrap_and_abort_with_action(terminate_pattern, abort_action=new_node.stop_scylla)
+        bootstrapabortmanager.run_bootstrap_and_abort_with_action(terminate_pattern, abort_action=new_node.stop_scylla)
         bootstrapabortmanager.clean_and_restart_bootstrap_after_abort()
 
         if new_node.db_up() and not self.target_node.raft.is_cluster_topology_consistent():
