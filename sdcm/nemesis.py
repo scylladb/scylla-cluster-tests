@@ -4744,7 +4744,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     'Non-system keyspace and table are not found. nemesis can\'t be run')
             ks_name, base_table_name = random.choice(ks_cfs).split('.')
             view_name = f'{base_table_name}_view'
-            with self.cluster.cql_connection_patient(cql_query_executor_node) as session:
+            with self.cluster.cql_connection_patient(node=cql_query_executor_node, connect_timeout=600) as session:
                 primary_key_columns = get_column_names(
                     session=session, ks=ks_name, cf=base_table_name, is_primary_key=True)
                 # selecting a supported column for creating a materialized-view (not a collection type).
