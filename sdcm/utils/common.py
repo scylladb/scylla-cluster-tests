@@ -2342,7 +2342,7 @@ SSH_KEY_AWS_DEFAULT = "scylla-qa-ec2"
 SSH_KEY_GCE_DEFAULT = "scylla-test"
 
 
-def get_aws_builders(tags=None, running=False):
+def get_aws_builders(tags=None, running=True):
     builders = []
     ssh_key_path = os.path.join(SSH_KEY_DIR, SSH_KEY_AWS_DEFAULT)
 
@@ -2351,7 +2351,7 @@ def get_aws_builders(tags=None, running=False):
     for aws_builder in aws_builders:
         builder_name = [tag["Value"] for tag in aws_builder["Tags"] if tag["Key"] == "Name"][0]
         builders.append({"builder": {
-            "public_ip": aws_builder["PublicIpAddress"],
+            "public_ip": aws_builder.get("PublicIpAddress"),
             "name": builder_name,
             "user": "jenkins",
             "key_file": os.path.expanduser(ssh_key_path)
@@ -2360,7 +2360,7 @@ def get_aws_builders(tags=None, running=False):
     return builders
 
 
-def get_gce_builders(tags=None, running=False):
+def get_gce_builders(tags=None, running=True):
     builders = []
     ssh_key_path = os.path.join(SSH_KEY_DIR, SSH_KEY_GCE_DEFAULT)
 
@@ -2377,7 +2377,7 @@ def get_gce_builders(tags=None, running=False):
     return builders
 
 
-def list_builders(running=False):
+def list_builders(running=True):
     builder_tag = {"NodeType": "Builder"}
     aws_builders = get_aws_builders(builder_tag, running=running)
     gce_builders = get_gce_builders(builder_tag, running=running)
@@ -2389,7 +2389,7 @@ def get_builder_by_test_id(test_id):
     base_path_on_builder = "/home/jenkins/slave/workspace"
     found_builders = []
 
-    builders = list_builders()
+    builders = list_builders(running=True)
 
     def search_test_id_on_builder(builder):
         remoter = RemoteCmdRunnerBase.create_remoter(
