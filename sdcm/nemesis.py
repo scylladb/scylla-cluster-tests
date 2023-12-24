@@ -4277,17 +4277,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes():
             self._k8s_disrupt_memory_stress()
             return
-        if self.target_node.distro.is_rhel_like:
-            self.target_node.install_epel()
-            self.target_node.remoter.sudo('yum install -y stress-ng')
-        elif self.target_node.distro.is_ubuntu:
-            self.target_node.remoter.sudo('apt-get -y install stress-ng')
-        else:
-            raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
+        # if self.target_node.distro.is_rhel_like:
+        #    self.target_node.install_epel()
+        #    self.target_node.remoter.sudo('yum install -y stress-ng')
+        # elif self.target_node.distro.is_ubuntu:
+        #    self.target_node.remoter.sudo('apt-get -y install stress-ng')
+        # else:
+        #    raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
+        #
+        # self.log.info('Try to allocate 90% total memory, the allocated memory will be swaped out')
+        # self.target_node.remoter.run(
+        #    "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
 
-        self.log.info('Try to allocate 90% total memory, the allocated memory will be swaped out')
-        self.target_node.remoter.run(
-            "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
+        # since we might get into uncontrolled situations with this nemesis
+        # see https://github.com/scylladb/scylla-cluster-tests/issues/6928
+        raise UnsupportedNemesis("Disabled cause of https://github.com/scylladb/scylla-cluster-tests/issues/6928")
 
     def disrupt_toggle_cdc_feature_properties_on_table(self):
         """Manipulate cdc feature settings
