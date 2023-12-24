@@ -248,17 +248,6 @@ class IndexSpecialColumnErrorEvent(InformationalEvent):
         return super().msgfmt + ": message={0.message}"
 
 
-class CommitLogCheckErrorEvent(InformationalEvent):
-    def __init__(self, message: str, severity: Severity = Severity.ERROR):
-        super().__init__(severity=severity)
-
-        self.message = message
-
-    @property
-    def msgfmt(self) -> str:
-        return super().msgfmt + ": message={0.message}"
-
-
 class ScyllaServerEventPattern(NamedTuple):
     pattern: Pattern
     period_func: Callable

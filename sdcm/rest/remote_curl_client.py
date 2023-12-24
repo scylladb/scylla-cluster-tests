@@ -29,7 +29,7 @@ class RemoteCurlClient(RestClient):
 
     def run_remoter_curl(self, method: Literal["GET", "POST"],  # pylint: disable=too-many-arguments
                          path: str,
-                         params: dict[str, str] | None,
+                         params: dict[str, str],
                          timeout: int = 120,
                          retry: int = 0):
         prepared_request = self._prepare_request(method=method, path=path, params=params)
