@@ -193,6 +193,7 @@ scylla_apt_keys:
   - '17723034C56D4B19'  # ScyllaDB Package Signing Key 2018 <security@scylladb.com>
   - '5E08FBD8B5D6EC9C'  # ScyllaDB Package Signing Key 2020 <security@scylladb.com>
   - 'D0A112E067426AB2'  # ScyllaDB Package Signing Key 2022 <security@scylladb.com>
+  - '491C93B9DE7496A7'  # ScyllaDB Package Signing Key 2024 <security@scylladb.com>
 
 raid_level: 0
 
