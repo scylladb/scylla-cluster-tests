@@ -17,5 +17,6 @@ scylla_apt_keys:
   # When will use manager 2.6, need to remove this commit because it's a workaround to make artifacts works
   - '5E08FBD8B5D6EC9C'  # ScyllaDB Package Signing Key 2020 <security@scylladb.com>
   - 'D0A112E067426AB2'  # ScyllaDB Package Signing Key 2022 <security@scylladb.com>
+  - '491C93B9DE7496A7'  # ScyllaDB Package Signing Key 2024 <security@scylladb.com>
 test_duration: 60
 user_prefix: 'artifacts-ubuntu2004'
