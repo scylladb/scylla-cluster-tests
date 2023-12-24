@@ -778,11 +778,11 @@ class SlaPerUserTest(LongevityTest):
         # Define Service Levels/Roles/Users
         interactive_role = Role(session=session, name="interactive",
                                 password="interactive", login=True, verbose=True, superuser=True).create()
-        batch_role = Role(session=session, name="batch", password="batch", login=True, verbose=True,
+        batch_role = Role(session=session, name="batch1", password="batch1", login=True, verbose=True,
                           superuser=True).create()
         interactive_sla = ServiceLevel(session=session, name="interactive", shares=None,
                                        workload_type="interactive").create()
-        batch_sla = ServiceLevel(session=session, name="batch", shares=None,
+        batch_sla = ServiceLevel(session=session, name="batch1", shares=None,
                                  workload_type="batch").create()
         interactive_role.attach_service_level(interactive_sla)
         batch_role.attach_service_level(batch_sla)
