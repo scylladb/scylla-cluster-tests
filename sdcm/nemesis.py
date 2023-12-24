@@ -2017,7 +2017,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with self.cluster.cql_connection_patient(self.tester.db_cluster.nodes[0]) as session:
             query_result = session.execute('SELECT keyspace_name FROM system_schema.keyspaces;')
             for result_rows in query_result:
-                keyspaces.extend([row.lower() for row in result_rows if not row.lower().startswith("system")])
+                keyspaces.extend([row.lower()
+                                 for row in result_rows if not row.lower().startswith(("system", "audit"))])
             for ks in keyspaces:
                 to_be_skipped = tables_to_skip.get(ks, None)
                 if to_be_skipped is None:
