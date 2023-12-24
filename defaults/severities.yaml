@@ -135,4 +135,3 @@ ScyllaSysconfigSetupEvent: NORMAL
 TestStepEvent: ERROR
 CpuNotHighEnoughEvent: ERROR
 HWPerforanceEvent: CRITICAL
-CommitLogCheckErrorEvent: ERROR
