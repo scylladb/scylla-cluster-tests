@@ -3524,8 +3524,12 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
                     has_data = False
                     try:
-                        stmt = SimpleStatement(f"SELECT * FROM {table_name}", fetch_size=10)
-                        has_data = bool(cql_session.execute(stmt).one())
+                        res = db_node.run_nodetool(sub_cmd='cfstats', args=table_name, timeout=300,
+                                                   warning_event_on_exception=(
+                                                       Failure, UnexpectedExit, Libssh2_UnexpectedExit,),
+                                                   publish_event=False, retry=0)
+                        cf_stats = db_node._parse_cfstats(res.stdout)  # pylint: disable=protected-access
+                        has_data = bool(cf_stats['Number of partitions (estimate)'])
                     except Exception as exc:  # pylint: disable=broad-except
                         self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
 
