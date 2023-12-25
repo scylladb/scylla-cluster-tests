@@ -57,7 +57,7 @@ def truncate_entries(func):
     @wraps(func)
     def inner(self, *args, **kwargs):
         node = args[0]
-        with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
+        with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks', connect_timeout=600) as session:
             InfoEvent(message="Start truncate simple tables").publish()
             try:
                 self.cql_truncate_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
@@ -70,7 +70,7 @@ def truncate_entries(func):
         func_result = func(self, *args, **kwargs)
 
         # re-new connection
-        with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
+        with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks', connect_timeout=600) as session:
             self.validate_truncated_entries_for_table(session=session, system_truncated=True)
             self.read_data_from_truncated_tables(session=session)
             self.cql_insert_data_to_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
