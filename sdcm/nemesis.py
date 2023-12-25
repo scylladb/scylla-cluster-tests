@@ -2235,8 +2235,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             default: speculative_retry = '99.0PERCENTILE';
         """
         options = ("'ALWAYS'",
-                   "'%spercentile'" % random.randint(1, 99),
-                   "'%sms'" % random.randint(1, 1000))
+                   "'%spercentile'" % random.randint(95, 99),
+                   "'%sms'" % random.randint(300, 1000))
         self._modify_table_property(name="speculative_retry", val=random.choice(options))
 
     def disrupt_toggle_table_ics(self):
