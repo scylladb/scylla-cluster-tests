@@ -5177,7 +5177,7 @@ class NoOpMonkey(Nemesis):
 
 class AddRemoveDcNemesis(Nemesis):
 
-    disruptive = False
+    disruptive = True
     kubernetes = False
     run_with_gemini = False
     limited = True
