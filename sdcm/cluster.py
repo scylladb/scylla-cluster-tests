@@ -2307,7 +2307,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_down:
             self.wait_db_down(timeout=timeout)
-        self.start_service(service_name='scylla-server', timeout=timeout)
+        with adaptive_timeout(operation=Operations.START_SCYLLA, node=self, timeout=timeout):
+            self.start_service(service_name='scylla-server', timeout=timeout * 4)
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
 
