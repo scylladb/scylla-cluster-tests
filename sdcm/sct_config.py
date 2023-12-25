@@ -1162,11 +1162,6 @@ class SCTConfiguration(dict):
              help="Assign target upgrade version, use for decide if the truncate entries test should be run. "
                   "This test should be performed in case the target upgrade version >= 3.1"),
 
-        dict(name="disable_raft", env="SCT_DISABLE_RAFT", type=boolean,
-             help="As for now, raft will be enable by default in all [upgrade] tests, so this flag will allow us"
-                  "to still run [upgrade] test without raft enabled (or disabling raft), so we will have better"
-                  "coverage"),
-
         dict(name="upgrade_node_packages", env="SCT_UPGRADE_NODE_PACKAGES", type=str,
              help=""),
 

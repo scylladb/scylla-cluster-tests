@@ -192,9 +192,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         upgrade_node_packages = self.params.get('upgrade_node_packages')
 
         scylla_yaml_updates = {}
-        if not self.params.get('disable_raft'):
-            scylla_yaml_updates.update({"consistent_cluster_management": True})
-
+        scylla_yaml_updates.update({"consistent_cluster_management": None})
         if self.params.get('test_sst3'):
             scylla_yaml_updates.update({"enable_sstables_mc_format": True})
 

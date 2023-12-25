@@ -141,7 +141,6 @@ recover_system_tables: false
 scylla_version: ''
 test_upgrade_from_installed_3_1_0: false
 target_upgrade_version: ''
-disable_raft: true
 
 stress_cdclog_reader_cmd: "cdc-stressor -stream-query-round-duration 30s"
 
