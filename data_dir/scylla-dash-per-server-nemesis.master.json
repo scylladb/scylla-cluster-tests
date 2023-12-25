@@ -7668,10 +7668,10 @@
             {
               "selected": false,
               "text": "Shard",
-              "value": "shard"
+              "value": "instance,shard"
             }
           ],
-          "query": "Cluster,DC,Instance,Shard",
+          "query": "Instance : instance,Cluster : cluster,DC : dc,Shard : instance\\,shard",
           "skipUrlSync": false,
           "type": "custom"
         },
