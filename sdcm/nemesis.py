@@ -28,6 +28,7 @@ import re
 import time
 import traceback
 import json
+import itertools
 from distutils.version import LooseVersion
 from contextlib import ExitStack
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
@@ -205,6 +206,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.monitoring_set = tester_obj.monitors
         self.target_node: BaseNode = None
         self.disruptions_list = []
+        self.disruptions_cycle: Iterable[Callable] | None = None
         self.termination_event = termination_event
         self.operation_log = []
         self.current_disruption = None
@@ -1882,12 +1884,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info(f"List of Nemesis to execute: {self._disruption_list_names}")
 
     def call_next_nemesis(self):
-        if self.disruptions_list:
-            self.log.debug(f'Selecting the next nemesis out of stack {self._disruption_list_names}')
-            self.execute_disrupt_method(disrupt_method=self.disruptions_list.pop())
-        else:
-            self.log.info('Nemesis stack is empty - setting termination_event')
-            self.termination_event.set()
+        assert self.disruptions_list, "no nemesis were selected"
+        if not self.disruptions_cycle:
+            self.disruptions_cycle = itertools.cycle(self.disruptions_list)
+        self.log.debug(f'Selecting the next nemesis out of stack {self._disruption_list_names[10:]}')
+        self.execute_disrupt_method(disrupt_method=next(self.disruptions_cycle))
 
     @latency_calculator_decorator(legend="Run repair process with nodetool repair")
     def repair_nodetool_repair(self, node=None, publish_event=True):
