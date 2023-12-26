@@ -43,12 +43,3 @@ def nodetool_context(node, start_command, end_command):
         yield result
     finally:
         node.run_nodetool(end_command)
-
-
-@contextmanager
-def run_nemesis(node: 'BaseNode', nemesis_name: str):
-    node.running_nemesis = nemesis_name
-    try:
-        yield node
-    finally:
-        node.running_nemesis = None

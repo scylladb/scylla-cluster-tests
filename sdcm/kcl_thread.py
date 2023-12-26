@@ -21,12 +21,12 @@ import threading
 from functools import cached_property
 from typing import Dict
 
+from sdcm.nemesis import Nemesis
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.stress.base import format_stress_cmd_error
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.loaders import KclStressEvent
-from sdcm.cluster import BaseNode
 
 
 LOGGER = logging.getLogger(__name__)
@@ -132,14 +132,12 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
             end_time = time.time() + self._timeout
 
             while not self._stop_event.is_set():
-                node: BaseNode = self.db_node_to_query(loader)
-                node.running_nemesis = "Compare tables size by cf-stats"
-                node.run_nodetool('flush')
+                with Nemesis.run_nemesis(node_list=self.node_list, nemesis_label="Compare tables size by cf-stats") as node:
+                    node.run_nodetool('flush')
 
-                dst_size = node.get_cfstats(dst_table)['Number of partitions (estimate)']
-                src_size = node.get_cfstats(src_table)['Number of partitions (estimate)']
+                    dst_size = node.get_cfstats(dst_table)['Number of partitions (estimate)']
+                    src_size = node.get_cfstats(src_table)['Number of partitions (estimate)']
 
-                node.running_nemesis = None
                 status = f"== CompareTablesSizesThread: dst table/src table number of partitions: {dst_size}/{src_size} =="
                 LOGGER.info(status)
                 InfoEvent(f'[{time.time()}/{end_time}] {status}').publish()
