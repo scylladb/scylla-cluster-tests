@@ -30,7 +30,7 @@ import traceback
 import json
 import itertools
 from distutils.version import LooseVersion
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial
 from collections import defaultdict, Counter, namedtuple
@@ -162,6 +162,8 @@ EXCLUSIVE_NEMESIS_NAMES = (
     "disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node",
 )
 
+NEMESIS_TARGET_SELECTION_LOCK = Lock()
+
 
 class DefaultValue:  # pylint: disable=too-few-public-methods
     """
@@ -292,6 +294,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         setattr(cls, func.__name__, wrapper)  # bind it to Nemesis class
         return func  # returning func means func can still be used normally
 
+    @staticmethod
+    @contextmanager
+    def run_nemesis(node_list: list['BaseNode'], nemesis_label: str):
+        """
+        pick a node out of a `node_list`, and mark is as running_nemesis
+        for the duration of this context
+        """
+        with NEMESIS_TARGET_SELECTION_LOCK:
+            free_nodes = [node for node in node_list if not node.running_nemesis]
+            assert free_nodes, f"couldn't find nodes for running:`{nemesis_label}`, are all nodes running nemesis ?"
+            node = random.choice(free_nodes)
+            node.running_nemesis = nemesis_label
+        try:
+            yield node
+        finally:
+            with NEMESIS_TARGET_SELECTION_LOCK:
+                node.running_nemesis = None
+
     def use_nemesis_seed(self):
         if nemesis_seed := self.tester.params.get("nemesis_seed"):
             random.seed(nemesis_seed)
@@ -318,12 +338,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         DisruptionEvent(nemesis_name=disrupt, severity=severity, **data).publish()
 
     def set_current_running_nemesis(self, node):
-        node.running_nemesis = self.current_disruption
+        with NEMESIS_TARGET_SELECTION_LOCK:
+            node.running_nemesis = self.current_disruption
 
     @staticmethod
     def unset_current_running_nemesis(node):
         if node is not None:
-            node.running_nemesis = None
+            with NEMESIS_TARGET_SELECTION_LOCK:
+                node.running_nemesis = None
 
     def _get_target_nodes(
             self,
@@ -363,21 +385,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if is_seed is DefaultValue - if self.filter_seed is True it act as if is_seed=False,
           otherwise it will act as if is_seed is None
         """
-        self.unset_current_running_nemesis(self.target_node)
-        nodes = self._get_target_nodes(is_seed=is_seed, dc_idx=dc_idx, rack=rack)
-        if not nodes:
-            dc_str = '' if dc_idx is None else f'dc {dc_idx} '
-            rack_str = '' if rack is None else f'rack {rack} '
-            raise UnsupportedNemesis(
-                f"Can't allocate node from {dc_str}{rack_str}to run nemesis on")
-        if allow_only_last_node_in_rack:
-            self.target_node = nodes[-1]
-        else:
-            self.target_node = random.choice(nodes)
+        with NEMESIS_TARGET_SELECTION_LOCK:
+            nodes = self._get_target_nodes(is_seed=is_seed, dc_idx=dc_idx, rack=rack)
+            if not nodes:
+                dc_str = '' if dc_idx is None else f'dc {dc_idx} '
+                rack_str = '' if rack is None else f'rack {rack} '
+                raise UnsupportedNemesis(
+                    f"Can't allocate node from {dc_str}{rack_str}to run nemesis on")
+            if allow_only_last_node_in_rack:
+                self.target_node = nodes[-1]
+            else:
+                self.target_node = random.choice(nodes)
 
-        self.set_current_running_nemesis(node=self.target_node)
-        self.log.info('Current Target: %s with running nemesis: %s',
-                      self.target_node, self.target_node.running_nemesis)
+            self.target_node.running_nemesis = self.current_disruption
+            self.log.info('Current Target: %s with running nemesis: %s',
+                          self.target_node, self.target_node.running_nemesis)
 
     @raise_event_on_failure
     def run(self, interval=None, cycles_count: int = -1):
@@ -1103,11 +1125,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def get_class_name(self):
         return self.__class__.__name__.replace('Monkey', '')
 
-    def _set_current_disruption(self, label=None, node=None):
-        self.target_node = node if node else self.target_node
-
-        if not label:
-            label = "%s on target node %s" % (self.__class__.__name__, self.target_node)
+    def set_current_disruption(self, label=None):
         self.log.debug('Set current_disruption -> %s', label)
         self.current_disruption = label
 
@@ -5028,8 +5046,10 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     # NOTE: exclusive nemesis will wait before the end of all other ones
                     time.sleep(10)
 
-            args[0].set_target_node()
             args[0].current_disruption = "".join(p.capitalize() for p in method_name.replace("disrupt_", "").split("_"))
+            args[0].set_current_disruption(f"{args[0].current_disruption}")
+            args[0].set_target_node()
+
             args[0].cluster.check_cluster_health()
             num_nodes_before = len(args[0].cluster.nodes)
             start_time = time.time()
@@ -5040,7 +5060,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
             result = None
             status = True
             # pylint: disable=protected-access
-            args[0]._set_current_disruption(f"{args[0].current_disruption} {args[0].target_node}")
+
             args[0].set_current_running_nemesis(node=args[0].target_node)
             log_info = {
                 'operation': args[0].current_disruption,

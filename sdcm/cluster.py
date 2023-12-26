@@ -28,7 +28,7 @@ import traceback
 import itertools
 import json
 import ipaddress
-
+from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr
 from datetime import datetime
 from textwrap import dedent
@@ -52,7 +52,6 @@ from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-modu
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
-
 from argus.backend.util.enums import ResourceState
 from sdcm.node_exporter_setup import NodeExporterSetup, SyslogNgExporterSetup
 from sdcm.db_log_reader import DbLogReader
@@ -150,7 +149,6 @@ from sdcm.exceptions import (
     NodeNotReady,
     SstablesNotFound,
 )
-from sdcm.utils.context_managers import run_nemesis
 
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
@@ -287,7 +285,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.stop_wait_db_up_event = threading.Event()
         self.lock = threading.Lock()
 
-        self._running_nemesis = None
+        self.running_nemesis = None
 
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
@@ -493,27 +491,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @property
     def continuous_events_registry(self) -> ContinuousEventsRegistry:
         return self._continuous_events_registry
-
-    @property
-    def running_nemesis(self):
-        return self._running_nemesis
-
-    @running_nemesis.setter
-    def running_nemesis(self, nemesis):
-        """Set name of nemesis which is started on node
-
-        Decorators:
-            running_nemesis.setter
-
-        Arguments:
-            nemesis {str} -- class name of Nemesis
-        """
-
-        # Only one Nemesis could run on node. Limitation
-        # of first version for X parallel Nemesis
-
-        with self.lock:
-            self._running_nemesis = nemesis
 
     @cached_property
     def distro(self):
@@ -4394,9 +4371,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                         message=f"Failed to rotate AWS KMS key for the '{kms_key_alias_name}' alias",
                         traceback=traceback.format_exc()).publish()
                 try:
-                    target_node = [node for node in db_cluster.nodes if not node.running_nemesis][0]
-                    self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
-                    with run_nemesis(node=target_node, nemesis_name="KMS encryption check"):
+                    nemesis_class = self.nemesis[0] if self.nemesis else getattr(
+                        import_module('sdcm.nemesis'), "Nemesis")
+                    with nemesis_class.run_nemesis(node_list=db_cluster.nodes, nemesis_label="KMS encryption check") as target_node:
+                        self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
+
                         ks_cf_list = db_cluster.get_non_system_ks_cf_list(
                             db_node=target_node, filter_out_table_with_counter=True, filter_out_mv=True,
                             filter_empty_tables=True)
