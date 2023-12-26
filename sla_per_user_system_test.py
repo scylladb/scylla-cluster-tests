@@ -838,7 +838,7 @@ class SlaPerUserTest(LongevityTest):
         try:
             for item, target_margin in comparison_axis.items():
                 interactive = float(workloads_results["interactive"][item])
-                batch = float(workloads_results["batch"][item])
+                batch = float(workloads_results["batch1"][item])
                 ratio = interactive / batch if item == "op rate" else batch / interactive
 
                 comparison_results.update(
