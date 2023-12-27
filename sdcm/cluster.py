@@ -2372,12 +2372,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
 
-    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=500, ignore_status=False):
+    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=1800, verify_up_timeout=None):
+        verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_up_before:
-            self.wait_db_up(timeout=timeout)
-        self.restart_service(service_name='scylla-server', timeout=timeout, ignore_status=ignore_status)
+            self.wait_db_up(timeout=verify_up_timeout)
+        with adaptive_timeout(operation=Operations.START_SCYLLA, node=self, timeout=timeout):
+            self.restart_service(service_name='scylla-server', timeout=timeout * 2)
         if verify_up_after:
-            self.wait_db_up(timeout=timeout)
+            self.wait_db_up(timeout=verify_up_timeout)
 
     def restart_scylla_jmx(self, verify_up_before=False, verify_up_after=True, timeout=300):
         if verify_up_before:
@@ -2387,7 +2389,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.wait_jmx_up(timeout=timeout)
 
     @log_run_info
-    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=500):
+    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=1800):
         self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
         if verify_up_after:
             self.wait_jmx_up(timeout=timeout)

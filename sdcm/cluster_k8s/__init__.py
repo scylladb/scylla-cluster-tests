@@ -2082,17 +2082,18 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
     def node_name(self) -> str:  # pylint: disable=invalid-overridden-method
         return self._pod.spec.node_name
 
-    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300,
-                              ignore_status=False):
+    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=1800,
+                              verify_up_timeout=None):
+        verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_up_before:
-            self.wait_db_up(timeout=timeout)
+            self.wait_db_up(timeout=verify_up_timeout)
         self.remoter.run('sh -c "supervisorctl restart scylla || supervisorctl restart scylla-server"',
                          timeout=timeout)
         if verify_up_after:
-            self.wait_db_up(timeout=timeout)
+            self.wait_db_up(timeout=verify_up_timeout)
 
     @cluster.log_run_info
-    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300):
+    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=1800):
         self.restart_scylla_server(
             verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
 
