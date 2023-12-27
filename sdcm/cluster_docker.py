@@ -157,20 +157,22 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
 
-    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
+    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=1800, verify_up_timeout=None):
+        verify_up_timeout = verify_up_timeout or self.verify_up_timeout
+
         if verify_up_before:
-            self.wait_db_up(timeout=timeout)
+            self.wait_db_up(timeout=verify_up_timeout)
 
         # Need to restart the scylla-housekeeping service manually because of autostart of this service is disabled
         # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
         self.stop_scylla_housekeeping_service(timeout=timeout)
         self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"), timeout=timeout)
         if verify_up_after:
-            self.wait_db_up(timeout=timeout)
+            self.wait_db_up(timeout=verify_up_timeout)
         self.start_scylla_housekeeping_service(timeout=timeout)
 
     @cluster.log_run_info
-    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300) -> None:
+    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=1800) -> None:
         self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
 
     @property
