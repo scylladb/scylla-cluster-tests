@@ -167,14 +167,17 @@ class SlaPerUserTest(LongevityTest):
             WorkloadPrioritisationEvent.RatioValidationEvent(
                 message=f'Can\'t compare expected and actual shares ratio. Expected: {expected_ratio}. '
                         f'Actual: {actual_ratio}', severity=Severity.ERROR).publish()
+            return False
         elif dev > self.VALID_DEVIATION_PRC:
             WorkloadPrioritisationEvent.RatioValidationEvent(
                 message=f'{msg}. Actual ratio ({actual_ratio}) is not as expected ({expected_ratio})',
                 severity=Severity.ERROR).publish()
+            return False
         else:
             WorkloadPrioritisationEvent.RatioValidationEvent(
                 message=f'{msg}. Actual ratio ({actual_ratio}) is as expected ({expected_ratio})',
                 severity=Severity.NORMAL).publish()
+            return True
 
     @staticmethod
     def calculate_deviation(first, second):
@@ -840,6 +843,8 @@ class SlaPerUserTest(LongevityTest):
                 interactive = float(workloads_results["interactive"][item])
                 batch = float(workloads_results["batch1"][item])
                 ratio = interactive / batch if item == "op rate" else batch / interactive
+                within_margin = self.validate_deviation(expected_ratio=target_margin, actual_ratio=ratio,
+                                                        msg=f'Validate workload ration for "{item}" item. ')
 
                 comparison_results.update(
                     {
@@ -848,7 +853,7 @@ class SlaPerUserTest(LongevityTest):
                             "batch": batch,
                             "diff": batch - interactive,
                             "ratio": ratio,
-                            "within_margin": ratio >= target_margin
+                            "within_margin": within_margin
                         }
                     }
                 )
