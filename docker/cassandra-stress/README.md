@@ -6,16 +6,16 @@ export DEB_LIST_URL=https://s3.amazonaws.com/downloads.scylladb.com/unstable/scy
 export CS_DOCKER_IMAGE=scylladb/hydra-loaders:cassandra-stress-$(date +'%Y%m%d')
 docker build . -t ${CS_DOCKER_IMAGE} -f Dockerfile-deb --build-arg DEB_LIST_URL=$DEB_LIST_URL
 docker push ${CS_DOCKER_IMAGE}
-echo "${CS_DOCKER_IMAGE}" > image
 ```
 
-### Building from source without shard aware driver (slower)
+### Building from fork source (slower)
+
+this is just example of such usage, you should point it to the fork/branch you need
 
 ```
-export BRANCH=branch-5.0
+export BRANCH=use_rack_aware
+export GIT_FORK=https://github.com/sylwiaszunejko/scylla-tools-java
 export CS_DOCKER_IMAGE=scylladb/hydra-loaders:cassandra-stress-${BRANCH}-$(date +'%Y%m%d')
-docker build . -t ${CS_DOCKER_IMAGE} -f Dockerfile
-docker build . -t ${CS_DOCKER_IMAGE} -f Dockerfile-src --build-arg BRANCH=${BRANCH}
+docker build . -t ${CS_DOCKER_IMAGE} -f Dockerfile-src --build-arg BRANCH=${BRANCH} --build-arg GIT_FORK=${GIT_FORK}
 docker push ${CS_DOCKER_IMAGE}
-echo "${CS_DOCKER_IMAGE}" > image
 ```
