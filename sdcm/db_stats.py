@@ -568,7 +568,7 @@ class TestStatsMixin(Stats):
             for line in versions_output:
                 for package in ['scylla-jmx', 'scylla-server', 'scylla-tools', 'scylla-enterprise-jmx',
                                 'scylla-enterprise-server', 'scylla-enterprise-tools']:
-                    match = re.search(r'(%s-([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)' % package, line)
+                    match = re.search(r'(%s-([\w.-]+)\.withkeyestimationperSSTablefix\.(0.)?([0-9]{8,8}).(\w+).)' % package, line)
                     if match:
                         versions[package.replace('-enterprise', '')] = {'version': match.group(2),
                                                                         'date': match.group(4),
