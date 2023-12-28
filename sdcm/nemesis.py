@@ -2799,7 +2799,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._mgmt_backup(backup_specific_tables=False)
 
     def disrupt_mgmt_restore(self):
-        def get_total_scylla_partition_size():
+        raise UnsupportedNemesis("'mgmt_restore' nemesis is too unstable.")
+
+        def get_total_scylla_partition_size():  # pylint: disable=unreachable
             result = self.cluster.nodes[0].remoter.run("df -k | grep /var/lib/scylla")  # Size in KB
             free_space_size = int(result.stdout.split()[1]) / 1024 ** 2  # Converting to GB
             return free_space_size
