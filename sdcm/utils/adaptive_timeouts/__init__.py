@@ -74,6 +74,14 @@ class Operations(Enum):
                                  ("timeout", "service_level_for_test_step"))
 
 
+class TestInfoServices:  # pylint: disable=too-few-public-methods
+    @staticmethod
+    def get(node: "BaseNode") -> dict:
+        return dict(
+            n_db_nodes=len(node.parent_cluster.nodes),
+        )
+
+
 @contextmanager
 def adaptive_timeout(operation: Operations, node: "BaseNode", stats_storage: AdaptiveTimeoutStore = ESAdaptiveTimeoutStore(), **kwargs):
     """
@@ -87,6 +95,7 @@ def adaptive_timeout(operation: Operations, node: "BaseNode", stats_storage: Ada
         assert arg in kwargs, f"Argument '{arg}' is required for operation {operation.name}"
         args[arg] = kwargs[arg]
     timeout, load_metrics = operation.value[1](node_info_service=NodeLoadInfoServices().get(node), **args)
+    load_metrics = load_metrics | TestInfoServices.get(node)
     start_time = time.time()
     timeout_occurred = False
     try:
