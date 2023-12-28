@@ -2850,56 +2850,48 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self.cluster.params.get('cluster_backend') != 'aws':
             raise UnsupportedNemesis("The restore test only supports AWS at the moment")
 
-        try:
-            mgr_cluster = self.cluster.get_cluster_manager()
-            cluster_backend = self.cluster.params.get('cluster_backend')
-            persistent_manager_snapshots_dict = get_persistent_snapshots()
-            target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"]
-            chosen_snapshot_tag, chosen_snapshot_info = (
-                choose_snapshot(persistent_manager_snapshots_dict[cluster_backend]))
+        mgr_cluster = self.cluster.get_cluster_manager()
+        cluster_backend = self.cluster.params.get('cluster_backend')
+        persistent_manager_snapshots_dict = get_persistent_snapshots()
+        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"]
+        chosen_snapshot_tag, chosen_snapshot_info = (
+            choose_snapshot(persistent_manager_snapshots_dict[cluster_backend]))
 
-            self.log.info("Restoring the keyspace %s", chosen_snapshot_info["keyspace_name"])
-            location_list = [f"{self.cluster.params.get('backup_bucket_backend')}:{target_bucket}"]
-            test_keyspaces = self.cluster.get_test_keyspaces()
-            if chosen_snapshot_info["keyspace_name"] not in test_keyspaces:
-                self.log.info("Restoring the schema of the keyspace '%s'",
-                              chosen_snapshot_info["keyspace_name"])
-                restore_task = mgr_cluster.create_restore_task(restore_schema=True, location_list=location_list,
-                                                               snapshot_tag=chosen_snapshot_tag)
-
-                restore_task.wait_and_get_final_status(step=10,
-                                                       timeout=6*60)  # giving 6 minutes to restore the schema
-                assert restore_task.status == TaskStatus.DONE, \
-                    f'Schema restoration of {chosen_snapshot_tag} has failed!'
-                self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
-
-            restore_task = mgr_cluster.create_restore_task(restore_data=True,
-                                                           location_list=location_list,
+        self.log.info("Restoring the keyspace %s", chosen_snapshot_info["keyspace_name"])
+        location_list = [f"{self.cluster.params.get('backup_bucket_backend')}:{target_bucket}"]
+        test_keyspaces = self.cluster.get_test_keyspaces()
+        if chosen_snapshot_info["keyspace_name"] not in test_keyspaces:
+            self.log.info("Restoring the schema of the keyspace '%s'",
+                          chosen_snapshot_info["keyspace_name"])
+            restore_task = mgr_cluster.create_restore_task(restore_schema=True, location_list=location_list,
                                                            snapshot_tag=chosen_snapshot_tag)
-            restore_task.wait_and_get_final_status(step=30, timeout=chosen_snapshot_info["expected_timeout"])
-            assert restore_task.status == TaskStatus.DONE, f'Data restoration of {chosen_snapshot_tag} has failed!'
 
-            manager_version = mgr_cluster.sctool.parsed_client_version
-            if manager_version < LooseVersion("3.2"):
-                mgr_task = mgr_cluster.create_repair_task()
-                task_final_status = mgr_task.wait_and_get_final_status(timeout=chosen_snapshot_info["expected_timeout"])
-                assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
-                    mgr_task.id, str(mgr_task.status))
+            restore_task.wait_and_get_final_status(step=10,
+                                                   timeout=6*60)  # giving 6 minutes to restore the schema
+            assert restore_task.status == TaskStatus.DONE, \
+                f'Schema restoration of {chosen_snapshot_tag} has failed!'
+            self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
 
-            confirmation_stress_template = (
-                persistent_manager_snapshots_dict)[cluster_backend]["confirmation_stress_template"]
-            stress_queue = execute_data_validation_thread(command_template=confirmation_stress_template,
-                                                          keyspace_name=chosen_snapshot_info["keyspace_name"],
-                                                          number_of_rows=chosen_snapshot_info["number_of_rows"])
-            for stress in stress_queue:
-                self.tester.verify_stress_thread(cs_thread_pool=stress)
-        finally:
-            if chosen_snapshot_info:
-                if "keyspace_name" in chosen_snapshot_info.keys():
-                    keyspace = chosen_snapshot_info["keyspace_name"]
-                    InfoEvent(message=f'Removing test {keyspace=}', severity=Severity.WARNING)
-                    with self.cluster.cql_connection_patient(self.target_node) as session:
-                        session.execute(f'DROP KEYSPACE IF EXISTS "{keyspace}"')
+        restore_task = mgr_cluster.create_restore_task(restore_data=True,
+                                                       location_list=location_list,
+                                                       snapshot_tag=chosen_snapshot_tag)
+        restore_task.wait_and_get_final_status(step=30, timeout=chosen_snapshot_info["expected_timeout"])
+        assert restore_task.status == TaskStatus.DONE, f'Data restoration of {chosen_snapshot_tag} has failed!'
+
+        manager_version = mgr_cluster.sctool.parsed_client_version
+        if manager_version < LooseVersion("3.2"):
+            mgr_task = mgr_cluster.create_repair_task()
+            task_final_status = mgr_task.wait_and_get_final_status(timeout=chosen_snapshot_info["expected_timeout"])
+            assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
+                mgr_task.id, str(mgr_task.status))
+
+        confirmation_stress_template = (
+            persistent_manager_snapshots_dict)[cluster_backend]["confirmation_stress_template"]
+        stress_queue = execute_data_validation_thread(command_template=confirmation_stress_template,
+                                                      keyspace_name=chosen_snapshot_info["keyspace_name"],
+                                                      number_of_rows=chosen_snapshot_info["number_of_rows"])
+        for stress in stress_queue:
+            self.tester.verify_stress_thread(cs_thread_pool=stress)
 
     def _delete_existing_backups(self, mgr_cluster):
         deleted_tasks = []
