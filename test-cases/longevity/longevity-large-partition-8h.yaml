@@ -51,6 +51,7 @@ gce_n_local_ssd_disk_db: 8
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '015'
 nemesis_interval: 15
+nemesis_during_prepare: false
 
 user_prefix: 'longevity-large-partitions-8h'
 
