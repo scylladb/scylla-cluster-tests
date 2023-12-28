@@ -23,7 +23,7 @@ from invoke import Result
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.adaptive_timeouts.load_info_store import AdaptiveTimeoutStore
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
-from unit_tests.lib.fake_remoter import FakeRemoter
+from unit_tests.test_cluster import DummyDbCluster
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +34,7 @@ class FakeNode():
         self.name = name
         self.remoter = remoter
         self.scylla_version_detailed = "2042.1.12-0.20220620.e23889f17"
+        self.parent_cluster = DummyDbCluster(nodes=[self], params={'n_db_nodes': 1})
 
 
 class MemoryAdaptiveTimeoutStore(AdaptiveTimeoutStore):
