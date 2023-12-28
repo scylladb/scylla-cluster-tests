@@ -68,4 +68,4 @@ data_validation: |
   primary_key_column: "pk"
   max_partitions_in_test_table: 400
   partition_range_with_data_validation: 0-100
-  limit_rows_number: 10000
+  limit_rows_number: 5555
