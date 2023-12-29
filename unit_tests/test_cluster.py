@@ -44,6 +44,7 @@ from sdcm.utils.distro import Distro
 from sdcm.nemesis.utils.indexes import get_column_names
 from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.remote import LocalCmdRunner
+from sdcm.sct_config import SCTConfiguration
 from unit_tests.dummy_remote import DummyRemote, LocalNode
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.test_utils_common import DummyNode
@@ -480,7 +481,7 @@ class TestBaseMonitorSet(unittest.TestCase):
             ssh_login_info=dict(key_file="~/.ssh/scylla-test"),
         )
         self.db_cluster = DummyDbCluster([self.node])
-        self.monitor_cluster = BaseMonitorSet({"db_cluster": self.db_cluster}, {})
+        self.monitor_cluster = BaseMonitorSet({"db_cluster": self.db_cluster}, params=SCTConfiguration())
         self.monitor_cluster.log = logging
 
     def test_monitoring_version(self):
