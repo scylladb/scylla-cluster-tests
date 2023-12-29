@@ -25,7 +25,7 @@ def test_check_cluster_layout():
             MagicMock(dc_idx=0, rack="rack2"),
         ]
     )
-    db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": "4"}
+    db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": 4}
     db_cluster.racks_count = 2
     assert check_cluster_layout(db_cluster) is True
 
@@ -40,7 +40,7 @@ def test_check_cluster_layout_on_two_dcs():
             MagicMock(dc_idx=1, rack="rack2"),
         ]
     )
-    db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": "2 2"}
+    db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": [2, 2]}
     db_cluster.racks_count = 2
     assert check_cluster_layout(db_cluster) is True
 
@@ -55,7 +55,7 @@ def test_check_cluster_layout_unbalanced_racks():
             MagicMock(dc_idx=0, rack="rack2"),
         ]
     )
-    db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": "3"}
+    db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": 3}
     db_cluster.racks_count = 2
     assert check_cluster_layout(db_cluster) is True
 
@@ -73,7 +73,7 @@ def test_check_cluster_layout_unbalanced_on_two_dcs():
             MagicMock(dc_idx=1, rack="rack2"),
         ]
     )
-    db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": "4 4"}
+    db_cluster.params = {"capacity_errors_check_mode": "per-initial_config", "n_db_nodes": [4, 4]}
     db_cluster.racks_count = 2
     assert check_cluster_layout(db_cluster) is False
 
