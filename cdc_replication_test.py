@@ -425,5 +425,4 @@ class CDCReplicationTest(ClusterTester):
             "oracle_instance_type": self.params.get("instance_type_db_oracle"),
             "consistency_status": self.consistency_ok
         })
-
         return email_data
