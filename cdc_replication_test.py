@@ -456,5 +456,4 @@ class CDCReplicationTest(ClusterTester):
                 "consistency_status": self.consistency_ok,
             }
         )
-
         return email_data

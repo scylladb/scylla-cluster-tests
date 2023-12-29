@@ -25,9 +25,10 @@ FAILING_EVENTS = {
 
 
 class FakeSCTConfiguration(SCTConfiguration):
+    failing_events: list
+
     def __init__(self, failing_events: list):
-        self.failing_events = failing_events
-        super().__init__()
+        super().__init__(failing_events=failing_events)
 
     def _load_environment_variables(self):
         return {"teardown_validators": {"test_error_events": {"enabled": True, "failing_events": self.failing_events}}}

@@ -101,10 +101,14 @@ def get_tenants(test_class_instance):
         )
 
     # Process multitenant parameters if present
-    for param_dict in test_class_instance.params.config_options:
-        param_name = param_dict["name"]
+    for field_name, field in test_class_instance.params.model_fields.items():
+        param_name = field_name
         param_value = test_class_instance.params.get(param_name)
-        if not (param_dict.get("is_k8s_multitenant_value") and isinstance(param_value, list)):
+        if not (
+            field.json_schema_extra
+            and field.json_schema_extra.get("is_k8s_multitenant_value")
+            and isinstance(param_value, list)
+        ):
             continue
         LOGGER.debug("Process multitenant option '%s'. It's value: %s", param_name, param_value)
         for i, _ in enumerate(tenants):

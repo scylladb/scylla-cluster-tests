@@ -6366,7 +6366,7 @@ class BaseMonitorSet:
             # scylla version can be branch-version:latest, or master:latest
             # only version is needed
             return scylla_version.lstrip("branch-").split(":")[0]
-        scylla_version = self.targets["db_cluster"].nodes[0].scylla_version
+        scylla_version = self.targets["db_cluster"].params.artifact_scylla_version
         self.log.debug("Using %s ScyllaDB version to derive monitoring version", scylla_version)
         if scylla_version and "dev" not in scylla_version:
             if version := re.match(r"(\d+\.\d+)", scylla_version):
