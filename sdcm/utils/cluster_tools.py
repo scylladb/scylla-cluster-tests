@@ -41,7 +41,8 @@ def check_cluster_layout(db_cluster: BaseCluster) -> bool:  # noqa: F821
     nodes_by_dc_idx = group_nodes_by_dc_idx(db_cluster.nodes)
     capacity_errors_check_mode = db_cluster.params.get("capacity_errors_check_mode") or "per-initial_config"
 
-    db_nodes_config_count = [int(i) for i in str(db_cluster.params.get("n_db_nodes") or 0).split(" ")]
+    n_db_nodes = db_cluster.params.get("n_db_nodes")
+    db_nodes_config_count = n_db_nodes if isinstance(n_db_nodes, list) else [n_db_nodes]
 
     if capacity_errors_check_mode == "per-initial_config":
         for dc_idx, nodes_in_dc in nodes_by_dc_idx.items():
