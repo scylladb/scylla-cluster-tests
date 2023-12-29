@@ -38,7 +38,6 @@ cluster_health_check: true
 
 add_node_cnt: 1
 
-reuse_cluster: false
 nemesis_class_name: 'NoOpMonkey'
 nemesis_during_prepare: true
 nemesis_interval: 5
@@ -79,7 +78,6 @@ use_scylla_doctor_on_failure: true
 
 hinted_handoff: 'disabled'
 parallel_node_operations: true  # supported from Scylla 6.0
-
 server_encrypt: false
 client_encrypt: false
 peer_verification: true  # when client encryption is used, peer verification is enabled by default
@@ -332,6 +330,9 @@ mgmt_snapshots_preparer_params:
 
 adaptive_timeout_store_metrics: true
 
+# XCloud-specific defaults
+xcloud_scaling_config: null
+
 # Vector Search defaults
 n_vector_store_nodes: 0
 vector_store_port: 6080
@@ -339,13 +340,12 @@ vector_store_scylla_port: 9042
 vector_store_threads: 0  # 0 = defaults to number of cores on a node
 vector_store_docker_image: 'scylladb/vector-store'
 vector_store_version: ''
-
 download_from_s3: []
 # The object-storage method options in Scylla-Manager are: native/rclone/auto.
 # An empty value here, means Scylla-Manager will use its default value.
 manager_backup_restore_method: ''
 
-enable_argus_email_report : false
+enable_argus_email_report: false
 argus_email_report_template: email_report_template_basic.yaml
 
 # SCT agent defaults

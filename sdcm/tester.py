@@ -421,7 +421,7 @@ class ClusterTester(unittest.TestCase):
                 commit_id=git_status.get("branch.oid", get_git_commit_id()),
                 origin_url=git_status.get("upstream.url"),
                 branch_name=git_status.get("branch.upstream"),
-                sct_config=self.params.dict(),
+                sct_config=self.params.model_dump(),
             )
             self.log.info("Submitted Argus TestRun with test id %s", self.test_config.argus_client().run_id)
             self.test_config.argus_client().set_sct_runner(
@@ -700,7 +700,7 @@ class ClusterTester(unittest.TestCase):
                     "gemini_write_ops": results.get("write_ops", -1),
                     "oracle_node_ami_id": self.params.get("ami_id_db_oracle"),
                     "oracle_node_instance_type": self.params.get("instance_type_db_oracle"),
-                    "oracle_node_scylla_version": self.cs_db_cluster.nodes[0].scylla_version
+                    "oracle_node_scylla_version": self.cs_db_cluster.params.artifact_scylla_version
                     if self.cs_db_cluster
                     else "N/A",
                     "oracle_nodes_count": self.params.get("n_test_oracle_db_nodes"),
@@ -872,8 +872,8 @@ class ClusterTester(unittest.TestCase):
           queries won't fail due to the lack of nodes in the cluster.
         :return:
         """
-        n_db_nodes = str(self.params.get("n_db_nodes"))
-        min_nodes_dc = min([int(nodes_num) for nodes_num in n_db_nodes.split() if int(nodes_num) > 0])
+        n_db_nodes = self.params.get("n_db_nodes")
+        min_nodes_dc = min(n_db_nodes if isinstance(n_db_nodes, list) else [n_db_nodes])
 
         # In case tablets are enabled, it's better to set RF smaller than dc-nodes-number, so decommission is allowed.
         rf_candidate = (
@@ -968,6 +968,12 @@ class ClusterTester(unittest.TestCase):
     def prepare_kms_host(self) -> None:  # noqa: PLR0911
         if self.params.get("cluster_backend") != "aws":
             logging.debug("Skip configuring AWS KMS, test is not running on AWS")
+            return
+        if not self.params.is_enterprise:
+            logging.debug("Skip configuring AWS KMS, not running enterprise version")
+            return
+        if ComparableScyllaVersion(self.params.artifact_scylla_version) < "2023.1.3":
+            logging.debug("Skip configuring AWS KMS, version does not support KMS")
             return
         if self.params.get("enterprise_disable_kms"):
             logging.debug("Skip configuring AWS KMS, `enterprise_disable_kms` is set in the config")
@@ -1506,7 +1512,7 @@ class ClusterTester(unittest.TestCase):
             nemesis_seeds = [int(seed) for seed in nemesis_seeds.split()]
 
         nemesis_class_names = []
-        for i, klass in enumerate(list_class_name.split(" ")):
+        for i, klass in enumerate(list_class_name):
             try:
                 nemesis_name, num = klass.strip().split(":")
                 nemesis_name = nemesis_name.strip()
@@ -1568,8 +1574,8 @@ class ClusterTester(unittest.TestCase):
             n_db_nodes = self.params.get("n_db_nodes")
             if isinstance(n_db_nodes, int):  # legacy type
                 db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, str):  # latest type to support multiple datacenters
-                db_info["n_nodes"] = [int(n) for n in n_db_nodes.split()]
+            elif isinstance(n_db_nodes, list):  # latest type to support multiple datacenters
+                db_info["n_nodes"] = n_db_nodes
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))
         cpu = self.params.get("gce_instance_type_cpu_db")
@@ -1694,8 +1700,8 @@ class ClusterTester(unittest.TestCase):
             n_db_nodes = self.params.get("n_db_nodes")
             if isinstance(n_db_nodes, int):  # legacy type
                 db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, str):  # latest type to support multiple datacenters
-                db_info["n_nodes"] = [int(n) for n in n_db_nodes.split()]
+            elif isinstance(n_db_nodes, list):  # latest type to support multiple datacenters
+                db_info["n_nodes"] = n_db_nodes
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))
         db_info["type"] = self.params.get("azure_instance_type_db")
@@ -1703,8 +1709,8 @@ class ClusterTester(unittest.TestCase):
             n_loader_nodes = self.params.get("n_loaders")
             if isinstance(n_loader_nodes, int):  # legacy type
                 loader_info["n_nodes"] = [n_loader_nodes]
-            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
-                loader_info["n_nodes"] = [int(n) for n in n_loader_nodes.split()]
+            elif isinstance(n_loader_nodes, list):  # latest type to support multiple datacenters
+                loader_info["n_nodes"] = n_loader_nodes
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_loader_nodes)))
         azure_image = self.params.get("azure_image_db").strip()
@@ -2368,8 +2374,8 @@ class ClusterTester(unittest.TestCase):
             n_db_nodes = self.params.get("n_db_nodes")
             if isinstance(n_db_nodes, int):
                 db_info["n_nodes"] = [n_db_nodes]
-            elif isinstance(n_db_nodes, str):
-                db_info["n_nodes"] = [int(n) for n in n_db_nodes.split()]
+            elif isinstance(n_db_nodes, list):
+                db_info["n_nodes"] = n_db_nodes
             else:
                 self.fail("Unsupported parameter type: {}".format(type(n_db_nodes)))
 
