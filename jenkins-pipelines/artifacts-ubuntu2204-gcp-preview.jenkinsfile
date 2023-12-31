@@ -4,7 +4,7 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 artifactsPipeline(
-    test_config: '''["test-cases/artifacts/ubuntu2204.yaml", "configurations/gce/preview-instance.yaml"]''',
+    test_config: '''["test-cases/artifacts/ubuntu2204.yaml", "configurations/gce/preview_instance.yaml"]''',
     backend: 'gce',
     gce_datacenter: 'us-central1',
     gce_project: 'gcp-local-ssd-latency',
