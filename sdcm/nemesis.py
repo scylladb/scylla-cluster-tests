@@ -4099,6 +4099,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.info("Upgradesstables on the '%s' node for the new encrypted table", node.name)
                 # NOTE: 'flush' is needed in case there are no sstables yet
                 node.remoter.run(f'nodetool flush -- {keyspace_name} {table_name}', verbose=True)
+                # NOTE: 'flush' is needed for system_schema, to make sure the new table info
+                # is on disk, `scylla sstable` reads only from disk
+                node.remoter.run('nodetool flush -- system_schema', verbose=True)
                 time.sleep(2)
                 node.remoter.run(f'nodetool upgradesstables -a -- {keyspace_name} {table_name}', verbose=True)
 
