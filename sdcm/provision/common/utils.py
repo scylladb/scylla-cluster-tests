@@ -52,7 +52,35 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
         fi
 
         if ! grep -P "log {{.*destination\\\\(remote_sct\\\\)" /etc/syslog-ng/syslog-ng.conf; then
-            echo "log {{ source($source_name); destination(remote_sct); }};" >> /etc/syslog-ng/syslog-ng.conf
+            echo "
+        filter filter_sct {{
+            # introduced as part of https://github.com/scylladb/scylla-cluster-tests/pull/3241
+            not message(\\".*workload prioritization - update_service_levels_from_distributed_data: an error occurred while retrieving configuration\\") and
+
+            # see https://github.com/scylladb/scylla-cluster-tests/issues/3705 for reasons
+            not message(\\"cdc - Could not update CDC description table with generation\\") and
+
+            # harmless shutdown message - scylladb/scylladb#11969
+            not message(\\"ldap_connection - Seastar read failed: std::system_error \\(error system:104, read: Connection reset by peer\\)\\") and
+
+            # issue relate to shutdown - decided to ignore in scylladb/scylladb#15672
+            not message(\\".*view update generator not plugged to push updates\\") and
+
+            # TODO: remove when those issues are solved:
+            # https://github.com/scylladb/scylladb/issues/16206
+            # https://github.com/scylladb/scylladb/issues/16259
+            # https://github.com/scylladb/scylladb/issues/15598
+            not message(\\".*view - Error applying view update.*\\") and
+
+            not message(\\"Rate-limit: supressed\\") and
+            not message(\\"Rate-limit: suppressed\\") and
+
+            # storage_proxy warning we dont care about
+            not message(\\".*storage_proxy.*abort_requested_exception\\");
+        }};
+            " >> /etc/syslog-ng/syslog-ng.conf
+
+            echo "log {{ source($source_name); filter(filter_sct); destination(remote_sct); }};" >> /etc/syslog-ng/syslog-ng.conf
         fi
 
         if [ ! -z "{hostname}" ]; then
