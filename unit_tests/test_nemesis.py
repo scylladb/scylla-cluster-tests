@@ -303,25 +303,21 @@ class TestSisyphusMonkeyNemesisFilter:
         tester.db_cluster = Cluster(nodes=[Node(), Node()])
         tester.db_cluster.params = tester.params
         tester.params["nemesis_class_name"] = "SisyphusMonkey:1 SisyphusMonkey:2"
-        tester.params["nemesis_selector"] = [["topology_changes"], ["schema_changes"]]
+        tester.params["nemesis_selector"] = [["topology_changes"], ["schema_changes"], ["schema_changes"]]
         tester.params["nemesis_multiply_factor"] = 1
         nemesises = tester.get_nemesis_class()
 
-        expected_selectors = [["topology_changes"], ["schema_changes"]]
-        expected_num_threads = [1, 2]
+        expected_selectors = [["topology_changes"], ["schema_changes"], ["schema_changes"]]
         for i, nemesis_settings in enumerate(nemesises):
             assert nemesis_settings['nemesis'] == SisyphusMonkey, \
                 f"Wrong instance of nemesis class {nemesis_settings['nemesis']} expected SisyphusMonkey"
-            assert nemesis_settings['num_threads'] == expected_num_threads[i], \
-                f"Wrong number of nemesis threads {nemesis_settings['num_threads']} expected {expected_num_threads[i]}"
             assert nemesis_settings['nemesis_selector'] == expected_selectors[i], \
                 f"Wrong nemesis filter selecters {nemesis_settings['nemesis_selector']} expected {expected_selectors[i]}"
 
         active_nemesis = []
         for nemesis in nemesises:
-            for _ in range(nemesis["num_threads"]):
-                sisyphus = nemesis['nemesis'](tester, None, nemesis_selector=nemesis["nemesis_selector"])
-                active_nemesis.append(sisyphus)
+            sisyphus = nemesis['nemesis'](tester, None, nemesis_selector=nemesis["nemesis_selector"])
+            active_nemesis.append(sisyphus)
         expected_methods = [expected_topology_changes_methods,
                             expected_schema_changes_methods, expected_schema_changes_methods]
         LOGGER.warning(expected_methods)
