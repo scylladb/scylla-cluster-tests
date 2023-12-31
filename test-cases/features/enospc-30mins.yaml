@@ -12,3 +12,5 @@ instance_type_loader: 'c5.4xlarge'
 instance_type_monitor: 't2.small'
 
 user_prefix: 'cases-enospc'
+
+use_mgmt: false
