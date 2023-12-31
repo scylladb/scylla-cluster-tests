@@ -221,6 +221,7 @@ function run_in_docker () {
     if [ -z "$is_podman" ]; then
         docker_common_args+=(
            -v /var/run:/run
+           -v /dev:/dev:rw
            )
     else
         PODMAN_PORT=$(EPHEMERAL_PORT)
@@ -258,7 +259,6 @@ function run_in_docker () {
         -v /etc/sudoers:/etc/sudoers:ro \
         -v /etc/sudoers.d/:/etc/sudoers.d:ro \
         -v /etc/shadow:/etc/shadow:ro \
-        -v /dev:/dev:rw \
         ${DOCKER_GROUP_ARGS[@]} \
         ${DOCKER_ADD_HOST_ARGS[@]} \
         ${docker_common_args[@]} \
