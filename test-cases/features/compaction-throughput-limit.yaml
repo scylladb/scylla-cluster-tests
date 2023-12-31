@@ -13,3 +13,5 @@ instance_type_monitor: 't2.small'
 user_prefix: 'compaction-limit'
 append_scylla_yaml: |
   auto_snapshot: false
+
+use_mgmt: false

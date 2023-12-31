@@ -21,3 +21,5 @@ instance_type_loader: 'c5.large'
 instance_type_monitor: 't2.small'
 
 user_prefix: 'per-part-limit'
+
+use_mgmt: false
