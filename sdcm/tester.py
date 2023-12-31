@@ -1025,18 +1025,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if nemesis_selectors and isinstance(nemesis_selectors[0], str):
             nemesis_selectors = [nemesis_selectors[:]]
 
-        nemesis_class_names = list_class_name.split(' ')
-
-        for i, klass in enumerate(nemesis_class_names):
+        nemesis_class_names = []
+        for i, klass in enumerate(list_class_name.split(' ')):
             try:
                 nemesis_name, num = klass.strip().split(':')
                 nemesis_name = nemesis_name.strip()
-                num = num.strip()
+                num = int(num.strip())
 
             except ValueError:
                 nemesis_name = klass.split(':')[0]
                 num = 1
+            for _ in range(num):
+                nemesis_class_names.append(nemesis_name)
 
+        for i, nemesis_name in enumerate(nemesis_class_names):
             nemesis_selector = []
             if nemesis_selectors:
                 try:
@@ -1045,7 +1047,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     self.log.warning("Missing nemesis selector. use default. %s", details)
 
             nemesis_threads.append({'nemesis': getattr(nemesis, nemesis_name),
-                                    'num_threads': int(num),
                                     'nemesis_selector': nemesis_selector})
 
         self.log.debug("Nemesis threads %s", nemesis_threads)

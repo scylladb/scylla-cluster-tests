@@ -4275,12 +4275,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def add_nemesis(self, nemesis, tester_obj):
         for nem in nemesis:
-            for _ in range(nem['num_threads']):
-                nemesis_obj = nem['nemesis'](tester_obj=tester_obj,
-                                             termination_event=self.nemesis_termination_event,
-                                             nemesis_selector=nem['nemesis_selector'])
-                self.nemesis.append(nemesis_obj)
-        self.nemesis_count = sum(nem['num_threads'] for nem in nemesis)
+            nemesis_obj = nem['nemesis'](tester_obj=tester_obj,
+                                         termination_event=self.nemesis_termination_event,
+                                         nemesis_selector=nem['nemesis_selector'])
+            self.nemesis.append(nemesis_obj)
+        self.nemesis_count = len(nemesis)
 
     def clean_nemesis(self):
         self.nemesis = []
