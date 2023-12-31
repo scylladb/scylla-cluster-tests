@@ -45,7 +45,7 @@ class QueryLimitsTest(ClusterTester):
         db_info = {'n_nodes': 1, 'device_mappings': bdm,
                    'type': 'm4.4xlarge'}
         monitor_info = {'n_nodes': 1, 'device_mappings': None,
-                        'type': 't2.small'}
+                        'type': 't3.small'}
         # Use big instance to be not throttled by the network
         self.init_resources(loader_info=loader_info, db_info=db_info,
                             monitor_info=monitor_info)
