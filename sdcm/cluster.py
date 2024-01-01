@@ -4102,7 +4102,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 if not match:
                     continue
                 node_info = match.groupdict()
-                node_ip = node_info.pop("ip")
+                # make sure we use ipv6 long format (some tools remove leading zeros)
+                node_ip = ipaddress.ip_address(node_info.pop("ip")).exploded
                 # NOTE: following replacement is needed for the K8S case where
                 #       registered IP is different than the one used for network connections
                 if verification_node.is_kubernetes():
