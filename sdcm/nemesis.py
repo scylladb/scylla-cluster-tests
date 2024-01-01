@@ -4154,27 +4154,32 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             sstable_util = SstableUtils(db_node=self.target_node, ks_cf=f"{keyspace_name}.{table_name}")
             check_encryption_fact(sstable_util, True)
 
-            # Disable encryption for the encrypted table
-            self.log.info("Disable encryption for the '%s.%s' table", keyspace_name, table_name)
-            with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_name) as session:
-                query = f"ALTER TABLE {table_name} WITH scylla_encryption_options = {{'key_provider': 'none'}};"
-                session.execute(query)
-            upgrade_sstables(self.cluster.nodes)
+            with self.target_node.remote_scylla_yaml() as scylla_yaml:
+                user_info_encryption_enabled = scylla_yaml.user_info_encryption.get('enabled', False)
 
-            # ReRead data
-            read_thread2 = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
-            self.tester.verify_stress_thread(read_thread2)
+            # if encryption is enabled by default, we currently can't disable it
+            if not user_info_encryption_enabled:
+                # Disable encryption for the encrypted table
+                self.log.info("Disable encryption for the '%s.%s' table", keyspace_name, table_name)
+                with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_name) as session:
+                    query = f"ALTER TABLE {table_name} WITH scylla_encryption_options = {{'key_provider': 'none'}};"
+                    session.execute(query)
+                upgrade_sstables(self.cluster.nodes)
 
-            # ReWrite data making the sstables be rewritten
-            run_write_scylla_bench_load(write_cmd)
-            upgrade_sstables(self.cluster.nodes)
+                # ReRead data
+                read_thread2 = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
+                self.tester.verify_stress_thread(read_thread2)
 
-            # ReRead data
-            read_thread3 = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
-            self.tester.verify_stress_thread(read_thread3)
+                # ReWrite data making the sstables be rewritten
+                run_write_scylla_bench_load(write_cmd)
+                upgrade_sstables(self.cluster.nodes)
 
-            # Check that sstables of that table are not encrypted anymore
-            check_encryption_fact(sstable_util, False)
+                # ReRead data
+                read_thread3 = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
+                self.tester.verify_stress_thread(read_thread3)
+
+                # Check that sstables of that table are not encrypted anymore
+                check_encryption_fact(sstable_util, False)
         finally:
             # Delete table
             self.log.info("Delete '%s.%s' table with server encryption", keyspace_name, table_name)
