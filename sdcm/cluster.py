@@ -3518,15 +3518,13 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 if filter_out_cdc_log_tables and getattr(row, column_names[1]).endswith(cdc.options.CDC_LOGTABLE_SUFFIX):
                     continue
 
-                if is_column_type and filter_empty_tables:
-                    if table_name in ["system_schema.dropped_columns", "system.truncated"]:
-                        # skipping those cause of some scylla issues on system tables
-                        # https://github.com/scylladb/scylladb/issues/7186
-                        # https://github.com/scylladb/scylladb/issues/12239
-                        continue
+                result.add(table_name)
 
+            if is_column_type and filter_empty_tables:
+                for i, table_name in enumerate(result.copy()):
                     has_data = False
                     try:
+                        self.log.debug(f"{i}: {table_name}")
                         res = db_node.run_nodetool(sub_cmd='cfstats', args=table_name, timeout=300,
                                                    warning_event_on_exception=(
                                                        Failure, UnexpectedExit, Libssh2_UnexpectedExit,),
@@ -3537,9 +3535,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                         self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
 
                     if not has_data:
-                        continue
+                        result.discard(table_name)
 
-                result.add(table_name)
             return result
 
         with self.cql_connection_patient(db_node) as session:
