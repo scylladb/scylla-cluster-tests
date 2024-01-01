@@ -87,7 +87,7 @@ class SstableUtils:
                 if dump_cmd == 'sstabledump':
                     sstables_encrypted_mapping[sstable] = False
                 else:
-                    scylla_metadata = json.loads(sstables_res.stdout)['sstables']
+                    scylla_metadata = json.loads(sstables_res.stdout, strict=False)['sstables']
                     sstables_encrypted_mapping[sstable] = all('scylla_encryption_options' in metadata.get('extension_attributes', {})
                                                               for table, metadata in scylla_metadata.items())
             # NOTE: case when sstable exists and it is encrypted:
