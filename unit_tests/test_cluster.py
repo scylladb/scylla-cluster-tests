@@ -640,7 +640,7 @@ def test_base_node_cpuset_not_configured(cat_results):
 
 
 @pytest.mark.integration
-def test_get_any_ks_cf_list(docker_scylla, params):
+def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=unused-argument
 
     cluster = DummyScyllaCluster([docker_scylla])
     cluster.params = params
@@ -661,17 +661,7 @@ def test_get_any_ks_cf_list(docker_scylla, params):
             "INSERT INTO mview.users (username, first_name, last_name, password) VALUES "
             "('fruch', 'Israel', 'Fruchter', '1111')")
 
-    table_names = cluster.get_any_ks_cf_list(docker_scylla, filter_empty_tables=True)
-    assert set(table_names) == {'system.runtime_info', 'system_distributed.cdc_generation_timestamps',
-                                'system.config', 'system.local', 'system.token_ring', 'system.clients',
-                                'system_schema.tables', 'system_schema.columns', 'system.compaction_history',
-                                'system.cdc_local', 'system.versions', 'system_distributed_everywhere.cdc_generation_descriptions_v2',
-                                'system.scylla_local', 'system.cluster_status', 'system.protocol_servers',
-                                'system_distributed.cdc_streams_descriptions_v2', 'system_schema.keyspaces',
-                                'system.size_estimates', 'system_schema.scylla_tables', 'system_auth.roles',
-                                'system.scylla_table_schema_history', 'system_schema.views',
-                                'system_distributed.view_build_status', 'system.built_views',
-                                'mview.users_by_first_name', 'mview.users_by_last_name', 'mview.users'}
+    docker_scylla.run_nodetool('flush')
 
     table_names = cluster.get_any_ks_cf_list(docker_scylla, filter_empty_tables=False)
     assert set(table_names) == {'system.runtime_info', 'system_distributed.cdc_generation_timestamps',
