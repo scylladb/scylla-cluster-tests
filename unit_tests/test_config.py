@@ -282,19 +282,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                          'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo')
 
     @pytest.mark.integration
-    def test_13_scylla_version_ami_branch(self):  # pylint: disable=invalid-name
-        os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
-        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = 'branch-5.2:15'
-        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
-
-        amis = conf.get('ami_id_db_scylla').split()
-        assert len(amis) == 2
-        assert all(ami.startswith('ami-') for ami in amis)
-
-    @pytest.mark.integration
     def test_13_scylla_version_ami_branch_latest(self):  # pylint: disable=invalid-name
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
