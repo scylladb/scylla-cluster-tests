@@ -992,7 +992,8 @@ class AzureSctRunner(SctRunner):
                                                test_duration=test_duration),
                                            user_data=None)
             self.instance = provisioner.get_or_create_instance(definition=vm_params,
-                                                               pricing_model=PricingModel.ON_DEMAND)
+                                                               pricing_model=PricingModel.ON_DEMAND,
+                                                               public_access=True)
             return self.instance
 
     def _stop_image_builder_instance(self, instance: Any) -> None:

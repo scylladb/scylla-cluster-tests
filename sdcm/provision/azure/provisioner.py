@@ -105,15 +105,20 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         return [cls(*params) for params in provisioner_params]
 
     def get_or_create_instance(self, definition: InstanceDefinition,
-                               pricing_model: PricingModel = PricingModel.SPOT) -> VmInstance:
+                               pricing_model: PricingModel = PricingModel.SPOT,
+                               public_access: bool = False,
+                               ) -> VmInstance:
         """Create virtual machine in provided region, specified by InstanceDefinition.
 
         Set definition.user_data to empty string when using specialized image."""
-        return self.get_or_create_instances(definitions=[definition], pricing_model=pricing_model)[0]
+        return self.get_or_create_instances(definitions=[definition],
+                                            pricing_model=pricing_model,
+                                            public_access=public_access)[0]
 
     def get_or_create_instances(self,
                                 definitions: List[InstanceDefinition],
-                                pricing_model: PricingModel = PricingModel.SPOT
+                                pricing_model: PricingModel = PricingModel.SPOT,
+                                public_access: bool = False,
                                 ) -> List[VmInstance]:
         """Create a set of instances specified by a list of InstanceDefinition.
         If instances already exist, returns them."""
@@ -128,7 +133,8 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             return provisioned_vm_instances
 
         self._rg_provider.get_or_create()
-        sec_group_id = self._network_sec_group_provider.get_or_create(security_rules=ScyllaOpenPorts).id
+        sec_group_id = self._network_sec_group_provider.get_or_create(
+            security_rules=ScyllaOpenPorts, public_access=public_access).id
         vnet_name = self._vnet_provider.get_or_create().name
         subnet_id = self._subnet_provider.get_or_create(vnet_name, sec_group_id).id
         ip_addresses = self._ip_provider.get_or_create(names=[d.name for d in definitions_to_provision], version="IPV4")
