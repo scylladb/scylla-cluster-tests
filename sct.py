@@ -44,6 +44,7 @@ from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
 from sdcm.provision.provisioner import VmInstance
 from sdcm.remote import LOCALRUNNER
+from sdcm.nemesis import SisyphusMonkey
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
@@ -110,6 +111,7 @@ import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
 from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
+from unit_tests.test_nemesis import FakeTester
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
@@ -1704,6 +1706,38 @@ def configure_jenkins_builders(cloud_provider, regions):
             GceBuilder.configure_in_all_region(regions=regions)
         case 'azure':
             raise NotImplementedError("configure_jenkins_builders doesn't support Azure yet")
+
+
+@cli.command("nemesis-list", help="get the list of select disrupt function for SisyphusMonkey")
+@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
+@click.option('-c', '--config', multiple=True, type=click.Path(exists=True), help="Test config .yaml to use, can have multiple of those")
+def get_nemesis_list(backend, config):
+    """
+    # usage via command line:
+    hydra nemesis-list -c test-cases/longevity/longevity-cdc-100gb-4h.yaml -c configurations/tablets.yaml
+
+    # usage with environment variables
+    export SCT_CONFIG_FILES='["test-cases/longevity/longevity-cdc-100gb-4h.yaml", "configurations/tablets.yaml"]'
+    hydra nemesis-list
+
+    """
+    add_file_logger()
+    logging.basicConfig(level=logging.WARNING)
+
+    if config:
+        os.environ['SCT_CONFIG_FILES'] = str(list(config))
+    if backend:
+        os.environ['SCT_CLUSTER_BACKEND'] = backend
+
+    tester = FakeTester()
+
+    tester.params = SCTConfiguration()
+    sisyphus_nemesis = SisyphusMonkey(tester, None)
+
+    collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisyphus_nemesis.disruptions_list]
+
+    click.secho(f'config files used: {pprint.pformat(tester.params.get("config_files"))}\n\n',  fg='green')
+    click.secho(pprint.pformat(collected_disrupt_methods_names), fg='green')
 
 
 @cli.command("create-argus-test-run", help="Initialize an argus test run.")
