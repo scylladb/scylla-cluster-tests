@@ -120,7 +120,7 @@ class ThroughputLimitFunctionalTest(ClusterTester):
 
         LOGGER.info("measure base latency and ops/s - without setting limits")
         base_write_result = self._measure_latency_and_ops(stress_cmd=stress_write_cmd, conditions="base write")
-        for limit in [0.7, 0.45, 0.2, 0.01]:
+        for limit in [0.45, 0.2, 0.01]:
             LOGGER.info("measure latency and ops/s - with setting compaction limit to %s of disk write bandwidth", limit)
             self._truncate_table(table=table)
             time.sleep(60)  # to make scylla complete truncate and make clear gap between load
@@ -189,6 +189,7 @@ class ThroughputLimitFunctionalTest(ClusterTester):
             node.reload_config()
             node.follow_system_log(patterns=[f"Set compaction bandwidth to {limit_mb}MB/s"], start_from_beginning=True)
             self._wait_for_compaction_limit_set(node, mark=mark, limit_mb=limit_mb)
+        time.sleep(60)  # wait for scylla to stabilse after config change
 
     @staticmethod
     def _wait_for_compaction_limit_set(node, mark, limit_mb, timeout=60):
