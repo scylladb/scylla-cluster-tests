@@ -176,7 +176,7 @@ class SlaTests(Steps):
     # pylint: disable=too-many-arguments
     def _create_new_service_level(self, session, auth_entity_name_index, shares, db_cluster, service_level_for_test_step: str = None):
         new_sl = ServiceLevel(session=session,
-                              name=SERVICE_LEVEL_NAME_TEMPLATE % ('50', auth_entity_name_index),
+                              name=SERVICE_LEVEL_NAME_TEMPLATE % (shares, auth_entity_name_index),
                               shares=shares).create()
         with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=db_cluster.nodes[0], timeout=15,
                               service_level_for_test_step=service_level_for_test_step):
