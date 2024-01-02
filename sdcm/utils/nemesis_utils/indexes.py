@@ -99,16 +99,10 @@ def verify_query_by_index_works(session, ks, cf, column) -> None:
         InfoEvent(message=f"No value for column {column} in {ks}.{cf}, skipping querying created index.",
                   severity=Severity.NORMAL).publish()
         return
-    match type(value).__name__:
-        case "str" | "datetime":
-            value = str(value).replace("'", "''")
-            value = f"'{value}'"
-        case "bytes":
-            value = "0x" + value.hex()
     try:
-        query = SimpleStatement(f'SELECT * FROM {ks}.{cf} WHERE "{column}" = {value} LIMIT 100', fetch_size=100)
+        query = SimpleStatement(f'SELECT * FROM {ks}.{cf} WHERE "{column}" = %s LIMIT 100', fetch_size=100)
         LOGGER.debug("Verifying query by index works: %s", query)
-        result = session.execute(query)
+        result = session.execute(query, parameters=(value,))
     except Exception as exc:  # pylint: disable=broad-except
         InfoEvent(message=f"Index {ks}.{cf}({column}) does not work in query: {query}. Reason: {exc}",
                   severity=Severity.ERROR).publish()
