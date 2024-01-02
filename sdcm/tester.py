@@ -1876,7 +1876,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                           keyspace_name=keyspace_name,
                                           stop_test_on_failure=stop_test_on_failure,
                                           params=params or self.params).run()
-        self.alter_test_tables_encryption(stress_command=stress_cmd)
+        # self.alter_test_tables_encryption(stress_command=stress_cmd)
 
         return cs_thread
 
