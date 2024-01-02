@@ -4047,6 +4047,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             enable_kms_key_rotation=True,
             additional_scylla_encryption_options={'key_provider': 'KmsKeyProviderFactory'})
 
+    @decorate_with_context(ignore_ycsb_connection_refused)
     @scylla_versions(("2023.1.1-dev", None))
     def _enable_disable_table_encryption(self, enable_kms_key_rotation, additional_scylla_encryption_options=None):
         if self.cluster.params.get("cluster_backend") != "aws":
