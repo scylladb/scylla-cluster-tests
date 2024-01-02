@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from sct import get_test_config
+from sdcm.utils.sct_cmd_helpers import get_test_config
 from sdcm.sct_config import SCTConfiguration
 from sdcm.test_config import TestConfig
 from sdcm.utils.azure_utils import AzureService  # pylint: disable=import-error
