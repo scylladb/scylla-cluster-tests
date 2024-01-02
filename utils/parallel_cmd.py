@@ -117,9 +117,11 @@ hosts = hosts[:int(sys.argv[1])]
 
 client = ParallelSSHClient(hosts, pkey='~/.ssh/scylla-test', user='scylla-test')
 outputs = []
-for i in range(int(sys.argv[2])):
+processes = int(sys.argv[2])
+
+for i in range(processes):
     tag = f"TAG: loader_idx:$(hostname | awk -F- '{{print $NF}}')-cpu_idx:{i}-keyspace_idx:0"
-    outputs.append(client.run_command(f"echo {tag}; " + sys.argv[3] + f"-log file=cs-{i}.log interval=10s"))
+    outputs.append(client.run_command(f"echo {tag}; " + sys.argv[3] + f" -log file=cs-{i}.log interval=10s"))
 
 STRESS_STATS = ('op rate', 'latency mean', 'latency 99th percentile')
 STRESS_STATS_TOTAL = ('op rate', 'total errors')

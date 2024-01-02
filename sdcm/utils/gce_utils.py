@@ -475,6 +475,9 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
         network_performance_config.total_egress_bandwidth_tier = "TIER_1"
         instance.network_performance_config = network_performance_config
 
+    if "n2-highmem" in machine_type:
+        instance.min_cpu_platform = "Intel Ice Lake"
+
     instance.network_interfaces = [network_interface]
 
     if spot:
