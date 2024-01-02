@@ -1,11 +1,13 @@
 import time
+import logging
 from typing import Callable, Optional, NamedTuple, Union
 
 from fabric.runners import Result
 
-from sct import LOGGER
 from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 from sdcm.rest.storage_service_client import StorageServiceClient
+
+LOGGER = logging.getLogger(__name__)
 
 
 class CompactionTypes(NamedTuple):
