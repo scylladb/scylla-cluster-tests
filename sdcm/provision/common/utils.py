@@ -26,7 +26,7 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
                     mem-buf-size(1048576)
                     disk-buf-size(104857600)
                     reliable(yes)
-                    dir(\\\"/tmp\\\")
+                    dir(\\\"/var/log\\\")
                 )"
         fi
 
