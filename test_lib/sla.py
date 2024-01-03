@@ -69,6 +69,7 @@ class ServiceLevel:
                  timeout: str = None,
                  workload_type: str = None):
         self.session = session
+        self.session.default_timeout = 600
         self._name = f"'{name}'"
         self.verbose = True
         self._created = False
@@ -208,6 +209,7 @@ class UserRoleBase:
         self._name = name
         self.password = password
         self.session = session
+        self.session.default_timeout = 600
         self.superuser = superuser
         self.verbose = verbose
         self._attached_service_level = None
