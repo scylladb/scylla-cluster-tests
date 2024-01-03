@@ -1,5 +1,6 @@
 user_prefix: 'longevity-operator-50gb-3d'
 nemesis_selector: ['kubernetes']
+nemesis_add_node_cnt: 1
 
 k8s_minio_storage_size: '1024Gi'
 
@@ -10,6 +11,8 @@ authenticator: 'AllowAllAuthenticator'
 authenticator_user: ''
 authenticator_password: ''
 authorizer: 'AllowAllAuthenticator'
+
+use_dns_names: false
 
 n_db_nodes: 7
 k8s_n_scylla_pods_per_cluster: 6
