@@ -2899,7 +2899,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     keyspace = chosen_snapshot_info["keyspace_name"]
                     InfoEvent(message=f'Removing test {keyspace=}', severity=Severity.WARNING)
                     with self.cluster.cql_connection_patient(self.target_node) as session:
-                        session.execute(f'DROP KEYSPACE IF EXISTS "{keyspace}"')
+                        session.execute(SimpleStatement(
+                            f'DROP KEYSPACE IF EXISTS "{keyspace}"', fetch_size=1), timeout=300)
 
     def _delete_existing_backups(self, mgr_cluster):
         deleted_tasks = []
