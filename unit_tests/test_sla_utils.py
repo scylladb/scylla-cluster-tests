@@ -85,6 +85,11 @@ class FakePrometheus:
         return 100
 
 
+# pylint: disable=too-few-public-methods
+class FakeSession:
+    default_timeout = 0
+
+
 class TestSlaUtilsTest(unittest.TestCase, SlaUtils):
     def test_less_runtime_than_expected_error(self):
         node = DummyNode(name='test_node',
@@ -93,7 +98,7 @@ class TestSlaUtilsTest(unittest.TestCase, SlaUtils):
 
         db_cluster = DummyDbCluster(nodes=[node])
         prometheus_stats = FakePrometheus()
-        session = None
+        session = FakeSession()
 
         role_low = self.create_sla_auth(session=session, shares=50, index="abc")
         role_high = self.create_sla_auth(session=session, shares=200, index="abc")
