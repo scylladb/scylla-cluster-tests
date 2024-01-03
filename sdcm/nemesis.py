@@ -1567,8 +1567,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # drop test tables one by one during repair
                 for i in range(10):
                     time.sleep(random.randint(0, 300))
-                    with self.cluster.cql_connection_patient(self.target_node) as session:
-                        session.execute(f'DROP TABLE drop_table_during_repair_ks_{i}.standard1')
+                    with self.cluster.cql_connection_patient(self.target_node, connect_timeout=600) as session:
+                        session.execute(SimpleStatement(
+                            f'DROP TABLE drop_table_during_repair_ks_{i}.standard1'), timeout=300)
             finally:
                 thread.result()
 
@@ -2898,9 +2899,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 if "keyspace_name" in chosen_snapshot_info.keys():
                     keyspace = chosen_snapshot_info["keyspace_name"]
                     InfoEvent(message=f'Removing test {keyspace=}', severity=Severity.WARNING)
-                    with self.cluster.cql_connection_patient(self.target_node) as session:
+                    with self.cluster.cql_connection_patient(self.target_node, connect_timeout=600) as session:
                         session.execute(SimpleStatement(
-                            f'DROP KEYSPACE IF EXISTS "{keyspace}"', fetch_size=1), timeout=300)
+                            f'DROP KEYSPACE IF EXISTS "{keyspace}"'), timeout=300)
 
     def _delete_existing_backups(self, mgr_cluster):
         deleted_tasks = []
