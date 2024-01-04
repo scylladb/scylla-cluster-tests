@@ -24,6 +24,7 @@
 - DrainerMonkey
 - EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey
 - EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey
+- EndOfQuotaNemesis
 - EnospcAllNodesMonkey
 - EnospcMonkey
 - GrowShrinkClusterNemesis

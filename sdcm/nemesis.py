@@ -6376,7 +6376,10 @@ class SlaDecreaseSharesDuringLoad(Nemesis):
 
 
 class SlaReplaceUsingDetachDuringLoad(Nemesis):
-    disruptive = False
+    # TODO: This SLA nemesis uses binary disable/enable workaround that in a test with parallel nemeses can cause to the errors and
+    #  failures that is not a problem of Scylla. The option "disruptive" was set to True to prevent irrelevant failures. Should be changed
+    #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
+    disruptive = True
     sla = True
 
     def disrupt(self):
@@ -6384,7 +6387,10 @@ class SlaReplaceUsingDetachDuringLoad(Nemesis):
 
 
 class SlaReplaceUsingDropDuringLoad(Nemesis):
-    disruptive = False
+    # TODO: This SLA nemesis uses binary disable/enable workaround that in a test with parallel nemeses can cause to the errors and
+    #  failures that is not a problem of Scylla. The option "disruptive" was set to True to prevent irrelevant failures. Should be changed
+    #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
+    disruptive = True
     sla = True
 
     def disrupt(self):
@@ -6392,7 +6398,10 @@ class SlaReplaceUsingDropDuringLoad(Nemesis):
 
 
 class SlaIncreaseSharesByAttachAnotherSlDuringLoad(Nemesis):
-    disruptive = False
+    # TODO: This SLA nemesis uses binary disable/enable workaround that in a test with parallel nemeses can cause to the errors and
+    #  failures that is not a problem of Scylla. The option "disruptive" was set to True to prevent irrelevant failures. Should be changed
+    #  to False when the issue https://github.com/scylladb/scylla-enterprise/issues/2572 will be fixed.
+    disruptive = True
     sla = True
 
     def disrupt(self):
