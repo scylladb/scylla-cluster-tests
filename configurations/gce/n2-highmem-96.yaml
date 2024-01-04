@@ -1,5 +1,6 @@
 gce_instance_type_db: 'n2-highmem-96'
-gce_instance_type_loader: 'z3-highmem-88'
+gce_instance_type_loader: 'c2-standard-30'
 gce_n_local_ssd_disk_db: 24
-n_loaders: 1
+n_loaders: 8
+stress_multiplier_r: 8
 #gce_project: ''

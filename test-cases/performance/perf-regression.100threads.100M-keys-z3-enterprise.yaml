@@ -8,12 +8,12 @@ prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=1000M -schema 're
                     "cassandra-stress write no-warmup cl=ALL n=1000M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=300 -pop seq=4000M..5000M",
                     "cassandra-stress write no-warmup cl=ALL n=1000M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=300 -pop seq=5000M..6000M"
                     ]
-stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=15m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=300 -pop seq=1..100M "
+stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=15m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1200 -pop seq=1..100M "
 stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) ' -mode cql3 native -rate threads=150 -pop 'dist=gauss(1..100000000,50000000,5000000)' "
 # used for read cache warmup:
 stress_cmd_no_mv: "cassandra-stress read no-warmup cl=QUORUM n=100M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=880 -pop seq=1..100M "
 stress_multiplier_w: 4
-stress_multiplier_r: 44
+stress_multiplier_r: 6
 stress_multiplier_m: 2
 gce_network: 'qa-vpc'
 scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-2023.1.repo'
@@ -21,7 +21,7 @@ scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/
 k8s_loader_run_type: 'static'
 use_prepared_loaders: true
 n_db_nodes: 3
-n_loaders: 7
+n_loaders: 6
 n_monitor_nodes: 1
 
 # AWS
