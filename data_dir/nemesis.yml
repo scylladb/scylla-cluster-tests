@@ -11,7 +11,7 @@
   - schema_changes = True
   - free_tier_set = True
 - disrupt_add_remove_dc:
-  - disruptive = False
+  - disruptive = True
   - kubernetes = False
   - run_with_gemini = False
   - limited = True
@@ -71,6 +71,9 @@
 - disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation:
   - disruptive = True
   - kubernetes = False
+- disrupt_end_of_quota_nemesis:
+  - disruptive = True
+  - config_changes = True
 - disrupt_grow_shrink_cluster:
   - disruptive = True
   - kubernetes = True
@@ -88,7 +91,7 @@
   - disruptive = False
   - config_changes = True
 - disrupt_increase_shares_by_attach_another_sl_during_load:
-  - disruptive = False
+  - disruptive = True
   - sla = True
 - disrupt_kill_scylla:
   - disruptive = True
@@ -124,7 +127,6 @@
   - manager_operation = True
   - disruptive = True
   - kubernetes = True
-  - limited = True
 - disrupt_mgmt_repair_cli:
   - manager_operation = True
   - disruptive = False
@@ -222,10 +224,10 @@
   - kubernetes = True
   - free_tier_set = True
 - disrupt_replace_service_level_using_detach_during_load:
-  - disruptive = False
+  - disruptive = True
   - sla = True
 - disrupt_replace_service_level_using_drop_during_load:
-  - disruptive = False
+  - disruptive = True
   - sla = True
 - disrupt_resetlocalschema:
   - disruptive = False
@@ -332,6 +334,3 @@
   - disruptive = False
   - kubernetes = True
   - free_tier_set = True
-- disrupt_end_of_quota_nemesis:
-  - disruptive = True
-  - kubernetes = False
