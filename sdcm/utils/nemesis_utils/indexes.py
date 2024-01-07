@@ -113,7 +113,7 @@ def verify_query_by_index_works(session, ks, cf, column) -> None:
 
 def drop_index(session, ks, index_name) -> None:
     InfoEvent(message=f"Starting dropping index: {ks}.{index_name}").publish()
-    session.execute(f'DROP INDEX {ks}.{index_name}')
+    session.execute(SimpleStatement(f'DROP INDEX {ks}.{index_name}'), timeout=300)
 
 
 def drop_materialized_view(session, ks, view_name) -> None:
@@ -122,4 +122,4 @@ def drop_materialized_view(session, ks, view_name) -> None:
             event_class=DatabaseLogEvent.DATABASE_ERROR,
             regex=".*Error applying view update.*",
             extra_time_to_expiration=180):
-        session.execute(f'DROP MATERIALIZED VIEW {ks}.{view_name}')
+        session.execute(SimpleStatement(f'DROP MATERIALIZED VIEW {ks}.{view_name}'), timeout=300)
