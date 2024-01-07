@@ -20,6 +20,7 @@ import time
 from enum import Enum
 
 import yaml
+from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from upgrade_test import UpgradeTest
 from sdcm.tester import ClusterTester, teardown_on_exception
@@ -677,8 +678,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             query = 'drop materialized view {}'.format(mv_name)
 
             try:
-                with self.db_cluster.cql_connection_patient_exclusive(self.db_cluster.nodes[0]) as session:
+                with self.db_cluster.cql_connection_patient_exclusive(self.db_cluster.nodes[0], connect_timeout=300) as session:
                     self.log.debug('Run query: {}'.format(query))
+                    session.execute(SimpleStatement(query), timeout=300)
                     session.execute(query)
             except Exception as ex:
                 self.log.debug('Failed to drop materialized view using query {0}. Error: {1}'.format(query, str(ex)))
