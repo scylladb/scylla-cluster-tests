@@ -4335,6 +4335,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                         traceback=traceback.format_exc()).publish()
                 try:
                     target_node = [node for node in db_cluster.nodes if not node.running_nemesis][0]
+                    self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
                     with run_nemesis(node=target_node, nemesis_name="KMS encryption check"):
                         ks_cf = db_cluster.get_non_system_ks_cf_list(db_node=target_node, filter_out_mv=True)[0]
                         sstable_util = SstableUtils(db_node=target_node, ks_cf=ks_cf)
@@ -4344,6 +4345,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
                 except SstablesNotFound as exc:
                     self.log.warning(f"Couldn't check the fact of encryption (KMS) for sstables: {exc}")
+
+                except IndexError:
+                    AwsKmsEvent(
+                        message="Failed to get any table for the KMS key rotation thread",
+                        traceback=traceback.format_exc()).publish()
 
                 except Exception:  # pylint: disable=broad-except
                     AwsKmsEvent(
