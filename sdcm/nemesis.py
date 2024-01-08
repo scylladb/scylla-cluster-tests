@@ -4732,8 +4732,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 raise UnsupportedNemesis(  # pylint: disable=raise-missing-from
                     "Tried to create already existing index. See log for details")
             try:
-                with adaptive_timeout(operation=Operations.CREATE_INDEX, node=self.target_node, timeout=7200):
-                    wait_for_index_to_be_built(self.target_node, ks, index_name, timeout=18000)
+                with adaptive_timeout(operation=Operations.CREATE_INDEX, node=self.target_node, timeout=14400) as timeout:
+                    wait_for_index_to_be_built(self.target_node, ks, index_name, timeout=timeout * 2)
                 verify_query_by_index_works(session, ks, cf, column)
                 sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
                                               min_duration=300, max_duration=2400)
@@ -4789,8 +4789,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     self.log.info("Starting Scylla on node %s", self.target_node.name)
                     self.target_node.start_scylla()
                     self.target_node.run_nodetool(sub_cmd="repair -pr")
-                    with adaptive_timeout(operation=Operations.CREATE_MV, node=self.target_node, timeout=7200):
-                        wait_for_view_to_be_built(self.target_node, ks_name, view_name, timeout=18000)
+                    with adaptive_timeout(operation=Operations.CREATE_MV, node=self.target_node, timeout=14400) as timeout:
+                        wait_for_view_to_be_built(self.target_node, ks_name, view_name, timeout=timeout * 2)
                     session.execute(SimpleStatement(f'SELECT * FROM {ks_name}.{view_name} limit 1', fetch_size=10))
                     sleep_for_percent_of_duration(self.tester.test_duration * 60, percent=1,
                                                   min_duration=300, max_duration=2400)
