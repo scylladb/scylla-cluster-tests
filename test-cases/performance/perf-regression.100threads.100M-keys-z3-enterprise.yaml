@@ -17,7 +17,7 @@ prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=400M -schema 'rep
                     "cassandra-stress write no-warmup cl=ALL n=400M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=300 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=5601M..6000M"
                     ]
 stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=15m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -rate threads=400 -mode cql3 native -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..6000M"
-stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=180m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1800 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=601M..800M "
+stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1800 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=601M..800M "
 stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) ' -mode cql3 native -rate threads=150 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..100000000,50000000,5000000)' "
 
 # used for read cache warmup:
