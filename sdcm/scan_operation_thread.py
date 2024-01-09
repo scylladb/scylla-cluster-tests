@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import datetime
 import logging
 import random
 import tempfile
 import threading
 import time
 import traceback
+from pathlib import Path
 from abc import abstractmethod
 from string import Template
 from typing import Optional, Type, NamedTuple, TYPE_CHECKING
+
+from pytz import utc
 from cassandra import ConsistencyLevel, OperationTimedOut, ReadTimeout
 from cassandra.cluster import ResponseFuture, ResultSet  # pylint: disable=no-name-in-module
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import FullScanEvent, FullPartitionScanReversedOrderEvent, FullPartitionScanEvent, \
@@ -376,14 +381,17 @@ class FullPartitionScanOperation(FullscanOperationBase):
             file_names = f' {self.normal_query_output.name} {self.reversed_query_output.name}'
             diff_cmd = f"diff -y --suppress-common-lines {file_names}"
             self.log.debug("Comparing scan queries output files by: %s", diff_cmd)
-            result = LOCAL_CMD_RUNNER.run(cmd=diff_cmd, ignore_status=True)
+            log_file = Path(TestConfig().logdir()) / 'fullscans' / \
+                f'partition_range_scan_diff_{datetime.datetime.now(tz=utc).strftime("%Y_%m_%d-%I_%M_%S")}.log'
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            result = LOCAL_CMD_RUNNER.run(cmd=diff_cmd, ignore_status=True, verbose=False, log_file=str(log_file))
 
         if not result.stderr:
             if not result.stdout:
                 self.log.debug("Compared output of normal and reversed queries is identical!")
                 result = True
             else:
-                self.log.warning("Normal and reversed queries output differs: \n%s", result.stdout.strip())
+                self.log.warning("Normal and reversed queries output differs: output results in %s", log_file)
                 ls_cmd = f"ls -alh {file_names}"
                 head_cmd = f"head {file_names}"
                 for cmd in [ls_cmd, head_cmd]:
