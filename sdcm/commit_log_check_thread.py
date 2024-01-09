@@ -199,12 +199,14 @@ class CommitLogCheckThread:
             CommitLogCheckErrorEvent(
                 severity=Severity.WARNING,
                 message="CommitLogCheckThread will not start due to no monitors in the cluster").publish()
+            return
 
         if "Not found" in get_max_disk_size_metric(custer_tester.db_cluster):
             CommitLogCheckErrorEvent(
                 severity=Severity.WARNING,
                 message="CommitLogCheckThread will not start due to current scylla version has no "
                         "commitlog/metrics/max_disk_size endpoint ").publish()
+            return
 
         try:
             thread = CommitLogCheckThread(custer_tester, duration)
