@@ -2844,11 +2844,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         if not (self.cluster.params.get('use_mgmt') or self.cluster.params.get('use_cloud_manager')):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
-        if self.cluster.params.get('cluster_backend') != 'aws':
-            raise UnsupportedNemesis("The restore test only supports AWS at the moment")
+        if self.cluster.params.get('cluster_backend') not in ('aws', 'k8s-eks'):
+            raise UnsupportedNemesis("The restore test only supports 'AWS' and 'K8S-EKS' backends.")
 
         mgr_cluster = self.cluster.get_cluster_manager()
         cluster_backend = self.cluster.params.get('cluster_backend')
+        if cluster_backend == 'k8s-eks':
+            cluster_backend = 'aws'
         persistent_manager_snapshots_dict = get_persistent_snapshots()
         target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"]
         chosen_snapshot_tag, chosen_snapshot_info = (

@@ -1662,7 +1662,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors = NoMonitorSet()
             self.monitors_multitenant = [self.monitors]
 
-    def get_cluster_k8s_eks(self, n_k8s_clusters: int):
+    def get_cluster_k8s_eks(self, n_k8s_clusters: int):  # pylint: disable=too-many-branches
         region_names = self.params.region_names
         availability_zones = self.params.get('availability_zone').split(',')
         for _ in range(n_k8s_clusters):
@@ -1690,6 +1690,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 node_pool_name=self.k8s_clusters[0].SCYLLA_POOL_NAME,
                 add_nodes=False,
             ))
+            if self.params.get('use_mgmt'):
+                for k8s_cluster in self.k8s_clusters:
+                    k8s_cluster.create_iamserviceaccount_for_s3_access(
+                        namespace=self.db_clusters_multitenant[i].namespace)
         self.db_cluster = self.db_clusters_multitenant[0]
 
         if self.params.get("n_loaders"):

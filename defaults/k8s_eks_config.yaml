@@ -56,9 +56,6 @@ k8s_instance_type_auxiliary: 't3.large'
 append_scylla_args: '--abort-on-lsa-bad-alloc 1 --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1'
 docker_image: ''
 
-backup_bucket_backend: 's3'
-backup_bucket_location: 'minio-bucket'
-
 # NOTE: Define a separate image for the 'cassandra stress' that supports 'serverless' feature.
 #       It will allow to test 'serverless' feature against any stable Scylla release
 #       with old 'cassandra-stress' binary.
