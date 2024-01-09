@@ -829,10 +829,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.repair_nodetool_repair()
 
     def disrupt_resetlocalschema(self):  # pylint: disable=invalid-name
-        result = self.target_node.run_nodetool(sub_cmd='help', args='resetlocalschema')
-        if 'Unknown command resetlocalschema' in result.stdout:
-            raise UnsupportedNemesis("nodetool doesn't support resetlocalschema")
-
         rlocal_schema_res = self.target_node.follow_system_log(patterns=["schema_tables - Schema version changed to"])
         self.target_node.run_nodetool("resetlocalschema")
 
