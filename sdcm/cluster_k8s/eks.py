@@ -38,6 +38,8 @@ from sdcm.cluster_k8s import (
     CloudK8sNodePool,
     KubernetesCluster,
     ScyllaPodCluster,
+    SCYLLA_AGENT_CONFIG_NAME,
+    SCYLLA_NAMESPACE,
 )
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.aws_utils import (
@@ -550,9 +552,31 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
     def get_ec2_instance_by_id(self, instance_id):
         return boto3.resource('ec2', region_name=self.region_name).Instance(id=instance_id)
 
-    def deploy_scylla_manager(self, pool_name: str = None) -> None:
-        self.deploy_minio_s3_backend()
-        super().deploy_scylla_manager(pool_name=pool_name)
+    def create_iamserviceaccount_for_s3_access(self, namespace: str = SCYLLA_NAMESPACE):
+        tags = ",".join([f"{key}={value}" for key, value in self.tags.items()])
+        LOCALRUNNER.run(
+            f'eksctl create iamserviceaccount --name {self.k8s_scylla_cluster_name}-member --namespace {namespace}'
+            f' --cluster {self.short_cluster_name}'
+            f' --attach-policy-arn arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Restore'
+            f' --approve --role-name EKS_S3-{self.short_cluster_name} --region {self.region_name}'
+            f' --tags {tags} --override-existing-serviceaccounts')
+
+    def create_scylla_manager_agent_config(self, s3_provider_endpoint: str = None, namespace: str = SCYLLA_NAMESPACE):
+        if s3_provider_endpoint:
+            self.log.warning(
+                "Ignoring the value ('%s') for the 's3_provider_endpoint' parameter,"
+                "which is needed only using S3-compatible services like MinIO.",
+                s3_provider_endpoint)
+        data = {}
+        if self.params.get("use_mgmt"):
+            data["s3"] = {
+                "provider": "AWS",
+                "region": self.params.get("backup_bucket_region"),
+            }
+        # Create kubernetes secret that holds scylla manager agent configuration
+        self.update_secret_from_data(SCYLLA_AGENT_CONFIG_NAME, namespace, {
+            "scylla-manager-agent.yaml": data,
+        })
 
     def _get_all_instance_ids(self):
         cmd = "get node --no-headers -o custom-columns=:.spec.providerID"
