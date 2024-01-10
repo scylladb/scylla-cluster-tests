@@ -30,6 +30,11 @@ export AWS_PROFILE=DeveloperAccessRole
 
 # Install hydra (docker holding all requirements for running SCT)
 sudo ./install-hydra.sh
+
+# if using podman, we need to disable enforcing of short name usage, without it monitoring stack won't run from withing hydra
+echo 'unqualified-search-registries = ["registry.fedoraproject.org", "registry.access.redhat.com", "docker.io", "quay.io"]
+short-name-mode="permissive"
+' > ~/.config/containers/registries.conf
 ```
 
 ### Run a test

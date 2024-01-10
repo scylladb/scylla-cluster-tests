@@ -416,8 +416,11 @@ def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_vers
     prom_tmpl_file.write_text(yaml.safe_dump(templ_yaml))
 
     cmd = dedent("""cd {monitoring_dockers_dir};
+            # patch to make podman work for result that don't have https://github.com/scylladb/scylla-monitoring/pull/2149
+            sed -i 's/DOCKER_HOST/HOST_ADDRESS/' *.sh
+
             echo "" > UA.sh
-            ./start-all.sh \
+            bash -x ./start-all.sh \
             $(grep -q -- --no-renderer ./start-all.sh && echo "--no-renderer")  \
             $(grep -q -- --no-loki ./start-all.sh && echo "--no-loki")  \
             -g {graf_port} -m {alert_port} -p {prom_port} \
@@ -425,10 +428,12 @@ def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_vers
             -d {monitoring_stack_data_dir} -v {scylla_version} \
             -b '-storage.tsdb.retention.time=100y' \
             -c 'GF_USERS_DEFAULT_THEME=dark'""".format(**locals()))
-    res = lr.run(cmd)
+    res = lr.run(cmd, ignore_status=True)
     if res.ok:
         LOGGER.info("Docker containers for monitoring stack are started")
-
+    else:
+        LOGGER.error("Failure to start monitoring stack: %s", res.stderr)
+        raise Exception("fail to start monitoring stack")
     return {"grafana_docker_port": graf_port,
             "alert_docker_port": alert_port,
             "prometheus_docker_port": prom_port}
