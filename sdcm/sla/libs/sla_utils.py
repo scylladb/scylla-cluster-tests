@@ -408,7 +408,7 @@ class SlaUtils:
                     node=node,
                     scheduler_group_name=service_level.scheduler_group_name)):
                 raise SchedulerGroupNotFound(f"Scheduler groups for {service_level.name} service levels is not created on the "
-                                             f"node '{node.name}'")
+                                             f"node '{node.name}'. Maybe the issue scylla-cluster-tests#7082")
 
             if len(scheduler_shares) != node.scylla_shards:
                 raise WrongServiceLevelShares(f"Expected that scheduler group is created on every Scylla shard for {service_level.name} "
