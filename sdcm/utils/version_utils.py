@@ -146,7 +146,11 @@ class ComparableScyllaVersion:
 
         # NOTE: make short scylla version like '5.2' be correct semver string
         _scylla_version_parts = _scylla_version.split('.')
-        if len(_scylla_version_parts) == 2:
+        if len(_scylla_version_parts) == 2 and '-' in _scylla_version_parts[1]:
+            # NOTE: support for older non-semver release like '2022.1~rc8'
+            minor, extra = _scylla_version_parts[1].split('-')
+            _scylla_version = f"{_scylla_version_parts[0]}.{minor}.0-{extra}"
+        elif len(_scylla_version_parts) == 2:
             _scylla_version = f"{_scylla_version}.0"
         elif len(_scylla_version_parts) > 2 and re.search(
                 r"\D+", _scylla_version_parts[2].split("-")[0]):
