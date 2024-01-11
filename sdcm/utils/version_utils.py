@@ -316,11 +316,11 @@ def get_branch_version_from_debian_repository(urls):
         major_versions = [version.split('-', maxsplit=1)[0] for version in REPO_VERSIONS_REGEX.findall(data)]
         if not major_versions:
             return ""
-        return max(set(major_versions), key=major_versions.count)
+        return max(set(major_versions), key=ComparableScyllaVersion)
 
     threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
     result = [thread.result for thread in threads]
-    return max(result, key=result.count)
+    return max(result, key=ComparableScyllaVersion)
 
 
 def get_branch_version_from_centos_repository(urls):
@@ -331,11 +331,11 @@ def get_branch_version_from_centos_repository(urls):
 
         parser = Parser(url=xml_url)
         major_versions = [package['version'][1]['ver'] for package in parser.getList()]
-        return max(set(major_versions), key=major_versions.count)
+        return max(set(major_versions), key=ComparableScyllaVersion)
 
     threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
     result = [thread.result for thread in threads]
-    return max(result, key=result.count)
+    return max(result, key=ComparableScyllaVersion)
 
 
 def get_all_versions_from_debian_repository(urls: set[str]) -> set[str]:
