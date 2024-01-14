@@ -780,7 +780,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         keyspace = "keyspace_complex"
         table = "user_with_ck"
         if first_node.is_enterprise:
-            should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "2023.2.0~rc0"
+            should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "2023.1.3"
         else:
             should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "5.4.0~rc0"
         if should_use_sstabledump:

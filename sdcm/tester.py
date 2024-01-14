@@ -799,7 +799,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         )
 
     def prepare_kms_host(self) -> None:
-        if (self.params.is_enterprise and ComparableScyllaVersion(self.params.scylla_version) >= '2023.2.0~rc0'
+        if (self.params.is_enterprise and ComparableScyllaVersion(self.params.scylla_version) >= '2023.1.3'
             and self.params.get('cluster_backend') == 'aws'
             and not self.params.get('scylla_encryption_options')
             and self.params.get("db_type") != "mixed_scylla"  # oracle probably doesn't support KMS
