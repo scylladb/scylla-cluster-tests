@@ -22,7 +22,9 @@ RUN apt-get update && \
     adduser --disabled-password --gecos "" $USER || true  && \
     usermod -aG sudo $USER && \
     sudo -Hu $USER sh -c "mkdir -m 700 ~/.ssh" && \
-    sudo -Hu $USER sh -c "echo 'mkdir -p /home/$USER/.cassandra && ! test -f /home/$USER/.cassandra/cqlshrc && sudo cp /root/.cassandra/cqlshrc /home/$USER/.cassandra/cqlshrc' >> ~/.ssh/rc" && \
+    sudo -Hu $USER sh -c "echo 'mkdir -p /home/$USER/.cassandra' > ~/.ssh/rc" && \
+    sudo -Hu $USER sh -c "echo 'sudo test -f /root/.cqlshrc && sudo cp /root/.cqlshrc /home/$USER/.cassandra/cqlshrc' >> ~/.ssh/rc" && \
+    sudo -Hu $USER sh -c "echo 'sudo test -f /root/.cassandra/cqlshrc && sudo cp /root/.cassandra/cqlshrc /home/$USER/.cassandra/cqlshrc' >> ~/.ssh/rc" && \
     echo "$USER  ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers && \
     apt install --no-install-recommends -y \
         iproute2 \
