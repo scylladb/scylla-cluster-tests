@@ -127,6 +127,7 @@ from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartiti
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
 from sdcm.utils.raft.common import NodeBootstrapAbortManager
+from sdcm.utils.issues import SkipPerIssues
 from sdcm.wait import wait_for, wait_for_log_lines
 from sdcm.exceptions import (
     KillNemesis,
@@ -580,7 +581,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # Let's wait for the target Node to have their services re-started
             self.log.info('Waiting scylla services to be restarted after we killed them...')
             self.target_node.wait_db_up(timeout=14400)
-            if self.cluster.params.get('use_mgmt'):
+            if (self.cluster.params.get('use_mgmt')
+                    and SkipPerIssues('scylladb/scylla-manager#2813', params=self.tester.params)):
                 # Workaround for https://github.com/scylladb/scylla-manager/issues/2813
                 # When scylla take too long time to bring api port up
                 #  scylla-manager-agent fails to start and never go up
@@ -1388,7 +1390,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._disrupt_kubernetes_then_replace_scylla_node('drain_k8s_node')
 
     def disrupt_terminate_kubernetes_host_then_replace_scylla_node(self):
-        if not self.cluster.params.get('k8s_enable_tls'):
+        if (not self.cluster.params.get('k8s_enable_tls')
+                and SkipPerIssues('https://github.com/scylladb/scylla-operator/issues/1124', params=self.tester.params)):
             raise UnsupportedNemesis("https://github.com/scylladb/scylla-operator/issues/1124")
         self._disrupt_kubernetes_then_replace_scylla_node('terminate_k8s_host')  # pylint: disable=unreachable
 
@@ -1647,7 +1650,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _k8s_fake_enospc_error(self, node):  # pylint: disable=no-self-use
         """Fakes ENOSPC error for scylla container (for /var/lib/scylla dir) using chaos-mesh without filling up disk."""
-        raise UnsupportedNemesis("https://github.com/scylladb/scylla-cluster-tests/issues/6327")
+
+        if SkipPerIssues("https://github.com/scylladb/scylla-cluster-tests/issues/6327", params=self.tester.params):
+            raise UnsupportedNemesis("https://github.com/scylladb/scylla-cluster-tests/issues/6327")
+
         if not node.k8s_cluster.chaos_mesh.initialized:  # pylint: disable=unreachable
             raise UnsupportedNemesis(
                 "Chaos Mesh is not installed. Set 'k8s_use_chaos_mesh' config option to 'true'")
@@ -3028,12 +3034,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug("Execute a complete repair for target node")
         self.repair_nodetool_repair()
 
-    # NOTE: enable back when 'https://github.com/scylladb/scylla/issues/8136' issue is fixed
-    def disable_disrupt_validate_hh_short_downtime(self):  # pylint: disable=invalid-name
+    def disrupt_validate_hh_short_downtime(self):  # pylint: disable=invalid-name
         """
             Validates that hinted handoff mechanism works: there were no drops and errors
             during short stop of one of the nodes in cluster
         """
+        # NOTE: enable back when 'https://github.com/scylladb/scylla/issues/8136' issue is fixed
+        if SkipPerIssues('https://github.com/scylladb/scylla/issues/8136', params=self.tester.params):
+            raise UnsupportedNemesis('https://github.com/scylladb/scylla/issues/8136')
+
         if self.cluster.params.get('hinted_handoff') == 'disabled':
             raise UnsupportedNemesis('For this nemesis to work, `hinted_handoff` needs to be set to `enabled`')
 
@@ -3513,11 +3522,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             finally:
                 self.unset_current_running_nemesis(new_node)
 
-    # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
-    def _disrupt_network_reject_inter_node_communication(self):
+    def disrupt_network_reject_inter_node_communication(self):
         """
         Generates random firewall rule to drop/reject packets for inter-node communications, port 7000 and 7001
         """
+
+        # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
+        if SkipPerIssues('https://github.com/scylladb/scylla/issues/6522', self.tester.params):
+            raise UnsupportedNemesis('https://github.com/scylladb/scylla/issues/6522')
+
         name = 'RejectInterNodeNetwork'
 
         self._install_iptables()
@@ -4200,10 +4213,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                     ignore_status=True).stdout
         update_certificates()
         node_system_logs = {}
-        with DbEventsFilter(
-                db_event=DatabaseLogEvent.DATABASE_ERROR,
-                line="error GnuTLS:-34, Base64 decoding error"):
+
+        if SkipPerIssues('https://github.com/scylladb/scylladb/issues/7909', params=self.tester.params):
             # TBD: To be removed after https://github.com/scylladb/scylla/issues/7909#issuecomment-758062545 is resolved
+            context_manager = DbEventsFilter(
+                db_event=DatabaseLogEvent.DATABASE_ERROR,
+                line="error GnuTLS:-34, Base64 decoding error")
+        else:
+            context_manager = contextlib.nullcontext()
+
+        with context_manager:
             for node in self.cluster.nodes:
                 node_system_logs[node] = node.follow_system_log(
                     patterns=f'messaging_service - Reloaded {{{ssl_files_location}}}')
@@ -4281,21 +4300,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes():
             self._k8s_disrupt_memory_stress()
             return
-        # if self.target_node.distro.is_rhel_like:
-        #    self.target_node.install_epel()
-        #    self.target_node.remoter.sudo('yum install -y stress-ng')
-        # elif self.target_node.distro.is_ubuntu:
-        #    self.target_node.remoter.sudo('apt-get -y install stress-ng')
-        # else:
-        #    raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
-        #
-        # self.log.info('Try to allocate 90% total memory, the allocated memory will be swaped out')
-        # self.target_node.remoter.run(
-        #    "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
 
-        # since we might get into uncontrolled situations with this nemesis
-        # see https://github.com/scylladb/scylla-cluster-tests/issues/6928
-        raise UnsupportedNemesis("Disabled cause of https://github.com/scylladb/scylla-cluster-tests/issues/6928")
+        if SkipPerIssues(['scylladb/scylla-cluster-tests#7098',
+                          'scylladb/scylla-cluster-tests#6928'], params=self.tester.params):
+            # since we might get into uncontrolled situations with this nemesis
+            # see https://github.com/scylladb/scylla-cluster-tests/issues/6928
+            raise UnsupportedNemesis("Disabled cause of https://github.com/scylladb/scylla-cluster-tests/issues/6928")
+
+        if self.target_node.distro.is_rhel_like:
+            self.target_node.install_epel()
+            self.target_node.remoter.sudo('yum install -y stress-ng')
+        elif self.target_node.distro.is_ubuntu:
+            self.target_node.remoter.sudo('apt-get -y install stress-ng')
+        else:
+            raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
+
+        self.log.info('Try to allocate 90% total memory, the allocated memory will be swaped out')
+        self.target_node.remoter.run(
+            "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
 
     def disrupt_toggle_cdc_feature_properties_on_table(self):
         """Manipulate cdc feature settings
@@ -5962,7 +5984,7 @@ class ValidateHintedHandoffShortDowntime(Nemesis):
     free_tier_set = True
 
     def disrupt(self):
-        self.disable_disrupt_validate_hh_short_downtime()
+        self.disrupt_validate_hh_short_downtime()
 
 
 class SnapshotOperations(Nemesis):
@@ -6056,7 +6078,7 @@ class RejectInterNodeNetworkMonkey(Nemesis):
     free_tier_set = True
 
     def disrupt(self):
-        self._disrupt_network_reject_inter_node_communication()
+        self.disrupt_network_reject_inter_node_communication()
 
 
 class RejectNodeExporterNetworkMonkey(Nemesis):

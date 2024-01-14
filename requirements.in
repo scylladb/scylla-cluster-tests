@@ -52,3 +52,4 @@ questionary==1.10.0
 pbr==5.11.1
 hdrhistogram==0.9.2
 deepdiff==6.2.3
+PyGithub==2.1.1
