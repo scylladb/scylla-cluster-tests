@@ -83,7 +83,7 @@ from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerfo
     LatencyDuringOperationsPerformanceAnalyzer
 from sdcm.sct_config import init_and_verify_sct_config
 from sdcm.sct_events import Severity
-from sdcm.sct_events.setup import start_events_device, stop_events_device
+from sdcm.sct_events.setup import start_events_device, stop_events_device, enable_default_filters
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
@@ -374,6 +374,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # Cover multi-tenant configuration. Prevent event device double initiate
         start_events_device(log_dir=self.logdir,
                             _registry=getattr(self, "_registry", None) or self.events_processes_registry)
+        enable_default_filters(sct_config=self.params)
 
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
