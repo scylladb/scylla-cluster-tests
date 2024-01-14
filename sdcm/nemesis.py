@@ -4487,8 +4487,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     strategy.replication_factors.update({new_dc_name: 1})
                     replication_strategy_setter(**{keyspace: strategy})
                 InfoEvent(message='execute rebuild on new datacenter').publish()
-                with wait_for_log_lines(node=new_node, start_line_patterns=["rebuild.*started with keyspaces="],
-                                        end_line_patterns=["rebuild.*finished with keyspaces="],
+                with wait_for_log_lines(node=new_node, start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
+                                        end_line_patterns=["(rebuild.*finished with keyspaces=", "Rebuild succeeded"],
                                         start_timeout=60, end_timeout=600):
                     new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", retry=0)
                 InfoEvent(message='Running full cluster repair on each node').publish()
