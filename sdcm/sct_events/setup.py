@@ -33,6 +33,8 @@ from sdcm.sct_events.events_processes import \
     EVENTS_MAIN_DEVICE_ID, EVENTS_FILE_LOGGER_ID, EVENTS_ANALYZER_ID, \
     EVENTS_GRAFANA_ANNOTATOR_ID, EVENTS_GRAFANA_AGGREGATOR_ID, EVENTS_GRAFANA_POSTMAN_ID, \
     EventsProcessesRegistry, create_default_events_process_registry, get_events_process, EVENTS_HANDLER_ID, EVENTS_COUNTER_ID
+from sdcm.utils.issues import SkipPerIssues
+
 
 EVENTS_DEVICE_START_DELAY = 1  # seconds
 EVENTS_SUBSCRIBERS_START_DELAY = 3  # seconds
@@ -90,46 +92,48 @@ def stop_events_device(_registry: Optional[EventsProcessesRegistry] = None) -> N
 def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unused-argument
 
     # Default filters.
+    if SkipPerIssues('scylladb/scylla-enterprise#1272', params=sct_config):
+        EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                    event_class=DatabaseLogEvent.DATABASE_ERROR,
+                                    regex=r'.*workload prioritization - update_service_levels_from_distributed_data: an '
+                                          r'error occurred while retrieving configuration').publish()
 
-    # https://github.com/scylladb/scylla-enterprise/issues/1272
-    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                regex=r'.*workload prioritization - update_service_levels_from_distributed_data: an '
-                                      r'error occurred while retrieving configuration').publish()
+    if SkipPerIssues('scylladb/scylla-enterprise#2710', params=sct_config):
+        EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                    event_class=DatabaseLogEvent.DATABASE_ERROR,
+                                    regex='ldap_connection - Seastar read failed: std::system_error '
+                                    '(error system:104, read: Connection reset by peer)').publish()
 
-    # https://github.com/scylladb/scylla-enterprise/issues/2710
-    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                regex='ldap_connection - Seastar read failed: std::system_error '
-                                '(error system:104, read: Connection reset by peer)').publish()
+    if SkipPerIssues('scylladb/scylladb#15672', params=sct_config):
+        EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                    event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                                    regex='.*view update generator not plugged to push updates').publish()
 
-    # scylladb/scylladb#15672
-    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                regex='.*view update generator not plugged to push updates').publish()
+    if sct_config.get('cluster_backend').startswith("k8s"):
+        # cause of issue https://github.com/scylladb/scylla-cluster-tests/issues/6119
+        EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                    event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                                    regex=r'.*sidecar/controller.go.*std::runtime_error '
+                                          r'\(Operation decommission is in progress, try again\)').publish()
 
-    # cause of issue https://github.com/scylladb/scylla-cluster-tests/issues/6119
-    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                regex=r'.*sidecar/controller.go.*std::runtime_error '
-                                      r'\(Operation decommission is in progress, try again\)').publish()
-
-    # TODO: remove when those issues are solved:
-    # https://github.com/scylladb/scylladb/issues/16206
-    # https://github.com/scylladb/scylladb/issues/16259
-    # https://github.com/scylladb/scylladb/issues/15598
-    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                event_class=DatabaseLogEvent,
-                                regex=r".*view - Error applying view update.*").publish()
+    if SkipPerIssues([
+        'scylladb/scylladb#16206',
+        'scylladb/scylladb#16259',
+        'scylladb/scylladb#15598',
+    ], params=sct_config):
+        EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                    event_class=DatabaseLogEvent,
+                                    regex=r".*view - Error applying view update.*").publish()
 
     # By default audit is disabled in 20223.1 by https://github.com/scylladb/scylla-enterprise/pull/3094.
     # But it won't be disabled in 2022.1 and 2022.2.
     # This message generates too much noise for us. We do not need it will fail the test. Create WARNING message, not ERROR.
     # This event will be created in branch 2023.1, not in 2022.x
     # issue that should be track https://github.com/scylladb/scylla-enterprise/issues/3148
-    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                event_class=CassandraStressLogEvent.ConsistencyError,
-                                regex=r".*Authentication error on host.*Cannot achieve consistency level for cl ONE").publish()
+    if SkipPerIssues('scylladb/scylla-enterprise#3148', params=sct_config):
+        EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                    event_class=CassandraStressLogEvent.ConsistencyError,
+                                    regex=r".*Authentication error on host.*Cannot achieve consistency level for cl ONE").publish()
 
     if sct_config.get('new_scylla_repo') or sct_config.get('new_version'):
         # scylladb/scylla-enterprise#3814
