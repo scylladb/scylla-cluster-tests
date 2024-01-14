@@ -210,8 +210,8 @@ class TestWaitForLogLines:
         write_thread = threading.Thread(target=write_to_file, args=(file_path, lines))
         write_thread.daemon = True
         file_path.touch()
-        with wait_for_log_lines(node=node, start_line_patterns=["rebuild.*started with keyspaces="],
-                                end_line_patterns=["rebuild.*finished with keyspaces="],
+        with wait_for_log_lines(node=node, start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
+                                end_line_patterns=["rebuild.*finished with keyspaces=", "Rebuild succeeded"],
                                 start_timeout=3, end_timeout=5):
             write_thread.start()
 
