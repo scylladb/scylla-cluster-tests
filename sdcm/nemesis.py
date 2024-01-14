@@ -4147,7 +4147,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             check_encryption_fact(sstable_util, True)
 
             with self.target_node.remote_scylla_yaml() as scylla_yaml:
-                user_info_encryption_enabled = scylla_yaml.user_info_encryption.get('enabled', False)
+                user_info_encryption_enabled = scylla_yaml.user_info_encryption \
+                    and scylla_yaml.user_info_encryption.get('enabled', False)
 
             # if encryption is enabled by default, we currently can't disable it
             if not user_info_encryption_enabled:
