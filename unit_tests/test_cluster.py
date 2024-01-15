@@ -660,6 +660,20 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
         session.execute(
             "INSERT INTO mview.users (username, first_name, last_name, password) VALUES "
             "('fruch', 'Israel', 'Fruchter', '1111')")
+        session.execute(
+            "CREATE KEYSPACE \"123_keyspace\" WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 1}")
+        session.execute(
+            "CREATE TABLE \"123_keyspace\".users (username text, first_name text, last_name text, password text, email text, "
+            "last_access timeuuid, PRIMARY KEY(username))")
+        session.execute(
+            "CREATE TABLE \"123_keyspace\".\"120users\" (username text, first_name text, last_name text, password text, email text, "
+            "last_access timeuuid, PRIMARY KEY(username))")
+        session.execute(
+            "INSERT INTO \"123_keyspace\".users (username, first_name, last_name, password) VALUES "
+            "('fruch', 'Israel', 'Fruchter', '1111')")
+        session.execute(
+            "INSERT INTO \"123_keyspace\".\"120users\" (username, first_name, last_name, password) VALUES "
+            "('fruch', 'Israel', 'Fruchter', '1111')")
 
     docker_scylla.run_nodetool('flush')
 
@@ -674,7 +688,7 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
                                 'system.scylla_table_schema_history', 'system_schema.views',
                                 'system_distributed.view_build_status', 'system.built_views',
                                 'mview.users_by_first_name', 'mview.users_by_last_name', 'mview.users',
-                                'system.IndexInfo', 'system.batchlog', 'system.compactions_in_progress',
+                                'system."IndexInfo"', 'system.batchlog', 'system.compactions_in_progress',
                                 'system.hints', 'system.large_cells', 'system.large_partitions', 'system.large_rows',
                                 'system.paxos', 'system.peer_events', 'system.peers', 'system.range_xfers', 'system.repair_history',
                                 'system.scylla_views_builds_in_progress', 'system.snapshots', 'system.sstable_activity',
@@ -684,16 +698,18 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
                                 'system_schema.indexes', 'system_schema.scylla_aggregates', 'system_schema.scylla_keyspaces',
                                 'system_schema.triggers', 'system_schema.types', 'system_schema.view_virtual_columns',
                                 'system_traces.events', 'system_traces.node_slow_log', 'system_traces.node_slow_log_time_idx',
-                                'system_traces.sessions', 'system_traces.sessions_time_idx'}
+                                'system_traces.sessions', 'system_traces.sessions_time_idx',
+                                '"123_keyspace"."120users"', '"123_keyspace".users'}
 
     table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=False, filter_out_mv=True)
-    assert set(table_names) == {'mview.users'}
+    assert set(table_names) == {'mview.users', '"123_keyspace"."120users"', '"123_keyspace".users'}
 
     table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=False)
-    assert set(table_names) == {'mview.users_by_first_name', 'mview.users_by_last_name', 'mview.users'}
+    assert set(table_names) == {'mview.users_by_first_name', 'mview.users_by_last_name',
+                                'mview.users', '"123_keyspace"."120users"', '"123_keyspace".users'}
 
     table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=True, filter_out_mv=True)
-    assert set(table_names) == {'mview.users'}
+    assert set(table_names) == {'mview.users', '"123_keyspace"."120users"', '"123_keyspace".users'}
 
 
 class TestNodetool(unittest.TestCase):
