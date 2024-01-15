@@ -3220,9 +3220,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug(
             "Running 'disrupt_show_toppartitions' method using %s API.",
             "new and old" if allow_new_api else "old")
-        result = self.target_node.run_nodetool(sub_cmd='help', args='toppartitions')
-        if 'Unknown command toppartitions' in result.stdout:
-            raise UnsupportedNemesis("nodetool doesn't support toppartitions")
         ks_cf_list = self.cluster.get_any_ks_cf_list(self.target_node)
         if not ks_cf_list:
             raise UnsupportedNemesis('User-defined Keyspace and ColumnFamily are not found.')
