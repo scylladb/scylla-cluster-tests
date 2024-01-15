@@ -62,7 +62,6 @@ from sdcm.log import SDCMAdapter
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder
 from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificateAttrBuilder
-
 from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.provision.helpers.certificate import install_client_certificate, install_encryption_at_rest_files
@@ -77,6 +76,7 @@ from sdcm.snitch_configuration import SnitchConfig
 from sdcm.utils import properties
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.aws_kms import AwsKms
+from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.common import (
     S3Storage,
@@ -3546,7 +3546,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         if not regular_table_names:
             return []
 
-        return list(regular_table_names - materialized_view_table_names)
+        ks_cf_list = list(regular_table_names - materialized_view_table_names)
+        ks_cf_list = ['.'.join([cql_quote_if_needed(v) for v in ks_cf.split('.', maxsplit=1)]) for ks_cf in ks_cf_list]
+        return ks_cf_list
 
     def is_table_has_data(self, session, table_name: str) -> (bool, Optional[Exception]):
         """
