@@ -157,6 +157,11 @@
   - networking = True
   - run_with_gemini = False
   - kubernetes = True
+- disrupt_network_reject_inter_node_communication:
+  - disruptive = True
+  - networking = True
+  - run_with_gemini = False
+  - free_tier_set = True
 - disrupt_network_reject_node_exporter:
   - disruptive = True
   - networking = True
@@ -332,5 +337,9 @@
   - free_tier_set = True
 - disrupt_truncate_large_partition:
   - disruptive = False
+  - kubernetes = True
+  - free_tier_set = True
+- disrupt_validate_hh_short_downtime:
+  - disruptive = True
   - kubernetes = True
   - free_tier_set = True

@@ -51,6 +51,7 @@
 - RebuildStreamingErrMonkey
 - RefreshBigMonkey
 - RefreshMonkey
+- RejectInterNodeNetworkMonkey
 - RejectNodeExporterNetworkMonkey
 - RejectThriftNetworkMonkey
 - RemoveServiceLevelMonkey
@@ -86,3 +87,4 @@
 - TopPartitions
 - TruncateLargeParititionMonkey
 - TruncateMonkey
+- ValidateHintedHandoffShortDowntime
