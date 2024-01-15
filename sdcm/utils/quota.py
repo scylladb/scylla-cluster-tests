@@ -32,9 +32,9 @@ def enable_quota_on_node(node):
 def is_quota_enabled_on_node(node):
     """ Verify usrquota is enabled on scylla user. """
     LOGGER.info("Verifying quota is configured on the node {}".format(node.name))
-    verify_usrquot_in_mount_cmd = "mount | grep /var/lib/scylla | awk {'print $6'} | cut -d ',' -f 8"
-    result = node.remoter.run(cmd=verify_usrquot_in_mount_cmd).stdout.rstrip().replace(")", "")
-    if not result == "usrquota":
+    verify_usrquot_in_mount_cmd = "cat /proc/mounts | grep /var/lib/scylla | awk {'print $4'}"
+    result = node.remoter.run(cmd=verify_usrquot_in_mount_cmd).stdout.strip()
+    if "usrquota" not in result:
         LOGGER.warning("User quota on user scylla at /var/lib/scylla is not enabled")
         return False
     return True
