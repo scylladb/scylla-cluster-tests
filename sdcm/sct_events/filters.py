@@ -24,12 +24,15 @@ class DbEventsFilter(BaseFilter):
     def __init__(self,
                  db_event: Union[LogEventProtocol, Type[LogEventProtocol]],
                  line: Optional[str] = None,
-                 node: Optional = None):
+                 node: Optional = None,
+                 extra_time_to_expiration: Optional[int] = 0):
         super().__init__()
 
         self.filter_type = db_event.type
         self.filter_line = line
         self.filter_node = str(node.name if hasattr(node, "name") else node) if node else None
+
+        self.extra_time_to_expiration = extra_time_to_expiration
 
     def eval_filter(self, event: LogEventProtocol) -> bool:
         if not isinstance(event, LogEventProtocol):
@@ -47,6 +50,11 @@ class DbEventsFilter(BaseFilter):
             result &= self.filter_node in (getattr(event, "node", "") or "").split()
 
         return result
+
+    def cancel_filter(self) -> None:
+        if self.extra_time_to_expiration:
+            self.expire_time = time.time() + self.extra_time_to_expiration
+        super().cancel_filter()
 
     @property
     def msgfmt(self) -> str:
