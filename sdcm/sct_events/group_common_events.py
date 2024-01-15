@@ -140,21 +140,25 @@ def ignore_disk_quota_exceeded_errors(node):
             db_event=DatabaseLogEvent.BACKTRACE,
             line="Disk quota exceeded",
             node=node,
+            extra_time_to_expiration=3600,  # one hour
         ))
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.FILESYSTEM_ERROR,
             line="Disk quota exceeded",
             node=node,
+            extra_time_to_expiration=3600,  # one hour
         ))
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.DATABASE_ERROR,
             line="Disk quota exceeded",
             node=node,
+            extra_time_to_expiration=3600,  # one hour
         ))
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.DISK_ERROR,
             line="Disk quota exceeded",
             node=node,
+            extra_time_to_expiration=3600,  # one hour
         ))
         yield
 
