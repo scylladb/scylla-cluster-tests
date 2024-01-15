@@ -111,7 +111,7 @@ import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
 from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
-from unit_tests.test_nemesis import FakeTester
+
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
@@ -1721,6 +1721,11 @@ def get_nemesis_list(backend, config):
     hydra nemesis-list
 
     """
+
+    # NOTE: this import messes up logging for the test, since it's importing tester.py
+    # directly down the line
+    from unit_tests.test_nemesis import FakeTester  # pylint: disable=import-outside-toplevel
+
     add_file_logger()
     logging.basicConfig(level=logging.WARNING)
 
