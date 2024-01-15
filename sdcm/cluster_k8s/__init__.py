@@ -751,15 +751,15 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 namespace=SCYLLA_OPERATOR_NAMESPACE,
                 values=values
             ))
-            if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
-                    self.scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
-                patch_cmd = ('patch deployment scylla-operator --type=json -p=\'[{"op": "add",'
-                             '"path": "/spec/template/spec/containers/0/args/-", '
-                             '"value": "--feature-gates=AutomaticTLSCertificates=true" }]\' ')
+            scylla_operator_version = self.scylla_operator_chart_version.split("-")[0]
+            enable_tls = 'true' if self.params.get('k8s_enable_tls') else 'false'
+            if ComparableScyllaOperatorVersion(scylla_operator_version) >= "1.8.0":
+                patch_cmd = (
+                    'patch deployment scylla-operator --type=json -p=\'[{"op": "add",'
+                    ' "path": "/spec/template/spec/containers/0/args/-", '
+                    f'"value": "--feature-gates=AutomaticTLSCertificates={enable_tls}" }}]\' ')
                 self.kubectl(patch_cmd, namespace=SCYLLA_OPERATOR_NAMESPACE)
-
-            if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
-                    self.scylla_operator_chart_version.split("-")[0]) >= "1.9.0":
+            if enable_tls == 'true' and ComparableScyllaOperatorVersion(scylla_operator_version) >= "1.9.0":
                 # around 10 keys that need to be cached per cluster
                 crypto_key_buffer_size = self.params.get('k8s_tenants_num') * 10
                 for flag in (f"--crypto-key-buffer-size-min={crypto_key_buffer_size}",
