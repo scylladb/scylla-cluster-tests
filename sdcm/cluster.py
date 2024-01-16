@@ -110,6 +110,7 @@ from sdcm.utils.version_utils import (
     ComparableScyllaVersion,
     SCYLLA_VERSION_RE,
 )
+from sdcm.utils.net import get_my_ip
 from sdcm.utils.node import build_node_api_command
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent, add_severity_limit_rules, max_severity
@@ -5396,6 +5397,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
             with node._remote_yaml(f'{self.monitoring_conf_dir}/node_exporter_servers.yml') as exporter_yaml:  # pylint: disable=protected-access
                 exporter_yaml[0]['targets'] += [f'{normalize_ipv6_url(node.private_ip_address)}:9100']
+                exporter_yaml[0]['targets'] += [f'{normalize_ipv6_url(get_my_ip())}:9100']
                 exporter_yaml[0]['targets'] = list(set(exporter_yaml[0]['targets']))  # remove duplicates
 
             if self.params.get("cloud_prom_bearer_token"):

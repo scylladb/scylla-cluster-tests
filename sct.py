@@ -1535,7 +1535,7 @@ def configure_aws_peering(regions):
 @click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")
 @click.option("-z", "--availability-zone", default="", type=str, help="Name of availability zone, ex. 'a'")
 def create_runner_image(cloud_provider, region, availability_zone):
-    if cloud_provider == "aws" and availability_zone != "":
+    if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
     sct_runner = get_sct_runner(cloud_provider=cloud_provider, region_name=region, availability_zone=availability_zone)
