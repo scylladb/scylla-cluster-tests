@@ -29,7 +29,7 @@ from sdcm.utils.decorators import timeout
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CoreDumpEvent, TestFrameworkEvent, SoftTimeoutEvent
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
-from sdcm.sct_events.loaders import YcsbStressEvent
+from sdcm.sct_events.loaders import YcsbStressEvent, CassandraStressLogEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.file_logger import get_logger_event_summary
@@ -442,6 +442,14 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                      "-268424650415671818): data_dictionary::no_such_column_family (Can't find a column family with "
                      "UUID 277dc241-9da2-11ee-a7ab-9c797a34c82c)"
             ).publish()
+
+            CassandraStressLogEvent.ConsistencyError().add_info(
+                node="A",
+                line_number=22,
+                line="ERROR 18:04:32,556 Authentication error on host rolling-upgrade--ubuntu-focal-db-node-24508405-0-3"
+                     ".c.sct-project-1.internal/10.142.1.155:9042: Cannot achieve consistency level for cl ONE. Requires 1, alive 0",
+            ).publish()
+
         log_content = self.get_event_log_file("events.log")
 
         self.assertIn("other back trace", log_content)
@@ -450,10 +458,12 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         warnings_log_content = self.get_event_log_file("warning.log")
         assert 'std::runtime_error' in warnings_log_content
         assert 'data_dictionary::no_such_column_family' in warnings_log_content
+        assert 'Authentication error' in warnings_log_content
 
         error_log_content = self.get_event_log_file("error.log")
         assert 'RUNTIME_ERROR' not in error_log_content
         assert 'data_dictionary::no_such_column_family' not in error_log_content
+        assert 'Authentication error' not in error_log_content
 
     def test_failed_stall_during_filter(self):
         with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):
