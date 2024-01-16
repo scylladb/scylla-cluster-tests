@@ -129,7 +129,7 @@ def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unu
     # issue that should be track https://github.com/scylladb/scylla-enterprise/issues/3148
     EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                 event_class=CassandraStressLogEvent.ConsistencyError,
-                                regex="Authentication error on host.*Cannot achieve consistency level for cl ONE").publish()
+                                regex=r".*Authentication error on host.*Cannot achieve consistency level for cl ONE").publish()
 
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
