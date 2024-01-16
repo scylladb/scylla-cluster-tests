@@ -62,6 +62,7 @@ from sdcm.utils.azure_utils import AzureService, list_instances_azure
 from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
 from sdcm.utils.context_managers import environment
 from sdcm.test_config import TestConfig
+from sdcm.node_exporter_setup import NodeExporterSetup
 
 if TYPE_CHECKING:
     # pylint: disable=ungrouped-imports
@@ -129,7 +130,7 @@ class SctRunnerInfo:  # pylint: disable=too-many-instance-attributes
 
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
-    VERSION = "1.6"  # Version of the Image
+    VERSION = "1.7"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -242,6 +243,10 @@ class SctRunner(ABC):
             # Jenkins pipelines run /bin/sh for some reason.
             ln -sf /bin/bash /bin/sh
         """), ignore_status=True)
+
+        node_exporter_setup = NodeExporterSetup()
+        node_exporter_setup.install(remoter=remoter)
+
         remoter.stop()
         if result.ok:
             LOGGER.info("All packages successfully installed.")
