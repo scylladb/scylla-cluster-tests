@@ -318,7 +318,7 @@ class AzureRegion:  # pylint: disable=too-many-public-methods
                         "caching": "ReadWrite",
                         "create_option": "FromImage",
                         "managed_disk": {
-                            "storage_account_type": "Premium_LRS",  # SSD
+                            "storage_account_type": "StandardSSD_LRS",  # SSD
                         },
                     } | ({} if disk_size is None else {
                         "disk_size_gb": disk_size,
