@@ -31,7 +31,7 @@ class CommitlogConfigParams:
                 method="GET", path="metrics/max_disk_size", params=None).stdout)
             self.smp = len(re.findall(
                 "shard",
-                db_cluster.nodes[0].remoter.run('seastar-cpu-map.sh -n scylla').stdout))
+                db_cluster.nodes[0].remoter.run('sudo seastar-cpu-map.sh -n scylla').stdout))
             self.total_space = int(self.max_disk_size / self.smp)
 
             logger.debug("CommitlogConfigParams")
