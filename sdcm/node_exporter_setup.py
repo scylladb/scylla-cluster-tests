@@ -6,9 +6,12 @@ NODE_EXPORTER_VERSION = '1.7.0'
 
 class NodeExporterSetup:  # pylint: disable=too-few-public-methods
     @staticmethod
-    def install(node):
-        node.install_package('wget')
-        node.remoter.sudo(shell_script_cmd(f"""
+    def install(node: "BaseNode | None" = None, remoter: "Remoter | None" = None):
+        assert node or remoter, "node or remoter much be pass to this function"
+        if node:
+            node.install_package('wget')
+            remoter = node.remoter
+        remoter.sudo(shell_script_cmd(f"""
             if ! id node_exporter > /dev/null 2>&1; then
                 useradd -rs /bin/false node_exporter
             fi
