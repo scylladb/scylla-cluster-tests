@@ -43,6 +43,7 @@ class DbLogReader(Process):
         ' | systemd-logind:',
         ' | sudo:',
         ' | dhclient[',
+        ' | cloud-init[',
 
         # Remove compactions, repair and steaming logs from being logged, we are getting to many of them
         '] compaction - [Compact',
@@ -114,13 +115,16 @@ class DbLogReader(Process):
                         except Exception:  # pylint: disable=broad-except
                             pass
 
-                    if self._log_lines:
-                        line = line.strip()
-                        for pattern in self.EXCLUDE_FROM_LOGGING:
-                            if pattern in line:
-                                break
-                        else:
-                            LOGGER.debug(line)
+                    line = line.strip()
+
+                    for pattern in self.EXCLUDE_FROM_LOGGING:
+                        if pattern in line:
+                            should_exclude_line = True
+                            break
+                    else:
+                        should_exclude_line = False
+                    if self._log_lines and not should_exclude_line:
+                        LOGGER.debug(line)
 
                     if json_log:
                         continue
