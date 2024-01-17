@@ -3492,6 +3492,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 raise ValueError(f"The following value '{entity_type}' not supported")
 
             cql_session.default_fetch_size = 1000
+            cql_session.default_timeout = 60.0 * 5
             cql_session.default_consistency_level = ConsistencyLevel.ONE
             execute_result = cql_session.execute_async(cmd)
             fetcher = PageFetcher(execute_result).request_all(timeout=120)
@@ -3519,7 +3520,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                         res = db_node.run_nodetool(sub_cmd='cfstats', args=table_name, timeout=300,
                                                    warning_event_on_exception=(
                                                        Failure, UnexpectedExit, Libssh2_UnexpectedExit,),
-                                                   publish_event=False, retry=0)
+                                                   publish_event=False, retry=3)
                         cf_stats = db_node._parse_cfstats(res.stdout)  # pylint: disable=protected-access
                         has_data = bool(cf_stats['Number of partitions (estimate)'])
                     except Exception as exc:  # pylint: disable=broad-except
@@ -3530,7 +3531,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
             return result
 
-        with self.cql_connection_patient(db_node) as session:
+        with self.cql_connection_patient(db_node, connect_timeout=600) as session:
             regular_table_names = execute_cmd(cql_session=session, entity_type="column")
             if regular_table_names and filter_out_mv:
                 materialized_view_table_names = execute_cmd(cql_session=session, entity_type="view")
