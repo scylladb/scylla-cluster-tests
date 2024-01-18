@@ -54,7 +54,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, Roun
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from argus.backend.util.enums import ResourceState
-from sdcm.node_exporter_setup import NodeExporterSetup
+from sdcm.node_exporter_setup import NodeExporterSetup, SyslogNgExporterSetup
 from sdcm.db_log_reader import DbLogReader
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
@@ -4479,6 +4479,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         if not self.test_config.REUSE_CLUSTER:
             node.disable_daily_triggered_services()
+            if self.params.get('logs_transport') == 'syslog-ng':
+                SyslogNgExporterSetup().install(node)
+
             nic_devname = node.get_nic_devices()[0]
             if install_scylla:
                 self._scylla_install(node)
@@ -5448,8 +5451,10 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
     def reconfigure_scylla_monitoring(self):
         for node in self.nodes:
             monitoring_targets = []
+            syslog_ng_stats_targets = []
             for db_node in self.targets["db_cluster"].nodes:
                 monitoring_targets.append(f"{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}")
+                syslog_ng_stats_targets += [f'{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}:9577']
             monitoring_targets = " ".join(monitoring_targets)
             node.remoter.sudo(shell_script_cmd(f"""\
                 cd {self.monitor_install_path}
@@ -5460,6 +5465,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
             with node._remote_yaml(f'{self.monitoring_conf_dir}/node_exporter_servers.yml') as exporter_yaml:  # pylint: disable=protected-access
                 exporter_yaml[0]['targets'] += [f'{normalize_ipv6_url(node.private_ip_address)}:9100']
+                exporter_yaml[0]['targets'] += syslog_ng_stats_targets
                 exporter_yaml[0]['targets'] += [f'{normalize_ipv6_url(get_my_ip())}:9100']
                 exporter_yaml[0]['targets'] = list(set(exporter_yaml[0]['targets']))  # remove duplicates
 
