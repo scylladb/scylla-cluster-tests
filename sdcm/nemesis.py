@@ -2687,8 +2687,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                      "dttl": 86400}
 
             """
-            current_unit = settings["compaction"]["compaction_window_unit"]
-            current_size = int(settings["compaction"]["compaction_window_size"])
+            # It is allowed that compaction strategy has only "class" defined, and "compaction_window_size" and "compaction_window_unit"
+            # are not defined.
+            current_unit = settings["compaction"].get("compaction_window_unit") or "DAYS"  # default value
+            current_size = int(settings["compaction"].get("compaction_window_size") or 1)  # default value
             multiplier = 3600 if current_unit in ["DAYS", "HOURS"] else 60
             expected_sstable_number = 35
 
