@@ -3359,9 +3359,10 @@ class FillDatabaseData(ClusterTester):
     def verify_db_data(self):
         # Prepare connection
         node = self.db_cluster.nodes[0]
-        with self.db_cluster.cql_connection_patient(node, keyspace=self.base_ks) as session:
+        with self.db_cluster.cql_connection_patient(node, keyspace=self.base_ks, connect_timeout=600) as session:
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
+            session.default_timeout = 60 * 5
             self.run_db_queries(session, session.default_fetch_size)
 
     def paged_query(self, keyspace='keyspace_complex'):
