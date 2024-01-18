@@ -42,3 +42,42 @@ class NodeExporterSetup:  # pylint: disable=too-few-public-methods
             systemctl enable node_exporter.service
             systemctl start node_exporter.service
         """))
+
+
+class SyslogNgExporterSetup:  # pylint: disable=too-few-public-methods
+    @staticmethod
+    def install(node: "BaseNode | None" = None, remoter: "Remoter | None" = None):
+        assert node or remoter, "node or remoter much be pass to this function"
+        if node:
+            node.install_package('wget')
+            remoter = node.remoter
+        remoter.sudo(shell_script_cmd("""
+            wget https://github.com/brandond/syslog_ng_exporter/releases/download/0.1.0/syslog_ng_exporter
+            chmod +x syslog_ng_exporter
+            mv syslog_ng_exporter /usr/local/bin
+
+            if [ -e /etc/systemd/system/syslog_ng_exporter.service ]; then
+                rm /etc/systemd/system/syslog_ng_exporter.service
+            fi
+
+            cat <<EOM >> /etc/systemd/system/syslog_ng_exporter.service
+            [Unit]
+            Description=Syslog-ng metrics Exporter
+            Wants=network.target network-online.target
+            After=network.target network-online.target
+
+            [Service]
+            Type=simple
+            ExecStart=/usr/local/bin/syslog_ng_exporter
+            StandardOutput=journal
+            StandardError=journal
+            Restart=on-failure
+
+            [Install]
+            WantedBy=multi-user.target
+            EOM
+
+            systemctl daemon-reload
+            systemctl enable syslog_ng_exporter.service
+            systemctl start syslog_ng_exporter.service
+        """))

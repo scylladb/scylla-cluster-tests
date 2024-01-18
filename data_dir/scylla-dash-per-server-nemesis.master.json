@@ -7628,6 +7628,141 @@
         "yaxis": {
           "align": false
         }
+      },
+      {
+        "class": "text_panel",
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "editable": true,
+        "error": false,
+        "gridPos": {
+          "h": 3,
+          "w": 24,
+          "x": 0,
+          "y": 287
+        },
+        "links": [],
+        "options": {
+          "code": {
+            "language": "plaintext",
+            "showLineNumbers": false,
+            "showMiniMap": false
+          },
+          "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Syslog-ng logging</h1>",
+          "mode": "html"
+        },
+        "pluginVersion": "10.2.2",
+        "style": {},
+        "transparent": true,
+        "type": "text"
+      },
+      {
+        "datasource": "prometheus",
+        "description": "",
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisBorderShow": false,
+              "axisCenteredZero": false,
+              "axisColorMode": "text",
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "insertNulls": false,
+              "lineInterpolation": "smooth",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": true,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "mps"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 0,
+          "y": 290
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "list",
+            "placement": "bottom",
+            "showLegend": false
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "none"
+          }
+        },
+        "pluginVersion": "10.2.2",
+        "targets": [
+          {
+            "datasource": "prometheus",
+            "editorMode": "code",
+            "exemplar": false,
+            "expr": "increase(syslog_ng_destination_messages_processed_total[10m])",
+            "format": "time_series",
+            "instant": false,
+            "intervalFactor": 1,
+            "legendFormat": "Processed {{instance}}",
+            "range": true,
+            "refId": "A"
+          },
+          {
+            "datasource": "prometheus",
+            "editorMode": "code",
+            "expr": "increase(syslog_ng_destination_messages_dropped_total[10m])",
+            "format": "time_series",
+            "intervalFactor": 1,
+            "legendFormat": "Dropped {{instance}}",
+            "range": true,
+            "refId": "B"
+          }
+        ],
+        "title": "Logs create/drop rates",
+        "type": "timeseries"
       }
     ],
     "refresh": false,
