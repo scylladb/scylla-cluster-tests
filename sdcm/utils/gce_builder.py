@@ -210,8 +210,10 @@ class GceBuilder:
         metadata.items += [{"key": "RunByUser", "value": "QA"}]
         metadata.items += [{"key": "NodeType", "value": "builder"}]
         metadata.items += [{"key": "keep", "value": "alive"}]
-
         template.properties.metadata = metadata
+
+        template.properties.labels = {"runbyuser": "qa", "nodetype": "builder", "keep": "alive"}
+
         template_client = compute_v1.InstanceTemplatesClient(credentials=self.credentials)
         try:
             operation = template_client.insert(
