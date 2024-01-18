@@ -1,4 +1,0 @@
-peers-37f71aca7dc2383ba70672528af04d4f/md-195-big-Data.db:level=0]. 17kB to 11kB (~67% of original) in 172ms = 67kB/s. ~256 total partitions merged to 1.
-2021-11-26T05:05:08+00:00 multi-dc-rolling-upgrade-master-ubu-db-node-92a4720b-1 !    INFO |  [shard 0] rpc - client 10.0.2.7:62608 msg_id 2:  exception "gate closed" in no_wait handler ignored
-2021-11-26T05:05:08+00:00 multi-dc-rolling-upgrade-master-ubu-db-node-92a4720b-1 !    INFO |  [shard 0] rpc - client 13.40.70.127:62008 msg_id 2:  some exception found by database error
-2021-11-26T05:05:08+00:00 multi-dc-rolling-upgrade-master-ubu-db-node-92a4720b-1 !    INFO |  [shard 0] rpc - client 13.40.70.127:62008 msg_id 3:  exception "gate closed" in no_wait handler ignored

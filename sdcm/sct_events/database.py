@@ -31,22 +31,11 @@ LOGGER = logging.getLogger(__name__)
 class DatabaseLogEvent(LogEvent, abstract=True):
     WARNING: Type[LogEventProtocol]
     NO_SPACE_ERROR: Type[LogEventProtocol]
-    UNKNOWN_VERB: Type[LogEventProtocol]
-    CLIENT_DISCONNECT: Type[LogEventProtocol]
-    SEMAPHORE_TIME_OUT: Type[LogEventProtocol]
-    LDAP_CONNECTION_RESET: Type[LogEventProtocol]
-    SYSTEM_PAXOS_TIMEOUT: Type[LogEventProtocol]
-    SERVICE_LEVEL_CONTROLLER: Type[LogEventProtocol]
-    GATE_CLOSED: Type[LogEventProtocol]
-    RESTARTED_DUE_TO_TIME_OUT: Type[LogEventProtocol]
-    EMPTY_NESTED_EXCEPTION: Type[LogEventProtocol]
     BAD_ALLOC: Type[LogEventProtocol]
     SCHEMA_FAILURE: Type[LogEventProtocol]
     RUNTIME_ERROR: Type[LogEventProtocol]
-    DIRECTORY_NOT_EMPTY: Type[LogEventProtocol]
     FILESYSTEM_ERROR: Type[LogEventProtocol]
     STACKTRACE: Type[LogEventProtocol]
-    RAFT_TRANSFER_SNAPSHOT_ERROR: Type[LogEventProtocol]
     DISK_ERROR: Type[LogEventProtocol]
     COMPACTION_STOPPED: Type[LogEventProtocol]
 
@@ -57,9 +46,6 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     SEGMENTATION: Type[LogEventProtocol]
     CORRUPTED_SSTABLE: Type[LogEventProtocol]
     INTEGRITY_CHECK: Type[LogEventProtocol]
-    SUPPRESSED_MESSAGES: Type[LogEventProtocol]
-    stream_exception: Type[LogEventProtocol]
-    RPC_CONNECTION: Type[LogEventProtocol]
     DATABASE_ERROR: Type[LogEventProtocol]
     BACKTRACE: Type[LogEventProtocol]
 
@@ -85,53 +71,18 @@ DatabaseLogEvent.add_subevent_type("WARNING", severity=Severity.WARNING,
                                    regex=r"(^WARNING|!\s*?WARNING).*\[shard.*\]")
 DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR,
                                    regex="No space left on device")
-DatabaseLogEvent.add_subevent_type("UNKNOWN_VERB", severity=Severity.WARNING,
-                                   regex="(unknown verb exception|unknown_verb_error)")
-DatabaseLogEvent.add_subevent_type("CLIENT_DISCONNECT", severity=Severity.WARNING,
-                                   regex=r"cql_server - exception while processing connection:")
-DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNING,
-                                   regex="semaphore_timed_out")
-# The below ldap-connection-reset is dependent on https://github.com/scylladb/scylla-enterprise/issues/2710
-DatabaseLogEvent.add_subevent_type("LDAP_CONNECTION_RESET", severity=Severity.WARNING,
-                                   regex=r".*ldap_connection - Seastar read failed: std::system_error \(error system:104, "
-                                         r"recv: Connection reset by peer\).*")
-# This scylla WARNING includes "exception" word and reported as ERROR. To prevent it I add the subevent below and locate
-# it before DATABASE_ERROR. Message example:
-# storage_proxy - Failed to apply mutation from 10.0.2.108#8: exceptions::mutation_write_timeout_exception
-# (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.)
-DatabaseLogEvent.add_subevent_type("SYSTEM_PAXOS_TIMEOUT", severity=Severity.WARNING,
-                                   regex="(mutation_write_|Operation timed out for system.paxos|"
-                                         "Operation failed for system.paxos)")
-DatabaseLogEvent.add_subevent_type("SERVICE_LEVEL_CONTROLLER", severity=Severity.WARNING,
-                                   regex="Operation timed out for system_distributed.service_levels")
-DatabaseLogEvent.add_subevent_type("GATE_CLOSED", severity=Severity.WARNING,
-                                   regex="exception \"gate closed\" in no_wait handler ignored")
-DatabaseLogEvent.add_subevent_type("RESTARTED_DUE_TO_TIME_OUT", severity=Severity.WARNING,
-                                   regex="scylla-server.service.*State 'stop-sigterm' timed out")
-DatabaseLogEvent.add_subevent_type("EMPTY_NESTED_EXCEPTION", severity=Severity.WARNING,
-                                   regex=r"cql_server - exception while processing connection: "
-                                         r"seastar::nested_exception \(seastar::nested_exception\)$")
-DatabaseLogEvent.add_subevent_type("COMPACTION_STOPPED", severity=Severity.NORMAL,
-                                   regex="compaction_stopped_exception")
 DatabaseLogEvent.add_subevent_type("BAD_ALLOC", severity=Severity.ERROR,
                                    regex="std::bad_alloc")
 DatabaseLogEvent.add_subevent_type("SCHEMA_FAILURE", severity=Severity.ERROR,
                                    regex="Failed to load schema version")
 DatabaseLogEvent.add_subevent_type("RUNTIME_ERROR", severity=Severity.ERROR,
                                    regex="std::runtime_error")
-# remove below workaround after dropping support for Scylla 2023.1 and 5.2 (see scylladb/scylla#13538)
-DatabaseLogEvent.add_subevent_type("DIRECTORY_NOT_EMPTY", severity=Severity.NORMAL,
-                                   regex="remove failed: Directory not empty")
 DatabaseLogEvent.add_subevent_type("FILESYSTEM_ERROR", severity=Severity.ERROR,
                                    regex="filesystem_error")
 DatabaseLogEvent.add_subevent_type("DISK_ERROR", severity=Severity.ERROR,
                                    regex=r"storage_service - .*due to I\/O errors.*Disk error: std::system_error")
 DatabaseLogEvent.add_subevent_type("STACKTRACE", severity=Severity.ERROR,
                                    regex=r'^(?!.*libabsl).*stacktrace')
-# scylladb/scylladb#12972
-DatabaseLogEvent.add_subevent_type("RAFT_TRANSFER_SNAPSHOT_ERROR", severity=Severity.WARNING,
-                                   regex=r"raft - \[[\w-]*\] Transferring snapshot to [\w-]* "
-                                         r"failed with: seastar::rpc::remote_verb_error \(connection is closed\)")
 
 # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
 DatabaseLogEvent.add_subevent_type("REACTOR_STALLED", mixin=ReactorStalledMixin, severity=Severity.DEBUG,
@@ -146,12 +97,6 @@ DatabaseLogEvent.add_subevent_type("CORRUPTED_SSTABLE", severity=Severity.CRITIC
                                    regex="sstables::malformed_sstable_exception|invalid_mutation_fragment_stream")
 DatabaseLogEvent.add_subevent_type("INTEGRITY_CHECK", severity=Severity.ERROR,
                                    regex="integrity check failed")
-DatabaseLogEvent.add_subevent_type("SUPPRESSED_MESSAGES", severity=Severity.WARNING,
-                                   regex="journal: Suppressed")
-DatabaseLogEvent.add_subevent_type("stream_exception", severity=Severity.ERROR,
-                                   regex="stream_exception")
-DatabaseLogEvent.add_subevent_type("RPC_CONNECTION", severity=Severity.WARNING,
-                                   regex=r'(^ERROR|!ERR).*rpc - client .*(connection dropped|fail to connect)')
 DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR,
                                    regex=r"(^ERROR|!\s*?ERR).*\[shard.*\]")
 DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR,
@@ -159,24 +104,12 @@ DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR,
 SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.WARNING(),
     DatabaseLogEvent.NO_SPACE_ERROR(),
-    DatabaseLogEvent.UNKNOWN_VERB(),
-    DatabaseLogEvent.CLIENT_DISCONNECT(),
-    DatabaseLogEvent.SEMAPHORE_TIME_OUT(),
-    DatabaseLogEvent.LDAP_CONNECTION_RESET(),
-    DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT(),
-    DatabaseLogEvent.SERVICE_LEVEL_CONTROLLER(),
-    DatabaseLogEvent.GATE_CLOSED(),
-    DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT(),
-    DatabaseLogEvent.EMPTY_NESTED_EXCEPTION(),
-    DatabaseLogEvent.COMPACTION_STOPPED(),
     DatabaseLogEvent.BAD_ALLOC(),
     DatabaseLogEvent.SCHEMA_FAILURE(),
     DatabaseLogEvent.RUNTIME_ERROR(),
-    DatabaseLogEvent.DIRECTORY_NOT_EMPTY(),
     DatabaseLogEvent.FILESYSTEM_ERROR(),
     DatabaseLogEvent.DISK_ERROR(),
     DatabaseLogEvent.STACKTRACE(),
-    DatabaseLogEvent.RAFT_TRANSFER_SNAPSHOT_ERROR(),
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     DatabaseLogEvent.REACTOR_STALLED(),
@@ -186,9 +119,6 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.SEGMENTATION(),
     DatabaseLogEvent.CORRUPTED_SSTABLE(),
     DatabaseLogEvent.INTEGRITY_CHECK(),
-    DatabaseLogEvent.SUPPRESSED_MESSAGES(),
-    DatabaseLogEvent.stream_exception(),
-    DatabaseLogEvent.RPC_CONNECTION(),
     DatabaseLogEvent.DATABASE_ERROR(),
     DatabaseLogEvent.BACKTRACE(),
 )
