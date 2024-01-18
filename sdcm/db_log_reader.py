@@ -22,6 +22,7 @@ from multiprocessing import Process, Event, Queue
 from typing import Optional
 
 from sdcm.remote.base import CommandRunner
+from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping, BACKTRACE_RE
 from sdcm.sct_events.decorators import raise_event_on_failure
@@ -158,12 +159,19 @@ class DbLogReader(Process):
                             item.period_func(match=event_match)
                             break
 
+                    skip_to_next_line = False
                     # for each line use all regexes to match, and if found send an event
                     for pattern, event in self._system_event_patterns:
                         if pattern.search(line):
+                            if event.severity == Severity.SUPPRESS:
+                                skip_to_next_line = True
+                                break
                             cloned_event = event.clone().add_info(node=self._node_name, line_number=index, line=line)
                             backtraces.append(dict(event=cloned_event, backtrace=[]))
                             break  # Stop iterating patterns to avoid creating two events for one line of the log
+
+                    if skip_to_next_line:
+                        continue
 
                     if one_line_backtrace and backtraces:
                         backtraces[-1]['backtrace'] = one_line_backtrace
