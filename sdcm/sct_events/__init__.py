@@ -18,6 +18,7 @@ from typing import Protocol, Optional, Type, runtime_checkable
 
 
 class Severity(enum.Enum):
+    SUPPRESS = -2  # those won't be generating events for
     DEBUG = -1  # this should only be through test case configuration!!!
     UNKNOWN = 0
     NORMAL = 1
