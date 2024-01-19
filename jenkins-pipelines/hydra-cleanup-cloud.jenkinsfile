@@ -1,0 +1,59 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+pipeline {
+    agent {
+        label {
+            label "aws-sct-builders-eu-west-1-v2-CI"
+        }
+    }
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+    }
+    parameters {
+        booleanParam(
+            defaultValue: false,
+            description: 'do not execute commands, just print out',
+            name: 'dryRun'
+        )
+    }
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+    }
+    stages {
+        stage('Skip build#1') {  // Because this: https://issues.jenkins-ci.org/browse/JENKINS-41929
+            when { expression { env.BUILD_NUMBER == '1' } }
+            steps {
+                script {
+                    if (currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause') != null) {
+                        currentBuild.description = ('Aborted build#1 not having parameters loaded.\n' +
+                                                    'Build#2 is ready to run')
+                        currentBuild.result = 'ABORTED'
+                        error('Abort build#1 which only loads params')
+                    }
+                }
+            }
+        }
+        stage('Checkout') {
+            steps {
+                dir('scylla-cluster-tests') {
+                    checkout scm
+                }
+            }
+        }
+        stage('Run hydra clean_azure.py') {
+            steps {
+                   timeout(time: 15, unit: 'MINUTES') {
+                        sctScript """
+                            ./docker/env/hydra.sh python ./utils/cloud_cleanup/azure/clean_azure.py ${params.dryRun ? '--dry-run' : ''}
+                        """
+                   }
+            }
+        }
+    }
+}
