@@ -436,6 +436,7 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
     # Use the network interface provided in the network_link argument.
     network_interface = compute_v1.NetworkInterface()
     network_interface.network = f"global/networks/{network_name}"
+    network_interface.nic_type = "GVNIC"
     if subnetwork_link:
         network_interface.subnetwork = subnetwork_link
 
@@ -453,7 +454,7 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
 
     # Collect information into the Instance object.
     instance = compute_v1.Instance()
-    instance.network_interfaces = [network_interface]
+
     instance.name = instance_name
     instance.disks = disks
     if re.match(r"^zones/[a-z\d\-]+/machineTypes/[a-z\d\-]+$", machine_type):
@@ -468,6 +469,13 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
 
     if "z3-highmem" in machine_type:
         instance.scheduling.on_host_maintenance = "TERMINATE"
+
+    if "sct-runner" not in instance_name and "monitor" not in instance_name:
+        network_performance_config = compute_v1.NetworkPerformanceConfig()
+        network_performance_config.total_egress_bandwidth_tier = "TIER_1"
+        instance.network_performance_config = network_performance_config
+
+    instance.network_interfaces = [network_interface]
 
     if spot:
         # Set the Spot VM setting
