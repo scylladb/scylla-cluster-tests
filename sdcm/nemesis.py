@@ -3779,16 +3779,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.unset_current_running_nemesis(new_node)
             return new_node
 
-        trigger = partial(
-            self.target_node.run_nodetool, sub_cmd="decommission", timeout=180, warning_event_on_exception=(Exception,),
-            retry=0,
-        )
-
         terminate_pattern = self.target_node.raft.get_random_log_message(operation=TopologyOperations.DECOMMISSION,
                                                                          seed=self.tester.params.get("nemesis_seed"))
         self.log.debug("Reboot node after log message: '%s'", terminate_pattern.log_message)
 
+        nodetool_decommission_timeout = terminate_pattern.timeout + 600
+
         log_follower = self.target_node.follow_system_log(patterns=[terminate_pattern.log_message])
+
+        trigger = partial(self.target_node.run_nodetool,
+                          sub_cmd="decommission",
+                          timeout=nodetool_decommission_timeout,
+                          warning_event_on_exception=(Exception,),
+                          retry=0)
 
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
@@ -3797,13 +3800,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
             delay=0
         )
-
+        full_operations_timeout = nodetool_decommission_timeout + 600
         with contextlib.ExitStack() as stack:
             for expected_start_failed_context in self.target_node.raft.get_severity_change_filters_scylla_start_failed(
                     terminate_pattern.timeout):
                 stack.enter_context(expected_start_failed_context)
             with ignore_stream_mutation_fragments_errors():
-                ParallelObject(objects=[trigger, watcher], timeout=terminate_pattern.timeout).call_objects()
+                ParallelObject(objects=[trigger, watcher], timeout=full_operations_timeout).call_objects()
             if new_node := decommission_post_action():
                 new_node.wait_node_fully_start()
                 new_node.run_nodetool("rebuild", retry=0)
