@@ -1884,6 +1884,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                           client_encrypt=self.params.get('client_encrypt'),
                                           keyspace_name=keyspace_name,
                                           stop_test_on_failure=stop_test_on_failure,
+                                          prometheus_db=self.prometheus_db,
                                           params=params or self.params).run()
         self.alter_test_tables_encryption(stress_command=stress_cmd)
 
