@@ -31,6 +31,7 @@ import json
 import itertools
 from distutils.version import LooseVersion
 from contextlib import ExitStack
+from uuid import uuid4
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial
 from collections import defaultdict, Counter, namedtuple
@@ -2412,6 +2413,69 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis("AddDropColumnMonkey: can't find table to run on")
         InfoEvent(f'AddDropColumnMonkey table {".".join(self._add_drop_column_target_table)}').publish()
         self._add_drop_column_run_in_cycle()
+
+    def disrupt_add_drop_table(self):
+        """
+        It spawns several threads to create/delete tables into separate keyspaces
+        """
+        self.log.debug("CreateDeleteTableMonkey: Started")
+        self.use_nemesis_seed()
+        nemesis_run_id = uuid4().hex[:8]
+        InfoEvent(f'CreateDeleteTableMonkey with ID {nemesis_run_id} started ').publish()
+        max_execute_concurrency = 10
+        number_of_tables = 1000  # random.randint(1100,1500)
+        nodes_to_execute = self.cluster.nodes * 2
+        number_of_tables_per_thread = math.ceil(number_of_tables/len(nodes_to_execute))
+        max_execute_concurrency_per_thread = math.ceil(max_execute_concurrency/len(nodes_to_execute))
+
+        threads = []
+        with ThreadPoolExecutor(max_workers=len(nodes_to_execute), thread_name_prefix='CreateDeleteTableMonkeyThread') as thread_pool:
+            start_time = time.time()
+            for thread_number in range(len(nodes_to_execute)):  # pylint: disable=consider-using-enumerate
+                threads.append(thread_pool.submit(partial(
+                    self._add_drop_table_in_thread,
+                    nemesis_run_id=nemesis_run_id,
+                    thread_number=thread_number,
+                    number_of_tables=number_of_tables_per_thread,
+                    node=nodes_to_execute[thread_number],
+                    concurrency=max_execute_concurrency_per_thread)))
+            for thread in threads:
+                thread.result()
+            elapsed_time = time.time() - start_time
+
+        InfoEvent(f'CreateDeleteTableMonkey with ID {nemesis_run_id} finised, {number_of_tables} tables '
+                  f'was create/deleted with Execution time: {time.strftime("%H:%M:%S", time.gmtime(elapsed_time))} ').publish()
+
+    def _add_drop_table_in_thread(self, nemesis_run_id, thread_number: int, number_of_tables: int, node: BaseNode, concurrency: int):
+        with self.cluster.cql_connection_patient(node, connect_timeout=1000) as session:
+            keyspace_name = f"CreateDeleteTableMonkey{nemesis_run_id}{thread_number}"
+            create_keyspase = (f"create keyspace {keyspace_name} with replication = "
+                               f"{{'class': 'NetworkTopologyStrategy', 'replication_factor': {len(self.cluster.nodes)}}}")
+            session.execute(create_keyspase, timeout=900)
+
+            tables_index = 0
+            while tables_index < number_of_tables:
+                execute_futures = []
+                for _ in range(concurrency):
+                    create_table = (f"create table {keyspace_name}.CreateDeleteTableMonkey{nemesis_run_id}{tables_index} "
+                                    f"(k int, v1 int, v2 int, primary key ((k)))")
+                    execute_futures.append(
+                        session.execute_async(create_table, timeout=900))
+                    tables_index += 1
+
+                for future in execute_futures:
+                    future.result()
+
+            while tables_index >= number_of_tables:
+                execute_futures = []
+                for _ in range(concurrency):
+                    tables_index -= 1
+                    execute_futures.append(
+                        session.execute_async(
+                            f"drop table {keyspace_name}.CreateDeleteTableMonkey{nemesis_run_id}{tables_index}", timeout=900))
+
+                for future in execute_futures:
+                    future.result()
 
     def modify_table_comment(self):
         # default: comment = ''
@@ -5752,6 +5816,19 @@ class AddDropColumnMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_add_drop_column()
+
+
+class AddDropTableMonkey(Nemesis):
+    disruptive = False
+    run_with_gemini = False
+    networking = False
+    kubernetes = True
+    limited = True
+    schema_changes = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_add_drop_table()
 
 
 class ToggleTableIcsMonkey(Nemesis):
