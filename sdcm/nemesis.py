@@ -2888,7 +2888,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                       keyspace_name=chosen_snapshot_info["keyspace_name"],
                                                       number_of_rows=chosen_snapshot_info["number_of_rows"])
         for stress in stress_queue:
-            self.tester.verify_stress_thread(cs_thread_pool=stress)
+            is_passed = self.tester.verify_stress_thread(cs_thread_pool=stress)
+            assert is_passed, (
+                "Data verification stress command, triggered by the 'mgmt_restore' nemesis, has failed")
 
     def _delete_existing_backups(self, mgr_cluster):
         deleted_tasks = []
