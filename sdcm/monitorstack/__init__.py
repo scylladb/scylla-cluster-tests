@@ -393,9 +393,9 @@ def restore_annotations_data(monitoring_stack_dir, grafana_docker_port):
 
 @retrying(n=3, sleep_time=5, message='Start docker containers')
 def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_version, tenants_number):  # pylint: disable=unused-argument
-    graf_port = get_free_port(ports_to_try=(GRAFANA_DOCKER_PORT + i for i in range(tenants_number)))
-    alert_port = get_free_port(ports_to_try=(ALERT_DOCKER_PORT + i for i in range(tenants_number)))
-    prom_port = get_free_port(ports_to_try=(PROMETHEUS_DOCKER_PORT + i for i in range(tenants_number)))
+    graf_port = get_free_port(ports_to_try=[GRAFANA_DOCKER_PORT + i for i in range(tenants_number)] + [0])
+    alert_port = get_free_port(ports_to_try=[ALERT_DOCKER_PORT + i for i in range(tenants_number)] + [0])
+    prom_port = get_free_port(ports_to_try=[PROMETHEUS_DOCKER_PORT + i for i in range(tenants_number)] + [0])
 
     lr = LocalCmdRunner()  # pylint: disable=invalid-name
     lr.run('cd {monitoring_dockers_dir}; ./kill-all.sh -g {graf_port} -m {alert_port} -p {prom_port}'.format(**locals()),
