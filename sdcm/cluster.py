@@ -142,6 +142,10 @@ from sdcm.paths import (
     SCYLLA_MANAGER_TLS_CERT_FILE,
     SCYLLA_MANAGER_TLS_KEY_FILE,
 )
+from sdcm.provision.common.utils import (
+    restart_syslogng_service,
+    configure_syslog_ng_send_to_monitoring
+)
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
 from sdcm.exceptions import (
     KillNemesis,
@@ -5414,6 +5418,13 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                     db_node.remoter.sudo(shell_script_cmd(
                         f"[ -f /etc/rsyslog.d/scylla.conf ] || scylla_rsyslog_setup --remote-server {node.ip_address}"
                     ), verbose=True)
+
+            if self.params.get("monitoring_send_logs"):
+                for db_node in self.targets["db_cluster"].nodes:
+                    script = configure_syslog_ng_send_to_monitoring(node.ip_address)
+                    script += restart_syslogng_service()
+
+                    db_node.remoter.sudo(shell_script_cmd(script, quote="'"), verbose=True)
 
     def _create_manager_prometheus_yaml(self, node):
         manager_prometheus_port = self.params.get("manager_prometheus_port")

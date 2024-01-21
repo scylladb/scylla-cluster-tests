@@ -162,3 +162,27 @@ def install_syslogng_service():
             echo "Unsupported distro"
         fi
     """)
+
+
+def configure_syslog_ng_send_to_monitoring(monitor_address):
+    return dedent(f"""\
+        cat <<EOF >>/etc/syslog-ng/conf.d/remote_monitoring.conf
+
+        destination remote_monitoring {{
+            syslog(
+                "{monitor_address}"
+                transport("tcp")
+                port(1514)
+                throttle(10000)
+                disk-buffer (
+                    mem-buf-size(1048576)
+                    disk-buf-size(104857600)
+                    reliable(yes)
+                    dir("/var/log")
+                )
+            );
+        }};
+        log {{ source(s_src);  destination(remote_monitoring); }};
+
+        EOF
+    """)
