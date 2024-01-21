@@ -446,8 +446,8 @@ class AwsSctRunner(SctRunner):
     BASE_IMAGE = "ami-07c2ae35d31367b3e"  # Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2022-12-01
     SOURCE_IMAGE_REGION = "eu-west-2"  # where the source Runner image will be created and copied to other regions
     IMAGE_BUILDER_INSTANCE_TYPE = "t3.small"
-    REGULAR_TEST_INSTANCE_TYPE = "t3.large"  # 2 vcpus, 8G, 36 CPU credits/hour
-    LONGTERM_TEST_INSTANCE_TYPE = "r5.large"  # 2 vcpus, 16G
+    REGULAR_TEST_INSTANCE_TYPE = "m7i-flex.large"  # 2 vcpus, 8G
+    LONGTERM_TEST_INSTANCE_TYPE = "m7i-flex.xlarge"  # 4 vcpus, 16G
 
     def __init__(self, region_name: str, availability_zone: str):
         super().__init__(region_name=region_name, availability_zone=availability_zone)
