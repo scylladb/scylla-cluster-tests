@@ -124,7 +124,7 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.monitorstack.ui import AlternatorDashboard
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3, \
-    save_kallsyms_map, collect_diagnostic_data
+    save_kallsyms_map, collect_diagnostic_data, EvictedScyllaLogCollector
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, \
     LDAP_PORT, DEFAULT_PWD_SUFFIX
 from sdcm.utils.remote_logger import get_system_logging_thread
@@ -3302,6 +3302,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             ))
         if node in self.nodes:
             self.nodes.remove(node)
+        EvictedScyllaLogCollector(node, params=self.params).collect_logs()
         node.destroy()
 
     def get_db_auth(self):
