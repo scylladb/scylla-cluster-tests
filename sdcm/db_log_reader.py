@@ -29,6 +29,11 @@ from sdcm.utils.common import make_threads_be_daemonic_by_default
 
 LOGGER = logging.getLogger(__name__)
 
+# we aren't going to process log line which are bigger than
+# this value, i.e. not event would be generated base on those,
+# but they would still be in the logs
+LOG_LINE_MAX_PROCESSING_SIZE = 1024 * 5
+
 
 class DbLogReader(Process):
     # pylint: disable=too-many-instance-attributes
@@ -91,6 +96,10 @@ class DbLogReader(Process):
             if self._last_log_position:
                 db_file.seek(self._last_log_position)
             for index, line in enumerate(db_file, start=self._last_line_no + 1):
+                if len(line) > LOG_LINE_MAX_PROCESSING_SIZE:
+                    # trim to avoid filling the memory when lot of long line is writen
+                    line = line[:LOG_LINE_MAX_PROCESSING_SIZE]
+
                 # Postpone processing line with no ending in case if half of line is written to the disc
                 if line[-1] == '\n' or self._skipped_end_line > 20:
                     self._skipped_end_line = 0
