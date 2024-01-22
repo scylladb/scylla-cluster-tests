@@ -104,31 +104,37 @@ def ignore_no_space_errors(node):
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.NO_SPACE_ERROR,
             node=node,
+            extra_time_to_expiration=1800,  # 30min
         ))
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.BACKTRACE,
             line="No space left on device",
             node=node,
+            extra_time_to_expiration=1800,  # 30min
         ))
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.DATABASE_ERROR,
             line="No space left on device",
             node=node,
+            extra_time_to_expiration=1800,  # 30min
         ))
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.FILESYSTEM_ERROR,
             line="No space left on device",
             node=node,
+            extra_time_to_expiration=1800,  # 30min
         ))
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.DATABASE_ERROR,
             line="No such file or directory",
             node=node,
+            extra_time_to_expiration=1800,  # 30min
         ))
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.FILESYSTEM_ERROR,
             line="No such file or directory",
             node=node,
+            extra_time_to_expiration=1800,  # 30min
         ))
         yield
 
