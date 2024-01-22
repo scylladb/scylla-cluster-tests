@@ -23,7 +23,7 @@ from typing import Optional
 
 from sdcm.remote.base import CommandRunner
 from sdcm.sct_events.base import LogEvent
-from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping, BACKTRACE_RE
+from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.common import make_threads_be_daemonic_by_default
 
@@ -116,15 +116,8 @@ class DbLogReader(Process):
                     if json_log:
                         continue
 
-                    match = BACKTRACE_RE.search(line)
                     one_line_backtrace = []
-                    if match and backtraces:
-                        data = match.groupdict()
-                        if data['other_bt']:
-                            backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
-                        if data['scylla_bt']:
-                            backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
-                    elif "backtrace:" in line.lower() and "0x" in line:
+                    if "backtrace:" in line.lower() and "0x" in line:
                         # This part handles the backtrases are printed in one line.
                         # Example:
                         # [shard 2] seastar - Exceptional future ignored: exceptions::mutation_write_timeout_exception
