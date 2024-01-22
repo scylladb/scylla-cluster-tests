@@ -2736,7 +2736,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return f'{cqlsh_cmd} {options} -e {command} {host}'
 
     def run_cqlsh(self, cmd, keyspace=None, timeout=120, verbose=True, split=False, connect_timeout=60,
-                  num_retry_on_failure=1):
+                  num_retry_on_failure=1, retry_interval=3):
         """Runs CQL command using cqlsh utility"""
         cmd = self._gen_cqlsh_cmd(command=cmd, keyspace=keyspace, timeout=timeout,
                                   connect_timeout=connect_timeout)
@@ -2749,6 +2749,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 num_retry_on_failure -= 1
                 if not num_retry_on_failure:
                     raise
+                time.sleep(retry_interval)
 
         # stdout of cqlsh example:
         #      pk
