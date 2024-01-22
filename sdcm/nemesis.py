@@ -4929,8 +4929,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.cluster.decommission(new_node, timeout=7200)
 
     def disrupt_disable_binary_gossip_execute_major_compaction(self):
-        def are_gate_closed_messages_raised(log_reader):
-            return bool(list(log_reader))
         with nodetool_context(node=self.target_node, start_command="disablebinary", end_command="enablebinary"):
             self.target_node.run_nodetool("statusbinary")
             self.target_node.run_nodetool("status")
@@ -4943,15 +4941,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.run_nodetool("statusgossip")
         self.target_node.run_nodetool("statusbinary")
         time.sleep(30)
-        gate_closed_log_reader = self.target_node.follow_system_log(patterns=['gate closed'])
-        gate_closed_appearing = bool(wait_for(func=are_gate_closed_messages_raised,
-                                              log_reader=gate_closed_log_reader,
-                                              timeout=100,
-                                              step=5,
-                                              text="Waiting for 'gate closed' exceptions",
-                                              throw_exc=False))
-        assert not gate_closed_appearing, \
-            "After re-enabling binary and gossip, 'gate closed' messages continue to appear"
+        try:
+            self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
+            self.target_node.run_cqlsh(
+                "SELECT * FROM system_schema.keyspaces;", num_retry_on_failure=20, retry_interval=3)
+        except Exception:  # pylint: disable=broad-except
+            # NOTE: restart the target node because it was the remedy for the problems with CQL workability
+            self.log.warning("'%s' node will be restarted to make the CQL work again", self.target_node)
+            self.target_node.restart_scylla_server()
+            raise
 
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
