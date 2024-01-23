@@ -16,6 +16,10 @@ from textwrap import dedent
 from sdcm.remote import shell_script_cmd
 from sdcm.utils.common import get_data_dir_path
 
+CLIENT_KEYFILE = get_data_dir_path('ssl_conf', "client/test.key")
+CLIENT_CERTFILE = get_data_dir_path('ssl_conf', "client/test.crt")
+CLIENT_TRUSTSTORE = get_data_dir_path('ssl_conf', "client/catest.pem")
+
 
 def install_client_certificate(remoter):
     if remoter.run('ls /etc/scylla/ssl_conf', ignore_status=True).ok:
