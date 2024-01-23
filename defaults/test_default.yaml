@@ -172,6 +172,7 @@ k8s_tenants_num: 1
 k8s_scylla_utils_docker_image: ''
 
 scylla_rsyslog_setup: false
+monitoring_send_logs: true
 
 backup_bucket_region: ''  # use the same region as a cluster
 

@@ -1412,6 +1412,9 @@ class SCTConfiguration(dict):
         dict(name="scylla_rsyslog_setup", env="SCT_SCYLLA_RSYSLOG_SETUP", type=boolean,
              help="Configure rsyslog on Scylla nodes to send logs to monitoring nodes"),
 
+        dict(name="monitoring_send_logs", env="SCT_MONITORING_SEND_LOGS", type=boolean,
+             help="Configure syslog-ng on Scylla nodes to send logs to monitoring nodes"),
+
         dict(name="events_limit_in_email", env="SCT_EVENTS_LIMIT_IN_EMAIL", type=int,
              help="Limit number events in email reports"),
 
