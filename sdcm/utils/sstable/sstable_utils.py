@@ -55,7 +55,8 @@ class SstableUtils:
         self.log.debug('Got %s sstables %s', len(selected_sstables), message)
         return selected_sstables
 
-    def is_sstable_encrypted(self, sstables=None) -> list:  # pylint: disable=too-many-branches
+    def check_that_sstables_are_encrypted(self, sstables=None,  # pylint: disable=too-many-branches
+                                          expected_bool_value: bool = True) -> list:
         if not sstables:
             sstables = self.get_sstables()
         if isinstance(sstables, str):
@@ -101,7 +102,8 @@ class SstableUtils:
             #       [shard 0:main] seastar - Exiting on unhandled exception: \
             #       sstables::malformed_sstable_exception \
             #       (/var/.../me-3g9s_1941_4web4236cvthbyawsi-big-TOC.txt: file not found)
-            elif " file not found)" in sstables_res.stderr or "Cannot find file" in sstables_res.stderr:
+            elif (" file not found)" in sstables_res.stderr or "Cannot find file" in sstables_res.stderr
+                    or "No such file or directory" in sstables_res.stderr):
                 self.log.debug("'%s' sstable doesn't exist anymore. Skipping it.", sstable)
             # NOTE: case when
             #       Could not load SSTable: /var/.../me-3g9w_104a_01xg12j55gjivrwtt5-big-Data.db: \
@@ -122,7 +124,15 @@ class SstableUtils:
                 self.log.warning(
                     "Unexpected error reading sstable located at '%s': %s", sstable, sstables_res.stderr)
                 sstables_encrypted_mapping[sstable] = None
-        return list(sstables_encrypted_mapping.values())
+
+        # NOTE: we read sstables in a concurrent environment.
+        #       So, we can get failures trying to read some of them when it gets deleted concurrently...
+        encryption_success_part, encryption_results = 0.79, list(sstables_encrypted_mapping.values())
+        assert encryption_results
+        assert (encryption_results.count(expected_bool_value) / len(encryption_results) >= encryption_success_part), (
+            "Sstables encryption check failed."
+            f" Success part: '{encryption_success_part}'. Expected bool value: '{expected_bool_value}'."
+            f" Encryption results: {encryption_results}")
 
     def count_sstable_tombstones(self, sstable: str) -> int:
         self.db_node.remoter.run(
