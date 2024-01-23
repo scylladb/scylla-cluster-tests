@@ -17,6 +17,7 @@ import queue
 import logging
 import os
 import shutil
+import ssl
 import sys
 import random
 import re
@@ -64,7 +65,8 @@ from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder
 from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificateAttrBuilder
 from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
-from sdcm.provision.helpers.certificate import install_client_certificate, install_encryption_at_rest_files
+from sdcm.provision.helpers.certificate import install_client_certificate, install_encryption_at_rest_files, CLIENT_KEYFILE, \
+    CLIENT_CERTFILE, CLIENT_TRUSTSTORE
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd, RetryableNetworkException
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
@@ -3389,11 +3391,17 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 return node
         return None
 
-    def _create_session(self, node, keyspace, user, password, compression,
-                        # pylint: disable=too-many-arguments, too-many-locals
-                        protocol_version, load_balancing_policy=None,
-                        port=None, ssl_opts=None, node_ips=None, connect_timeout=None,
-                        verbose=True, connection_bundle_file=None):
+    @staticmethod
+    def create_ssl_context(keyfile: str, certfile: str, truststore: str):
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ssl_context.load_cert_chain(certfile=certfile, keyfile=keyfile)
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        ssl_context.load_verify_locations(cafile=truststore)
+        return ssl_context
+
+    def _create_session(self, node, keyspace, user, password, compression, protocol_version, load_balancing_policy=None, port=None,
+                        ssl_context=None, node_ips=None, connect_timeout=None, verbose=True, connection_bundle_file=None):
         if not port:
             port = node.CQL_PORT
 
@@ -3409,10 +3417,12 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         else:
             auth_provider = None
 
-        if ssl_opts is None and self.params.get('client_encrypt'):
-            ssl_opts = {'ca_certs': './data_dir/ssl_conf/client/catest.pem'}
-        self.log.debug(str(ssl_opts))
-        kwargs = dict(contact_points=node_ips, port=port, ssl_options=ssl_opts)
+        if ssl_context is None and self.params.get('client_encrypt'):
+            ssl_context = self.create_ssl_context(
+                keyfile=CLIENT_KEYFILE, certfile=CLIENT_CERTFILE, truststore=CLIENT_TRUSTSTORE)
+        self.log.debug("ssl_context: %s", str(ssl_context))
+
+        kwargs = dict(contact_points=node_ips, port=port, ssl_context=ssl_context)
         if connection_bundle_file:
             kwargs = dict(scylla_cloud=connection_bundle_file)
         cluster_driver = ClusterDriver(auth_provider=auth_provider,
@@ -3438,23 +3448,22 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     def cql_connection(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
                        password=None, compression=True, protocol_version=None,
-                       port=None, ssl_opts=None, connect_timeout=100, verbose=True):
+                       port=None, ssl_context=None, connect_timeout=100, verbose=True):
         if connection_bundle_file := node.parent_cluster.connection_bundle_file:
             wlrr = None
             node_ips = []
         else:
             node_ips = self.get_node_cql_ips()
             wlrr = WhiteListRoundRobinPolicy(node_ips)
-        return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
-                                    compression=compression, protocol_version=protocol_version,
-                                    load_balancing_policy=wlrr, port=port, ssl_opts=ssl_opts, node_ips=node_ips,
-                                    connect_timeout=connect_timeout, verbose=verbose,
+        return self._create_session(node=node, keyspace=keyspace, user=user, password=password, compression=compression,
+                                    protocol_version=protocol_version, load_balancing_policy=wlrr, port=port, ssl_context=ssl_context,
+                                    node_ips=node_ips, connect_timeout=connect_timeout, verbose=verbose,
                                     connection_bundle_file=connection_bundle_file)
 
     def cql_connection_exclusive(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments,too-many-locals
                                  password=None, compression=True,
                                  protocol_version=None, port=None,
-                                 ssl_opts=None, connect_timeout=100, verbose=True):
+                                 ssl_context=None, connect_timeout=100, verbose=True):
         if connection_bundle_file := node.parent_cluster.connection_bundle_file:
             # TODO: handle the case of multiple datacenters
             bundle_yaml = yaml.safe_load(connection_bundle_file.open('r', encoding='utf-8'))
@@ -3470,10 +3479,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         else:
             node_ips = [node.cql_address]
             wlrr = WhiteListRoundRobinPolicy(node_ips)
-        return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
-                                    compression=compression, protocol_version=protocol_version,
-                                    load_balancing_policy=wlrr, port=port, ssl_opts=ssl_opts, node_ips=node_ips,
-                                    connect_timeout=connect_timeout, verbose=verbose,
+        return self._create_session(node=node, keyspace=keyspace, user=user, password=password, compression=compression,
+                                    protocol_version=protocol_version, load_balancing_policy=wlrr, port=port, ssl_context=ssl_context,
+                                    node_ips=node_ips, connect_timeout=connect_timeout, verbose=verbose,
                                     connection_bundle_file=connection_bundle_file)
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
@@ -3481,7 +3489,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                # pylint: disable=too-many-arguments,unused-argument
                                user=None, password=None,
                                compression=True, protocol_version=None,
-                               port=None, ssl_opts=None, connect_timeout=100, verbose=True):
+                               port=None, ssl_context=None, connect_timeout=100, verbose=True):
         """
         Returns a connection after it stops throwing NoHostAvailables.
 
@@ -3497,7 +3505,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                          user=None, password=None,
                                          compression=True,
                                          protocol_version=None,
-                                         port=None, ssl_opts=None, connect_timeout=100, verbose=True):
+                                         port=None, ssl_context=None, connect_timeout=100, verbose=True):
         """
         Returns a connection after it stops throwing NoHostAvailables.
 
