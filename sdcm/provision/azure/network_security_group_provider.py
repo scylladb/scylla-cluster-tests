@@ -24,15 +24,15 @@ from sdcm.utils.azure_utils import AzureService
 LOGGER = logging.getLogger(__name__)
 
 
-def rules_to_payload(rules: Iterable) -> List[Dict[str, Union[str, int]]]:
+def rules_to_payload(rules: Iterable, public_access: bool) -> List[Dict[str, Union[str, int]]]:
     """convert iterable rules to format accepted by provisioner"""
     template = {
         "name": "",
         "protocol": "TCP",
         "source_port_range": "*",
         "destination_port_range": "",
-        "source_address_prefix": "*",
-        "destination_address_prefix": "*",
+        "source_address_prefix": "*" if public_access else "VirtualNetwork",
+        "destination_address_prefix": "*" if public_access else "VirtualNetwork",
         "access": "Allow",
         "priority": 300,
         "direction": "Inbound",
@@ -66,11 +66,11 @@ class NetworkSecurityGroupProvider:
         except ResourceNotFoundError:
             pass
 
-    def get_or_create(self, security_rules: Iterable, name="default") -> NetworkSecurityGroup:
+    def get_or_create(self, security_rules: Iterable, name="default", public_access=False) -> NetworkSecurityGroup:
         """Creates or gets (if already exists) security group"""
         if name in self._cache:
             return self._cache[name]
-        open_ports_rules = rules_to_payload(security_rules)
+        open_ports_rules = rules_to_payload(security_rules, public_access=public_access)
         LOGGER.info(
             "Creating SCT network security group in resource group %s...", self._resource_group_name)
         self._azure_service.network.network_security_groups.begin_create_or_update(

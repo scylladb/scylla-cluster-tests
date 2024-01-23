@@ -37,7 +37,8 @@ class FakeProvisioner(Provisioner):
 
     def get_or_create_instance(self,
                                definition: InstanceDefinition,
-                               pricing_model: PricingModel = PricingModel.SPOT
+                               pricing_model: PricingModel = PricingModel.SPOT,
+                               public_access: bool = False,
                                ) -> VmInstance:
         if v_m := self._instances.get(definition.name):
             return v_m
@@ -55,7 +56,8 @@ class FakeProvisioner(Provisioner):
 
     def get_or_create_instances(self,
                                 definitions: List[InstanceDefinition],
-                                pricing_model: PricingModel = PricingModel.SPOT
+                                pricing_model: PricingModel = PricingModel.SPOT,
+                                public_access: bool = False,
                                 ) -> List[VmInstance]:
         return [self.get_or_create_instance(definition, pricing_model) for definition in definitions]
 
