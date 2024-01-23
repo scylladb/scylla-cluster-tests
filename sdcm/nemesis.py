@@ -4098,9 +4098,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         @retrying(n=4, sleep_time=30, allowed_exceptions=(AssertionError, ))
         def check_encryption_fact(sstable_util_instance, expected_bool_value):
-            encryption_results = sstable_util_instance.is_sstable_encrypted()
-            assert encryption_results
-            assert all(encryption_result is expected_bool_value for encryption_result in encryption_results)
+            sstable_util_instance.check_that_sstables_are_encrypted(expected_bool_value=expected_bool_value)
 
         def run_write_scylla_bench_load(write_cmd):
             # NOTE: 'scylla-bench' runs 'truncate' operation when 'validate-data' is used in addition
