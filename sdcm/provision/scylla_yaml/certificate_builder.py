@@ -10,13 +10,13 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-
+import os
 from functools import cached_property
 from typing import Optional, Any
 
 from pydantic import Field
 
-from sdcm.provision.helpers.certificate import install_client_certificate
+from sdcm.provision.helpers.certificate import install_client_certificate, CLIENT_CERTFILE, CLIENT_KEYFILE, CLIENT_TRUSTSTORE
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, ClientEncryptionOptions, \
     ServerEncryptionOptions
 
@@ -40,9 +40,9 @@ class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
             return None
         return ClientEncryptionOptions(
             enabled=True,
-            certificate=self._ssl_files_path + '/client/test.crt',
-            keyfile=self._ssl_files_path + '/client/test.key',
-            truststore=self._ssl_files_path + '/client/catest.pem',
+            certificate=os.path.join(self._ssl_files_path, 'client', os.path.basename(CLIENT_CERTFILE)),
+            keyfile=os.path.join(self._ssl_files_path, 'client', os.path.basename(CLIENT_KEYFILE)),
+            truststore=os.path.join(self._ssl_files_path, 'client', os.path.basename(CLIENT_TRUSTSTORE)),
         )
 
     @property
