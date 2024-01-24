@@ -269,6 +269,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
     skip_wait_for_gossip_to_settle: int = None  # -1
     force_gossip_generation: int = None  # -1
     experimental_features: list[str] = None  # []
+    tablets_initial_scale_factor: int = None
     lsa_reclamation_step: int = None  # 1
     prometheus_port: int = None  # 9180
     prometheus_address: str = None  # "localhost"
