@@ -552,7 +552,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         #       in each 'minor' family.
         current_newest_version, current_newest_version_str = None, ''
         for version_object in all_versions:
-            if version_object["version"].count('-') not in (0, 3):
+            if version_object["version"].count('-') == 1:
                 continue
             if ComparableScyllaOperatorVersion(version_object["version"]) > (
                     current_newest_version or '0.0.0'):
