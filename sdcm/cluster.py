@@ -4397,8 +4397,18 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     target_node = [node for node in db_cluster.nodes if not node.running_nemesis][0]
                     self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
                     with run_nemesis(node=target_node, nemesis_name="KMS encryption check"):
-                        ks_cf = db_cluster.get_non_system_ks_cf_list(db_node=target_node, filter_out_mv=True)[0]
-                        SstableUtils(db_node=target_node, ks_cf=ks_cf).check_that_sstables_are_encrypted()
+                        ks_cf_list = db_cluster.get_non_system_ks_cf_list(
+                            db_node=target_node, filter_out_table_with_counter=True, filter_out_mv=True,
+                            filter_empty_tables=True)
+                        chosen_ks_cf, chosen_ks_cf_sstables_num = 'keyspace1.standard1', 0
+                        for ks_cf in ks_cf_list:
+                            res = target_node.run_nodetool(
+                                sub_cmd='cfstats', args=ks_cf, timeout=300, retry=3, publish_event=False,
+                                warning_event_on_exception=(Failure, UnexpectedExit, Libssh2_UnexpectedExit))
+                            cf_stats = target_node._parse_cfstats(res.stdout)  # pylint: disable=protected-access
+                            if int(cf_stats["SSTable count"]) > chosen_ks_cf_sstables_num:
+                                chosen_ks_cf, chosen_ks_cf_sstables_num = ks_cf, int(cf_stats["SSTable count"])
+                        SstableUtils(db_node=target_node, ks_cf=chosen_ks_cf).check_that_sstables_are_encrypted()
                 except SstablesNotFound as exc:
                     self.log.warning(f"Couldn't check the fact of encryption (KMS) for sstables: {exc}")
                 except IndexError:
