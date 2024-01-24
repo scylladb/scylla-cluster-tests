@@ -15,6 +15,7 @@ from collections import defaultdict
 from copy import deepcopy
 from dataclasses import asdict
 
+import random
 import logging
 import os
 import re
@@ -961,9 +962,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.run_commit_log_check_thread(self.get_duration(None))
 
     def set_system_auth_rf(self, db_cluster=None):
-
-        if not db_cluster:
-            db_cluster = self.db_cluster
+        db_cluster = db_cluster or self.db_cluster
         # No need to change system tables when running via scylla-cloud
         # Also, when running a Alternator via scylla-cloud, we don't have CQL access to the cluster
         if self.params.get('db_type') == 'cloud_scylla' or self.params.get("cluster_backend") == "baremetal":
@@ -977,21 +976,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.test_config.REUSE_CLUSTER:
             self.log.debug("Skipping change rf of system_auth for reusing cluster")
             return
-        node = self.db_cluster.nodes[0]
+        self.set_ks_strategy_to_network_and_rf_according_to_cluster(keyspace="system_auth", db_cluster=db_cluster)
+
+    def set_ks_strategy_to_network_and_rf_according_to_cluster(self, keyspace, db_cluster=None, repair_after_alter=True):
+        db_cluster = db_cluster or self.db_cluster
+        node = random.choice([node for node in self.db_cluster.nodes if not node.running_nemesis])
         nodes_by_region = self.db_cluster.nodes_by_region()
         dc_by_region = self.db_cluster.get_datacenter_name_per_region(db_cluster.nodes)
         datacenters = {}
         for region in nodes_by_region:
             datacenters.update({dc_by_region[region]: len(nodes_by_region[region])})
         self.log.debug("Number of nodes by datacenter %s", datacenters)
-        NetworkTopologyReplicationStrategy(**datacenters).apply(node, "system_auth")
-        res = node.run_cqlsh('DESC KEYSPACE system_auth',
-                             num_retry_on_failure=3)
-        self.log.debug("system_auth description: %s", res.stdout)
-        self.log.info('repair system_auth keyspace ...')
-        for node in self.db_cluster.nodes:
-            node.run_nodetool(sub_cmd="repair -pr system_auth", timeout=MINUTE_IN_SEC * 20)
-        self.log.info('repair system_auth keyspace done')
+        NetworkTopologyReplicationStrategy(**datacenters).apply(node, keyspace)
+        res = node.run_cqlsh(f'DESC KEYSPACE {keyspace}', num_retry_on_failure=3)
+        self.log.debug("%s description: %s", keyspace, res.stdout)
+        if repair_after_alter:
+            self.log.info('repair %s keyspace ...', keyspace)
+            for node in self.db_cluster.nodes:
+                node.run_nodetool(sub_cmd=f"repair -pr {keyspace}", timeout=MINUTE_IN_SEC * 20)
+            self.log.info('repair %s keyspace done', keyspace)
 
     @cache
     def pre_create_alternator_tables(self):

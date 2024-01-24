@@ -2902,6 +2902,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             with ignore_ycsb_connection_refused():
                 self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
+            self.tester.set_ks_strategy_to_network_and_rf_according_to_cluster(
+                keyspace=chosen_snapshot_info["keyspace_name"], repair_after_alter=False)
 
         restore_task = mgr_cluster.create_restore_task(restore_data=True,
                                                        location_list=location_list,
