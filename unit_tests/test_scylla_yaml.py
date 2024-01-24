@@ -381,6 +381,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'streaming_socket_timeout_in_ms': None,
                 'system_info_encryption': None,
                 'system_key_directory': None,
+                'tablets_initial_scale_factor': None,
                 'thrift_framed_transport_size_in_mb': None,
                 'thrift_max_message_length_in_mb': None,
                 'tombstone_failure_threshold': None,
