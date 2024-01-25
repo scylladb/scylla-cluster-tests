@@ -39,7 +39,8 @@ gce_n_local_ssd_disk_db: 0
 gce_root_disk_type_loader: 'pd-ssd'
 root_disk_size_loader: 50
 gce_instance_type_monitor: 'n2-highmem-16'
-gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts'
+#gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts'
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/5918161085269747628'
 scylla_linux_distro: 'ubuntu-jammy'
 #------
 

@@ -4604,6 +4604,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             if ":" in scylla_repo.rsplit("/", 1)[-1]:
                 scylla_repo, version = scylla_repo.rsplit(":", 1)
             node.install_scylla(scylla_repo=scylla_repo, scylla_version=version)
+        # remove dependency when using scylla ami but installing from repo
+        node.remoter.sudo("sudo rm /etc/systemd/system/scylla-server.service.requires/scylla-image-*", ignore_status=True)
 
     @staticmethod
     def _wait_for_preinstalled_scylla(node):
