@@ -1,0 +1,3 @@
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: ['tablets_phase_1_supported']
+nemesis_add_node_cnt: 1

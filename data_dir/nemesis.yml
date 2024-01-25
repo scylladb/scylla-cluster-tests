@@ -16,6 +16,7 @@
   - run_with_gemini = False
   - limited = True
   - topology_changes = True
+  - tablets_phase_1_supported = False
 - disrupt_add_remove_mv:
   - disruptive = True
   - schema_changes = True
@@ -37,16 +38,19 @@
   - kubernetes = True
   - free_tier_set = True
   - delete_rows = True
+  - tablets_phase_1_supported = False
 - disrupt_delete_by_rows_range:
   - disruptive = False
   - kubernetes = True
   - free_tier_set = True
   - delete_rows = True
+  - tablets_phase_1_supported = False
 - disrupt_delete_overlapping_row_ranges:
   - disruptive = False
   - kubernetes = True
   - free_tier_set = True
   - delete_rows = True
+  - tablets_phase_1_supported = False
 - disrupt_destroy_data_then_rebuild:
   - disruptive = True
   - kubernetes = True
@@ -59,21 +63,27 @@
 - disrupt_disable_enable_ldap_authorization:
   - disruptive = True
   - limited = True
+  - tablets_phase_1_supported = False
 - disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node:
   - disruptive = True
   - kubernetes = True
+  - tablets_phase_1_supported = False
 - disrupt_drain_kubernetes_node_then_replace_scylla_node:
   - disruptive = True
   - kubernetes = True
+  - tablets_phase_1_supported = False
 - disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation:
   - disruptive = True
   - kubernetes = False
+  - tablets_phase_1_supported = False
 - disrupt_enable_disable_table_encryption_aws_kms_provider_without_rotation:
   - disruptive = True
   - kubernetes = False
+  - tablets_phase_1_supported = False
 - disrupt_end_of_quota_nemesis:
   - disruptive = True
   - config_changes = True
+  - tablets_phase_1_supported = False
 - disrupt_grow_shrink_cluster:
   - disruptive = True
   - kubernetes = True
@@ -82,6 +92,7 @@
   - disruptive = True
   - kubernetes = True
   - config_changes = True
+  - tablets_phase_1_supported = False
 - disrupt_hard_reboot_node:
   - disruptive = True
   - kubernetes = True
@@ -93,6 +104,7 @@
 - disrupt_increase_shares_by_attach_another_sl_during_load:
   - disruptive = True
   - sla = True
+  - tablets_phase_1_supported = False
 - disrupt_kill_scylla:
   - disruptive = True
   - kubernetes = True
@@ -100,6 +112,7 @@
 - disrupt_ldap_connection_toggle:
   - disruptive = False
   - limited = True
+  - tablets_phase_1_supported = False
 - disrupt_load_and_stream:
   - disruptive = False
   - run_with_gemini = False
@@ -112,9 +125,11 @@
 - disrupt_maximum_allowed_sls_with_max_shares_during_load:
   - disruptive = False
   - sla = True
+  - tablets_phase_1_supported = False
 - disrupt_memory_stress:
   - disruptive = True
   - free_tier_set = True
+  - tablets_phase_1_supported = False
 - disrupt_mgmt_backup:
   - manager_operation = True
   - disruptive = False
@@ -152,11 +167,13 @@
   - networking = True
   - run_with_gemini = False
   - kubernetes = True
+  - tablets_phase_1_supported = False
 - disrupt_network_random_interruptions:
   - disruptive = True
   - networking = True
   - run_with_gemini = False
   - kubernetes = True
+  - tablets_phase_1_supported = False
 - disrupt_network_reject_inter_node_communication:
   - disruptive = True
   - networking = True
@@ -174,10 +191,12 @@
   - disruptive = True
   - networking = True
   - run_with_gemini = False
+  - tablets_phase_1_supported = False
 - disrupt_no_corrupt_repair:
   - disruptive = False
   - kubernetes = True
   - limited = True
+  - tablets_phase_1_supported = False
 - disrupt_nodetool_cleanup:
   - disruptive = False
   - kubernetes = True
@@ -198,18 +217,22 @@
 - disrupt_nodetool_enospc:
   - disruptive = True
   - kubernetes = True
+  - tablets_phase_1_supported = False
 - disrupt_nodetool_flush_and_reshard_on_kubernetes:
   - disruptive = True
   - kubernetes = True
+  - tablets_phase_1_supported = False
 - disrupt_nodetool_refresh:
   - disruptive = False
   - run_with_gemini = False
   - kubernetes = True
   - limited = True
+  - tablets_phase_1_supported = False
 - disrupt_nodetool_refresh:
   - disruptive = False
   - run_with_gemini = False
   - kubernetes = True
+  - tablets_phase_1_supported = False
 - disrupt_nodetool_seed_decommission:
   - disruptive = True
   - topology_changes = True
@@ -231,9 +254,11 @@
 - disrupt_replace_service_level_using_detach_during_load:
   - disruptive = True
   - sla = True
+  - tablets_phase_1_supported = False
 - disrupt_replace_service_level_using_drop_during_load:
   - disruptive = True
   - sla = True
+  - tablets_phase_1_supported = False
 - disrupt_resetlocalschema:
   - disruptive = False
   - config_changes = True
@@ -243,6 +268,7 @@
   - kubernetes = True
   - topology_changes = True
   - config_changes = True
+  - tablets_phase_1_supported = False
 - disrupt_rolling_config_change_internode_compression:
   - disruptive = True
   - full_cluster_restart = True
@@ -270,9 +296,11 @@
 - disrupt_sla_decrease_shares_during_load:
   - disruptive = False
   - sla = True
+  - tablets_phase_1_supported = False
 - disrupt_sla_increase_shares_during_load:
   - disruptive = False
   - sla = True
+  - tablets_phase_1_supported = False
 - disrupt_snapshot_operations:
   - disruptive = False
   - kubernetes = True
@@ -282,12 +310,14 @@
   - kubernetes = True
   - limited = True
   - free_tier_set = True
+  - tablets_phase_1_supported = False
 - disrupt_start_stop_cleanup_compaction:
   - disruptive = False
 - disrupt_start_stop_major_compaction:
   - disruptive = False
 - disrupt_start_stop_scrub_compaction:
   - disruptive = False
+  - tablets_phase_1_supported = False
 - disrupt_start_stop_validation_compaction:
   - disruptive = False
 - disrupt_stop_start_scylla_server:
@@ -301,6 +331,7 @@
 - disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back:
   - disruptive = True
   - config_changes = True
+  - tablets_phase_1_supported = False
 - disrupt_terminate_and_replace_node:
   - disruptive = True
   - kubernetes = False
@@ -308,19 +339,23 @@
 - disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node:
   - disruptive = True
   - kubernetes = True
+  - tablets_phase_1_supported = False
 - disrupt_terminate_kubernetes_host_then_replace_scylla_node:
   - disruptive = True
   - kubernetes = True
+  - tablets_phase_1_supported = False
 - disrupt_toggle_audit_syslog:
   - disruptive = True
   - schema_changes = True
   - config_changes = True
   - free_tier_set = True
+  - tablets_phase_1_supported = False
 - disrupt_toggle_cdc_feature_properties_on_table:
   - disruptive = False
   - schema_changes = True
   - config_changes = True
   - free_tier_set = True
+  - tablets_phase_1_supported = False
 - disrupt_toggle_table_gc_mode:
   - kubernetes = True
   - disruptive = False
@@ -330,6 +365,7 @@
   - kubernetes = True
   - schema_changes = True
   - free_tier_set = True
+  - tablets_phase_1_supported = False
 - disrupt_truncate:
   - disruptive = False
   - kubernetes = True
@@ -343,3 +379,4 @@
   - disruptive = True
   - kubernetes = True
   - free_tier_set = True
+  - tablets_phase_1_supported = False
