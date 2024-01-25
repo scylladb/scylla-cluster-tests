@@ -1,5 +1,4 @@
 import sys
-import random
 from datetime import datetime
 from logging import getLogger
 from sdcm.send_email import Email
@@ -15,26 +14,9 @@ def notify_by_email(general_report: BaseReport,
                     detailed_report: DetailedReport = None,
                     recipients: list = None,
                     group_str=""):
-
-    def rand(string_to_manipulate):
-        letters = [
-            ['o', '0', '\u022f', '\u1ecd', '\u1ecf', '\u01a1', '\u00f6', '\u00f3', '\u00f2'],
-            ['s', '\u0282'],
-            ['r', '\u0393'],
-            ['e', '\u1eb9', '\u0117', '\u0117', '\u00e9', '\u00e8'],
-            ["g", "\u0121"],
-            ["u", "\u057d", "\u00fc", "\u00fa", "\u00f9"]]
-
-        manipulated_string = string_to_manipulate
-        for charlist in letters:
-            manipulated_string = manipulated_string.replace(charlist[0], random.choice(charlist))
-        return manipulated_string
-
     email_client = Email()
     LOGGER.info("Sending email to '%s'", recipients)
-    subject = f"Cloud resources: {group_str} usage report - {datetime.now()}"
-    random_subject = rand(string_to_manipulate=subject)
-    email_client.send(subject=random_subject,
+    email_client.send(subject=f"Cloud resources: {group_str} usage report - {datetime.now()}",
                       content=general_report.to_html(),
                       recipients=recipients,
                       html=True,
