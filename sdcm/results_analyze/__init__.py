@@ -22,15 +22,19 @@ import re
 
 from datetime import datetime, timedelta
 from typing import Any
+from uuid import UUID
 from sortedcontainers import SortedDict
 
 import jinja2
+from argus.client.base import ArgusClientError
+from argus.backend.plugins.sct.types import PerformanceResultsRequest
 
 from sdcm.es import ES
 from sdcm.test_config import TestConfig
 from sdcm.db_stats import TestStatsMixin
 from sdcm.send_email import Email, BaseEmailReporter
 from sdcm.sct_events import Severity
+from sdcm.utils.argus import get_argus_client
 from sdcm.utils.common import format_timestamp
 from sdcm.utils.es_queries import QueryFilter, PerformanceFilterYCSB, PerformanceFilterScyllaBench, \
     PerformanceFilterCS, CDCQueryFilterCS, LatencyWithNemesisQueryFilter
@@ -176,6 +180,14 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
                 html_file.write(html)
             self.log.info("HTML report saved to '%s'.", html_file_path)
         return html
+
+    def upload_test_results_to_argus(self, test_id: UUID | str, results: PerformanceResultsRequest):
+        # pylint: disable=no-self-use
+        try:
+            client = get_argus_client(test_id)
+            client.submit_performance_results(results)
+        except ArgusClientError:
+            LOGGER.warning("Unable to upload perf results to Argus", exc_info=True)
 
     def send_email(self, subject, content, html=True, files=()):
         if self._email_recipients:
@@ -885,6 +897,23 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         email_data = {'email_body': results,
                       'attachments': (),
                       'template': self._email_template_fp}
+        total_errors = doc.get("_source", {}).get("results", {}).get("stats_total", {}).get("Total errors", 0.0)
+        if not isinstance(total_errors, float):
+            try:
+                total_errors = float(total_errors)
+            except ValueError:
+                total_errors = 0.0
+
+        self.upload_test_results_to_argus(test_id=doc["_source"]["test_details"]["test_id"], results={
+            "test_name": full_test_name,
+            "perf_avg_latency_99th": doc.get("_source", {}).get("results", {}).get("stats_average", {}).get("latency 99th percentile", 0.0),
+            "perf_avg_latency_mean": doc.get("_source", {}).get("results", {}).get("stats_average", {}).get("latency mean", 0.0),
+            "perf_op_rate_average": doc.get("_source", {}).get("results", {}).get("stats_total", {}).get("op rate", 0.0),
+            "perf_op_rate_total": doc.get("_source", {}).get("results", {}).get("stats_total", {}).get("op rate", 0.0),
+            "perf_total_errors": total_errors,
+            "stress_cmd": results["cs_raw_cmd"],
+            "histograms": None
+        })
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
         return True
