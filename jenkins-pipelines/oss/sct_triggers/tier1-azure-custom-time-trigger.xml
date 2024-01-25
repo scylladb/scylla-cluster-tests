@@ -45,7 +45,7 @@ stress_duration=$stress_duration</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../longevity/longevity-1tb-5days-azure-test</projects>
+          <projects>../tier1/longevity-1tb-5days-azure-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
