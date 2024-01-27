@@ -333,6 +333,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self._update_scylla_yaml_on_node(node_to_update=node, updates=scylla_yaml_updates)
             InfoEvent(message='upgrade_node - ended to "update_scylla_yaml"').publish()
         node.forget_scylla_version()
+        node.drop_raft_property()
         InfoEvent(message='upgrade_node - starting to "start_scylla_server"').publish()
         node.start_scylla_server(verify_up_timeout=500)
         InfoEvent(message='upgrade_node - ended to "start_scylla_server"').publish()
@@ -431,6 +432,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if self.params.get('test_upgrade_from_installed_3_1_0'):
             node.remoter.run(
                 r'sudo sed -i -e "s/enable_3_1_0_compatibility_mode:/#enable_3_1_0_compatibility_mode:/g" /etc/scylla/scylla.yaml')
+        node.drop_raft_property()
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
         node.run_scylla_sysconfig_setup()

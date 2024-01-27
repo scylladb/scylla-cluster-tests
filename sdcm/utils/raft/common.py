@@ -38,7 +38,6 @@ def validate_raft_on_nodes(nodes: list["BaseNode"]) -> None:
         LOGGER.error("Node %s has raft status: %s", node.name, node.raft.get_status())
     if not all(nodes_raft_status):
         raise RaftException("Raft is not ready")
-
     LOGGER.debug("Raft is ready!")
 
 

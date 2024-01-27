@@ -271,7 +271,7 @@ def check_group0_tokenring_consistency(group0_members: list[dict[str, str]],
     if not current_node.raft.is_enabled:
         LOGGER.debug("Raft feature is disabled on node %s (host_id=%s)", current_node.name, current_node.host_id)
         return
-    LOGGER.debug("Check group0 and tokenring consistency on node %s (host_id=%s)...",
+    LOGGER.debug("Check group0 and token ring consistency on node %s (host_id=%s)...",
                  current_node.name, current_node.host_id)
     token_ring_node_ids = [member["host_id"] for member in tokenring_members]
     for member in group0_members:
