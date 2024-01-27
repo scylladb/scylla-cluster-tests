@@ -9,9 +9,11 @@ from collections import namedtuple
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events import Severity
+from sdcm.utils.version_utils import ComparableScyllaVersion
 
 
 LOGGER = logging.getLogger(__name__)
+RAFT_DEFAULT_SCYLLA_VERSION = "5.5.0-dev"
 
 
 class Group0MembersNotConsistentWithTokenRingMembersException(Exception):
@@ -108,7 +110,7 @@ class RaftFeatureOperations(Protocol):
         return list(map(self.get_message_waiting_timeout, log_patterns))
 
 
-class Raft(RaftFeatureOperations):
+class RaftFeature(RaftFeatureOperations):
     TOPOLOGY_OPERATION_LOG_PATTERNS: dict[TopologyOperations, Iterable[MessagePosition]] = {
         TopologyOperations.DECOMMISSION: ABORT_DECOMMISSION_LOG_PATTERNS,
         TopologyOperations.BOOTSTRAP: ABORT_BOOTSTRAP_LOG_PATTERNS,
@@ -315,14 +317,17 @@ class NoRaft(RaftFeatureOperations):
         return len(token_ring_ids) == num_of_nodes
 
 
-def get_raft_mode(node) -> Raft | NoRaft:
+def get_raft_mode(node) -> RaftFeature | NoRaft:
+    scylla_version = ComparableScyllaVersion(node.scylla_version)
+    if scylla_version >= RAFT_DEFAULT_SCYLLA_VERSION:
+        return RaftFeature(node)
     with node.remote_scylla_yaml() as scylla_yaml:
         if node.is_kubernetes():
             consistent_cluster_management = scylla_yaml.get('consistent_cluster_management')
         else:
             consistent_cluster_management = scylla_yaml.consistent_cluster_management
         node.log.debug("consistent_cluster_management : %s", consistent_cluster_management)
-        return Raft(node) if consistent_cluster_management else NoRaft(node)
+        return RaftFeature(node) if consistent_cluster_management else NoRaft(node)
 
 
 __all__ = ["get_raft_mode",

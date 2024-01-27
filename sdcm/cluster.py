@@ -662,6 +662,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def raft(self):
         return get_raft_mode(self)
 
+    def drop_raft_property(self):
+        self.__dict__.pop('raft', None)
+
     @staticmethod
     def is_kubernetes() -> bool:
         return False
