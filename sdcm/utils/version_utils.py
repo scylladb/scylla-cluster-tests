@@ -390,7 +390,7 @@ def resolve_latest_repo_symlink(url: str) -> str:
     # pylint: disable=too-many-branches
     base, sep, rest = url.partition(LATEST_SYMLINK_NAME)
     if sep != LATEST_SYMLINK_NAME:
-        LOGGER.info("%s doesn't contain `%s' substring, use URL as is", url, LATEST_SYMLINK_NAME)
+        LOGGER.debug("%s doesn't contain `%s' substring, use URL as is", url, LATEST_SYMLINK_NAME)
         return url
 
     parsed_base_url = urlparse(base)
@@ -445,7 +445,6 @@ def resolve_latest_repo_symlink(url: str) -> str:
             url=url,
             error=f"There is no a sibling directory which contains same repo file (ETag={latest_etag})"
         ).publish_or_dump(default_logger=LOGGER)
-        LOGGER.info("There is no a sibling directory which contains same repo file, use URL %s as is", url)
         return url
 
     if (timestamp, build) != build_list[0]:
@@ -453,10 +452,9 @@ def resolve_latest_repo_symlink(url: str) -> str:
             url=url,
             error=f"{url} doesn't point to the latest repo ({base}{build_list[0][1]}{rest})"
         ).publish_or_dump(default_logger=LOGGER)
-        LOGGER.info("Actual latest build is %s, not %s", build_list[0][1], build)
 
     resolved_url = f"{base}{build}{rest}"
-    LOGGER.info("%s resolved to %s", url, resolved_url)
+    LOGGER.debug("%s resolved to %s", url, resolved_url)
     return resolved_url
 
 
