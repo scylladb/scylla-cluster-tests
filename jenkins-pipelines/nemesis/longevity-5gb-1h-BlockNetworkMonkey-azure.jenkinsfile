@@ -7,6 +7,8 @@ longevityPipeline(
     backend: 'azure',
     region: 'eastus',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/nemesis/longevity-5gb-1h-BlockNetworkMonkey.yaml',
-    ip_ssh_connections: 'public'
+    test_config: """['configurations/nemesis/longevity-5gb-1h-nemesis.yaml', 'configurations/nemesis/BlockNetworkMonkey.yaml', 'configurations/network_config/two_interfaces.yaml']""",
+
+    ip_ssh_connections: "public"
+
 )
