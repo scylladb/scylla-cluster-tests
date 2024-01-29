@@ -301,7 +301,8 @@ def test_add_new_node_and_check_old_nodes_are_cleaned_up(db_cluster):
     for node in db_cluster.nodes:
         for keyspace in db_cluster.nodes[0].run_cqlsh('describe keyspaces').stdout.split():
             log_followers[f"{node.name}--{keyspace}"] = node.follow_system_log(patterns=[
-                f"api - force_keyspace_cleanup: keyspace={keyspace} "])
+                f"api - force_keyspace_cleanup: keyspace={keyspace} ",
+                f"api - Keyspace {keyspace} does not require cleanup"])
 
     def wait_for_cleanup_logs(log_follower_name, log_follower, db_cluster):
         db_rf = len(db_cluster.nodes)
