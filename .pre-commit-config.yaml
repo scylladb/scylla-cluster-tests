@@ -18,7 +18,7 @@ repos:
                 sdcm/k8s_configs/minio/templates/.*|
                 sdcm/k8s_configs/monitoring/prometheus-operator/.*|
                 sdcm/k8s_configs/provisioner/templates/.*|
-                sdcm/k8s_configs/eks/storageclass.yaml
+                sdcm/k8s_configs/eks/storageclass_gp3.yaml
             )$
     -   id: check-added-large-files
         exclude: >
