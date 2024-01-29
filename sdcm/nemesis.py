@@ -3075,6 +3075,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         snapshot_params = nodetool_cmd.split()
         ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node, filter_empty_tables=False)
+        # remove quotes from keyspace or column family, since output of `nodetool listsnapshots` isn't returning them quoted
+        ks_cf = [k_c.replace('"', '') for k_c in ks_cf]
         keyspace_table = []
         if len(snapshot_params) > 1:
             if snapshot_params[1] == "-kc":
