@@ -11,4 +11,6 @@ longevityPipeline(
 
     ip_ssh_connections: "public"
 
+    ip_ssh_connections: "public"
+
 )
