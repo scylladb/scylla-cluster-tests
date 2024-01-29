@@ -52,7 +52,66 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
         fi
 
         if ! grep -P "log {{.*destination\\\\(remote_sct\\\\)" /etc/syslog-ng/syslog-ng.conf; then
-            echo "log {{ source($source_name); destination(remote_sct); }};" >> /etc/syslog-ng/syslog-ng.conf
+            echo "
+        filter filter_sct {{
+            # introduced as part of https://github.com/scylladb/scylla-cluster-tests/pull/3241
+            not message(\\".*workload prioritization - update_service_levels_from_distributed_data: an error occurred while retrieving configuration\\") and
+
+            # see https://github.com/scylladb/scylla-cluster-tests/issues/3705 for reasons
+            not message(\\"cdc - Could not update CDC description table with generation\\") and
+
+            # harmless shutdown message - scylladb/scylladb#11969
+            not message(\\"ldap_connection - Seastar read failed: std::system_error \\(error system:104, read: Connection reset by peer\\)\\") and
+
+            # issue relate to shutdown - decided to ignore in scylladb/scylladb#15672
+            not message(\\".*view update generator not plugged to push updates\\") and
+
+            # TODO: remove below workaround after dropping support for Scylla 2023.1 and 5.2 (see scylladb/scylla#13538)
+            not message(\\"remove failed: Directory not empty\\") and
+
+            # scylladb/scylladb#12972
+            not message(\\"raft - .* failed with: seastar::rpc::remote_verb_error \\(connection is closed\\)\\") and
+
+            # TODO: remove when those issues are solved:
+            # https://github.com/scylladb/scylladb/issues/16206
+            # https://github.com/scylladb/scylladb/issues/16259
+            # https://github.com/scylladb/scylladb/issues/15598
+            not message(\\".*view - Error applying view update.*\\") and
+
+            # The below ldap-connection-reset is dependent on https://github.com/scylladb/scylla-enterprise/issues/2710
+            not message(\\".*ldap_connection - Seastar read failed: std::system_error \\(error system:104, recv: Connection reset by peer\\).*\\") and
+
+            # This scylla WARNING includes "exception" word and reported as ERROR. To prevent it I add the subevent below and locate
+            # it before DATABASE_ERROR. Message example:
+            # storage_proxy - Failed to apply mutation from 10.0.2.108#8: exceptions::mutation_write_timeout_exception
+            # (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.)
+            not message(\\"\\(mutation_write_|Operation timed out for system.paxos|Operation failed for system.paxos\\)\\") and
+
+            # scylladb/scylladb#10011
+            not message(\\"\\(unknown verb exception|unknown_verb_error\\)\\") and
+
+            # scylladb/scylla-enterprise#2552
+            not message(\\"Operation timed out for system_distributed.service_levels\\") and
+
+            # scylladb/scylladb#9656
+            not message(\\"exception \\\\"gate closed\\\\" in no_wait handler ignored\\") and
+
+            # all those are of unknown origin, i.e. no scylla issues for those:
+            not message(\\"cql_server - exception while processing connection:\\") and
+            not message(\\"semaphore_timed_out\\") and
+            not message(\\"scylla-server.service.*State .stop-sigterm. timed out\\") and
+            not message(\\"cql_server - exception while processing connection: seastar::nested_exception \\(seastar::nested_exception\\)$\\") and
+            not message(\\"compaction_stopped_exception\\") and
+            not message(\\"rpc - client .*\\(connection dropped|fail to connect\\)\\") and
+            not message(\\"Rate-limit: supressed\\") and
+            not message(\\"Rate-limit: suppressed\\") and
+
+            # storage_proxy warning we dont care about
+            not message(\\".*storage_proxy.*abort_requested_exception\\");
+        }};
+            " >> /etc/syslog-ng/syslog-ng.conf
+
+            echo "log {{ source($source_name); filter(filter_sct); destination(remote_sct); }};" >> /etc/syslog-ng/syslog-ng.conf
         fi
 
         if [ ! -z "{hostname}" ]; then

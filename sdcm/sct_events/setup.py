@@ -22,9 +22,9 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import Severity
 from sdcm.sct_events.event_handler import start_events_handler
 from sdcm.sct_events.grafana import start_grafana_pipeline
-from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
-from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressLogEvent
+from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.file_logger import start_events_logger
 from sdcm.sct_events.events_device import start_events_main_device
 from sdcm.sct_events.events_analyzer import start_events_analyzer
@@ -91,36 +91,12 @@ def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unu
 
     # Default filters.
 
-    # https://github.com/scylladb/scylla-enterprise/issues/1272
-    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                regex=r'.*workload prioritization - update_service_levels_from_distributed_data: an '
-                                      r'error occurred while retrieving configuration').publish()
-
-    # https://github.com/scylladb/scylla-enterprise/issues/2710
-    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                event_class=DatabaseLogEvent.DATABASE_ERROR,
-                                regex='ldap_connection - Seastar read failed: std::system_error '
-                                '(error system:104, read: Connection reset by peer)').publish()
-
-    # scylladb/scylladb#15672
-    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                regex='.*view update generator not plugged to push updates').publish()
-
-    # cause of issue https://github.com/scylladb/scylla-cluster-tests/issues/6119
-    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                regex=r'.*sidecar/controller.go.*std::runtime_error '
-                                      r'\(Operation decommission is in progress, try again\)').publish()
-
-    # TODO: remove when those issues are solved:
-    # https://github.com/scylladb/scylladb/issues/16206
-    # https://github.com/scylladb/scylladb/issues/16259
-    # https://github.com/scylladb/scylladb/issues/15598
-    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                event_class=DatabaseLogEvent,
-                                regex=r".*view - Error applying view update.*").publish()
+    if sct_config.get('cluster_backend').startswith("k8s"):
+        # cause of issue https://github.com/scylladb/scylla-cluster-tests/issues/6119
+        EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                    event_class=DatabaseLogEvent.RUNTIME_ERROR,
+                                    regex=r'.*sidecar/controller.go.*std::runtime_error '
+                                          r'\(Operation decommission is in progress, try again\)').publish()
 
     # By default audit is disabled in 20223.1 by https://github.com/scylladb/scylla-enterprise/pull/3094.
     # But it won't be disabled in 2022.1 and 2022.2.
@@ -130,10 +106,6 @@ def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unu
     EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                 event_class=CassandraStressLogEvent.ConsistencyError,
                                 regex=r".*Authentication error on host.*Cannot achieve consistency level for cl ONE").publish()
-
-    DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
-    DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
-    DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line='abort_requested_exception').publish()
 
 
 __all__ = ("start_events_device", "stop_events_device", "enable_default_filters")

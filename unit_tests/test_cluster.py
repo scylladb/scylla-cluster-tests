@@ -172,21 +172,6 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             events = [line for line in events_file if 'Powering Off' in line]
             assert events
 
-    def test_search_system_suppressed_messages(self):
-        self.node.system_log = os.path.join(os.path.dirname(
-            __file__), 'test_data', 'system_suppressed_messages.log')
-
-        self._read_and_publish_events()
-
-        with self.get_raw_events_log().open() as events_file:
-            events = [json.loads(line) for line in events_file]
-
-            event_a = events[-1]
-            print(event_a)
-
-            assert event_a["type"] == "SUPPRESSED_MESSAGES", 'Not expected event type {}'.format(event_a["type"])
-            assert event_a["line_number"] == 6, 'Not expected event line number {}'.format(event_a["line_number"])
-
     def test_search_one_line_backtraces(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_one_line_backtrace.log')
 
@@ -203,40 +188,6 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             assert event_backtrace1["raw_backtrace"]
             assert event_backtrace2["type"] == "BACKTRACE"
             assert event_backtrace2["raw_backtrace"]
-
-    def test_gate_closed_ignored_exception_is_catched(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'gate_closed_ignored_exception.log')
-
-        self._read_and_publish_events()
-
-        with self.get_raw_events_log().open() as events_file:
-            events = [json.loads(line) for line in events_file]
-
-            event_backtrace1, event_backtrace2 = events[-2], events[-1]
-            print(event_backtrace1)
-            print(event_backtrace2)
-
-            assert event_backtrace1["type"] == "GATE_CLOSED"
-            assert event_backtrace1["line_number"] == 1
-            assert event_backtrace2["type"] == "GATE_CLOSED"
-            assert event_backtrace2["line_number"] == 3
-
-    def test_compaction_stopped_exception_is_catched(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'compaction_stopped_exception.log')
-
-        self._read_and_publish_events()
-
-        with self.get_raw_events_log().open() as events_file:
-            events = [json.loads(line) for line in events_file]
-
-            event_backtrace1, event_backtrace2 = events[-3], events[-2]
-            print(event_backtrace1)
-            print(event_backtrace2)
-
-            assert event_backtrace1["type"] == "COMPACTION_STOPPED"
-            assert event_backtrace1["line_number"] == 0
-            assert event_backtrace2["type"] == "COMPACTION_STOPPED"
-            assert event_backtrace2["line_number"] == 1
 
     def test_appending_to_log(self):
         logs = """

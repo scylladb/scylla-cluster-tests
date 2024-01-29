@@ -29,7 +29,7 @@ from sdcm.utils.decorators import timeout
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CoreDumpEvent, TestFrameworkEvent, SoftTimeoutEvent
 from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
-from sdcm.sct_events.loaders import YcsbStressEvent, CassandraStressLogEvent
+from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.file_logger import get_logger_event_summary
@@ -402,68 +402,6 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
 
         self.assertIn("this is not filtered", log_content)
         self.assertNotIn("this is filtered", log_content)
-
-    def test_default_filters(self):
-        with self.wait_for_n_events(self.get_events_logger(), count=5):
-            DatabaseLogEvent.BACKTRACE() \
-                .add_info(node="A",
-                          line_number=22,
-                          line="Jul 01 03:37:31 ip-10-0-127-151.eu-west-1.compute.internal"
-                               " scylla[6026]:Rate-limit: supressed 4294967292 backtraces on shard 5") \
-                .publish()
-            DatabaseLogEvent.BACKTRACE() \
-                .add_info(node="A", line_number=22, line="other back trace that shouldn't be filtered") \
-                .publish()
-            DatabaseLogEvent.RUNTIME_ERROR() \
-                .add_info(node="A",
-                          line_number=22,
-                          line="!ERR | scylla[5969]: [shard 1:stat] storage_proxy - exception during mutation write to "
-                               "10.12.0.219: std::runtime_error (view update generator not plugged to push updates)") \
-                .publish()
-
-            DatabaseLogEvent.RUNTIME_ERROR() \
-                .add_info(node="A",
-                          line_number=22,
-                          line="E1126 06:51:09.025977       1 sidecar/controller.go:143] syncing key "
-                               "'scylla/sct-cluster-eu-north-1-rack-1-1-0' failed: [can't sync the HostID "
-                               "annotation: local host ID \"877e1a6f-1a41-41d0-9331-88223cae86e8\" not found in IP "
-                               "to hostID mapping: map[172.20.14.11:c1895157-9b21-458d-b135-2f94ca1a5c9f "
-                               "172.20.169.200:fe04409c-7077-4faf-a9bc-3fada4deea1d "
-                               "172.20.171.188:ee21eb2f-8ffe-4017-9c84-ee88de98b5ac], "
-                               "can't decommision a node: can't decommission the node: "
-                               "agent [HTTP 500] std::runtime_error (Operation decommission is in progress, try again)]") \
-                .publish()
-
-            DatabaseLogEvent.DATABASE_ERROR().add_info(
-                node="A",
-                line_number=22,
-                line="ERROR 2023-12-18 12:45:25,673 [shard 5] view - Error applying view update to 172.20.196.153 "
-                     "(view: keyspace1.standard1_c4_nemesis_index, base token: 3003228260188484921, view token: "
-                     "-268424650415671818): data_dictionary::no_such_column_family (Can't find a column family with "
-                     "UUID 277dc241-9da2-11ee-a7ab-9c797a34c82c)"
-            ).publish()
-
-            CassandraStressLogEvent.ConsistencyError().add_info(
-                node="A",
-                line_number=22,
-                line="ERROR 18:04:32,556 Authentication error on host rolling-upgrade--ubuntu-focal-db-node-24508405-0-3"
-                     ".c.sct-project-1.internal/10.142.1.155:9042: Cannot achieve consistency level for cl ONE. Requires 1, alive 0",
-            ).publish()
-
-        log_content = self.get_event_log_file("events.log")
-
-        self.assertIn("other back trace", log_content)
-        self.assertNotIn("supressed", log_content)
-
-        warnings_log_content = self.get_event_log_file("warning.log")
-        assert 'std::runtime_error' in warnings_log_content
-        assert 'data_dictionary::no_such_column_family' in warnings_log_content
-        assert 'Authentication error' in warnings_log_content
-
-        error_log_content = self.get_event_log_file("error.log")
-        assert 'RUNTIME_ERROR' not in error_log_content
-        assert 'data_dictionary::no_such_column_family' not in error_log_content
-        assert 'Authentication error' not in error_log_content
 
     def test_failed_stall_during_filter(self):
         with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):
