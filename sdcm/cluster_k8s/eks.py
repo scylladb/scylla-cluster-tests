@@ -329,7 +329,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
     IS_NODE_TUNING_SUPPORTED = True
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/eks/scylla-node-prepare.yaml")
     NODE_CONFIG_CRD_FILE = sct_abs_path("sdcm/k8s_configs/eks/node-config-crd.yaml")
-    STORAGE_CLASS_FILE = sct_abs_path("sdcm/k8s_configs/eks/storageclass.yaml")
+    STORAGE_CLASS_FILE = sct_abs_path("sdcm/k8s_configs/eks/storageclass_gp3.yaml")
     pools: Dict[str, EksNodePool]
     short_cluster_name: str
 
@@ -461,11 +461,13 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         self.log.info("Create storage class")
         self.create_ebs_storge_class()
 
-    def create_ebs_storge_class(self):
-        if self.params.get('k8s_scylla_disk_class') in SUPPORTED_EBS_STORAGE_CLASSES:
+    def create_ebs_storge_class(self, storage_class_backend="gp3"):
+        if storage_class_backend in SUPPORTED_EBS_STORAGE_CLASSES:
             tags_specification = "\n".join(
                 [f'  tagSpecification_{i}: "{k}={v}"' for i, (k, v) in enumerate(self.tags.items(), start=1)])
             self.apply_file(self.STORAGE_CLASS_FILE, environ=dict(EXTRA_TAG_SPEC=tags_specification))
+        else:
+            raise NotImplementedError(f"'{storage_class_backend}' storage class backend is not supported")
 
     @property
     def ebs_csi_driver_info(self) -> dict:

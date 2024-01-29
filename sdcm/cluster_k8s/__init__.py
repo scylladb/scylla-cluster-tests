@@ -626,6 +626,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 self.POOL_LABEL_NAME, pool_name) if pool_name else {}
             values = HelmValues(**helm_affinity)
             values.set("controllerAffinity", helm_affinity.get("affinity", {}))
+            storage_config = {"capacity": "10Gi"}
+            if self.cluster_backend == "k8s-eks":
+                storage_config["storageClassName"] = "gp3-3k-iops"
             values.set("scylla", {
                 "developerMode": True,
                 "datacenter": "manager-dc",
@@ -635,7 +638,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                     "name": "manager-rack",
                     "members": 1,
                     "placement": helm_affinity["affinity"],
-                    "storage": {"capacity": "10Gi"},
+                    "storage": storage_config,
                     "resources": {
                         "limits": {"cpu": 1, "memory": "200Mi"},
                         "requests": {"cpu": 1, "memory": "200Mi"},

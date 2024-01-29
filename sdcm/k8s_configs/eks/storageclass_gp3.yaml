@@ -1,0 +1,32 @@
+# NOTE: AWS EBS GP3 disks have limitation to the 'IOPS / vol size' proportion.
+#       Setting maximum supported 16k IOPS we limit the disk size to be 32Gb at minimum.
+#       In K8S functional tests we create smaller volumes than 32Gb.
+#       So, create second storage class using less IOPS to satisfy that need.
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3-16k-iops
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+parameters:
+  csi.storage.k8s.io/fstype: ext4
+  type: gp3
+  iops: '16000'
+$EXTRA_TAG_SPEC
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+  name: gp3-3k-iops
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+parameters:
+  csi.storage.k8s.io/fstype: ext4
+  type: gp3
+  iops: '3000'
+$EXTRA_TAG_SPEC
