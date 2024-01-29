@@ -1377,13 +1377,17 @@ def create_operator_test_release_jobs(branch, username, password, sct_branch, sc
 
 @cli.command("create-nemesis-pipelines")
 @click.option("--base-job", default=None, type=str)
-@click.option("--backend", default="aws", type=str)
-def create_nemesis_pipelines(base_job: str, backend: str):
-    gen = NemesisJobGenerator(base_job=base_job, backend=backend)
-
-    gen.render_base_job_config()
-    gen.create_test_cases_from_template()
-    gen.create_job_files_from_template()
+@click.option("--backend", default=NemesisJobGenerator.BACKEND_TO_REGION.keys(), multiple=True)
+def create_nemesis_pipelines(base_job: str, backend: list[str]):
+    for backend_name in backend:
+        if backend_name not in NemesisJobGenerator.BACKEND_TO_REGION.keys():
+            LOGGER.warning("## Unsupported backend: %s", backend_name)
+            continue
+        LOGGER.info("## Generating jobs for backend %s", backend_name)
+        gen = NemesisJobGenerator(base_job=base_job, backend=backend_name)
+        gen.render_base_job_config()
+        gen.create_test_cases_from_template()
+        gen.create_job_files_from_template()
 
 
 @cli.command('create-test-release-jobs', help="Create pipeline jobs for a new branch")
