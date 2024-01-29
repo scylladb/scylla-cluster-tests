@@ -7,6 +7,6 @@ longevityPipeline(
     backend: 'azure',
     region: 'eastus',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/nemesis/longevity-5gb-1h-PauseLdapNemesis.yaml", "configurations/ldap-authorization.yaml"]'''
+    test_config: """['configurations/nemesis/longevity-5gb-1h-nemesis.yaml', 'configurations/nemesis/PauseLdapNemesis.yaml', 'configurations/ldap-authorization.yaml']"""
 
 )
