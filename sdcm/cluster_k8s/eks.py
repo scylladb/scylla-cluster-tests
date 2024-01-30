@@ -159,7 +159,7 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
 # pylint: disable=too-many-instance-attributes
 class EksNodePool(CloudK8sNodePool):
     k8s_cluster: 'EksCluster'
-    disk_type: Literal["standard", "io1", "io2", "gp2", "sc1", "st1"]
+    disk_type: Literal["standard", "io1", "io2", "gp2", "gp3", "sc1", "st1"]
 
     # pylint: disable=too-many-arguments,too-many-locals
     def __init__(
@@ -177,7 +177,7 @@ class EksNodePool(CloudK8sNodePool):
             provision_type: Literal['ON_DEMAND', 'SPOT'] = 'ON_DEMAND',
             launch_template: str = None,
             image_type: Literal['AL2_x86_64', 'AL2_x86_64_GPU', 'AL2_ARM_64'] = None,
-            disk_type: Literal["standard", "io1", "io2", "gp2", "sc1", "st1"] = None,
+            disk_type: Literal["standard", "io1", "io2", "gp2", "gp3", "sc1", "st1"] = "gp3",
             k8s_version: str = None,
             is_deployed: bool = False,
             user_data: str = None,
@@ -214,29 +214,25 @@ class EksNodePool(CloudK8sNodePool):
 
     @property
     def is_launch_template_required(self) -> bool:
-        return bool(self.user_data)
+        # NOTE: use launch template to be able to specify the `gp3` disk type by default
+        return True
 
     @property
     def _launch_template_cfg(self) -> dict:
-        block_devices = []
+        root_ebs_block_device_params = {
+            "DeleteOnTermination": True,
+            "Encrypted": False,
+            "VolumeType": self.disk_type,
+        }
         if self.disk_size:
-            root_disk_def = LaunchTemplateBlockDeviceMappingRequestTypeDef(
-                DeviceName='/dev/xvda',
-                Ebs=LaunchTemplateEbsBlockDeviceRequestTypeDef(
-                    DeleteOnTermination=True,
-                    Encrypted=False,
-                    VolumeSize=self.disk_size,
-                    VolumeType=self.disk_type
-                ))
-            block_devices.append(root_disk_def)
+            root_ebs_block_device_params["VolumeSize"] = self.disk_size
+        root_disk_def = LaunchTemplateBlockDeviceMappingRequestTypeDef(
+            DeviceName="/dev/xvda",
+            Ebs=LaunchTemplateEbsBlockDeviceRequestTypeDef(**root_ebs_block_device_params))
         launch_template = RequestLaunchTemplateDataTypeDef(
             KeyName=self.ssh_key_pair_name,
             EbsOptimized=False,
-            BlockDeviceMappings=block_devices,
-            NetworkInterfaces=[{
-                "DeviceIndex": 0,
-                "SubnetId": self.ec2_subnet_ids[0],
-            }],
+            BlockDeviceMappings=[root_disk_def],
         )
         if self.user_data:
             launch_template['UserData'] = base64.b64encode(self.user_data.encode('utf-8')).decode("ascii")
