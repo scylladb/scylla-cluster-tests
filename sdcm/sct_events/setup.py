@@ -131,6 +131,16 @@ def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unu
                                 event_class=CassandraStressLogEvent.ConsistencyError,
                                 regex=r".*Authentication error on host.*Cannot achieve consistency level for cl ONE").publish()
 
+    if sct_config.get('new_scylla_repo') or sct_config.get('new_version'):
+        # scylladb/scylla-enterprise#3814
+        # scylladb/scylla-enterprise#3092
+        # skip audit related issue when upgrading from older versions it's default in
+        # TODO: remove when branch 2022.2 is deprecated
+        EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                    event_class=DatabaseLogEvent.DATABASE_ERROR,
+                                    regex=r".*audit - Unexpected exception when writing login.*"
+                                          r"Cannot achieve consistency level for cl ONE").publish()
+
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line='abort_requested_exception').publish()
