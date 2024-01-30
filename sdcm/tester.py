@@ -1690,10 +1690,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 node_pool_name=self.k8s_clusters[0].SCYLLA_POOL_NAME,
                 add_nodes=False,
             ))
-            if self.params.get('use_mgmt'):
+            if self.params.get('use_mgmt') and i == 0:
                 for k8s_cluster in self.k8s_clusters:
-                    k8s_cluster.create_iamserviceaccount_for_s3_access(
-                        namespace=self.db_clusters_multitenant[i].namespace)
+                    k8s_cluster.create_iamserviceaccount_for_s3_access()
         self.db_cluster = self.db_clusters_multitenant[0]
 
         if self.params.get("n_loaders"):
