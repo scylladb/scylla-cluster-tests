@@ -552,10 +552,10 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
     def get_ec2_instance_by_id(self, instance_id):
         return boto3.resource('ec2', region_name=self.region_name).Instance(id=instance_id)
 
-    def create_iamserviceaccount_for_s3_access(self, namespace: str = SCYLLA_NAMESPACE):
+    def create_iamserviceaccount_for_s3_access(self):
         tags = ",".join([f"{key}={value}" for key, value in self.tags.items()])
         LOCALRUNNER.run(
-            f'eksctl create iamserviceaccount --name {self.k8s_scylla_cluster_name}-member --namespace {namespace}'
+            f'eksctl create iamserviceaccount --name {self.short_cluster_name} --namespace kube-system'
             f' --cluster {self.short_cluster_name}'
             f' --attach-policy-arn arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Restore'
             f' --approve --role-name EKS_S3-{self.short_cluster_name} --region {self.region_name}'
