@@ -105,41 +105,27 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         self.stop_test_on_failure = stop_test_on_failure
         self.compaction_strategy = compaction_strategy
 
-    def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):  # pylint: disable=too-many-branches,too-many-locals
-        stress_cmd = self.stress_cmd
-
+    @staticmethod
+    def append_no_warmup_to_cmd(stress_cmd):
         if "no-warmup" not in stress_cmd:
             # add no-warmup to stress_cmd if it's not there. See issue #5767
             stress_cmd = re.sub(r'(cassandra-stress [\w]+)', r'\1 no-warmup', stress_cmd)
+        return stress_cmd
 
-        # When using cassandra-stress with "user profile" the profile yaml should be provided
-        if 'profile' in stress_cmd and not self.profile:
-            # support of using -profile in sct test-case yaml, assumes they exists data_dir
-            # TODO: move those profile to their own directory
-            cs_profile, profile = get_profile_content(stress_cmd)
-            keyspace_name = profile['keyspace']
-            self.profile = cs_profile
-            self.keyspace_name = keyspace_name
-
+    def adjust_cmd_keyspace_name(self, stress_cmd, keyspace_idx):
         if self.keyspace_name:
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(self.keyspace_name))
         elif 'keyspace=' not in stress_cmd:  # if keyspace is defined in the command respect that
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace{} ".format(keyspace_idx))
+        return stress_cmd
 
+    def adjust_cmd_compaction_strategy(self, stress_cmd):
         if self.compaction_strategy and "compaction(" not in stress_cmd:
             stress_cmd = stress_cmd.replace(" -schema ", f" -schema 'compaction(strategy={self.compaction_strategy})' ")
+        return stress_cmd
 
-        credentials = self.loader_set.get_db_auth()
-        if credentials and 'user=' not in stress_cmd:
-            # put the credentials into the right place into -mode section
-            stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*credentials), stress_cmd)
-        if self.client_encrypt and 'transport' not in stress_cmd:
-            stress_cmd += \
-                " -transport 'truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra'"
-
-        if (connection_bundle_file := self.node_list[0].parent_cluster.connection_bundle_file) and '-node' not in stress_cmd:
-            stress_cmd += f" -cloudconf file={Path('/tmp') / connection_bundle_file.name}"
-        elif self.node_list and '-node' not in stress_cmd:
+    def adjust_cmd_node_option(self, stress_cmd, loader, cmd_runner):
+        if self.node_list and '-node' not in stress_cmd:
             stress_cmd += " -node "
             if self.loader_set.test_config.MULTI_REGION:
                 # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
@@ -163,6 +149,42 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             node_ip_list = [n.cql_address for n in node_list]
 
             stress_cmd += ",".join(node_ip_list)
+        return stress_cmd
+
+    def adjust_cmd_connection_options(self, stress_cmd: str, loader, cmd_runner) -> str:
+        if (connection_bundle_file := self.node_list[0].parent_cluster.connection_bundle_file) and '-node' not in stress_cmd:
+            stress_cmd += f" -cloudconf file={Path('/tmp') / connection_bundle_file.name}"
+        else:
+            stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
+        return stress_cmd
+
+    def create_stress_cmd(self, cmd_runner, keyspace_idx, loader):  # pylint: disable=too-many-branches
+        stress_cmd = self.stress_cmd
+
+        stress_cmd = self.append_no_warmup_to_cmd(stress_cmd)
+
+        # When using cassandra-stress with "user profile" the profile yaml should be provided
+        if 'profile' in stress_cmd and not self.profile:
+            # support of using -profile in sct test-case yaml, assumes they exists data_dir
+            # TODO: move those profile to their own directory
+            cs_profile, profile = get_profile_content(stress_cmd)
+            keyspace_name = profile['keyspace']
+            self.profile = cs_profile
+            self.keyspace_name = keyspace_name
+
+        stress_cmd = self.adjust_cmd_keyspace_name(stress_cmd, keyspace_idx)
+        stress_cmd = self.adjust_cmd_compaction_strategy(stress_cmd)
+
+        credentials = self.loader_set.get_db_auth()
+        if credentials and 'user=' not in stress_cmd:
+            # put the credentials into the right place into -mode section
+            stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*credentials), stress_cmd)
+        if self.client_encrypt and 'transport' not in stress_cmd:
+            stress_cmd += \
+                " -transport 'truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra'"
+
+        stress_cmd = self.adjust_cmd_connection_options(stress_cmd, loader, cmd_runner)
+
         if 'skip-unsupported-columns' in self._get_available_suboptions(cmd_runner, '-errors'):
             stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns'])
         return stress_cmd
