@@ -559,8 +559,8 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
     def create_iamserviceaccount_for_s3_access(self):
         tags = ",".join([f"{key}={value}" for key, value in self.tags.items()])
         LOCALRUNNER.run(
-            f'eksctl create iamserviceaccount --name {self.short_cluster_name} --namespace kube-system'
-            f' --cluster {self.short_cluster_name}'
+            f'eksctl create iamserviceaccount --name s3-sa-for-{self.short_cluster_name.lower()}'
+            f' --namespace kube-system --cluster {self.short_cluster_name}'
             f' --attach-policy-arn arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Restore'
             f' --approve --role-name EKS_S3-{self.short_cluster_name} --region {self.region_name}'
             f' --tags {tags} --override-existing-serviceaccounts')
