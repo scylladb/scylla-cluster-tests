@@ -128,6 +128,8 @@ class CommitLogCheckThread:
     # Prometheus API limit: check_interval/discreteness must be less then 11000
     check_interval = 10 * 60
     discreteness = 1
+    # scylla_commitlog_disk_total_bytes can exceed the limit during/after replay. For a short bit.
+    exceed_time_interval = 60
 
     def __init__(self, custer_tester, test_duration, termination_event=None, thread_name: str = ""):
         self.log = logging.getLogger(self.__class__.__name__)
@@ -176,13 +178,33 @@ class CommitLogCheckThread:
                 message=f"CommitLogCheckThread failed: {exc.__repr__()} with traceback {trace}").publish()
         self.log.debug("CommitLogCheckThread finished")
 
+    @staticmethod
+    def get_commit_log_directory_max_exceed_time(prometheus_response):
+        # get max time diff from response per shard(line in response)
+        # response example:
+        # [{'metric': {'__name__': 'scylla_commitlog_disk_total_bytes',
+        #              'instance': '10.0.0.6', 'job': 'scylla', 'shard': '0'},
+        #              'values': [[1706415723.153, '54324629504'],  [1706415743.153, '54324629504']]},
+        #  {'metric': {'__name__': 'scylla_commitlog_disk_total_bytes',
+        #             'instance': '10.0.0.7', 'job': 'scylla', 'shard': '1'},
+        #             'values': [[1706415724.153, '54324629504'], [1706415725.153, '54324629504']]}
+        # ]
+        exceed_time_list = []
+        for line in prometheus_response:
+            time_list = [item[0] for item in line["values"]]
+            time_list.sort()
+            exceed_time_list.append(time_list[-1] - time_list[0])
+        exceed_time_list.sort()
+        return exceed_time_list[-1]
+
     def overflow_commit_log_directory_checker(self, start_time, end_time):
         response = self.prometheus.query(
             self.prometheus_queries.overflow_commit_log_directory, start_time, end_time, self.discreteness)
         self.log.debug("overflow_commit_log_directory: %s", response)
-        if response:
+        if response and self.get_commit_log_directory_max_exceed_time(response) > self.exceed_time_interval:
             CommitLogCheckErrorEvent(
-                message=f"commit log directory exceed the limit. Prometheus response: {response}").publish()
+                message=f"commit log directory exceed the limit longer that expected."
+                        f" Prometheus response: {response}").publish()
 
     def zero_free_segments_checker(self, start_time, end_time):
         response = self.prometheus.query(
