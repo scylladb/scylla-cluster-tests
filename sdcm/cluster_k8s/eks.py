@@ -281,10 +281,16 @@ class EksNodePool(CloudK8sNodePool):
         self.k8s_cluster.log.info("Deploy %s node pool with %d node(s)", self.name, self.num_nodes)
         if self.is_launch_template_required:
             self.k8s_cluster.log.info("Deploy launch template %s", self.launch_template_name)
-            self.k8s_cluster.ec2_client.create_launch_template(
-                LaunchTemplateName=self.launch_template_name,
-                LaunchTemplateData=self._launch_template_cfg,
-            )
+            create_launch_template_args = {
+                "LaunchTemplateName": self.launch_template_name,
+                "LaunchTemplateData": self._launch_template_cfg,
+            }
+            if self.tags:
+                create_launch_template_args["TagSpecifications"] = [LaunchTemplateTagSpecificationRequestTypeDef(
+                    ResourceType="launch-template",
+                    Tags=tags_as_ec2_tags(self.tags),
+                )]
+            self.k8s_cluster.ec2_client.create_launch_template(**create_launch_template_args)
         self.k8s_cluster.eks_client.create_nodegroup(**self._node_group_cfg)
         self.is_deployed = True
 
