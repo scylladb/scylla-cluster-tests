@@ -607,6 +607,7 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):  # pylint: dis
         return
     if cluster_backend in ('k8s-eks', ''):
         clean_clusters_eks(tags_dict, regions=aws_regions, dry_run=dry_run)
+        clean_launch_templates_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_load_balancers_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_cloudformation_stacks_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
     if cluster_backend in ('k8s-gke', ''):
@@ -1191,6 +1192,80 @@ def clean_cloudformation_stacks_aws(tags_dict, regions=None, dry_run=False):
                     LOGGER.debug("Done. Result: %s\n", response)
                 except Exception as ex:  # pylint: disable=broad-except
                     LOGGER.debug("Failed with: %s", str(ex))
+
+
+def list_launch_templates_aws(tags_dict=None, regions=None, verbose=False):
+    """
+    List all launch templates with specific tags.
+
+    :param tags_dict: key-value pairs used for resource filtering
+    :param regions: list of the AWS regions to consider
+    :param verbose: if True will log progress information
+
+    :return: launch templates dict where region is a key
+    """
+    launch_templates, aws_regions = {}, regions or all_aws_regions()
+
+    def get_launch_templates(region):
+        if verbose:
+            LOGGER.info("Going to list AWS region '%s'", region)
+        time.sleep(random.random())
+        ec2_client = boto3.client("ec2", region_name=region)
+        paginator = ec2_client.get_paginator("describe_launch_templates")
+        tags_filters = [{"Name": f"tag:{k}", "Values": [v]} for k, v in tags_dict.items() if k != "NodeType"]
+        launch_templates[region] = []
+        for page in paginator.paginate(Filters=tags_filters):
+            if current_launch_templates := page["LaunchTemplates"]:
+                launch_templates[region].extend(current_launch_templates)
+        if verbose:
+            LOGGER.info("%s: done [%s/%s]", region, len(launch_templates), len(aws_regions))
+
+    ParallelObject(aws_regions, timeout=120, num_workers=len(aws_regions)).run(
+        get_launch_templates, ignore_exceptions=False)
+
+    if verbose:
+        total_items = sum([len(value) for value in launch_templates.values()])
+        LOGGER.info("Found total of %s launch templates.", total_items)
+    return launch_templates
+
+
+def clean_launch_templates_aws(tags_dict, regions=None, dry_run=False):
+    """
+    Remove all VM launch templates with specific tags.
+
+    :param tags_dict: key-value pairs used for filtering
+    :param regions: list of the AWS regions to consider
+    :param dry_run: if True, wouldn't delete any resource
+    :return: None
+    """
+
+    assert tags_dict, "Can't cleanup launch templates because 'tags_dict' was not provided."
+
+    lts_per_region = list_launch_templates_aws(tags_dict=tags_dict, regions=regions)
+    for region_name, lt_list in lts_per_region.items():
+        if not lt_list:
+            LOGGER.info("There are no LaunchTemplates to remove in AWS region %s", region_name)
+            continue
+        ec2_client = boto3.client("ec2", region_name=region_name)
+        for current_lt in lt_list:
+            current_lt_name = current_lt.get("LaunchTemplateName")
+            current_lt_id = current_lt.get("LaunchTemplateId")
+            LOGGER.info(
+                "Going to delete LaunchTemplate, ID: '%s', Name: '%s'",
+                current_lt_id, current_lt_name)
+            if dry_run:
+                continue
+            try:
+                if current_lt_name:
+                    deletion_args = {"LaunchTemplateName": current_lt_name}
+                else:
+                    deletion_args = {"LaunchTemplateId": current_lt_id}
+                response = ec2_client.delete_launch_template(**deletion_args)
+                LOGGER.info(
+                    "Successfully deleted '%s' LaunchTemplate. Response: %s\n",
+                    (current_lt_name or current_lt_id), response)
+            except Exception as ex:  # pylint: disable=broad-except
+                LOGGER.info("Failed to delete the '%s' LaunchTemplate: %s", deletion_args, str(ex))
 
 
 def get_all_gce_regions():
