@@ -5,6 +5,7 @@ from contextlib import ContextDecorator
 from typing import Callable, Dict
 
 from sdcm.cluster import BaseNode
+from sdcm.utils.cql_utils import cql_quote_if_needed
 
 
 class ReplicationStrategy:  # pylint: disable=too-few-public-methods
@@ -25,7 +26,7 @@ class ReplicationStrategy:  # pylint: disable=too-few-public-methods
         return ReplicationStrategy.from_string(create_ks_statement)
 
     def apply(self, node: BaseNode, keyspace: str):
-        cql = f"ALTER KEYSPACE {keyspace} WITH replication = {self}"
+        cql = f'ALTER KEYSPACE {cql_quote_if_needed(keyspace)} WITH replication = {self}'
         with node.parent_cluster.cql_connection_patient(node) as session:
             session.execute(cql)
 
