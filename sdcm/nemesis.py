@@ -2888,7 +2888,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.info("Restoring the keyspace %s", chosen_snapshot_info["keyspace_name"])
         location_list = [f"{self.cluster.params.get('backup_bucket_backend')}:{target_bucket}"]
-        test_keyspaces = self.cluster.get_test_keyspaces()
+        test_keyspaces = [keyspace.replace('"', '') for keyspace in self.cluster.get_test_keyspaces()]
+        # Keyspace names that start with a digit are surrounded by quotation marks in the output of a describe query
         if chosen_snapshot_info["keyspace_name"] not in test_keyspaces:
             self.log.info("Restoring the schema of the keyspace '%s'",
                           chosen_snapshot_info["keyspace_name"])
