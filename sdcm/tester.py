@@ -72,6 +72,7 @@ from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import format_timestamp, wait_ami_available, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, rows_to_list, \
     make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, change_default_password
+from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
@@ -987,7 +988,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             datacenters.update({dc_by_region[region]: len(nodes_by_region[region])})
         self.log.debug("Number of nodes by datacenter %s", datacenters)
         NetworkTopologyReplicationStrategy(**datacenters).apply(node, keyspace)
-        res = node.run_cqlsh(f'DESC KEYSPACE {keyspace}', num_retry_on_failure=3)
+        res = node.run_cqlsh(f'DESC KEYSPACE {cql_quote_if_needed(keyspace)}', num_retry_on_failure=3)
         self.log.debug("%s description: %s", keyspace, res.stdout)
         if repair_after_alter:
             self.log.info('repair %s keyspace ...', keyspace)
