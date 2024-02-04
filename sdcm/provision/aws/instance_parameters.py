@@ -10,11 +10,15 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+from __future__ import annotations
 
 import base64
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from pydantic.typing import AbstractSetIntStr, DictStrAny, MappingIntStrAny
 
 from sdcm.provision.common.provisioner import InstanceParamsBase
 
@@ -73,15 +77,15 @@ class AWSInstanceParams(InstanceParamsBase):
     def dict(
         self,
         *,
-        include: 'AbstractSetIntStr | MappingIntStrAny' = None,
-        exclude: 'AbstractSetIntStr | MappingIntStrAny' = None,
+        include: AbstractSetIntStr | MappingIntStrAny = None,
+        exclude: AbstractSetIntStr | MappingIntStrAny = None,
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_unset: bool = False,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
         encode_user_data: bool = False
-    ) -> 'DictStrAny':
+    ) -> DictStrAny:
         dict_data = super().dict(
             include=include,
             exclude=exclude,

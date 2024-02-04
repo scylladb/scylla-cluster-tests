@@ -10,12 +10,17 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+from __future__ import annotations
+
 import logging
 from difflib import unified_diff
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import yaml
-from pydantic import BaseModel, Extra, validator  # pylint: disable=no-name-in-module
+from pydantic import BaseModel, Extra, validator
+
+if TYPE_CHECKING:
+    from pydantic.typing import AbstractSetIntStr, DictStrAny, MappingIntStrAny
 
 from sdcm.provision.scylla_yaml.auxiliaries import (
     ClientEncryptionOptions,
@@ -349,15 +354,15 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     def dict(  # pylint: disable=arguments-differ
         self,
         *,
-        include: 'MappingIntStrAny | AbstractSetIntStr' = None,
-        exclude: 'MappingIntStrAny | AbstractSetIntStr' = None,
+        include: MappingIntStrAny | AbstractSetIntStr = None,
+        exclude: MappingIntStrAny | AbstractSetIntStr = None,
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
         exclude_unset: bool = False,
-        explicit: 'AbstractSetIntStr | MappingIntStrAny' = None,
-    ) -> 'DictStrAny':
+        explicit: AbstractSetIntStr | MappingIntStrAny = None,
+    ) -> DictStrAny:
         to_dict = super().dict(
             include=include, exclude=exclude, by_alias=by_alias, skip_defaults=skip_defaults,
             exclude_unset=exclude_unset, exclude_defaults=exclude_defaults, exclude_none=exclude_none)
@@ -378,7 +383,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
                     attr_value = attr_info.type(**attr_value)  # noqa: PLW2901
             setattr(self, attr_name, attr_value)
 
-    def update(self, *objects: 'ScyllaYaml | dict'):
+    def update(self, *objects: ScyllaYaml | dict):
         """
         Do the same as dict.update, with one exception.
         It ignores whatever key if it's value equal to default
@@ -397,7 +402,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
                 raise ValueError("Only dict or ScyllaYaml is accepted")
         return self
 
-    def diff(self, other: 'ScyllaYaml') -> str:
+    def diff(self, other: ScyllaYaml) -> str:
         self_str = yaml.safe_dump(self.dict(
             exclude_defaults=True, exclude_unset=True, exclude_none=True)).splitlines(keepends=True)
         other_str = yaml.safe_dump(other.dict(

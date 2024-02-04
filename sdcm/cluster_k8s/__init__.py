@@ -54,7 +54,7 @@ from kubernetes.dynamic.resource import (
 
 import sdcm.utils.sstable.load_inventory as datasets
 from sdcm import cluster, sct_abs_path
-from sdcm.cluster import ClusterNodesNotReady, DeadNode
+from sdcm.cluster import ClusterNodesNotReady
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
 from sdcm.coredump import CoredumpExportFileThread
 from sdcm.db_stats import PrometheusDBStats
@@ -2230,7 +2230,7 @@ class LoaderPodContainer(BasePodContainer):
     def node_type(self) -> str:
         return 'loader'
 
-    def __init__(self, name: str, parent_cluster: PodCluster,
+    def __init__(self, name: str, parent_cluster: 'PodCluster',
                  node_prefix: str = "node", node_index: int = 1,
                  base_logdir: str | None = None, dc_idx: int = 0, rack=0):
         self.loader_cluster_name = parent_cluster.loader_cluster_name

@@ -10,6 +10,8 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+from __future__ import annotations
+
 import base64
 import os
 import pprint
@@ -159,13 +161,13 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
 
 # pylint: disable=too-many-instance-attributes
 class EksNodePool(CloudK8sNodePool):
-    k8s_cluster: 'EksCluster'
+    k8s_cluster: EksCluster
     disk_type: Literal["standard", "io1", "io2", "gp2", "gp3", "sc1", "st1"]
 
     # pylint: disable=too-many-arguments,too-many-locals
     def __init__(  # noqa: PLR0913
             self,
-            k8s_cluster: 'EksCluster',
+            k8s_cluster: EksCluster,
             name: str,
             num_nodes: int,
             disk_size: int,
@@ -717,7 +719,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
 
 
 class EksScyllaPodContainer(BaseScyllaPodContainer):
-    parent_cluster: 'EksScyllaPodCluster'
+    parent_cluster: EksScyllaPodCluster
 
     pod_readiness_delay = 30  # seconds
     pod_readiness_timeout = 30  # minutes

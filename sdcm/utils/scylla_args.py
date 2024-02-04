@@ -15,7 +15,7 @@ import argparse
 import logging
 import re
 from collections.abc import Callable
-from typing import NoReturn, Text
+from typing import NoReturn
 
 # Regexp for parsing arguments from the output of `scylla --help' command:
 # $ scylla --help

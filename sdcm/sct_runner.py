@@ -11,7 +11,8 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-#pylint: disable=too-many-lines
+
+# pylint: disable=too-many-lines
 from __future__ import annotations
 
 import datetime

@@ -10,10 +10,12 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2023 ScyllaDB
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from cassandra.util import (  # pylint: disable=no-name-in-module
     datetime_from_uuid1,
@@ -22,6 +24,9 @@ from cassandra.util import (  # pylint: disable=no-name-in-module
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseCluster
 
 LOGGER = logging.getLogger(__name__)
 AuditStore = Literal["none", "table", "syslog"]
@@ -175,7 +180,7 @@ class SyslogAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-me
 class Audit:
     """Manage audit state and query audit log on Scylla cluster."""
 
-    def __init__(self, cluster: "BaseCluster"):
+    def __init__(self, cluster: BaseCluster):
         self._cluster = cluster
         self._configuration = self._get_audit_configuration()
 

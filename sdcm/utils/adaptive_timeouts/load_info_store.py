@@ -10,6 +10,8 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2023 ScyllaDB
+from __future__ import annotations
+
 import logging
 import re
 import time
@@ -17,7 +19,7 @@ import uuid
 from collections import defaultdict
 from datetime import datetime
 from functools import cached_property
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 from cachetools import TTLCache, cached
@@ -27,6 +29,9 @@ from sdcm.remote import RemoteCmdRunner
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying
 from sdcm.utils.metaclasses import Singleton
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger(__name__)
 
@@ -258,7 +263,7 @@ class NodeLoadInfoServices(metaclass=Singleton):  # pylint: disable=too-few-publ
     def __init__(self):
         self._services: dict[str, NodeLoadInfoService] = {}
 
-    def get(self, node: "BaseNode") -> NodeLoadInfoService:
+    def get(self, node: BaseNode) -> NodeLoadInfoService:
         if node not in self._services:
             self._services[node.name] = NodeLoadInfoService(node.remoter, node.name, node.scylla_version_detailed)
         if self._services[node.name].remoter != node.remoter:

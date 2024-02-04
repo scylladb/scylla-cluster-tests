@@ -23,7 +23,6 @@ from invoke import Result
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.adaptive_timeouts.load_info_store import AdaptiveTimeoutStore
-from unit_tests.lib.fake_remoter import FakeRemoter
 from unit_tests.test_cluster import DummyDbCluster
 
 LOGGER = logging.getLogger(__name__)

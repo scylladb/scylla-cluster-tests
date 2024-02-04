@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+from __future__ import annotations
 
 import json
 import os
@@ -20,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 from threading import Event, Thread
+from typing import TYPE_CHECKING
 
 from sdcm.log import SDCMAdapter
 from sdcm.remote import NETWORK_EXCEPTIONS
@@ -28,12 +30,15 @@ from sdcm.sct_events.system import CoreDumpEvent
 from sdcm.utils.decorators import timeout
 from sdcm.utils.version_utils import get_systemd_version
 
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
+
 
 # pylint: disable=too-many-instance-attributes
 @dataclass
 class CoreDumpInfo:
     pid: str
-    node: 'BaseNode' = None
+    node: BaseNode = None
     corefile: str = ''
     source_timestamp: float | None = None
     coredump_info: str = ''
@@ -57,9 +62,8 @@ class CoreDumpInfo:
             return f'CoreDump[{self.pid}, {self.corefile}]'
         return f'CoreDump[{self.pid}]'
 
-    # pylint: disable=too-many-arguments
     def update(self,
-               node: 'BaseNode' = None,
+               node: BaseNode = None,
                corefile: str = None,
                source_timestamp: float | None = None,
                coredump_info: str = None,
@@ -88,7 +92,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
     upload_retry_limit = 3
     max_coredump_thread_exceptions = 10
 
-    def __init__(self, node: 'BaseNode', max_core_upload_limit: int):
+    def __init__(self, node: BaseNode, max_core_upload_limit: int):
         self.node = node
         self.log = SDCMAdapter(node.log, extra={"prefix": self.__class__.__name__})
         self.max_core_upload_limit = max_core_upload_limit
@@ -456,7 +460,7 @@ class CoredumpExportFileThread(CoredumpThreadBase):
     """
     checkup_time_core_to_complete = 1
 
-    def __init__(self, node: 'BaseNode', max_core_upload_limit: int, coredump_directories: list[str]):
+    def __init__(self, node: BaseNode, max_core_upload_limit: int, coredump_directories: list[str]):
         self.coredumps_directories = coredump_directories
         super().__init__(node=node, max_core_upload_limit=max_core_upload_limit)
 

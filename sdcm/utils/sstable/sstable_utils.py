@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import datetime
 import json
 import logging
 import random
+from typing import TYPE_CHECKING
 
 from sdcm.exceptions import SstablesNotFound
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.utils.version_utils import ComparableScyllaVersion
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 
 class NonDeletedTombstonesFound(Exception):
@@ -19,8 +25,7 @@ class SstableUtils:
 
     """
 
-    # pylint: disable=too-many-instance-attributes
-    def __init__(self, propagation_delay_in_seconds: int = 0, ks_cf: str = None, db_node: 'BaseNode' = None,
+    def __init__(self, propagation_delay_in_seconds: int = 0, ks_cf: str = None, db_node: BaseNode = None,
                  **kwargs):
         self.db_node = db_node
         self.db_cluster = self.db_node.parent_cluster if self.db_node else None

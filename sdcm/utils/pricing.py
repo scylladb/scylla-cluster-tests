@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timedelta
-from functools import cache, lru_cache
+from functools import cache
 from logging import getLogger
 
 import boto3

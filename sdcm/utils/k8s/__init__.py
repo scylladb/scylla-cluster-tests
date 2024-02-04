@@ -10,8 +10,8 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+from __future__ import annotations
 
-# pylint: disable=too-many-arguments,too-many-lines
 import abc
 import contextlib
 import json
@@ -22,6 +22,7 @@ import queue
 import re
 import threading
 import time
+import typing
 from collections.abc import Callable, Iterator
 from functools import cached_property, partialmethod
 from pathlib import Path
@@ -45,6 +46,9 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.docker_utils import Container, ContainerManager
 from sdcm.wait import wait_for
+
+if typing.TYPE_CHECKING:
+    from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 
 KUBECTL_BIN = "kubectl"
 HELM_IMAGE = "alpine/helm:3.8.0"
@@ -75,19 +79,19 @@ logging.getLogger("kubernetes.client.rest").setLevel(logging.INFO)
 
 
 class ApiLimiterClient(k8s.client.ApiClient):
-    _api_rate_limiter: 'ApiCallRateLimiter' = None
+    _api_rate_limiter: ApiCallRateLimiter = None
 
     def call_api(self, *args, **kwargs):  # pylint: disable=signature-differs
         if self._api_rate_limiter:
             self._api_rate_limiter.wait()
         return super().call_api(*args, **kwargs)
 
-    def bind_api_limiter(self, instance: 'ApiCallRateLimiter'):
+    def bind_api_limiter(self, instance: ApiCallRateLimiter):
         self._api_rate_limiter = instance
 
 
 class ApiLimiterRetry(Retry):
-    _api_rate_limiter: 'ApiCallRateLimiter' = None
+    _api_rate_limiter: ApiCallRateLimiter = None
 
     def sleep(self, *args, **kwargs):  # pylint: disable=signature-differs
         super().sleep(*args, **kwargs)
@@ -100,7 +104,7 @@ class ApiLimiterRetry(Retry):
             ApiLimiterRetry.bind_api_limiter(result, self._api_rate_limiter)
         return result
 
-    def bind_api_limiter(self, instance: 'ApiCallRateLimiter'):
+    def bind_api_limiter(self, instance: ApiCallRateLimiter):
         self._api_rate_limiter = instance
 
 
@@ -300,7 +304,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
 
     @classmethod
     def kubectl(cls, kluster, *command, namespace: str | None = None, timeout: int = KUBECTL_TIMEOUT,
-                remoter: 'KubernetesCmdRunner | None' = None, ignore_status: bool = False, verbose: bool = True):
+                remoter: KubernetesCmdRunner | None = None, ignore_status: bool = False, verbose: bool = True):
         cmd = cls.kubectl_cmd(kluster, *command, namespace=namespace, ignore_k8s_server_url=bool(remoter))
         if remoter is None:
             remoter = LOCALRUNNER
@@ -308,7 +312,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
 
     @classmethod
     def kubectl_multi_cmd(cls, kluster, *command, namespace: str | None = None, timeout: int = KUBECTL_TIMEOUT,
-                          remoter: 'KubernetesCmdRunner | None' = None, ignore_status: bool = False,
+                          remoter: KubernetesCmdRunner | None = None, ignore_status: bool = False,
                           verbose: bool = True):
         total_command = ' '.join(command)
         final_command = []
@@ -688,7 +692,7 @@ class HelmContainerMixin:
     def _helm_container(self) -> Container:
         return ContainerManager.run_container(self, "helm")
 
-    def helm(self, kluster, *command: str, namespace: str | None = None, values: 'HelmValues' = None, prepend_command=None) -> str:  # pylint: disable=no-self-use
+    def helm(self, kluster, *command: str, namespace: str | None = None, values: HelmValues = None, prepend_command=None) -> str:  # pylint: disable=no-self-use
         cmd = [
             f"HELM_CONFIG_HOME={kluster.helm_dir_path}",
             "helm",
@@ -734,7 +738,7 @@ class HelmContainerMixin:
                                  version: str = "",
                                  use_devel: bool = False,
                                  debug: bool = True,
-                                 values: 'HelmValues' = None,
+                                 values: HelmValues = None,
                                  namespace: str | None = None,
                                  atomic: bool = False,
                                  timeout: str | None = None) -> str:
@@ -1262,7 +1266,7 @@ class HelmValues:
     def as_dict(self):
         return self._data
 
-    def __eq__(self, other: 'HelmValues | dict'):
+    def __eq__(self, other: HelmValues | dict):
         if isinstance(other, HelmValues):
             return self._data == other._data
         return self._data == other

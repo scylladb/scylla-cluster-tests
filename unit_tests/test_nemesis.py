@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 import pytest
 
-import sdcm.utils.cloud_monitor  # pylint: disable=unused-import # import only to avoid cyclic dependency
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_docker import ScyllaDockerCluster

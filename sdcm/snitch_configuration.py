@@ -10,14 +10,19 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2023 ScyllaDB
+from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 
 class SnitchConfig:  # pylint: disable=too-few-public-methods
     """Keeps all cassandra-rackdc.properties settings and function to apply them"""
 
-    def __init__(self, node: "sdcm.cluster.BaseNode", datacenters: list[str]):
+    def __init__(self, node: BaseNode, datacenters: list[str]):
         self._node = node
         self._is_multi_dc = len(datacenters) > 1
         self._rack = f"RACK{node.rack}"

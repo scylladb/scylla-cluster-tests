@@ -3,7 +3,6 @@ import json
 import logging
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
-from typing import Union
 
 from pydantic import Field
 

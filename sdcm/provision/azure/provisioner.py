@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
+from __future__ import annotations
 
 import logging
 import string
@@ -90,7 +91,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
 
     @classmethod
     def discover_regions(cls, test_id: str = "", regions: list = None,
-                         azure_service: AzureService = AzureService(), **kwargs) -> list["AzureProvisioner"]:
+                         azure_service: AzureService = AzureService(), **kwargs) -> list[AzureProvisioner]:
         # pylint: disable=arguments-differ,unused-argument
         """Discovers provisioners for in each region for given test id.
 

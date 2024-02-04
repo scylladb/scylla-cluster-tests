@@ -10,8 +10,14 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+from __future__ import annotations
 
-from pydantic import BaseModel  # pylint: disable=no-name-in-module
+from typing import TYPE_CHECKING
+
+from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from pydantic.typing import AbstractSetIntStr, DictStrAny, MappingIntStrAny
 
 
 class AttrBuilder(BaseModel):
@@ -30,14 +36,14 @@ class AttrBuilder(BaseModel):
     def dict(
         self,
         *,
-        include: 'MappingIntStrAny | AbstractSetIntStr' = None,
-        exclude: 'MappingIntStrAny | AbstractSetIntStr' = None,
+        include: MappingIntStrAny | AbstractSetIntStr = None,
+        exclude: MappingIntStrAny | AbstractSetIntStr = None,
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_unset: bool = False,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
-    ) -> 'DictStrAny':
+    ) -> DictStrAny:
         """
         Pydantic does not treat properties as fields, so you can't get their values when call dict
         This function is to enable property extraction

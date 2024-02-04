@@ -1,7 +1,7 @@
 import logging
 import time
 from collections.abc import Callable
-from typing import NamedTuple, Optional, Union
+from typing import NamedTuple
 
 from fabric.runners import Result
 

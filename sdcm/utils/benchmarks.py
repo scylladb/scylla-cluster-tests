@@ -10,11 +10,13 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+from __future__ import annotations
+
 import json
 import logging
 import re
 from dataclasses import asdict, dataclass, field
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from sdcm.es import ES
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
@@ -23,6 +25,9 @@ from sdcm.utils.common import ParallelObject
 from sdcm.utils.decorators import retrying
 from sdcm.utils.git import clone_repo
 from sdcm.utils.metaclasses import Singleton
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger(__name__)
 ES_INDEX = "node_benchmarks"
@@ -90,7 +95,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
     """
 
     def __init__(self, global_compare: bool = False):
-        self._nodes: list["BaseNode"] = []
+        self._nodes: list[BaseNode] = []
         self._benchmark_runners: list[ScyllaNodeBenchmarkRunner] = []
         self._es = ES()
         self._comparison = {}
@@ -101,13 +106,13 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
     def comparison(self):
         return self._comparison
 
-    def add_node(self, new_node: "BaseNode"):
+    def add_node(self, new_node: BaseNode):
         if new_node.distro.is_debian_like:
             self._benchmark_runners.append(ScyllaNodeBenchmarkRunner(new_node))
         else:
             LOGGER.debug("Skipped installing benchmarking tools on a non-debian-like distro.")
 
-    def add_nodes(self, nodes: list["BaseNode"]):
+    def add_nodes(self, nodes: list[BaseNode]):
         for node in nodes:
             self.add_node(node)
 
@@ -256,7 +261,7 @@ class ScyllaNodeBenchmarkRunner:
     tools on given cluster nodes and collects the output.
     """
 
-    def __init__(self, node: "BaseNode"):
+    def __init__(self, node: BaseNode):
         self._node = node
         self._remoter: RemoteCmdRunnerBase = node.remoter
         self.node_instance_type = self._get_db_node_instance_type()

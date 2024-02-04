@@ -1,14 +1,18 @@
+from __future__ import annotations
+
 import contextlib
 import logging
 import random
-from collections import namedtuple
 from collections.abc import Iterable, Mapping
 from enum import Enum
-from typing import NamedTuple, Protocol
+from typing import TYPE_CHECKING, NamedTuple, Protocol
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger(__name__)
 
@@ -67,7 +71,7 @@ ABORT_BOOTSTRAP_LOG_PATTERNS: Iterable[MessagePosition] = [
 
 
 class RaftFeatureOperations(Protocol):
-    _node: "BaseNode"
+    _node: BaseNode
     TOPOLOGY_OPERATION_LOG_PATTERNS: dict[TopologyOperations, Iterable[MessagePosition]]
 
     @property
@@ -113,7 +117,7 @@ class Raft(RaftFeatureOperations):
         TopologyOperations.BOOTSTRAP: ABORT_BOOTSTRAP_LOG_PATTERNS,
     }
 
-    def __init__(self, node: "BaseNode") -> None:
+    def __init__(self, node: BaseNode) -> None:
         super().__init__()
         self._node = node
 
@@ -275,7 +279,7 @@ class NoRaft(RaftFeatureOperations):
         ]
     }
 
-    def __init__(self, node: "BaseNode") -> None:
+    def __init__(self, node: BaseNode) -> None:
         super().__init__()
         self._node = node
 

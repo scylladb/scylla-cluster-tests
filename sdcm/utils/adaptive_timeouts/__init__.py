@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import logging
 import time
 from contextlib import contextmanager
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sdcm.sct_events.system import SoftTimeoutEvent
 from sdcm.utils.adaptive_timeouts.load_info_store import (
@@ -11,6 +13,9 @@ from sdcm.utils.adaptive_timeouts.load_info_store import (
     NodeLoadInfoService,
     NodeLoadInfoServices,
 )
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger(__name__)
 
@@ -80,14 +85,14 @@ class Operations(Enum):
 
 class TestInfoServices:  # pylint: disable=too-few-public-methods
     @staticmethod
-    def get(node: "BaseNode") -> dict:
+    def get(node: BaseNode) -> dict:
         return dict(
             n_db_nodes=len(node.parent_cluster.nodes),
         )
 
 
 @contextmanager
-def adaptive_timeout(operation: Operations, node: "BaseNode", stats_storage: AdaptiveTimeoutStore = ESAdaptiveTimeoutStore(), **kwargs):
+def adaptive_timeout(operation: Operations, node: BaseNode, stats_storage: AdaptiveTimeoutStore = ESAdaptiveTimeoutStore(), **kwargs):
     """
     Calculate timeout in seconds for given operation based on node load info and return its value.
     Upon exit, verify if timeout occurred and publish SoftTimeoutEvent if happened.
