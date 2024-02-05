@@ -556,14 +556,14 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
     def get_ec2_instance_by_id(self, instance_id):
         return boto3.resource('ec2', region_name=self.region_name).Instance(id=instance_id)
 
-    def create_iamserviceaccount_for_s3_access(self):
+    def create_iamserviceaccount_for_s3_access(self, db_cluster_name: str, namespace: str = SCYLLA_NAMESPACE):
         tags = ",".join([f"{key}={value}" for key, value in self.tags.items()])
         LOCALRUNNER.run(
-            'eksctl create iamserviceaccount --name s3-access-sa'
-            f' --namespace kube-system --cluster {self.short_cluster_name}'
+            f'eksctl create iamserviceaccount --name {db_cluster_name}-member'
+            f' --namespace {namespace} --cluster {self.short_cluster_name}'
             f' --attach-policy-arn arn:aws:iam::aws:policy/AWSBackupServiceRolePolicyForS3Restore'
-            f' --approve --role-name EKS_S3-{self.short_cluster_name} --region {self.region_name}'
-            f' --tags {tags} --override-existing-serviceaccounts')
+            f' --approve --role-name EKS_S3-{self.short_cluster_name}--{db_cluster_name}'
+            f' --region {self.region_name} --tags {tags} --override-existing-serviceaccounts')
 
     def create_scylla_manager_agent_config(self, s3_provider_endpoint: str = None, namespace: str = SCYLLA_NAMESPACE):
         if s3_provider_endpoint:
