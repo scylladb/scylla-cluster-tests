@@ -12,6 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 import abc
+import logging
 from functools import cached_property
 from typing import Union, List, Optional, Tuple
 
@@ -23,7 +24,9 @@ from sdcm.provision.aws.instance_parameters_builder import AWSInstanceParamsBuil
 from sdcm.provision.common.user_data import UserDataBuilderBase
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.aws_utils import ec2_ami_get_root_device_name, get_ec2_network_configuration
+from sdcm.utils.aws_utils import ec2_ami_get_root_device_name, EC2NetworkConfiguration
+
+LOGGER = logging.getLogger(__name__)
 
 
 class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMeta):
@@ -67,10 +70,9 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
 
     @property
     def NetworkInterfaces(self) -> List[dict]:  # pylint: disable=invalid-name
-        output = [{'DeviceIndex': 0, **self._network_interface_params}]
-        # TODO: handle case when more then 1 additional interface should be added
-        if network_interfaces_count(self.params) > 1:
-            output.append({'DeviceIndex': 1, **self._network_interface_params})
+        output = []
+        for index in range(network_interfaces_count(self.params)):
+            output.append({'DeviceIndex': index, **self._network_interface_params(interface_index=index)})
         return output
 
     @property
@@ -115,11 +117,10 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
 
     @cached_property
     def _ec2_network_configuration(self) -> Tuple[List[str], List[List[str]]]:
-        return get_ec2_network_configuration(
-            regions=self.params.region_names,
-            availability_zones=self._availability_zones,
-            params=self.params
-        )
+        ec2_network_configuration = EC2NetworkConfiguration(regions=self.params.region_names,
+                                                            availability_zones=self._availability_zones,
+                                                            params=self.params)
+        return ec2_network_configuration.security_groups, ec2_network_configuration.subnets
 
     @cached_property
     def _ec2_subnet_ids(self) -> List[str]:
@@ -129,10 +130,11 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     def _ec2_security_group_ids(self) -> List[str]:
         return self._ec2_network_configuration[0]
 
-    @property
-    def _network_interface_params(self):
+    def _network_interface_params(self, interface_index: int = 0):
+        LOGGER.info("_network_interface_params: %s. region_id: %s. availability_zone: %s", self._ec2_subnet_ids,
+                    self.region_id, self.availability_zone)
         return {
-            'SubnetId': self._ec2_subnet_ids[self.region_id][self.availability_zone],  # pylint: disable=invalid-sequence-index
+            'SubnetId': self._ec2_subnet_ids[self.region_id][self.availability_zone + interface_index],  # pylint: disable=invalid-sequence-index
             'Groups': self._ec2_security_group_ids[self.region_id],  # pylint: disable=invalid-sequence-index
         }
 

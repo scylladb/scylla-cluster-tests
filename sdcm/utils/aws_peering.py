@@ -23,9 +23,10 @@ LOG = logging.getLogger(__name__)
 
 
 class AwsVpcPeering:
-    def __init__(self, regions=None):
+    def __init__(self, regions=None, subnets=1):
         regions = regions or all_aws_regions(cached=True)
-        self.regions = [AwsRegion(r) for r in regions]
+        self.subnets_per_az = subnets
+        self.regions = [AwsRegion(r, subnets) for r in regions]
 
     @staticmethod
     def peering_connection(origin_region, target_region):
@@ -69,21 +70,21 @@ class AwsVpcPeering:
 
         return origin_vpx, target_vpx
 
-    @staticmethod
-    def configure_route_tables(origin_region, target_region, vpc_peering_id):
-        route_table = origin_region.sct_route_table
-        try:
-            route_table.create_route(DestinationCidrBlock=str(target_region.vpc_ipv4_cidr),
-                                     VpcPeeringConnectionId=vpc_peering_id)
-        except ClientError as ex:
-            if 'already exists' not in str(ex):
-                raise
-        try:
-            route_table.create_route(DestinationIpv6CidrBlock=str(target_region.vpc_ipv6_cidr),
-                                     VpcPeeringConnectionId=vpc_peering_id)
-        except ClientError as ex:
-            if 'already exists' not in str(ex):
-                raise
+    def configure_route_tables(self, origin_region, target_region, vpc_peering_id):
+        for index in range(self.subnets_per_az):
+            route_table = origin_region.sct_route_table(index=index)
+            try:
+                route_table.create_route(DestinationCidrBlock=str(target_region.vpc_ipv4_cidr),
+                                         VpcPeeringConnectionId=vpc_peering_id)
+            except ClientError as ex:
+                if 'already exists' not in str(ex):
+                    raise
+            try:
+                route_table.create_route(DestinationIpv6CidrBlock=str(target_region.vpc_ipv6_cidr),
+                                         VpcPeeringConnectionId=vpc_peering_id)
+            except ClientError as ex:
+                if 'already exists' not in str(ex):
+                    raise
 
     @staticmethod
     def open_security_group(origin_region, target_region):

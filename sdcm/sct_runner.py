@@ -517,7 +517,7 @@ class AwsSctRunner(SctRunner):
             aws_region: AwsRegion = self.aws_region_source
         else:
             aws_region: AwsRegion = self.aws_region
-        subnet = aws_region.sct_subnet(region_az=region_az)
+        subnet = aws_region.sct_subnet(region_az=region_az, subnet_index="0")
         assert subnet, f"No SCT subnet found in the source region. " \
                        f"Use `hydra prepare-regions --cloud-provider aws --region-name {aws_region.region_name}' " \
                        f"to create cloud env!"

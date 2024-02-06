@@ -288,6 +288,7 @@ class LoaderCluster(ClusterBase):
         return AWSInstanceUserDataBuilder(
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
+            aws_additional_interface=True,
         ).to_string()
 
 

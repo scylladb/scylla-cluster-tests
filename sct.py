@@ -1455,13 +1455,15 @@ def create_test_release_jobs_enterprise(branch, username, password, sct_branch, 
 @cli.command("prepare-regions", help="Configure all required resources for SCT runs in selected cloud region")
 @cloud_provider_option
 @click.option("-r", "--regions", type=CloudRegion(), help="Cloud region", multiple=True)
-def prepare_regions(cloud_provider, regions):
+@click.option("-s", "--subnets", required=False, type=int, default=1,
+              help="Number of subnets in each availability zone. It is relevant for AWS only now")
+def prepare_regions(cloud_provider, regions, subnets):
     add_file_logger()
     regions = regions or get_all_regions(cloud_provider)
 
     for region in regions:
         if cloud_provider == "aws":
-            region = AwsRegion(region_name=region)
+            region = AwsRegion(region_name=region, subnets_per_az=subnets)
         elif cloud_provider == "azure":
             region = AzureRegion(region_name=region)
         elif cloud_provider == "gce":
@@ -1474,9 +1476,10 @@ def prepare_regions(cloud_provider, regions):
 @cli.command("configure-aws-peering", help="Configure all required resources for SCT to run in multi-dc")
 @click.option("-r", "--regions", type=CloudRegion(cloud_provider='aws'),
               default=[], help="Cloud regions", multiple=True)
-def configure_aws_peering(regions):
+@click.option("-s", "--subnets", required=False, type=int, default=1, help="Number of subnets in each availability zone")
+def configure_aws_peering(regions, subnets):
     add_file_logger()
-    peering = AwsVpcPeering(regions)
+    peering = AwsVpcPeering(regions, subnets)
     peering.configure()
 
 

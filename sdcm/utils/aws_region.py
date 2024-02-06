@@ -31,13 +31,14 @@ class AwsRegion:
     SCT_VPC_CIDR_TMPL = "10.{}.0.0/16"
     SCT_SECURITY_GROUP_NAME = "SCT-2-sg"
     SCT_TEST_SECURITY_GROUP_NAME_TMPL = "SCT-2-sg-{}"
-    SCT_SUBNET_NAME = "SCT-2-subnet-{availability_zone}"
+    SCT_SUBNET_NAME = "SCT-2-subnet-{availability_zone}{subnet_index}"
     SCT_INTERNET_GATEWAY_NAME = "SCT-2-igw"
-    SCT_ROUTE_TABLE_NAME = "SCT-2-rt"
+    SCT_ROUTE_TABLE_NAME = "SCT-2-rt{index}"
     SCT_KEY_PAIR_NAME = "scylla-qa-ec2"  # TODO: change legacy name to sct-keypair-aws
     SCT_SSH_GROUP_NAME = 'SCT-ssh-sg'
 
-    def __init__(self, region_name):
+    def __init__(self, region_name, subnets_per_az=1):
+
         self.region_name = region_name
         self.client: EC2Client = boto3.client("ec2", region_name=region_name)
         self.resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
@@ -48,6 +49,7 @@ class AwsRegion:
         region_index = all_aws_regions(cached=True).index(self.region_name)
         cidr = ip_network(self.SCT_VPC_CIDR_TMPL.format(region_index))
         self.vpc_ipv4_cidr = cidr
+        self.subnets_per_az = subnets_per_az
 
     @property
     def sct_vpc(self) -> EC2ServiceResource.Vpc:
@@ -60,24 +62,10 @@ class AwsRegion:
             f"More than 1 VPC with {self.SCT_VPC_NAME} found in {self.region_name}: {existing_vpcs}"
         return self.resource.Vpc(existing_vpcs[0]["VpcId"])  # pylint: disable=no-member
 
-    def create_sct_vpc(self):
-        LOGGER.info("Going to create VPC...")
-        if self.sct_vpc:
-            LOGGER.warning("VPC '%s' already exists!  Id: '%s'.", self.SCT_VPC_NAME, self.sct_vpc.vpc_id)
-            return self.sct_vpc.vpc_id
-        else:
-            result = self.client.create_vpc(CidrBlock=str(self.vpc_ipv4_cidr), AmazonProvidedIpv6CidrBlock=True)
-            vpc_id = result["Vpc"]["VpcId"]
-            vpc = self.resource.Vpc(vpc_id)  # pylint: disable=no-member
-            vpc.modify_attribute(EnableDnsHostnames={"Value": True})
-            vpc.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_VPC_NAME}])
-            LOGGER.info("'%s' with id '%s' created. Waiting until it becomes available...", self.SCT_VPC_NAME, vpc_id)
-            vpc.wait_until_available()
-            return vpc_id
-
     @cached_property
     def availability_zones(self):
         response = self.client.describe_availability_zones()
+        # return ["eu-north-1c"]
         return [zone["ZoneName"]for zone in response['AvailabilityZones'] if zone["State"] == "available"]
 
     @cache
@@ -99,51 +87,101 @@ class AwsRegion:
     def vpc_ipv6_cidr(self):
         return ip_network(self.sct_vpc.ipv6_cidr_block_association_set[0]["Ipv6CidrBlock"])
 
-    def az_subnet_name(self, region_az):
-        return self.SCT_SUBNET_NAME.format(availability_zone=region_az)
+    def az_subnet_name(self, region_az, subnet_index=""):  # pylint: disable=arguments-differ
+        # To support existing VPC/subnet names convention, ignore the index number for first subnet
+        return self.SCT_SUBNET_NAME.format(availability_zone=region_az,
+                                           subnet_index="" if subnet_index == "0" else f"-{subnet_index}")
 
-    def sct_subnet(self, region_az) -> EC2ServiceResource.Subnet:
-        subnet_name = self.az_subnet_name(region_az)
+    def sct_subnet(self, region_az, subnet_index="") -> EC2ServiceResource.Subnet:
+        subnet_name = self.az_subnet_name(region_az, subnet_index=subnet_index)
         subnets = self.client.describe_subnets(Filters=[{"Name": "tag:Name", "Values": [subnet_name]}])
-        LOGGER.debug("Found Subnets: %s", subnets)
+        LOGGER.info("Found Subnets: %s", subnets)
         existing_subnets = subnets.get("Subnets", [])
         if len(existing_subnets) == 0:
             return None
         assert len(existing_subnets) == 1, \
             f"More than 1 Subnet with {subnet_name} found in {self.region_name}: {existing_subnets}!"
+        assert existing_subnets[0]['State'] == 'available', \
+            f"State of {subnet_name} is not available. Fix it (delete or make it available) and re-run"
         return self.resource.Subnet(existing_subnets[0]["SubnetId"])  # pylint: disable=no-member
 
-    def create_sct_subnet(self, region_az, ipv4_cidr, ipv6_cidr):
-        LOGGER.info("Creating subnet for %s...", region_az)
-        subnet_name = self.az_subnet_name(region_az)
-        if self.sct_subnet(region_az):
-            subnet_id = self.sct_subnet(region_az).subnet_id
-            LOGGER.warning("Subnet '%s' already exists!  Id: '%s'.", subnet_name, subnet_id)
+    def create_sct_vpc(self):
+        LOGGER.info("Going to create VPC...")
+        if self.sct_vpc:
+            LOGGER.warning("VPC '%s' already exists!  Id: '%s'.", self.SCT_VPC_NAME, self.sct_vpc.vpc_id)
+            return self.sct_vpc.vpc_id
         else:
+            result = self.client.create_vpc(CidrBlock=str(self.vpc_ipv4_cidr), AmazonProvidedIpv6CidrBlock=True)
+            vpc_id = result["Vpc"]["VpcId"]
+            vpc = self.resource.Vpc(vpc_id)  # pylint: disable=no-member
+            vpc.modify_attribute(EnableDnsHostnames={"Value": True})
+            vpc.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_VPC_NAME}])
+            LOGGER.info("'%s' with id '%s' created. Waiting until it becomes available...", self.SCT_VPC_NAME, vpc_id)
+            vpc.wait_until_available()
+            return vpc_id
 
-            result = self.client.create_subnet(CidrBlock=str(ipv4_cidr), Ipv6CidrBlock=str(ipv6_cidr),
-                                               VpcId=self.sct_vpc.vpc_id, AvailabilityZone=region_az)
-            subnet_id = result["Subnet"]["SubnetId"]
-            subnet = self.resource.Subnet(subnet_id)  # pylint: disable=no-member
-            subnet.create_tags(Tags=[{"Key": "Name", "Value": subnet_name}])
-            LOGGER.info("Configuring to automatically assign public IPv4 and IPv6 addresses...")
-            self.client.modify_subnet_attribute(
-                MapPublicIpOnLaunch={"Value": True},
-                SubnetId=subnet_id
-            )
-            # for some reason boto3 throws error when both AssignIpv6AddressOnCreation and MapPublicIpOnLaunch are used
-            self.client.modify_subnet_attribute(
-                AssignIpv6AddressOnCreation={"Value": True},
-                SubnetId=subnet_id
-            )
-            LOGGER.info("'%s' with id '%s' created.", subnet_name, subnet_id)
+    def create_sct_subnet(self, region_az, ipv4_cidr, ipv6_cidr, subnet_index=""):
+        LOGGER.info("Creating subnet(s) for %s...", region_az)
+        subnet_name = self.az_subnet_name(region_az, subnet_index=str(subnet_index))
+        if subnet := self.sct_subnet(region_az, subnet_index=str(subnet_index)):
+            subnet_id = subnet.subnet_id
+            LOGGER.warning("Subnet '%s' already exists!  Id: '%s'.", subnet_name, subnet_id)
+            return
+
+        result = self.client.create_subnet(CidrBlock=str(ipv4_cidr), Ipv6CidrBlock=str(ipv6_cidr),
+                                           VpcId=self.sct_vpc.vpc_id, AvailabilityZone=region_az)
+        subnet_id = result["Subnet"]["SubnetId"]
+        subnet = self.resource.Subnet(subnet_id)  # pylint: disable=no-member
+        subnet.create_tags(Tags=[{"Key": "Name", "Value": subnet_name}])
+        LOGGER.info("Configuring to automatically assign public IPv4 and IPv6 addresses...")
+        self.client.modify_subnet_attribute(
+            MapPublicIpOnLaunch={"Value": True},
+            SubnetId=subnet_id
+        )
+        # for some reason boto3 throws error when both AssignIpv6AddressOnCreation and MapPublicIpOnLaunch are used
+        self.client.modify_subnet_attribute(
+            AssignIpv6AddressOnCreation={"Value": True},
+            SubnetId=subnet_id
+        )
+        LOGGER.info("'%s' with id '%s' created.", subnet_name, subnet_id)
+
+    def associate_subnet_with_route_table(self, region_az: str, index: str):
+        subnet = self.sct_subnet(region_az, subnet_index=str(index))
+        sct_route_table = self.sct_route_table(index=index)
+        response = self.client.describe_route_tables(
+            Filters=[{'Name': 'association.subnet-id', 'Values': [subnet.subnet_id]}])
+
+        # If subnet is not associated with route table or associated with main route table
+        if not (associated_route_table := response['RouteTables']):
+            self.client.associate_route_table(RouteTableId=sct_route_table.route_table_id, SubnetId=subnet.subnet_id)
+            LOGGER.info("Subnet '%s' has been associated with '%s' route table.",
+                        subnet.subnet_id, sct_route_table.route_table_id)
+            return
+
+        associated_route_table_id = associated_route_table[0].get('RouteTableId')
+        # If subnet is associated with route table but not that was created for this subnet
+        if associated_route_table_id != sct_route_table.route_table_id:
+            self.client.replace_route_table_association(
+                AssociationId=associated_route_table_id, RouteTableId=sct_route_table.route_table_id)
+            LOGGER.info("Subnet '%s' has been associated with '%s' route table.",
+                        subnet.subnet_id, sct_route_table.route_table_id)
+        # If subnet is associated with appropriate route table
+        else:
+            LOGGER.info("Subnet '%s' is already associated with '%s' route table.",
+                        subnet.subnet_id, sct_route_table.route_table_id)
 
     def create_sct_subnets(self):
-        num_subnets = len(self.availability_zones)
-        ipv4_cidrs = list(self.vpc_ipv4_cidr.subnets(6))[:num_subnets]
-        ipv6_cidrs = list(self.vpc_ipv6_cidr.subnets(8))[:num_subnets]
-        for i, az_name in enumerate(self.availability_zones):
-            self.create_sct_subnet(region_az=az_name, ipv4_cidr=ipv4_cidrs[i], ipv6_cidr=ipv6_cidrs[i])
+        begin_cidrs = 0
+        for az_name in self.availability_zones:
+            ipv4_cidrs = list(self.vpc_ipv4_cidr.subnets(6))[begin_cidrs:self.subnets_per_az + begin_cidrs]
+            ipv6_cidrs = list(self.vpc_ipv6_cidr.subnets(8))[begin_cidrs:self.subnets_per_az + begin_cidrs]
+            for range_index in range(self.subnets_per_az):
+                self.create_sct_subnet(region_az=az_name, ipv4_cidr=ipv4_cidrs[range_index], ipv6_cidr=ipv6_cidrs[range_index],
+                                       subnet_index=str(range_index))
+                self.create_sct_subnet_route_table(subnet_name=self.az_subnet_name(region_az=az_name, subnet_index=str(range_index)),
+                                                   index=str(range_index))
+                self.associate_subnet_with_route_table(region_az=az_name, index=str(range_index))
+            begin_cidrs += self.subnets_per_az
 
     @property
     def sct_internet_gateway(self) -> EC2ServiceResource.InternetGateway:
@@ -172,41 +210,67 @@ class AwsRegion:
                         self.SCT_INTERNET_GATEWAY_NAME, igw_id, self.sct_vpc.vpc_id)
             igw.attach_to_vpc(VpcId=self.sct_vpc.vpc_id)
 
-    @cached_property
-    def sct_route_table(self) -> EC2ServiceResource.RouteTable:
+    def sct_route_table_name(self, index: str = ""):
+        """
+        :param index: suffix of the route table name
+        """
+        # For first subnet the main rout table will be used, so ignore the index number
+        return self.SCT_ROUTE_TABLE_NAME.format(index="" if index in ("0", "") else f"-{index}")
+
+    def sct_route_table(self, index: str = "") -> EC2ServiceResource.RouteTable:
+        sct_route_table_name = self.sct_route_table_name(index=index)
         route_tables = self.client.describe_route_tables(Filters=[{"Name": "tag:Name",
-                                                                   "Values": [self.SCT_ROUTE_TABLE_NAME]}])
+                                                                   "Values": [sct_route_table_name]}])
         LOGGER.debug("Found Route Tables: %s", route_tables)
         existing_rts = route_tables.get("RouteTables", [])
         if len(existing_rts) == 0:
             return None
         assert len(existing_rts) == 1, \
-            f"More than 1 Route Table with {self.SCT_ROUTE_TABLE_NAME} found " \
-            f"in {self.region_name}: {existing_rts}!"
+            f"More than 1 Route Table with {sct_route_table_name} found in {self.region_name}: {existing_rts}!"
         return self.resource.RouteTable(existing_rts[0]["RouteTableId"])  # pylint: disable=no-member
 
-    def configure_sct_route_table(self):
+    def create_sct_subnet_route_table(self, subnet_name: str, index: str):
+        subnet_route_table = self.sct_route_table_name(index=index)
+        LOGGER.info("Configuring SCT subnet Route Table %s for subnet %s...", subnet_route_table, subnet_name)
+        if sct_route_table := self.sct_route_table(index=index):
+            LOGGER.warning("Route Table '%s' already exists! Id: '%s'.",
+                           subnet_route_table, sct_route_table.route_table_id)
+            return
+
+        self.client.create_route_table(DryRun=False,
+                                       VpcId=self.sct_vpc.vpc_id,
+                                       TagSpecifications=[
+                                           {'ResourceType': "route-table",
+                                            'Tags': [{'Key': 'Name',
+                                                      'Value': subnet_route_table
+                                                      }]
+                                            }],
+                                       )
+        LOGGER.info("Setting routing of all outbound traffic via Internet Gateway...")
+        route_table = self.sct_route_table(index=index)
+        route_table.create_route(DestinationCidrBlock="0.0.0.0/0",
+                                 GatewayId=self.sct_internet_gateway.internet_gateway_id)
+        route_table.create_route(DestinationIpv6CidrBlock="::/0",
+                                 GatewayId=self.sct_internet_gateway.internet_gateway_id)
+
+    def configure_sct_route_table(self, index: str = ""):
         # add route to Internet: 0.0.0.0/0 -> igw
         LOGGER.info("Configuring main Route Table...")
-        if self.sct_route_table:
+        if sct_route_table := self.sct_route_table(index=index):
             LOGGER.warning("Route Table '%s' already exists! Id: '%s'.",
-                           self.SCT_ROUTE_TABLE_NAME, self.sct_route_table.route_table_id)
+                           self.sct_route_table_name(index=""), sct_route_table.route_table_id)
         else:
             route_tables = list(self.sct_vpc.route_tables.all())
             assert len(route_tables) == 1, f"Only one main route table should exist for {self.SCT_VPC_NAME}. " \
                                            f"Found {len(route_tables)}!"
             route_table: EC2ServiceResource.RouteTable = route_tables[0]
-            route_table.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_ROUTE_TABLE_NAME}])
+
+            route_table.create_tags(Tags=[{"Key": "Name", "Value": self.sct_route_table_name(index="")}])
             LOGGER.info("Setting routing of all outbound traffic via Internet Gateway...")
             route_table.create_route(DestinationCidrBlock="0.0.0.0/0",
                                      GatewayId=self.sct_internet_gateway.internet_gateway_id)
             route_table.create_route(DestinationIpv6CidrBlock="::/0",
                                      GatewayId=self.sct_internet_gateway.internet_gateway_id)
-            LOGGER.info("Going to associate all Subnets with the Route Table...")
-            for az_name in self.availability_zones:
-                subnet_id = self.sct_subnet(az_name).subnet_id
-                LOGGER.info("Associating Route Table with '%s' [%s]...", self.az_subnet_name(az_name), subnet_id)
-                route_table.associate_with_subnet(SubnetId=subnet_id)
 
     @property
     def sct_security_group(self) -> EC2ServiceResource.SecurityGroup:
@@ -544,9 +608,9 @@ class AwsRegion:
     def configure(self):
         LOGGER.info("Configuring '%s' region...", self.region_name)
         self.create_sct_vpc()
-        self.create_sct_subnets()
         self.create_sct_internet_gateway()
         self.configure_sct_route_table()
+        self.create_sct_subnets()
         self.create_sct_security_group()
         self.create_sct_ssh_security_group()
         self.create_sct_key_pair()
