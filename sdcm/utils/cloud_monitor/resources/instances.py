@@ -113,7 +113,7 @@ class AzureInstance(CloudInstance):
             name=instance.name,
             instance_id=resource_group,
             region_az=instance.location,
-            state="running",
+            state=self._get_vm_status(instance),
             lifecycle=InstanceLifecycle.SPOT if instance.priority == "Spot" else InstanceLifecycle.ON_DEMAND,
             instance_type=instance.hardware_profile.vm_size,
             owner=tags.get("RunByUser", NA),
@@ -121,6 +121,11 @@ class AzureInstance(CloudInstance):
             keep=tags.get("keep", ""),
             project=resource_group
         )
+
+    @staticmethod
+    def _get_vm_status(instance) -> str:
+        statuses = {s.code: s.display_status for s in instance.instance_view.statuses}
+        return 'running' if statuses.get("PowerState/running") else 'stopped'
 
     @property
     def region(self):
@@ -148,7 +153,7 @@ class CloudInstances(CloudResources):
         res = AzureService().resource_graph_query(query=' | '.join(query_bits))
         get_virtual_machine = AzureService().compute.virtual_machines.get
         instances = [(get_virtual_machine(resource_group_name=vm["resourceGroup"],
-                      vm_name=vm["name"]), vm["resourceGroup"]) for vm in res]
+                      vm_name=vm["name"], expand='instanceView'), vm["resourceGroup"]) for vm in res]
         self["azure"] = [AzureInstance(instance, resource_group) for instance, resource_group in instances]
         self.all.extend(self["azure"])
 
