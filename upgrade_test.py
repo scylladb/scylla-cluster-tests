@@ -27,12 +27,14 @@ import contextlib
 
 from argus.client.sct.types import Package
 from cassandra import ConsistencyLevel
+from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import CassandraStressThread
+from sdcm.utils.decorators import retrying
 from sdcm.utils.user_profile import get_profile_content
 from sdcm.utils.version_utils import (
     get_node_supported_sstable_versions,
@@ -150,19 +152,23 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     # would be recalculated after all the cluster finish upgrade
     expected_sstable_format_version = 'mc'
 
+    @retrying(n=5)
+    def _query_from_one_table(self, session, query, table_name) -> list:
+        return self.rows_to_list(session.execute(SimpleStatement(query.format(table_name)), timeout=300))
+
     def read_data_from_truncated_tables(self, session):
         truncate_query = 'SELECT COUNT(*) FROM {}'
         tables_name = self.get_tables_name_of_keyspace(session=session, keyspace_name='truncate_ks')
         for table_name in tables_name:
-            InfoEvent(message="Start read data from truncated tables").publish()
+            InfoEvent(message=f"Start read data from {table_name} tables").publish()
             try:
-                count = self.rows_to_list(session.execute(truncate_query.format(table_name)))
+                count = self._query_from_one_table(session=session, query=truncate_query, table_name=table_name)
                 self.assertEqual(str(count[0][0]), '0',
                                  msg='Expected that there is no data in the table truncate_ks.{}, but found {} rows'
                                  .format(table_name, count[0][0]))
-                InfoEvent(message="Finish read data from truncated tables").publish()
+                InfoEvent(message=f"Finish read data from {table_name} tables").publish()
             except Exception as details:  # pylint: disable=broad-except
-                InfoEvent(message=f"Failed read data from truncated tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
+                InfoEvent(message=f"Failed read data from {table_name} tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
                           severity=Severity.ERROR).publish()
 
     def validate_truncated_entries_for_table(self, session, system_truncated=False):  # pylint: disable=invalid-name
