@@ -375,6 +375,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def _init_port_mapping(self):
         if self.test_config.IP_SSH_CONNECTIONS == 'public':
+            if self.test_config.SYSLOGNG_ADDRESS:
+                try:
+                    ContainerManager.destroy_container(self, "auto_ssh:syslog_ng", ignore_keepalive=True)
+                except NotFound:
+                    pass
+                ContainerManager.run_container(self, "auto_ssh:syslog_ng",
+                                               local_port=self.test_config.SYSLOGNG_ADDRESS[1],
+                                               remote_port=self.test_config.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT)
             if self.test_config.LDAP_ADDRESS and self.parent_cluster.node_type == "scylla-db":
                 try:
                     ContainerManager.destroy_container(self, "auto_ssh:ldap", ignore_keepalive=True)
