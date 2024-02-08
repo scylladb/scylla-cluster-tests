@@ -2866,7 +2866,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                    timeout=6*60)  # giving 6 minutes to restore the schema
             assert restore_task.status == TaskStatus.DONE, \
                 f'Schema restoration of {chosen_snapshot_tag} has failed!'
-            self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
+
+            with ignore_ycsb_connection_refused():
+                self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
 
         restore_task = mgr_cluster.create_restore_task(restore_data=True,
                                                        location_list=location_list,
