@@ -16,8 +16,6 @@ from sdcm.microbenchmarking import (
 
 LOGGER = logging.getLogger("microbenchmarking-tests")
 
-# pylint: disable=invalid-name
-
 
 class MicroBenchmarkingResultsAnalyzerMock(MicroBenchmarkingResultsAnalyzer):
     _mock_returns = None
@@ -65,7 +63,7 @@ class MicroBenchmarkingResultsAnalyzerMock(MicroBenchmarkingResultsAnalyzer):
         return params_hash
 
 
-class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
+class TestMBM(unittest.TestCase):
     def setUp(self):
         self.mbra = MicroBenchmarkingResultsAnalyzerMock(email_recipients=(
             'alex.bykov@scylladb.com', ), es_index="microbenchmarking")
@@ -87,7 +85,7 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
         return expected_obj
 
     def test_object_exists(self):
-        # pylint: disable=protected-access
+
         self.assertIsInstance(self.mbra, MicroBenchmarkingResultsAnalyzer)
         self.assertEqual(self.mbra.hostname, 'godzilla.cloudius-systems.com')
         self.assertEqual(self.mbra._email_recipients, ('alex.bykov@scylladb.com', ))

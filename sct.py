@@ -13,7 +13,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-# pylint: disable=too-many-lines
+
 import glob
 import logging
 import os
@@ -131,13 +131,13 @@ from sdcm.utils.sct_cmd_helpers import (
 )
 from sdcm.utils.version_utils import get_s3_scylla_repos_mapping
 from utils.build_system.create_test_release_jobs import (
-    JenkinsPipelines,  # pylint: disable=no-name-in-module,import-error
+    JenkinsPipelines,
 )
 from utils.get_supported_scylla_base_versions import (
-    UpgradeBaseVersion,  # pylint: disable=no-name-in-module,import-error
+    UpgradeBaseVersion,
 )
 from utils.mocks.aws_mock import (
-    AwsMock,  # pylint: disable=no-name-in-module,import-error
+    AwsMock,
 )
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
@@ -257,7 +257,7 @@ def provision_resources(backend, test_name: str, config: str):
 @click.option('--dry-run', is_flag=True, default=False, help='dry run')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
 @click.pass_context
-def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend):  # pylint: disable=too-many-arguments,too-many-branches
+def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend):
     """Clean cloud resources.
 
     There are different options how to run clean up:
@@ -336,7 +336,6 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
 @click.option('--verbose', is_flag=True, default=False, help='if enable, will log progress')
 @click.pass_context
 def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):  # noqa: PLR0912, PLR0915
-    # pylint: disable=too-many-locals,too-many-arguments,too-many-branches,too-many-statements
 
     add_file_logger()
 
@@ -624,7 +623,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):  # no
 @click.option('-a', '--arch',
               type=click.Choice(AwsArchType.__args__),
               default='x86_64',
-              help="architecture of the AMI (default: x86_64)")  # pylint: disable=too-many-locals
+              help="architecture of the AMI (default: x86_64)")
 def list_images(cloud_provider: str, branch: str, version: str, region: str, arch: AwsArchType):
     add_file_logger()
     version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
@@ -741,7 +740,7 @@ def list_repos(dist_type, dist_version):
 @click.option('-d', '--linux-distro', type=str, help='Linux Distribution type')
 @click.option('-o', '--only-print-versions', type=bool, default=False, required=False, help='')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
-def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions, backend):  # pylint: disable=too-many-locals
+def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions, backend):
     """
     Upgrade test try to upgrade from multiple supported base versions, this command is used to
     get the base versions according to the scylla repo and distro type, then we don't need to hardcode
@@ -811,7 +810,7 @@ def _run_yaml_test(backend, full_path, env):
         config = SCTConfiguration()
         config.verify_configuration()
         config.check_required_files()
-    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         output.append(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
         error = True
     return error, output
@@ -821,7 +820,7 @@ def _run_yaml_test(backend, full_path, env):
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
 @click.option('-i', '--include', type=str, default='')
 @click.option('-e', '--exclude', type=str, default='')
-def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many-locals,too-many-branches
+def lint_yamls(backend, exclude: str, include: str):
     if not include:
         raise ValueError('You did not provide include filters')
 
@@ -831,7 +830,7 @@ def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many
             continue
         try:
             exclude_filters.append(re.compile(flt))
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             raise ValueError(f'Exclude filter "{flt}" compiling failed with: {exc}') from exc
 
     include_filters = []
@@ -840,11 +839,11 @@ def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many
             continue
         try:
             include_filters.append(re.compile(flt))
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             raise ValueError(f'Include filter "{flt}" compiling failed with: {exc}') from exc
 
     original_env = {**os.environ}
-    process_pool = ProcessPoolExecutor(max_workers=5)  # pylint: disable=consider-using-with
+    process_pool = ProcessPoolExecutor(max_workers=5)
 
     features = []
     for root, _, files in os.walk('./test-cases'):
@@ -882,7 +881,7 @@ def conf(config_file, backend):
     try:
         config.verify_configuration()
         config.check_required_files()
-    except Exception as ex:  # pylint: disable=broad-except
+    except Exception as ex:
         logging.exception(str(ex))
         click.secho(str(ex), fg='red')
         sys.exit(1)
@@ -981,7 +980,7 @@ def show_monitor(test_id, date_time, kill, cluster_name):
     containers = {}
     try:
         containers = restore_monitoring_stack(test_id, date_time)
-    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception as details:  # noqa: BLE001
         LOGGER.error(details)
 
     if not containers:
@@ -1117,7 +1116,7 @@ def pre_commit():
 class OutputLogger:
     def __init__(self, filename, terminal):
         self.terminal = terminal
-        self.log = open(filename, "a", encoding="utf-8")  # pylint: disable=consider-using-with
+        self.log = open(filename, "a", encoding="utf-8")
 
     def write(self, message):
         self.terminal.write(message)
@@ -1127,7 +1126,7 @@ class OutputLogger:
         self.terminal.flush()
         self.log.flush()
 
-    def isatty(self):  # pylint: disable=no-self-use
+    def isatty(self):
         return False
 
 
@@ -1201,10 +1200,10 @@ def cloud_usage_report(emails, report_type, user):
 @click.option('--backend', help='Cloud where search nodes', default=None)
 @click.option('--config-file', type=str, help='config test file path')
 def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
-    # pylint: disable=too-many-nested-blocks,too-many-branches
+
     add_file_logger()
 
-    from sdcm.logcollector import Collector  # pylint: disable=import-outside-toplevel
+    from sdcm.logcollector import Collector
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     if backend is None:
         if os.environ.get('SCT_CLUSTER_BACKEND', None) is None:
@@ -1243,7 +1242,7 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
 
 def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
-    # pylint: disable=import-outside-toplevel
+
     try:
         argus_client = get_argus_client(run_id=test_id)
         log_links = []
@@ -1252,7 +1251,7 @@ def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
                 file_name = link.split("/")[-1]
                 log_links.append(LogLink(log_name=file_name, log_link=link))
         argus_client.submit_sct_logs(log_links)
-    except Exception:  # pylint: disable=broad-except
+    except Exception:
         LOGGER.error("Error saving logs to argus", exc_info=True)
 
 
@@ -1270,7 +1269,6 @@ def get_test_results_for_failed_test(test_status, start_time):
     }
 
 
-# pylint: disable=too-many-arguments,too-many-branches,too-many-statements
 @cli.command('send-email', help='Send email with results for testrun')
 @click.option('--test-id', help='Test-id of run')
 @click.option('--test-status', help='Override test status FAILED|ABORTED')
@@ -1359,7 +1357,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
             sys.exit(1)
         try:
             reporter.send_report(test_results)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
             build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
                 "job_url": os.environ.get("BUILD_URL"),
@@ -1589,7 +1587,6 @@ def create_runner_image(cloud_provider, region, availability_zone):
 @click.option("-p", "--address-pool", required=False, type=str, help="ElasticIP pool to use")
 def create_runner_instance(cloud_provider, region, availability_zone, instance_type, root_disk_size_gb,
                            test_id, test_name, duration, restore_monitor=False, restored_test_id="", address_pool=None):
-    # pylint: disable=too-many-locals
 
     if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
@@ -1755,7 +1752,7 @@ def get_nemesis_list(backend, config):
 
     # NOTE: this import messes up logging for the test, since it's importing tester.py
     # directly down the line
-    from unit_tests.test_nemesis import FakeTester  # pylint: disable=import-outside-toplevel
+    from unit_tests.test_nemesis import FakeTester
 
     add_file_logger()
     logging.basicConfig(level=logging.WARNING)

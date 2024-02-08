@@ -18,8 +18,6 @@ import ast
 import getpass
 import json
 import logging
-
-# pylint: disable=too-many-lines
 import os
 import pathlib
 import re
@@ -89,7 +87,7 @@ def str_or_list_or_eval(value: str | list[str]) -> list[str]:
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
         return [str(value), ]
 
@@ -98,7 +96,7 @@ def str_or_list_or_eval(value: str | list[str]) -> list[str]:
         for val in value:
             try:
                 ret_values += [ast.literal_eval(val)]
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 ret_values += [str(val)]
         return ret_values
 
@@ -109,19 +107,19 @@ def int_or_list(value):
     try:
         value = int(value)
         return value
-    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         pass
 
     if isinstance(value, str):
         try:
             values = value.split()
-            [int(v) for v in values]  # pylint: disable=expression-not-assigned
+            [int(v) for v in values]
             return value
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
 
     raise ValueError(f"{value} isn't int or list")
@@ -131,7 +129,7 @@ def dict_or_str(value):
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             pass
     if isinstance(value, dict):
         return value
@@ -1633,7 +1631,7 @@ class SCTConfiguration(dict):
     aws_supported_regions = ['eu-west-1', 'eu-west-2', 'us-west-2', 'us-east-1', 'eu-north-1', 'eu-central-1']
 
     def __init__(self):  # noqa: PLR0912, PLR0915
-        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+
         super().__init__()
         self.scylla_version = None
         self.is_enterprise = False
@@ -1705,7 +1703,7 @@ class SCTConfiguration(dict):
         dist_type = scylla_linux_distro.split('-')[0]
         dist_version = scylla_linux_distro.split('-')[-1]
 
-        if scylla_version := self.get('scylla_version'):  # pylint: disable=too-many-nested-blocks
+        if scylla_version := self.get('scylla_version'):
             if not self.get('docker_image'):
                 self['docker_image'] = get_scylla_docker_repo_from_version(scylla_version)
             if self.get("cluster_backend") in (
@@ -1782,7 +1780,7 @@ class SCTConfiguration(dict):
 
         # 6.1) handle oracle_scylla_version if exists
         if (oracle_scylla_version := self.get('oracle_scylla_version')) \
-           and self.get("db_type") == "mixed_scylla":  # pylint: disable=too-many-nested-blocks
+           and self.get("db_type") == "mixed_scylla":
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
                 ami_list = []
                 for region in region_names:
@@ -1808,7 +1806,7 @@ class SCTConfiguration(dict):
         # 7) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version')
         if new_scylla_version and not 'k8s' in cluster_backend:
-            if not self.get('ami_id_db_scylla') and cluster_backend == 'aws':  # pylint: disable=no-else-raise
+            if not self.get('ami_id_db_scylla') and cluster_backend == 'aws':
                 raise ValueError("'new_version' isn't supported for AWS AMIs")
 
             elif not self.get('new_scylla_repo'):
@@ -1962,7 +1960,7 @@ class SCTConfiguration(dict):
             if opt['env'] in os.environ:
                 try:
                     environment_vars[opt['name']] = opt['type'](os.environ[opt['env']])
-                except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as ex:  # noqa: BLE001
                     raise ValueError(
                         "failed to parse {} from environment variable".format(opt['env'])) from ex
             nested_keys = [key for key in os.environ if key.startswith(opt['env'] + '.')]
@@ -2015,7 +2013,7 @@ class SCTConfiguration(dict):
         opt['is_k8s_multitenant_value'] = False
         try:
             opt['type'](self.get(opt['name']))
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             if not (self.get("cluster_backend").startswith("k8s")
                     and self.get("k8s_tenants_num") > 1
                     and opt.get("k8s_multitenancy_supported")
@@ -2027,7 +2025,7 @@ class SCTConfiguration(dict):
             for list_element in self.get(opt['name']):
                 try:
                     opt['type'](list_element)
-                except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception as ex:  # noqa: BLE001
                     raise ValueError("failed to validate {}".format(opt['name'])) from ex
             opt['is_k8s_multitenant_value'] = True
 
@@ -2062,8 +2060,7 @@ class SCTConfiguration(dict):
         return stress_tools
 
     def check_required_files(self):
-        # pylint: disable=too-many-nested-blocks
-        # pylint: disable=too-many-branches
+
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
             if stress_cmds is None:
@@ -2290,7 +2287,7 @@ class SCTConfiguration(dict):
             if int(partition_range_splitted[1]) < int(partition_range_splitted[0]):
                 raise ValueError(error_message_template.format('<max PK value> should be bigger then <min PK value>. '))
 
-    def verify_configuration_urls_validity(self):  # pylint: disable=too-many-branches
+    def verify_configuration_urls_validity(self):
         """
         Check if ami_id and repo urls are valid
         """
@@ -2353,7 +2350,7 @@ class SCTConfiguration(dict):
         get_branch_version_for_multiple_repositories(
             urls=(self.get(url) for url in repos_to_validate if self.get(url)))
 
-    def get_version_based_on_conf(self):  # pylint: disable=too-many-locals
+    def get_version_based_on_conf(self):
         """
         figure out which version and if it's enterprise version
         base on configuration only, before nodes are up and running
@@ -2480,7 +2477,7 @@ class SCTConfiguration(dict):
             raise ValueError('Data volume configuration requires: data_volume_disk_type, data_volume_disk_size')
 
     def _verify_scylla_bench_mode_and_workload_parameters(self):
-        # pylint: disable=too-many-nested-blocks
+
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
             if stress_cmds is None:

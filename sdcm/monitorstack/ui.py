@@ -41,7 +41,7 @@ class Login:
             login_button.click()
             self.skip_set_new_password()
             LOGGER.info("Logged in succesful")
-        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as details:  # noqa: BLE001
             LOGGER.error("Authentication failed: %s", details)
 
     def skip_set_new_password(self):
@@ -79,7 +79,7 @@ class Panel:
         LOGGER.info("Work with panel %s done", self.name)
 
 
-class Snapshot:  # pylint: disable=too-few-public-methods
+class Snapshot:
     locators_sequence = [
         (By.XPATH, """//button[contains(@aria-label, "Share dashboard or panel")]"""),
         (By.XPATH, """//div/a[contains(@aria-label, "Tab Snapshot") and contains(text(), "Snapshot")]"""),

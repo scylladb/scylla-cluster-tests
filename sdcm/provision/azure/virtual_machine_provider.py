@@ -51,7 +51,7 @@ class VirtualMachineProvider:
 
     def get_or_create(self, definitions: list[InstanceDefinition], nics_ids: list[str], pricing_model: PricingModel
                       ) -> list[VirtualMachine]:
-        # pylint: disable=too-many-locals
+
         v_ms = []
         pollers = []
         error_to_raise = None

@@ -35,10 +35,8 @@ if TYPE_CHECKING:
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
 
-# pylint: disable=line-too-long
 
-
-class Node:  # pylint: disable=no-init,too-few-public-methods
+class Node:
     def __init__(self):
         self.ssh_login_info = {'hostname': '34.253.205.91',
                                'user': 'centos',
@@ -48,12 +46,12 @@ class Node:  # pylint: disable=no-init,too-few-public-methods
         self.ip_address = '34.253.205.91'
 
 
-class DbNode:  # pylint: disable=no-init,too-few-public-methods
+class DbNode:
     ip_address = "34.244.157.61"
     dc_idx = 1
 
 
-class LoaderSetDummy:  # pylint: disable=no-init,too-few-public-methods
+class LoaderSetDummy:
     def __init__(self):
         self.nodes = [Node()]
         self.params = {}
@@ -97,7 +95,7 @@ class TestCassandraStressExporter(unittest.TestCase):
         cls.metrics = nemesis_metrics_obj()
 
     def test_01(self):
-        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')
         cs_exporter = CassandraStressExporter("127.0.0.1", self.metrics, 'write',
                                               tmp_file.name, loader_idx=1, cpu_idx=0)
 
@@ -137,7 +135,7 @@ class TestCassandraStressHDRExporter(unittest.TestCase):
         cls.metrics = nemesis_metrics_obj()
 
     def test_01_mixed(self):
-        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')
         cs_exporter = CassandraStressHDRExporter("127.0.0.1", self.metrics, 'mixed',
                                                  tmp_file.name, loader_idx=1, cpu_idx=0)
 
@@ -164,7 +162,7 @@ class TestCassandraStressHDRExporter(unittest.TestCase):
         res.result(10)
 
     def test_02_write(self):
-        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')
         cs_exporter = CassandraStressHDRExporter("127.0.0.1", self.metrics, 'write',
                                                  tmp_file.name, loader_idx=1, cpu_idx=0)
 
@@ -184,7 +182,7 @@ class TestCassandraStressHDRExporter(unittest.TestCase):
         res.result(10)
 
     def test_03_read(self):
-        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')
         cs_exporter = CassandraStressHDRExporter("127.0.0.1", self.metrics, 'read',
                                                  tmp_file.name, loader_idx=1, cpu_idx=0)
 
@@ -204,7 +202,7 @@ class TestCassandraStressHDRExporter(unittest.TestCase):
         res.result(10)
 
     def test_04_mixed_only_write(self):
-        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')
         cs_exporter = CassandraStressHDRExporter("127.0.0.1", self.metrics, 'mixed',
                                                  tmp_file.name, loader_idx=1, cpu_idx=0)
 
@@ -246,7 +244,7 @@ class BaseSCTEventsTest(unittest.TestCase):
 
 @unittest.skip("manual tests")
 class TestStressThread(BaseSCTEventsTest):
-    def test_01(self):  # pylint: disable=no-self-use
+    def test_01(self):
         start_metrics_server()
         cstress = CassandraStressThread(LoaderSetDummy(), timeout=60, node_list=[DbNode()], stress_num=1,
                                         stress_cmd="cassandra-stress write cl=ONE duration=3m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)'"
@@ -270,7 +268,7 @@ class TestStressThread(BaseSCTEventsTest):
     @staticmethod
     def test_02():
 
-        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')
         tailer = CassandraStressEventsPublisher(node=Node(), cs_log_filename=tmp_file.name)
 
         res = tailer.start()
@@ -290,7 +288,7 @@ class TestStressThread(BaseSCTEventsTest):
 
 @unittest.skip("manual tests")
 class TestYcsbStressThread(BaseSCTEventsTest):
-    def test_01(self):  # pylint: disable=no-self-use
+    def test_01(self):
         params = dict(alternator_port=8080)  # , dynamodb_primarykey_type='HASH_AND_RANGE')
         loader_set = LoaderSetDummy()
         thread1 = YcsbStressThread(loader_set,

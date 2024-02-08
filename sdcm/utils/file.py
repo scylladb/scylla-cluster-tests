@@ -16,7 +16,6 @@ from re import Pattern
 from typing import AnyStr, TextIO
 
 
-# pylint: disable=too-few-public-methods
 class ReiterableGenerator:
     def __init__(self, generator):
         self._generator = generator
@@ -25,7 +24,6 @@ class ReiterableGenerator:
         return self._generator()
 
 
-# pylint: disable=too-many-instance-attributes
 class File:
     """
     File object that support chaining and context managing
@@ -35,7 +33,6 @@ class File:
         >>> ).move_to_beginning().readlines() == ['someline\\n', 'someline #1\\n', 'someline #2\\n']
     """
 
-    # pylint: disable=too-many-arguments
     def __init__(self, path: str, mode: str = 'r', buffering: int | None = None,
                  encoding: str | None = None, errors: str | None = None, newline: str | None = None,
                  closefd: bool = True):
@@ -64,7 +61,7 @@ class File:
     def _open(self) -> TextIO:
         kwargs = {attr_name: getattr(self, attr_name) for attr_name in
                   ['mode', 'buffering', 'encoding', 'errors', 'closefd'] if getattr(self, attr_name, None) is not None}
-        return open(self.path, **kwargs)  # pylint: disable=consider-using-with,unspecified-encoding
+        return open(self.path, **kwargs)
 
     def move_to(self, pos) -> 'File':
         self._io.seek(pos)

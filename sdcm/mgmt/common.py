@@ -153,7 +153,7 @@ class HostRestStatus(Enum):
             raise ScyllaManagerError(f"Could not recognize returned host rest status: {output_str}") from err
 
 
-class TaskStatus:  # pylint: disable=too-few-public-methods
+class TaskStatus:
     NEW = "NEW"
     RUNNING = "RUNNING"
     DONE = "DONE"

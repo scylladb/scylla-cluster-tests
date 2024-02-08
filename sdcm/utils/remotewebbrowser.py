@@ -19,7 +19,7 @@ from functools import cached_property
 import paramiko
 from selenium.webdriver import ChromeOptions, Remote
 
-from docker import DockerClient  # pylint: disable=wrong-import-order
+from docker import DockerClient
 from sdcm.utils.common import get_free_port, normalize_ipv6_url, wait_for_port
 from sdcm.utils.docker_utils import DOCKER_API_CALL_TIMEOUT, ContainerManager
 from sdcm.utils.ssh_agent import SSHAgent
@@ -124,5 +124,5 @@ class RemoteBrowser:
                 LOGGER.debug("Destroy %s (%s) container", name, self)
                 ContainerManager.destroy_container(self.node, name, ignore_keepalive=True)
                 LOGGER.info("%s (%s) destroyed", name, self)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("%s: some exception raised during container '%s' destroying", self, name, exc_info=exc)

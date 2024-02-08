@@ -19,7 +19,7 @@ def create_index(index_name: str, mappings: dict, **kwargs):
     es_client = ES()
     doc_type = kwargs.get("doc_type")
     es_client.indices.create(index=index_name)
-    es_client.indices.put_mapping(index=index_name, doc_type=doc_type, body=mappings,  # pylint: disable=unexpected-keyword-arg
+    es_client.indices.put_mapping(index=index_name, doc_type=doc_type, body=mappings,
                                   include_type_name=True)
 
 

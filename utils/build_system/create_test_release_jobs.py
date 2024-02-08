@@ -24,7 +24,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class JenkinsPipelines:
-    def __init__(self, username, password, base_job_dir, sct_branch_name, sct_repo):  # pylint: disable=too-many-arguments
+    def __init__(self, username, password, base_job_dir, sct_branch_name, sct_repo):
         self.jenkins = jenkins.Jenkins('https://jenkins.scylladb.com', username=username, password=password)
         self.base_sct_dir = Path(__file__).parent.parent.parent
         self.base_job_dir = base_job_dir

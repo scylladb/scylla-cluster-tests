@@ -13,8 +13,6 @@
 
 from textwrap import dedent
 
-# pylint: disable=anomalous-backslash-in-string
-
 
 def configure_syslogng_target_script(host: str, port: int, throttle_per_second: int, hostname: str = "") -> str:
     return dedent(f"""

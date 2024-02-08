@@ -66,7 +66,6 @@ class YcsbStatsPublisher(FileFollowerThread):
             self.set_metric('verify', stat['status'], float(stat['value']))
 
     def run(self):
-        # pylint: disable=too-many-nested-blocks
 
         # 729.39 current ops/sec;
         # [READ: Count=510, Max=195327, Min=2011, Avg=4598.69, 90=5743, 99=12583, 99.9=194815, 99.99=195327]
@@ -107,11 +106,11 @@ class YcsbStatsPublisher(FileFollowerThread):
                                         value = float(0)  # noqa: PLW2901
                                 self.set_metric(operation, key, float(value))
 
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     LOGGER.exception("fail to send metric")
 
 
-class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class YcsbStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.ycsb"
 
@@ -240,7 +239,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         log_file_name = os.path.join(loader.logdir, f'ycsb-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
         LOGGER.debug('ycsb-stress local log: %s', log_file_name)
 
-        def raise_event_callback(sentinel, line):  # pylint: disable=unused-argument
+        def raise_event_callback(sentinel, line):
             if line:
                 YcsbStressEvent.error(node=loader, stress_cmd=stress_cmd, errors=[line, ]).publish()
 

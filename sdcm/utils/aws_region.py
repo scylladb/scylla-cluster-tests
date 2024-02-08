@@ -25,7 +25,6 @@ from sdcm.utils.get_username import get_username
 LOGGER = logging.getLogger(__name__)
 
 
-# pylint: disable=too-many-public-methods
 class AwsRegion:
     SCT_VPC_NAME = "SCT-2-vpc"
     SCT_VPC_CIDR_TMPL = "10.{}.0.0/16"
@@ -44,7 +43,7 @@ class AwsRegion:
 
         # cause import straight from common create cyclic dependency
         from sdcm.utils.common import (
-            all_aws_regions,  # pylint: disable=import-outside-toplevel
+            all_aws_regions,
         )
 
         region_index = all_aws_regions(cached=True).index(self.region_name)
@@ -60,7 +59,7 @@ class AwsRegion:
             return None
         assert len(existing_vpcs) == 1, \
             f"More than 1 VPC with {self.SCT_VPC_NAME} found in {self.region_name}: {existing_vpcs}"
-        return self.resource.Vpc(existing_vpcs[0]["VpcId"])  # pylint: disable=no-member
+        return self.resource.Vpc(existing_vpcs[0]["VpcId"])
 
     def create_sct_vpc(self):
         LOGGER.info("Going to create VPC...")
@@ -70,7 +69,7 @@ class AwsRegion:
         else:
             result = self.client.create_vpc(CidrBlock=str(self.vpc_ipv4_cidr), AmazonProvidedIpv6CidrBlock=True)
             vpc_id = result["Vpc"]["VpcId"]
-            vpc = self.resource.Vpc(vpc_id)  # pylint: disable=no-member
+            vpc = self.resource.Vpc(vpc_id)
             vpc.modify_attribute(EnableDnsHostnames={"Value": True})
             vpc.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_VPC_NAME}])
             LOGGER.info("'%s' with id '%s' created. Waiting until it becomes available...", self.SCT_VPC_NAME, vpc_id)
@@ -113,7 +112,7 @@ class AwsRegion:
             return None
         assert len(existing_subnets) == 1, \
             f"More than 1 Subnet with {subnet_name} found in {self.region_name}: {existing_subnets}!"
-        return self.resource.Subnet(existing_subnets[0]["SubnetId"])  # pylint: disable=no-member
+        return self.resource.Subnet(existing_subnets[0]["SubnetId"])
 
     def create_sct_subnet(self, region_az, ipv4_cidr, ipv6_cidr):
         LOGGER.info("Creating subnet for %s...", region_az)
@@ -126,7 +125,7 @@ class AwsRegion:
             result = self.client.create_subnet(CidrBlock=str(ipv4_cidr), Ipv6CidrBlock=str(ipv6_cidr),
                                                VpcId=self.sct_vpc.vpc_id, AvailabilityZone=region_az)
             subnet_id = result["Subnet"]["SubnetId"]
-            subnet = self.resource.Subnet(subnet_id)  # pylint: disable=no-member
+            subnet = self.resource.Subnet(subnet_id)
             subnet.create_tags(Tags=[{"Key": "Name", "Value": subnet_name}])
             LOGGER.info("Configuring to automatically assign public IPv4 and IPv6 addresses...")
             self.client.modify_subnet_attribute(
@@ -158,7 +157,7 @@ class AwsRegion:
         assert len(existing_igws) == 1, \
             f"More than 1 Internet Gateway with {self.SCT_INTERNET_GATEWAY_NAME} found " \
             f"in {self.region_name}: {existing_igws}!"
-        return self.resource.InternetGateway(existing_igws[0]["InternetGatewayId"])  # pylint: disable=no-member
+        return self.resource.InternetGateway(existing_igws[0]["InternetGatewayId"])
 
     def create_sct_internet_gateway(self):
         LOGGER.info("Creating Internet Gateway..")
@@ -168,7 +167,7 @@ class AwsRegion:
         else:
             result = self.client.create_internet_gateway()
             igw_id = result["InternetGateway"]["InternetGatewayId"]
-            igw = self.resource.InternetGateway(igw_id)  # pylint: disable=no-member
+            igw = self.resource.InternetGateway(igw_id)
             igw.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_INTERNET_GATEWAY_NAME}])
             LOGGER.info("'%s' with id '%s' created. Attaching to '%s'",
                         self.SCT_INTERNET_GATEWAY_NAME, igw_id, self.sct_vpc.vpc_id)
@@ -185,7 +184,7 @@ class AwsRegion:
         assert len(existing_rts) == 1, \
             f"More than 1 Route Table with {self.SCT_ROUTE_TABLE_NAME} found " \
             f"in {self.region_name}: {existing_rts}!"
-        return self.resource.RouteTable(existing_rts[0]["RouteTableId"])  # pylint: disable=no-member
+        return self.resource.RouteTable(existing_rts[0]["RouteTableId"])
 
     def configure_sct_route_table(self):
         # add route to Internet: 0.0.0.0/0 -> igw
@@ -221,7 +220,7 @@ class AwsRegion:
         assert len(existing_sgs) == 1, \
             f"More than 1 Security group with {self.SCT_SECURITY_GROUP_NAME} found " \
             f"in {self.region_name}: {existing_sgs}!"
-        return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])  # pylint: disable=no-member
+        return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])
 
     def create_sct_security_group(self):
         """
@@ -239,7 +238,7 @@ class AwsRegion:
                                                        GroupName=self.SCT_SECURITY_GROUP_NAME,
                                                        VpcId=self.sct_vpc.vpc_id)
             sg_id = result["GroupId"]
-            security_group = self.resource.SecurityGroup(sg_id)  # pylint: disable=no-member
+            security_group = self.resource.SecurityGroup(sg_id)
             security_group.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_SECURITY_GROUP_NAME}])
             LOGGER.info("'%s' with id '%s' created. ", self.SCT_SECURITY_GROUP_NAME, self.sct_security_group.group_id)
             LOGGER.info("Creating common ingress rules...")
@@ -272,7 +271,7 @@ class AwsRegion:
         assert len(existing_sgs) == 1, \
             f"More than 1 Security group with {name} found " \
             f"in {self.region_name}: {existing_sgs}!"
-        return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])  # pylint: disable=no-member
+        return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])
 
     def provide_sct_test_security_group(self, test_id: str):
         """
@@ -292,7 +291,7 @@ class AwsRegion:
                                                        GroupName=name,
                                                        VpcId=self.sct_vpc.vpc_id)
             sg_id = result["GroupId"]
-            security_group = self.resource.SecurityGroup(sg_id)  # pylint: disable=no-member
+            security_group = self.resource.SecurityGroup(sg_id)
             security_group.create_tags(Tags=[{"Key": "Name",
                                               "Value": name},
                                              {"Key": "RunByUser", "Value": get_username()},
@@ -482,7 +481,7 @@ class AwsRegion:
         assert len(existing_sgs) == 1, \
             f"More than 1 Security group with {self.SCT_SSH_GROUP_NAME} found " \
             f"in {self.region_name}: {existing_sgs}!"
-        return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])  # pylint: disable=no-member
+        return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])
 
     def create_sct_ssh_security_group(self):
         """
@@ -501,7 +500,7 @@ class AwsRegion:
                                                        GroupName=self.SCT_SSH_GROUP_NAME,
                                                        VpcId=self.sct_vpc.vpc_id)
             sg_id = result["GroupId"]
-            security_group = self.resource.SecurityGroup(sg_id)  # pylint: disable=no-member
+            security_group = self.resource.SecurityGroup(sg_id)
             security_group.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_SSH_GROUP_NAME}])
             LOGGER.info("'%s' with id '%s' created. ", self.SCT_SSH_GROUP_NAME,
                         self.sct_ssh_security_group.group_id)
@@ -530,7 +529,7 @@ class AwsRegion:
         assert len(existing_key_pairs) == 1, \
             f"More than 1 Key Pair with {self.SCT_KEY_PAIR_NAME} found " \
             f"in {self.region_name}: {existing_key_pairs}!"
-        return self.resource.KeyPair(existing_key_pairs[0]["KeyName"])  # pylint: disable=no-member
+        return self.resource.KeyPair(existing_key_pairs[0]["KeyName"])
 
     def create_sct_key_pair(self):
         LOGGER.info("Creating SCT Key Pair...")
@@ -539,7 +538,7 @@ class AwsRegion:
         else:
             ks = KeyStore()
             sct_key_pair = ks.get_ec2_ssh_key_pair()
-            self.resource.import_key_pair(KeyName=self.SCT_KEY_PAIR_NAME,  # pylint: disable=no-member
+            self.resource.import_key_pair(KeyName=self.SCT_KEY_PAIR_NAME,
                                           PublicKeyMaterial=sct_key_pair.public_key)
             LOGGER.info("SCT Key Pair created.")
 

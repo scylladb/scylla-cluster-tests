@@ -50,12 +50,12 @@ class FakeTester:
     def get_test_details(self):
         pass
 
-    def id(self):  # pylint: disable=invalid-name,no-self-use
+    def id(self):
         return 0
 
 
 class FakeNemesis(Nemesis):
-    def __new__(cls, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
+    def __new__(cls, tester_obj, termination_event, *args):
         return object.__new__(cls)
 
     def disrupt(self):
@@ -68,7 +68,7 @@ def test_list_all_available_nemesis(generate_file=True):
     tester.params["nemesis_seed"] = '1'
     sisyphus = SisyphusMonkey(tester, None)
 
-    subclasses = sisyphus._get_subclasses()  # pylint: disable=protected-access
+    subclasses = sisyphus._get_subclasses()
     disruption_list, disruptions_dict, disruption_classes = sisyphus.get_list_of_disrupt_methods(
         subclasses_list=subclasses, export_properties=True)
 

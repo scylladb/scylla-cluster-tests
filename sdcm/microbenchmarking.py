@@ -36,9 +36,9 @@ warnings.filterwarnings(action='ignore', category=CryptographyDeprecationWarning
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from sdcm.results_analyze import (
-    BaseResultsAnalyzer,  # pylint: disable=wrong-import-position
+    BaseResultsAnalyzer,
 )
-from sdcm.utils.log import setup_stdout_logger  # pylint: disable=wrong-import-position
+from sdcm.utils.log import setup_stdout_logger
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 setup_stdout_logger()
@@ -78,7 +78,7 @@ class EmptyResultFolder(Exception):
         return f"MBM: {self.message}"
 
 
-class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=too-many-instance-attributes
+class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
     allowed_stats = ('Current', 'Stats', 'Last, commit, date', 'Diff last [%]', 'Best, commit, date', 'Diff best [%]')
     higher_better = ('frag/s',)
     lower_better = ('avg aio',)
@@ -101,7 +101,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         query = f"hostname:'{self.hostname}' AND versions.scylla-server.version:{self.db_version[:3]}*"
         if additional_filter:
             query += " AND " + additional_filter
-        output = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+        output = self._es.search(
             index=self._es_index,
             q=query,
             size=self._limit,
@@ -109,8 +109,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         )
         return output
 
-    def check_regression(self, current_results):  # pylint: disable=arguments-differ
-        # pylint: disable=too-many-locals, too-many-statements
+    def check_regression(self, current_results):
 
         if not current_results:
             return {}
@@ -327,7 +326,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         return self.send_email(subject, summary_html, files=files)
 
     def get_results(self, results_path, update_db):
-        # pylint: disable=too-many-locals
 
         bad_chars = " "
         with chdir(os.path.join(results_path, "perf_fast_forward_output")):
@@ -458,7 +456,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             "hits.hits._source.versions.scylla-server.run_date_time"
         )
         self.log.info(f'Exclude tests before date {date}')
-        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
+        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
                                   q=f"hostname:'{self.hostname}' AND versions.scylla-server.version:{self.db_version[:3]}*")
         if not results:
             self.log.info('Nothing to exclude')
@@ -491,7 +489,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
 
         self.log.info(f'Exclude tests by commit id #{commit_id}')
 
-        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
+        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
                                   q=f"hostname:'{self.hostname}' \
                                   AND versions.scylla-server.version:{self.db_version[:3]}*\
                                   AND versions.scylla-server.commit_id:'{commit_id}'")

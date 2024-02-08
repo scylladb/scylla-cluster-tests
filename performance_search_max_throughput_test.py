@@ -11,7 +11,7 @@ from sdcm.utils.common import format_timestamp
 
 class MaximumPerformanceSearchTest(PerformanceRegressionTest):
 
-    def test_search_best_read_throughput(self):  # pylint: disable=too-many-locals
+    def test_search_best_read_throughput(self):
         stress_params = {"stress_cmd_tmpl":  self.params.get('stress_cmd_r'),
                          "test_name": "Test read"}
         stress_params.update(**self._get_stress_parameters())
@@ -24,7 +24,7 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
 
         self.run_search_best_performance(**stress_params)
 
-    def test_search_best_write_throughput(self):  # pylint: disable=too-many-locals
+    def test_search_best_write_throughput(self):
         stress_params = {"stress_cmd_tmpl":  self.params.get('stress_cmd_w'),
                          "test_name": "Test write"}
         stress_params.update(**self._get_stress_parameters())
@@ -35,7 +35,7 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
 
         self.run_search_best_performance(**stress_params)
 
-    def test_search_best_mixed_throughput(self):  # pylint: disable=too-many-locals
+    def test_search_best_mixed_throughput(self):
         stress_params = {"stress_cmd_tmpl":  self.params.get('stress_cmd_m'),
                          "test_name": "Test mixed"}
         stress_params.update(**self._get_stress_parameters())
@@ -46,7 +46,7 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
 
         self.run_search_best_performance(**stress_params)
 
-    def run_search_best_performance(self, stress_cmd_tmpl: str,  # pylint: disable=too-many-arguments,too-many-locals,too-many-statements
+    def run_search_best_performance(self, stress_cmd_tmpl: str,
                                     stress_num: int,
                                     stress_num_step: int,
                                     stress_step_duration: str,

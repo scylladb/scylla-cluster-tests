@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Literal
 
-from cassandra.util import (  # pylint: disable=no-name-in-module
+from cassandra.util import (
     datetime_from_uuid1,
     uuid_from_time,
 )
@@ -52,7 +52,7 @@ class AuditConfiguration:
 
 
 @dataclass
-class AuditLogRow:  # pylint: disable=too-many-instance-attributes
+class AuditLogRow:
     date: date
     node: str
     event_time: datetime
@@ -66,7 +66,7 @@ class AuditLogRow:  # pylint: disable=too-many-instance-attributes
     username: str
 
 
-class AuditLogReader:  # pylint: disable=too-few-public-methods
+class AuditLogReader:
 
     def __init__(self, cluster):
         self._cluster = cluster
@@ -79,7 +79,7 @@ class AuditLogReader:  # pylint: disable=too-few-public-methods
         raise NotImplementedError()
 
 
-class TableAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
+class TableAuditLogReader(AuditLogReader):
 
     def read(self, from_datetime: datetime | None = None,
              category: AuditCategory | None = None,
@@ -116,7 +116,7 @@ class TableAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-met
         return rows
 
 
-def get_audit_log_rows(node,  # pylint: disable=too-many-locals
+def get_audit_log_rows(node,
                        from_datetime: datetime | None = None,
                        category: AuditCategory | None = None,
                        operation: str | None = None,
@@ -160,7 +160,7 @@ def get_audit_log_rows(node,  # pylint: disable=too-many-locals
                     break
 
 
-class SyslogAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
+class SyslogAuditLogReader(AuditLogReader):
 
     def read(self, from_datetime: datetime | None = None, category: AuditCategory | None = None,
              operation: str | None = None,

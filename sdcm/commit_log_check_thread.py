@@ -113,7 +113,6 @@ class PrometheusQueries:
     """
 
 
-# pylint: disable=too-many-instance-attributes
 class CommitLogCheckThread:
     """
         if commitlog-use-hard-size-limit is enabled,
@@ -173,7 +172,7 @@ class CommitLogCheckThread:
                 self.zero_free_segments_checker(self.start_time, interval_end_time)
 
                 self.start_time = interval_end_time
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             trace = traceback.format_exc()
             CommitLogCheckErrorEvent(
                 message=f"CommitLogCheckThread failed: {exc.__repr__()} with traceback {trace}").publish()
@@ -233,7 +232,7 @@ class CommitLogCheckThread:
 
         try:
             thread = CommitLogCheckThread(custer_tester, duration)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             trace = traceback.format_exc()
             CommitLogCheckErrorEvent(
                 message=f"CommitLogCheckThread.__init__ failed with unexpected exception:"
@@ -241,7 +240,7 @@ class CommitLogCheckThread:
         else:
             try:
                 thread.start()
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 trace = traceback.format_exc()
                 CommitLogCheckErrorEvent(
                     message=f"CommitLogCheckThread.start failed with unexpected exception:"

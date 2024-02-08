@@ -34,7 +34,7 @@ class CSWorkloadTypes(Enum):
     MIXED = "mixed"
 
 
-def make_cs_range_histogram_summary(  # pylint: disable=too-many-arguments,unused-argument
+def make_cs_range_histogram_summary(
         workload: CSWorkloadTypes, pattern: str = "", base_path="", start_time: int | float = 0, end_time: int | float = sys.maxsize,
         absolute_time: bool = True, tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> list[dict[str, dict[str, int]]]:
     """
@@ -49,7 +49,7 @@ def make_cs_range_histogram_summary(  # pylint: disable=too-many-arguments,unuse
     return builder.build_histogram_summary(base_path)
 
 
-def make_cs_range_histogram_summary_by_interval(  # pylint: disable=too-many-arguments,unused-argument
+def make_cs_range_histogram_summary_by_interval(
         workload: CSWorkloadTypes, path: str, start_time: int | float, end_time: int | float, interval=TIME_INTERVAL,
         absolute_time=True, tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> list[dict[str, dict[str, int]]]:
     """
@@ -167,7 +167,7 @@ class _CSRangeHistogramBuilder:
                 scan_results.update(result)
         return [scan_results]
 
-    def build_histograms_summary_with_interval(self, path: str, interval=TIME_INTERVAL) -> list[dict[str, dict[str, int]]]:  # pylint: disable=too-many-locals
+    def build_histograms_summary_with_interval(self, path: str, interval=TIME_INTERVAL) -> list[dict[str, dict[str, int]]]:
         """
         Build Several Range Histogram Summaries from provided hdr logs files path splitted by interval
         """

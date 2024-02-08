@@ -22,9 +22,9 @@ from threading import BoundedSemaphore, Event, Lock, Thread
 from time import perf_counter, sleep
 from warnings import warn
 
-from ssh2.channel import Channel  # pylint: disable=no-name-in-module
-from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN  # pylint: disable=no-name-in-module
-from ssh2.exceptions import AuthenticationError  # pylint: disable=no-name-in-module
+from ssh2.channel import Channel
+from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN
+from ssh2.exceptions import AuthenticationError
 
 from .exceptions import (
     AuthenticationException,
@@ -48,17 +48,17 @@ __all__ = ['Session', 'Timings', 'Client', 'Channel', 'FailedToRunCommand']
 LINESEP = b'\n'
 
 
-class __DEFAULT__:  # pylint: disable=invalid-name, too-few-public-methods
+class __DEFAULT__:
     """ Default value for function attribute when None is not an option """
 
 
-class StreamWatcher(ABC):  # pylint: disable=too-few-public-methods
+class StreamWatcher(ABC):
     @abstractmethod
     def submit_line(self, line: str):
         pass
 
 
-class SSHReaderThread(Thread):  # pylint: disable=too-many-instance-attributes
+class SSHReaderThread(Thread):
     """
     Thread that reads data from ssh session socket and forwards it to Queue.
     It is needed because socket buffer gets overflowed if data is sent faster than watchers can process it, so
@@ -84,16 +84,16 @@ class SSHReaderThread(Thread):  # pylint: disable=too-many-instance-attributes
         try:
             self._read_output(self._session, self._channel, self._timeout,
                               self._timeout_read_data, self.stdout, self.stderr)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             self.raised = exc
 
-    def _read_output(  # pylint: disable=too-many-arguments,too-many-branches
+    def _read_output(
             self, session: Session, channel: Channel, timeout: NullableTiming, timeout_read_data: NullableTiming,
             stdout_stream: Queue, stderr_stream: Queue):
         """Reads data from ssh session, split it into lines and forward lines into stderr ad stdout pipes
         It is required for it to be fast, that is why there is code duplications and non-pythonic code
         """
-        # pylint: disable=too-many-locals
+
         stdout_remainder = stderr_remainder = b''
         if timeout is None:
             end_time = float_info.max
@@ -101,14 +101,14 @@ class SSHReaderThread(Thread):  # pylint: disable=too-many-instance-attributes
             end_time = perf_counter() + timeout
         eof_result = stdout_size = stderr_size = 1
         while eof_result == LIBSSH2_ERROR_EAGAIN or stdout_size == LIBSSH2_ERROR_EAGAIN or \
-                stdout_size > 0 or stderr_size == LIBSSH2_ERROR_EAGAIN or stderr_size > 0:  # pylint: disable=consider-using-in
+                stdout_size > 0 or stderr_size == LIBSSH2_ERROR_EAGAIN or stderr_size > 0:
             if perf_counter() > end_time:
                 self.timeout_reached = True
                 break
             if not self._can_run.is_set():
                 break
             with session.lock:
-                if stdout_size == LIBSSH2_ERROR_EAGAIN and stderr_size == LIBSSH2_ERROR_EAGAIN:  # pylint: disable=consider-using-in
+                if stdout_size == LIBSSH2_ERROR_EAGAIN and stderr_size == LIBSSH2_ERROR_EAGAIN:
                     session.simple_select(timeout=timeout_read_data)
                 stdout_size, stdout_chunk = channel.read()
                 stderr_size, stderr_chunk = channel.read_stderr()
@@ -158,7 +158,7 @@ class KeepAliveThread(Thread):
             try:
                 time_to_wait = self._session.eagain(
                     self._session.keepalive_send, timeout=self._keepalive_timeout)
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 time_to_wait = self._keepalive_timeout
             sleep(time_to_wait)
 
@@ -241,7 +241,7 @@ class FloodPreventingFacility(dict):
 DEFAULT_FLOOD_PREVENTING = FloodPreventingFacility(hash_items='host', limit=2)
 
 
-class Client:  # pylint: disable=too-many-instance-attributes
+class Client:
     """
     SSH2 Client, partially imitates invoke interface.
     It is not thread safe, so make sure that any given instance is not used by multiple threads.
@@ -292,7 +292,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
     timings: Timings = Timings()
     flood_preventing: FloodPreventingFacility = DEFAULT_FLOOD_PREVENTING
 
-    def __init__(self, host: str, user: str, password: str = None,  # pylint: disable=too-many-arguments
+    def __init__(self, host: str, user: str, password: str = None,
                  port: int = None, pkey: str = None, allow_agent: bool = None, forward_ssh_agent: bool = None,
                  proxy_host: str = None, keepalive_seconds: int = None, timings: Timings = None,
                  flood_preventing: FloodPreventingFacility = None):
@@ -364,7 +364,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 with self.session.lock:
                     self.session.agent_auth(self.user)
                 return
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 pass
         self._password_auth()
 
@@ -394,7 +394,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
             self.session.eagain(
                 self.session.userauth_password,
                 args=(self.user, self.password), timeout=self.timings.auth_timeout)
-        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
             raise AuthenticationException("Password authentication failed") from error
 
     @staticmethod
@@ -411,7 +411,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
         if self.sock:
             try:
                 self.sock.close()
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 pass
         family = self._get_socket_family(host)
         if family is None:
@@ -430,7 +430,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
             raise ConnectError(f"Error connecting to host '{host}:{port}' - {str(error_type)}") from ex
 
     @staticmethod
-    def _process_output(  # pylint: disable=too-many-arguments, too-many-branches
+    def _process_output(
             watchers: list[StreamWatcher], encoding: str, stdout_stream: StringIO, stderr_stream: StringIO,
             reader: SSHReaderThread, timeout: NullableTiming, timeout_read_data_chunk: NullableTiming):
         """Separate different approach for the case when watchers are present, since watchers are slow,
@@ -455,7 +455,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                     stdout_stream.write(data)
                     for watcher in watchers:
                         watcher.submit_line(data)
-                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     pass
             if stderr_stream is not None:
                 if reader.stderr.qsize():
@@ -465,12 +465,12 @@ class Client:  # pylint: disable=too-many-instance-attributes
                         stderr_stream.write(data)
                         for watcher in watchers:
                             watcher.submit_line(data)
-                    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                    except Exception:  # noqa: BLE001
                         pass
         return True
 
     @staticmethod
-    def _process_output_no_watchers(  # pylint: disable=too-many-arguments
+    def _process_output_no_watchers(
             session: Session, channel: Channel, encoding: str, stdout_stream: StringIO,
             stderr_stream: StringIO, timeout: NullableTiming, timeout_read_data_chunk: NullableTiming) -> bool:
         eof_result = stdout_size = stderr_size = LIBSSH2_ERROR_EAGAIN
@@ -479,11 +479,11 @@ class Client:  # pylint: disable=too-many-instance-attributes
         else:
             end_time = float_info.max
         while eof_result == LIBSSH2_ERROR_EAGAIN or stdout_size == LIBSSH2_ERROR_EAGAIN or stdout_size > 0 or \
-                stderr_size == LIBSSH2_ERROR_EAGAIN or stderr_size > 0:  # pylint: disable=consider-using-in
+                stderr_size == LIBSSH2_ERROR_EAGAIN or stderr_size > 0:
             if perf_counter() > end_time:
                 return False
             with session.lock:
-                if stdout_size == LIBSSH2_ERROR_EAGAIN and stderr_size == LIBSSH2_ERROR_EAGAIN:  # pylint: disable=consider-using-in
+                if stdout_size == LIBSSH2_ERROR_EAGAIN and stderr_size == LIBSSH2_ERROR_EAGAIN:
                     session.simple_select(timeout=timeout_read_data_chunk)
                 eof_result = channel.wait_eof()
                 stdout_size, stdout_chunk = channel.read()
@@ -524,8 +524,8 @@ class Client:  # pylint: disable=too-many-instance-attributes
                     break
                 except AuthenticationError:
                     self.disconnect()
-                    raise  # pylint: disable=broad-except
-                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                    raise
+                except Exception as exc:  # noqa: BLE001
                     self.disconnect()
                     if perf_counter() > end_time:
                         ex_msg = f'Failed to connect in {timeout} seconds, last error: ({type(exc).__name__}){str(exc)}'
@@ -548,19 +548,19 @@ class Client:  # pylint: disable=too-many-instance-attributes
         if self.session is not None:
             try:
                 self.session.eagain(self.session.disconnect)
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 pass
             del self.session
             self.session = None
         if self.sock is not None:
             try:
                 self.sock.close()
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 pass
             self.sock = None
 
-    def run(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals
-            self, command: str, warn: bool = False, encoding: str = 'utf-8',  # pylint: disable=redefined-outer-name
+    def run(
+            self, command: str, warn: bool = False, encoding: str = 'utf-8',
             hide=True, watchers=None, env=None, replace_env=False, in_stream=False, timeout=None) -> Result:
         """Run command, wait till it ends and return result in Result class.
         If `watchers` are defined it runs `SSHReaderThread` that reads data from the socket and forwards it to Queue.
@@ -595,12 +595,12 @@ class Client:  # pylint: disable=too-many-instance-attributes
             if self.session is None:
                 self.connect()
             channel = self.open_channel()
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             return self._complete_run(
                 channel, FailedToRunCommand(result, exc), timeout_reached, timeout, result, warn, stdout, stderr)
         try:
             self._apply_env(channel, env)
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             return self._complete_run(
                 channel, FailedToRunCommand(result, exc), timeout_reached, timeout, result, warn, stdout, stderr)
         if watchers:
@@ -610,7 +610,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 self.execute(command, channel=channel, use_pty=False)
                 self._process_output(watchers, encoding, stdout, stderr, reader, timeout,
                                      self.timings.interactive_read_data_chunk_timeout)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 exception = FailedToReadCommandOutput(result, exc)
             if reader.is_alive():
                 reader.stop()
@@ -623,7 +623,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 timeout_reached = not self._process_output_no_watchers(
                     self.session, channel, encoding, stdout, stderr, timeout,
                     self.timings.read_data_chunk_timeout)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 exception = FailedToReadCommandOutput(result, exc)
         return self._complete_run(channel, exception, timeout_reached, timeout, result, warn, stdout, stderr)
 
@@ -633,8 +633,8 @@ class Client:  # pylint: disable=too-many-instance-attributes
             for var, val in env.items():
                 channel.setenv(str(var), str(val))
 
-    def _complete_run(self, channel: Channel, exception: Exception,  # pylint: disable=too-many-arguments
-                      timeout_reached: NullableTiming, timeout: NullableTiming, result: Result, warn,  # pylint: disable=redefined-outer-name
+    def _complete_run(self, channel: Channel, exception: Exception,
+                      timeout_reached: NullableTiming, timeout: NullableTiming, result: Result, warn,
                       stdout: StringIO, stderr: StringIO) -> Result:
         """Complete executing command and return result, no matter what had happened.
         """
@@ -645,11 +645,11 @@ class Client:  # pylint: disable=too-many-instance-attributes
             try:
                 with self.session.lock:
                     channel.close()
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 print(f'Failed to close channel due to the following error: {exc}')
             try:
                 self.session.eagain(channel.wait_closed, timeout=self.timings.channel_close_timeout)
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 print(f'Failed to close channel due to the following error: {exc}')
             exit_status = channel.get_exit_status()
             self.session.drop_channel(channel)
@@ -687,7 +687,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 chan = self.session.eagain(self.session.open_session)
                 if chan != LIBSSH2_ERROR_EAGAIN:
                     break
-            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 pass
             delay = next(delay_iter, delay)
             sleep(delay)

@@ -45,7 +45,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     _INSTANCE_PROFILE_PARAM_NAME: str = None
 
     @property
-    def BlockDeviceMappings(self) -> list[AWSDiskMapping]:  # pylint: disable=invalid-name
+    def BlockDeviceMappings(self) -> list[AWSDiskMapping]:
         if not self.ImageId:
             return []
         device_mappings = []
@@ -62,17 +62,17 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return device_mappings
 
     @property
-    def ImageId(self) -> str | None:  # pylint: disable=invalid-name
+    def ImageId(self) -> str | None:
         if not self._image_ids:
             return None
         return self._image_ids[self.region_id]
 
     @property
-    def KeyName(self) -> str:  # pylint: disable=invalid-name
+    def KeyName(self) -> str:
         return self._credentials[self.region_id].key_pair_name
 
     @property
-    def NetworkInterfaces(self) -> list[dict]:  # pylint: disable=invalid-name
+    def NetworkInterfaces(self) -> list[dict]:
         output = [{'DeviceIndex': 0, **self._network_interface_params}]
         # TODO: handle case when more then 1 additional interface should be added
         if network_interfaces_count(self.params) > 1:
@@ -80,23 +80,23 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return output
 
     @property
-    def IamInstanceProfile(self):  # pylint: disable=invalid-name
+    def IamInstanceProfile(self):
         if profile := self.params.get(self._INSTANCE_PROFILE_PARAM_NAME):
             return {'Name': profile}
         return None
 
     @property
-    def InstanceType(self) -> str:  # pylint: disable=invalid-name
+    def InstanceType(self) -> str:
         return self.params.get(self._INSTANCE_TYPE_PARAM_NAME)
 
     @property
-    def Placement(self) -> AWSPlacementInfo | None:  # pylint: disable=invalid-name
+    def Placement(self) -> AWSPlacementInfo | None:
         return AWSPlacementInfo(
             AvailabilityZone=self._region_name + self._availability_zones[self.availability_zone],
             GroupName=self.placement_group)
 
     @property
-    def UserData(self) -> str | None:  # pylint: disable=invalid-name
+    def UserData(self) -> str | None:
         if not self.user_data_raw:
             return None
         if isinstance(self.user_data_raw, UserDataBuilderBase):
@@ -138,8 +138,8 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     @property
     def _network_interface_params(self):
         return {
-            'SubnetId': self._ec2_subnet_ids[self.region_id][self.availability_zone],  # pylint: disable=invalid-sequence-index
-            'Groups': self._ec2_security_group_ids[self.region_id],  # pylint: disable=invalid-sequence-index
+            'SubnetId': self._ec2_subnet_ids[self.region_id][self.availability_zone],
+            'Groups': self._ec2_security_group_ids[self.region_id],
         }
 
     @property

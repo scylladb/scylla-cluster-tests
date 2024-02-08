@@ -15,7 +15,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.continuous_event import ContinuousEvent
 
 
-class PrometheusAlertManagerEvent(ContinuousEvent):  # pylint: disable=too-many-instance-attributes
+class PrometheusAlertManagerEvent(ContinuousEvent):
     _eq_attrs = (
         "type",
         "starts_at",

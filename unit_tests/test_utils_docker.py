@@ -11,9 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=too-few-public-methods,too-many-statements,protected-access,attribute-defined-outside-init
-# pylint: disable=too-many-public-methods,too-many-instance-attributes
-
 
 import os
 import unittest
@@ -33,7 +30,7 @@ from sdcm.utils.docker_utils import (
 
 
 class DummyDockerClient:
-    class containers:  # pylint: disable=invalid-name
+    class containers:
         @staticmethod
         def list(*args, **kwargs):
             return args, kwargs
@@ -52,7 +49,7 @@ class DummyDockerClient:
             container.run_args = args, kwargs
             return container
 
-    class images:  # pylint: disable=invalid-name
+    class images:
         @staticmethod
         def build(*args, **kwargs):
             return (args, kwargs,), [{"stream": "blah"}]
@@ -164,7 +161,7 @@ class TestContainerManager(unittest.TestCase):
                              ContainerManager.default_docker_client)
 
         with self.subTest("Docker client without name argument"):
-            self.node.None_docker_client = Mock()  # pylint: disable=invalid-name
+            self.node.None_docker_client = Mock()
             self.node.docker_client = sentinel.none_docker_client
             self.assertEqual(ContainerManager.get_docker_client(self.node), sentinel.none_docker_client)
             self.node.None_docker_client.assert_not_called()
@@ -408,7 +405,6 @@ class TestContainerManager(unittest.TestCase):
             rsa_key_mock.return_value.get_base64.assert_called_once_with()
             self.container.exec_run.assert_called_once()
 
-            # pylint: disable=unsubscriptable-object; disable this message for .call_args[]
             self.assertIn(" 0123456789 ", " ".join(self.container.exec_run.call_args[0][0]))
             self.assertEqual(self.container.exec_run.call_args[1]["user"], sentinel.ssh_user)
 

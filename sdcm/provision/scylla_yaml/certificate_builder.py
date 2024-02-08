@@ -23,9 +23,9 @@ from sdcm.provision.scylla_yaml.auxiliaries import (
     ServerEncryptionOptions,
 )
 
-
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
-# pylint: disable=no-member
+
+
 class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes regarding encryption

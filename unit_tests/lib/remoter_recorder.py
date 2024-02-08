@@ -29,7 +29,7 @@ class RemoterRecorder(RemoteCmdRunner):
     """
     responses = {}
 
-    def run(self, cmd: str, timeout: float | None = None,  # pylint: disable=too-many-arguments
+    def run(self, cmd: str, timeout: float | None = None,
             ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
             log_file: str | None = None, retry: int = 1, watchers: list[StreamWatcher] | None = None,
             change_context: bool = False) -> Result:

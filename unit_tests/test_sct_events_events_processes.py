@@ -22,7 +22,7 @@ from sdcm.sct_events.events_processes import (
 )
 
 
-class FakeProcess:  # pylint: disable=too-few-public-methods
+class FakeProcess:
     def __init__(self, _registry=None):
         self._registry = _registry
         self.started = False
@@ -36,10 +36,9 @@ class TestEventsProcessesRegistry(unittest.TestCase):
         self.registry = EventsProcessesRegistry("some_path")
 
     def test_fresh(self):
-        self.assertEqual(self.registry._registry_dict, {})  # pylint: disable=protected-access
+        self.assertEqual(self.registry._registry_dict, {})
         self.assertEqual(self.registry.log_dir, Path("some_path"))
 
-    # pylint: disable=protected-access
     def test_start_events_process(self):
         self.registry.start_events_process("test", FakeProcess)
         self.assertEqual(len(self.registry._registry_dict), 1)

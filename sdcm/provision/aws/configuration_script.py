@@ -18,7 +18,7 @@ from sdcm.provision.aws.utils import (
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 
 
-class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):  # pylint: disable=too-few-public-methods
+class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):
     """
     A class that builds instance initialization script from parameters
     """

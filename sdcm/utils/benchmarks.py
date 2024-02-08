@@ -169,7 +169,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
 
         @retrying(n=3, sleep_time=1, message="Get hw performance nodes result...", raise_on_exceeded=False)
         def search_results():
-            results = self._es.search(index=ES_INDEX,  # pylint: disable=unexpected-keyword-arg
+            results = self._es.search(index=ES_INDEX,
                                       q=query,
                                       filter_path=filter_path,
                                       size=1000)
@@ -207,7 +207,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                                         margins=Margins(sysbench_eps=0.03,
                                                         cassandra_fio_read_bw=0.01,
                                                         cassandra_fio_write_bw=0.01)))
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.warning(
                     "Failed to generate comparable result for the following item:\n%s"
                     "\nException:%s", runner.benchmark_results, exc)
@@ -241,7 +241,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                     cassandra_fio_read_bw=item["cassandra_fio_lcs_64k_read"]["read"]["bw"],
                     cassandra_fio_write_bw=item["cassandra_fio_lcs_64k_write"]["write"]["bw"]
                 ))
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.warning(
                     "Failed to generate comparable result for the following item:\n%s"
                     "\nException:%s", item, exc)
@@ -255,7 +255,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
 
 
 class ScyllaNodeBenchmarkRunner:
-    # pylint: disable=broad-except
+
     """
     ScyllaNodeBenchmarkRunner installs and runs benchmarking
     tools on given cluster nodes and collects the output.

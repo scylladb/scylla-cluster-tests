@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     from sdcm.tester import ClusterTester
 
 
-# pylint: disable=too-few-public-methods
 class EventHandler(abc.ABC):
 
     def __init__(self):

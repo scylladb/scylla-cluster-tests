@@ -76,7 +76,6 @@ class ContinuousEventsRegistry(metaclass=Singleton):
         return running_nemesis_events
 
 
-# pylint: disable=too-many-instance-attributes
 class ContinuousEvent(SctEvent, abstract=True):
     # Event filter does not create object of the class (not initialize it), so "_duration" attribute should
     # exist without initialization

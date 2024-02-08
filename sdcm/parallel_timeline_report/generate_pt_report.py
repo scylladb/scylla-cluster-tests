@@ -40,7 +40,6 @@ class EventGroup(Enum):
     STRESS_EVENTS = ["CassandraStressEvent", "CassandraStressLogEvent"]
 
 
-# pylint: disable=too-many-instance-attributes
 @dataclass
 class Event:
     event_dict: dict
@@ -148,7 +147,6 @@ class Event:
         return label_string
 
 
-# pylint: disable=too-many-instance-attributes
 class ParallelTimelinesReportGenerator:
     def __init__(self, events_file):
         self.events_file = Path(events_file)

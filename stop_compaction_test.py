@@ -378,7 +378,7 @@ class StopCompactionTest(ClusterTester):
 
         try:
             email_data = self._get_common_email_data()
-        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as error:  # noqa: BLE001
             self.log.error("Error in gathering common email data: Error:\n%s", error)
 
         email_data.update({"test_statuses": self.test_statuses,

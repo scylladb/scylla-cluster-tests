@@ -20,7 +20,7 @@ import tempfile
 
 import yaml
 from cassandra import AlreadyExists, InvalidRequest
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.query import SimpleStatement
 
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
 from sdcm.sct_events import Severity
@@ -40,7 +40,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
     Test a Scylla cluster stability over a time period.
     """
 
-    def __init__(self, *args, **kwargs):  # pylint: disable=too-many-statements,too-many-locals,too-many-branches
+    def __init__(self, *args, **kwargs):
         super().__init__(*args)
 
         # This ignores large_data warning messages "Writing large collection" for large collections to prevent
@@ -116,7 +116,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         """
         Run cassandra-stress with params defined in data_dir/scylla.yaml
         """
-        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)
@@ -177,7 +176,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
                 with open(cs_profile, encoding="utf-8") as pconf:
                     cont = pconf.readlines()
-                    user_profile_table_count = self.params.get(  # pylint: disable=invalid-name
+                    user_profile_table_count = self.params.get(
                         'user_profile_table_count')
                     for _ in range(user_profile_table_count):
                         for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
@@ -288,7 +287,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 assert os.path.exists(cs_profile), f'File not found: {cs_profile}'
                 self.log.debug(f'Run stress test with user profile {cs_profile}, duration {cs_duration}')
 
-                user_profile_table_count = self.params.get('user_profile_table_count')  # pylint: disable=invalid-name
+                user_profile_table_count = self.params.get('user_profile_table_count')
 
                 for _ in range(user_profile_table_count):
                     stress_params_list += self.create_templated_user_stress_params(next(templated_table_counter),
@@ -306,7 +305,6 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         :param stress_params_list: the list of all stress commands
         :return:
         """
-        # pylint: disable=too-many-locals
 
         def chunks(_list, chunk_size):
             """Yield successive n-sized chunks from _list."""
@@ -409,8 +407,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                               compaction=compaction_strategy, sstable_size=sstable_size)
 
     def _pre_create_templated_user_schema(self, batch_start=None, batch_end=None):
-        # pylint: disable=too-many-locals
-        user_profile_table_count = self.params.get(  # pylint: disable=invalid-name
+
+        user_profile_table_count = self.params.get(
             'user_profile_table_count') or 0
         cs_user_profiles = self.params.get('cs_user_profiles')
         # read user-profile
@@ -468,7 +466,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         try:
             grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
                 self.start_time) if self.monitors else {}
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:
             self.log.exception("Error in gathering Grafana screenshots and snapshots. Error:\n%s",
                                error, exc_info=error)
 
@@ -484,8 +482,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                            "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-", })
         return email_data
 
-    def create_templated_user_stress_params(self, idx, cs_profile):  # pylint: disable=invalid-name
-        # pylint: disable=too-many-locals
+    def create_templated_user_stress_params(self, idx, cs_profile):
+
         params_list = []
         cs_duration = self.params.get('cs_duration')
 

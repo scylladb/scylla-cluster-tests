@@ -17,7 +17,7 @@ import time
 from enum import Enum
 
 import yaml
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.query import SimpleStatement
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
@@ -42,7 +42,7 @@ class PerformanceTestType(Enum):
     LATENCY = "latency"
 
 
-class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-public-methods
+class PerformanceRegressionTest(ClusterTester):
 
     """
     Test Scylla performance regression with cassandra-stress.
@@ -173,11 +173,11 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             with open(os.path.join(self.logdir, 'jenkins_perf_PerfPublisher.xml'), 'w', encoding="utf-8") as pref_file:
                 content = f"""<report name="{test_name} report" categ="none">{test_xml}</report>"""
                 pref_file.write(content)
-        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as ex:  # noqa: BLE001
             self.log.debug(f'Failed to display results: {results}')
             self.log.debug(f'Exception: {ex}')
 
-    def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments
+    def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='',
                   save_stats=True):
         if debug_message:
             self.log.debug(debug_message)
@@ -265,7 +265,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             cmds = [cmds]
 
         for cmd in cmds:
-            # pylint: disable=no-member
+
             with self.db_cluster.cql_connection_patient(node) as session:
                 session.execute(cmd)
 
@@ -724,7 +724,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self._mixed_with_mv(on_populated=False)
 
     # Counter Tests
-    def test_uniform_counter_update_bench(self):  # pylint: disable=invalid-name
+    def test_uniform_counter_update_bench(self):
         """
         Test steps:
 
@@ -796,24 +796,24 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                                   histogram_data=histogram_data_by_interval)
 
 
-class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):  # pylint: disable=too-many-ancestors
-    def get_email_data(self):  # pylint: disable=no-self-use
+class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest):
+    def get_email_data(self):
         return PerformanceRegressionTest.get_email_data(self)
 
     @latency_calculator_decorator(legend="Upgrade Node")
-    def upgrade_node(self, node):  # pylint: disable=arguments-differ
+    def upgrade_node(self, node):
         InfoEvent(message='Upgrade Node %s begin' % node.name).publish()
         self._upgrade_node(node)
         InfoEvent(message='Upgrade Node %s ended' % node.name).publish()
 
-    def _stop_stress_when_finished(self):  # pylint: disable=no-self-use
+    def _stop_stress_when_finished(self):
         with EventsSeverityChangerFilter(new_severity=Severity.NORMAL,  # killing stress creates Critical error
                                          event_class=CassandraStressEvent,
                                          extra_time_to_expiration=60):
             self.loaders.kill_stress_thread()
 
     @latency_calculator_decorator
-    def steady_state_latency(self):  # pylint: disable=no-self-use
+    def steady_state_latency(self):
         sleep_time = self.db_cluster.params.get('nemesis_interval') * 60
         InfoEvent(message='Starting Steady State calculation for %ss' % sleep_time).publish()
         time.sleep(sleep_time)
@@ -828,9 +828,9 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
 
     def run_workload_and_upgrade(self, stress_cmd, sub_type=None):
         # next 3 lines, is a workaround to have it working inside `latency_calculator_decorator`
-        self.cluster = self.db_cluster  # pylint: disable=attribute-defined-outside-init
-        self.tester = self  # pylint: disable=attribute-defined-outside-init
-        self.monitoring_set = self.monitors  # pylint: disable=attribute-defined-outside-init
+        self.cluster = self.db_cluster
+        self.tester = self
+        self.monitoring_set = self.monitors
 
         if sub_type is None:
             sub_type = 'read' if ' read ' in stress_cmd else 'write' if ' write ' in stress_cmd else 'mixed'

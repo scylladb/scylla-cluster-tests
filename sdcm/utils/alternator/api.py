@@ -56,7 +56,7 @@ class Alternator:
         ]
         dynamodb_api.client.tag_resource(ResourceArn=arn, Tags=tags)
 
-    def create_table(self, node,  # pylint: disable=too-many-arguments
+    def create_table(self, node,
                      schema=enums.YCSBSchemaTypes.HASH_AND_RANGE, isolation=None, table_name=consts.TABLE_NAME,
                      wait_until_table_exists=True, **kwargs) -> Table:
         if isinstance(schema, enums.YCSBSchemaTypes):

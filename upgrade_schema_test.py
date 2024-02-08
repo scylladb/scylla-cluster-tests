@@ -12,7 +12,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 # TODO: this test seem to be broken, hence disabling all pylint checks
-# pylint: disable=all
+
 
 import random
 import struct

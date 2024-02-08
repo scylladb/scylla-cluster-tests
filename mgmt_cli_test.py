@@ -10,9 +10,8 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-# pylint: disable=too-many-lines
 
-# pylint: disable=too-many-lines
+
 import random
 import re
 import time
@@ -143,7 +142,7 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
             return base_id.replace('-', '')
         return base_id
 
-    def restore_backup(self, mgr_cluster, snapshot_tag, keyspace_and_table_list):  # pylint: disable=too-many-locals
+    def restore_backup(self, mgr_cluster, snapshot_tag, keyspace_and_table_list):
         backup_bucket_backend = self.params.get("backup_bucket_backend")
         if backup_bucket_backend == "s3":
             install_dependencies = self.install_awscli_dependencies
@@ -177,7 +176,6 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
         self.restore_backup(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
                             keyspace_and_table_list=keyspace_and_table_list)
 
-    # pylint: disable=too-many-arguments
     def verify_backup_success(self, mgr_cluster, backup_task, keyspace_name='keyspace1', tables_names=None,
                               truncate=True, restore_data_with_task=False, timeout=None):
         if tables_names is None:
@@ -271,7 +269,6 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
         return stress_thread
 
 
-# pylint: disable=too-many-public-methods
 class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     """
     Test Scylla Manager operations on Scylla cluster.
@@ -459,7 +456,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                       timeout=110000, restore_data=True)
         self.run_verification_read_stress()
 
-    def test_restore_multiple_backup_snapshots(self):  # pylint: disable=too-many-locals
+    def test_restore_multiple_backup_snapshots(self):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
@@ -848,7 +845,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert manager_from_version[0] != manager_tool.sctool.version[0], "Manager version not changed after rollback."
         self.log.info('finishing test_manager_rollback_upgrade')
 
-    def test_repair_multiple_keyspace_types(self):  # pylint: disable=invalid-name
+    def test_repair_multiple_keyspace_types(self):
         self.log.info('starting test_repair_multiple_keyspace_types')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
@@ -862,7 +859,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.log.info(f'Task: {repair_task.id} is done.')
         self.log.debug(f"sctool version is : {manager_tool.sctool.version}")
 
-        expected_keyspaces_to_be_repaired = ["system_auth", "system_distributed",  # pylint: disable=invalid-name
+        expected_keyspaces_to_be_repaired = ["system_auth", "system_distributed",
                                              self.NETWORKSTRATEGY_KEYSPACE_NAME]
         per_keyspace_progress = repair_task.per_keyspace_progress
         self.log.info("Looking in the repair output for all of the required keyspaces")

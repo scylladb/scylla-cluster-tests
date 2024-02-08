@@ -132,7 +132,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
     def _pre_create_schema_scylla_bench(self):
         node = self.db_cluster.nodes[0]
         create_table_query = create_scylla_bench_table_query()
-        # pylint: disable=no-member
+
         with self.db_cluster.cql_connection_patient(node) as session:
             session.execute("""
                     CREATE KEYSPACE IF NOT EXISTS scylla_bench WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3}
@@ -184,7 +184,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                 f"Node {node.public_ip_address} used capacity after pre-load data is: {used_capacity}")
 
         self.log.info(f'Run Repair on node: {node1.name} , 0% synced')
-        repair_time = self._run_repair(node=node1)[0]  # pylint: disable=unsubscriptable-object
+        repair_time = self._run_repair(node=node1)[0]
         self.log.info(f'Repair (0% synced) time on node: {node1.name} is: {repair_time}')
 
         stats['repair_runtime_all_diff'] = repair_time
@@ -192,7 +192,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.wait_no_compactions_running()
 
         self.log.info(f'Run Repair on node: {node1.name} , 100% synced')
-        repair_time = self._run_repair(node=node1)[0]  # pylint: disable=unsubscriptable-object
+        repair_time = self._run_repair(node=node1)[0]
         self.log.info(f'Repair (100% synced) time on node: {node1.name} is: {repair_time}')
 
         stats['repair_runtime_no_diff'] = repair_time
@@ -239,7 +239,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.print_nodes_used_capacity()
 
         self.log.info(f'Run Repair on node: {node3.name} , 99.8% synced')
-        repair_time = self._run_repair(node=node3)[0]  # pylint: disable=unsubscriptable-object
+        repair_time = self._run_repair(node=node3)[0]
 
         self.log.debug("Nodes total used capacity after repair end is:")
         self.print_nodes_used_capacity()
@@ -316,7 +316,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.print_nodes_used_capacity()
 
         self.log.info(f'Run Repair on node: {node3.name}')
-        repair_time = self._run_repair(node=node3)[0]  # pylint: disable=unsubscriptable-object
+        repair_time = self._run_repair(node=node3)[0]
 
         self.log.debug("Nodes total used capacity after repair end is:")
         self.print_nodes_used_capacity()
@@ -367,7 +367,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             stress_queue.append(self.run_stress_thread(**params))
 
         self.log.info(f'Run Repair on node: {node1.name} , during r/w load')
-        repair_time = self._run_repair(node=node1)[0]  # pylint: disable=unsubscriptable-object
+        repair_time = self._run_repair(node=node1)[0]
 
         self.log.debug("Nodes total used capacity after repair end is:")
         self.print_nodes_used_capacity()

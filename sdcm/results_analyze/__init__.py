@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-# pylint: disable=too-many-lines
+
 import collections
 import json
 import logging
@@ -47,12 +47,12 @@ LOGGER = logging.getLogger(__name__)
 PP = pprint.PrettyPrinter(indent=2)
 
 
-class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
-    # pylint: disable=too-many-arguments
+class BaseResultsAnalyzer:
+
     def __init__(self, es_index, es_doc_type, email_recipients=(), email_template_fp="", query_limit=1000, logger=None,
                  events=None):
         self._es = ES()
-        self._conf = self._es._conf  # pylint: disable=protected-access
+        self._conf = self._es._conf
         self._es_index = es_index
         self._es_doc_type = es_doc_type
         self._limit = query_limit
@@ -65,7 +65,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         """
         Get all the test results in json format
         """
-        return self._es.search(index=self._es_index, size=self._limit)  # pylint: disable=unexpected-keyword-arg
+        return self._es.search(index=self._es_index, size=self._limit)
 
     def get_test_by_id(self, test_id):
         """
@@ -227,7 +227,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     Get latency during operations performance analyzer
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_latency_during_ops_short.html", logger=logger, events=events)
         self.percentiles = ['percentile_90', 'percentile_99']
@@ -254,7 +254,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         query = LatencyWithNemesisQueryFilter(test_doc, is_gce, use_wide_query=True, lastyear=True)()
 
         LOGGER.debug("ES QUERY: %s", query)
-        test_results = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+        test_results = self._es.search(
             index=self._es_index,
             doc_type=self._es_doc_type,
             q=query,
@@ -292,7 +292,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                      "average_time_operation_in_sec": int(operation_time_average)
                      })
 
-    def _get_best_per_nemesis_for_each_version(self, test_doc, is_gce):  # pylint: disable=too-many-branches,too-many-locals
+    def _get_best_per_nemesis_for_each_version(self, test_doc, is_gce):
         try:
             if not test_doc["_source"].get("latency_during_ops"):
                 LOGGER.error("Document with id=%s doesn't have 'latency_during_ops' statistics", test_doc['_id'])
@@ -353,7 +353,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                                                                    key=lambda version: version,
                                                                    reverse=True)}
             return best_results
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("Search best results per version failed. Error: %s", exc)
             return {}
 
@@ -408,10 +408,10 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                     best['average_time_operation_in_sec_diff'] = _calculate_relative_change_magnitude(
                         current_result[nemesis]['average_time_operation_in_sec'],
                         best['average_time_operation_in_sec'])
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("Compare results failed: %s", exc)
 
-    def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, email_subject_postfix=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-arguments
+    def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, email_subject_postfix=None):
         doc = self.get_test_by_id(test_id)
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.LongevityTest.test_custom_time
@@ -504,7 +504,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
     Get specified performance test results from elasticsearch DB and analyze it to find a regression
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="", logger=logger, events=events)
 
@@ -515,7 +515,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
             return None
         return test_doc['_source']['results']
 
-    def check_regression(self, test_id, stats):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_id, stats):
         """
         Get test results by id, filter similar results and calculate DB values for each version,
         then compare with max-allowed in the tested version (and report all the found versions).
@@ -543,7 +543,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
             stat_path = '.'.join([es_source_path, stat])
             filter_path.append(stat_path)
 
-        tests_filtered = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+        tests_filtered = self._es.search(
             index=self._es_index,
             size=self._limit,
             filter_path=filter_path,
@@ -634,7 +634,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     PARAMS = TestStatsMixin.STRESS_STATS
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):  # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_performance.html", logger=logger, events=events)
 
@@ -710,7 +710,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     f'Failed to compare {param} results: {src[param]} vs {dst[param]}, version {version_dst}')
         return cmp_res
 
-    # pylint: disable=too-many-arguments
     def check_regression(self, test_id, is_gce=False, email_subject_postfix=None,
                          use_wide_query=False, lastyear=False,
                          node_benchmarks=None):
@@ -722,7 +721,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         :param is_gce: is gce instance
         :return: True/False
         """
-        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 
         # get test res
         doc = self.get_test_by_id(test_id)
@@ -745,7 +743,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        'hits.hits._source.results.stats_total',
                        'hits.hits._source.results.throughput',
                        'hits.hits._source.versions']
-        tests_filtered = self._es.search(index=self._es_index, q=query, filter_path=filter_path,  # pylint: disable=unexpected-keyword-arg
+        tests_filtered = self._es.search(index=self._es_index, q=query, filter_path=filter_path,
                                          size=self._limit, request_timeout=30)
 
         if not tests_filtered:
@@ -902,7 +900,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         :param is_gce: is gce instance
         :return: True/False
         """
-        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 
         doc = self.get_test_by_id(test_id)
         if not doc:
@@ -927,7 +924,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        'hits.hits._source.results',
                        'hits.hits._source.versions',
                        'hits.hits._source.test_details']
-        tests_filtered = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+        tests_filtered = self._es.search(
             index=self._es_index,
             q=query,
             size=self._limit,
@@ -1208,7 +1205,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return output
 
     @staticmethod
-    def _cleanup_not_complete_main_tests(prior_main_tests: list, prior_subtests: dict, expected_subtests_count):  # pylint: disable=too-many-branches
+    def _cleanup_not_complete_main_tests(prior_main_tests: list, prior_subtests: dict, expected_subtests_count):
         is_test_complete = {}
         for subtest, prior_tests in prior_subtests.items():
             for prior_test_id, _ in prior_tests.group_by('main_test_id').items():
@@ -1241,7 +1238,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             subtests_info: list = None,
             metrics: list = None,
             subject: str = None,
-    ):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    ):
         """
         Build regression report for subtests.
         test_id: Main test id
@@ -1357,7 +1354,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         tmp_subtest_by_name = rp_subtests_of_current_test.group_by('subtest_name')
 
-        for group_name, group_substest_infos in subtests_groups.items():  # pylint: disable=too-many-nested-blocks
+        for group_name, group_substest_infos in subtests_groups.items():
             rp_metrics_table[group_name] = rp_metrics_table_l1 = collections.OrderedDict()
             grouped_subtests = []
             subtest_info_grouped_by_baseline = group_substest_infos.group_by('baseline', '', sort_keys=1)
@@ -1476,11 +1473,11 @@ class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(BaseResultsAnalyzer
     Performance Analyzer for results with throughput and latency of gradual payload increase
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_incremental_throughput_increase.html", logger=logger, events=events)
 
-    def check_regression(self, test_name, test_results, test_details):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_name, test_results, test_details):
         results = dict(
             stats=test_results,
             test_name=test_name,
@@ -1500,11 +1497,11 @@ class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
     Get latency during operations performance analyzer
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_search_best_throughput_config.html", logger=logger, events=events)
 
-    def check_regression(self, test_name, setup_details, test_results):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_name, setup_details, test_results):
         subject = f"Performance Regression Best throughput with configuation - {test_name} - {setup_details['start_time']}"
         results = {
             "test_name": test_name,

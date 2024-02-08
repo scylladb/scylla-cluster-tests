@@ -44,7 +44,7 @@ class EventStatData:
     stats: dict
 
 
-class EventStatHandler:  # pylint: disable=too-few-public-methods
+class EventStatHandler:
     def __init__(self, event: T_log_event, save_dir: str | Path):
         self._event = event
         self._event_name = self._event.__class__.__name__
@@ -68,7 +68,7 @@ class EventStatHandler:  # pylint: disable=too-few-public-methods
             event_writer.write(str(self._event.line) + "\n")
 
 
-class ReactorStallEventStatHandler(EventStatHandler):  # pylint: disable=too-few-public-methods
+class ReactorStallEventStatHandler(EventStatHandler):
     intervals = [10, 20, 30, 50, 100, 200, 1000, 2000]
 
     def _get_interval(self, stall_ms: int):

@@ -54,7 +54,7 @@ class ChaosMeshTimeout(ChaosMeshExperimentException):
     pass
 
 
-class ChaosMesh:  # pylint: disable=too-few-public-methods
+class ChaosMesh:
     NAMESPACE = "chaos-mesh"
     VERSION = "2.5.0"
     HELM_SETTINGS = {
@@ -167,7 +167,6 @@ class ChaosMeshExperiment:
         self.log.info("'%s' experiment '%s' has started", self.CHAOS_KIND, self._name)
         self._end_time = time.time() + self._timeout
 
-    # pylint: disable=too-many-return-statements
     def get_status(self) -> ExperimentStatus:  # noqa: PLR0911
         """Gets status of chaos-mesh experiment."""
         result = self._k8s_cluster.kubectl(
@@ -410,7 +409,6 @@ class NetworkDelayExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "NetworkChaos"
 
-    # pylint: disable=too-many-arguments
     def __init__(self, pod: BasePodContainer, duration: str, latency: str,
                  correlation: int = 0, jitter: str = "0"):
         """Simulate network delay fault into a specified Pod for a period of time.
@@ -444,7 +442,6 @@ class NetworkBandwidthLimitExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "NetworkChaos"
 
-    # pylint: disable=too-many-arguments
     def __init__(self, pod: BasePodContainer, duration: str,
                  rate: str, limit: int, buffer: int):
         """Simulate network bandwidth limit fault into a specified Pod for a period of time.

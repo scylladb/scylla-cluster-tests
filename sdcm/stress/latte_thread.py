@@ -90,11 +90,11 @@ class LatteStatsPublisher(FileFollowerThread):
                             value = float(_value)
                             self.set_metric(self.operation, key, value)
 
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     LOGGER.exception("fail to send metric")
 
 
-class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class LatteStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
 
@@ -201,7 +201,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 )
                 return self.parse_final_output(result)
 
-            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=latte_stress_event, exc=exc)
 
         return {}

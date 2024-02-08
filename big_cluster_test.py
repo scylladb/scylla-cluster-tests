@@ -12,7 +12,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 # TODO: this test seem to totally unused, hence disabling all pylint checks
-# pylint: disable=all
+
 
 import logging
 

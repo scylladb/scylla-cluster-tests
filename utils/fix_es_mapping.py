@@ -36,4 +36,4 @@ def fix_es_mapping(index_name):
 
 
 if __name__ == '__main__':
-    fix_es_mapping()  # pylint: disable=no-value-for-parameter
+    fix_es_mapping()

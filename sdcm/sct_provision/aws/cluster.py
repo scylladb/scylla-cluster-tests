@@ -195,7 +195,7 @@ class ClusterBase(BaseModel):
 
     def _spot_low_price(self, region_id: int) -> float:
         from sdcm.utils.pricing import (
-            AWSPricing,  # pylint: disable=import-outside-toplevel
+            AWSPricing,
         )
 
         aws_pricing = AWSPricing()
@@ -217,7 +217,7 @@ class ClusterBase(BaseModel):
         ).provision_plan
 
     def _instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
-        params_builder = self._INSTANCE_PARAMS_BUILDER(  # pylint: disable=not-callable
+        params_builder = self._INSTANCE_PARAMS_BUILDER(
             params=self.params,
             region_id=region_id,
             user_data_raw=self._user_data,

@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=no-member; disable `no-member' messages because of zmq.
 
 import ctypes
 import logging
@@ -146,7 +145,6 @@ class EventsDevice(multiprocessing.Process):
                 if sub.poll(timeout=self.sub_polling_timeout):
                     yield sub.recv_pyobj(flags=zmq.NOBLOCK)
 
-    # pylint: disable=import-outside-toplevel
     def outbound_events(self,
                         stop_event: StopEvent,
                         events_counter: multiprocessing.Value) -> Generator[tuple[str, Any], None, None]:

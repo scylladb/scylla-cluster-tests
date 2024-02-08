@@ -24,7 +24,7 @@ CLIENT_TRUSTSTORE = get_data_dir_path('ssl_conf', "client/catest.pem")
 def install_client_certificate(remoter):
     if remoter.run('ls /etc/scylla/ssl_conf', ignore_status=True).ok:
         return
-    remoter.send_files(src=get_data_dir_path('ssl_conf'), dst='/tmp/')  # pylint: disable=not-callable
+    remoter.send_files(src=get_data_dir_path('ssl_conf'), dst='/tmp/')
     setup_script = dedent("""
         mkdir -p ~/.cassandra/
         cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/

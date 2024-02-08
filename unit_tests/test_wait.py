@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2023 ScyllaDB
-# pylint: disable=all
+
 
 import logging
 import threading

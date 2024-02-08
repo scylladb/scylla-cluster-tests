@@ -25,7 +25,7 @@ from sdcm.prometheus import PrometheusAlertManagerListener
 from sdcm.utils.common import generate_random_string
 from sdcm.utils.profiler import ProfileableProcess as pp
 from sdcm.utils.profiler import ProfileableThread as pt
-from sdcm.utils.profiler import ProfilerFactory  # pylint: disable=ungrouped-imports
+from sdcm.utils.profiler import ProfilerFactory
 from unit_tests.lib.test_profiler.lib import (
     LibMultiprocessingProcessCustomClass,
     LibMultiprocessingProcessCustomClassWithRun,
@@ -140,7 +140,7 @@ class TestProfileFactory(unittest.TestCase):
             'main',
         ]
         for sub in self._subroutines:
-            dirs_to_expect.append(sub._name)  # pylint: disable=protected-access
+            dirs_to_expect.append(sub._name)
 
         not_found = []
         for directory in dirs_to_expect:
@@ -197,7 +197,7 @@ class TestProfileFactory(unittest.TestCase):
                     break
         tmp.stop()
 
-    def _add_tests(self):  # pylint: disable=too-many-statements
+    def _add_tests(self):
         self._subroutines.append(Thread(target=thread_body, name="Thread.daemon", daemon=True))
         self._subroutines.append(LibThread(target=thread_body, name="lib.Thread.daemon", daemon=True))
         self._subroutines.append(ThreadCustomClass(target=thread_body, name="Thread.CustomClass.daemon", daemon=True))

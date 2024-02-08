@@ -5,12 +5,12 @@ from sdcm.utils.gce_utils import GceLoggingClient
 from unit_tests.test_events import BaseEventsTest
 
 
-class FakeGceLogClient(GceLoggingClient):  # pylint: disable=too-few-public-methods
+class FakeGceLogClient(GceLoggingClient):
 
-    def __init__(self):  # pylint: disable=super-init-not-called
+    def __init__(self):
         pass
 
-    def get_system_events(self, from_: float, until: float):  # pylint: disable=unused-argument
+    def get_system_events(self, from_: float, until: float):
         """This is example output from GCE logging system in dictionary form."""
         entry = {
             'protoPayload': {
@@ -59,7 +59,7 @@ class FakeGceLogClient(GceLoggingClient):  # pylint: disable=too-few-public-meth
 
 class FakeGceNode(GCENode):
 
-    def __init__(self, logging_client: GceLoggingClient):  # pylint: disable=super-init-not-called
+    def __init__(self, logging_client: GceLoggingClient):
         self._gce_logging_client = logging_client
         self._last_logs_fetch_time = 1656590843.0
 

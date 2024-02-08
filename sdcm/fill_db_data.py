@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-# pylint: disable=too-many-lines,eval-used, line-too-long
+
 import contextlib
 import logging
 import random
@@ -21,8 +21,8 @@ from collections import OrderedDict
 from uuid import UUID
 
 from cassandra import ConsistencyLevel, InvalidRequest
-from cassandra.protocol import ProtocolException  # pylint: disable=no-name-in-module
-from cassandra.util import SortedSet, sortedset  # pylint: disable=no-name-in-module
+from cassandra.protocol import ProtocolException
+from cassandra.util import SortedSet, sortedset
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
@@ -3037,11 +3037,11 @@ class FillDatabaseData(ClusterTester):
             time.sleep(15)
 
     @staticmethod
-    def cql_insert_data_to_simple_tables(session, rows):  # pylint: disable=invalid-name
+    def cql_insert_data_to_simple_tables(session, rows):
         def insert_query():
             return f'INSERT INTO truncate_table{i} (my_id, col1, value) VALUES ( {k}, {k}, {k})'
-        for i in range(rows):  # pylint: disable=unused-variable
-            for k in range(100):  # pylint: disable=unused-variable
+        for i in range(rows):
+            for k in range(100):
                 session.execute(insert_query())
 
     @staticmethod
@@ -3176,7 +3176,7 @@ class FillDatabaseData(ClusterTester):
         return self.parsed_scylla_version >= version_with_support
 
     @retrying(n=3, sleep_time=20, allowed_exceptions=ProtocolException)
-    def truncate_table(self, session, truncate):  # pylint: disable=no-self-use
+    def truncate_table(self, session, truncate):
         LOGGER.debug(truncate)
         session.execute(truncate)
 
@@ -3198,7 +3198,7 @@ class FillDatabaseData(ClusterTester):
 
     def cql_insert_data_to_tables(self, session, default_fetch_size):
         self.log.info('Start to populate data into tables')
-        # pylint: disable=too-many-nested-blocks
+
         for test_num, item in enumerate(self.all_verification_items):
             test_name = item.get('name', 'Test #' + str(test_num))
             # TODO: fix following condition to make "skip_condition" really skip stuff
@@ -3275,7 +3275,7 @@ class FillDatabaseData(ClusterTester):
 
     def run_db_queries(self, session, default_fetch_size):
         self.log.info('Start to running queries')
-        # pylint: disable=too-many-branches,too-many-nested-blocks
+
         for test_num, item in enumerate(self.all_verification_items):
             test_name = item.get('name', 'Test #' + str(test_num))
             # Some queries contains statement of switch keyspace, reset keyspace at the beginning
@@ -3316,14 +3316,14 @@ class FillDatabaseData(ClusterTester):
         node = self.db_cluster.nodes[0]
 
         with self.db_cluster.cql_connection_patient(node) as session:
-            # pylint: disable=no-member
+
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
             # clean original test data by truncate
             try:
                 session.set_keyspace(self.base_ks)
                 self.truncate_tables(session)
-            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+            except Exception as ex:  # noqa: BLE001
                 LOGGER.debug("Found error in truncate tables: '%s'", ex)
 
             # Insert data to the tables according to the "inserts" and flush to disk in several cases (nodetool flush)

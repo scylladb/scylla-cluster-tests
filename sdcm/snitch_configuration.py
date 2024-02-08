@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
 
 
-class SnitchConfig:  # pylint: disable=too-few-public-methods
+class SnitchConfig:
     """Keeps all cassandra-rackdc.properties settings and function to apply them"""
 
     def __init__(self, node: BaseNode, datacenters: list[str]):
