@@ -12,44 +12,43 @@
 # Copyright (c) 2021 ScyllaDB
 
 import abc
-from typing import List, Optional
 
-from sdcm.provision.aws.instance_parameters import AWSPlacementInfo, AWSDiskMapping
+from sdcm.provision.aws.instance_parameters import AWSDiskMapping, AWSPlacementInfo
 from sdcm.provision.common.builders import AttrBuilder
 
 
 class AWSInstanceParamsBuilderBase(AttrBuilder, metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
-    def BlockDeviceMappings(self) -> List[AWSDiskMapping]:  # pylint: disable=invalid-name
+    def BlockDeviceMappings(self) -> list[AWSDiskMapping]:
         pass
 
     @property
     @abc.abstractmethod
-    def ImageId(self) -> Optional[str]:  # pylint: disable=invalid-name
+    def ImageId(self) -> str | None:
         pass
 
     @property
     @abc.abstractmethod
-    def KeyName(self) -> str:  # pylint: disable=invalid-name
+    def KeyName(self) -> str:
         pass
 
     @property
     @abc.abstractmethod
-    def NetworkInterfaces(self) -> List[dict]:  # pylint: disable=invalid-name
+    def NetworkInterfaces(self) -> list[dict]:
         pass
 
     @property
     @abc.abstractmethod
-    def IamInstanceProfile(self):  # pylint: disable=invalid-name
+    def IamInstanceProfile(self):
         pass
 
     @property
     @abc.abstractmethod
-    def InstanceType(self) -> str:  # pylint: disable=invalid-name
+    def InstanceType(self) -> str:
         pass
 
     @property
     @abc.abstractmethod
-    def Placement(self) -> Optional[AWSPlacementInfo]:  # pylint: disable=invalid-name
+    def Placement(self) -> AWSPlacementInfo | None:
         pass

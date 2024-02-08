@@ -1,13 +1,12 @@
 import logging
-from functools import cached_property
 from difflib import unified_diff
+from functools import cached_property
 from pathlib import Path
 
 import yaml
 from jinja2 import Template
 
 import sdcm.utils.nemesis_jobs_configs as config
-
 
 DEFAULT_JOB_NAME = "longevity-5gb-1h"
 TEST_CASE_TEMPLATE_DIR = "test_config"
@@ -88,7 +87,7 @@ class NemesisJobGenerator:
                     old_config = yaml.safe_load(content)
                     new_keys = set(new_config.keys())
                     old_keys = set(old_config.keys())
-                    if len((key_diff := new_keys.symmetric_difference(old_keys))) != 0:
+                    if len(key_diff := new_keys.symmetric_difference(old_keys)) != 0:
                         diff = unified_diff(
                             content.splitlines(keepends=True),
                             nemesis_config_body.splitlines(keepends=True),

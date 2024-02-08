@@ -12,17 +12,21 @@
 # Copyright (c) 2021 ScyllaDB
 
 import logging
-from typing import List
 
 from pydantic import BaseModel
 
-from sdcm.provision.common.provisioner import ProvisionParameters, InstanceProvisionerBase, InstanceParamsBase, TagsType
+from sdcm.provision.common.provisioner import (
+    InstanceParamsBase,
+    InstanceProvisionerBase,
+    ProvisionParameters,
+    TagsType,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 
 class ProvisionPlan(BaseModel):
-    provision_steps: List[ProvisionParameters]
+    provision_steps: list[ProvisionParameters]
     provisioner: InstanceProvisionerBase
 
     @property
@@ -31,10 +35,10 @@ class ProvisionPlan(BaseModel):
 
     def provision_instances(
             self,
-            instance_parameters: InstanceParamsBase | List[InstanceParamsBase],
+            instance_parameters: InstanceParamsBase | list[InstanceParamsBase],
             node_count: int,
-            node_tags: List[TagsType],
-            node_names: List[str],
+            node_tags: list[TagsType],
+            node_names: list[str],
     ):
         for provision_parameters in self.provision_steps:
             if instances := self.provisioner.provision(

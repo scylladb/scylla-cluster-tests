@@ -11,15 +11,15 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import smtplib
-import os.path
-import subprocess
-import logging
-import tempfile
-import json
 import copy
+import json
+import logging
+import os.path
+import smtplib
+import subprocess
+import tempfile
 import traceback
-from typing import Optional, Sequence, Tuple
+from collections.abc import Sequence
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -28,7 +28,12 @@ from functools import cached_property
 import jinja2
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.common import list_instances_gce, list_instances_aws, list_resources_docker, format_timestamp
+from sdcm.utils.common import (
+    format_timestamp,
+    list_instances_aws,
+    list_instances_gce,
+    list_resources_docker,
+)
 from sdcm.utils.gce_utils import gce_public_addresses
 
 LOGGER = logging.getLogger(__name__)
@@ -48,7 +53,7 @@ class BodySizeExceeded(Exception):
         super().__init__()
 
 
-class Email():
+class Email:
     #  pylint: disable=too-many-instance-attributes
     """
     Responsible for sending emails
@@ -73,12 +78,12 @@ class Email():
         self._password = creds["password"]
 
     def _connect(self):
-        self.conn = smtplib.SMTP(host=self._server_host, port=self._server_port)
+        self.conn = smtplib.SMTP(host=self._server_host, port=int(self._server_port))
         self.conn.ehlo()
         self.conn.starttls()
         self.conn.login(user=self._user, password=self._password)
 
-    def prepare_email(self, subject, content, recipients, html=True, files=()):  # pylint: disable=too-many-arguments
+    def prepare_email(self, subject, content, recipients, html=True, files=()):
         msg = MIMEMultipart()
         msg['subject'] = subject
         msg['from'] = self.sender
@@ -106,7 +111,7 @@ class Email():
             raise BodySizeExceeded(current_size=len(email), limit=self._body_size_limit)
         return email
 
-    def send(self, subject, content, recipients, html=True, files=()):  # pylint: disable=too-many-arguments
+    def send(self, subject, content, recipients, html=True, files=()):
         """
         :param subject: text
         :param content: text/html
@@ -168,7 +173,7 @@ class BaseEmailReporter:
         self.logdir = logdir if logdir else tempfile.mkdtemp()
 
     @cached_property
-    def fields(self) -> Tuple[str, ...]:
+    def fields(self) -> tuple[str, ...]:
         return self.COMMON_EMAIL_FIELDS + self._fields
 
     def build_data_for_report(self, results):
@@ -218,7 +223,7 @@ class BaseEmailReporter:
             return
         try:
             Email().send_email(recipients=self.email_recipients, email=email)
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:
             self.log.error("Error during sending email: %s", details, exc_info=True)
         finally:
             self.log.info('Send email with results to %s', self.email_recipients)
@@ -282,11 +287,11 @@ class BaseEmailReporter:
         return self.render_to_html(report_data)
 
     @staticmethod
-    def build_report_attachments(attachments_data, template_str=None):  # pylint: disable=unused-argument
+    def build_report_attachments(attachments_data, template_str=None):
         return ()
 
     @staticmethod
-    def cut_report_data(report_data, attachments_data, reason):  # pylint: disable=unused-argument
+    def cut_report_data(report_data, attachments_data, reason):
         if attachments_data is not None:
             return report_data, None
         return None, None
@@ -531,7 +536,7 @@ class JepsenEmailReporter(BaseEmailReporter):
     email_template_file = "results_jepsen.html"
 
     @staticmethod
-    def build_report_attachments(attachments_data, template_str=None):  # pylint: disable=unused-argument
+    def build_report_attachments(attachments_data, template_str=None):
         return (attachments_data["jepsen_report"], )
 
 
@@ -571,10 +576,10 @@ class PerfSimpleQueryReporter(BaseEmailReporter):
     email_template_file = "results_perf_simple_query.html"
 
 
-def build_reporter(name: str,
+def build_reporter(name: str,  # noqa: PLR0911
                    email_recipients: Sequence[str] = (),
-                   logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
-    # pylint: disable=too-many-return-statements,too-many-branches
+                   logdir: str | None = None) -> BaseEmailReporter | None:
+
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Longevity" in name:
@@ -607,7 +612,7 @@ def build_reporter(name: str,
         return None
 
 
-def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):  # pylint: disable=too-many-locals
+def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
     """Get running instances left after testrun
 
     Get all running instances leff after testrun is done.
@@ -673,7 +678,7 @@ def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
     return nodes
 
 
-def send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time):  # pylint: disable=too-many-arguments
+def send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time):
     for subject, content in test_results.items():
         if 'email_body' not in content:
             content['email_body'] = {}
@@ -687,7 +692,7 @@ def send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir,
                                        template=email_content['template'])
         try:
             reporter.send_email(subject=subject, content=html, files=email_content['attachments'])
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
             build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
                 "job_url": os.environ.get("BUILD_URL"),
@@ -711,7 +716,7 @@ def read_email_data_from_file(filename):
             with open(filename, encoding="utf-8") as file:
                 data = file.read().strip()
                 email_data = json.loads(data or '{}')
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # noqa: BLE001
             LOGGER.warning("Error during read email data file %s: %s", filename, details)
     return email_data
 
@@ -729,5 +734,5 @@ def save_email_data_to_file(email_data, filepath):
         if email_data:
             with open(filepath, "w", encoding="utf-8") as json_file:
                 json.dump(email_data, json_file)
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # noqa: BLE001
         LOGGER.warning("Error during collecting data for email %s", details)

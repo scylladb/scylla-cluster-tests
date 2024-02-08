@@ -11,27 +11,31 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import getpass
-import unittest
+import os
 import threading
-from typing import Union, Optional
+import unittest
 from logging import getLogger
 
-# from parameterized import parameterized
-
-from sdcm.remote import RemoteLibSSH2CmdRunner, RemoteCmdRunner, LocalCmdRunner, RetryableNetworkException, \
-    SSHConnectTimeoutError, shell_script_cmd
-from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
-from sdcm.remote.base import CommandRunner, Result
-from sdcm.remote.remote_file import remote_file
 from sdcm.cluster_k8s import KubernetesCluster
+
+# from parameterized import parameterized
+from sdcm.remote import (
+    LocalCmdRunner,
+    RemoteCmdRunner,
+    RemoteLibSSH2CmdRunner,
+    RetryableNetworkException,
+    SSHConnectTimeoutError,
+    shell_script_cmd,
+)
+from sdcm.remote.base import CommandRunner, Result
+from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
+from sdcm.remote.remote_file import remote_file
 
 
 class FakeKluster(KubernetesCluster):
     k8s_server_url = None
 
-    # pylint: disable=super-init-not-called
     def __init__(self, k8s_server_url):
         self.k8s_server_url = k8s_server_url
 
@@ -51,7 +55,6 @@ class FakeKluster(KubernetesCluster):
         pass
 
 
-# pylint: disable=too-many-nested-blocks
 def generate_all_commands_with_all_options():
     all_commands_with_all_options = []
     for ip in ['::1', '127.0.0.1']:
@@ -89,7 +92,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
 
     @staticmethod
     def _create_and_run_twice_in_same_thread(remoter_type, key_file, stmt, kwargs, paramiko_thread_results):
-        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+        if issubclass(remoter_type, RemoteCmdRunner | RemoteLibSSH2CmdRunner):
             remoter = remoter_type(hostname='127.0.0.1', user=getpass.getuser(), key_file=key_file)
         else:
             remoter = KubernetesCmdRunner(
@@ -98,20 +101,19 @@ class TestRemoteCmdRunners(unittest.TestCase):
                 pod_name='sct-cluster-dc-1-kind-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
         remoter.stop()
 
-    # pylint: disable=too-many-arguments
     @staticmethod
     def _create_and_run_in_same_thread(remoter_type, host, key_file, stmt, kwargs, paramiko_thread_results):
-        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+        if issubclass(remoter_type, RemoteCmdRunner | RemoteLibSSH2CmdRunner):
             remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=key_file)
         else:
             remoter = KubernetesCmdRunner(
@@ -120,13 +122,13 @@ class TestRemoteCmdRunners(unittest.TestCase):
                 pod_name='sct-cluster-dc-1-kind-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
-        remoter._reconnect()  # pylint: disable=protected-access
+        remoter._reconnect()
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
         remoter.stop()
@@ -135,13 +137,13 @@ class TestRemoteCmdRunners(unittest.TestCase):
     def _create_and_run_in_separate_thread(remoter, stmt, kwargs, paramiko_thread_results):
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
-        remoter._reconnect()  # pylint: disable=protected-access
+        remoter._reconnect()
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             result = exc
         paramiko_thread_results.append(result)
         remoter.stop()
@@ -200,9 +202,9 @@ class TestRemoteCmdRunners(unittest.TestCase):
 
     # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
     @unittest.skip('To be ran manually')
-    def test_run_in_mainthread(  # pylint: disable=too-many-arguments
+    def test_run_in_mainthread(
             self, remoter_type, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool, retry: int,
-            timeout: Union[float, None]):
+            timeout: float | None):
         kwargs = {
             'verbose': verbose,
             'ignore_status': ignore_status,
@@ -211,10 +213,10 @@ class TestRemoteCmdRunners(unittest.TestCase):
             'timeout': timeout}
         try:
             expected = LocalCmdRunner().run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             expected = exc
 
-        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+        if issubclass(remoter_type, RemoteCmdRunner | RemoteLibSSH2CmdRunner):
             remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=self.key_file)
         else:
             remoter = KubernetesCmdRunner(
@@ -223,12 +225,12 @@ class TestRemoteCmdRunners(unittest.TestCase):
                 pod_name='sct-cluster-dc-1-kind-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             result = exc
-        remoter._reconnect()  # pylint: disable=protected-access
+        remoter._reconnect()
         try:
             result2 = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             result2 = exc
         remoter.stop()
 
@@ -237,9 +239,9 @@ class TestRemoteCmdRunners(unittest.TestCase):
 
     # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
     @unittest.skip('To be ran manually')
-    def test_create_and_run_in_same_thread(  # pylint: disable=too-many-arguments,too-many-locals
+    def test_create_and_run_in_same_thread(
             self, remoter_type, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool,
-            retry: int, timeout: Union[float, None]):
+            retry: int, timeout: float | None):
         kwargs = {
             'verbose': verbose,
             'ignore_status': ignore_status,
@@ -249,7 +251,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         self.log.info(repr({stmt: stmt, **kwargs}))
         try:
             expected = LocalCmdRunner().run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             expected = exc
 
         paramiko_thread_results = []
@@ -264,9 +266,9 @@ class TestRemoteCmdRunners(unittest.TestCase):
 
     # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
     @unittest.skip('To be ran manually')
-    def test_create_and_run_in_separate_thread(  # pylint: disable=too-many-arguments
+    def test_create_and_run_in_separate_thread(
             self, remoter_type, host: str, stmt: str, verbose: bool, ignore_status: bool,
-            new_session: bool, retry: int, timeout: Union[float, None]):
+            new_session: bool, retry: int, timeout: float | None):
         kwargs = {
             'verbose': verbose,
             'ignore_status': ignore_status,
@@ -276,12 +278,12 @@ class TestRemoteCmdRunners(unittest.TestCase):
         self.log.info(repr({stmt: stmt, **kwargs}))
         try:
             expected = LocalCmdRunner().run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             expected = exc
 
         # Paramiko fails too often when it is invoked like that, that is why it is not in the test
 
-        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+        if issubclass(remoter_type, RemoteCmdRunner | RemoteLibSSH2CmdRunner):
             remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=self.key_file)
         else:
             remoter = KubernetesCmdRunner(
@@ -332,7 +334,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         self.log.info(repr({stmt: stmt, **kwargs}))
         try:
             expected = LocalCmdRunner().run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             expected = exc
 
         libssh2_thread_results = []
@@ -385,12 +387,12 @@ class TestSudoAndRunShellScript(unittest.TestCase):
     def setUpClass(cls) -> None:
         class _Runner(CommandRunner):
             def run(self, cmd, *_, **__):
-                self.command_to_run = cmd  # pylint: disable=attribute-defined-outside-init
+                self.command_to_run = cmd
 
             def _create_connection(self):
                 pass
 
-            def is_up(self, timeout: Optional[float] = None) -> bool:
+            def is_up(self, timeout: float | None = None) -> bool:
                 return True
 
         cls.remoter_cls = _Runner

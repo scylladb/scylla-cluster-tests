@@ -15,18 +15,30 @@ import abc
 import contextlib
 import datetime
 import time
+from collections.abc import Callable
 from textwrap import dedent
-from typing import Any, Callable, List, Dict, Optional
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
-from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
+from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Instance
-from mypy_boto3_ec2.type_defs import InstanceTypeDef, SpotFleetLaunchSpecificationTypeDef, \
-    RequestSpotLaunchSpecificationTypeDef, SpotFleetRequestConfigDataTypeDef
+from mypy_boto3_ec2.type_defs import (
+    InstanceTypeDef,
+    RequestSpotLaunchSpecificationTypeDef,
+    SpotFleetLaunchSpecificationTypeDef,
+    SpotFleetRequestConfigDataTypeDef,
+)
 
-from sdcm.provision.aws.constants import SPOT_REQUEST_TIMEOUT, SPOT_REQUEST_WAITING_TIME, STATUS_FULFILLED, \
-    SPOT_STATUS_UNEXPECTED_ERROR, SPOT_PRICE_TOO_LOW, FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR
+from sdcm.provision.aws.constants import (
+    FLEET_LIMIT_EXCEEDED_ERROR,
+    SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
+    SPOT_PRICE_TOO_LOW,
+    SPOT_REQUEST_TIMEOUT,
+    SPOT_REQUEST_WAITING_TIME,
+    SPOT_STATUS_UNEXPECTED_ERROR,
+    STATUS_FULFILLED,
+)
 from sdcm.provision.common.provisioner import TagsType
 
 
@@ -83,22 +95,22 @@ def get_subnet_info(region_name: str, subnet_id: str):
     return [subnet for subnet in resp['Subnets'] if subnet['SubnetId'] == subnet_id][0]
 
 
-def convert_tags_to_aws_format(tags: TagsType) -> List[Dict[str, str]]:
+def convert_tags_to_aws_format(tags: TagsType) -> list[dict[str, str]]:
     return [{'Key': str(name), 'Value': str(value)} for name, value in tags.items()]
 
 
-def convert_tags_to_filters(tags: TagsType) -> List[Dict[str, str]]:
-    return [{'Name': 'tag:{}'.format(name), 'Values': value if isinstance(
+def convert_tags_to_filters(tags: TagsType) -> list[dict[str, str]]:
+    return [{'Name': f'tag:{name}', 'Values': value if isinstance(
         value, list) else [value]} for name, value in tags.items()]
 
 
-def find_instance_descriptions_by_tags(region_name: str, tags: TagsType) -> List[InstanceTypeDef]:
+def find_instance_descriptions_by_tags(region_name: str, tags: TagsType) -> list[InstanceTypeDef]:
     client: EC2Client = ec2_clients[region_name]
     response = client.describe_instances(Filters=convert_tags_to_filters(tags))
     return [instance for reservation in response['Reservations'] for instance in reservation['Instances']]
 
 
-def find_instances_by_tags(region_name: str, tags: TagsType, states: List[str] = None) -> List[Instance]:
+def find_instances_by_tags(region_name: str, tags: TagsType, states: list[str] = None) -> list[Instance]:
     instances = []
     for instance_description in find_instance_descriptions_by_tags(region_name=region_name, tags=tags):
         if states and instance_description['State']['Name'] not in states:
@@ -108,14 +120,14 @@ def find_instances_by_tags(region_name: str, tags: TagsType, states: List[str] =
 
 
 def find_instance_by_id(region_name: str, instance_id: str) -> Instance:
-    return ec2_resources[region_name].Instance(id=instance_id)  # pylint: disable=no-member
+    return ec2_resources[region_name].Instance(id=instance_id)
 
 
-def set_tags_on_instances(region_name: str, instance_ids: List[str], tags: TagsType):
+def set_tags_on_instances(region_name: str, instance_ids: list[str], tags: TagsType):
     end_time = time.perf_counter() + 20
     while end_time > time.perf_counter():
         with contextlib.suppress(ClientError):
-            ec2_clients[region_name].create_tags(  # pylint: disable=no-member
+            ec2_clients[region_name].create_tags(
                 Resources=instance_ids,
                 Tags=convert_tags_to_aws_format(tags))
             return True
@@ -123,7 +135,7 @@ def set_tags_on_instances(region_name: str, instance_ids: List[str], tags: TagsT
 
 
 def wait_for_provision_request_done(
-        region_name: str, request_ids: List[str], is_fleet: bool,
+        region_name: str, request_ids: list[str], is_fleet: bool,
         timeout: float = SPOT_REQUEST_TIMEOUT,
         wait_interval: float = SPOT_REQUEST_WAITING_TIME):
     waiting_time = 0
@@ -142,10 +154,10 @@ def wait_for_provision_request_done(
     return provisioned_instance_ids
 
 
-def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str]) -> Optional[List[str]]:
+def get_provisioned_fleet_instance_ids(region_name: str, request_ids: list[str]) -> list[str] | None:
     try:
         resp = ec2_clients[region_name].describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001
         return []
     for req in resp['SpotFleetRequestConfigs']:
         if req['SpotFleetRequestState'] == 'active' and req.get('ActivityStatus', None) == STATUS_FULFILLED:
@@ -168,13 +180,13 @@ def get_provisioned_fleet_instance_ids(region_name: str, request_ids: List[str])
     for request_id in request_ids:
         try:
             resp = ec2_clients[region_name].describe_spot_fleet_instances(SpotFleetRequestId=request_id)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             return None
         provisioned_instances.extend([inst['InstanceId'] for inst in resp['ActiveInstances']])
     return provisioned_instances
 
 
-def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) -> Optional[List[str]]:
+def get_provisioned_spot_instance_ids(region_name: str, request_ids: list[str]) -> list[str] | None:
     """
     Return list of provisioned instances if all requests where fulfilled
       if any of the requests failed it will return empty list
@@ -182,7 +194,7 @@ def get_provisioned_spot_instance_ids(region_name: str, request_ids: List[str]) 
     """
     try:
         resp = ec2_clients[region_name].describe_spot_instance_requests(SpotInstanceRequestIds=request_ids)
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001
         return []
     provisioned = []
     for req in resp['SpotInstanceRequests']:
@@ -220,11 +232,11 @@ def create_spot_fleet_instance_request(
 def create_spot_instance_request(
         region_name: str,
         count: int,
-        price: Optional[float],
+        price: float | None,
         instance_parameters: RequestSpotLaunchSpecificationTypeDef,
         full_availability_zone: str,
         valid_until: datetime.datetime = None,
-) -> List[str]:
+) -> list[str]:
     params = {
         'DryRun': False,
         'InstanceCount': count,

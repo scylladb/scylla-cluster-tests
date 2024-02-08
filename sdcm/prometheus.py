@@ -11,21 +11,20 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
-import logging
 import datetime
+import logging
 import threading
-from typing import Optional
+import time
 from http.server import HTTPServer
 from socketserver import ThreadingMixIn
 
-import requests
 import prometheus_client
+import requests
 
 from sdcm.sct_events.base import EventPeriod
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
-from sdcm.utils.decorators import retrying, log_run_info
+from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.net import get_my_ip
 
 START = 'start'
@@ -60,15 +59,15 @@ def start_metrics_server():
         port = httpd.server_port
         ip = get_my_ip()
         LOGGER.info('prometheus API server running on port: %s', port)
-        return '{}:{}'.format(ip, port)
-    except Exception as ex:  # pylint: disable=broad-except
+        return f'{ip}:{port}'
+    except Exception as ex:  # noqa: BLE001
         LOGGER.error('Cannot start local http metrics server: %s', ex)
 
     return None
 
 
 def nemesis_metrics_obj(metric_name_suffix=''):
-    global NM_OBJ  # pylint: disable=global-statement,global-variable-not-assigned
+    global NM_OBJ  # noqa: PLW0602
     if not NM_OBJ.get(metric_name_suffix):
         NM_OBJ[metric_name_suffix] = NemesisMetrics(metric_name_suffix)
     return NM_OBJ[metric_name_suffix]
@@ -97,7 +96,7 @@ class NemesisMetrics:
     def create_counter(name, desc, param_list):
         try:
             return prometheus_client.Counter(name, desc, param_list)
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # noqa: BLE001
             LOGGER.error('Cannot create metrics counter: %s', ex)
         return None
 
@@ -105,22 +104,22 @@ class NemesisMetrics:
     def create_gauge(name, desc, param_list):
         try:
             return prometheus_client.Gauge(name, desc, param_list)
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # noqa: BLE001
             LOGGER.error('Cannot create metrics gauge: %s', ex)
         return None
 
     def event_start(self, disrupt):
         try:
-            self._disrupt_counter.labels(disrupt, START).inc()  # pylint: disable=no-member
-            self._disrupt_gauge.labels(disrupt).inc()  # pylint: disable=no-member
-        except Exception as ex:  # pylint: disable=broad-except
+            self._disrupt_counter.labels(disrupt, START).inc()
+            self._disrupt_gauge.labels(disrupt).inc()
+        except Exception as ex:
             LOGGER.exception('Cannot start metrics event: %s', ex)
 
     def event_stop(self, disrupt):
         try:
-            self._disrupt_counter.labels(disrupt, STOP).inc()  # pylint: disable=no-member
-            self._disrupt_gauge.labels(disrupt).dec()  # pylint: disable=no-member
-        except Exception as ex:  # pylint: disable=broad-except
+            self._disrupt_counter.labels(disrupt, STOP).inc()
+            self._disrupt_gauge.labels(disrupt).dec()
+        except Exception as ex:
             LOGGER.exception('Cannot stop metrics event: %s', ex)
 
 
@@ -138,7 +137,7 @@ class PrometheusAlertManagerListener(threading.Thread):
     def is_alert_manager_up(self):
         try:
             return requests.get(f"{self._alert_manager_url}/status", timeout=3).json()['cluster']['status'] == 'ready'
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             return False
 
     @log_run_info
@@ -168,7 +167,7 @@ class PrometheusAlertManagerListener(threading.Thread):
             return response.json()
         return None
 
-    def _publish_new_alerts(self, alerts: dict):  # pylint: disable=no-self-use
+    def _publish_new_alerts(self, alerts: dict):
         for alert in alerts.values():
             PrometheusAlertManagerEvent(raw_alert=alert).begin_event()
 
@@ -184,7 +183,7 @@ class PrometheusAlertManagerListener(threading.Thread):
         for alert in alerts.values():
             if not alert.get('endsAt', None):
                 alert['endsAt'] = time.strftime("%Y-%m-%dT%H:%M:%S.0Z", time.gmtime())
-            alert = updated_dict.get(alert['fingerprint'], alert)
+            alert = updated_dict.get(alert['fingerprint'], alert)  # noqa: PLW2901
             labels = alert.get("labels") or {}
             alert_name = labels.get("alertname", "")
             node = labels.get("instance", "N/A")
@@ -234,9 +233,9 @@ class PrometheusAlertManagerListener(threading.Thread):
 
     def silence(self,
                 alert_name: str,
-                duration: Optional[int] = None,
-                start: Optional[datetime.datetime] = None,
-                end: Optional[datetime.datetime] = None) -> str:
+                duration: int | None = None,
+                start: datetime.datetime | None = None,
+                end: datetime.datetime | None = None) -> str:
         """
         Silence an alert for a duration of time
 
@@ -284,13 +283,13 @@ class PrometheusAlertManagerListener(threading.Thread):
 
 
 class AlertSilencer:
-    # pylint: disable=too-many-arguments
+
     def __init__(self,
                  alert_manager: PrometheusAlertManagerListener,
                  alert_name: str,
-                 duration: Optional[int] = None,
-                 start: Optional[datetime.datetime] = None,
-                 end: Optional[datetime.datetime] = None):
+                 duration: int | None = None,
+                 start: datetime.datetime | None = None,
+                 end: datetime.datetime | None = None):
         self.alert_manager = alert_manager
         self.alert_name = alert_name
         self.duration = duration or 86400  # 24h

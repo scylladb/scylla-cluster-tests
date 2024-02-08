@@ -11,14 +11,13 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=too-few-public-methods
 
+import logging
 import os
 import shutil
-import logging
 
+from sdcm.cluster import BaseCluster, BaseNode, BaseScyllaCluster
 from sdcm.remote import LocalCmdRunner
-from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 
 
 class DummyOutput:
@@ -43,7 +42,7 @@ class DummyRemote:
 
 
 class LocalNode(BaseNode):
-    # pylint: disable=too-many-arguments
+
     def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):
         super().__init__(name, parent_cluster)
         self.remoter = LocalCmdRunner()
@@ -78,7 +77,7 @@ class LocalNode(BaseNode):
 
 
 class LocalLoaderSetDummy(BaseCluster):
-    # pylint: disable=super-init-not-called,abstract-method
+
     def __init__(self, nodes=None):
         self.name = "LocalLoaderSetDummy"
         self.params = {}
@@ -94,7 +93,7 @@ class LocalLoaderSetDummy(BaseCluster):
 
 
 class LocalScyllaClusterDummy(BaseScyllaCluster):
-    # pylint: disable=super-init-not-called
+
     def __init__(self):
         self.name = "LocalScyllaClusterDummy"
         self.params = {}

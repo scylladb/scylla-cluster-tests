@@ -11,62 +11,78 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-#pylint: disable=too-many-lines
+
 from __future__ import annotations
 
-import logging
-import string
-import random
-import tempfile
 import datetime
+import logging
+import random
+import string
+import tempfile
+from abc import ABC, abstractmethod
 from contextlib import suppress
+from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
 from itertools import chain
 from math import ceil
 from typing import TYPE_CHECKING
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 
 import boto3
+import google.api_core.exceptions
 import pytz
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.mgmt.compute.models import GalleryImageVersion
 from azure.mgmt.compute.v2021_07_01.models import VirtualMachine
-from azure.mgmt.resource.resources.v2021_04_01.models import TagsPatchResource, TagsPatchOperation
-import google.api_core.exceptions
+from azure.mgmt.resource.resources.v2021_04_01.models import (
+    TagsPatchOperation,
+    TagsPatchResource,
+)
 from google.cloud import compute_v1
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import Instance
 
 from sct_ssh import ssh_run_cmd
 from sdcm.keystore import KeyStore
-from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance, provisioner_factory
+from sdcm.node_exporter_setup import NodeExporterSetup
+from sdcm.provision.provisioner import (
+    InstanceDefinition,
+    PricingModel,
+    VmInstance,
+    provisioner_factory,
+)
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
-from sdcm.utils.common import list_instances_aws, aws_tags_to_dict, list_instances_gce, gce_meta_to_dict
-from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
+from sdcm.test_config import TestConfig
 from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.aws_utils import (
+    ec2_ami_get_root_device_name,
+    ec2_instance_wait_public_ip,
+)
+from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
+from sdcm.utils.azure_utils import AzureService, list_instances_azure
+from sdcm.utils.common import (
+    aws_tags_to_dict,
+    gce_meta_to_dict,
+    list_instances_aws,
+    list_instances_gce,
+)
+from sdcm.utils.context_managers import environment
 from sdcm.utils.gce_utils import (
     SUPPORTED_PROJECTS,
+    create_instance,
+    disk_from_image,
+    gce_public_addresses,
+    gce_set_labels,
     get_gce_compute_addresses_client,
     get_gce_compute_images_client,
     get_gce_compute_instances_client,
-    create_instance,
-    disk_from_image,
-    wait_for_extended_operation,
     random_zone,
-    gce_set_labels,
-    gce_public_addresses,
+    wait_for_extended_operation,
 )
-from sdcm.utils.azure_utils import AzureService, list_instances_azure
-from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
-from sdcm.utils.context_managers import environment
-from sdcm.test_config import TestConfig
-from sdcm.node_exporter_setup import NodeExporterSetup
 
 if TYPE_CHECKING:
-    # pylint: disable=ungrouped-imports
-    from typing import Optional, Any, Type
+
+    from typing import Any
 
     from mypy_boto3_ec2.literals import InstanceTypeType
 
@@ -92,17 +108,17 @@ def datetime_from_formatted(date_string: str) -> datetime.datetime:
 
 
 @dataclass
-class SctRunnerInfo:  # pylint: disable=too-many-instance-attributes
-    sct_runner_class: Type[SctRunner] = field(repr=False)
+class SctRunnerInfo:
+    sct_runner_class: type[SctRunner] = field(repr=False)
     cloud_service_instance: EC2Client | AzureService | None = field(repr=False)
     region_az: str
     instance: VirtualMachine | compute_v1.Instance | Any = field(repr=False)
     instance_name: str
     public_ips: list[str]
     test_id: str | None = None
-    launch_time: Optional[datetime.datetime] = None
-    keep: Optional[str] = None
-    keep_action: Optional[str] = None
+    launch_time: datetime.datetime | None = None
+    keep: str | None = None
+    keep_action: str | None = None
     logs_collected: bool = False
 
     @property
@@ -176,15 +192,17 @@ class SctRunner(ABC):
     def key_pair(self) -> SSHKey:
         ...
 
-    def get_remoter(self, host, connect_timeout: Optional[float] = None) -> RemoteCmdRunnerBase:
-        self._ssh_pkey_file = tempfile.NamedTemporaryFile(mode="w", delete=False)  # pylint: disable=consider-using-with
+    def get_remoter(self, host, connect_timeout: float | None = None) -> RemoteCmdRunnerBase:
+        self._ssh_pkey_file = tempfile.NamedTemporaryFile(mode="w", delete=False)
         self._ssh_pkey_file.write(self.key_pair.private_key.decode())
         self._ssh_pkey_file.flush()
         return RemoteCmdRunnerBase.create_remoter(hostname=host, user=self.LOGIN_USER,
                                                   key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout)
 
-    def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:
-        from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE  # pylint: disable=import-outside-toplevel
+    def install_prereqs(self, public_ip: str, connect_timeout: int | None = None) -> None:
+        from sdcm.cluster_docker import (
+            AIO_MAX_NR_RECOMMENDED_VALUE,
+        )
 
         LOGGER.info("Connecting instance...")
         remoter = self.get_remoter(host=public_ip, connect_timeout=connect_timeout)
@@ -283,7 +301,6 @@ class SctRunner(ABC):
         ...
 
     @abstractmethod
-    # pylint: disable=too-many-arguments
     def _create_instance(self,
                          instance_type: str,
                          base_image: Any,
@@ -366,7 +383,7 @@ class SctRunner(ABC):
             try:
                 LOGGER.info("Terminating SCT Image Builder instance `%s'...", builder_instance_id)
                 self._terminate_image_builder_instance(instance=instance)
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # noqa: BLE001
                 LOGGER.warning("Was not able to terminate `%s': %s\nPlease terminate manually!!!",
                                builder_instance_id, ex)
         else:
@@ -382,10 +399,10 @@ class SctRunner(ABC):
             LOGGER.info("No need to copy SCT Runner image since it already exists in `%s'", self.region_name)
 
     @abstractmethod
-    def _get_base_image(self, image: Optional[Any] = None) -> Any:
+    def _get_base_image(self, image: Any | None = None) -> Any:
         ...
 
-    def create_instance(self,  # pylint: disable=too-many-arguments
+    def create_instance(self,
                         test_id: str,
                         test_name: str,
                         test_duration: int,
@@ -503,7 +520,6 @@ class AwsSctRunner(SctRunner):
 
         return aws_region.resource.Image(existing_amis[0]["ImageId"])
 
-    # pylint: disable=too-many-arguments
     def _create_instance(self,
                          instance_type: InstanceTypeType,
                          base_image: Any,
@@ -620,7 +636,7 @@ class AwsSctRunner(SctRunner):
         return image.image_id
 
     def _copy_source_image_to_region(self) -> None:
-        result = self.aws_region.client.copy_image(  # pylint: disable=no-member
+        result = self.aws_region.client.copy_image(
             Description=self.IMAGE_DESCRIPTION,
             Name=self.image_name,
             SourceImageId=self.source_image.image_id,
@@ -681,7 +697,7 @@ class AwsSctRunner(SctRunner):
         LOGGER.info("Updated SCT Runner %s with tags: %s successfully.", cloud_instance_name, tags_to_create)
 
 
-class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
+class GceSctRunner(SctRunner):
     """Provision and configure the SCT runner on GCE."""
 
     CLOUD_PROVIDER = "gce"
@@ -757,7 +773,6 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
     def tags_to_labels(tags: dict[str, str]) -> dict[str, str]:
         return {key.lower(): value.lower().replace(".", "_") for key, value in tags.items()}
 
-    # pylint: disable=too-many-arguments
     def _create_instance(self,
                          instance_type: str,
                          base_image: Any,
@@ -845,7 +860,7 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
     def _copy_source_image_to_region(self) -> None:
         LOGGER.debug("gce images are global, not need to copy")
 
-    def _get_base_image(self, image: Optional[Any] = None) -> Any:
+    def _get_base_image(self, image: Any | None = None) -> Any:
         if image is None:
             image = self.image
         return image.self_link
@@ -952,7 +967,7 @@ class AzureSctRunner(SctRunner):
                         return gallery_image_version
         return None
 
-    def _create_instance(self,  # pylint: disable=too-many-arguments
+    def _create_instance(self,
                          instance_type: str,
                          base_image: Any,
                          tags: dict[str, str],
@@ -1036,7 +1051,7 @@ class AzureSctRunner(SctRunner):
             region_name=self.region_name,
         )
 
-    def _get_base_image(self, image: Optional[Any] = None) -> Any:
+    def _get_base_image(self, image: Any | None = None) -> Any:
         if image is None:
             image = self.image
         if isinstance(image, GalleryImageVersion):
@@ -1148,7 +1163,7 @@ def update_sct_runner_tags(test_runner_ip: str = None, test_id: str = None, tags
         runner_to_update = runner_to_update[0]
         runner_to_update.sct_runner_class.set_tags(runner_to_update, tags=tags)
         LOGGER.info("Tags on SCT runner updated with: %s", tags)
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # noqa: BLE001
         LOGGER.warning("Could not set SCT runner tags to: %s due to exc:\n%s", tags, exc)
 
 
@@ -1178,14 +1193,13 @@ def _manage_runner_keep_tag_value(utc_now: datetime,
         return sct_runner_info
 
     LOGGER.info("No changes to make to runner tags.")
-    return sct_runner_info
 
 
 def clean_sct_runners(test_status: str,
                       test_runner_ip: str = None,
                       dry_run: bool = False,
                       force: bool = False) -> None:
-    # pylint: disable=too-many-branches,too-many-statements
+
     sct_runners_list = list_sct_runners(test_runner_ip=test_runner_ip)
     timeout_flag = False
     runners_terminated = 0
@@ -1219,9 +1233,9 @@ def clean_sct_runners(test_status: str,
         LOGGER.info("UTC now: %s", utc_now)
 
         if not dry_run and test_runner_ip:
-            sct_runner_info = _manage_runner_keep_tag_value(test_status=test_status, utc_now=utc_now,
-                                                            timeout_flag=timeout_flag, sct_runner_info=sct_runner_info,
-                                                            dry_run=dry_run)
+            _manage_runner_keep_tag_value(test_status=test_status, utc_now=utc_now,
+                                          timeout_flag=timeout_flag, sct_runner_info=sct_runner_info,
+                                          dry_run=dry_run)
 
         if sct_runner_info.keep:
             if "alive" in str(sct_runner_info.keep):
@@ -1247,7 +1261,7 @@ def clean_sct_runners(test_status: str,
             sct_runner_info.terminate()
             runners_terminated += 1
             end_message = f"Number of cleaned runners: {runners_terminated}"
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Exception raised during termination of %s: %s", sct_runner_info, exc)
             end_message = "No runners have been terminated"
 

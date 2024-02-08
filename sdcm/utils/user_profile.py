@@ -12,7 +12,7 @@
 # Copyright (c) 2023 ScyllaDB
 
 """ This module keeps utilities that help to extract schema definition and stress commands from user profile """
-from __future__ import absolute_import, annotations
+from __future__ import annotations
 
 import re
 

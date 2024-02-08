@@ -1,8 +1,8 @@
-import os
-from enum import Enum
-from collections import defaultdict
-
 import json
+import os
+from collections import defaultdict
+from enum import Enum
+
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.results_analyze import ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer
 
@@ -12,33 +12,33 @@ class CSPopulateDistribution(Enum):
     UNIFORM = "uniform"
 
 
-class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest):  # pylint: disable=too-many-instance-attributes
+class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # all parameters were taken from scylla-stress-orch repo
         # Planned data size is 3 TB in total: 1tb per node
-        self.NUM_THREADS = 500  # pylint: disable=invalid-name
-        self.CLUSTER_SIZE = self.params.get("n_db_nodes")  # pylint: disable=invalid-name
-        self.REPLICATION_FACTOR = 3  # pylint: disable=invalid-name
+        self.NUM_THREADS = 500
+        self.CLUSTER_SIZE = self.params.get("n_db_nodes")
+        self.REPLICATION_FACTOR = 3
         # Planned data size is 3 TB in total: 1tb per node
-        self.DATASET_SIZE = 3000 * 1024 * 1024 * 1024  # pylint: disable=invalid-name
+        self.DATASET_SIZE = 3000 * 1024 * 1024 * 1024
         # expected row size (was calculated by dev team ~313 bytes)
-        self.ROW_SIZE_BYTES = 210 * 1024 * 1024 * 1024 / 720_000_000  # pylint: disable=invalid-name
-        self.ROW_COUNT = int(self.DATASET_SIZE / self.ROW_SIZE_BYTES /  # pylint: disable=invalid-name
+        self.ROW_SIZE_BYTES = 210 * 1024 * 1024 * 1024 / 720_000_000
+        self.ROW_COUNT = int(self.DATASET_SIZE / self.ROW_SIZE_BYTES /
                              self.REPLICATION_FACTOR)
         # How many standard deviations should span the cluster's memory
-        self.CONFIDENCE = 6  # pylint: disable=invalid-name
+        self.CONFIDENCE = 6
         # intance i3.4xlarge
-        self.INSTANCE_MEMORY_GB = 122  # pylint: disable=invalid-name
-        self.GAUSS_CENTER = self.ROW_COUNT // 2  # pylint: disable=invalid-name
-        self.GAUSS_SIGMA = int(self.INSTANCE_MEMORY_GB * self.CLUSTER_SIZE * 1024 * 1024 *  # pylint: disable=invalid-name
+        self.INSTANCE_MEMORY_GB = 122
+        self.GAUSS_CENTER = self.ROW_COUNT // 2
+        self.GAUSS_SIGMA = int(self.INSTANCE_MEMORY_GB * self.CLUSTER_SIZE * 1024 * 1024 *
                                1024 // (self.CONFIDENCE * self.ROW_SIZE_BYTES * self.REPLICATION_FACTOR))
 
-        self.MAX_95TH_LATENCY = 20.0  # pylint: disable=invalid-name
-        self.MAX_99TH_LATENCY = 400.0  # pylint: disable=invalid-name
+        self.MAX_95TH_LATENCY = 20.0
+        self.MAX_99TH_LATENCY = 400.0
 
-    def test_mixed_gradual_increase_load(self):  # pylint: disable=too-many-locals
+    def test_mixed_gradual_increase_load(self):
         """
         Test steps:
 
@@ -48,7 +48,7 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         self._base_test_workflow(cs_cmd_tmpl=self.params.get('stress_cmd_m'),
                                  test_name="Test 'mixed: read:50%,write:50%'")
 
-    def test_write_gradual_increase_load(self):  # pylint: disable=too-many-locals
+    def test_write_gradual_increase_load(self):
         """
         Test steps:
 
@@ -58,7 +58,7 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         self._base_test_workflow(cs_cmd_tmpl=self.params.get('stress_cmd_w'),
                                  test_name="Test 'write 100%'")
 
-    def test_read_gradual_increase_load(self):  # pylint: disable=too-many-locals
+    def test_read_gradual_increase_load(self):
         """
         Test steps:
 
@@ -120,7 +120,7 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
             params.update({'stress_cmd': stress_cmd})
             # Run all stress commands
             params.update(dict(stats_aggregate_cmds=False))
-            self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
+            self.log.debug(f'RUNNING stress cmd: {stress_cmd}')
             stress_queue.append(self.run_stress_thread(**params))
 
         for stress in stress_queue:
@@ -128,7 +128,6 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
 
         self.log.info("Dataset has been populated")
 
-    # pylint: disable=too-many-arguments,too-many-locals
     def run_gradual_increase_load(self, stress_cmd_templ,
                                   start_ops, max_ops, throttle_step,
                                   stress_num, num_loaders, compaction_strategy, test_name):
@@ -215,7 +214,7 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         return status
 
     def warmup_cache(self, compaction_strategy):
-        cmd = f"cassandra-stress read no-warmup cl=QUORUM duration=180m -pop 'dist={self.get_cs_distribution()}' -mode native cql3 -rate 'threads=500 throttle=35000/s'"  # pylint: disable=line-too-long
+        cmd = f"cassandra-stress read no-warmup cl=QUORUM duration=180m -pop 'dist={self.get_cs_distribution()}' -mode native cql3 -rate 'threads=500 throttle=35000/s'"
         stress_queue = self.run_stress_cassandra_thread(
             stress_cmd=cmd,
             stress_num=1,

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -15,10 +13,9 @@
 import os
 
 from sdcm.cluster_k8s import ScyllaPodCluster
-from sdcm.tester import ClusterTester
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
-
+from sdcm.tester import ClusterTester
 
 SCT_ROOT = os.path.realpath(os.path.join(__file__, '..', '..', '..', '..'))
 

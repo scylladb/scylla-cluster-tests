@@ -1,15 +1,12 @@
 import logging
 
-from typing import Tuple, List
-
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.common import exceptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.common import exceptions
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from sdcm.utils.ci_tools import get_test_name
-
 
 LOGGER = logging.getLogger(__name__)
 UI_ELEMENT_LOAD_TIMEOUT = 180
@@ -44,7 +41,7 @@ class Login:
             login_button.click()
             self.skip_set_new_password()
             LOGGER.info("Logged in succesful")
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # noqa: BLE001
             LOGGER.error("Authentication failed: %s", details)
 
     def skip_set_new_password(self):
@@ -82,7 +79,7 @@ class Panel:
         LOGGER.info("Work with panel %s done", self.name)
 
 
-class Snapshot:  # pylint: disable=too-few-public-methods
+class Snapshot:
     locators_sequence = [
         (By.XPATH, """//button[contains(@aria-label, "Share dashboard or panel")]"""),
         (By.XPATH, """//div/a[contains(@aria-label, "Tab Snapshot") and contains(text(), "Snapshot")]"""),
@@ -120,8 +117,8 @@ class Dashboard:
     name: str
     path: str
     resolution: str
-    scroll_ready_locator: Tuple[By, str] = (By.XPATH, "//div[@class='scrollbar-view']")
-    panels: List[Panel]
+    scroll_ready_locator: tuple[By, str] = (By.XPATH, "//div[@class='scrollbar-view']")
+    panels: list[Panel]
     scroll_step: int = 1000
     title: str
 

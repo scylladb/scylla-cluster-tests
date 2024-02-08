@@ -11,16 +11,15 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import re
-import typing
-from datetime import datetime
 import logging
+import re
+from datetime import datetime
 
 from sdcm.es import ES
 from test_lib.utils import get_class_by_path
-from .base import ClassBase, __DEFAULT__
-from .metrics import ScyllaTestMetrics
 
+from .base import __DEFAULT__, ClassBase
+from .metrics import ScyllaTestMetrics
 
 LOGGER = logging.getLogger(__name__)
 
@@ -239,11 +238,11 @@ class SoftwareVersions(ClassBase):
     scylla_enterprise_server: ScyllaEnterpriseVersionInfo = None
 
     @property
-    def scylla_server_any(self) -> typing.Union[ScyllaVersionInfo, ScyllaEnterpriseVersionInfo]:
+    def scylla_server_any(self) -> ScyllaVersionInfo | ScyllaEnterpriseVersionInfo:
         return self.scylla_server if self.scylla_server else self.scylla_enterprise_server
 
     def is_valid(self):
-        for data_name in self.__annotations__.keys():  # pylint: disable=no-member
+        for data_name in self.__annotations__.keys():
             default = getattr(self.__class__, data_name)
             value = getattr(self, data_name, None)
             if value is default:
@@ -437,7 +436,7 @@ class TestResultClass(ClassBase):
     def _get_es_filters(cls, depth=2):
         tmp = []
         for es_filter in cls._get_all_es_data_mapping().values():
-            es_filter = '.'.join(es_filter.split('.')[:depth])
+            es_filter = '.'.join(es_filter.split('.')[:depth])  # noqa: PLW2901
             if es_filter not in tmp:
                 tmp.append(es_filter)
         return ['hits.hits.' + es_filter for es_filter in tmp]
@@ -459,11 +458,11 @@ class TestResultClass(ClassBase):
     def _get_es_query_from_es_data(cls, es_data: dict):
         filters = []
         for es_data_path, data_value in es_data.items():
-            es_data_path = es_data_path.split('.')
+            es_data_path = es_data_path.split('.')  # noqa: PLW2901
             if es_data_path[0] == '_source':
-                es_data_path = es_data_path[1:]
-            es_data_path = '.'.join(es_data_path)
-            es_data_path = cls._escape_filter_key(es_data_path)
+                es_data_path = es_data_path[1:]  # noqa: PLW2901
+            es_data_path = '.'.join(es_data_path)  # noqa: PLW2901
+            es_data_path = cls._escape_filter_key(es_data_path)  # noqa: PLW2901
             if isinstance(data_value, str) and es_data_path not in cls._es_field_indexes and data_value != '*':
                 filters.append(f'{es_data_path}.keyword: \"{data_value}\"')
             elif isinstance(data_value, bool):
@@ -489,13 +488,13 @@ class TestResultClass(ClassBase):
         es_query = cls._get_es_query_from_instance_data(params)
         filter_path = cls._get_es_filters()
         try:
-            es_data = ES().search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+            es_data = ES().search(
                 index=es_index,
                 q=es_query,
                 size=10000,
                 filter_path=filter_path,
             )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Unable to find ES data: %s", exc)
             es_data = None
 
@@ -520,7 +519,7 @@ class TestResultClass(ClassBase):
     def gen_kibana_dashboard_url(
             dashboard_path="app/kibana#/dashboard/03414b70-0e89-11e9-a976-2fe0f5890cd0?_g=()"
     ):
-        return "%s/%s" % (ES()._conf.get('kibana_url'), dashboard_path)  # pylint: disable=protected-access
+        return "{}/{}".format(ES()._conf.get('kibana_url'), dashboard_path)
 
     def get_subtests(self):
         return self.get_by_params(es_index=self.es_index, main_test_id=self.test_id, subtest_name='*')
@@ -555,24 +554,24 @@ class TestResultClass(ClassBase):
             ])
         return self._get_es_query_from_self(list_of_attributes)
 
-    def get_prior_tests(self, filter_path=None) -> typing.List['TestResultClass']:
+    def get_prior_tests(self, filter_path=None) -> list['TestResultClass']:
         output = []
         try:
             es_query = self.get_same_tests_query()
-            es_result = ES().search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+            es_result = ES().search(
                 index=self._es_data['_index'],
                 q=es_query,
                 size=10000,
                 filter_path=filter_path,
             )
             es_result = es_result.get('hits', {}).get('hits', None) if es_result else None
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Unable to find ES data: %s", exc)
             es_result = None
 
         if not es_result:
             return output
-        for es_data in es_result:  # pylint: disable=not-an-iterable
+        for es_data in es_result:
             test = TestResultClass(es_data)
             output.append(test)
         return output

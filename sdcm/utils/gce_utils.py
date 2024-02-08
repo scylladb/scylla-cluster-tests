@@ -11,24 +11,22 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import re
 import json
-import random
 import logging
+import os
+import random
+import re
 import time
-from typing import Any, List, Literal
+from typing import Any, Literal
 
-from google.oauth2 import service_account
-from google.cloud import compute_v1
-from google.cloud.compute_v1 import Image
-from google.cloud import storage
 from google.api_core.extended_operation import ExtendedOperation
+from google.cloud import compute_v1, storage
+from google.cloud.compute_v1 import Image
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
-
+from sdcm.utils.docker_utils import Container, ContainerManager, DockerException
 
 # NOTE: we cannot use neither 'slim' nor 'alpine' versions because we need the 'beta' component be installed.
 GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:437.0.1"
@@ -143,11 +141,11 @@ class GcloudContextManager:
         if self._container:
             return
         try:
-            self._container = self._instance._get_gcloud_container()  # pylint: disable=protected-access
+            self._container = self._instance._get_gcloud_container()
         except Exception as exc:
             try:
                 ContainerManager.destroy_container(self._instance, self._name)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # noqa: BLE001
                 pass
             raise exc from None
 
@@ -157,7 +155,7 @@ class GcloudContextManager:
             return
         try:
             ContainerManager.destroy_container(self._instance, self._name)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             pass
         self._container = None
 
@@ -237,7 +235,7 @@ class GcloudContainerMixin:
         return GcloudContextManager(self, 'gcloud')
 
 
-class GceLoggingClient:  # pylint: disable=too-few-public-methods
+class GceLoggingClient:
 
     def __init__(self, instance_name: str, zone: str):
         credentials = KeyStore().get_gcp_credentials()
@@ -318,7 +316,7 @@ def wait_for_extended_operation(
     return result
 
 
-def disk_from_image(  # pylint: disable=too-many-arguments
+def disk_from_image(
     disk_type: str,
     boot: bool,
     disk_size_gb: int = None,
@@ -370,18 +368,18 @@ def disk_from_image(  # pylint: disable=too-many-arguments
     return boot_disk
 
 
-def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
+def create_instance(  # noqa: PLR0913
     project_id: str,
     zone: str,
     instance_name: str,
-    disks: List[compute_v1.AttachedDisk],
+    disks: list[compute_v1.AttachedDisk],
     machine_type: str = "n1-standard-1",
     network_name: str = None,
     subnetwork_link: str = None,
     internal_ip: str = None,
     external_access: bool = False,
     external_ipv4: str = None,
-    accelerators: List[compute_v1.AcceleratorConfig] = None,
+    accelerators: list[compute_v1.AcceleratorConfig] = None,
     spot: bool = False,
     instance_termination_action: str = "STOP",
     custom_hostname: str = None,

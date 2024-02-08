@@ -11,28 +11,25 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import time
-import random
 import logging
-import uuid
+import os
+import random
 import threading
-
+import time
+import uuid
 from functools import cached_property
-from typing import Dict
 
-from sdcm.stress_thread import DockerBasedStressThread
-from sdcm.stress.base import format_stress_cmd_error
-from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.sct_events.system import InfoEvent
-from sdcm.sct_events.loaders import KclStressEvent
 from sdcm.cluster import BaseNode
-
+from sdcm.sct_events.loaders import KclStressEvent
+from sdcm.sct_events.system import InfoEvent
+from sdcm.stress.base import format_stress_cmd_error
+from sdcm.stress_thread import DockerBasedStressThread
+from sdcm.utils.docker_remote import RemoteDocker
 
 LOGGER = logging.getLogger(__name__)
 
 
-class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class KclStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.kcl"
 
@@ -58,18 +55,17 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'kcl-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
+        log_file_name = os.path.join(loader.logdir, f'kcl-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
         LOGGER.debug('kcl-stress local log: %s', log_file_name)
 
         LOGGER.debug("'running: %s", stress_cmd)
 
         if self.stress_num > 1:
-            node_cmd = 'taskset -c %s bash -c "%s"' % (cpu_idx, stress_cmd)
+            node_cmd = f'taskset -c {cpu_idx} bash -c "{stress_cmd}"'
         else:
             node_cmd = stress_cmd
 
-        node_cmd = 'cd /hydra-kcl && {}'.format(node_cmd)
+        node_cmd = f'cd /hydra-kcl && {node_cmd}'
 
         KclStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
 
@@ -83,7 +79,7 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
 
                 return result
 
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             errors_str = format_stress_cmd_error(exc)
             KclStressEvent.failure(
                 node=loader,
@@ -96,7 +92,7 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
             KclStressEvent.finish(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()
 
 
-class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class CompareTablesSizesThread(DockerBasedStressThread):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._stop_event = threading.Event()
@@ -113,7 +109,7 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
         return node_to_query
 
     @cached_property
-    def _options(self) -> Dict[str, str]:
+    def _options(self) -> dict[str, str]:
         return dict(item.strip().split("=") for item in self.stress_cmd.replace('table_compare', '').strip().split(";"))
 
     @property
@@ -152,7 +148,7 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
                 time.sleep(self._interval)
             return None
 
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             KclStressEvent.failure(
                 node=loader,
                 stress_cmd=self.stress_cmd,

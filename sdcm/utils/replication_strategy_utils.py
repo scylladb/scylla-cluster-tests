@@ -1,13 +1,12 @@
 import ast
 import re
-
+from collections.abc import Callable
 from contextlib import ContextDecorator
-from typing import Callable, Dict
 
 from sdcm.cluster import BaseNode
 
 
-class ReplicationStrategy:  # pylint: disable=too-few-public-methods
+class ReplicationStrategy:
 
     @classmethod
     def from_string(cls, replication_string):
@@ -70,13 +69,13 @@ class LocalReplicationStrategy(ReplicationStrategy):
 replication_strategies = [SimpleReplicationStrategy, NetworkTopologyReplicationStrategy, LocalReplicationStrategy]
 
 
-class temporary_replication_strategy_setter(ContextDecorator):  # pylint: disable=invalid-name
+class temporary_replication_strategy_setter(ContextDecorator):
     """Context manager that allows to set replication strategy
      and preserves all modified keyspaces for automatic rollback on exit."""
 
     def __init__(self, node: BaseNode) -> None:
         self.node = node
-        self.preserved: Dict[str, ReplicationStrategy] = {}
+        self.preserved: dict[str, ReplicationStrategy] = {}
 
     def __enter__(self) -> Callable[..., None]:
         return self

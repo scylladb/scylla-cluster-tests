@@ -11,19 +11,17 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-# pylint: disable=too-many-lines
 
 import json
 import logging
 import os
 import re
 from functools import cached_property
-from multiprocessing import Process, Event, Queue
-from typing import Optional
+from multiprocessing import Event, Process, Queue
 
 from sdcm.remote.base import CommandRunner
 from sdcm.sct_events.base import LogEvent
-from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping, BACKTRACE_RE
+from sdcm.sct_events.database import BACKTRACE_RE, get_pattern_to_event_to_func_mapping
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.common import make_threads_be_daemonic_by_default
 
@@ -36,7 +34,7 @@ LOG_LINE_MAX_PROCESSING_SIZE = 1024 * 5
 
 
 class DbLogReader(Process):
-    # pylint: disable=too-many-instance-attributes
+
     EXCLUDE_FROM_LOGGING = [
         ' | sshd[',
         ' | systemd:',
@@ -53,14 +51,13 @@ class DbLogReader(Process):
         '] stream_session - [Stream ',
         '] storage_proxy - Exception when communicating with',
     ]
-    # pylint: disable=too-many-arguments
 
     def __init__(self,
                  system_log: str,
                  remoter: CommandRunner,
                  node_name: str,
                  system_event_patterns: list,
-                 decoding_queue: Optional[Queue],
+                 decoding_queue: 'Queue | None',
                  log_lines: bool,
                  ):
         self._system_log = system_log
@@ -84,8 +81,6 @@ class DbLogReader(Process):
     def _read_and_publish_events(self) -> None:
         """Search for all known patterns listed in `sdcm.sct_events.database.SYSTEM_ERROR_EVENTS'."""
 
-        # pylint: disable=too-many-branches,too-many-locals,too-many-statements
-
         backtraces = []
         index = 0
 
@@ -98,7 +93,7 @@ class DbLogReader(Process):
             for index, line in enumerate(db_file, start=self._last_line_no + 1):
                 if len(line) > LOG_LINE_MAX_PROCESSING_SIZE:
                     # trim to avoid filling the memory when lot of long line is writen
-                    line = line[:LOG_LINE_MAX_PROCESSING_SIZE]
+                    line = line[:LOG_LINE_MAX_PROCESSING_SIZE]  # noqa: PLW2901
 
                 # Postpone processing line with no ending in case if half of line is written to the disc
                 if line[-1] == '\n' or self._skipped_end_line > 20:
@@ -111,11 +106,11 @@ class DbLogReader(Process):
                     if line[0] == '{':
                         try:
                             json_log = json.loads(line)
-                        except Exception:  # pylint: disable=broad-except
+                        except Exception:  # noqa: BLE001
                             pass
 
                     if self._log_lines:
-                        line = line.strip()
+                        line = line.strip()  # noqa: PLW2901
                         for pattern in self.EXCLUDE_FROM_LOGGING:
                             if pattern in line:
                                 break
@@ -161,7 +156,7 @@ class DbLogReader(Process):
 
                     if one_line_backtrace and backtraces:
                         backtraces[-1]['backtrace'] = one_line_backtrace
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     LOGGER.exception('Processing of %s line of %s failed, line content:\n%s',
                                      index, self._system_log, line)
 
@@ -192,7 +187,7 @@ class DbLogReader(Process):
                     "debug_file": scylla_debug_info,
                     "event": backtrace["event"],
                 })
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 backtrace["event"].publish()
                 raise
 
@@ -210,7 +205,7 @@ class DbLogReader(Process):
                 self._read_and_publish_events()
             except (SystemExit, KeyboardInterrupt) as ex:
                 LOGGER.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 LOGGER.exception("failed to read db log")
 
     def filter_backtraces(self, backtrace):
@@ -245,7 +240,7 @@ class DbLogReader(Process):
         """
         # first try default location
         scylla_debug_info = '/usr/lib/debug/bin/scylla.debug'
-        results = self._remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
+        results = self._remoter.run(f'[[ -f {scylla_debug_info} ]]', ignore_status=True)
         if results.ok:
             return scylla_debug_info
 
@@ -256,8 +251,8 @@ class DbLogReader(Process):
 
         # then look it up base on the build id
         if build_id := self.get_scylla_build_id():
-            scylla_debug_info = "/usr/lib/debug/.build-id/{0}/{1}.debug".format(build_id[:2], build_id[2:])
-            results = self._remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
+            scylla_debug_info = f"/usr/lib/debug/.build-id/{build_id[:2]}/{build_id[2:]}.debug"
+            results = self._remoter.run(f'[[ -f {scylla_debug_info} ]]', ignore_status=True)
             if results.ok:
                 return scylla_debug_info
 

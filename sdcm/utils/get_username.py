@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import getpass
+import os
 import subprocess
 
 
@@ -24,7 +24,7 @@ def get_email_user(email_addr: str) -> str:
     return email_addr.strip().split("@")[0]
 
 
-def get_username() -> str:  # pylint: disable=too-many-return-statements
+def get_username() -> str:  # noqa: PLR0911
     # First check that we running on Jenkins try to get user email
     email = os.environ.get('BUILD_USER_EMAIL')
     if is_email_in_scylladb_domain(email):
@@ -54,7 +54,7 @@ def get_username() -> str:  # pylint: disable=too-many-return-statements
         return get_email_user(res.stdout)
 
     # We didn't find email, fallback to current user with unknown email user identifier
-    return "linux_user={}".format(current_linux_user)
+    return f"linux_user={current_linux_user}"
 
 
 if __name__ == "__main__":

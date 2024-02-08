@@ -1,15 +1,13 @@
-from typing import Dict
-
 from dateutil import parser
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, EventPeriod
+from sdcm.sct_events.base import EventPeriod, SctEvent
 
 
 class GceInstanceEvent(SctEvent):
 
     def __init__(self,
-                 gce_log_entry: Dict,
+                 gce_log_entry: dict,
                  severity=Severity.ERROR):
         self.date = str(parser.parse(gce_log_entry["timestamp"]).astimezone())
         self.node = gce_log_entry["protoPayload"]["resourceName"].split("/")[-1]

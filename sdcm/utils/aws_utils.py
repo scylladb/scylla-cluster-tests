@@ -11,22 +11,21 @@
 #
 # Copyright (c) 2021 ScyllaDB
 import functools
-import time
 import logging
+import time
 from functools import cached_property
-from typing import List, Dict
 
 import boto3
 from botocore.exceptions import ClientError
-from mypy_boto3_ec2 import EC2ServiceResource, EC2Client
+from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.literals import ArchitectureTypeType
 
-from sdcm.provision.network_configuration import ssh_connection_ip_type
-from sdcm.utils.decorators import retrying
-from sdcm.utils.aws_region import AwsRegion
-from sdcm.wait import wait_for
-from sdcm.test_config import TestConfig
 from sdcm.keystore import KeyStore
+from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.test_config import TestConfig
+from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.decorators import retrying
+from sdcm.wait import wait_for
 
 LOGGER = logging.getLogger(__name__)
 AwsArchType = ArchitectureTypeType
@@ -57,23 +56,23 @@ class EksClusterCleanupMixin:
         return [{"Name": f"tag:{self.owned_object_tag_name}", 'Values': ['owned']}]
 
     @property
-    def attached_security_group_ids(self) -> List[str]:
+    def attached_security_group_ids(self) -> list[str]:
         return [group_desc['GroupId'] for group_desc in
                 self.ec2_client.describe_security_groups(Filters=self.cluster_owned_objects_filter)['SecurityGroups']]
 
     @property
-    def attached_nodegroup_names(self) -> List[str]:
+    def attached_nodegroup_names(self) -> list[str]:
         return self._get_attached_nodegroup_names()
 
     @property
-    def failed_to_delete_nodegroup_names(self) -> List[str]:
+    def failed_to_delete_nodegroup_names(self) -> list[str]:
         return self._get_attached_nodegroup_names(status='DELETE_FAILED')
 
     @property
-    def deleting_nodegroup_names(self) -> List[str]:
+    def deleting_nodegroup_names(self) -> list[str]:
         return self._get_attached_nodegroup_names(status='DELETING')
 
-    def _get_attached_nodegroup_names(self, status: str = None) -> List[str]:
+    def _get_attached_nodegroup_names(self, status: str = None) -> list[str]:
         if status is None:
             return self.eks_client.list_nodegroups(clusterName=self.short_cluster_name)['nodegroups']
         output = []
@@ -122,7 +121,7 @@ class EksClusterCleanupMixin:
                 if attachment_id := attachment.get('AttachmentId'):
                     try:
                         self.ec2_client.detach_network_interface(AttachmentId=attachment_id, Force=True)
-                    except Exception as exc:  # pylint: disable=broad-except
+                    except Exception as exc:  # noqa: BLE001
                         LOGGER.debug("Failed to detach network interface (%s) attachment %s:\n%s",
                                      network_interface_id, attachment_id, exc)
 
@@ -132,7 +131,7 @@ class EksClusterCleanupMixin:
             network_interface_id = interface_description['NetworkInterfaceId']
             try:
                 self.ec2_client.delete_network_interface(NetworkInterfaceId=network_interface_id)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.debug("Failed to delete network interface %s :\n%s", network_interface_id, exc)
 
     def destroy_attached_security_groups(self):
@@ -140,7 +139,7 @@ class EksClusterCleanupMixin:
         # even when cluster is gone
         try:
             sg_list = self.attached_security_group_ids
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.debug("Failed to get list of security groups:\n%s", exc)
             return
 
@@ -150,12 +149,12 @@ class EksClusterCleanupMixin:
             # In this case you need to forcefully detach interfaces and delete them to make nodegroup deletion possible.
             try:
                 self.delete_network_interfaces_of_sg(security_group_id)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.debug("destroy_attached_security_groups: %s", exc)
 
             try:
                 self.ec2_client.delete_security_group(GroupId=security_group_id)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.debug("Failed to delete security groups %s, due to the following error:\n%s",
                              security_group_id, exc)
 
@@ -165,7 +164,7 @@ class EksClusterCleanupMixin:
             for node_group_name in self._get_attached_nodegroup_names(status=status):
                 try:
                     self.eks_client.delete_nodegroup(clusterName=self.short_cluster_name, nodegroupName=node_group_name)
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # noqa: BLE001
                     LOGGER.debug("Failed to delete nodegroup %s/%s, due to the following error:\n%s",
                                  self.short_cluster_name, node_group_name, exc)
             time.sleep(10)
@@ -180,7 +179,7 @@ class EksClusterCleanupMixin:
     def destroy_cluster(self):
         try:
             self.eks_client.delete_cluster(name=self.short_cluster_name)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.debug("Failed to delete cluster %s, due to the following error:\n%s",
                          self.short_cluster_name, exc)
 
@@ -204,14 +203,14 @@ class EksClusterCleanupMixin:
                 LOGGER.warning(
                     "Couldn't find any OIDC provider associated with the '%s' EKS cluster",
                     self.short_cluster_name)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning(
                 "Failed to delete OIDC provider for the '%s' cluster due to "
                 "the following error:\n%s",
                 self.short_cluster_name, exc)
 
 
-def init_monitoring_info_from_params(monitor_info: dict, params: dict, regions: List):
+def init_monitoring_info_from_params(monitor_info: dict, params: dict, regions: list):
     if monitor_info['n_nodes'] is None:
         monitor_info['n_nodes'] = params.get('n_monitor_nodes')
     if monitor_info['type'] is None:
@@ -233,7 +232,7 @@ def init_monitoring_info_from_params(monitor_info: dict, params: dict, regions: 
     return monitor_info
 
 
-def init_db_info_from_params(db_info: dict, params: dict, regions: List, root_device: str = None):
+def init_db_info_from_params(db_info: dict, params: dict, regions: list, root_device: str = None):
     if db_info['n_nodes'] is None:
         n_db_nodes = params.get('n_db_nodes')
         if isinstance(n_db_nodes, int):  # legacy type
@@ -282,7 +281,7 @@ def init_db_info_from_params(db_info: dict, params: dict, regions: List, root_de
     return db_info
 
 
-def get_common_params(params: dict, regions: List, credentials: List, services: List, availability_zone: str = None) -> dict:
+def get_common_params(params: dict, regions: list, credentials: list, services: list, availability_zone: str = None) -> dict:
     availability_zones = [availability_zone] if availability_zone else params.get('availability_zone').split(',')
     ec2_security_group_ids, ec2_subnet_ids = get_ec2_network_configuration(
         regions=regions,
@@ -336,7 +335,7 @@ def get_ec2_services(regions):
     return services
 
 
-def tags_as_ec2_tags(tags: Dict[str, str]) -> List[Dict[str, str]]:
+def tags_as_ec2_tags(tags: dict[str, str]) -> list[dict[str, str]]:
     return [{"Key": key, "Value": value} for key, value in tags.items()]
 
 

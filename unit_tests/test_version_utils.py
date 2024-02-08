@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 
 import os
 import unittest
@@ -9,6 +8,13 @@ import requests
 
 import sdcm
 from sdcm.utils.version_utils import (
+    SCYLLA_VERSION_GROUPED_RE,
+    VERSION_NOT_FOUND_ERROR,
+    ComparableScyllaOperatorVersion,
+    ComparableScyllaVersion,
+    MethodVersionNotFound,
+    RepositoryDetails,
+    ScyllaFileType,
     assume_version,
     get_all_versions,
     get_branch_version,
@@ -19,13 +25,6 @@ from sdcm.utils.version_utils import (
     get_specific_tag_of_docker_image,
     is_enterprise,
     scylla_versions,
-    ComparableScyllaOperatorVersion,
-    ComparableScyllaVersion,
-    MethodVersionNotFound,
-    RepositoryDetails,
-    ScyllaFileType,
-    SCYLLA_VERSION_GROUPED_RE,
-    VERSION_NOT_FOUND_ERROR,
 )
 
 BASE_S3_DOWNLOAD_URL = 'https://s3.amazonaws.com/downloads.scylladb.com'
@@ -209,21 +208,20 @@ def test_07_get_git_tag_from_helm_chart_version__wrong_input(chart_version):
     assert False, f"'ValueError' was expected, but absent. Returned value: {git_tag}"
 
 
-class ClassWithVersiondMethods:  # pylint: disable=too-few-public-methods
+class ClassWithVersiondMethods:
     def __init__(self, scylla_version, nemesis_like_class):
         params = {"scylla_version": scylla_version}
         if scylla_version.startswith('enterprise:'):
             node_scylla_version = "2023.1.dev"
         elif scylla_version.startswith('master:') or scylla_version == "":
             node_scylla_version = "4.7.dev"
+        elif ":" in scylla_version:
+            node_scylla_version = scylla_version.split(":")[0]
+            if node_scylla_version.count(".") < 1:
+                node_scylla_version += ".0"
+            node_scylla_version += ".dev"
         else:
-            if ":" in scylla_version:
-                node_scylla_version = scylla_version.split(":")[0]
-                if node_scylla_version.count(".") < 1:
-                    node_scylla_version += ".0"
-                node_scylla_version += ".dev"
-            else:
-                node_scylla_version = scylla_version
+            node_scylla_version = scylla_version
         nodes = [type("Node", (object,), {"scylla_version": node_scylla_version})]
         if nemesis_like_class:
             self.cluster = type("Cluster", (object,), {
@@ -235,52 +233,52 @@ class ClassWithVersiondMethods:  # pylint: disable=too-few-public-methods
             self.nodes = nodes
 
     @scylla_versions((None, "4.3"))
-    def oss_method(self):  # pylint: disable=no-self-use
+    def oss_method(self):
         return "any 4.3.x and lower"
 
     @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"))
-    def oss_method(self):  # pylint: disable=no-self-use,function-redefined
+    def oss_method(self):
         return "all 4.4 and 4.5 except 4.4.rc2 and 4.4.rc3"
 
     @scylla_versions(("4.6.rc1", None))
-    def oss_method(self):  # pylint: disable=no-self-use,function-redefined
+    def oss_method(self):
         return "4.6.rc1 and higher"
 
     @scylla_versions((None, "2019.1"))
-    def es_method(self):  # pylint: disable=no-self-use
+    def es_method(self):
         return "any 2019.1.x and lower"
 
     @scylla_versions(("2020.1.rc1", "2020.1.rc1"), ("2020.1.rc4", "2021.1"))
-    def es_method(self):  # pylint: disable=no-self-use,function-redefined
+    def es_method(self):
         return "all 2020.1 and 2021.1 except 2020.1.rc2 and 2020.1.rc3"
 
     @scylla_versions(("2022.1.rc1", None))
-    def es_method(self):  # pylint: disable=no-self-use,function-redefined
+    def es_method(self):
         return "2022.1.rc1 and higher"
 
     @scylla_versions((None, "4.3"), (None, "2019.1"))
-    def mixed_method(self):  # pylint: disable=no-self-use
+    def mixed_method(self):
         return "any 4.3.x and lower, any 2019.1.x and lower"
 
     @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"),
                      ("2020.1.rc1", "2020.1.rc1"), ("2020.1.rc4", "2021.1"))
-    def mixed_method(self):  # pylint: disable=no-self-use,function-redefined
+    def mixed_method(self):
         return "all 4.4, 4.5, 2020.1 and 2021.1 except 4.4.rc2, 4.4.rc3, 2020.1.rc2 and 2020.1.rc3"
 
     @scylla_versions(("4.6.rc1", None), ("2022.1.rc1", None))
-    def mixed_method(self):  # pylint: disable=no-self-use,function-redefined
+    def mixed_method(self):
         return "4.6.rc1 and higher, 2022.1.rc1 and higher"
 
     @scylla_versions(("4.6.rc1", None))
-    def new_oss_method(self):  # pylint: disable=no-self-use,function-redefined
+    def new_oss_method(self):
         return "4.6.rc1 and higher"
 
     @scylla_versions(("2022.1.rc1", None))
-    def new_es_method(self):  # pylint: disable=no-self-use,function-redefined
+    def new_es_method(self):
         return "4.6.rc1 and higher"
 
     @scylla_versions(("4.6.rc1", None), ("2022.1.rc1", None))
-    def new_mixed_method(self):  # pylint: disable=no-self-use,function-redefined
+    def new_mixed_method(self):
         return "4.6.rc1 and higher"
 
 
@@ -336,8 +334,8 @@ def test_scylla_versions_decorator_negative(scylla_version, method):
                 scylla_version=scylla_version, nemesis_like_class=nemesis_like_class)
             getattr(cls_instance, method)()
         except MethodVersionNotFound as exc:
-            assert "Method '{}' with version '{}' is not supported in '{}'!".format(
-                method, scylla_version, cls_instance.__class__.__name__) in str(exc)
+            assert f"Method '{method}' with version '{scylla_version}' is not supported in '{cls_instance.__class__.__name__}'!" in str(
+                exc)
         else:
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
 
@@ -354,8 +352,8 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_nodes():
                 cls_instance.nodes = []
             cls_instance.oss_method()
         except MethodVersionNotFound as exc:
-            assert "Method 'oss_method' with version 'n/a' is not supported in '{}'!".format(
-                cls_instance.__class__.__name__) in str(exc)
+            assert f"Method 'oss_method' with version 'n/a' is not supported in '{cls_instance.__class__.__name__}'!" in str(
+                exc)
         else:
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
 
@@ -372,8 +370,8 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_attr():
                 delattr(cls_instance.nodes[0], "scylla_version")
             cls_instance.oss_method()
         except MethodVersionNotFound as exc:
-            assert "Method 'oss_method' with version 'n/a' is not supported in '{}'!".format(
-                cls_instance.__class__.__name__) in str(exc)
+            assert f"Method 'oss_method' with version 'n/a' is not supported in '{cls_instance.__class__.__name__}'!" in str(
+                exc)
         else:
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
 

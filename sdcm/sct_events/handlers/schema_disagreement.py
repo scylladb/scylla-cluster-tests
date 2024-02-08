@@ -10,19 +10,26 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
+from __future__ import annotations
 
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.handlers import EventHandler
-from sdcm.sct_events.loaders import CassandraStressLogEvent, SchemaDisagreementErrorEvent
+from sdcm.sct_events.loaders import (
+    CassandraStressLogEvent,
+    SchemaDisagreementErrorEvent,
+)
 from sdcm.utils.sstable.s3_uploader import upload_sstables_to_s3
+
+if TYPE_CHECKING:
+    from sdcm.tester import ClusterTester
 
 LOGGER = logging.getLogger(__name__)
 
 
-# pylint: disable=too-few-public-methods
 class SchemaDisagreementHandler(EventHandler):
     """Collects relevant data for schema mismatch investigation."""
 
@@ -34,7 +41,7 @@ class SchemaDisagreementHandler(EventHandler):
         # upload sstables once per hour as usually these events come multiple times for some period of time
         return time.time() - 3600 > self._sstables_uploaded_time
 
-    def handle(self, event: CassandraStressLogEvent, tester_obj: "sdcm.tester.ClusterTester"):
+    def handle(self, event: CassandraStressLogEvent, tester_obj: ClusterTester):
         if self._should_upload_sstables():
             self._sstables_uploaded_time = time.time()
             # create new event with details to make them visible in error events log/argus
@@ -48,7 +55,7 @@ class SchemaDisagreementHandler(EventHandler):
                 try:
                     link = upload_sstables_to_s3(node, keyspace='system_schema', test_id=tester_obj.test_id)
                     event.add_sstable_link(link)
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # noqa: BLE001
                     LOGGER.error("failed to upload system_schema sstables for node %s: %s", node.name, exc)
             event.add_gossip_info(gossip_info)
             event.add_peers_info(peers_info)

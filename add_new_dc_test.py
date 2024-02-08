@@ -1,8 +1,7 @@
 import warnings
-from typing import Tuple, List
 
 from cassandra import ConsistencyLevel
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.query import SimpleStatement
 
 from longevity_test import LongevityTest
 from sdcm.cluster import BaseNode
@@ -17,7 +16,7 @@ class TestAddNewDc(LongevityTest):
      https://docs.scylladb.com/operating-scylla/procedures/cluster-management/add-dc-to-existing-dc/
      """
 
-    def test_add_new_dc(self) -> None:  # pylint: disable=too-many-locals
+    def test_add_new_dc(self) -> None:
 
         self.log.info("Starting add new DC test...")
         assert self.params.get('n_db_nodes').endswith(" 0"), "n_db_nodes must be a list and last dc must equal 0"
@@ -56,7 +55,7 @@ class TestAddNewDc(LongevityTest):
         self.verify_data_can_be_read_from_new_dc(new_node)
         self.log.info("Test completed.")
 
-    def reconfigure_keyspaces_to_use_network_topology_strategy(self, keyspaces: List[str], replication_factors: dict[str, int]) -> None:
+    def reconfigure_keyspaces_to_use_network_topology_strategy(self, keyspaces: list[str], replication_factors: dict[str, int]) -> None:
         node = self.db_cluster.nodes[0]
         self.log.info("Reconfiguring keyspace Replication Strategy")
         network_topology_strategy = NetworkTopologyReplicationStrategy(
@@ -64,7 +63,7 @@ class TestAddNewDc(LongevityTest):
         for keyspace in keyspaces:
             cql = f"ALTER KEYSPACE {keyspace} WITH replication = {network_topology_strategy}"
             node.run_cqlsh(cql)
-        self.log.info("Replication Strategies for {} reconfigured".format(keyspaces))
+        self.log.info(f"Replication Strategies for {keyspaces} reconfigured")
 
     def prewrite_db_with_data(self) -> None:
         self.log.info("Prewriting database...")
@@ -73,7 +72,7 @@ class TestAddNewDc(LongevityTest):
         self.verify_stress_thread(cs_thread_pool=pre_thread)
         self.log.info("Database pre write completed")
 
-    def start_stress_during_adding_new_dc(self) -> Tuple[CassandraStressThread, CassandraStressThread]:
+    def start_stress_during_adding_new_dc(self) -> tuple[CassandraStressThread, CassandraStressThread]:
         self.log.info("Running stress during adding new DC")
         stress_cmds = self.params.get('stress_cmd')
         read_thread = self.run_stress_thread(stress_cmd=stress_cmds[0], stats_aggregate_cmds=False, round_robin=False)

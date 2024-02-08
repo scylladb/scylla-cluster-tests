@@ -6,12 +6,12 @@ from cassandra import Unauthorized
 from longevity_test import LongevityTest
 from sdcm.cluster import BaseNode
 from sdcm.sct_events.system import InfoEvent
-from sdcm.utils.ldap import LdapServerType, LDAP_USERS, LDAP_PASSWORD, LdapUtilsMixin
+from sdcm.utils.ldap import LDAP_PASSWORD, LDAP_USERS, LdapServerType, LdapUtilsMixin
 
 
 class AddRemoveLdapRolePermissionTest(LongevityTest, LdapUtilsMixin):
 
-    def test_add_remove_ldap_role_permission(self):  # pylint: disable=too-many-statements
+    def test_add_remove_ldap_role_permission(self):
         """
         Test adding a new user with Ldap permissions,
         and run some load for it.

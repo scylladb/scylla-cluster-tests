@@ -11,18 +11,18 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List, Callable
-from abc import abstractmethod, ABCMeta
-import shlex
 import logging
-import re
 import os
+import re
+import shlex
 import subprocess
+from abc import ABCMeta, abstractmethod
+from collections.abc import Callable
 from textwrap import dedent
 
-from invoke.watchers import StreamWatcher, Responder
-from invoke.runners import Result
 from fabric import Connection
+from invoke.runners import Result
+from invoke.watchers import Responder, StreamWatcher
 
 
 class OutputCheckError(Exception):
@@ -73,15 +73,15 @@ class CommandRunner(metaclass=ABCMeta):
         return {'hostname': self.hostname, 'user': self.user, 'password': self.password}
 
     @abstractmethod
-    def is_up(self, timeout: Optional[float] = None) -> bool:
+    def is_up(self, timeout: float | None = None) -> bool:
         """
         Return instance parameters required to rebuild instance
         """
 
     def __str__(self):
-        return '{} [{}@{}]'.format(self.__class__.__name__, self.user, self.hostname)
+        return f'{self.__class__.__name__} [{self.user}@{self.hostname}]'
 
-    def _setup_watchers(self, verbose: bool, log_file: str, additional_watchers: list) -> List[StreamWatcher]:
+    def _setup_watchers(self, verbose: bool, log_file: str, additional_watchers: list) -> list[StreamWatcher]:
         watchers = additional_watchers if additional_watchers else []
         if verbose:
             watchers.append(OutputWatcher(self.log))
@@ -89,32 +89,30 @@ class CommandRunner(metaclass=ABCMeta):
             watchers.append(LogWriteWatcher(log_file))
         return watchers
 
-    # pylint: disable=too-many-arguments
     @abstractmethod
     def run(self,
             cmd: str,
-            timeout: Optional[float] = None,
+            timeout: float | None = None,
             ignore_status: bool = False,
             verbose: bool = True,
             new_session: bool = False,
-            log_file: Optional[str] = None,
+            log_file: str | None = None,
             retry: int = 1,
-            watchers: Optional[List[StreamWatcher]] = None,
+            watchers: list[StreamWatcher] | None = None,
             change_context: bool = False
             ) -> Result:
         pass
 
-    # pylint: disable=too-many-arguments
     def sudo(self,
              cmd: str,
-             timeout: Optional[float] = None,
+             timeout: float | None = None,
              ignore_status: bool = False,
              verbose: bool = True,
              new_session: bool = False,
-             log_file: Optional[str] = None,
+             log_file: str | None = None,
              retry: int = 1,
-             watchers: Optional[List[StreamWatcher]] = None,
-             user: Optional[str] = 'root') -> Result:
+             watchers: list[StreamWatcher] | None = None,
+             user: str | None = 'root') -> Result:
         if user != self.user:
             if user == 'root':
                 cmd = f"sudo {cmd}"
@@ -182,14 +180,14 @@ class CommandRunner(metaclass=ABCMeta):
         new_name = []
         for char in filename:
             if char in escape_chars:
-                new_name.append("\\%s" % (char,))
+                new_name.append(f"\\{char}")
             else:
                 new_name.append(char)
 
         return shlex.quote("".join(new_name))
 
     @staticmethod
-    def _make_ssh_command(user: str = "root",  # pylint: disable=too-many-arguments
+    def _make_ssh_command(user: str = "root",
                           port: int = 22, opts: str = '', hosts_file: str = '/dev/null',
                           key_file: str = None, connect_timeout: float = 300, alive_interval: float = 300,
                           extra_ssh_options: str = '') -> str:
@@ -208,7 +206,7 @@ class CommandRunner(metaclass=ABCMeta):
                                alive_interval, user, port)
 
 
-class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
+class OutputWatcher(StreamWatcher):
     def __init__(self, log: logging.Logger):
         super().__init__()
         self.len = 0
@@ -228,13 +226,13 @@ class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
         self.log.debug(line.rstrip('\n'))
 
 
-class LogWriteWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
+class LogWriteWatcher(StreamWatcher):
     def __init__(self, log_file: str):
         super().__init__()
         self.len = 0
         self.log_file = log_file
         # open fail with line buffering, so prom stats would be as accuracte as possible
-        # pylint: disable=consider-using-with
+
         self.file_object = open(self.log_file, "a+", encoding="utf-8", buffering=1)
 
     def submit(self, stream: str) -> list:
@@ -277,7 +275,7 @@ class FailuresWatcher(Responder):
             self._process_line(line)
 
     def _process_line(self, line):
-        err = 'command failed found {!r} in \n{!r}'.format(self.sentinel, line)
+        err = f'command failed found {self.sentinel!r} in \n{line!r}'
         if callable(self.callback):
             self.callback(self.sentinel, line)
         if self.raise_exception:

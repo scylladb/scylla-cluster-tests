@@ -11,12 +11,13 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import time
 import logging
+import time
+
 import pytest
 
+from sdcm.kcl_thread import CompareTablesSizesThread, KclStressThread
 from sdcm.ycsb_thread import YcsbStressThread
-from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 from unit_tests.lib.alternator_utils import TEST_PARAMS
 
@@ -29,7 +30,7 @@ pytestmark = [
 @pytest.mark.skip("test isn't yet fully working")
 def test_01_kcl_with_ycsb(
     request, docker_scylla, events, params
-):  # pylint: disable=too-many-locals
+):
     params.update(TEST_PARAMS)
     loader_set = LocalLoaderSetDummy()
     num_of_keys = 1000

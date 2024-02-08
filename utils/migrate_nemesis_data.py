@@ -1,13 +1,14 @@
 #!/usr/bin/env python
-import sys
-import os.path
 import datetime
 import logging
 import logging.config
+import os.path
+import sys
 
 import click
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import scan
+
 from sdcm.keystore import KeyStore
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -21,7 +22,7 @@ LOGGER = logging.getLogger(__name__)
 @click.option('--new-index', default='nemesis_data', help='name of the target index')
 @click.option('--days', default=10, type=int, help="how many days backwards to migrate")
 @click.argument('old_index_name', type=str, default='longevitytest')
-def migrate(old_index_name, dry_run, new_index, days):  # pylint: disable=too-many-locals
+def migrate(old_index_name, dry_run, new_index, days):
 
     logging.basicConfig(level=logging.DEBUG)
     logging.config.dictConfig({
@@ -130,4 +131,4 @@ def migrate(old_index_name, dry_run, new_index, days):  # pylint: disable=too-ma
 
 
 if __name__ == '__main__':
-    migrate()  # pylint: disable=no-value-for-parameter
+    migrate()

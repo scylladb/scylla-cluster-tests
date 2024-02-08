@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -14,12 +12,11 @@
 # Copyright (c) 2016 ScyllaDB
 
 # TODO: this test seem to totally unused, hence disabling all pylint checks
-# pylint: disable=all
+
 
 import logging
 
-from sdcm.tester import ClusterTester
-from sdcm.tester import teardown_on_exception
+from sdcm.tester import ClusterTester, teardown_on_exception
 
 
 class HugeClusterTest(ClusterTester):

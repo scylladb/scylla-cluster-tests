@@ -11,17 +11,16 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import logging
-import tempfile
 import contextlib
+import logging
+import os
+import tempfile
 from io import StringIO
 
 import yaml
 
 from sdcm import wait
 from sdcm.remote import shell_script_cmd
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +29,6 @@ def read_to_stringio(fobj):
     return StringIO(fobj.read())
 
 
-# pylint: disable=too-many-locals,too-many-arguments
 @contextlib.contextmanager
 def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer=read_to_stringio, sudo=False,
                 preserve_ownership=True, preserve_permissions=True, log_change=True):

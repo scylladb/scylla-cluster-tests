@@ -1,14 +1,14 @@
-#!/usr/bin/env python
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field, fields
-from typing import Optional
 
 from sdcm.utils.decorators import retrying
-from sdcm.utils.loader_utils import (STRESS_ROLE_NAME_TEMPLATE,
-                                     STRESS_ROLE_PASSWORD_TEMPLATE,
-                                     SERVICE_LEVEL_NAME_TEMPLATE)
+from sdcm.utils.loader_utils import (
+    SERVICE_LEVEL_NAME_TEMPLATE,
+    STRESS_ROLE_NAME_TEMPLATE,
+    STRESS_ROLE_PASSWORD_TEMPLATE,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -59,13 +59,12 @@ class ServiceLevelAttributes:
         self.query_string = "".join(attr_strings)
 
 
-# pylint: disable=too-many-instance-attributes
 class ServiceLevel:
     # The class provide interface to manage SERVICE LEVEL
-    # pylint: disable=too-many-arguments
+
     def __init__(self, session,
                  name: str,
-                 shares: Optional[int] = 1000,
+                 shares: int | None = 1000,
                  timeout: str = None,
                  workload_type: str = None):
         self.session = session
@@ -134,7 +133,7 @@ class ServiceLevel:
         return (self.name == other.name) and self._sl_attributes == other._sl_attributes
 
     def __repr__(self):
-        return "%s: name: %s, attributes: %s" % (self.__class__.__name__, self.name, self._sl_attributes)
+        return f"{self.__class__.__name__}: name: {self.name}, attributes: {self._sl_attributes}"
 
     def create(self, if_not_exists=True) -> ServiceLevel:
         query = "CREATE SERVICE_LEVEL{if_not_exists} {service_level_name}{query_attributes}"\
@@ -150,9 +149,7 @@ class ServiceLevel:
 
     def alter(self, new_shares: int = None, new_timeout: str = None, new_workload_type: str = None):
         sla = ServiceLevelAttributes(shares=new_shares, timeout=new_timeout, workload_type=new_workload_type)
-        query = 'ALTER SERVICE_LEVEL {service_level_name} {query_string}'\
-                .format(service_level_name=self.name,
-                        query_string=sla.query_string)
+        query = f'ALTER SERVICE_LEVEL {self.name} {sla.query_string}'
         if self.verbose:
             LOGGER.debug('Change service level query: %s', query)
         self.session.execute(query)
@@ -171,7 +168,7 @@ class ServiceLevel:
         self.created = False
 
     def list_service_level(self) -> ServiceLevel | None:
-        query = 'LIST SERVICE_LEVEL {}'.format(self.name)
+        query = f'LIST SERVICE_LEVEL {self.name}'
         if self.verbose:
             LOGGER.debug('List service level query: %s', query)
         res = self.session.execute(query).all()
@@ -197,8 +194,6 @@ class ServiceLevel:
             result_dict["name"] = result_dict.pop("service_level")
             output.append(ServiceLevel(session=self.session, **result_dict))
         return output
-
-# pylint: disable=too-many-arguments, too-many-instance-attributes, unused-argument
 
 
 class UserRoleBase:
@@ -279,9 +274,6 @@ class UserRoleBase:
         self._attached_scheduler_group_name = service_level.scheduler_group_name
 
     def detach_service_level(self):
-        """
-        :param auth_name: it may be role name or user name
-        """
         query = f'DETACH SERVICE_LEVEL FROM {self.name}'
         if self.verbose:
             LOGGER.debug('Detach service level query: %s', query)
@@ -350,11 +342,11 @@ class Role(UserRoleBase):
             if hasattr(self, opt):
                 value = getattr(self, opt)
                 if value:
-                    role_options[opt.replace('_dict', '')] = '\'{}\''.format(value) \
+                    role_options[opt.replace('_dict', '')] = f'\'{value}\'' \
                         if opt == 'password' else value
-        role_options_str = ' AND '.join(['{} = {}'.format(opt, val) for opt, val in role_options.items()])
+        role_options_str = ' AND '.join([f'{opt} = {val}' for opt, val in role_options.items()])
         if role_options_str:
-            role_options_str = ' WITH {}'.format(role_options_str)
+            role_options_str = f' WITH {role_options_str}'
 
         query = f"CREATE ROLE{' IF NOT EXISTS' if if_not_exists else ''} {self.name}{role_options_str}"
         if self.verbose:
@@ -405,12 +397,11 @@ class User(UserRoleBase):
         super().__init__(session, name, password, superuser, verbose)
 
     def create(self) -> User:
-        user_options_str = '{password}{superuser}'.format(password=' PASSWORD \'{}\''
-                                                          .format(self.password) if self.password else '',
+        user_options_str = '{password}{superuser}'.format(password=f' PASSWORD \'{self.password}\'' if self.password else '',
                                                           superuser='' if self.superuser is None else ' SUPERUSER'
                                                           if self.superuser else ' NOSUPERUSER')
         if user_options_str:
-            user_options_str = ' WITH {}'.format(user_options_str)
+            user_options_str = f' WITH {user_options_str}'
 
         query = f'CREATE USER {self.name}{user_options_str}'
         if self.verbose:

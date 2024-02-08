@@ -14,8 +14,6 @@
 import logging
 from dataclasses import dataclass, field
 
-from typing import Dict
-
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.network.models import VirtualNetwork
 
@@ -30,14 +28,14 @@ class VirtualNetworkProvider:
     _region: str
     _az: str
     _azure_service: AzureService = AzureService()
-    _cache: Dict[str, VirtualNetwork] = field(default_factory=dict)
+    _cache: dict[str, VirtualNetwork] = field(default_factory=dict)
 
     def __post_init__(self):
         """Discover existing virtual networks for resource group."""
         try:
             vnets = self._azure_service.network.virtual_networks.list(self._resource_group_name)
-            for vnet in vnets:
-                vnet = self._azure_service.network.virtual_networks.get(self._resource_group_name, vnet.name)
+            for _vnet in vnets:
+                vnet = self._azure_service.network.virtual_networks.get(self._resource_group_name, _vnet.name)
                 self._cache[vnet.name] = vnet
         except ResourceNotFoundError:
             pass

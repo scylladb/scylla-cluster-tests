@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-from __future__ import print_function
-import sys
 import os.path
+import sys
 
-import requests
 import click
+import requests
 
 from sdcm.keystore import KeyStore
 
@@ -33,8 +32,8 @@ def fix_es_mapping(index_name):
     print(res.text)
     res.raise_for_status()
 
-    click.secho("fixed {index_name}".format(index_name=index_name), fg='green')
+    click.secho(f"fixed {index_name}", fg='green')
 
 
 if __name__ == '__main__':
-    fix_es_mapping()  # pylint: disable=no-value-for-parameter
+    fix_es_mapping()

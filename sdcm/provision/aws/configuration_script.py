@@ -11,11 +11,14 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-from sdcm.provision.aws.utils import network_config_ipv6_workaround_script, configure_eth1_script
+from sdcm.provision.aws.utils import (
+    configure_eth1_script,
+    network_config_ipv6_workaround_script,
+)
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 
 
-class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):  # pylint: disable=too-few-public-methods
+class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):
     """
     A class that builds instance initialization script from parameters
     """

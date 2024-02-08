@@ -11,8 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List, Union
-from sdcm.remote.remote_base import StreamWatcher, Result, CommandRunner
+from sdcm.remote.remote_base import CommandRunner, Result, StreamWatcher
 from unit_tests.lib.data_pickle import Pickler
 
 
@@ -30,27 +29,26 @@ class MockRemoter:
     """
     user = 'scylla-test'
 
-    def __init__(self, responses: Union[dict, str] = None):
+    def __init__(self, responses: dict | str = None):
         self.command_counter = {}
         if isinstance(responses, str):
             self.responses = Pickler.load_from_file(responses)
         elif isinstance(responses, dict):
             self.responses = responses
 
-    def is_up(self, timeout=None):  # pylint: disable=unused-argument,no-self-use
+    def is_up(self, timeout=None):
         return True
 
-    def _process_response(self, response):  # pylint: disable=no-self-use
+    def _process_response(self, response):
         if isinstance(response, Result):
             return response
         elif isinstance(response, Exception):
             raise response
         return None
 
-    # pylint: disable=too-many-arguments,unused-argument
-    def run(self, cmd: str, timeout: Optional[float] = None,
+    def run(self, cmd: str, timeout: float | None = None,
             ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-            log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None,
+            log_file: str | None = None, retry: int = 1, watchers: list[StreamWatcher] | None = None,
             change_context: bool = False) -> Result:
         response = self.responses.get(cmd)
         if response is None:

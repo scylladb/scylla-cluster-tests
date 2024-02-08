@@ -1,10 +1,10 @@
-from enum import Enum
-import logging
 import datetime
+import logging
+from enum import Enum
+
 import yaml
 
 from sdcm.utils.distro import Distro
-
 
 DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)
@@ -132,7 +132,7 @@ class HostStatus(Enum):
                 return cls.DOWN
             return getattr(cls, output_str)
         except AttributeError as err:
-            raise ScyllaManagerError("Could not recognize returned host status: {}".format(output_str)) from err
+            raise ScyllaManagerError(f"Could not recognize returned host status: {output_str}") from err
 
 
 class HostRestStatus(Enum):
@@ -150,10 +150,10 @@ class HostRestStatus(Enum):
                 return cls.DOWN
             return getattr(cls, output_str)
         except AttributeError as err:
-            raise ScyllaManagerError("Could not recognize returned host rest status: {}".format(output_str)) from err
+            raise ScyllaManagerError(f"Could not recognize returned host rest status: {output_str}") from err
 
 
-class TaskStatus:  # pylint: disable=too-few-public-methods
+class TaskStatus:
     NEW = "NEW"
     RUNNING = "RUNNING"
     DONE = "DONE"
@@ -173,7 +173,7 @@ class TaskStatus:  # pylint: disable=too-few-public-methods
             output_str = output_str.upper()
             return getattr(cls, output_str)
         except AttributeError as err:
-            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str)) from err
+            raise ScyllaManagerError(f"Could not recognize returned task status: {output_str}") from err
 
     @classmethod
     def all_statuses(cls):

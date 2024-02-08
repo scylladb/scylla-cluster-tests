@@ -1,10 +1,16 @@
 import sys
 from datetime import datetime
 from logging import getLogger
+
 from sdcm.send_email import Email
+from sdcm.utils.cloud_monitor.report import (
+    BaseReport,
+    DetailedReport,
+    GeneralReport,
+    NonQaInstancesTimeDistributionReport,
+    QAonlyInstancesTimeDistributionReport,
+)
 from sdcm.utils.cloud_monitor.resources.instances import CloudInstances
-from sdcm.utils.cloud_monitor.report import BaseReport, GeneralReport, DetailedReport, \
-    QAonlyInstancesTimeDistributionReport, NonQaInstancesTimeDistributionReport
 from sdcm.utils.cloud_monitor.resources.static_ips import StaticIPs
 
 LOGGER = getLogger(__name__)

@@ -14,28 +14,28 @@
 from __future__ import annotations
 
 import logging
-from typing import NamedTuple, TYPE_CHECKING
 from functools import cached_property
 from itertools import chain
+from typing import TYPE_CHECKING, NamedTuple
 
+from azure.core.credentials import AzureNamedKeyCredential
 from azure.identity import ClientSecretCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachine
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import ResourceManagementClient
-from azure.storage.blob import BlobServiceClient
-from azure.core.credentials import AzureNamedKeyCredential
-from azure.mgmt.subscription import SubscriptionClient
 from azure.mgmt.resourcegraph import ResourceGraphClient
-from azure.mgmt.resourcegraph.models import QueryRequestOptions, QueryRequest
+from azure.mgmt.resourcegraph.models import QueryRequest, QueryRequestOptions
+from azure.mgmt.subscription import SubscriptionClient
+from azure.storage.blob import BlobServiceClient
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.decorators import retrying
 from sdcm.utils.metaclasses import Singleton
 
 if TYPE_CHECKING:
-    # pylint: disable=ungrouped-imports
-    from typing import Optional, Callable, Iterator
+
+    from collections.abc import Callable, Iterator
 
     from azure.core.credentials import TokenCredential
     from azure.mgmt.resource.resources.models import Resource
@@ -63,12 +63,12 @@ logging.getLogger("azure").setLevel(logging.ERROR)
 
 class VirtualMachineIPs(NamedTuple):
     private_ip: str
-    public_ip: Optional[str]
+    public_ip: str | None
 
 
 class AzureService(metaclass=Singleton):
     @cached_property
-    def azure_credentials(self) -> dict[str, str]:  # pylint: disable=no-self-use; pylint doesn't now about cached_property
+    def azure_credentials(self) -> dict[str, str]:
         return KeyStore().get_azure_credentials()
 
     @cached_property
@@ -207,7 +207,7 @@ class AzureService(metaclass=Singleton):
         return chain.from_iterable(paged_query())
 
 
-def list_instances_azure(tags_dict: Optional[dict[str, str]] = None,
+def list_instances_azure(tags_dict: dict[str, str] | None = None,
                          running: bool = False,
                          verbose: bool = False) -> list[VirtualMachine]:
     query_bits = [

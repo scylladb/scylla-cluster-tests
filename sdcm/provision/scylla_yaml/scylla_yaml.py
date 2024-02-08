@@ -10,23 +10,32 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from difflib import unified_diff
-from typing import List, Literal, Union
+from __future__ import annotations
 
 import logging
+from difflib import unified_diff
+from typing import TYPE_CHECKING, Literal
+
 import yaml
-from pydantic import validator, BaseModel, Extra  # pylint: disable=no-name-in-module
+from pydantic import BaseModel, Extra, validator
 
-from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
-    ServerEncryptionOptions, ClientEncryptionOptions
+if TYPE_CHECKING:
+    from pydantic.typing import AbstractSetIntStr, DictStrAny, MappingIntStrAny
 
+from sdcm.provision.scylla_yaml.auxiliaries import (
+    ClientEncryptionOptions,
+    EndPointSnitchType,
+    RequestSchedulerOptions,
+    SeedProvider,
+    ServerEncryptionOptions,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-instance-attributes
+class ScyllaYaml(BaseModel):
 
-    class Config:  # pylint: disable=too-few-public-methods
+    class Config:
         extra = Extra.allow
 
     broadcast_address: str = None  # ""
@@ -43,7 +52,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     listen_interface: str = None  # "eth0"
     listen_interface_prefer_ipv6: bool = None  # False
     commitlog_directory: str = None  # ""
-    data_file_directories: List[str] = None  # None
+    data_file_directories: list[str] = None  # None
     hints_directory: str = None  # ""
     view_hints_directory: str = None  # ""
     saved_caches_directory: str = None  # ""
@@ -51,7 +60,6 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     disk_failure_policy: Literal["die", "stop_paranoid", "stop", "best_effort", "ignore"] = None  # "stop"
     endpoint_snitch: EndPointSnitchType = None
 
-    # pylint: disable=no-self-argument,no-self-use
     @validator("endpoint_snitch", pre=True, always=True)
     def set_endpoint_snitch(cls, endpoint_snitch: str):
         if endpoint_snitch is None:
@@ -64,7 +72,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     rpc_interface: str = None  # "eth1"
     rpc_interface_prefer_ipv6: bool = None  # False
     # [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider')]
-    seed_provider: List[SeedProvider] = None
+    seed_provider: list[SeedProvider] = None
     consistent_cluster_management: bool = None  # False
     compaction_throughput_mb_per_sec: int = None  # 0
     compaction_large_partition_warning_threshold_mb: int = None  # 1000
@@ -183,7 +191,6 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     ] = None
     stream_io_throughput_mb_per_sec: int = None  # 0
 
-    # pylint: disable=no-self-argument,no-self-use
     @validator("request_scheduler", pre=True, always=True)
     def set_request_scheduler(cls, request_scheduler: str):
         if request_scheduler is None:
@@ -203,7 +210,6 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         "com.scylladb.auth.SaslauthdAuthenticator"
     ] = None  # "org.apache.cassandra.auth.AllowAllAuthenticator"
 
-    # pylint: disable=no-self-argument,no-self-use
     @validator("authenticator", pre=True, always=True)
     def set_authenticator(cls, authenticator: str):
         if authenticator is None:
@@ -224,7 +230,6 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         "com.scylladb.auth.SaslauthdAuthorizer"
     ] = None  # "org.apache.cassandra.auth.AllowAllAuthorizer"
 
-    # pylint: disable=no-self-argument,no-self-use
     @validator("authorizer", pre=True, always=True)
     def set_authorizer(cls, authorizer: str):
         if authorizer is None:
@@ -342,18 +347,18 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
 
     compaction_collection_items_count_warning_threshold: int = None  # None
 
-    def dict(  # pylint: disable=arguments-differ
+    def dict(
         self,
         *,
-        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
-        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
+        include: MappingIntStrAny | AbstractSetIntStr = None,
+        exclude: MappingIntStrAny | AbstractSetIntStr = None,
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
         exclude_unset: bool = False,
-        explicit: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
-    ) -> 'DictStrAny':
+        explicit: AbstractSetIntStr | MappingIntStrAny = None,
+    ) -> DictStrAny:
         to_dict = super().dict(
             include=include, exclude=exclude, by_alias=by_alias, skip_defaults=skip_defaults,
             exclude_unset=exclude_unset, exclude_defaults=exclude_defaults, exclude_none=exclude_none)
@@ -370,12 +375,11 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
             if attr_info and hasattr(attr_info.type_, "__attrs_attrs__"):
                 if attr_value is not None:
                     if not isinstance(attr_value, dict):
-                        raise ValueError("Unexpected data `%s` in attribute `%s`" % (
-                            type(attr_value), attr_name))
-                    attr_value = attr_info.type(**attr_value)
+                        raise ValueError(f"Unexpected data `{type(attr_value)}` in attribute `{attr_name}`")
+                    attr_value = attr_info.type(**attr_value)  # noqa: PLW2901
             setattr(self, attr_name, attr_value)
 
-    def update(self, *objects: Union['ScyllaYaml', dict]):
+    def update(self, *objects: ScyllaYaml | dict):
         """
         Do the same as dict.update, with one exception.
         It ignores whatever key if it's value equal to default
@@ -394,7 +398,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
                 raise ValueError("Only dict or ScyllaYaml is accepted")
         return self
 
-    def diff(self, other: 'ScyllaYaml') -> str:
+    def diff(self, other: ScyllaYaml) -> str:
         self_str = yaml.safe_dump(self.dict(
             exclude_defaults=True, exclude_unset=True, exclude_none=True)).splitlines(keepends=True)
         other_str = yaml.safe_dump(other.dict(

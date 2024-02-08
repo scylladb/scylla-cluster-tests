@@ -11,24 +11,23 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import json
 import logging
 import os
-import uuid
 import random
-import json
 import time
+import uuid
 
 from sdcm.sct_events import Severity
-from sdcm.utils.common import FileFollowerThread
 from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
 from sdcm.stress_thread import DockerBasedStressThread
+from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.docker_remote import RemoteDocker
-
 
 LOGGER = logging.getLogger(__name__)
 
 
-class NotGeminiErrorResult:  # pylint: disable=too-few-public-methods
+class NotGeminiErrorResult:
     def __init__(self, error):
         self.exited = 1
         self.stdout = "n/a"
@@ -58,11 +57,11 @@ class GeminiEventsPublisher(FileFollowerThread):
                     break
 
 
-class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class GeminiStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.gemini"
 
-    def __init__(self, test_cluster, oracle_cluster, loaders, stress_cmd, timeout=None, params=None):  # pylint: disable=too-many-arguments
+    def __init__(self, test_cluster, oracle_cluster, loaders, stress_cmd, timeout=None, params=None):
         super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
@@ -74,7 +73,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
     @property
     def gemini_result_file(self):
         if not self._gemini_result_file:
-            self._gemini_result_file = os.path.join("/", "gemini_result_{}.log".format(uuid.uuid4()))
+            self._gemini_result_file = os.path.join("/", f"gemini_result_{uuid.uuid4()}.log")
         return self._gemini_result_file
 
     def _generate_gemini_command(self):
@@ -85,15 +84,9 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
         oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips()) if self.oracle_cluster else None
 
-        cmd = "./{} --test-cluster={} --outfile {} --seed {} --request-timeout {}s --connect-timeout {}s ".format(
-            self.stress_cmd.strip(),
-            test_nodes,
-            self.gemini_result_file,
-            seed,
-            self.gemini_request_timeout,
-            self.gemini_connect_timeout)
+        cmd = f"./{self.stress_cmd.strip()} --test-cluster={test_nodes} --outfile {self.gemini_result_file} --seed {seed} --request-timeout {self.gemini_request_timeout}s --connect-timeout {self.gemini_connect_timeout}s "
         if oracle_nodes:
-            cmd += "--oracle-cluster={} ".format(oracle_nodes)
+            cmd += f"--oracle-cluster={oracle_nodes} "
         if table_options:
             cmd += " ".join([f"--table-options \"{table_opt}\"" for table_opt in table_options])
         self.gemini_commands.append(cmd)
@@ -111,8 +104,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'gemini-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
+        log_file_name = os.path.join(loader.logdir, f'gemini-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
         LOGGER.debug('gemini local log: %s', log_file_name)
 
         gemini_cmd = self._generate_gemini_command()
@@ -130,14 +122,14 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                                     )
                 # sleep to gather all latest log messages
                 time.sleep(5)
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # noqa: BLE001
                 LOGGER.error(details)
                 result = getattr(details, "result", NotGeminiErrorResult(details))
 
             if result.exited:
                 gemini_stress_event.add_result(result=result)
                 gemini_stress_event.severity = Severity.ERROR
-            else:
+            else:  # noqa: PLR5501
                 if result.stderr:
                     gemini_stress_event.add_result(result=result)
                     gemini_stress_event.severity = Severity.WARNING
@@ -173,7 +165,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                 stats['results'].append(res)
                 for err_type in ['write_errors', 'read_errors', 'errors']:
                     if res.get(err_type, None):
-                        LOGGER.error("Gemini {} errors: {}".format(err_type, res[err_type]))
+                        LOGGER.error(f"Gemini {err_type} errors: {res[err_type]}")
                         stats['status'] = 'FAILED'
                         stats['errors'][err_type] = res[err_type]
         if not stats.get('status'):
@@ -187,8 +179,8 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         try:
             results = json.loads(json_str)
 
-        except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error("Invalid json document {}".format(details))
+        except Exception as details:  # noqa: BLE001
+            LOGGER.error(f"Invalid json document {details}")
 
         return results.get('result')
 

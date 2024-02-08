@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2022 ScyllaDB
 from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from pydantic import BaseModel
@@ -63,7 +63,7 @@ class UDA(BaseModel):
     args: str
     return_type: str
     accumulator_udf: UDF
-    reduce_udf: Optional[UDF]
+    reduce_udf: UDF | None
     final_udf: UDF
     initial_condition: str
 
@@ -82,9 +82,9 @@ class UDA(BaseModel):
     def from_yaml(cls, uda_yaml_file_path: str) -> UDA:
         with Path(uda_yaml_file_path).open(mode="r", encoding="utf-8") as uda_yaml:
             input_yaml = yaml.safe_load(uda_yaml)
-            accumulator_udf = UDFS.get((input_yaml.get("accumulator_udf_name", None)))
-            reduce_udf = UDFS.get((input_yaml.get("reduce_udf_name", None)))
-            final_udf = UDFS.get((input_yaml.get("final_udf_name", None)))
+            accumulator_udf = UDFS.get(input_yaml.get("accumulator_udf_name", None))
+            reduce_udf = UDFS.get(input_yaml.get("reduce_udf_name", None))
+            final_udf = UDFS.get(input_yaml.get("final_udf_name", None))
             return UDA(
                 accumulator_udf=accumulator_udf,
                 reduce_udf=reduce_udf,

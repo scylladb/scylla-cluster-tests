@@ -5,7 +5,7 @@ import threading
 import time
 
 from sdcm import wait
-from sdcm.cluster import BaseScyllaCluster, BaseCluster
+from sdcm.cluster import BaseCluster, BaseScyllaCluster
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import TombstoneGcVerificationEvent
@@ -15,10 +15,7 @@ LOCAL_CMD_RUNNER = LocalCmdRunner()
 ERROR_SUBSTRINGS = ("timed out", "timeout")
 
 
-# pylint: disable=too-many-instance-attributes
 class TombstoneGcVerificationThread:
-
-    # pylint: disable=too-many-arguments
 
     def __init__(self, db_cluster: [BaseScyllaCluster, BaseCluster], duration: int, interval: int,
                  termination_event: threading.Event, **kwargs):
@@ -74,7 +71,7 @@ class TombstoneGcVerificationThread:
             try:
                 self.tombstone_gc_verification()
                 tombstone_event.message = "Tombstone GC verification ended successfully"
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 msg = str(exc)
                 msg = f"{msg} while running Nemesis: {db_node.running_nemesis}" if db_node.running_nemesis else msg
                 tombstone_event.message = msg

@@ -11,29 +11,29 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
-import os
 import logging
+import os
+import re
+from collections import defaultdict, namedtuple
 from enum import Enum, auto
-from string import Template
-from typing import List, Optional, Literal
-from collections import namedtuple, defaultdict
-from urllib.parse import urlparse
 from functools import lru_cache, wraps
 from itertools import count
+from string import Template
+from typing import Literal
+from urllib.parse import urlparse
 
-import yaml
 import boto3
-import requests
 import dateutil.parser
-from mypy_boto3_s3 import S3Client
+import requests
+import yaml
 from botocore import UNSIGNED
 from botocore.client import Config
+from mypy_boto3_s3 import S3Client
 from repodataParser.RepoParser import Parser
 
 from sdcm.remote import LOCALRUNNER
-from sdcm.utils.common import ParallelObject, DEFAULT_AWS_REGION
 from sdcm.sct_events.system import ScyllaRepoEvent
+from sdcm.utils.common import DEFAULT_AWS_REGION, ParallelObject
 from sdcm.utils.decorators import retrying
 
 # Examples of ScyllaDB version strings:
@@ -414,7 +414,7 @@ def is_enterprise(scylla_version):
     return bool(re.search(r"^20[0-9]{2}.*", scylla_version))
 
 
-def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> tuple[bool, str]:
+def assume_version(params: dict[str], scylla_version: str | None = None) -> tuple[bool, str]:
     # Try to get the major version from the branch name, it will only be used when scylla_version isn't assigned.
     # It can be switched to RELEASE_BRANCH from upstream job
     git_branch = os.environ.get('GIT_BRANCH')  # origin/branch-4.5
@@ -446,7 +446,7 @@ def get_gemini_version(output: str):
     return None
 
 
-def get_node_supported_sstable_versions(node_system_log) -> List[str]:
+def get_node_supported_sstable_versions(node_system_log) -> list[str]:
     output = []
     with open(node_system_log, encoding="utf-8") as file:
         for line in file.readlines():
@@ -509,7 +509,7 @@ def get_docker_image_by_version(scylla_version: str):
     return default_image
 
 
-def _list_repo_file_etag(s3_client: S3Client, prefix: str) -> Optional[dict]:
+def _list_repo_file_etag(s3_client: S3Client, prefix: str) -> str | None:
     repo_file = s3_client.list_objects_v2(Bucket=SCYLLA_REPO_BUCKET, Prefix=prefix)
     if repo_file["KeyCount"] != 1:
         LOGGER.debug("No such file `%s' in %s bucket", prefix, SCYLLA_REPO_BUCKET)
@@ -524,7 +524,7 @@ def resolve_latest_repo_symlink(url: str) -> str:
 
     Can raise ValueError if `url' is not a valid URL that points to a repo file stored in S3.
     """
-    # pylint: disable=too-many-branches
+
     base, sep, rest = url.partition(LATEST_SYMLINK_NAME)
     if sep != LATEST_SYMLINK_NAME:
         LOGGER.debug("%s doesn't contain `%s' substring, use URL as is", url, LATEST_SYMLINK_NAME)
@@ -555,7 +555,7 @@ def resolve_latest_repo_symlink(url: str) -> str:
     continuation_token = "BEGIN"
     while continuation_token:
         for build in s3_objects.get("CommonPrefixes", []):
-            build = build.get("Prefix", "").rstrip("/").rsplit("/", 1)[-1]
+            build = build.get("Prefix", "").rstrip("/").rsplit("/", 1)[-1]  # noqa: PLW2901
             if build == LATEST_SYMLINK_NAME:
                 continue
             timestamp = NO_TIMESTAMP
@@ -665,7 +665,7 @@ class MethodVersionNotFound(Exception):
     pass
 
 
-class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
+class scylla_versions:
     """Runs a versioned method that is suitable for the configured scylla version.
 
     Limitations:
@@ -702,14 +702,14 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
         if (func.__name__, func.__code__.co_filename) not in self.VERSIONS:
             self.VERSIONS[(func.__name__, func.__code__.co_filename)] = {}
         for min_v, max_v in self.min_max_version_pairs:
-            scylla_type = "enterprise" if any((is_enterprise(v) for v in (min_v, max_v) if v)) else "oss"
-            min_v = min_v or ("3.0.0" if scylla_type == "oss" else "2019.1.rc0")
-            max_v = max_v or ("99.99.99" if scylla_type == "oss" else "2099.99.99")
+            scylla_type = "enterprise" if any(is_enterprise(v) for v in (min_v, max_v) if v) else "oss"
+            min_v = min_v or ("3.0.0" if scylla_type == "oss" else "2019.1.rc0")  # noqa: PLW2901
+            max_v = max_v or ("99.99.99" if scylla_type == "oss" else "2099.99.99")  # noqa: PLW2901
             if max_v.count(".") == 1:
                 # NOTE: version parse function considers 4.4 as lower than 4.4.1,
                 #       but we expect it to be any of the 4.4.x versions.
                 #       So, update all such short versions with the patch part and make it to be huge.
-                max_v = f"{max_v}.999"
+                max_v = f"{max_v}.999"  # noqa: PLW2901
             self.VERSIONS[(func.__name__, func.__code__.co_filename)].update({(min_v, max_v): func})
 
         @wraps(func)
@@ -733,8 +733,7 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
                 except ValueError as exc:
                     LOGGER.warning("Failed to parse '%s' scylla version: %s", scylla_version, exc)
             raise MethodVersionNotFound(
-                "Method '{}' with version '{}' is not supported in '{}'!".format(
-                    func.__name__, scylla_version, cls_self.__class__.__name__))
+                f"Method '{func.__name__}' with version '{scylla_version}' is not supported in '{cls_self.__class__.__name__}'!")
         return inner
 
 
@@ -746,7 +745,7 @@ def get_relocatable_pkg_url(scylla_version: str) -> str:
             get_pkgs_cmd = f'curl -s -X POST http://backtrace.scylladb.com/index.html -d "build_id={scylla_build_id}&backtrace="'
             res = LOCALRUNNER.run(get_pkgs_cmd)
             relocatable_pkg = re.findall(fr"{scylla_build_id}.+(http:[/\w.:-]*\.tar\.gz)", res.stdout)[0]
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Couldn't get relocatable_pkg link due to: %s", exc)
     return relocatable_pkg
 
@@ -754,7 +753,7 @@ def get_relocatable_pkg_url(scylla_version: str) -> str:
 _S3_SCYLLA_REPOS_CACHE = defaultdict(dict)
 
 
-def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
+def get_s3_scylla_repos_mapping(dist_type: Literal["centos", "ubuntu", "debian"] = 'centos', dist_version: str | None = None):
     """
     get the mapping from version prefixes to rpm .repo or deb .list files locations
 
@@ -784,28 +783,28 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
                     path=repo_file['Key'])
 
     elif dist_type in ('ubuntu', 'debian'):
-        response = s3_client.list_objects(Bucket=bucket, Prefix='deb/{}/'.format(dist_type), Delimiter='/')
+        response = s3_client.list_objects(Bucket=bucket, Prefix=f'deb/{dist_type}/', Delimiter='/')
         for repo_file in response['Contents']:
             filename = os.path.basename(repo_file['Key'])
 
             # only if path look like 'deb/debian/scylla-3.0-jessie.list', we deem it formal one
             repo_regex = re.compile(r'\d+\.\d\.list')
             if filename.startswith('scylla-') and (
-                    filename.endswith('-{}.list'.format(dist_version)) or
+                    filename.endswith(f'-{dist_version}.list') or
                     repo_regex.search(filename)):
                 version_prefix = \
-                    filename.replace('-{}.list'.format(dist_version), '').replace('.list', '').split('-')[-1]
+                    filename.replace(f'-{dist_version}.list', '').replace('.list', '').split('-')[-1]
                 _S3_SCYLLA_REPOS_CACHE[(
                     dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(
                     bucket=bucket,
                     path=repo_file['Key'])
 
     else:
-        raise NotImplementedError("[{}] is not yet supported".format(dist_type))
+        raise NotImplementedError(f"[{dist_type}] is not yet supported")
     return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
 
 
-def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
+def find_scylla_repo(scylla_version, dist_type: Literal["centos", "ubuntu", "debian"] = 'centos', dist_version: str | None = None):
     """
     Get a repo/list of scylla, based on scylla version match
 
@@ -823,17 +822,16 @@ def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
 
     repo_map = get_s3_scylla_repos_mapping(dist_type, dist_version)
 
-    # pylint: disable=useless-else-on-loop
     for key in repo_map:
         if scylla_version.startswith(key):
             return repo_map[key]
-    else:
+    else:  # noqa: PLW0120
         raise ValueError(f"repo for scylla version {scylla_version} wasn't found")
 
 
 def get_branched_repo(scylla_version: str,
                       dist_type: Literal["centos", "ubuntu", "debian"] = "centos",
-                      bucket: str = "downloads.scylladb.com") -> Optional[str]:
+                      bucket: str = "downloads.scylladb.com") -> str | None:
     """
     Get a repo/list of scylla, based on scylla version match
 

@@ -1,6 +1,6 @@
 import logging
 import shlex
-from functools import cached_property, cache
+from functools import cache, cached_property
 from pathlib import Path
 
 from sdcm.cluster import BaseNode
@@ -9,7 +9,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class RemoteDocker(BaseNode):
-    def __init__(self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts="", docker_network=None):  # pylint: disable=too-many-arguments
+    def __init__(self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts="", docker_network=None):
         self.node = node
         self._internal_ip_address = None
         self.log = LOGGER
@@ -96,7 +96,7 @@ class RemoteDocker(BaseNode):
                                         verbose=kwargs.get('verbose'), ignore_status=True).ok
         return result
 
-    def receive_files(self, src, dst, **kwargs):  # pylint: disable=unused-argument
+    def receive_files(self, src, dst, **kwargs):
         remote_tempfile = self.node.remoter.run("mktemp").stdout.strip()
 
         result = self.node.remoter.run(f"{self.sudo_needed} docker cp {self.docker_id}:{src} {remote_tempfile}",

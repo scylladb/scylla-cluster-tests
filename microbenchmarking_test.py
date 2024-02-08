@@ -11,8 +11,11 @@
 #
 # Copyright (c) 2023 ScyllaDB
 import json
-from sdcm.tester import ClusterTester, teardown_on_exception, log_run_info
-from sdcm.utils.microbenchmarking.perf_simple_query_reporter import PerfSimpleQueryAnalyzer
+
+from sdcm.tester import ClusterTester, log_run_info, teardown_on_exception
+from sdcm.utils.microbenchmarking.perf_simple_query_reporter import (
+    PerfSimpleQueryAnalyzer,
+)
 
 
 class PerfSimpleQueryTest(ClusterTester):

@@ -1,12 +1,19 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from sdcm.remote import shell_script_cmd
 
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
+    from sdcm.remote import RemoteCmdRunnerBase
 
-NODE_EXPORTER_VERSION = '1.7.0'
+NODE_EXPORTER_VERSION = "1.7.0"
 
 
-class NodeExporterSetup:  # pylint: disable=too-few-public-methods
+class NodeExporterSetup:
     @staticmethod
-    def install(node: "BaseNode | None" = None, remoter: "Remoter | None" = None):
+    def install(node: BaseNode | None = None, remoter: RemoteCmdRunnerBase | None = None):
         assert node or remoter, "node or remoter much be pass to this function"
         if node:
             node.install_package('wget')
@@ -44,9 +51,9 @@ class NodeExporterSetup:  # pylint: disable=too-few-public-methods
         """))
 
 
-class SyslogNgExporterSetup:  # pylint: disable=too-few-public-methods
+class SyslogNgExporterSetup:
     @staticmethod
-    def install(node: "BaseNode | None" = None, remoter: "Remoter | None" = None):
+    def install(node: BaseNode | None = None, remoter: RemoteCmdRunnerBase | None = None):
         assert node or remoter, "node or remoter much be pass to this function"
         if node:
             node.install_package('wget')

@@ -13,12 +13,11 @@
 
 import logging
 from functools import cached_property
-from typing import Dict, Literal
+from typing import Literal
 from urllib.parse import urljoin
 
 import requests
 from requests import Response
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,13 +34,13 @@ class RestClient:
     def _base_url(self) -> str:
         return urljoin(f"{self._url_prefix}{self._host}", self._endpoint)
 
-    def get(self, path: str, params: Dict[str, str] = None) -> Response:
+    def get(self, path: str, params: dict[str, str] = None) -> Response:
         url = f"{self._base_url}/{path}"
         LOGGER.info("Sending a GET request for: %s", url)
 
         return requests.get(url=url, params=params)
 
-    def post(self, path: str, params: Dict[str, str] = None) -> Response:
+    def post(self, path: str, params: dict[str, str] = None) -> Response:
         url = f"{self._base_url}/{path}"
         LOGGER.info("Sending a POST request for: %s", url)
         return requests.post(url=url, params=params)

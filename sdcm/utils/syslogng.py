@@ -11,13 +11,12 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import os
-import logging
 import getpass
+import logging
+import os
 from functools import cached_property
 from pwd import getpwnam
 from tempfile import mkstemp
-from typing import Optional
 
 from sdcm.utils.docker_utils import ContainerManager
 
@@ -28,17 +27,17 @@ SYSLOGNG_PORT = 49153  # Non-root
 LOGGER = logging.getLogger(__name__)
 
 
-class SyslogNGContainerMixin:  # pylint: disable=too-few-public-methods
+class SyslogNGContainerMixin:
     @cached_property
     def syslogng_confpath(self) -> str:
         return generate_syslogng_conf_file()
 
     @property
-    def syslogng_port(self) -> Optional[int]:
+    def syslogng_port(self) -> int | None:
         return ContainerManager.get_container_port(self, "syslogng", SYSLOGNG_PORT)
 
     @property
-    def syslogng_log_dir(self) -> Optional[str]:
+    def syslogng_log_dir(self) -> str | None:
         # This should work after process that had run container was terminated and another one starts
         # that is why it is not using variable to store log directory instead
         return ContainerManager.get_host_volume_path(

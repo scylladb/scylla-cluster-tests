@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -15,7 +13,7 @@
 from longevity_test import LongevityTest
 from sdcm.sla.libs.sla_utils import SlaUtils
 from sdcm.utils import loader_utils
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from test_lib.sla import create_sla_auth
 
 

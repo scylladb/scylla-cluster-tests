@@ -11,19 +11,19 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import os
 import re
-import logging
 import time
 import uuid
 from typing import Any
 
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events.loaders import NdBenchStressEvent, NDBENCH_ERROR_EVENTS_PATTERNS
+from sdcm.sct_events.loaders import NDBENCH_ERROR_EVENTS_PATTERNS, NdBenchStressEvent
+from sdcm.stress.base import format_stress_cmd_error
+from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.stress_thread import DockerBasedStressThread
-from sdcm.stress.base import format_stress_cmd_error
 
 LOGGER = logging.getLogger(__name__)
 
@@ -106,11 +106,11 @@ class NdBenchStatsPublisher(FileFollowerThread):
                             operation, name = key.split('_', 1)
                             self.set_metric(operation, name, float(value))
 
-                except Exception as exc:  # pylint: disable=broad-except
-                    LOGGER.warning("Failed to send metric. Failed with exception {exc}".format(exc=exc))
+                except Exception as exc:  # noqa: BLE001
+                    LOGGER.warning(f"Failed to send metric. Failed with exception {exc}")
 
 
-class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class NdBenchStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.ndbench"
 
@@ -155,7 +155,7 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
                                                retry=0,
                                                )
                 return docker_run_result
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 NdBenchStressEvent.failure(node=str(loader),
                                            stress_cmd=self.stress_cmd,
                                            log_file_name=log_file_name,

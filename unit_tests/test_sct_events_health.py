@@ -13,8 +13,8 @@
 
 import pickle
 import unittest
-from sdcm.sct_events import Severity
 
+from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent, DataValidatorEvent
 
 

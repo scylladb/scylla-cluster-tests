@@ -10,11 +10,15 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+from __future__ import annotations
 
 import base64
-from typing import List, Optional, Literal, Union
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from pydantic.typing import AbstractSetIntStr, DictStrAny, MappingIntStrAny
 
 from sdcm.provision.common.provisioner import InstanceParamsBase
 
@@ -22,7 +26,7 @@ from sdcm.provision.common.provisioner import InstanceParamsBase
 class AWSNetworkInterfaces(BaseModel):
     DeviceIndex: int
     SubnetId: str
-    Groups: List[str]
+    Groups: list[str]
 
 
 class AWSInstanceProfile(BaseModel):
@@ -55,33 +59,32 @@ class AWSPlacementInfo(BaseModel):
 
 
 class AWSInstanceParams(InstanceParamsBase):
-    # pylint: disable=invalid-name
+
     ImageId: str
     KeyName: str
     InstanceType: str
     UserData: str = None
-    NetworkInterfaces: List[AWSNetworkInterfaces] = None
-    IamInstanceProfile: Optional[AWSInstanceProfile] = None
-    BlockDeviceMappings: List[AWSDiskMapping] = None
+    NetworkInterfaces: list[AWSNetworkInterfaces] = None
+    IamInstanceProfile: AWSInstanceProfile | None = None
+    BlockDeviceMappings: list[AWSDiskMapping] = None
     Placement: AWSPlacementInfo = None
     SubnetId: str = None
-    SecurityGroups: List[str] = None
+    SecurityGroups: list[str] = None
     AddressingType: str = None
     EbsOptimized: bool = None
 
-    # pylint: disable=arguments-differ
     def dict(
         self,
         *,
-        include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
-        exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
+        include: AbstractSetIntStr | MappingIntStrAny = None,
+        exclude: AbstractSetIntStr | MappingIntStrAny = None,
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_unset: bool = False,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
         encode_user_data: bool = False
-    ) -> 'DictStrAny':
+    ) -> DictStrAny:
         dict_data = super().dict(
             include=include,
             exclude=exclude,

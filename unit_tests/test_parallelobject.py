@@ -1,9 +1,8 @@
-import unittest
-import time
+import concurrent.futures
 import logging
 import random
-import concurrent.futures
-
+import time
+import unittest
 
 from sdcm.utils.common import ParallelObject, ParallelObjectException
 

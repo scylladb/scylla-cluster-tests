@@ -14,8 +14,6 @@
 import logging
 from dataclasses import dataclass, field
 
-from typing import Dict
-
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.network.models import Subnet
 
@@ -28,7 +26,7 @@ LOGGER = logging.getLogger(__name__)
 class SubnetProvider:
     _resource_group_name: str
     _azure_service: AzureService = AzureService()
-    _cache: Dict[str, Subnet] = field(default_factory=dict)
+    _cache: dict[str, Subnet] = field(default_factory=dict)
 
     def __post_init__(self):
         """Discover existing subnets for resource group."""

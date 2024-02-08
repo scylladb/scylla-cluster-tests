@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -56,7 +54,7 @@ class GeminiTest(ClusterTester):
         self.gemini_results["cmd"] = gemini_thread.gemini_commands
         # sleep before run nemesis test_duration * .25
         sleep_before_start = float(self.params.get('test_duration')) * 60 * .1
-        self.log.info('Sleep interval {}'.format(sleep_before_start))
+        self.log.info(f'Sleep interval {sleep_before_start}')
         time.sleep(sleep_before_start)
 
         self.db_cluster.start_nemesis()
@@ -85,7 +83,7 @@ class GeminiTest(ClusterTester):
                                                          base_table_name="table1")
         # sleep before run nemesis test_duration * .1
         sleep_before_start = float(self.params.get('test_duration')) * 60 * .1
-        self.log.info('Sleep interval {}'.format(sleep_before_start))
+        self.log.info(f'Sleep interval {sleep_before_start}')
         time.sleep(sleep_before_start)
 
         self.db_cluster.start_nemesis()

@@ -1,14 +1,18 @@
 import base64
 import json
 import logging
-from typing import Union
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 
 from pydantic import Field
 
 from sdcm.provision.aws.configuration_script import AWSConfigurationScriptBuilder
-from sdcm.provision.common.user_data import UserDataBuilderBase, DataDeviceType, ScyllaUserDataBuilderBase, RaidLevelType
+from sdcm.provision.common.user_data import (
+    DataDeviceType,
+    RaidLevelType,
+    ScyllaUserDataBuilderBase,
+    UserDataBuilderBase,
+)
 from sdcm.provision.network_configuration import is_ip_ssh_connections_ipv6, network_interfaces_count
 from sdcm.provision.scylla_yaml import ScyllaYaml
 from sdcm.sct_config import SCTConfiguration
@@ -17,7 +21,7 @@ LOGGER = logging.getLogger()
 
 
 class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
-    params: Union[SCTConfiguration, dict] = Field(as_dict=False)
+    params: SCTConfiguration | dict = Field(as_dict=False)
     cluster_name: str
     bootstrap: bool = Field(default=None, as_dict=False)
     user_data_format_version: str = Field(default='2', as_dict=False)
@@ -113,7 +117,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
 
 
 class AWSInstanceUserDataBuilder(UserDataBuilderBase):
-    params: Union[SCTConfiguration, dict] = Field(as_dict=False)
+    params: SCTConfiguration | dict = Field(as_dict=False)
     syslog_host_port: tuple[str, int] = None
 
     def to_string(self) -> str:

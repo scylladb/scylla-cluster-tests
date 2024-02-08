@@ -11,37 +11,44 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
 import logging
 import threading
-from typing import NewType, Dict, Any, Tuple, Optional, Callable, cast
-from functools import partial
+import time
 from collections import defaultdict
+from collections.abc import Callable
+from functools import partial
+from typing import Any, NewType, cast
 
 import requests
 
-from sdcm.sct_events.events_processes import \
-    EVENTS_GRAFANA_ANNOTATOR_ID, EVENTS_GRAFANA_AGGREGATOR_ID, EVENTS_GRAFANA_POSTMAN_ID, \
-    EventsProcessesRegistry, BaseEventsProcess, EventsProcessPipe, \
-    start_events_process, get_events_process, verbose_suppress
-
+from sdcm.sct_events.events_processes import (
+    EVENTS_GRAFANA_AGGREGATOR_ID,
+    EVENTS_GRAFANA_ANNOTATOR_ID,
+    EVENTS_GRAFANA_POSTMAN_ID,
+    BaseEventsProcess,
+    EventsProcessesRegistry,
+    EventsProcessPipe,
+    get_events_process,
+    start_events_process,
+    verbose_suppress,
+)
 
 GRAFANA_EVENT_AGGREGATOR_TIME_WINDOW: float = 90  # seconds
 GRAFANA_EVENT_AGGREGATOR_MAX_DUPLICATES: int = 5
 GRAFANA_EVENT_AGGREGATOR_QUEUE_WAIT_TIMEOUT: float = 1  # seconds
 GRAFANA_ANNOTATIONS_API_ENDPOINT: str = "/api/annotations"
-GRAFANA_ANNOTATIONS_API_AUTH: Tuple[str, str] = ("admin", "admin", )
+GRAFANA_ANNOTATIONS_API_AUTH: tuple[str, str] = ("admin", "admin", )
 
 LOGGER = logging.getLogger(__name__)
 
 
-Annotation = NewType("Annotation", Dict[str, Any])
-AnnotationKey = NewType("AnnotationKey", Tuple[str, ...])
+Annotation = NewType("Annotation", dict[str, Any])
+AnnotationKey = NewType("AnnotationKey", tuple[str, ...])
 
 
-class GrafanaAnnotator(EventsProcessPipe[Tuple[str, Any], Annotation]):
+class GrafanaAnnotator(EventsProcessPipe[tuple[str, Any], Annotation]):
     def run(self) -> None:
-        for event_tuple in self.inbound_events():  # pylint: disable=no-member; pylint doesn't understand generics
+        for event_tuple in self.inbound_events():
             with verbose_suppress("GrafanaAnnotator failed to process %s", event_tuple):
                 event_class, event = event_tuple  # try to unpack event from EventsDevice
                 if not event.publish_to_grafana:
@@ -67,10 +74,10 @@ class GrafanaEventAggregator(EventsProcessPipe[Annotation, Annotation]):
     max_duplicates = GRAFANA_EVENT_AGGREGATOR_MAX_DUPLICATES
 
     def run(self) -> None:
-        time_window_counters: Dict[AnnotationKey, int] = defaultdict(int)
+        time_window_counters: dict[AnnotationKey, int] = defaultdict(int)
         time_window_end = time.perf_counter()
 
-        for annotation in self.inbound_events():  # pylint: disable=no-member; pylint doesn't understand generics
+        for annotation in self.inbound_events():
             with verbose_suppress("GrafanaEventAggregator failed to process an annotation %s", annotation):
                 annotation_key = self.unique_key(annotation)
                 time_diff = time.perf_counter() - time_window_end
@@ -136,17 +143,17 @@ start_grafana_postman = partial(start_events_process, EVENTS_GRAFANA_POSTMAN_ID,
 get_grafana_postman = cast(Callable[..., GrafanaEventPostman], partial(get_events_process, EVENTS_GRAFANA_POSTMAN_ID))
 
 
-def start_grafana_pipeline(_registry: Optional[EventsProcessesRegistry] = None) -> None:
+def start_grafana_pipeline(_registry: EventsProcessesRegistry | None = None) -> None:
     start_grafana_annotator(_registry=_registry)
     start_grafana_aggregator(_registry=_registry)
     start_grafana_postman(_registry=_registry)
 
 
-def set_grafana_url(url: str, _registry: Optional[EventsProcessesRegistry] = None) -> None:
+def set_grafana_url(url: str, _registry: EventsProcessesRegistry | None = None) -> None:
     get_grafana_postman(_registry=_registry).set_grafana_url(url)
 
 
-def start_posting_grafana_annotations(_registry: Optional[EventsProcessesRegistry] = None) -> None:
+def start_posting_grafana_annotations(_registry: EventsProcessesRegistry | None = None) -> None:
     get_grafana_postman(_registry=_registry).start_posting_grafana_annotations()
 
 

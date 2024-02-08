@@ -13,17 +13,17 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import sys
-import logging
+import argparse
+import contextlib
 import datetime
 import json
-import argparse
+import logging
+import os
 import socket
+import sys
 import tempfile
-from collections import defaultdict
-import contextlib
 import warnings
+from collections import defaultdict
 
 # disable InsecureRequestWarning
 import urllib3
@@ -31,11 +31,14 @@ import urllib3
 # HACK: since cryptography==37.0.0 CryptographyDeprecationWarning is being raised
 # this is until https://github.com/paramiko/paramiko/issues/2038 would be solved
 from cryptography.utils import CryptographyDeprecationWarning
+
 warnings.filterwarnings(action='ignore', category=CryptographyDeprecationWarning)
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from sdcm.results_analyze import BaseResultsAnalyzer  # pylint: disable=wrong-import-position
-from sdcm.utils.log import setup_stdout_logger  # pylint: disable=wrong-import-position
+from sdcm.results_analyze import (
+    BaseResultsAnalyzer,
+)
+from sdcm.utils.log import setup_stdout_logger
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 setup_stdout_logger()
@@ -63,7 +66,7 @@ class LargeNumberOfDatasetsException(Exception):
         self.message = msg
 
     def __str__(self):
-        return "MBM: {0.message}".format(self)
+        return f"MBM: {self.message}"
 
 
 class EmptyResultFolder(Exception):
@@ -72,10 +75,10 @@ class EmptyResultFolder(Exception):
         self.message = msg
 
     def __str__(self):
-        return "MBM: {0.message}".format(self)
+        return f"MBM: {self.message}"
 
 
-class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=too-many-instance-attributes
+class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):
     allowed_stats = ('Current', 'Stats', 'Last, commit, date', 'Diff last [%]', 'Best, commit, date', 'Diff best [%]')
     higher_better = ('frag/s',)
     lower_better = ('avg aio',)
@@ -98,7 +101,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         query = f"hostname:'{self.hostname}' AND versions.scylla-server.version:{self.db_version[:3]}*"
         if additional_filter:
             query += " AND " + additional_filter
-        output = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+        output = self._es.search(
             index=self._es_index,
             q=query,
             size=self._limit,
@@ -106,8 +109,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         )
         return output
 
-    def check_regression(self, current_results):  # pylint: disable=arguments-differ
-        # pylint: disable=too-many-locals, too-many-statements
+    def check_regression(self, current_results):
 
         if not current_results:
             return {}
@@ -145,8 +147,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
 
         sorted_by_type = defaultdict(list)
         for res in results:
-            test_type = "%s_%s" % (res["_source"]["test_group_properties"]["name"],
-                                   res["_source"]["test_args"])
+            test_type = "{}_{}".format(res["_source"]["test_group_properties"]["name"],
+                                       res["_source"]["test_args"])
             sorted_by_type[test_type].append(res)
 
         report_results = defaultdict(dict)
@@ -324,7 +326,6 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         return self.send_email(subject, summary_html, files=files)
 
     def get_results(self, results_path, update_db):
-        # pylint: disable=too-many-locals
 
         bad_chars = " "
         with chdir(os.path.join(results_path, "perf_fast_forward_output")):
@@ -333,15 +334,14 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
                 self.log.info(fullpath)
                 if (os.path.dirname(fullpath).endswith('perf_fast_forward_output') and
                         len(subdirs) > 1):
-                    raise LargeNumberOfDatasetsException('Test set {} has more than one datasets: {}'.format(
-                        os.path.basename(fullpath),
-                        subdirs))
+                    raise LargeNumberOfDatasetsException(
+                        f'Test set {os.path.basename(fullpath)} has more than one datasets: {subdirs}')
 
                 if not subdirs:
                     dataset_name = os.path.basename(fullpath)
-                    self.log.info('Dataset name: {}'.format(dataset_name))
+                    self.log.info(f'Dataset name: {dataset_name}')
                     dirname = os.path.basename(os.path.dirname(fullpath))
-                    self.log.info("Test set: {}".format(dirname))
+                    self.log.info(f"Test set: {dirname}")
                     for filename in files:
                         if filename.startswith('.'):
                             continue
@@ -360,7 +360,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
                                           })
                         if update_db:
                             self._es.create_doc(index=self._es_index, doc_type=self._es_doc_type,
-                                                doc_id="%s_%s" % (self.test_run_date, test_type), body=datastore)
+                                                doc_id=f"{self.test_run_date}_{test_type}", body=datastore)
                         results[test_type] = datastore
             if not results:
                 raise EmptyResultFolder("perf_fast_forward_output folder is empty")
@@ -381,7 +381,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             self.log.info("Nothing to exclude")
             return
 
-        self.log.info('Exclude testrun {} from results'.format(testrun_id))
+        self.log.info(f'Exclude testrun {testrun_id} from results')
         filter_path = (
             "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
             "hits.hits._source.hostname",  # 'godzilla.cloudius-systems.com'
@@ -414,7 +414,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             self.log.info("Nothing to exclude")
             return
 
-        self.log.info('Exclude test id {} from results'.format(test_id))
+        self.log.info(f'Exclude test id {test_id} from results')
         doc = self._es.get_doc(index=self._es_index, doc_id=test_id)
         if doc:
             self._es.update_doc(index=self._es_index,
@@ -455,10 +455,9 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             "hits.hits._source.hostname",
             "hits.hits._source.versions.scylla-server.run_date_time"
         )
-        self.log.info('Exclude tests before date {}'.format(date))
-        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
-                                  q="hostname:'%s' AND versions.scylla-server.version:%s*" %
-                                  (self.hostname, self.db_version[:3]))
+        self.log.info(f'Exclude tests before date {date}')
+        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+                                  q=f"hostname:'{self.hostname}' AND versions.scylla-server.version:{self.db_version[:3]}*")
         if not results:
             self.log.info('Nothing to exclude')
             return
@@ -488,14 +487,14 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             "hits.hits._source.test_run_date"
         )
 
-        self.log.info('Exclude tests by commit id #{}'.format(commit_id))
+        self.log.info(f'Exclude tests by commit id #{commit_id}')
 
-        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
-                                  q="hostname:'{}' \
-                                  AND versions.scylla-server.version:{}*\
-                                  AND versions.scylla-server.commit_id:'{}'".format(self.hostname, self.db_version[:3], commit_id))
+        results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,
+                                  q=f"hostname:'{self.hostname}' \
+                                  AND versions.scylla-server.version:{self.db_version[:3]}*\
+                                  AND versions.scylla-server.commit_id:'{commit_id}'")
         if not results:
-            self.log.info('There is no testrun results for commit id #{}'.format(commit_id))
+            self.log.info(f'There is no testrun results for commit id #{commit_id}')
             return
 
         for doc in results['hits']['hits']:

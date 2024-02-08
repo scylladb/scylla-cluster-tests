@@ -10,11 +10,11 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
+from __future__ import annotations
 
 import logging
 import string
 from datetime import datetime, timezone
-from typing import Dict, List
 
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
 from azure.mgmt.resource.resources.models import ResourceGroup
@@ -22,19 +22,26 @@ from invoke import Result
 
 from sdcm.provision.azure.ip_provider import IpAddressProvider
 from sdcm.provision.azure.network_interface_provider import NetworkInterfaceProvider
-from sdcm.provision.azure.network_security_group_provider import NetworkSecurityGroupProvider
+from sdcm.provision.azure.network_security_group_provider import (
+    NetworkSecurityGroupProvider,
+)
 from sdcm.provision.azure.resource_group_provider import ResourceGroupProvider
 from sdcm.provision.azure.subnet_provider import SubnetProvider
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
 from sdcm.provision.azure.virtual_network_provider import VirtualNetworkProvider
-from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmInstance, PricingModel
+from sdcm.provision.provisioner import (
+    InstanceDefinition,
+    PricingModel,
+    Provisioner,
+    VmInstance,
+)
 from sdcm.provision.security import ScyllaOpenPorts
 from sdcm.utils.azure_utils import AzureService
 
 LOGGER = logging.getLogger(__name__)
 
 
-class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attributes
+class AzureProvisioner(Provisioner):
     """Provides api for VM provisioning in Azure cloud, tuned for Scylla QA. """
 
     def __init__(self, test_id: str, region: str, availability_zone: str,
@@ -42,7 +49,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         availability_zone = self._convert_az_to_zone(availability_zone)
         super().__init__(test_id, region, availability_zone)
         self._azure_service: AzureService = azure_service
-        self._cache: Dict[str, VmInstance] = {}
+        self._cache: dict[str, VmInstance] = {}
         LOGGER.debug("getting resources for %s...", self._resource_group_name)
         self._rg_provider = ResourceGroupProvider(
             self._resource_group_name, self._region, self._az, self._azure_service)
@@ -84,13 +91,12 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
 
     @classmethod
     def discover_regions(cls, test_id: str = "", regions: list = None,
-                         azure_service: AzureService = AzureService(), **kwargs) -> List["AzureProvisioner"]:
-        # pylint: disable=arguments-differ,unused-argument
+                         azure_service: AzureService = AzureService(), **kwargs) -> list[AzureProvisioner]:
         """Discovers provisioners for in each region for given test id.
 
         If test_id is not provided, it discovers all related to SCT provisioners."""
 
-        all_resource_groups: List[ResourceGroup] = [
+        all_resource_groups: list[ResourceGroup] = [
             rg
             for rg in azure_service.resource.resource_groups.list()
             if rg.name.startswith("SCT-") and (rg.location in regions if regions else True)
@@ -112,9 +118,9 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         return self.get_or_create_instances(definitions=[definition], pricing_model=pricing_model)[0]
 
     def get_or_create_instances(self,
-                                definitions: List[InstanceDefinition],
+                                definitions: list[InstanceDefinition],
                                 pricing_model: PricingModel = PricingModel.SPOT
-                                ) -> List[VmInstance]:
+                                ) -> list[VmInstance]:
         """Create a set of instances specified by a list of InstanceDefinition.
         If instances already exist, returns them."""
         provisioned_vm_instances = []
@@ -156,7 +162,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
     def reboot_instance(self, name: str, wait: bool, hard: bool = False) -> None:
         self._vm_provider.reboot(name, wait, hard)
 
-    def list_instances(self) -> List[VmInstance]:
+    def list_instances(self) -> list[VmInstance]:
         """List virtual machines for given provisioner."""
         return list(self._cache.values())
 
@@ -176,7 +182,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             for task in tasks:
                 task.wait()
 
-    def add_instance_tags(self, name: str, tags: Dict[str, str]) -> None:
+    def add_instance_tags(self, name: str, tags: dict[str, str]) -> None:
         """Adds tags to instance."""
         LOGGER.info("Adding tags '%s' to intance '%s'...", tags, name)
         instance = self._vm_to_instance(self._vm_provider.add_tags(name, tags))

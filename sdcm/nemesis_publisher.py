@@ -12,9 +12,9 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
+import sys
 from datetime import datetime
 from functools import cached_property
-import sys
 
 from elasticsearch import Elasticsearch
 
@@ -34,7 +34,7 @@ class NemesisElasticSearchPublisher:
     def create_es_connection(self):
         ks = KeyStore()
         es_conf = ks.get_elasticsearch_credentials()
-        self.es = Elasticsearch(hosts=[es_conf["es_url"]], verify_certs=False,  # pylint: disable=invalid-name
+        self.es = Elasticsearch(hosts=[es_conf["es_url"]], verify_certs=False,
                                 http_auth=(es_conf["es_user"], es_conf["es_password"]))
 
     @cached_property

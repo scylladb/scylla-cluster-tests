@@ -11,47 +11,46 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import os
 import re
 import time
-import logging
-from typing import Dict, Any, ParamSpec, TypeVar
-from textwrap import dedent
-from functools import cached_property, cache
 from collections.abc import Callable
+from functools import cache, cached_property
+from textwrap import dedent
+from typing import Any, ParamSpec, TypeVar
 
-import tenacity
 import google.api_core.exceptions
+import tenacity
 from google.cloud import compute_v1
 
 from sdcm import cluster
+from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
+from sdcm.sct_events.system import SpotTerminationEvent
+from sdcm.utils.common import gce_meta_to_dict, list_instances_gce
+from sdcm.utils.decorators import retrying
 from sdcm.utils.gce_utils import (
     GceLoggingClient,
     create_instance,
     disk_from_image,
-    get_gce_compute_disks_client,
-    wait_for_extended_operation,
     gce_private_addresses,
     gce_public_addresses,
-    random_zone,
     gce_set_labels,
+    get_gce_compute_disks_client,
+    random_zone,
+    wait_for_extended_operation,
 )
 from sdcm.wait import exponential_retry
-from sdcm.keystore import pub_key_from_private_key_file
-from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
-from sdcm.utils.decorators import retrying
-
 
 SPOT_TERMINATION_CHECK_DELAY = 5 * 60
 
 LOGGER = logging.getLogger(__name__)
 
-P = ParamSpec("P")  # pylint: disable=invalid-name
-R = TypeVar("R")  # pylint: disable=invalid-name
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class CreateGCENodeError(Exception):
@@ -66,7 +65,7 @@ class GCENode(cluster.BaseNode):
 
     log = LOGGER
 
-    def __init__(self, gce_instance: compute_v1.Instance,  # pylint: disable=too-many-arguments
+    def __init__(self, gce_instance: compute_v1.Instance,
                  gce_service: compute_v1.InstancesClient,
                  credentials,
                  parent_cluster,
@@ -110,7 +109,7 @@ class GCENode(cluster.BaseNode):
         super().init()
 
     @cached_property
-    def tags(self) -> Dict[str, str]:
+    def tags(self) -> dict[str, str]:
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
 
@@ -181,7 +180,7 @@ class GCENode(cluster.BaseNode):
                         GceInstanceEvent(entry).publish()
                     case _:
                         GceInstanceEvent(entry, severity=Severity.WARNING).publish()
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # noqa: BLE001
             self.log.warning('Error during getting spot termination notification %s', details)
             self._last_logs_fetch_time = since
         return SPOT_TERMINATION_CHECK_DELAY
@@ -234,20 +233,19 @@ class GCENode(cluster.BaseNode):
         return disk.source_image
 
 
-class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attributes,abstract-method
+class GCECluster(cluster.BaseCluster):
 
     """
     Cluster of Node objects, started on GCE (Google Compute Engine).
     """
     _gce_service: compute_v1.InstancesClient
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # noqa: PLR0913
                  cluster_uuid=None, gce_instance_type='n1-standard-1', gce_region_names=None,
                  gce_n_local_ssd=1, gce_image_username='root', cluster_prefix='cluster',
                  node_prefix='node', n_nodes=3, add_disks=None, params=None, node_type=None,
                  service_accounts=None, add_nodes=True):
 
-        # pylint: disable=too-many-locals
         self._gce_image = gce_image
         self._gce_image_type = gce_image_type
         self._gce_image_size = gce_image_size
@@ -276,21 +274,21 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def __str__(self):
         identifier = 'GCE Cluster %s | ' % self.name
         identifier += 'Image: %s | ' % os.path.basename(self._gce_image)
-        identifier += 'Root Disk: %s %s GB | ' % (self._gce_image_type, self._gce_image_size)
+        identifier += f'Root Disk: {self._gce_image_type} {self._gce_image_size} GB | '
         if self._gce_n_local_ssd:
             identifier += 'Local SSD: %s | ' % self._gce_n_local_ssd
         if self._add_disks:
             for disk_type, disk_size in self._add_disks.items():
                 if int(disk_size):
-                    identifier += '%s: %s | ' % (disk_type, disk_size)
+                    identifier += f'{disk_type}: {disk_size} | '
         identifier += 'Type: %s' % self._gce_instance_type
         return identifier
 
     def _get_disk_url(self, disk_type='pd-standard', dc_idx=0):
-        return "projects/%s/zones/%s/diskTypes/%s" % (self.project, self._gce_zone_names[dc_idx], disk_type)
+        return f"projects/{self.project}/zones/{self._gce_zone_names[dc_idx]}/diskTypes/{disk_type}"
 
     def _get_root_disk_struct(self, name, disk_type='pd-standard', dc_idx=0):
-        device_name = '%s-root-%s' % (name, disk_type)
+        device_name = f'{name}-root-{disk_type}'
         return disk_from_image(disk_type=self._get_disk_url(disk_type, dc_idx=dc_idx),
                                disk_size_gb=self._gce_image_size,
                                boot=True,
@@ -301,7 +299,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                )
 
     def _get_local_ssd_disk_struct(self, name, index, interface='NVME', dc_idx=0):
-        device_name = '%s-data-local-ssd-%s' % (name, index)
+        device_name = f'{name}-data-local-ssd-{index}'
         return disk_from_image(disk_type=self._get_disk_url('local-ssd', dc_idx=dc_idx),
                                boot=False,
                                auto_delete=True,
@@ -311,7 +309,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                )
 
     def _get_persistent_disk_struct(self, name, disk_size, disk_type='pd-ssd', dc_idx=0):
-        device_name = '%s-data-%s' % (name, disk_type)
+        device_name = f'{name}-data-{disk_type}'
         return disk_from_image(disk_type=self._get_disk_url(disk_type, dc_idx=dc_idx),
                                disk_size_gb=disk_size,
                                boot=False,
@@ -329,15 +327,14 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, dc_idx=dc_idx))
         if self._add_disks:
             for disk_type, disk_size in self._add_disks.items():
-                disk_size = int(disk_size)
+                disk_size = int(disk_size)  # noqa: PLW2901
                 if disk_size:
                     gce_disk_struct.append(self._get_persistent_disk_struct(name=name, disk_size=disk_size,
                                                                             disk_type=disk_type, dc_idx=dc_idx))
         self.log.debug(gce_disk_struct)
         return gce_disk_struct
 
-    def _create_instance(self, node_index, dc_idx, spot=False, enable_auto_bootstrap=False, instance_type=None):  # pylint: disable=too-many-arguments
-        # pylint: disable=too-many-locals
+    def _create_instance(self, node_index, dc_idx, spot=False, enable_auto_bootstrap=False, instance_type=None):
 
         def set_tags_as_labels(_instance: compute_v1.Instance):
             self.log.debug(f"Expected tags are {self.tags}")
@@ -497,10 +494,9 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            dc_idx=dc_idx)
             node.init()
             return node
-        except Exception as ex:
+        except Exception as ex:  # noqa: BLE001
             raise CreateGCENodeError('Failed to create node: %s' % ex) from ex
 
-    # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         if count <= 0:
             return []
@@ -509,7 +505,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if self.test_config.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx)
             if not instances:
-                raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
+                raise RuntimeError(f"No nodes found for testId {self.test_config.test_id()} ")
         else:
             instances = self._create_instances(count, dc_idx, enable_auto_bootstrap, instance_type=instance_type)
 
@@ -530,11 +526,11 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
 class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # noqa: PLR0913
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
                  user_prefix=None, n_nodes=3, add_disks=None, params=None, gce_datacenter=None, service_accounts=None):
-        # pylint: disable=too-many-locals
+
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
@@ -566,11 +562,11 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
 
 class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # noqa: PLR0913
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
                  user_prefix=None, n_nodes=10, add_disks=None, params=None, gce_datacenter=None):
-        # pylint: disable=too-many-locals
+
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
         cluster.BaseLoaderSet.__init__(self,
@@ -597,12 +593,12 @@ class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
 
 class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
 
-    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, gce_service, credentials,  # noqa: PLR0913
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', user_prefix=None, n_nodes=1,
                  targets=None, add_disks=None, params=None, gce_datacenter=None,
                  add_nodes=True, monitor_id=None):
-        # pylint: disable=too-many-locals
+
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
 

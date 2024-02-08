@@ -11,18 +11,26 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
 import shutil
 import tempfile
+import time
 import unittest.mock
 from contextlib import contextmanager
 
-from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, start_events_device, stop_events_device, enable_default_filters
-from sdcm.sct_events.events_device import start_events_main_device, get_events_main_device
-from sdcm.sct_events.file_logger import get_events_logger
-from sdcm.sct_events.events_processes import EventsProcessesRegistry
-from sdcm.sct_events.event_counter import get_events_counter
 from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_events.event_counter import get_events_counter
+from sdcm.sct_events.events_device import (
+    get_events_main_device,
+    start_events_main_device,
+)
+from sdcm.sct_events.events_processes import EventsProcessesRegistry
+from sdcm.sct_events.file_logger import get_events_logger
+from sdcm.sct_events.setup import (
+    EVENTS_DEVICE_START_DELAY,
+    enable_default_filters,
+    start_events_device,
+    stop_events_device,
+)
 
 
 class EventsUtilsMixin:
@@ -58,7 +66,7 @@ class EventsUtilsMixin:
         shutil.rmtree(cls.temp_dir)
 
     @contextmanager
-    def wait_for_n_events(self, subscriber, count: int, timeout: float = 1,  # pylint: disable=no-self-use
+    def wait_for_n_events(self, subscriber, count: int, timeout: float = 1,
                           last_event_processing_delay: float = 1):
         last_event_n = subscriber.events_counter + count
         end_time = time.perf_counter() + timeout

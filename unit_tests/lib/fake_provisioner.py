@@ -12,11 +12,15 @@
 # Copyright (c) 2022 ScyllaDB
 import datetime
 import subprocess
-from typing import List, Dict
 
 from invoke import Result
 
-from sdcm.provision.provisioner import Provisioner, VmInstance, InstanceDefinition, PricingModel
+from sdcm.provision.provisioner import (
+    InstanceDefinition,
+    PricingModel,
+    Provisioner,
+    VmInstance,
+)
 
 
 class FakeProvisioner(Provisioner):
@@ -33,7 +37,7 @@ class FakeProvisioner(Provisioner):
 
     def __init__(self, test_id: str, region: str, availability_zone: str, **_) -> None:
         super().__init__(test_id, region, availability_zone)
-        self._instances: Dict[str, VmInstance] = getattr(self, "_instances", {})
+        self._instances: dict[str, VmInstance] = getattr(self, "_instances", {})
 
     def get_or_create_instance(self,
                                definition: InstanceDefinition,
@@ -54,15 +58,15 @@ class FakeProvisioner(Provisioner):
         return v_m
 
     def get_or_create_instances(self,
-                                definitions: List[InstanceDefinition],
+                                definitions: list[InstanceDefinition],
                                 pricing_model: PricingModel = PricingModel.SPOT
-                                ) -> List[VmInstance]:
+                                ) -> list[VmInstance]:
         return [self.get_or_create_instance(definition, pricing_model) for definition in definitions]
 
-    def list_instances(self) -> List[VmInstance]:
+    def list_instances(self) -> list[VmInstance]:
         return list(self._instances.values())
 
-    def add_instance_tags(self, name: str, tags: Dict[str, str]) -> None:
+    def add_instance_tags(self, name: str, tags: dict[str, str]) -> None:
         self._instances[name].tags.update(tags)
 
     def terminate_instance(self, name: str, wait: bool = False) -> None:
@@ -76,8 +80,8 @@ class FakeProvisioner(Provisioner):
 
     def run_command(self, name: str, command: str) -> Result:
         """Runs command on instance."""
-        return subprocess.run(command, shell=True, capture_output=True, text=True)  # pylint: disable=subprocess-run-check
+        return subprocess.run(command, shell=True, capture_output=True, text=True, check=False)
 
     @classmethod
-    def discover_regions(cls, test_id: str, **kwargs) -> List[Provisioner]:  # pylint: disable=unused-argument
+    def discover_regions(cls, test_id: str, **kwargs) -> list[Provisioner]:
         return list(cls._provisioners.get(test_id, {}).values())

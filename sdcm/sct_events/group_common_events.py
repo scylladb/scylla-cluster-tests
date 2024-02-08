@@ -11,14 +11,23 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from contextlib import contextmanager, ExitStack, ContextDecorator
+from collections.abc import Callable, Sequence
+from contextlib import (
+    AbstractContextManager,
+    ContextDecorator,
+    ExitStack,
+    contextmanager,
+)
 from functools import wraps
-from typing import ContextManager, Callable, Sequence
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
-from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.filters import (
+    DbEventsFilter,
+    EventsFilter,
+    EventsSeverityChangerFilter,
+)
+from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 
 
@@ -298,13 +307,13 @@ def ignore_stream_mutation_fragments_errors():
         yield
 
 
-def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
+def decorate_with_context(context_list: list[Callable | AbstractContextManager] | Callable | AbstractContextManager):
     """
     helper to decorate a function to run with a list of callables that return context managers
     """
     context_list = context_list if isinstance(context_list, Sequence) else [context_list]
     for context in context_list:
-        assert callable(context) or isinstance(context, ContextManager), \
+        assert callable(context) or isinstance(context, AbstractContextManager), \
             f"{context} - Should be contextmanager or callable that returns one"
         assert not isinstance(context, ContextDecorator), \
             f"{context} - ContextDecorator shouldn't be used, since they are usable only one"
@@ -316,7 +325,7 @@ def decorate_with_context(context_list: list[Callable | ContextManager] | Callab
                 for context_manager in context_list:
                     if callable(context_manager):
                         cmanger = context_manager()
-                        assert isinstance(cmanger, ContextManager)
+                        assert isinstance(cmanger, AbstractContextManager)
                         stack.enter_context(cmanger)
                     else:
                         stack.enter_context(context_manager)

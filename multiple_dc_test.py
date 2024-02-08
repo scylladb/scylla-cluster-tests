@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -14,7 +12,7 @@
 # Copyright (c) 2017 ScyllaDB
 
 # TODO: this test seem to be broken, hence disabling all pylint checks
-# pylint: disable=all
+# ruff: noqa
 
 from sdcm.tester import ClusterTester
 

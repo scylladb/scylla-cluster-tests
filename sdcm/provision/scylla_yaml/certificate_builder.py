@@ -12,17 +12,20 @@
 # Copyright (c) 2021 ScyllaDB
 import os
 from functools import cached_property
-from typing import Optional, Any
+from typing import Any
 
 from pydantic import Field
 
-from sdcm.provision.helpers.certificate import install_client_certificate, CLIENT_CERTFILE, CLIENT_KEYFILE, CLIENT_TRUSTSTORE
-from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, ClientEncryptionOptions, \
-    ServerEncryptionOptions
-
+from sdcm.provision.helpers.certificate import CLIENT_CERTFILE, CLIENT_KEYFILE, CLIENT_TRUSTSTORE, install_client_certificate
+from sdcm.provision.scylla_yaml.auxiliaries import (
+    ClientEncryptionOptions,
+    ScyllaYamlAttrBuilderBase,
+    ServerEncryptionOptions,
+)
 
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
-# pylint: disable=no-member
+
+
 class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes regarding encryption
@@ -35,7 +38,7 @@ class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
         return '/etc/scylla/ssl_conf'
 
     @property
-    def client_encryption_options(self) -> Optional[ClientEncryptionOptions]:
+    def client_encryption_options(self) -> ClientEncryptionOptions | None:
         if not self.params.get('client_encrypt'):
             return None
         return ClientEncryptionOptions(
@@ -46,7 +49,7 @@ class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
         )
 
     @property
-    def server_encryption_options(self) -> Optional[ServerEncryptionOptions]:
+    def server_encryption_options(self) -> ServerEncryptionOptions | None:
         if not self.params.get('internode_encryption') or not self.params.get('server_encrypt'):
             return None
         return ServerEncryptionOptions(

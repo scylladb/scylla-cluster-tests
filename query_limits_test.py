@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -15,8 +13,7 @@
 
 import logging
 
-from sdcm.tester import ClusterTester
-from sdcm.tester import teardown_on_exception
+from sdcm.tester import ClusterTester, teardown_on_exception
 
 
 class QueryLimitsTest(ClusterTester):
@@ -53,7 +50,7 @@ class QueryLimitsTest(ClusterTester):
         self.db_cluster.wait_for_init()
         nodes_monitored = [node.private_ip_address for node in self.db_cluster.nodes]
         nodes_monitored += [node.private_ip_address for node in self.loaders.nodes]
-        self.monitors.wait_for_init(targets=nodes_monitored)  # pylint: disable=unexpected-keyword-arg
+        self.monitors.wait_for_init(targets=nodes_monitored)
         self.stress_thread = None
 
         self.payload = "/tmp/payload"
@@ -81,7 +78,7 @@ class QueryLimitsTest(ClusterTester):
     def test_connection_limits(self):
         ips = self.db_cluster.get_node_private_ips()
         params = " --servers %s --duration 600 --queries 1000000" % (ips[0])
-        cmd = '%s %s' % (self.payload, params)
+        cmd = f'{self.payload} {params}'
         result = self.loaders.nodes[0].remoter.run(cmd, ignore_status=True)
         if result.exit_status != 0:
             self.fail('Payload failed:\n%s' % result)

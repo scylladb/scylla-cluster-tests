@@ -11,16 +11,20 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+import logging
 import os
 import re
-from abc import abstractmethod, ABCMeta
 import time
-import logging
+from abc import ABCMeta, abstractmethod
 from typing import NamedTuple
 
 from sdcm.prometheus import NemesisMetrics
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
-from sdcm.utils.csrangehistogram import CSHistogramTags, CSWorkloadTypes, make_cs_range_histogram_summary_from_log_line
+from sdcm.utils.csrangehistogram import (
+    CSHistogramTags,
+    CSWorkloadTypes,
+    make_cs_range_histogram_summary_from_log_line,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -44,12 +48,10 @@ class HDRPositions(NamedTuple):
     lat_perc_9999: int
 
 
-# pylint: disable=too-many-instance-attributes
 class StressExporter(FileFollowerThread, metaclass=ABCMeta):
     METRICS_GAUGES = {}
     METRIC_NAMES = ['lat_mean', 'lat_med', 'lat_perc_95', 'lat_perc_99', 'lat_perc_999', 'lat_max']
 
-    # pylint: disable=too-many-arguments
     def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
                  loader_idx: int, cpu_idx: int = 1):
         super().__init__()
@@ -129,7 +131,6 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
 
 
 class CassandraStressExporter(StressExporter):
-    # pylint: disable=too-many-arguments
 
     def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
                  loader_idx: int, cpu_idx: int = 1):
@@ -164,7 +165,7 @@ class CassandraStressExporter(StressExporter):
 
 
 class CassandraStressHDRExporter(StressExporter):
-    # pylint: disable=too-many-arguments
+
     METRIC_NAMES = ['lat_perc_50', 'lat_perc_90', 'lat_perc_99', 'lat_perc_999', "lat_perc_9999"]
 
     def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str,
@@ -205,8 +206,6 @@ class CassandraStressHDRExporter(StressExporter):
 class CqlStressCassandraStressExporter(StressExporter):
     # Lines containing any of these should be skipped. These are the logs emitted by the `tracing` crate.
     TRACING_LOGS = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR']
-
-    # pylint: disable=too-many-arguments
 
     def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
                  loader_idx: int, cpu_idx: int = 1):
@@ -271,7 +270,6 @@ class ScyllaBenchStressExporter(StressExporter):
                 [f'scylla_bench_stress_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', 'keyspace'])
         return gauge_name
 
-    # pylint: disable=line-too-long
     def merics_position_in_log(self) -> MetricsPosition:
         # Enumerate stress metric position in the log. Example:
         # time  operations/s    rows/s   errors  max   99.9th   99th      95th     90th       median        mean
@@ -280,7 +278,6 @@ class ScyllaBenchStressExporter(StressExporter):
         return MetricsPosition(ops=1, lat_mean=10, lat_med=9, lat_perc_95=7, lat_perc_99=6, lat_perc_999=5,
                                lat_max=4, errors=3)
 
-    # pylint: disable=line-too-long
     def skip_line(self, line) -> bool:
         # If line is not starts with numeric ended by "s" - skip this line.
         # Example:
@@ -304,7 +301,6 @@ class ScyllaBenchStressExporter(StressExporter):
 
 class CassandraHarryStressExporter(StressExporter):
 
-    # pylint: disable=too-many-arguments,useless-super-delegation
     def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
                  loader_idx: int, cpu_idx: int = 1):
 

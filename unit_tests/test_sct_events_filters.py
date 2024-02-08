@@ -11,13 +11,17 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
 import pickle
+import re
 import unittest
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.filters import (
+    DbEventsFilter,
+    EventsFilter,
+    EventsSeverityChangerFilter,
+)
 
 
 class TestDbEventsFilter(unittest.TestCase):
@@ -67,16 +71,16 @@ class TestEventsFilter(unittest.TestCase):
     def test_regex_pattern(self):
         pattern = re.compile("lalala")
         db_events_filter = EventsFilter(regex=pattern)
-        self.assertEqual(db_events_filter._regex, pattern)  # pylint: disable=protected-access
+        self.assertEqual(db_events_filter._regex, pattern)
         self.assertEqual(db_events_filter.regex, pattern.pattern)
         self.assertEqual(db_events_filter, pickle.loads(pickle.dumps(db_events_filter)))
         db_events_filter.to_json()
 
     def test_regex_string(self):
         db_events_filter = EventsFilter(regex="lalala")
-        self.assertEqual(db_events_filter._regex,  # pylint: disable=protected-access
+        self.assertEqual(db_events_filter._regex,
                          re.compile("lalala", re.MULTILINE | re.DOTALL))
-        self.assertEqual(db_events_filter._regex.pattern, "lalala")  # pylint: disable=protected-access
+        self.assertEqual(db_events_filter._regex.pattern, "lalala")
         self.assertEqual(db_events_filter.regex, "lalala")
         self.assertEqual(db_events_filter, pickle.loads(pickle.dumps(db_events_filter)))
         db_events_filter.to_json()

@@ -12,7 +12,11 @@
 # Copyright (c) 2022 ScyllaDB
 from dataclasses import dataclass
 
-from sdcm.provision.common.utils import configure_sshd_script, restart_sshd_service, configure_ssh_accept_rsa
+from sdcm.provision.common.utils import (
+    configure_ssh_accept_rsa,
+    configure_sshd_script,
+    restart_sshd_service,
+)
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 

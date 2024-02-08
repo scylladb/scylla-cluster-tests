@@ -15,11 +15,11 @@ import getpass
 import logging
 import os
 import re
-from typing import Tuple, Optional, Callable
-from textwrap import dedent
+from collections.abc import Callable
 from functools import cached_property
-import yaml
+from textwrap import dedent
 
+import yaml
 from invoke.exceptions import UnexpectedExit
 
 from sdcm import (
@@ -27,13 +27,7 @@ from sdcm import (
     sct_abs_path,
 )
 from sdcm.cluster import LocalK8SHostNode
-from sdcm.remote import LOCALRUNNER
-from sdcm.remote.base import CommandRunner
 from sdcm.cluster_k8s import (
-    CloudK8sNodePool,
-    KubernetesCluster,
-    BaseScyllaPodContainer,
-    ScyllaPodCluster,
     COMMON_CONTAINERS_RESOURCES,
     INGRESS_CONTROLLER_CONFIG_PATH,
     K8S_LOCAL_VOLUME_PROVISIONER_VERSION,
@@ -43,13 +37,18 @@ from sdcm.cluster_k8s import (
     SCYLLA_MANAGER_AGENT_RESOURCES,
     SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER,
     SCYLLA_VERSION_IN_SCYLLA_MANAGER,
+    BaseScyllaPodContainer,
+    CloudK8sNodePool,
+    KubernetesCluster,
+    ScyllaPodCluster,
 )
-from sdcm.utils.k8s import TokenUpdateThread, HelmValues
-from sdcm.utils.k8s.chaos_mesh import ChaosMesh
+from sdcm.remote import LOCALRUNNER
+from sdcm.remote.base import CommandRunner
+from sdcm.utils import version_utils
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import docker_hub_login
-from sdcm.utils import version_utils
-
+from sdcm.utils.k8s import HelmValues, TokenUpdateThread
+from sdcm.utils.k8s.chaos_mesh import ChaosMesh
 
 SRC_APISERVER_AUDIT_POLICY = sct_abs_path("sdcm/k8s_configs/local-kind/audit-policy.yaml")
 DST_APISERVER_AUDIT_POLICY = "/etc/kubernetes/policies/audit-policy.yaml"
@@ -75,7 +74,7 @@ class MinimalK8SNodePool(CloudK8sNodePool):
         pass
 
     @cached_property
-    def cpu_and_memory_capacity(self) -> Tuple[float, float]:
+    def cpu_and_memory_capacity(self) -> tuple[float, float]:
         cpu_per_member = 1
         # NOTE: Setting '1' to 'memory_for_cpu_multiplier' we will get failure incresing CPUs
         #       Setting '2' to 'memory_for_cpu_multiplier' we will be able to add 1 CPU per member
@@ -179,10 +178,9 @@ class MinimalK8SOps:
         node.remoter.sudo(f'bash -cxe "{script}"')
 
 
-class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: disable=too-many-public-methods
+class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
     POOL_LABEL_NAME = POOL_LABEL_NAME
 
-    # pylint: disable=too-many-arguments
     def __init__(self, mini_k8s_version, params: dict, user_prefix: str = '', region_name: str = None,
                  cluster_uuid: str = None, **_):
         self.software_version = mini_k8s_version
@@ -253,7 +251,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         self._mini_k8s_version = value
 
     @cached_property
-    def local_kubectl_version(self):  # pylint: disable=no-self-use
+    def local_kubectl_version(self):
         # Example of kubectl command output:
         #   $ kubectl version --client --short
         #   Client Version: v1.18.5
@@ -282,12 +280,12 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
 
     @property
     @abc.abstractmethod
-    def _target_user(self) -> Optional[str]:
+    def _target_user(self) -> str | None:
         pass
 
     @property
     @abc.abstractmethod
-    def host_node(self) -> 'BaseNode':
+    def host_node(self) -> cluster.BaseNode:
         """
         Host where kind/k3d/minikube is running
         """
@@ -331,7 +329,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
 
     @cached_property
     def minio_images(self):
-        with open(LOCAL_MINIO_DIR + '/values.yaml', mode='r', encoding='utf8') as minio_config_stream:
+        with open(LOCAL_MINIO_DIR + '/values.yaml', encoding='utf8') as minio_config_stream:
             minio_config = yaml.safe_load(minio_config_stream)
             return [
                 f"{minio_config['image']['repository']}:{minio_config['image']['tag']}",
@@ -340,13 +338,13 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
 
     @cached_property
     def static_local_volume_provisioner_image(self):
-        with open(LOCAL_PROVISIONER_FILE, mode='r', encoding='utf8') as provisioner_config_stream:
+        with open(LOCAL_PROVISIONER_FILE, encoding='utf8') as provisioner_config_stream:
             for doc in yaml.safe_load_all(provisioner_config_stream):
                 if doc["kind"] != "DaemonSet":
                     continue
                 try:
                     return doc["spec"]["template"]["spec"]["containers"][0]["image"]
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # noqa: BLE001
                     self.log.warning(
                         "Could not read the static local volume provisioner image: %s", exc)
         return ""
@@ -371,14 +369,14 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
             for subfile in subfiles:
                 if not subfile.endswith('yaml'):
                     continue
-                with open(os.path.join(root, subfile), mode='r', encoding='utf8') as file_stream:
+                with open(os.path.join(root, subfile), encoding='utf8') as file_stream:
                     for doc in yaml.safe_load_all(file_stream):
                         if doc["kind"] != "Deployment":
                             continue
                         for container in doc["spec"]["template"]["spec"]["containers"]:
                             try:
                                 ingress_images.add(container["image"])
-                            except Exception as exc:  # pylint: disable=broad-except
+                            except Exception as exc:  # noqa: BLE001
                                 self.log.warning(
                                     "Could not read the ingress controller related image: %s", exc)
         return ingress_images
@@ -425,7 +423,6 @@ class LocalMinimalClusterBase(MinimalClusterBase):
             region_name="local-dc-1",
             params=params)
 
-    # pylint: disable=invalid-overridden-method
     @cached_property
     def host_node(self):
         node = LocalK8SHostNode(
@@ -458,8 +455,8 @@ class LocalMinimalClusterBase(MinimalClusterBase):
 class LocalKindCluster(LocalMinimalClusterBase):
     docker_pull: Callable
     docker_tag: Callable
-    host_node: 'BaseNode'
-    scylla_image: Optional[str]
+    host_node: cluster.BaseNode
+    scylla_image: str | None
     software_version: str
     _target_user: str
     _create_kubectl_config_cmd: str = '/var/tmp/kind export kubeconfig'
@@ -578,7 +575,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
             if not target_route_regex.match(route_line):
                 continue
             route_parts = route_line.split()
-            route_cmd = "ip ro add {0} via {1} || ip ro change {0} via {1}".format(route_parts[0], route_parts[2])
+            route_cmd = f"ip ro add {route_parts[0]} via {route_parts[2]} || ip ro change {route_parts[0]} via {route_parts[2]}"
             self.host_node.remoter.run(f"sudo bash -c '{route_cmd}'")
 
     def stop_k8s_software(self):
@@ -590,7 +587,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
             self.host_node.remoter.run(
                 f"/var/tmp/kind load docker-image {image}", ignore_status=True)
 
-    def on_deploy_completed(self):  # pylint: disable=too-many-branches
+    def on_deploy_completed(self):
         images_to_cache, images_to_retag, new_scylla_image_tag = [], {}, ""
 
         # first setup CNI plugin, otherwise everything else might get broken
@@ -608,9 +605,8 @@ class LocalKindCluster(LocalMinimalClusterBase):
         images_to_cache.extend(self.cert_manager_images)
         if self.params.get("k8s_local_volume_provisioner_type") != 'static':
             images_to_cache.append(self.dynamic_local_volume_provisioner_image)
-        else:
-            if provisioner_image := self.static_local_volume_provisioner_image:
-                images_to_cache.append(provisioner_image)
+        elif provisioner_image := self.static_local_volume_provisioner_image:
+            images_to_cache.append(provisioner_image)
         if self.params.get("k8s_use_chaos_mesh"):
             chaos_mesh_version = ChaosMesh.VERSION
             if not chaos_mesh_version.startswith("v"):
@@ -691,7 +687,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
                     f"docker cp kind-control-plane:{src_container_path} {self.logdir} "
                     f"&& mkdir -p {self.logdir}/{dst_subdir} "
                     f"&& mv {self.logdir}/*/{log_prefix}* {self.logdir}/{dst_subdir}")
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 self.log.warning(
                     "Failed to copy K8S apiserver audit logs located at '%s'. Exception: \n%s",
                     src_container_path, exc)
@@ -725,22 +721,21 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
         raise NotImplementedError("Not supported on local K8S backends")
 
 
-# pylint: disable=too-many-ancestors
 class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
     """Represents scylla cluster hosted on locally running minimal k8s clusters such as k3d, minikube or kind"""
     PodContainerClass = LocalMinimalScyllaPodContainer
 
-    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=20, sleep_time=60, timeout=0):  # pylint: disable=too-many-arguments
+    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=20, sleep_time=60, timeout=0):
         @retrying(n=iterations, sleep_time=sleep_time,
                   allowed_exceptions=(cluster.ClusterNodesNotReady, UnexpectedExit),
                   message="Waiting for nodes to join the cluster", timeout=timeout)
-        def _wait_for_nodes_up_and_normal(self):  # pylint: disable=unused-argument
+        def _wait_for_nodes_up_and_normal(self):
             super().check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
         _wait_for_nodes_up_and_normal(self)
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=unused-argument
+    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list)
 

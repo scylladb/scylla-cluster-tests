@@ -16,13 +16,12 @@ import json
 import logging
 import re
 import sys
-from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List
 from enum import Enum
-from jinja2 import Environment, FileSystemLoader
+from pathlib import Path
 
+from jinja2 import Environment, FileSystemLoader
 
 LOGGER = logging.getLogger(__name__)
 
@@ -41,7 +40,6 @@ class EventGroup(Enum):
     STRESS_EVENTS = ["CassandraStressEvent", "CassandraStressLogEvent"]
 
 
-# pylint: disable=too-many-instance-attributes
 @dataclass
 class Event:
     event_dict: dict
@@ -149,7 +147,6 @@ class Event:
         return label_string
 
 
-# pylint: disable=too-many-instance-attributes
 class ParallelTimelinesReportGenerator:
     def __init__(self, events_file):
         self.events_file = Path(events_file)
@@ -220,7 +217,7 @@ class ParallelTimelinesReportGenerator:
                                                                                   x.stress_cmd))
             self._process_chart_data(event_list=stress_events_data_sorted, group_name="Stress events")
 
-    def _process_chart_data(self, event_list: List[Event], group_name: str) -> None:
+    def _process_chart_data(self, event_list: list[Event], group_name: str) -> None:
         """
         The structure of self.chart_data should look like this:
         [
@@ -273,7 +270,7 @@ class ParallelTimelinesReportGenerator:
                                                    event_data.end_timestamp],
                                      "val": event_data.chart_value})
 
-    def _process_raw_data(self, events_to_process: list) -> List[Event]:
+    def _process_raw_data(self, events_to_process: list) -> list[Event]:
         """
         Finds continuous events with 'begin' records only and evaluates 'end_timestamp' for them.
         If continuous event has both 'begin' and 'end' records, then only 'end' record will be processed.

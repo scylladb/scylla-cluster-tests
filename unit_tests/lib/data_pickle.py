@@ -11,12 +11,11 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, Any, Dict
-import json
 import enum
+import json
+from typing import Any
 
 
-# pylint: disable=too-few-public-methods
 class DefaultValue:
     pass
 
@@ -88,7 +87,7 @@ class Pickler:
         return lib
 
     @classmethod
-    def _get_attrs_by_class(cls, instance_class: str, attr_type=None) -> Optional[Dict[str, Any]]:
+    def _get_attrs_by_class(cls, instance_class: str, attr_type=None) -> dict[str, Any] | None:
         info = cls.class_info.get(instance_class, None)
         if info is None:
             return None
@@ -132,7 +131,7 @@ class Pickler:
 
     @classmethod
     def to_data(cls, obj):
-        if isinstance(obj, (str, type(None), int, float)):
+        if isinstance(obj, str | type(None) | int | float):
             return obj
         if isinstance(obj, dict):
             return cls._to_data_dict(obj)
@@ -146,7 +145,7 @@ class Pickler:
 
     @classmethod
     def from_data(cls, data):
-        if isinstance(data, (str, type(None), int, float)):
+        if isinstance(data, str | type(None) | int | float):
             return data
         if isinstance(data, dict):
             return cls._from_data_dict(data)

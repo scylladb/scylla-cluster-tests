@@ -1,7 +1,9 @@
 import time
+
 from invoke import exceptions
-from sdcm.tester import ClusterTester
+
 from sdcm.db_stats import PrometheusDBStats
+from sdcm.tester import ClusterTester
 
 
 class AdmissionControlOverloadTest(ClusterTester):
@@ -53,7 +55,7 @@ class AdmissionControlOverloadTest(ClusterTester):
                     try:
                         results.append(self.get_stress_results(stress))
                     except exceptions.CommandTimedOut as ex:
-                        self.log.debug('some c-s timed out\n{}'.format(ex))
+                        self.log.debug(f'some c-s timed out\n{ex}')
 
         return is_ever_triggered
 

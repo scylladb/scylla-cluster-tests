@@ -12,11 +12,10 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
-from typing import Optional
 
 from sdcm.utils.docker_utils import ContainerManager
-from sdcm.utils.k8s import HelmContainerMixin
 from sdcm.utils.gce_utils import GcloudContainerMixin
+from sdcm.utils.k8s import HelmContainerMixin
 from sdcm.utils.ldap import LDAP_PORT, LDAP_SSL_PORT, LdapContainerMixin
 from sdcm.utils.syslogng import SyslogNGContainerMixin
 
@@ -24,13 +23,13 @@ LOGGER = logging.getLogger(__name__)
 
 
 class LocalHost(SyslogNGContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin):
-    def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
+    def __init__(self, user_prefix: str | None = None, test_id: str | None = None) -> None:
         self._containers = {}
         self.tags = {}
         self.name = (f"{user_prefix}-" if user_prefix else "") + "localhost" + (f"-{test_id}" if test_id else "")
 
     @property
-    def ldap_ports(self) -> Optional[dict]:
+    def ldap_ports(self) -> dict | None:
         return {'ldap_port': ContainerManager.get_container_port(self, "ldap", LDAP_PORT),
                 'ldap_ssl_port': ContainerManager.get_container_port(self, "ldap", LDAP_SSL_PORT)}
 

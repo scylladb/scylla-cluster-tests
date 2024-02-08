@@ -1,12 +1,13 @@
 import json
 from datetime import datetime, timedelta
-from functools import lru_cache
+from functools import cache
 from logging import getLogger
+
 import boto3
 import requests
 from mypy_boto3_pricing import PricingClient
-from sdcm.utils.cloud_monitor.common import InstanceLifecycle
 
+from sdcm.utils.cloud_monitor.common import InstanceLifecycle
 
 LOGGER = getLogger(__name__)
 
@@ -17,7 +18,7 @@ class AWSPricing:
     def __init__(self):
         self.pricing_client: PricingClient = boto3.client('pricing', region_name='us-east-1')
 
-    @lru_cache(maxsize=None)
+    @cache
     def get_on_demand_instance_price(self, region_name: str, instance_type: str):
         regions_names_map = {
             "af-south-1": "Africa (Cape Town)",
@@ -62,15 +63,14 @@ class AWSPricing:
             ],
             MaxResults=10
         )
-        assert response['PriceList'], "failed to get price for {instance_type} in {region_name}".format(
-            region_name=region_name, instance_type=instance_type)
+        assert response['PriceList'], f"failed to get price for {instance_type} in {region_name}"
         price = response['PriceList'][0]
         price_dimensions = next(iter(json.loads(price)['terms']['OnDemand'].values()))['priceDimensions']
         instance_price = next(iter(price_dimensions.values()))['pricePerUnit']['USD']
         return float(instance_price)
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @cache
     def get_spot_instance_price(region_name, instance_type):
         """currently doesn't take AZ into consideration"""
         client = boto3.client('ec2', region_name=region_name)
@@ -101,7 +101,7 @@ class AWSPricing:
             return 0
 
 
-class GCEPricing:  # pylint: disable=too-few-public-methods
+class GCEPricing:
     # TODO: use https://github.com/googleapis/python-billing
     prices = {
         InstanceLifecycle.ON_DEMAND: {
@@ -252,7 +252,7 @@ class GCEPricing:  # pylint: disable=too-few-public-methods
         },
     }
 
-    def get_instance_price(self, region, instance_type, state, lifecycle):  # pylint: disable=unused-argument
+    def get_instance_price(self, region, instance_type, state, lifecycle):
         """Using us-east1 to estimate"""
         if state == "running":
             price = self.prices[lifecycle].get(instance_type, 0)
@@ -264,7 +264,7 @@ class GCEPricing:  # pylint: disable=too-few-public-methods
             return 0
 
 
-class AzurePricing:  # pylint: disable=too-few-public-methods
+class AzurePricing:
 
     def get_instance_price(self, region, instance_type, state, lifecycle):
         if state == "running":
@@ -285,7 +285,7 @@ class AzurePricing:  # pylint: disable=too-few-public-methods
             return 0
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @cache
     def _get_sku_prices(instance_type: str, region):
         resp = requests.get(
             f"https://prices.azure.com/api/retail/prices?$filter=serviceName eq 'Virtual Machines' "

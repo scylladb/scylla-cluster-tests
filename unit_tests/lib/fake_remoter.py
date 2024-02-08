@@ -12,7 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 import re
-from typing import Dict, Pattern
+from re import Pattern
 
 from invoke import Result
 
@@ -22,9 +22,9 @@ from sdcm.remote import RemoteCmdRunnerBase
 class FakeRemoter(RemoteCmdRunnerBase):
     """Fake remoter that responds to commands as described in `result_map` class attribute."""
 
-    result_map: Dict[Pattern, Result] = {}
+    result_map: dict[Pattern, Result] = {}
 
-    def run(self,  # pylint: disable=too-many-arguments
+    def run(self,
             cmd: str,
             timeout=None,
             ignore_status=False,

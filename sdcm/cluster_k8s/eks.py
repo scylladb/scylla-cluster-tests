@@ -10,48 +10,51 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+from __future__ import annotations
+
 import base64
 import os
-import time
 import pprint
+import time
+from collections.abc import Callable
+from functools import cached_property
 from textwrap import dedent
 from threading import Lock
-from typing import List, Dict, Literal, ParamSpec, TypeVar
-from functools import cached_property
-from collections.abc import Callable
+from typing import Literal, ParamSpec, TypeVar
 
 import boto3
 import tenacity
-from mypy_boto3_ec2.type_defs import LaunchTemplateBlockDeviceMappingRequestTypeDef, \
-    LaunchTemplateEbsBlockDeviceRequestTypeDef, RequestLaunchTemplateDataTypeDef, \
-    LaunchTemplateTagSpecificationRequestTypeDef
+from mypy_boto3_ec2.type_defs import (
+    LaunchTemplateBlockDeviceMappingRequestTypeDef,
+    LaunchTemplateEbsBlockDeviceRequestTypeDef,
+    LaunchTemplateTagSpecificationRequestTypeDef,
+    RequestLaunchTemplateDataTypeDef,
+)
 
-from sdcm import sct_abs_path, cluster
+from sdcm import cluster, ec2_client, sct_abs_path
 from sdcm.cluster_aws import MonitorSetAWS
-from sdcm import ec2_client
-from sdcm.utils.ci_tools import get_test_name
-from sdcm.utils.common import list_instances_aws
-from sdcm.utils.k8s import TokenUpdateThread
-from sdcm.wait import wait_for, exponential_retry
 from sdcm.cluster_k8s import (
+    SCYLLA_AGENT_CONFIG_NAME,
+    SCYLLA_NAMESPACE,
     BaseScyllaPodContainer,
     CloudK8sNodePool,
     KubernetesCluster,
     ScyllaPodCluster,
-    SCYLLA_AGENT_CONFIG_NAME,
-    SCYLLA_NAMESPACE,
 )
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.aws_utils import (
+    EksClusterCleanupMixin,
     get_arch_from_instance_type,
     get_ec2_network_configuration,
     tags_as_ec2_tags,
-    EksClusterCleanupMixin,
 )
+from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.common import list_instances_aws
+from sdcm.utils.k8s import TokenUpdateThread
+from sdcm.wait import exponential_retry, wait_for
 
-
-P = ParamSpec("P")  # pylint: disable=invalid-name
-R = TypeVar("R")  # pylint: disable=invalid-name
+P = ParamSpec("P")
+R = TypeVar("R")
 
 # we didn't add configuration for all the rest 'io1', 'io2', 'gp2', 'sc1', 'st1'
 SUPPORTED_EBS_STORAGE_CLASSES = ['gp3', ]
@@ -62,7 +65,7 @@ ARCH_TO_IMAGE_TYPE_MAPPING = {'arm64': 'AL2_ARM_64', 'x86_64': 'AL2_x86_64'}
 
 
 def init_k8s_eks_cluster(region_name: str, availability_zone: str, params: dict,
-                         credentials: List[cluster.UserRemoteCredentials],
+                         credentials: list[cluster.UserRemoteCredentials],
                          cluster_uuid: str = None):
     """Dedicated for the usage by the 'Tester' class which orchestrates all the resources creation.
 
@@ -156,23 +159,21 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
     return k8s_cluster
 
 
-# pylint: disable=too-many-instance-attributes
 class EksNodePool(CloudK8sNodePool):
-    k8s_cluster: 'EksCluster'
+    k8s_cluster: EksCluster
     disk_type: Literal["standard", "io1", "io2", "gp2", "gp3", "sc1", "st1"]
 
-    # pylint: disable=too-many-arguments,too-many-locals
-    def __init__(
+    def __init__(  # noqa: PLR0913
             self,
-            k8s_cluster: 'EksCluster',
+            k8s_cluster: EksCluster,
             name: str,
             num_nodes: int,
             disk_size: int,
             instance_type: str,
             role_arn: str,
             labels: dict = None,
-            security_group_ids: List[str] = None,
-            ec2_subnet_ids: List[str] = None,
+            security_group_ids: list[str] = None,
+            ec2_subnet_ids: list[str] = None,
             ssh_key_pair_name: str = None,
             provision_type: Literal['ON_DEMAND', 'SPOT'] = 'ON_DEMAND',
             launch_template: str = None,
@@ -312,7 +313,7 @@ class EksNodePool(CloudK8sNodePool):
             self.k8s_cluster.eks_client.delete_nodegroup(
                 clusterName=self.k8s_cluster.short_cluster_name,
                 nodegroupName=self.name)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             self.k8s_cluster.log.debug(
                 "Failed to delete nodegroup %s/%s, due to the following error:\n%s",
                 self.k8s_cluster.short_cluster_name, self.name, exc)
@@ -329,18 +330,16 @@ class EksTokenUpdateThread(TokenUpdateThread):
         return LOCALRUNNER.run(self._aws_cmd).stdout
 
 
-# pylint: disable=too-many-instance-attributes
-class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=too-many-public-methods
+class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     POOL_LABEL_NAME = 'eks.amazonaws.com/nodegroup'
     IS_NODE_TUNING_SUPPORTED = True
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/eks/scylla-node-prepare.yaml")
     NODE_CONFIG_CRD_FILE = sct_abs_path("sdcm/k8s_configs/eks/node-config-crd.yaml")
     STORAGE_CLASS_FILE = sct_abs_path("sdcm/k8s_configs/eks/storageclass_gp3.yaml")
-    pools: Dict[str, EksNodePool]
+    pools: dict[str, EksNodePool]
     short_cluster_name: str
 
-    # pylint: disable=too-many-arguments
-    def __init__(self,
+    def __init__(self,  # noqa: PLR0913
                  eks_cluster_version,
                  ec2_security_group_ids,
                  ec2_subnet_ids,
@@ -586,7 +585,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         cmd = "get node --no-headers -o custom-columns=:.spec.providerID"
         return [name.split("/")[-1] for name in self.kubectl(cmd).stdout.split()]
 
-    def set_tags(self, instance_ids, memo={}):  # pylint: disable=dangerous-default-value
+    def set_tags(self, instance_ids, memo={}):
         if not instance_ids:
             return
         if isinstance(instance_ids, str):
@@ -609,7 +608,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         # So, we add it for each node explicitly.
         self.set_tags(self._get_all_instance_ids())
 
-    def set_security_groups(self, instance_id, memo={}):  # pylint: disable=dangerous-default-value
+    def set_security_groups(self, instance_id, memo={}):
         if not instance_id or instance_id in memo:
             return
         with EC2_INSTANCE_UPDATE_LOCK:
@@ -632,7 +631,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         for instance_id in self._get_all_instance_ids():
             self.set_security_groups(instance_id)
 
-    def deploy_scylla_cluster(self, *args, **kwargs) -> None:  # pylint: disable=signature-differs
+    def deploy_scylla_cluster(self, *args, **kwargs) -> None:
         super().deploy_scylla_cluster(*args, **kwargs)
         self.set_security_groups_on_all_instances()
         self.set_tags_on_all_instances()
@@ -716,7 +715,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
 
 
 class EksScyllaPodContainer(BaseScyllaPodContainer):
-    parent_cluster: 'EksScyllaPodCluster'
+    parent_cluster: EksScyllaPodCluster
 
     pod_readiness_delay = 30  # seconds
     pod_readiness_timeout = 30  # minutes
@@ -789,9 +788,8 @@ class EksScyllaPodContainer(BaseScyllaPodContainer):
 
 class EksScyllaPodCluster(ScyllaPodCluster):
     PodContainerClass = EksScyllaPodContainer
-    nodes: List[EksScyllaPodContainer]
+    nodes: list[EksScyllaPodContainer]
 
-    # pylint: disable=too-many-arguments
     def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",
@@ -799,7 +797,7 @@ class EksScyllaPodCluster(ScyllaPodCluster):
                   rack: int = 0,
                   enable_auto_bootstrap: bool = False,
                   instance_type=None
-                  ) -> List[EksScyllaPodContainer]:
+                  ) -> list[EksScyllaPodContainer]:
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,
@@ -847,7 +845,7 @@ class MonitorSetEKS(MonitorSetAWS):
         instances = sorted(instances, key=sort_by_index)
         return [ec2.get_instance(instance['InstanceId']) for instance in instances]
 
-    def _create_instances(self, count, ec2_user_data='', dc_idx=0, az_idx=0, instance_type=None):  # pylint: disable=too-many-arguments
+    def _create_instances(self, count, ec2_user_data='', dc_idx=0, az_idx=0, instance_type=None):
         instances = super()._create_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx,
                                               az_idx=az_idx, instance_type=instance_type)
         for instance in instances:

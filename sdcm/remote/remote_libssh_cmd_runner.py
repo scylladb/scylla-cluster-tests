@@ -12,18 +12,28 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
-import time
 import socket
+import time
 
-from .libssh2_client import Client as LibSSH2Client, Timings
-from .libssh2_client.exceptions import AuthenticationException, UnknownHostException, ConnectError, \
-    FailedToReadCommandOutput, CommandTimedOut, FailedToRunCommand, OpenChannelTimeout, SocketRecvError, \
-    UnexpectedExit, Failure
 from .base import RetryableNetworkException
+from .libssh2_client import Client as LibSSH2Client
+from .libssh2_client import Timings
+from .libssh2_client.exceptions import (
+    AuthenticationException,
+    CommandTimedOut,
+    ConnectError,
+    FailedToReadCommandOutput,
+    FailedToRunCommand,
+    Failure,
+    OpenChannelTimeout,
+    SocketRecvError,
+    UnexpectedExit,
+    UnknownHostException,
+)
 from .remote_base import RemoteCmdRunnerBase
 
 
-class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):  # pylint: disable=too-many-instance-attributes
+class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):
     """Remoter that mimic RemoteCmdRunner, under the hood it runs libssh2 client, instead of paramiko
     Main problem in libssh2 - is that it is not thread safe, we mitigate this problem by having
       _connection_thread_map - a dictionary in which we bind thread to the libssh2 session.
@@ -54,11 +64,11 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):  # p
             try:
                 if self.connection.check_if_alive(timeout):
                     return True
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # noqa: BLE001
                 try:
                     self.connection.close()
                     self.connection.open(timeout)
-                except Exception:  # pylint: disable=broad-except
+                except Exception:  # noqa: BLE001
                     pass
         return False
 
@@ -68,11 +78,11 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):  # p
             self.log.debug('Reestablish the session...')
             try:
                 self.connection.disconnect()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # noqa: BLE001
                 pass
             try:
                 self.connection.connect()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # noqa: BLE001
                 pass
         if self._is_error_retryable(str(exc)) or isinstance(exc, self.exception_retryable):
             raise RetryableNetworkException(str(exc), original=exc)

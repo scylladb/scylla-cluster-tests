@@ -10,9 +10,14 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2023 ScyllaDB
+from __future__ import annotations
 
 import os
 from contextlib import contextmanager
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 
 @contextmanager
@@ -46,7 +51,7 @@ def nodetool_context(node, start_command, end_command):
 
 
 @contextmanager
-def run_nemesis(node: 'BaseNode', nemesis_name: str):
+def run_nemesis(node: BaseNode, nemesis_name: str):
     node.running_nemesis = nemesis_name
     try:
         yield node

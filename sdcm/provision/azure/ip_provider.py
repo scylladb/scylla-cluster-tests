@@ -14,8 +14,6 @@
 import logging
 from dataclasses import dataclass, field
 
-from typing import Dict, List
-
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.network.models import PublicIPAddress
 
@@ -30,19 +28,19 @@ class IpAddressProvider:
     _region: str
     _az: str
     _azure_service: AzureService = AzureService()
-    _cache: Dict[str, PublicIPAddress] = field(default_factory=dict)
+    _cache: dict[str, PublicIPAddress] = field(default_factory=dict)
 
     def __post_init__(self):
         """Discover existing ip addresses for resource group."""
         try:
             ips = self._azure_service.network.public_ip_addresses.list(self._resource_group_name)
             for ip in ips:
-                ip = self._azure_service.network.public_ip_addresses.get(self._resource_group_name, ip.name)
+                ip = self._azure_service.network.public_ip_addresses.get(self._resource_group_name, ip.name)  # noqa: PLW2901
                 self._cache[ip.name] = ip
         except ResourceNotFoundError:
             pass
 
-    def get_or_create(self, names: List[str] = "default", version: str = "IPV4") -> List[PublicIPAddress]:
+    def get_or_create(self, names: list[str] = "default", version: str = "IPV4") -> list[PublicIPAddress]:
         addresses = []
         pollers = []
         for name in names:

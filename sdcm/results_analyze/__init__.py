@@ -11,43 +11,48 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-# pylint: disable=too-many-lines
-import json
-import os
-import math
-import pprint
-import logging
-import collections
-import re
 
+import collections
+import json
+import logging
+import math
+import os
+import pprint
+import re
 from datetime import datetime, timedelta
 from typing import Any
-from sortedcontainers import SortedDict
 
 import jinja2
+from sortedcontainers import SortedDict
 
-from sdcm.es import ES
-from sdcm.test_config import TestConfig
 from sdcm.db_stats import TestStatsMixin
-from sdcm.send_email import Email, BaseEmailReporter
+from sdcm.es import ES
 from sdcm.sct_events import Severity
+from sdcm.send_email import BaseEmailReporter, Email
+from sdcm.test_config import TestConfig
 from sdcm.utils.common import format_timestamp
-from sdcm.utils.es_queries import QueryFilter, PerformanceFilterYCSB, PerformanceFilterScyllaBench, \
-    PerformanceFilterCS, CDCQueryFilterCS, LatencyWithNemesisQueryFilter
+from sdcm.utils.es_queries import (
+    CDCQueryFilterCS,
+    LatencyWithNemesisQueryFilter,
+    PerformanceFilterCS,
+    PerformanceFilterScyllaBench,
+    PerformanceFilterYCSB,
+    QueryFilter,
+)
 from test_lib.utils import MagicList, get_data_by_path
-from .test import TestResultClass
 
+from .test import TestResultClass
 
 LOGGER = logging.getLogger(__name__)
 PP = pprint.PrettyPrinter(indent=2)
 
 
-class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
-    # pylint: disable=too-many-arguments
+class BaseResultsAnalyzer:
+
     def __init__(self, es_index, es_doc_type, email_recipients=(), email_template_fp="", query_limit=1000, logger=None,
                  events=None):
         self._es = ES()
-        self._conf = self._es._conf  # pylint: disable=protected-access
+        self._conf = self._es._conf
         self._es_index = es_index
         self._es_doc_type = es_doc_type
         self._limit = query_limit
@@ -60,7 +65,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         """
         Get all the test results in json format
         """
-        return self._es.search(index=self._es_index, size=self._limit)  # pylint: disable=unexpected-keyword-arg
+        return self._es.search(index=self._es_index, size=self._limit)
 
     def get_test_by_id(self, test_id):
         """
@@ -69,7 +74,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         :return: test results in json format
         """
         if not self._es.exists(index=self._es_index, doc_type=self._es_doc_type, id=test_id):
-            self.log.error('Test results not found: {}'.format(test_id))
+            self.log.error(f'Test results not found: {test_id}')
             return None
         return self._es.get(index=self._es_index, doc_type=self._es_doc_type, id=test_id)
 
@@ -179,7 +184,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
 
     def send_email(self, subject, content, html=True, files=()):
         if self._email_recipients:
-            self.log.debug('Send email to {}'.format(self._email_recipients))
+            self.log.debug(f'Send email to {self._email_recipients}')
             email = Email()
             email.send(subject, content, html=html, recipients=self._email_recipients, files=files)
         else:
@@ -194,7 +199,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         return report_file
 
     def gen_kibana_dashboard_url(self, dashboard_path=""):
-        return "%s/%s" % (self._conf.get('kibana_url'), dashboard_path)
+        return "{}/{}".format(self._conf.get('kibana_url'), dashboard_path)
 
     def save_email_data_file(self, subject, email_data, file_path='email_data.json'):
         file_path = os.path.join(TestConfig.logdir(), file_path)
@@ -203,7 +208,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
                 with open(file_path, encoding="utf-8") as file:
                     data = file.read().strip()
                     file_content = json.loads(data or '{}')
-            except EnvironmentError as err:
+            except OSError as err:
                 self.log.error('Failed to read file %s with error %s', file_path, err)
         else:
             file_content = {}
@@ -211,7 +216,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         try:
             with open(file_path, 'w', encoding="utf-8") as file:
                 json.dump(file_content, file)
-        except EnvironmentError as err:
+        except OSError as err:
             self.log.error('Failed to write %s to file %s with error %s', file_content, file_path, err)
         else:
             self.log.debug('Successfully wrote %s to file %s', file_content, file_path)
@@ -222,7 +227,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     Get latency during operations performance analyzer
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_latency_during_ops_short.html", logger=logger, events=events)
         self.percentiles = ['percentile_90', 'percentile_99']
@@ -249,7 +254,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         query = LatencyWithNemesisQueryFilter(test_doc, is_gce, use_wide_query=True, lastyear=True)()
 
         LOGGER.debug("ES QUERY: %s", query)
-        test_results = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+        test_results = self._es.search(
             index=self._es_index,
             doc_type=self._es_doc_type,
             q=query,
@@ -287,7 +292,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                      "average_time_operation_in_sec": int(operation_time_average)
                      })
 
-    def _get_best_per_nemesis_for_each_version(self, test_doc, is_gce):  # pylint: disable=too-many-branches,too-many-locals
+    def _get_best_per_nemesis_for_each_version(self, test_doc, is_gce):
         try:
             if not test_doc["_source"].get("latency_during_ops"):
                 LOGGER.error("Document with id=%s doesn't have 'latency_during_ops' statistics", test_doc['_id'])
@@ -348,7 +353,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                                                                    key=lambda version: version,
                                                                    reverse=True)}
             return best_results
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("Search best results per version failed. Error: %s", exc)
             return {}
 
@@ -403,10 +408,10 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                     best['average_time_operation_in_sec_diff'] = _calculate_relative_change_magnitude(
                         current_result[nemesis]['average_time_operation_in_sec'],
                         best['average_time_operation_in_sec'])
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("Compare results failed: %s", exc)
 
-    def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, email_subject_postfix=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-arguments
+    def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, email_subject_postfix=None):
         doc = self.get_test_by_id(test_id)
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.LongevityTest.test_custom_time
@@ -499,7 +504,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
     Get specified performance test results from elasticsearch DB and analyze it to find a regression
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="", logger=logger, events=events)
 
@@ -510,7 +515,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
             return None
         return test_doc['_source']['results']
 
-    def check_regression(self, test_id, stats):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_id, stats):
         """
         Get test results by id, filter similar results and calculate DB values for each version,
         then compare with max-allowed in the tested version (and report all the found versions).
@@ -521,7 +526,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
         # get test res
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error('Cannot find test by id: {}!'.format(test_id))
+            self.log.error(f'Cannot find test by id: {test_id}!')
             return False
 
         test_stats = self._test_stats(doc)
@@ -538,15 +543,15 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
             stat_path = '.'.join([es_source_path, stat])
             filter_path.append(stat_path)
 
-        tests_filtered = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+        tests_filtered = self._es.search(
             index=self._es_index,
             size=self._limit,
             filter_path=filter_path,
         )
-        self.log.debug("Filtered tests found are: {}".format(tests_filtered))
+        self.log.debug(f"Filtered tests found are: {tests_filtered}")
 
         if not tests_filtered:
-            self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
+            self.log.info(f'Cannot find tests with the same parameters as {test_id}')
             return False
         cur_test_version = None
         tested_params = stats.keys()
@@ -572,7 +577,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                 continue
             version_info = tag_row['_source']['versions']['scylla-server']
             version = version_info['version']
-            self.log.debug("version_info={} version={}".format(version_info, version))
+            self.log.debug(f"version_info={version_info} version={version}")
 
             if tag_row['_id'] == test_id:  # save the current test values
                 cur_test_version = version
@@ -599,7 +604,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                         else:
                             group_by_version[version][param].append(tag_row['_source'][param])
 
-            self.log.debug("group_by_version={}".format(group_by_version))
+            self.log.debug(f"group_by_version={group_by_version}")
 
         if not cur_test_version:
             raise ValueError("Could not retrieve current test details from database")
@@ -610,18 +615,15 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                 param_avg = sum(list_param_stats) / float(len(list_param_stats))
                 deviation_limit = param_avg * allowed_deviation
                 self.log.info(
-                    "Performance result for: {} is: {}. (average statistics deviation limit is: {}".format(param,
-                                                                                                           cur_test_param_result,
-                                                                                                           deviation_limit))
+                    f"Performance result for: {param} is: {cur_test_param_result}. (average statistics deviation limit is: {deviation_limit}")
                 for version, group in group_by_version.items():
                     if param in group:
                         list_param_results = group[param]
                         version_avg = sum(list_param_results) / float(len(list_param_results))
-                        self.log.info("Performance average of {} results for: {} on version: {} is: {}".format(
-                            len(list_param_results), param, version, version_avg))
+                        self.log.info(
+                            f"Performance average of {len(list_param_results)} results for: {param} on version: {version} is: {version_avg}")
                 assert float(
-                    cur_test_param_result) < deviation_limit, "Current test performance for: {} exceeds allowed deviation ({})".format(
-                    param, deviation_limit)
+                    cur_test_param_result) < deviation_limit, f"Current test performance for: {param} exceeds allowed deviation ({deviation_limit})"
         return True
 
 
@@ -632,7 +634,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     PARAMS = TestStatsMixin.STRESS_STATS
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):  # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_performance.html", logger=logger, events=events)
 
@@ -704,11 +706,10 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     "status": status,
                 }
             except TypeError:
-                self.log.exception('Failed to compare {} results: {} vs {}, version {}'.format(
-                    param, src[param], dst[param], version_dst))
+                self.log.exception(
+                    f'Failed to compare {param} results: {src[param]} vs {dst[param]}, version {version_dst}')
         return cmp_res
 
-    # pylint: disable=too-many-arguments
     def check_regression(self, test_id, is_gce=False, email_subject_postfix=None,
                          use_wide_query=False, lastyear=False,
                          node_benchmarks=None):
@@ -720,12 +721,11 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         :param is_gce: is gce instance
         :return: True/False
         """
-        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 
         # get test res
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error('Cannot find test by id: {}!'.format(test_id))
+            self.log.error(f'Cannot find test by id: {test_id}!')
             return False
         self.log.debug(PP.pformat(doc))
 
@@ -743,11 +743,11 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        'hits.hits._source.results.stats_total',
                        'hits.hits._source.results.throughput',
                        'hits.hits._source.versions']
-        tests_filtered = self._es.search(index=self._es_index, q=query, filter_path=filter_path,  # pylint: disable=unexpected-keyword-arg
+        tests_filtered = self._es.search(index=self._es_index, q=query, filter_path=filter_path,
                                          size=self._limit, request_timeout=30)
 
         if not tests_filtered:
-            self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
+            self.log.info(f'Cannot find tests with the same parameters as {test_id}')
             return False
         # get the best res for all versions of this job
         group_by_version = {}
@@ -816,7 +816,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         for version, group in group_by_version.items():
             if version == test_version and not group_by_version[test_version]['tests']:
-                self.log.info('No previous tests in the current version {} to compare'.format(test_version))
+                self.log.info(f'No previous tests in the current version {test_version} to compare')
                 continue
             cmp_res = self.cmp(test_stats, group['stats_best'], version, group['best_test_id'])
             latest_version_test = group["tests"].peekitem(index=-1)[1]
@@ -900,11 +900,10 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         :param is_gce: is gce instance
         :return: True/False
         """
-        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error('Cannot find test by id: {}!'.format(test_id))
+            self.log.error(f'Cannot find test by id: {test_id}!')
             return False
         self.log.debug(PP.pformat(doc))
 
@@ -925,7 +924,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        'hits.hits._source.results',
                        'hits.hits._source.versions',
                        'hits.hits._source.test_details']
-        tests_filtered = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+        tests_filtered = self._es.search(
             index=self._es_index,
             q=query,
             size=self._limit,
@@ -933,7 +932,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         )
 
         if not tests_filtered:
-            self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
+            self.log.info(f'Cannot find tests with the same parameters as {test_id}')
             return False
         # get the best res for all versions of this job
         group_by_version_sub_type = SortedDict()
@@ -1047,7 +1046,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             cmp_res = {}
             for sub_type, tests in group.items():
                 if not tests['tests']:
-                    self.log.info('No previous tests in the current version {} to compare'.format(test_version))
+                    self.log.info(f'No previous tests in the current version {test_version} to compare')
                     continue
                 if sub_type not in current_tests:
                     continue
@@ -1107,7 +1106,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         if rp_main_test:
             rp_main_test = rp_main_test[0]
         if not rp_main_test or not rp_main_test.is_valid():
-            self.log.error('Cannot find main_test by id: {}!'.format(test_id))
+            self.log.error(f'Cannot find main_test by id: {test_id}!')
             return None
         return rp_main_test
 
@@ -1136,9 +1135,9 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     def _mark_best_tests(self, prior_subtests, metrics, tests_info, main_test_id):
         main_tests_by_id = MagicList(tests_info.keys()).group_by('test_id')
-        for _, prior_tests in prior_subtests.items():
+        for _, _prior_tests in prior_subtests.items():
             prior_tests = MagicList(
-                [prior_test for prior_test in prior_tests if prior_test.main_test_id != main_test_id])
+                [prior_test for prior_test in _prior_tests if prior_test.main_test_id != main_test_id])
             if not prior_tests:
                 continue
             for metric_path in metrics:
@@ -1206,7 +1205,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return output
 
     @staticmethod
-    def _cleanup_not_complete_main_tests(prior_main_tests: list, prior_subtests: dict, expected_subtests_count):  # pylint: disable=too-many-branches
+    def _cleanup_not_complete_main_tests(prior_main_tests: list, prior_subtests: dict, expected_subtests_count):
         is_test_complete = {}
         for subtest, prior_tests in prior_subtests.items():
             for prior_test_id, _ in prior_tests.group_by('main_test_id').items():
@@ -1233,13 +1232,13 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                 for num in sorted(to_delete, reverse=True):
                     prior_tests.pop(num)
 
-    def check_regression_multi_baseline(
+    def check_regression_multi_baseline(  # noqa: PLR0912, PLR0915
             self,
             test_id,
             subtests_info: list = None,
             metrics: list = None,
             subject: str = None,
-    ):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    ):
         """
         Build regression report for subtests.
         test_id: Main test id
@@ -1275,12 +1274,12 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         rp_main_test = self.get_test_instance_by_id(test_id)
 
         if not rp_main_test:
-            self.log.error('Cannot find test with id: {}!'.format(test_id))
+            self.log.error(f'Cannot find test with id: {test_id}!')
             return False
 
         if subject is None:
-            subject = 'Performance Regression Compare Results - {test.test_name} - ' \
-                '{test.software.scylla_server_any.version.as_string}'.format(test=rp_main_test)
+            subject = f'Performance Regression Compare Results - {rp_main_test.test_name} - ' \
+                f'{rp_main_test.software.scylla_server_any.version.as_string}'
         else:
             subject = subject.format(test=rp_main_test)
 
@@ -1298,7 +1297,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         ])
 
         if not prior_main_tests:
-            self.log.error('Cannot find prior runs for test with id: {}!'.format(test_id))
+            self.log.error(f'Cannot find prior runs for test with id: {test_id}!')
             return False
 
         # Get all subtests of the current main test and sort them by subtest name
@@ -1308,7 +1307,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         ]).sort_by('subtest_name')
 
         if not rp_subtests_of_current_test:
-            self.log.error('Cannot find subtests for test id: {}!'.format(test_id))
+            self.log.error(f'Cannot find subtests for test id: {test_id}!')
             return False
 
         if not subtests_info:
@@ -1355,7 +1354,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         tmp_subtest_by_name = rp_subtests_of_current_test.group_by('subtest_name')
 
-        for group_name, group_substest_infos in subtests_groups.items():  # pylint: disable=too-many-nested-blocks
+        for group_name, group_substest_infos in subtests_groups.items():
             rp_metrics_table[group_name] = rp_metrics_table_l1 = collections.OrderedDict()
             grouped_subtests = []
             subtest_info_grouped_by_baseline = group_substest_infos.group_by('baseline', '', sort_keys=1)
@@ -1474,11 +1473,11 @@ class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(BaseResultsAnalyzer
     Performance Analyzer for results with throughput and latency of gradual payload increase
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_incremental_throughput_increase.html", logger=logger, events=events)
 
-    def check_regression(self, test_name, test_results, test_details):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_name, test_results, test_details):
         results = dict(
             stats=test_results,
             test_name=test_name,
@@ -1498,11 +1497,11 @@ class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
     Get latency during operations performance analyzer
     """
 
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_search_best_throughput_config.html", logger=logger, events=events)
 
-    def check_regression(self, test_name, setup_details, test_results):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_name, setup_details, test_results):
         subject = f"Performance Regression Best throughput with configuation - {test_name} - {setup_details['start_time']}"
         results = {
             "test_name": test_name,

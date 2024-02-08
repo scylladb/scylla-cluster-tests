@@ -13,13 +13,15 @@
 
 import logging
 from enum import Enum
-from typing import List, Optional
 
 from pydantic import BaseModel
 
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provision_plan import ProvisionPlan
-from sdcm.provision.common.provisioner import ProvisionParameters, InstanceProvisionerBase
+from sdcm.provision.common.provisioner import (
+    InstanceProvisionerBase,
+    ProvisionParameters,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,7 +42,7 @@ class ProvisionPlanBuilder(BaseModel):
     provisioner: InstanceProvisionerBase
 
     @property
-    def _provision_request_on_demand(self) -> Optional[ProvisionParameters]:
+    def _provision_request_on_demand(self) -> ProvisionParameters | None:
         return ProvisionParameters(
             name='On Demand',
             spot=False,
@@ -68,7 +70,7 @@ class ProvisionPlanBuilder(BaseModel):
         )
 
     @property
-    def _provision_steps(self) -> List[ProvisionParameters]:
+    def _provision_steps(self) -> list[ProvisionParameters]:
         if self.initial_provision_type == ProvisionType.ON_DEMAND:
             return [self._provision_request_on_demand]
         provision_plan = []

@@ -11,16 +11,15 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from time import sleep
 from enum import Enum
+from time import sleep
 
 from cassandra import Unauthorized
-from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES
+from ldap3 import ALL, ALL_ATTRIBUTES, Connection, Server
 from ldap3.core.exceptions import LDAPSocketOpenError
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.decorators import retrying
-
 
 LDAP_IMAGE = "osixia/openldap:1.4.0"
 LDAP_PORT = 389
@@ -34,7 +33,7 @@ DEFAULT_PWD_SUFFIX = '-0'
 LDAP_PASSWORD = 'scylla-0'
 LDAP_ROLE = 'scylla_ldap'
 LDAP_USERS = ['scylla-qa', 'dummy-user']
-LDAP_BASE_OBJECT = (lambda l: ','.join([f'dc={part}' for part in l.split('.')]))(LDAP_DOMAIN)
+LDAP_BASE_OBJECT = (lambda l: ','.join([f'dc={part}' for part in l.split('.')]))(LDAP_DOMAIN)  # noqa: PLC3002
 SASLAUTHD_AUTHENTICATOR = 'com.scylladb.auth.SaslauthdAuthenticator'
 
 
@@ -51,7 +50,7 @@ class LdapServerType(str, Enum):
     OPENLDAP = "openldap"
 
 
-class LdapContainerMixin:  # pylint: disable=too-few-public-methods
+class LdapContainerMixin:
     ldap_server = None
     ldap_conn = None
     ldap_server_port = None

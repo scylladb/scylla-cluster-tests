@@ -12,14 +12,13 @@
 # Copyright (c) 2020 ScyllaDB
 #
 
-import time
-import threading
-from threading import Thread as LibThread
-from threading import Thread  # pylint: disable=reimported
 import multiprocessing
+import threading
+import time
+from multiprocessing import Process
 from multiprocessing import Process as LibProcess
-from multiprocessing import Process  # pylint: disable=reimported
-
+from threading import Thread
+from threading import Thread as LibThread
 
 __all__ = [
     'LibMultiprocessingProcessCustomClass', 'LibProcessCustomClass', 'LibMultiprocessingProcessCustomClassWithRun',

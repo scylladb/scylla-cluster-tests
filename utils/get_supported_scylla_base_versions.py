@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 import logging
-import sys
-import re
 import os
+import re
+import sys
 
-from sdcm.utils.version_utils import is_enterprise, get_all_versions
-from sdcm.utils.version_utils import ComparableScyllaVersion, get_s3_scylla_repos_mapping
+from sdcm.utils.version_utils import (
+    ComparableScyllaVersion,
+    get_all_versions,
+    get_s3_scylla_repos_mapping,
+    is_enterprise,
+)
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -23,7 +27,7 @@ start_support_backend = {'azure': {'scylla': '5.2', 'enterprise': '2023.1'}}
 unsupported_versions = ['5.3', ]
 
 
-class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
+class UpgradeBaseVersion:
 
     oss_start_support_version = None
     ent_start_support_version = None
@@ -75,7 +79,7 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
         LOGGER.info("Support start versions set: oss=%s enterprise=%s", self.oss_start_support_version,
                     self.ent_start_support_version)
 
-    def get_supported_scylla_base_versions(self, supported_versions) -> list:  # pylint: disable=too-many-branches
+    def get_supported_scylla_base_versions(self, supported_versions) -> list:
         """
         We have special base versions list for each release, and we don't support to upgraded from enterprise
         to opensource. This function is used to get the base versions list which will be used in the upgrade test.

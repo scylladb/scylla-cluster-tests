@@ -11,31 +11,29 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
 import datetime
-import time
+import json
+import logging
 import os
 import platform
-import logging
-import json
+import re
+import time
 import urllib.parse
-
-from textwrap import dedent
-from math import sqrt
-from typing import Optional
-from functools import cached_property
 from collections import defaultdict
+from functools import cached_property
+from math import sqrt
+from textwrap import dedent
 
-import yaml
 import requests
+import yaml
 
 from sdcm.es import ES
-from sdcm.test_config import TestConfig
-from sdcm.utils.common import normalize_ipv6_url, get_ami_tags
-from sdcm.utils.git import get_git_commit_id
-from sdcm.utils.decorators import retrying
 from sdcm.sct_events.system import ElasticsearchEvent
+from sdcm.test_config import TestConfig
 from sdcm.utils.ci_tools import get_job_name, get_job_url
+from sdcm.utils.common import get_ami_tags, normalize_ipv6_url
+from sdcm.utils.decorators import retrying
+from sdcm.utils.git import get_git_commit_id
 
 LOGGER = logging.getLogger(__name__)
 
@@ -56,9 +54,9 @@ class CassandraStressCmdParseError(Exception):
         self.exception = repr(ex)
 
     def __str__(self):
-        return dedent("""
-            Stress command: '{0.command}'
-            Error: {0.exception}""".format(self))
+        return dedent(f"""
+            Stress command: '{self.command}'
+            Error: {self.exception}""")
 
     def __repr__(self):
         return self.__str__()
@@ -76,7 +74,6 @@ def get_stress_cmd_params(cmd):
     :return: dict with params
     """
 
-    # pylint: disable=too-many-branches
     cmd_params = {
         "raw_cmd": cmd
     }
@@ -126,7 +123,7 @@ def get_stress_cmd_params(cmd):
                 del cmd_params['rate']
 
         return cmd_params
-    except Exception as ex:
+    except Exception as ex:  # noqa: BLE001
         raise CassandraStressCmdParseError(cmd=cmd, ex=ex) from None
 
 
@@ -205,8 +202,7 @@ class PrometheusDBStats:
         self.host = host
         self.port = port
         self.protocol = protocol
-        self.range_query_url = "{}://{}:{}/api/v1/query_range?query=".format(
-            protocol, normalize_ipv6_url(host), port)
+        self.range_query_url = f"{protocol}://{normalize_ipv6_url(host)}:{port}/api/v1/query_range?query="
         self.config = self.get_configuration()
         self.alternator = alternator
 
@@ -234,8 +230,7 @@ class PrometheusDBStats:
         return None
 
     def get_configuration(self):
-        result = self.request(url="{}://{}:{}/api/v1/status/config".format(
-            self.protocol, normalize_ipv6_url(self.host), self.port))
+        result = self.request(url=f"{self.protocol}://{normalize_ipv6_url(self.host)}:{self.port}/api/v1/status/config")
         configs = yaml.safe_load(result["data"]["yaml"])
         LOGGER.debug("Parsed Prometheus configs: %s", configs)
         new_scrape_configs = {}
@@ -255,11 +250,10 @@ class PrometheusDBStats:
                   values: [[linux_timestamp1, value1], [linux_timestamp2, value2]...[linux_timestampN, valueN]]
                  }
         """
-        url = "{}://{}:{}/api/v1/query_range?query=".format(self.protocol, normalize_ipv6_url(self.host), self.port)
+        url = f"{self.protocol}://{normalize_ipv6_url(self.host)}:{self.port}/api/v1/query_range?query="
         if not scrap_metrics_step:
             scrap_metrics_step = self.scylla_scrape_interval
-        _query = "{url}{query}&start={start}&end={end}&step={scrap_metrics_step}".format(
-            url=url, query=query, start=start, end=end, scrap_metrics_step=scrap_metrics_step)
+        _query = f"{url}{query}&start={start}&end={end}&step={scrap_metrics_step}"
         LOGGER.debug("Query to PrometheusDB: %s", _query)
         result = self.request(url=_query)
         if result:
@@ -325,8 +319,8 @@ class PrometheusDBStats:
         if not self._check_start_end_time(start_time, end_time):
             return {}
         # the query is taken from the Grafana Dashborad definition
-        query = 'avg(irate(scylla_scheduler_runtime_ms{group=~"sl:.*", instance="%s"}  [%s] )) ' \
-            'by (group, instance)' % (node_ip, irate_sample_sec)
+        query = f'avg(irate(scylla_scheduler_runtime_ms{{group=~"sl:.*", instance="{node_ip}"}}  [{irate_sample_sec}] )) ' \
+            'by (group, instance)'
         results = self.query(query=query, start=start_time, end=end_time)
         res = defaultdict(dict)
         for item in results:
@@ -334,7 +328,7 @@ class PrometheusDBStats:
                                                     [float(runtime[1]) for runtime in item['values']]})
         return res
 
-    def get_scylla_scheduler_shares_per_sla(self, start_time, end_time, node_ip):  # pylint: disable=invalid-name
+    def get_scylla_scheduler_shares_per_sla(self, start_time, end_time, node_ip):
         """
         Get scylla_scheduler_shares from PrometheusDB
 
@@ -349,13 +343,13 @@ class PrometheusDBStats:
         for item in results:
             try:
                 res[item['metric']['group']] = {int(i[1]) for i in item['values']}
-            except Exception as error:  # pylint: disable=broad-except
+            except Exception as error:  # noqa: BLE001
                 # average value may be returned not integer. Ignore it
                 LOGGER.error("Failed to analyze results of query: %s\nResults: %s\nError: %s", query, results, error)
         return res
 
     def get_scylla_storage_proxy_replica_cross_shard_ops(self, start_time, end_time):
-        query = """sum(irate(scylla_storage_proxy_replica_cross_shard_ops{instance=~".+[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.+",shard=~"[0-9]+"}[1m])) by (dc)"""  # pylint: disable=line-too-long
+        query = """sum(irate(scylla_storage_proxy_replica_cross_shard_ops{instance=~".+[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.+",shard=~"[0-9]+"}[1m])) by (dc)"""
         query = urllib.parse.quote(query)
         results = self.query(query, start_time, end_time)
         cross_shards_ops_per_node_shard_by_dc = []
@@ -382,16 +376,16 @@ class PrometheusDBStats:
                                 scrap_metrics_step=scrap_metrics_step)
 
     def create_snapshot(self):
-        url = "http://{}:{}/api/v1/admin/tsdb/snapshot".format(normalize_ipv6_url(self.host), self.port)
+        url = f"http://{normalize_ipv6_url(self.host)}:{self.port}/api/v1/admin/tsdb/snapshot"
         result = self.request(url, True)
-        LOGGER.debug('Request result: {}'.format(result))
+        LOGGER.debug(f'Request result: {result}')
         return result
 
     @staticmethod
     def generate_node_capacity_query_postfix(node):
         return f'{{mountpoint="{SCYLLA_DIR}", instance=~".*?{node.private_ip_address}.*?"}}'
 
-    def get_used_capacity_gb(self, node):  # pylint: disable=too-many-locals
+    def get_used_capacity_gb(self, node):
         #  example: node_filesystem_size_bytes{mountpoint="/var/lib/scylla",
         #  instance=~".*?10.0.79.46.*?"}-node_filesystem_avail_bytes{mountpoint="/var/lib/scylla",
         #  instance=~".*?10.0.79.46.*?"}
@@ -460,10 +454,10 @@ class Stats:
             super().__init__(*args, **kwargs)
 
     @cached_property
-    def elasticsearch(self) -> Optional[ES]:
+    def elasticsearch(self) -> ES | None:
         try:
             return ES()
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             LOGGER.exception("Failed to create ES connection (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
             return None
@@ -479,7 +473,7 @@ class Stats:
                 doc_id=self._test_id,
                 body=self._stats,
             )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             LOGGER.exception("Failed to create test stats (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
 
@@ -494,11 +488,11 @@ class Stats:
                 doc_id=self._test_id,
                 body=data,
             )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             LOGGER.exception("Failed to update test stats (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
 
-    def exists(self) -> Optional[bool]:
+    def exists(self) -> bool | None:
         if not self.elasticsearch:
             LOGGER.error("Failed to check for test stats existence: ES connection is not created (doc_id=%s)",
                          self._test_id)
@@ -509,7 +503,7 @@ class Stats:
                 doc_type=self._es_doc_type,
                 id=self._test_id,
             )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             LOGGER.exception("Failed to check for test stats existence (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
         return None
@@ -589,7 +583,7 @@ class TestStatsMixin(Stats):
                                                                             'date': match.group(4),
                                                                             'commit_id': match.group(5),
                                                                             'build_id': build_id if build_id else ''}
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:
             LOGGER.exception('Failed getting scylla versions: %s', ex)
 
         # append Scylla build mode in scylla_versions
@@ -605,19 +599,18 @@ class TestStatsMixin(Stats):
         test_params = self.params.items()
 
         for key, value in test_params:
-            if key in exclude_details or (isinstance(key, str) and key.startswith('stress_cmd')):  # pylint: disable=no-else-continue
+            if key in exclude_details or (isinstance(key, str) and key.startswith('stress_cmd')):
                 continue
+            elif is_gce and key in \
+                    ['instance_type_loader',
+                     'instance_type_monitor',
+                     'instance_type_db']:
+                # exclude these params from gce run
+                continue
+            elif key == 'n_db_nodes' and isinstance(value, str) and re.search(r'\s', value):  # multidc
+                setup_details['n_db_nodes'] = sum([int(i) for i in value.split()])
             else:
-                if is_gce and key in \
-                        ['instance_type_loader',  # pylint: disable=no-else-continue
-                         'instance_type_monitor',
-                         'instance_type_db']:
-                    # exclude these params from gce run
-                    continue
-                elif key == 'n_db_nodes' and isinstance(value, str) and re.search(r'\s', value):  # multidc
-                    setup_details['n_db_nodes'] = sum([int(i) for i in value.split()])
-                else:
-                    setup_details[key] = value
+                setup_details[key] = value
 
         if self.params.get('cluster_backend') == 'aws':
             setup_details["ami_tags_db_scylla"] = []
@@ -631,10 +624,10 @@ class TestStatsMixin(Stats):
         setup_details['packages_updated'] = bool(new_scylla_packages and os.listdir(new_scylla_packages))
         setup_details['cpu_platform'] = 'UNKNOWN'
         if is_gce and self.db_cluster:
-            if hasattr(self.db_cluster.nodes[0]._instance, "cpu_platform"):  # pylint: disable=protected-access
-                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.cpu_platform  # pylint: disable=protected-access
+            if hasattr(self.db_cluster.nodes[0]._instance, "cpu_platform"):
+                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.cpu_platform
             else:
-                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get(  # pylint: disable=protected-access
+                setup_details['cpu_platform'] = self.db_cluster.nodes[0]._instance.extra.get(
                     'cpuPlatform', 'UNKNOWN')
 
         setup_details['db_cluster_node_details'] = {}
@@ -657,7 +650,7 @@ class TestStatsMixin(Stats):
         test_details['log_files'] = {}
         return test_details
 
-    def create_test_stats(self, sub_type=None, specific_tested_stats=None,  # pylint: disable=too-many-arguments
+    def create_test_stats(self, sub_type=None, specific_tested_stats=None,
                           doc_id_with_timestamp=False, append_sub_test_to_name=True, test_name=None, test_index=None):
 
         if not self.create_stats:
@@ -675,18 +668,18 @@ class TestStatsMixin(Stats):
         if sub_type:
             self._stats['test_details']['sub_type'] = sub_type
         if sub_type and append_sub_test_to_name:
-            self._stats['test_details']['test_name'] = '{}_{}'.format(test_name, sub_type)
+            self._stats['test_details']['test_name'] = f'{test_name}_{sub_type}'
         else:
             self._stats['test_details']['test_name'] = test_name
         for stat in self.PROMETHEUS_STATS:
             self._stats['results'][stat] = {}
         if specific_tested_stats:
             self._stats['results'].update(specific_tested_stats)
-            self.log.info("Creating specific tested stats of: {}".format(specific_tested_stats))
+            self.log.info(f"Creating specific tested stats of: {specific_tested_stats}")
         self.create()
 
     def update_stress_cmd_details(self, cmd, prefix='', stresser="cassandra-stress", aggregate=True):
-        section = '{prefix}{stresser}'.format(prefix=prefix, stresser=stresser)
+        section = f'{prefix}{stresser}'
         if section not in self._stats['test_details']:
             self._stats['test_details'][section] = [] if aggregate else {}
         if stresser == "cassandra-stress":
@@ -728,7 +721,7 @@ class TestStatsMixin(Stats):
             stat["stdev"] = stddev(ops_filtered)
             self.log.debug("Stats: %s", stat)
             return stat
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # noqa: BLE001
             self.log.error("Exception when calculating PrometheusDB stats: %s" % ex)
             return {}
 
@@ -774,9 +767,9 @@ class TestStatsMixin(Stats):
             return 0
         try:
             return float(stress_result[stat])
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.warning("Error in conversion of '%s' for stat '%s': '%s'"
-                             "Discarding stat." % (stress_result[stat], stat, details))
+        except Exception as details:  # noqa: BLE001
+            self.log.warning(f"Error in conversion of '{stress_result[stat]}' for stat '{stat}': '{details}'"
+                             "Discarding stat.")
         return 0
 
     def _calc_stat_total(self, stat):
@@ -807,7 +800,6 @@ class TestStatsMixin(Stats):
                 total_stats[stat] = total
         self._stats['results']['stats_total'] = total_stats
 
-    # pylint: disable=too-many-arguments,too-many-locals
     def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, extra_stats=None, alternator=False,
                             scrap_metrics_step=None):
         if not self.create_stats:
@@ -886,7 +878,7 @@ class TestStatsMixin(Stats):
 
         self.update(update_data)
 
-    def get_doc_data(self, key) -> Optional[dict]:
+    def get_doc_data(self, key) -> dict | None:
         if self.create_stats and self._test_index and self._test_id:
             if not self.elasticsearch:
                 LOGGER.error("Failed to get test stats: ES connection is not created (doc_id=%s)", self._test_id)
@@ -897,7 +889,7 @@ class TestStatsMixin(Stats):
                     doc_type=self._es_doc_type,
                     doc_id=self._test_id,
                 )
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 LOGGER.exception("Failed to get test stats (doc_id=%s)", self._test_id)
                 ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
             else:

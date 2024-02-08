@@ -13,10 +13,9 @@
 
 import traceback
 
-from ssh2.exceptions import SocketRecvError  # pylint: disable=no-name-in-module
+from ssh2.exceptions import SocketRecvError
 
 from .result import Result
-
 
 __all__ = (
     'AuthenticationException', 'UnknownHostException', 'ConnectError', 'ConnectTimeout', 'PKeyFileError',
@@ -75,7 +74,7 @@ class Failure(Exception):
     .. versionadded:: 1.0
     """
 
-    def __init__(self, result: Result, reason: str = None):  # pylint: disable=super-init-not-called
+    def __init__(self, result: Result, reason: str = None):
         self.result = result
         self.reason = reason
 
@@ -102,11 +101,10 @@ class Failure(Exception):
             stdout = self.result.tail("stdout")
         if self.result.pty:
             stderr = " n/a (PTYs have no stderr)"
+        elif "stderr" not in self.result.hide:
+            stderr = already_printed
         else:
-            if "stderr" not in self.result.hide:
-                stderr = already_printed
-            else:
-                stderr = self.result.tail("stderr")
+            stderr = self.result.tail("stderr")
         return stdout, stderr
 
     def __repr__(self) -> str:
@@ -122,7 +120,7 @@ class Failure(Exception):
         rest = ""
         if kwargs:
             rest = " " + " ".join(
-                "{}={}".format(key, value) for key, value in kwargs.items()
+                f"{key}={value}" for key, value in kwargs.items()
             )
         return template.format(
             self.__class__.__name__, self.result.command, rest

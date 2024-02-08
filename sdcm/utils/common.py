@@ -11,84 +11,90 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
-# pylint: disable=too-many-lines
 
-from __future__ import absolute_import, annotations
+from __future__ import annotations
 
 import atexit
-import itertools
-import os
-import logging
-import random
-import socket
-import time
+import concurrent.futures
+import copy
+import ctypes
 import datetime
 import errno
-import threading
+import getpass
+import hashlib
+import io
+import itertools
+import json
+import logging
+import os
+import random
+import re
 import select
 import shutil
-import copy
+import socket
 import string
-import warnings
-import getpass
-import json
-import re
-import uuid
-import zipfile
-import io
 import tempfile
+import threading
+import time
 import traceback
-import ctypes
-from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any, Type
-from urllib.parse import urlparse
-from unittest.mock import MagicMock, Mock
-from textwrap import dedent
-from contextlib import closing, contextmanager
-from functools import wraps, cached_property, lru_cache, singledispatch
+import uuid
+import warnings
+import zipfile
 from collections import defaultdict, namedtuple
-import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from concurrent.futures.thread import _python_exit
-import hashlib
+from contextlib import closing, contextmanager
+from functools import cached_property, lru_cache, singledispatch, wraps
 from pathlib import Path
+from textwrap import dedent
+from typing import Any, Literal
+from unittest.mock import MagicMock, Mock
+from urllib.parse import urlparse
 
-import requests
 import boto3
-from mypy_boto3_s3 import S3Client, S3ServiceResource
+import requests
+from botocore.exceptions import ClientError
+from google.cloud.compute_v1 import Image as GceImage
+from google.cloud.compute_v1 import ListImagesRequest
+from google.cloud.compute_v1.types import Instance as GceInstance
+from google.cloud.compute_v1.types import Metadata as GceMetadata
+from google.cloud.storage import Blob as GceBlob
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Image as EC2Image
-from botocore.exceptions import ClientError
-import docker  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
-from google.cloud.storage import Blob as GceBlob
-from google.cloud.compute_v1.types import Metadata as GceMetadata, Instance as GceInstance
-from google.cloud.compute_v1 import ListImagesRequest, Image as GceImage
+from mypy_boto3_s3 import S3Client, S3ServiceResource
 from packaging.version import Version
 from prettytable import PrettyTable
 
+import docker
+from sdcm import wait
+from sdcm.keystore import KeyStore
 from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.remote import LocalCmdRunner, RemoteCmdRunnerBase
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_kms import AwsKms
-from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType, get_scylla_images_ec2_resource
-
-from sdcm.utils.ssh_agent import SSHAgent
+from sdcm.utils.aws_utils import (
+    AwsArchType,
+    EksClusterCleanupMixin,
+    get_scylla_images_ec2_resource,
+)
+from sdcm.utils.context_managers import environment
 from sdcm.utils.decorators import retrying
-from sdcm import wait
-from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapServerType
-from sdcm.keystore import KeyStore
 from sdcm.utils.docker_utils import ContainerManager
-from sdcm.utils.gce_utils import GcloudContainerMixin, gce_public_addresses
-from sdcm.remote import LocalCmdRunner
-from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.gce_utils import (
-    get_gce_compute_instances_client,
-    get_gce_compute_images_client,
+    GcloudContainerMixin,
+    gce_public_addresses,
     get_gce_compute_addresses_client,
+    get_gce_compute_images_client,
+    get_gce_compute_instances_client,
     get_gce_compute_regions_client,
     get_gce_storage_client,
 )
-from sdcm.utils.context_managers import environment
+from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapServerType
+from sdcm.utils.ssh_agent import SSHAgent
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
@@ -97,7 +103,7 @@ SCYLLA_AMI_OWNER_ID_LIST = ["797456418907", "158855661827"]
 SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
 
 
-class KeyBasedLock():  # pylint: disable=too-few-public-methods
+class KeyBasedLock:
     """Class designed for creating locks based on hashable keys."""
 
     def __init__(self):
@@ -117,21 +123,21 @@ def deprecation(message):
 
 def _remote_get_hash(remoter, file_path):
     try:
-        result = remoter.run('md5sum {}'.format(file_path), verbose=True)
+        result = remoter.run(f'md5sum {file_path}', verbose=True)
         return result.stdout.strip().split()[0]
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # noqa: BLE001
         LOGGER.error(str(details))
         return None
 
 
 def _remote_get_file(remoter, src, dst, user_agent=None):
-    cmd = 'curl -L {} -o {}'.format(src, dst)
+    cmd = f'curl -L {src} -o {dst}'
     if user_agent:
         cmd += ' --user-agent %s' % user_agent
     return remoter.run(cmd, ignore_status=True)
 
 
-def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent=None):  # pylint: disable=too-many-arguments
+def remote_get_file(remoter, src, dst, hash_expected=None, retries=1, user_agent=None):
     _remote_get_file(remoter, src, dst, user_agent)
     if not hash_expected:
         return
@@ -189,7 +195,7 @@ def get_data_dir_path(*args):
 
 
 def get_sct_root_path():
-    import sdcm  # pylint: disable=import-outside-toplevel
+    import sdcm
     sdcm_path = os.path.realpath(sdcm.__path__[0])
     sct_root_dir = os.path.join(sdcm_path, "..")
     return os.path.abspath(sct_root_dir)
@@ -227,10 +233,10 @@ def verify_scylla_repo_file(content, is_rhel_like=True):
                 valid_prefix = True
                 break
         LOGGER.debug(line)
-        assert valid_prefix, 'Repository content has invalid line: {}'.format(line)
+        assert valid_prefix, f'Repository content has invalid line: {line}'
 
 
-class S3Storage():
+class S3Storage:
     bucket_name = 'cloudius-jenkins-test'
     enable_multipart_threshold_size = 1024 * 1024 * 1024  # 1GB
     multipart_chunksize = 50 * 1024 * 1024  # 50 MB
@@ -260,23 +266,21 @@ class S3Storage():
     def generate_url(self, file_path, dest_dir=''):
         bucket_name = self.bucket_name
         file_name = os.path.basename(os.path.normpath(file_path))
-        return "https://{bucket_name}.s3.amazonaws.com/{dest_dir}/{file_name}".format(dest_dir=dest_dir,
-                                                                                      file_name=file_name,
-                                                                                      bucket_name=bucket_name)
+        return f"https://{bucket_name}.s3.amazonaws.com/{dest_dir}/{file_name}"
 
     def upload_file(self, file_path, dest_dir=''):
         s3_url = self.generate_url(file_path, dest_dir)
-        s3_obj = "{}/{}".format(dest_dir, os.path.basename(file_path))
+        s3_obj = f"{dest_dir}/{os.path.basename(file_path)}"
         try:
-            LOGGER.info("Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url))
+            LOGGER.info(f"Uploading '{file_path}' to {s3_url}")
             self._bucket.upload_file(Filename=file_path,
                                      Key=s3_obj,
                                      Config=self.transfer_config)
-            LOGGER.info("Uploaded to {0}".format(s3_url))
+            LOGGER.info(f"Uploaded to {s3_url}")
             LOGGER.info("Set public read access")
             self.set_public_access(key=s3_obj)
             return s3_url
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # noqa: BLE001
             LOGGER.debug("Unable to upload to S3: %s", details)
             return ""
 
@@ -295,18 +299,18 @@ class S3Storage():
         acl_obj.put(ACL='', AccessControlPolicy={'Grants': grants, 'Owner': acl_obj.owner})
 
     def download_file(self, link, dst_dir):
-        key_name = link.replace("https://{0.bucket_name}.s3.amazonaws.com/".format(self), "")
+        key_name = link.replace(f"https://{self.bucket_name}.s3.amazonaws.com/", "")
         file_name = os.path.basename(key_name)
         try:
-            LOGGER.info("Downloading {0} from {1}".format(key_name, self.bucket_name))
+            LOGGER.info(f"Downloading {key_name} from {self.bucket_name}")
             self._bucket.download_file(Key=key_name,
                                        Filename=os.path.join(dst_dir, file_name),
                                        Config=self.transfer_config)
             LOGGER.info("Downloaded finished")
             return os.path.join(os.path.abspath(dst_dir), file_name)
 
-        except Exception as details:  # pylint: disable=broad-except
-            LOGGER.warning("File {} is not downloaded by reason: {}".format(key_name, details))
+        except Exception as details:  # noqa: BLE001
+            LOGGER.warning(f"File {key_name} is not downloaded by reason: {details}")
             return ""
 
 
@@ -341,7 +345,7 @@ def list_logs_by_test_id(test_id):
             if log_type in log_file:
                 results.append({"file_path": log_file,
                                 "type": log_type,
-                                "link": "https://{}.s3.amazonaws.com/{}".format(S3Storage.bucket_name, log_file),
+                                "link": f"https://{S3Storage.bucket_name}.s3.amazonaws.com/{log_file}",
                                 "date": convert_to_date(log_file.split('/')[1])
                                 })
                 break
@@ -392,7 +396,7 @@ class ParallelObject:
         Run function in with supplied args in parallel using thread.
     """
 
-    def __init__(self, objects: Iterable, timeout: int = 6,  # pylint: disable=redefined-outer-name
+    def __init__(self, objects: Iterable, timeout: int = 6,
                  num_workers: int = None, disable_logging: bool = False):
         """Constructor for ParallelObject
 
@@ -412,7 +416,7 @@ class ParallelObject:
         self.timeout = timeout
         self.num_workers = num_workers
         self.disable_logging = disable_logging
-        self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)  # pylint: disable=consider-using-with
+        self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)
 
     def run(self, func: Callable, ignore_exceptions=False, unpack_objects: bool = False):
         """Run callable object "disrupt_func" in parallel
@@ -441,12 +445,9 @@ class ParallelObject:
                 fun_args = args
                 fun_kwargs = kwargs
                 fun_name = fun.__name__
-                LOGGER.debug("[{thread_name}] {fun_name}({fun_args}, {fun_kwargs})".format(thread_name=thread_name,
-                                                                                           fun_name=fun_name,
-                                                                                           fun_args=fun_args,
-                                                                                           fun_kwargs=fun_kwargs))
+                LOGGER.debug(f"[{thread_name}] {fun_name}({fun_args}, {fun_kwargs})")
                 return_val = fun(*args, **kwargs)
-                LOGGER.debug("[{thread_name}] Done.".format(thread_name=thread_name))
+                LOGGER.debug(f"[{thread_name}] Done.")
                 return return_val
 
             return inner
@@ -454,13 +455,13 @@ class ParallelObject:
         results = []
 
         if not self.disable_logging:
-            LOGGER.debug("Executing in parallel: '{}' on {}".format(func.__name__, self.objects))
+            LOGGER.debug(f"Executing in parallel: '{func.__name__}' on {self.objects}")
             func = func_wrap(func)
 
         futures = []
 
         for obj in self.objects:
-            if unpack_objects and isinstance(obj, (list, tuple)):
+            if unpack_objects and isinstance(obj, list | tuple):
                 futures.append((self._thread_pool.submit(func, *obj), obj))
             elif unpack_objects and isinstance(obj, dict):
                 futures.append((self._thread_pool.submit(func, **obj), obj))
@@ -473,7 +474,7 @@ class ParallelObject:
             except FuturesTimeoutError as exception:
                 results.append(ParallelObjectResult(obj=target_obj, exc=exception, result=None))
                 time_out = 0.001  # if there was a timeout on one of the futures there is no need to wait for all
-            except Exception as exception:  # pylint: disable=broad-except
+            except Exception as exception:  # noqa: BLE001
                 results.append(ParallelObjectResult(obj=target_obj, exc=exception, result=None))
             else:
                 results.append(ParallelObjectResult(obj=target_obj, exc=None, result=result))
@@ -488,7 +489,7 @@ class ParallelObject:
             raise ParallelObjectException(results=results)
         return results
 
-    def call_objects(self, ignore_exceptions: bool = False) -> list["ParallelObjectResult"]:
+    def call_objects(self, ignore_exceptions: bool = False) -> list[ParallelObjectResult]:
         """
         Use the ParallelObject run() method to call a list of
         callables in parallel. Rather than running a single function
@@ -558,7 +559,7 @@ class ParallelObject:
         return results_map
 
 
-class ParallelObjectResult:  # pylint: disable=too-few-public-methods
+class ParallelObjectResult:
     """Object for result of future in ParallelObject
 
     Return as a result of ParallelObject.run method
@@ -573,7 +574,7 @@ class ParallelObjectResult:  # pylint: disable=too-few-public-methods
 
 
 class ParallelObjectException(Exception):
-    def __init__(self, results: List[ParallelObjectResult]):
+    def __init__(self, results: list[ParallelObjectResult]):
         super().__init__()
         self.results = results
 
@@ -585,7 +586,7 @@ class ParallelObjectException(Exception):
         return ex_str
 
 
-def clean_cloud_resources(tags_dict, config=None, dry_run=False):  # pylint: disable=inconsistent-return-statements,too-many-branches
+def clean_cloud_resources(tags_dict, config=None, dry_run=False):
     """
     Clean up cloud resources created in various cloud platforms.
 
@@ -637,7 +638,7 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):  # pylint: dis
     return True
 
 
-def docker_current_container_id() -> Optional[str]:
+def docker_current_container_id() -> str | None:
     with open("/proc/1/cgroup", encoding="utf-8") as cgroup:
         for line in cgroup:
             match = DOCKER_CGROUP_RE.search(line)
@@ -646,11 +647,11 @@ def docker_current_container_id() -> Optional[str]:
     return None
 
 
-def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = False) -> Dict[str, docker.DockerClient]:
+def list_clients_docker(builder_name: str | None = None, verbose: bool = False) -> dict[str, docker.DockerClient]:
     log = LOGGER if verbose else Mock()
     docker_clients = {}
 
-    def get_builder_docker_client(builder: Dict[str, str]) -> None:
+    def get_builder_docker_client(builder: dict[str, str]) -> None:
         if not can_connect_to(builder["public_ip"], 22, timeout=5):
             log.error("%(name)s: can't establish connection to %(public_ip)s:22, port is closed", builder)
             return
@@ -663,7 +664,7 @@ def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = Fals
                     base_url=f"ssh://{builder['user']}@{normalize_ipv6_url(builder['public_ip'])}:22")
             client.ping()
             log.info("%(name)s: connected via SSH (%(user)s@%(public_ip)s)", builder)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             log.error("%(name)s: failed to connect to Docker via SSH", builder)
             raise
         docker_clients[builder["name"]] = client
@@ -686,11 +687,11 @@ def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = Fals
     return docker_clients
 
 
-def list_resources_docker(tags_dict: Optional[dict] = None,
-                          builder_name: Optional[str] = None,
+def list_resources_docker(tags_dict: dict | None = None,
+                          builder_name: str | None = None,
                           running: bool = False,
                           group_as_builder: bool = False,
-                          verbose: bool = False) -> Dict[str, Union[list, dict]]:
+                          verbose: bool = False) -> dict[str, list | dict]:
     log = LOGGER if verbose else Mock()
     filters = {}
 
@@ -743,7 +744,7 @@ def list_resources_docker(tags_dict: Optional[dict] = None,
     return dict(containers=containers, images=images)
 
 
-def clean_resources_docker(tags_dict: dict, builder_name: Optional[str] = None, dry_run: bool = False) -> None:
+def clean_resources_docker(tags_dict: dict, builder_name: str | None = None, dry_run: bool = False) -> None:
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
 
     def delete_container(container):
@@ -770,13 +771,13 @@ def clean_resources_docker(tags_dict: dict, builder_name: Optional[str] = None, 
     for container in containers:
         try:
             delete_container(container)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             LOGGER.error("Failed to delete container %s on host `%s'", container, container.client.info()["Name"])
 
     for image in images:
         try:
             delete_image(image)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             LOGGER.error("Failed to delete image tag(s) %s on host `%s'", image.tags, image.client.info()["Name"])
 
 
@@ -786,8 +787,6 @@ def aws_tags_to_dict(tags_list):
         for item in tags_list:
             tags_dict[item["Key"]] = item["Value"]
     return tags_dict
-
-# pylint: disable=too-many-arguments
 
 
 def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as_region=False, verbose=False, availability_zone=None):
@@ -813,7 +812,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         client: EC2Client = boto3.client('ec2', region_name=region)
         custom_filter = []
         if tags_dict:
-            custom_filter = [{'Name': 'tag:{}'.format(key),
+            custom_filter = [{'Name': f'tag:{key}',
                               'Values': value if isinstance(value, list) else [value]}
                              for key, value in tags_dict.items()]
         response = client.describe_instances(Filters=custom_filter)
@@ -843,14 +842,14 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         total_items = sum([len(value) for _, value in instances.items()])
 
     if verbose:
-        LOGGER.info("Found total of {} instances.".format(total_items))
+        LOGGER.info(f"Found total of {total_items} instances.")
 
     return instances
 
 
 def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
     """Remove all instances with specific tags in AWS."""
-    # pylint: disable=too-many-locals,import-outside-toplevel
+
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     if regions:
         aws_instances = {}
@@ -878,7 +877,7 @@ def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
             if node_type and node_type == "sct-runner":
                 LOGGER.info("Skipping Sct Runner instance '%s'", instance_id)
                 continue
-            LOGGER.info("Going to delete '{instance_id}' [name={name}] ".format(instance_id=instance_id, name=name))
+            LOGGER.info(f"Going to delete '{instance_id}' [name={name}] ")
             if not dry_run:
                 response = client.terminate_instances(InstanceIds=[instance_id])
                 terminate_resource_in_argus(client=argus_client, resource_name=name)
@@ -906,7 +905,7 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
         client: EC2Client = boto3.client('ec2', region_name=region)
         custom_filter = []
         if tags_dict:
-            custom_filter = [{'Name': 'tag:{}'.format(key),
+            custom_filter = [{'Name': f'tag:{key}',
                               'Values': value if isinstance(value, list) else [value]}
                              for key, value in tags_dict.items()]
         response = client.describe_addresses(Filters=custom_filter)
@@ -980,7 +979,7 @@ def list_test_security_groups(tags_dict=None, region_name=None, group_as_region=
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
         client: EC2Client = boto3.client('ec2', region_name=region)
-        custom_filter = [{'Name': 'tag:{}'.format(key),
+        custom_filter = [{'Name': f'tag:{key}',
                           'Values': value if isinstance(value, list) else [value]}
                          for key, value in tags_dict.items() if key != 'NodeType']
         response = client.describe_security_groups(Filters=custom_filter)
@@ -1030,7 +1029,7 @@ def clean_test_security_groups(tags_dict, regions=None, dry_run=False):
                 try:
                     response = client.delete_security_group(GroupId=group_id)
                     LOGGER.debug("Done. Result: %s\n", response)
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:  # noqa: BLE001
                     LOGGER.debug("Failed with: %s", str(ex))
 
 
@@ -1113,7 +1112,7 @@ def clean_load_balancers_aws(tags_dict, regions=None, dry_run=False):
                 try:
                     response = client.delete_load_balancer(LoadBalancerName=arn.split('/')[1])
                     LOGGER.debug("Done. Result: %s\n", response)
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:  # noqa: BLE001
                     LOGGER.debug("Failed with: %s", str(ex))
 
 
@@ -1190,7 +1189,7 @@ def clean_cloudformation_stacks_aws(tags_dict, regions=None, dry_run=False):
                 try:
                     response = client.delete_stack(StackName=arn.split('/')[1])
                     LOGGER.debug("Done. Result: %s\n", response)
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:  # noqa: BLE001
                     LOGGER.debug("Failed with: %s", str(ex))
 
 
@@ -1264,7 +1263,7 @@ def clean_launch_templates_aws(tags_dict, regions=None, dry_run=False):
                 LOGGER.info(
                     "Successfully deleted '%s' LaunchTemplate. Response: %s\n",
                     (current_lt_name or current_lt_id), response)
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # noqa: BLE001
                 LOGGER.info("Failed to delete the '%s' LaunchTemplate: %s", deletion_args, str(ex))
 
 
@@ -1320,7 +1319,7 @@ def filter_gce_by_tags(tags_dict, instances: list[GceInstance]) -> list[GceInsta
     return filtered_instances
 
 
-def list_instances_gce(tags_dict: Optional[dict] = None,
+def list_instances_gce(tags_dict: dict | None = None,
                        running: bool = False,
                        verbose: bool = True) -> list[GceInstance]:
     """List all instances with specific tags GCE."""
@@ -1363,7 +1362,7 @@ def list_static_ips_gce(verbose=False):
 
 
 class GkeCluster:
-    def __init__(self, cluster_info: dict, cleaner: "GkeCleaner"):
+    def __init__(self, cluster_info: dict, cleaner: GkeCleaner):
         self.cluster_info = cluster_info
         self.cleaner = cleaner
 
@@ -1394,7 +1393,7 @@ class GkeCleaner(GcloudContainerMixin):
     def list_gke_clusters(self) -> list:
         try:
             output = self.gcloud.run("container clusters list --format json")
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("`gcloud container clusters list --format json' failed to run: %s", exc)
         else:
             try:
@@ -1410,7 +1409,7 @@ class GkeCleaner(GcloudContainerMixin):
         try:
             disks = json.loads(self.gcloud.run(
                 'compute disks list --format="json(name,zone)" --filter="name~^gke-.*-pvc-.* AND -users:*"'))
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("`gcloud compute disks list' failed to run: %s", exc)
         else:
             for disk in disks:
@@ -1427,7 +1426,7 @@ class GkeCleaner(GcloudContainerMixin):
         ContainerManager.destroy_all_containers(self)
 
 
-def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -> list:
+def list_clusters_gke(tags_dict: dict | None = None, verbose: bool = False) -> list:
     clusters = GkeCleaner().list_gke_clusters()
     if tags_dict:
         clusters = filter_k8s_clusters_by_tags(tags_dict, clusters)
@@ -1453,29 +1452,29 @@ class EksCluster(EksClusterCleanupMixin):
         return self.body['createdAt']
 
 
-def list_clusters_eks(tags_dict: Optional[dict] = None, regions: list = None,
-                      verbose: bool = False) -> List[EksCluster]:
+def list_clusters_eks(tags_dict: dict | None = None, regions: list = None,
+                      verbose: bool = False) -> list[EksCluster]:
     class EksCleaner:
         name = f"eks-cleaner-{uuid.uuid4()!s:.8}"
         _containers = {}
         tags = {}
 
         @cached_property
-        def eks_client(self):  # pylint: disable=no-self-use
+        def eks_client(self):
             return
 
-        def list_clusters(self) -> list:  # pylint: disable=no-self-use
+        def list_clusters(self) -> list:
             eks_clusters = []
             for aws_region in regions or all_aws_regions():
                 try:
                     cluster_names = boto3.client('eks', region_name=aws_region).list_clusters()['clusters']
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # noqa: BLE001
                     LOGGER.error("Failed to get list of EKS clusters in the '%s' region: %s", aws_region, exc)
                     return []
                 for cluster_name in cluster_names:
                     try:
                         eks_clusters.append(EksCluster(cluster_name, aws_region))
-                    except Exception as exc:  # pylint: disable=broad-except
+                    except Exception as exc:  # noqa: BLE001
                         LOGGER.error("Failed to get body of cluster on EKS: %s", exc)
             return eks_clusters
 
@@ -1491,8 +1490,7 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, regions: list = None,
 
 
 def filter_k8s_clusters_by_tags(tags_dict: dict,
-                                clusters: list[Union["EksCluster", "GkeCluster"]]) -> list[
-        Union["EksCluster", "GkeCluster"]]:
+                                clusters: list[EksCluster | GkeCluster]) -> list[EksCluster | GkeCluster]:
     if "NodeType" in tags_dict and "k8s" not in tags_dict.get("NodeType"):
         return []
 
@@ -1592,7 +1590,7 @@ def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
             try:
                 res = cluster.destroy()
                 LOGGER.info("%s deleted=%s", cluster.name, res)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.error(exc)
 
     ParallelObject(gke_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
@@ -1611,7 +1609,7 @@ def clean_orphaned_gke_disks(tags_dict: dict, dry_run: bool = False) -> None:
                 gke_cleaner.clean_disks(disk_names=disk_names, zone=zone)
                 LOGGER.info("Deleted following orphaned GKE disks in the '%s' zone (%s project): %s",
                             zone, os.environ.get("SCT_GCE_PROJECT"), disk_names)
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # noqa: BLE001
         LOGGER.error(exc)
 
 
@@ -1633,7 +1631,7 @@ def clean_clusters_eks(tags_dict: dict, regions: list = None, dry_run: bool = Fa
                 res = cluster.destroy()
                 LOGGER.info("'%s' EKS cluster in the '%s' region has been deleted. Response=%s",
                             cluster.name, cluster.region_name, res)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.error(exc)
 
     ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
@@ -1711,7 +1709,7 @@ def get_latest_scylla_ami_release(region: str = 'eu-west-1',
     return str(max(versions))
 
 
-def get_latest_scylla_release(product: Literal['scylla', 'scylla-enterprise']) -> str:
+def get_latest_scylla_release(product: ScyllaProduct) -> str:
     """
     get latest advertised scylla version from the same service scylla_setup is getting it
     """
@@ -1745,11 +1743,11 @@ def safe_kill(pid, signal):
     try:
         os.kill(pid, signal)
         return True
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001
         return False
 
 
-class FileFollowerIterator():  # pylint: disable=too-few-public-methods
+class FileFollowerIterator:
     def __init__(self, filename, thread_obj):
         self.filename = filename
         self.thread_obj = thread_obj
@@ -1757,11 +1755,11 @@ class FileFollowerIterator():  # pylint: disable=too-few-public-methods
     def __iter__(self):
         with open(self.filename, encoding="utf-8") as input_file:
             line = ''
-            poller = select.poll()  # pylint: disable=no-member
+            poller = select.poll()
             registered = False
             while not self.thread_obj.stopped():
                 if not registered:
-                    poller.register(input_file, select.POLLIN)  # pylint: disable=no-member
+                    poller.register(input_file, select.POLLIN)
                     registered = True
                 if poller.poll(100):
                     line += input_file.readline()
@@ -1775,9 +1773,9 @@ class FileFollowerIterator():  # pylint: disable=too-few-public-methods
             yield line
 
 
-class FileFollowerThread():
+class FileFollowerThread:
     def __init__(self):
-        self.executor = concurrent.futures.ThreadPoolExecutor(1)  # pylint: disable=consider-using-with
+        self.executor = concurrent.futures.ThreadPoolExecutor(1)
         self._stop_event = threading.Event()
         self.future = None
 
@@ -2051,7 +2049,7 @@ def get_branched_gce_images(
     return images[:1]
 
 
-@lru_cache()
+@lru_cache
 def ami_built_by_scylla(ami_id: str, region_name: str) -> bool:
     all_tags = get_ami_tags(ami_id, region_name)
     if owner_id := all_tags.get('owner_id'):
@@ -2060,7 +2058,7 @@ def ami_built_by_scylla(ami_id: str, region_name: str) -> bool:
         return False
 
 
-@lru_cache()
+@lru_cache
 def get_ami_tags(ami_id, region_name):
     """
     Get a list of tags of a specific AMI
@@ -2118,12 +2116,12 @@ def remove_files(path):
             shutil.rmtree(path=path, ignore_errors=True)
         if os.path.isfile(path):
             os.remove(path)
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # noqa: BLE001
         LOGGER.error("Error during remove archived logs %s", details)
         LOGGER.info("Remove temporary data manually: \"%s\"", path)
 
 
-def create_remote_storage_dir(node, path='') -> Optional[str, None]:
+def create_remote_storage_dir(node, path='') -> str | None:
     node_remote_dir = '/tmp'
     if not path:
         path = node.name
@@ -2136,7 +2134,7 @@ def create_remote_storage_dir(node, path='') -> Optional[str, None]:
                 'Remote storing folder not created.\n %s', result)
             remote_dir = node_remote_dir
 
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # noqa: BLE001
         LOGGER.error("Error during creating remote directory %s", details)
         return None
 
@@ -2181,7 +2179,7 @@ def update_certificates(db_csr='data_dir/ssl_conf/example/db.csr', cadb_pem='dat
                         f'-out {db_crt} -days 365')
         localrunner.run(f'openssl x509 -enddate -noout -in {db_crt}')
         new_crt = localrunner.run(f'cat {db_crt}').stdout
-    except Exception as ex:  # pylint: disable=broad-except
+    except Exception as ex:  # noqa: BLE001
         raise Exception('Failed to update certificates by openssl: %s' % ex) from None
     return new_crt
 
@@ -2265,16 +2263,15 @@ def download_dir_from_cloud(url):
     parsed = urlparse(url)
     LOGGER.info("Downloading [%s] to [%s]", url, tmp_dir)
     if os.path.isdir(tmp_dir) and os.listdir(tmp_dir):
-        LOGGER.warning("[{}] already exists, skipping download".format(tmp_dir))
+        LOGGER.warning(f"[{tmp_dir}] already exists, skipping download")
+    elif url.startswith('s3://'):
+        s3_download_dir(parsed.hostname, parsed.path, tmp_dir)
+    elif url.startswith('gs://'):
+        gce_download_dir(parsed.hostname, parsed.path, tmp_dir)
+    elif os.path.isdir(url):
+        tmp_dir = url
     else:
-        if url.startswith('s3://'):
-            s3_download_dir(parsed.hostname, parsed.path, tmp_dir)
-        elif url.startswith('gs://'):
-            gce_download_dir(parsed.hostname, parsed.path, tmp_dir)
-        elif os.path.isdir(url):
-            tmp_dir = url
-        else:
-            raise ValueError("Unsupported url schema or non-existing directory [{}]".format(url))
+        raise ValueError(f"Unsupported url schema or non-existing directory [{url}]")
     if not tmp_dir.endswith('/'):
         tmp_dir += '/'
     LOGGER.info("Finished downloading [%s]", url)
@@ -2407,8 +2404,7 @@ def get_builder_by_test_id(test_id):
             builder['public_ip'], user=builder["user"], key_file=builder["key_file"])
 
         LOGGER.info('Search on %s', builder['name'])
-        result = remoter.run("find {where} -name test_id | xargs grep -rl {test_id}".format(where=base_path_on_builder,
-                                                                                            test_id=test_id),
+        result = remoter.run(f"find {base_path_on_builder} -name test_id | xargs grep -rl {test_id}",
                              ignore_status=True, verbose=False)
 
         if not result.exited and result.stdout:
@@ -2485,11 +2481,11 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
 
 def search_test_id_in_latest(logdir):
     test_id = None
-    result = LocalCmdRunner().run('cat {0}/latest/test_id'.format(logdir), ignore_status=True)
+    result = LocalCmdRunner().run(f'cat {logdir}/latest/test_id', ignore_status=True)
     if not result.exited and result.stdout:
         test_id = result.stdout.strip()
-        LOGGER.info("Found latest test_id: {}".format(test_id))
-        LOGGER.info("Collect logs for test-run with test-id: {}".format(test_id))
+        LOGGER.info(f"Found latest test_id: {test_id}")
+        LOGGER.info(f"Collect logs for test-run with test-id: {test_id}")
     else:
         LOGGER.error('test_id not found. Exit code: %s; Error details %s', result.exited, result.stderr)
     return test_id
@@ -2552,7 +2548,7 @@ def rows_to_list(rows):
 
 
 # Copied from dtest
-class Page:  # pylint: disable=too-few-public-methods
+class Page:
     data = None
 
     def __init__(self):
@@ -2654,8 +2650,7 @@ class PageFetcher:
         """
 
         def error_message(msg):
-            return "{}. Requested: {}; retrieved: {}; empty retrieved {}".format(
-                msg, self.requested_pages, self.retrieved_pages, self.retrieved_empty_pages)
+            return f"{msg}. Requested: {self.requested_pages}; retrieved: {self.retrieved_pages}; empty retrieved {self.retrieved_empty_pages}"
 
         def missing_pages():
             pages = self.requested_pages - (self.retrieved_pages + self.retrieved_empty_pages)
@@ -2730,10 +2725,10 @@ def reach_enospc_on_node(target_node):
         free_space_size = int(result.stdout.split()[3])
         occupy_space_size = int(free_space_size * 90 / 100)
         occupy_space_cmd = f'fallocate -l {occupy_space_size}K /var/lib/scylla/occupy_90percent.{time.time()}'
-        LOGGER.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
+        LOGGER.debug(f'Cost 90% free space on /var/lib/scylla/ by {occupy_space_cmd}')
         try:
             target_node.remoter.sudo(occupy_space_cmd, verbose=True)
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # noqa: BLE001
             LOGGER.warning(str(details))
         return bool(list(no_space_log_reader))
 
@@ -2746,7 +2741,7 @@ def reach_enospc_on_node(target_node):
 
 
 def clean_enospc_on_node(target_node, sleep_time):
-    LOGGER.debug('Sleep {} seconds before releasing space to scylla'.format(sleep_time))
+    LOGGER.debug(f'Sleep {sleep_time} seconds before releasing space to scylla')
     time.sleep(sleep_time)
 
     LOGGER.debug('Delete occupy_90percent file to release space to scylla-server')
@@ -2820,7 +2815,7 @@ def convert_metric_to_ms(metric: str) -> float:
             metric_converted += _convert_to_ms(parsed_values['units'], parsed_values['sec'])
         else:
             metric_converted = float(metric)
-    except ValueError as ve:  # pylint: disable=invalid-name
+    except ValueError as ve:
         metric_converted = metric
         LOGGER.error("Value %s can't be converted to float. Exception: %s", metric, ve)
     return metric_converted
@@ -2844,7 +2839,7 @@ def _shorten_alpha_sequences(value: str, max_alpha_chunk_size: int) -> str:
     return output
 
 
-def _shorten_sequences_in_string(value: Union[str, List[str]], max_alpha_chunk_size: int) -> str:
+def _shorten_sequences_in_string(value: str | list[str], max_alpha_chunk_size: int) -> str:
     chunks = []
     if isinstance(value, str):
         tmp = value.split('-')
@@ -2930,11 +2925,11 @@ def walk_thru_data(data, path: str, separator: str = '/') -> Any:
         if not name:
             continue
         if name[0] == '[' and name[-1] == ']':
-            name = name[1:-1]
-        if name.isalnum() and isinstance(current_value, (list, tuple, set)):
+            name = name[1:-1]  # noqa: PLW2901
+        if name.isalnum() and isinstance(current_value, list | tuple | set):
             try:
                 current_value = current_value[int(name)]
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # noqa: BLE001
                 current_value = None
             continue
         current_value = current_value.get(name, None)
@@ -3008,7 +3003,7 @@ def make_threads_be_daemonic_by_default():
     @return:
     @rtype:
     """
-    threading.current_thread()._daemonic = True  # pylint: disable=protected-access
+    threading.current_thread()._daemonic = True
 
 
 def clear_out_all_exit_hooks():
@@ -3018,7 +3013,7 @@ def clear_out_all_exit_hooks():
     To avoid that we clear it out to be sure that nothing is hooked and test is terminated right after
       teardown.
     """
-    threading._threading_atexits.clear()  # pylint: disable=protected-access
+    threading._threading_atexits.clear()
 
 
 def validate_if_scylla_load_high_enough(start_time, wait_cpu_utilization, prometheus_stats,
@@ -3112,7 +3107,7 @@ def describering_parsing(describering_output):
 
 
 @contextmanager
-def SoftTimeoutContext(timeout: int, operation: str):  # pylint: disable=invalid-name
+def SoftTimeoutContext(timeout: int, operation: str):
     """Publish SoftTimeoutEvent with operation info in case of duration > timeout"""
     start_time = time.time()
     yield
@@ -3122,7 +3117,7 @@ def SoftTimeoutContext(timeout: int, operation: str):  # pylint: disable=invalid
                          duration=duration).publish_or_dump()
 
 
-def raise_exception_in_thread(thread: threading.Thread, exception_type: Type[BaseException]):
+def raise_exception_in_thread(thread: threading.Thread, exception_type: type[BaseException]):
     res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_ulong(thread.ident), ctypes.py_object(exception_type))
     LOGGER.debug("PyThreadState_SetAsyncExc: return [%s]", res)
 
@@ -3150,7 +3145,7 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
         client: EC2Client = boto3.client('ec2', region_name=region)
         custom_filter = []
         if tags_dict:
-            custom_filter = [{'Name': 'tag:{}'.format(key),
+            custom_filter = [{'Name': f'tag:{key}',
                               'Values': value if isinstance(value, list) else [value]}
                              for key, value in tags_dict.items()]
         response = client.describe_placement_groups(Filters=custom_filter)
@@ -3176,7 +3171,7 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
         total_items = sum([len(value) for _, value in placement_groups.items()])
 
     if verbose:
-        LOGGER.info("Found total of {} instances.".format(total_items))
+        LOGGER.info(f"Found total of {total_items} instances.")
 
     return placement_groups
 
@@ -3184,7 +3179,7 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
 @retrying(n=30, sleep_time=10, allowed_exceptions=(ClientError,))
 def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
     """Remove all placement groups with specific tags in AWS."""
-    # pylint: disable=too-many-locals,import-outside-toplevel
+
     tags_dict = {key: value for key, value in tags_dict.items() if key != "NodeType"}
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     if regions:
@@ -3202,12 +3197,12 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
         client: EC2Client = boto3.client('ec2', region_name=region)
         for instance in instance_list:
             name = instance.get("GroupName")
-            LOGGER.info("Going to delete placement group '{name} ".format(name=name))
+            LOGGER.info(f"Going to delete placement group '{name} ")
             if not dry_run:
                 try:
                     response = client.delete_placement_group(GroupName=name)
                     LOGGER.debug("Done. Result: %s\n", response)
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:
                     LOGGER.info("Failed with: %s", str(ex))
                     raise
 # ----------

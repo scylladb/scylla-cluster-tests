@@ -11,15 +11,15 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import os
 import logging
+import os
+import threading
 import time
 import uuid
-import threading
 
 from sdcm.cluster import BaseNode
+from sdcm.sct_events.loaders import NOSQLBENCH_EVENT_PATTERNS, NoSQLBenchStressEvent
 from sdcm.stress.base import DockerBasedStressThread
-from sdcm.sct_events.loaders import NoSQLBenchStressEvent, NOSQLBENCH_EVENT_PATTERNS
 from sdcm.utils.common import FileFollowerThread
 
 LOGGER = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class NoSQLBenchEventsPublisher(FileFollowerThread):
                         event.clone().add_info(node=self.node, line=line, line_number=line_number).publish()
 
 
-class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class NoSQLBenchStressThread(DockerBasedStressThread):
     """
     A stress thread that is running NoSQLBench docker on remote loader and getting results back
     If you have questions regarding NoSQLBench command line please checkout following documentation:
@@ -80,8 +80,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'nosql-bench-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
+        log_file_name = os.path.join(loader.logdir, f'nosql-bench-{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
         LOGGER.debug('nosql-bench-stress local log: %s', log_file_name)
         LOGGER.debug("'running: %s", stress_cmd)
         with NoSQLBenchStressEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as stress_event, \
@@ -111,6 +110,6 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                                               f'{self.docker_image_name} '
                                               f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
                                           timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=stress_event, exc=exc)
             return None

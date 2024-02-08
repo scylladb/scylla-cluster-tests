@@ -15,7 +15,12 @@ from pathlib import Path
 
 import yaml
 
-from sdcm.provision.scylla_yaml import ServerEncryptionOptions, ClientEncryptionOptions, SeedProvider, ScyllaYaml
+from sdcm.provision.scylla_yaml import (
+    ClientEncryptionOptions,
+    ScyllaYaml,
+    SeedProvider,
+    ServerEncryptionOptions,
+)
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions
 
 
@@ -442,7 +447,7 @@ class ScyllaYamlTest(unittest.TestCase):
         assert yaml1.enable_sstables_mc_format == append_scylla_args_dict["enable_sstables_mc_format"]
         assert yaml1.enable_sstables_md_format == append_scylla_args_dict["enable_sstables_md_format"]
 
-        assert yaml1.force_schema_commit_log == append_scylla_args_dict["force_schema_commit_log"]  # pylint: disable=no-member
+        assert yaml1.force_schema_commit_log == append_scylla_args_dict["force_schema_commit_log"]
 
     @staticmethod
     def test_copy():

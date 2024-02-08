@@ -11,25 +11,23 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
-import logging
 import collections
+import logging
+import os
 from pathlib import Path
 
 import pytest
 
-from sdcm import wait, sct_config
+from sdcm import sct_config, wait
 from sdcm.cluster import BaseNode
 from sdcm.prometheus import start_metrics_server
 from sdcm.provision import provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
-from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.utils.common import update_certificates
-
+from sdcm.utils.docker_remote import RemoteDocker
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
-
 from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder
@@ -53,7 +51,7 @@ def prom_address():
 
 
 @pytest.fixture(name='docker_scylla', scope='function')
-def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=too-many-locals
+def fixture_docker_scylla(request: pytest.FixtureRequest):
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
@@ -93,14 +91,14 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=to
     def db_up():
         try:
             return scylla.is_port_used(port=BaseNode.CQL_PORT, service_name="scylla-server")
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # noqa: BLE001
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
     def db_alternator_up():
         try:
             return scylla.is_port_used(port=8000, service_name="scylla-server")
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # noqa: BLE001
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
@@ -119,12 +117,12 @@ def fake_remoter():
 
 
 @pytest.fixture(scope='session', autouse=True)
-def fake_provisioner():  # pylint: disable=no-self-use
+def fake_provisioner():
     provisioner_factory.register_provisioner(backend="fake", provisioner_class=FakeProvisioner)
 
 
 @pytest.fixture(scope='session', autouse=True)
-def fake_region_definition_builder():  # pylint: disable=no-self-use
+def fake_region_definition_builder():
     region_definition_builder.register_builder(backend="fake", builder_class=FakeDefinitionBuilder)
 
 
@@ -135,7 +133,7 @@ def fixture_params(request: pytest.FixtureRequest):
         os.environ['SCT_CONFIG_FILES'] = config_files
 
     os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
-    params = sct_config.SCTConfiguration()  # pylint: disable=attribute-defined-outside-init
+    params = sct_config.SCTConfiguration()
 
     yield params
 

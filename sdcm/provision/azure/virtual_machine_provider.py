@@ -11,17 +11,16 @@
 #
 # Copyright (c) 2022 ScyllaDB
 import base64
-import time
-from datetime import datetime
+import binascii
 import logging
 import os
+import time
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
 
-from typing import Dict, Optional, Any, List
-
-import binascii
-from azure.core.exceptions import ResourceNotFoundError, AzureError
-from azure.mgmt.compute.models import VirtualMachine, RunCommandInput
+from azure.core.exceptions import AzureError, ResourceNotFoundError
+from azure.mgmt.compute.models import RunCommandInput, VirtualMachine
 from invoke import Result
 
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, ProvisionError
@@ -37,22 +36,22 @@ class VirtualMachineProvider:
     _region: str
     _az: str
     _azure_service: AzureService = AzureService()
-    _cache: Dict[str, VirtualMachine] = field(default_factory=dict)
+    _cache: dict[str, VirtualMachine] = field(default_factory=dict)
 
     def __post_init__(self):
         """Discover existing virtual machines for resource group."""
         try:
             v_ms = self._azure_service.compute.virtual_machines.list(self._resource_group_name)
-            for v_m in v_ms:
-                v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, v_m.name)
+            for _v_m in v_ms:
+                v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, _v_m.name)
                 if v_m.provisioning_state != "Deleting":
                     self._cache[v_m.name] = v_m
         except ResourceNotFoundError:
             pass
 
-    def get_or_create(self, definitions: List[InstanceDefinition], nics_ids: List[str], pricing_model: PricingModel
-                      ) -> List[VirtualMachine]:
-        # pylint: disable=too-many-locals
+    def get_or_create(self, definitions: list[InstanceDefinition], nics_ids: list[str], pricing_model: PricingModel
+                      ) -> list[VirtualMachine]:
+
         v_ms = []
         pollers = []
         error_to_raise = None
@@ -156,7 +155,7 @@ class VirtualMachineProvider:
             if instance_view and instance_view.statuses[-1].display_status == 'VM running':
                 break
 
-    def add_tags(self, name: str, tags: Dict[str, str]) -> VirtualMachine:
+    def add_tags(self, name: str, tags: dict[str, str]) -> VirtualMachine:
         """Adds tags to instance (with waiting for completion)"""
         if name not in self._cache:
             raise AttributeError(f"Instance '{name}' does not exist in resource group '{self._resource_group_name}'")
@@ -172,7 +171,7 @@ class VirtualMachineProvider:
 
     @staticmethod
     def _get_os_profile(computer_name: str, admin_username: str,
-                        admin_password: str, ssh_public_key: str, custom_data: str) -> Dict[str, Any]:
+                        admin_password: str, ssh_public_key: str, custom_data: str) -> dict[str, Any]:
         os_profile = {"os_profile": {
             "computer_name": computer_name,
             "admin_username": admin_username,
@@ -192,7 +191,7 @@ class VirtualMachineProvider:
         return os_profile
 
     @staticmethod
-    def _get_scylla_storage_profile(image_id: str, name: str, disk_size: Optional[int] = None) -> Dict[str, Any]:
+    def _get_scylla_storage_profile(image_id: str, name: str, disk_size: int | None = None) -> dict[str, Any]:
         """Creates storage profile based on image_id. image_id may refer to scylla-crafted images
          (starting with '/subscription') or to 'Urn' of image (see output of e.g. `az vm image list --output table`)"""
         storage_profile = {"storage_profile": {
@@ -264,7 +263,7 @@ class VirtualMachineProvider:
         self._cache = {}
 
     @staticmethod
-    def _replace_null_value_from_tags_with_empty_string(tags: Dict[str, str]) -> Dict[str, str]:
+    def _replace_null_value_from_tags_with_empty_string(tags: dict[str, str]) -> dict[str, str]:
         """Azure API does not accept 'null' as value for tags, so we replace it with empty string."""
         for key, value in tags.items():
             if value == "null":

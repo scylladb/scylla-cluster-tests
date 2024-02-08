@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -29,7 +27,7 @@ class SnitchTest(ClusterTester):
         assert 'GoogleCloudSnitch' in result.stdout, "Cluster doesn't use GoogleCloudSnitch"
 
         with self.db_cluster.cql_connection_patient_exclusive(self.db_cluster.nodes[0]) as session:
-            # pylint: disable=no-member
+
             result = list(session.execute('select * from system.peers'))
 
         self.log.debug(result)

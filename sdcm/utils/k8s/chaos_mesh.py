@@ -10,24 +10,28 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
+from __future__ import annotations
 
 import ast
 import json
 import logging
+import time
 from datetime import datetime
 from enum import Enum
 from json import JSONDecodeError
 from tempfile import NamedTemporaryFile
-import time
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import yaml
 from botocore.utils import deep_merge
 
-from sdcm.log import SDCMAdapter
 from sdcm import sct_abs_path
+from sdcm.log import SDCMAdapter
 from sdcm.utils.common import time_period_str_to_seconds
 from sdcm.utils.k8s import HelmValues, get_helm_pool_affinity_values
+
+if TYPE_CHECKING:
+    from sdcm.cluster_k8s import BasePodContainer, KubernetesCluster
 
 LOGGER = logging.getLogger(__name__)
 
@@ -37,8 +41,7 @@ class ChaosMeshException(Exception):
 
 
 class ChaosMeshExperimentException(ChaosMeshException):
-
-    def __init__(self, msg: str, experiment: "ChaosMeshExperiment"):
+    def __init__(self, msg: str, experiment: ChaosMeshExperiment):
         super().__init__(msg)
         self.message = f"{msg}. Search debug log about {experiment.name}"
         LOGGER.debug(experiment.describe())
@@ -51,7 +54,7 @@ class ChaosMeshTimeout(ChaosMeshExperimentException):
     pass
 
 
-class ChaosMesh:  # pylint: disable=too-few-public-methods
+class ChaosMesh:
     NAMESPACE = "chaos-mesh"
     VERSION = "2.5.0"
     HELM_SETTINGS = {
@@ -60,7 +63,7 @@ class ChaosMesh:  # pylint: disable=too-few-public-methods
     }
     ADDITIONAL_CONFIGS = sct_abs_path("sdcm/k8s_configs/chaos-mesh/gke-auth-workaround.yaml")
 
-    def __init__(self, k8s_cluster: "sdcm.cluster_k8s.KubernetesCluster"):
+    def __init__(self, k8s_cluster: KubernetesCluster):
         self._k8s_cluster = k8s_cluster
         self.log = SDCMAdapter(LOGGER, extra={'prefix': k8s_cluster.region_name})
         self.initialized = False
@@ -125,7 +128,7 @@ class ChaosMeshExperiment:
     API_VERSION = "chaos-mesh.org/v1alpha1"
     CHAOS_KIND = ""  # need to override it in child classes
 
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", name: str, timeout: int = 0):
+    def __init__(self, pod: BasePodContainer, name: str, timeout: int = 0):
         self._k8s_cluster = pod.k8s_cluster
         self._name = name
         self._namespace = pod.parent_cluster.namespace
@@ -164,8 +167,7 @@ class ChaosMeshExperiment:
         self.log.info("'%s' experiment '%s' has started", self.CHAOS_KIND, self._name)
         self._end_time = time.time() + self._timeout
 
-    # pylint: disable=too-many-return-statements
-    def get_status(self) -> ExperimentStatus:
+    def get_status(self) -> ExperimentStatus:  # noqa: PLR0911
         """Gets status of chaos-mesh experiment."""
         result = self._k8s_cluster.kubectl(
             f"get {self.CHAOS_KIND} {self._name} -n {self._namespace} -o jsonpath='{{.status.conditions}}'", verbose=False)
@@ -217,7 +219,7 @@ class PodFailureExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "PodChaos"
 
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str):
+    def __init__(self, pod: BasePodContainer, duration: str):
         """Injects fault into a specified Pod to make the Pod unavailable for a period of time.
 
             :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
@@ -241,8 +243,7 @@ class MemoryStressExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "StressChaos"
 
-    # pylint: disable=too-many-arguments
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, workers: int, size: str, time_to_reach: str | None = None):
+    def __init__(self, pod: BasePodContainer, duration: str, workers: int, size: str, time_to_reach: str | None = None):
         """Stresses memory on scylla pod using https://github.com/chaos-mesh/memStress
 
             :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
@@ -305,8 +306,7 @@ class IOFaultChaosExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "IOChaos"
 
-    # pylint: disable=too-many-arguments
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, error: DiskError, error_probability: int,
+    def __init__(self, pod: BasePodContainer, duration: str, error: DiskError, error_probability: int,
                  methods: list[DiskMethod], volume_path: str, path: str | None = None):
         """Induces disk fault (programatically) using IOChaos: https://chaos-mesh.org/docs/simulate-io-chaos-on-kubernetes/
 
@@ -345,7 +345,7 @@ class NetworkPacketLossExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "NetworkChaos"
 
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str,
+    def __init__(self, pod: BasePodContainer, duration: str,
                  probability: int = 0, correlation: int = 0):
         """Simulate packet loss fault into a specified Pod for a period of time.
 
@@ -377,11 +377,11 @@ class NetworkCorruptExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "NetworkChaos"
 
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str,
+    def __init__(self, pod: BasePodContainer, duration: str,
                  probability: int = 0, correlation: int = 0):
         """Simulate network corrupt fault into a specified Pod for a period of time.
 
-            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+            :param BasePodContainer pod: affected scylla pod
             :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
             :param probability: Indicates the probability of packet corruption. Range of value: [0, 100]
             :param correlation: Indicates the correlation between the probability of current packet corruption
@@ -409,12 +409,11 @@ class NetworkDelayExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "NetworkChaos"
 
-    # pylint: disable=too-many-arguments
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str, latency: str,
+    def __init__(self, pod: BasePodContainer, duration: str, latency: str,
                  correlation: int = 0, jitter: str = "0"):
         """Simulate network delay fault into a specified Pod for a period of time.
 
-            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+            :param BasePodContainer pod: affected scylla pod
             :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
             :param latency: Indicates the network latency (example: 10ms)
             :param correlation: Indicates the correlation between the current latency and the previous one. Range of value: [0, 100]
@@ -443,12 +442,11 @@ class NetworkBandwidthLimitExperiment(ChaosMeshExperiment):
     """
     CHAOS_KIND = "NetworkChaos"
 
-    # pylint: disable=too-many-arguments
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", duration: str,
+    def __init__(self, pod: BasePodContainer, duration: str,
                  rate: str, limit: int, buffer: int):
         """Simulate network bandwidth limit fault into a specified Pod for a period of time.
 
-            :param sdcm.cluster_k8s.BasePodContainer pod: affected scylla pod
+            :param BasePodContainepycodestyler pod: affected scylla pod
             :param str duration: how long it will last. str type in k8s notation. E.g. 10s, 5m
             :param rate: Indicates the rate of bandwidth limit (example: 1mbps)
             :param limit: Indicates the number of bytes waiting in queue (example: 20971520)

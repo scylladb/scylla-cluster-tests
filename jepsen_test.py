@@ -89,7 +89,7 @@ class JepsenTest(ClusterTester):
             sleep {JEPSEN_WEB_SERVER_START_DELAY}
         """), verbose=True)
 
-        with open(os.path.join(self.logdir, "jepsen_report.html"), "wt", encoding="utf-8") as jepsen_report:
+        with open(os.path.join(self.logdir, "jepsen_report.html"), "w", encoding="utf-8") as jepsen_report:
             jepsen_report.write(requests.get(url).text)
         self.log.info("Report has been saved to %s", jepsen_report.name)
 

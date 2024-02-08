@@ -1,14 +1,14 @@
 #!/usr/bin/python3
-import sys
-import dnslib.server
-import dnslib
-import random
 import _thread
-import urllib.request
-import time
+import random
 import socket
+import sys
+import time
+import urllib.request
 
-from dnslib import DNSRecord, RCODE
+import dnslib
+import dnslib.server
+from dnslib import RCODE, DNSRecord
 
 # The list of live nodes, all of them supposedly answering HTTP requests on
 # alternator_port. One of these nodes will be returned at random from every
@@ -20,21 +20,21 @@ alternator_port = sys.argv[2]
 
 
 def livenodes_update():
-    global alternator_port
-    global livenodes
+    global alternator_port  # noqa: PLW0602
+    global livenodes  # noqa: PLW0603
     while True:
         # Contact one of the already known nodes by random, to fetch a new
         # list of known nodes.
         ip = random.choice(livenodes)
-        url = 'http://{}:{}/localnodes'.format(ip, alternator_port)
-        print('updating livenodes from {}'.format(url))
+        url = f'http://{ip}:{alternator_port}/localnodes'
+        print(f'updating livenodes from {url}')
         try:
             nodes = urllib.request.urlopen(url, None, 1.0).read().decode('ascii')
             a = [x.strip('"').rstrip('"') for x in nodes.strip('[').rstrip(']').split(',')]
             # If we're successful, replace livenodes by the new list
             livenodes = a
             print(livenodes)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             # TODO: contacting this ip was unsuccessful, maybe we should
             # remove it from the list of live nodes.
             pass
@@ -58,7 +58,7 @@ class Resolver:
 
         if qname == 'alternator':
             ip = random.choice(livenodes)
-            reply.add_answer(*dnslib.RR.fromZone('{} 4 A {}'.format(qname, ip)))
+            reply.add_answer(*dnslib.RR.fromZone(f'{qname} 4 A {ip}'))
 
         # Otherwise proxy
         if not reply.rr:

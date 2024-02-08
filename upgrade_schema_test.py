@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -14,7 +12,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 # TODO: this test seem to be broken, hence disabling all pylint checks
-# pylint: disable=all
+
 
 import random
 import struct
@@ -22,11 +20,11 @@ from unittest import TestCase
 
 from cassandra.cluster import Cluster
 from thrift.transport import TSocket
+from thrift_bindings.v22.Cassandra import *
+from thrift_bindings.v22.ttypes import NotFoundException
 
 from sdcm.nemesis import UpgradeNemesisOneNode
 from sdcm.tester import ClusterTester
-from thrift_bindings.v22.Cassandra import *
-from thrift_bindings.v22.ttypes import NotFoundException
 
 tests = []
 ks_name = 'test_upgrade_schema_ks'
@@ -258,8 +256,8 @@ class UpgradeSchemaTest(ClusterTester):
 
     def test_upgrade_schema(self):
 
-        global thrift_client
-        global cql_client
+        global thrift_client  # noqa: PLW0603
+        global cql_client  # noqa: PLW0603
         ips = []
         for node in self.db_cluster.nodes:
             ips.append(node.public_ip_address)
@@ -303,7 +301,7 @@ class UpgradeSchemaTest(ClusterTester):
         # upgrade all the nodes in random order
         for i in indexes:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
-            self.log.info("started upgrade node {0}".format(self.db_cluster.node_to_upgrade))
+            self.log.info(f"started upgrade node {self.db_cluster.node_to_upgrade}")
             self.db_cluster.add_nemesis(nemesis=UpgradeNemesisOneNode,
                                         tester_obj=self)
             self.db_cluster.start_nemesis(interval=15)

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -21,10 +19,9 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.es import ES
 from sdcm.sct_events import Severity
 from sdcm.sct_events.workload_prioritisation import WorkloadPrioritisationEvent
-from test_lib.sla import ServiceLevel, Role, User
+from test_lib.sla import Role, ServiceLevel, User
 
 
-# pylint: disable=too-many-public-methods
 class SlaPerUserTest(LongevityTest):
     """
     Test SLA per user feature using cassandra-stress.
@@ -101,14 +98,14 @@ class SlaPerUserTest(LongevityTest):
         for node_ip in self.db_cluster.get_node_private_ips():
             # Temporary solution
             scheduler_shares = self.prometheus_stats.get_scylla_scheduler_shares_per_sla(start_time, end_time, node_ip)
-            self.log.debug('SCHEDULERS SHARES FROM PROMETHEUS: {}'.format(scheduler_shares))
+            self.log.debug(f'SCHEDULERS SHARES FROM PROMETHEUS: {scheduler_shares}')
             # this default scheduler that is not under test - ignore it
             if 'sl:default' in scheduler_shares:
                 scheduler_shares.pop('sl:default')
 
             test_users_to_sg = self.role_to_scheduler_group(test_users=roles_with_shares,
                                                             scheduler_shares=scheduler_shares)
-            self.log.debug('ROLE - SERVICE LEVEL - SCHEDULER: {}'.format(test_users_to_sg))
+            self.log.debug(f'ROLE - SERVICE LEVEL - SCHEDULER: {test_users_to_sg}')
             # End Temporary solution
 
             # Query 'scylla_scheduler_runtime_ms' from prometheus. If no data returned, try to increase the step time
@@ -137,7 +134,7 @@ class SlaPerUserTest(LongevityTest):
                         len(shards_time_per_sla[node_ip][val[1]])
                 else:
                     runtime_per_role[rolename] = 0
-            self.log.debug('RUN TIME PER ROLE: {}'.format(runtime_per_role))
+            self.log.debug(f'RUN TIME PER ROLE: {runtime_per_role}')
             actual_shares_ratio = self.calculate_metrics_ratio_per_user(two_users_list=read_users,
                                                                         metrics=runtime_per_role)
             self.validate_deviation(expected_ratio=expected_ratio, actual_ratio=actual_shares_ratio,
@@ -188,7 +185,7 @@ class SlaPerUserTest(LongevityTest):
         return None
 
     @staticmethod
-    def calculate_metrics_ratio_per_user(two_users_list, metrics=None):  # pylint: disable=invalid-name
+    def calculate_metrics_ratio_per_user(two_users_list, metrics=None):
         """
         :param metrics: calculate ratio for specific Scylla or cassandra-stress metrics (ops, scheduler_runtime etc..).
                         If metrics name is not defined - ration will be calculated for service_shares
@@ -252,7 +249,7 @@ class SlaPerUserTest(LongevityTest):
 
         return results
 
-    def validate_if_scylla_load_high_enough(self, start_time, wait_cpu_utilization):  # pylint: disable=invalid-name
+    def validate_if_scylla_load_high_enough(self, start_time, wait_cpu_utilization):
         end_time = int(time.time())
         scylla_load = self.prometheus_stats.get_scylla_reactor_utilization(start_time=start_time, end_time=end_time)
 
@@ -288,7 +285,6 @@ class SlaPerUserTest(LongevityTest):
                      ]
         self.run_stress_and_verify_threads(params={'stress_cmd': read_cmds})
 
-    # pylint: disable=too-many-arguments, too-many-locals
     def define_read_cassandra_stress_command(self,
                                              role: Role, load_type: str,
                                              c_s_workload_type: str,
@@ -306,23 +302,23 @@ class SlaPerUserTest(LongevityTest):
         def latency():
             return '%d throttle=%d/s' % (threads, throttle)
 
-        def throughput():  # pylint: disable=unused-variable
+        def throughput():
             return threads
 
-        def cache_only(max_rows_for_read):  # pylint: disable=unused-variable
+        def cache_only(max_rows_for_read):
             if not max_rows_for_read:
                 max_rows_for_read = int(self.num_of_partitions * 0.3)
             return 'seq=1..%d' % max_rows_for_read
 
         # Read from cache and disk
-        def mixed(max_rows_for_read):  # pylint: disable=unused-variable
+        def mixed(max_rows_for_read):
             if not max_rows_for_read:
                 max_rows_for_read = self.num_of_partitions
             return "'dist=gauss(1..%d, %d, %d)'" % (max_rows_for_read,
                                                     int(max_rows_for_read / 2),
                                                     int(max_rows_for_read * 0.05))
 
-        def disk_only(max_rows_for_read):  # pylint: disable=unused-variable
+        def disk_only(max_rows_for_read):
             if not max_rows_for_read:
                 max_rows_for_read = int(self.num_of_partitions * 0.3)
             return 'seq=%d..%d' % (max_rows_for_read, max_rows_for_read+int(self.num_of_partitions*0.25))
@@ -428,7 +424,7 @@ class SlaPerUserTest(LongevityTest):
         finally:
             self.clean_auth(entities_list_of_dict=read_users)
 
-    def test_read_throughput_vs_latency_cache_and_disk(self):  # pylint: disable=invalid-name
+    def test_read_throughput_vs_latency_cache_and_disk(self):
         """
         Test when one user run load with high latency and another  - with high througput
         The load is run on the full data set (that is read from both the cache and the disk)
@@ -493,7 +489,7 @@ class SlaPerUserTest(LongevityTest):
         self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds,
                                            latency_user=read_users[1], improvement_expected=improvement_expected)
 
-    def test_read_throughput_vs_latency_cache_only(self):  # pylint: disable=invalid-name
+    def test_read_throughput_vs_latency_cache_only(self):
         """
         Test when one user run load with high latency and another  - with high througput
         The load is run on the data set that fully exists in the cache
@@ -559,7 +555,7 @@ class SlaPerUserTest(LongevityTest):
         self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds,
                                            latency_user=read_users[1], improvement_expected=improvement_expected)
 
-    def test_read_throughput_vs_latency_disk_only(self):  # pylint: disable=invalid-name
+    def test_read_throughput_vs_latency_disk_only(self):
         """
         Test when one user run load with high latency and another  - with high througput
         The load is run on the data set that fully exists in the cache
@@ -707,7 +703,6 @@ class SlaPerUserTest(LongevityTest):
                                            latency_user=read_users[1], improvement_expected=improvement_expected)
 
     def _throughput_latency_tests_run(self, read_cmds, read_users, latency_user, improvement_expected):
-        # pylint: disable=too-many-locals
 
         # Wait that service levels are propagated to all nodes
         time.sleep(10)
@@ -835,8 +830,7 @@ class SlaPerUserTest(LongevityTest):
             workloads_results.update({result[0].get("username"): result[0]})
 
         assert len(workloads_results) == 2, \
-            "Expected workload_results length to be 2, got: %s. workload_results: %s" % (
-                len(workloads_results), workloads_results)
+            f"Expected workload_results length to be 2, got: {len(workloads_results)}. workload_results: {workloads_results}"
         comparison_results = {}
         try:
             for item, target_margin in comparison_axis.items():
@@ -884,13 +878,13 @@ class SlaPerUserTest(LongevityTest):
 
         try:
             email_data = self._get_common_email_data()
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:  # noqa: BLE001
             self.log.error("Error in gathering common email data: Error:\n%s", error)
 
         try:
             grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
                 self.start_time) if self.monitors else {}
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:  # noqa: BLE001
             self.log.error("Error in gathering Grafana screenshots and snapshots. Error:\n%s", error)
 
         email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
@@ -902,11 +896,10 @@ class SlaPerUserTest(LongevityTest):
 
         return email_data
 
-    # pylint: disable=inconsistent-return-statements
     def get_test_status(self) -> str:
         if self._comparison_results:
             try:
-                if all((item["within_margin"] for item in self._comparison_results.values())):
+                if all(item["within_margin"] for item in self._comparison_results.values()):
                     return "SUCCESS"
                 else:
                     return "FAILED"
@@ -947,8 +940,8 @@ class SlaPerUserTest(LongevityTest):
         grafana_screenshots = grafana_dataset.get('screenshots', [])
         grafana_snapshots = grafana_dataset.get('snapshots', [])
 
-        self.log.debug('GRAFANA SCREENSHOTS: {}'.format(grafana_screenshots))
-        self.log.debug('GRAFANA SNAPSHOTS: {}'.format(grafana_snapshots))
+        self.log.debug(f'GRAFANA SCREENSHOTS: {grafana_screenshots}')
+        self.log.debug(f'GRAFANA SNAPSHOTS: {grafana_snapshots}')
 
         # Compare latency of two runs
         self.log.debug('Test results:\n---------------------\n')
@@ -965,9 +958,9 @@ class SlaPerUserTest(LongevityTest):
         result_print_str = '\nTest results:\n---------------------\n'
         result_print_str += '\nWorkload                  |      Latency 99%'
         result_print_str += '\n========================= | ================='
-        result_print_str += '\nLatency only              |      {}'.format(latency_99_latency_workload)
-        result_print_str += '\nLatency and throughput    |      {}'.format(latency_99_mixed_workload)
+        result_print_str += f'\nLatency only              |      {latency_99_latency_workload}'
+        result_print_str += f'\nLatency and throughput    |      {latency_99_mixed_workload}'
         result_print_str += '\n------------------------- | -----------------'
-        result_print_str += '\nLatency 99 is {} in {}%'.format(latency_change, deviation)
+        result_print_str += f'\nLatency 99 is {latency_change} in {deviation}%'
 
         return latency_99_latency_workload, latency_99_mixed_workload, result_print_str

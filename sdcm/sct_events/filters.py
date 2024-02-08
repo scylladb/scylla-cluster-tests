@@ -13,19 +13,25 @@
 
 import re
 import time
-from typing import Optional, Type, Union
 from functools import cached_property
+from typing import Any
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, SctEventProtocol, BaseFilter, LogEventProtocol
+from sdcm.sct_events.base import (
+    BaseFilter,
+    LogEventProtocol,
+    SctEvent,
+    SctEventProtocol,
+)
 
 
 class DbEventsFilter(BaseFilter):
     def __init__(self,
-                 db_event: Union[LogEventProtocol, Type[LogEventProtocol]],
-                 line: Optional[str] = None,
-                 node: Optional = None,
-                 extra_time_to_expiration: Optional[int] = 0):
+                 db_event: LogEventProtocol | type[LogEventProtocol],
+                 line: str | None = None,
+                 node: Any | None = None,
+                 extra_time_to_expiration: int = 0,
+                 ):
         super().__init__()
 
         self.filter_type = db_event.type
@@ -70,9 +76,9 @@ class DbEventsFilter(BaseFilter):
 
 class EventsFilter(BaseFilter):
     def __init__(self,
-                 event_class: Optional[Type[SctEventProtocol] | Type[SctEvent]] = None,
-                 regex: Optional[Union[str, re.Pattern]] = None,
-                 extra_time_to_expiration: Optional[int] = 0):
+                 event_class: type[SctEventProtocol] | type[SctEvent] | None = None,
+                 regex: str | re.Pattern | None = None,
+                 extra_time_to_expiration: int | None = 0):
 
         assert event_class or regex, \
             "Should call with event_class or regex, or both"
@@ -94,7 +100,7 @@ class EventsFilter(BaseFilter):
     def _regex(self):
         try:
             return self.regex and re.compile(self.regex, self.regex_flags)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             raise ValueError(f'Compilation of the regexp "{self.regex}" failed with error: {exc}') from None
 
     def cancel_filter(self) -> None:
@@ -126,9 +132,9 @@ class EventsFilter(BaseFilter):
 class EventsSeverityChangerFilter(EventsFilter):
     def __init__(self,
                  new_severity: Severity,
-                 event_class: Optional[Type[SctEvent]] = None,
-                 regex: Optional[str] = None,
-                 extra_time_to_expiration: Optional[int] = None):
+                 event_class: type[SctEvent] | None = None,
+                 regex: str | None = None,
+                 extra_time_to_expiration: int | None = None):
         super().__init__(event_class=event_class, regex=regex, extra_time_to_expiration=extra_time_to_expiration)
 
         self.new_severity = new_severity

@@ -10,19 +10,24 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+from __future__ import annotations
+
 import json
 import logging
 import re
-from dataclasses import dataclass, field, asdict
-from typing import NamedTuple
+from dataclasses import asdict, dataclass, field
+from typing import TYPE_CHECKING, NamedTuple
 
 from sdcm.es import ES
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
 from sdcm.test_config import TestConfig
 from sdcm.utils.common import ParallelObject
+from sdcm.utils.decorators import retrying
 from sdcm.utils.git import clone_repo
 from sdcm.utils.metaclasses import Singleton
-from sdcm.utils.decorators import retrying
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger(__name__)
 ES_INDEX = "node_benchmarks"
@@ -90,7 +95,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
     """
 
     def __init__(self, global_compare: bool = False):
-        self._nodes: list["BaseNode"] = []
+        self._nodes: list[BaseNode] = []
         self._benchmark_runners: list[ScyllaNodeBenchmarkRunner] = []
         self._es = ES()
         self._comparison = {}
@@ -101,13 +106,13 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
     def comparison(self):
         return self._comparison
 
-    def add_node(self, new_node: "BaseNode"):
+    def add_node(self, new_node: BaseNode):
         if new_node.distro.is_debian_like:
             self._benchmark_runners.append(ScyllaNodeBenchmarkRunner(new_node))
         else:
             LOGGER.debug("Skipped installing benchmarking tools on a non-debian-like distro.")
 
-    def add_nodes(self, nodes: list["BaseNode"]):
+    def add_nodes(self, nodes: list[BaseNode]):
         for node in nodes:
             self.add_node(node)
 
@@ -164,7 +169,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
 
         @retrying(n=3, sleep_time=1, message="Get hw performance nodes result...", raise_on_exceeded=False)
         def search_results():
-            results = self._es.search(index=ES_INDEX,  # pylint: disable=unexpected-keyword-arg
+            results = self._es.search(index=ES_INDEX,
                                       q=query,
                                       filter_path=filter_path,
                                       size=1000)
@@ -202,7 +207,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                                         margins=Margins(sysbench_eps=0.03,
                                                         cassandra_fio_read_bw=0.01,
                                                         cassandra_fio_write_bw=0.01)))
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.warning(
                     "Failed to generate comparable result for the following item:\n%s"
                     "\nException:%s", runner.benchmark_results, exc)
@@ -236,7 +241,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                     cassandra_fio_read_bw=item["cassandra_fio_lcs_64k_read"]["read"]["bw"],
                     cassandra_fio_write_bw=item["cassandra_fio_lcs_64k_write"]["write"]["bw"]
                 ))
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 LOGGER.warning(
                     "Failed to generate comparable result for the following item:\n%s"
                     "\nException:%s", item, exc)
@@ -250,13 +255,13 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
 
 
 class ScyllaNodeBenchmarkRunner:
-    # pylint: disable=broad-except
+
     """
     ScyllaNodeBenchmarkRunner installs and runs benchmarking
     tools on given cluster nodes and collects the output.
     """
 
-    def __init__(self, node: "BaseNode"):
+    def __init__(self, node: BaseNode):
         self._node = node
         self._remoter: RemoteCmdRunnerBase = node.remoter
         self.node_instance_type = self._get_db_node_instance_type()
@@ -296,7 +301,7 @@ class ScyllaNodeBenchmarkRunner:
             for pkg in package_list:
                 self._node.install_package(pkg, wait_for_package_manager=False)
             LOGGER.info("Ubuntu prerequisites for the node benchmarks installed.")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Failed to install Ubuntu prerequisites for the node benchmarking tools. "
                            "Exception:\n%s", exc)
 
@@ -342,7 +347,7 @@ class ScyllaNodeBenchmarkRunner:
             for job in cassandra_fio_jobs:
                 jsoned_output.update({f'cassandra_fio_{job["jobname"]}': job})
             self.benchmark_results.update(jsoned_output)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Failed to get cassandra-fio result for node %s with exception:\n%s", self.node_name, exc)
 
     def run_benchmarks(self):

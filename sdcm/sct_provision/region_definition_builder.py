@@ -13,13 +13,11 @@
 import abc
 from dataclasses import dataclass
 from functools import cache
-from typing import List, Dict, Type
 
 from sdcm.keystore import KeyStore, SSHKey
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.types import NodeTypeType
-
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 from sdcm.sct_provision.user_data_objects.scylla import ScyllaUserDataObject
 from sdcm.sct_provision.user_data_objects.sshd import SshdUserDataObject
@@ -36,7 +34,7 @@ class RegionDefinition:
     test_id: str
     region: str
     availability_zone: str
-    definitions: List[InstanceDefinition]
+    definitions: list[InstanceDefinition]
 
 
 @dataclass
@@ -55,7 +53,7 @@ class DefinitionBuilder(abc.ABC):
     which maps sct params to proper attributes in InstanceDefinition.
     """
     BACKEND: str
-    SCT_PARAM_MAPPER: Dict[NodeTypeType, ConfigParamsMap]
+    SCT_PARAM_MAPPER: dict[NodeTypeType, ConfigParamsMap]
     REGION_MAP: str
 
     def __init__(self, params: SCTConfiguration, test_config: TestConfig) -> None:
@@ -64,7 +62,7 @@ class DefinitionBuilder(abc.ABC):
         self.test_id = self.params.get("test_id")
 
     @property
-    def regions(self) -> List[str]:
+    def regions(self) -> list[str]:
         return self.params.get(self.REGION_MAP)
 
     def build_instance_definition(self, region: str, node_type: NodeTypeType, index: int, instance_type: str = None) -> InstanceDefinition:
@@ -89,7 +87,7 @@ class DefinitionBuilder(abc.ABC):
                                   user_data=user_data
                                   )
 
-    def build_region_definition(self, region: str, availability_zone: str, n_db_nodes: int,  # pylint: disable=too-many-arguments
+    def build_region_definition(self, region: str, availability_zone: str, n_db_nodes: int,
                                 n_loader_nodes: int, n_monitor_nodes: int) -> RegionDefinition:
         """Builds instances definitions for given region"""
         definitions = []
@@ -108,7 +106,7 @@ class DefinitionBuilder(abc.ABC):
         return RegionDefinition(backend=self.BACKEND, test_id=self.test_id, region=region,
                                 availability_zone=availability_zone, definitions=definitions)
 
-    def build_all_region_definitions(self) -> List[RegionDefinition]:
+    def build_all_region_definitions(self) -> list[RegionDefinition]:
         """Builds all instances definitions in all regions based on SCT test configuration."""
         region_definitions = []
         availability_zone = self.params.get("availability_zone")
@@ -127,7 +125,7 @@ class DefinitionBuilder(abc.ABC):
     def _get_ssh_key() -> SSHKey:
         return KeyStore().get_gce_ssh_key_pair()
 
-    def _get_node_count_for_each_region(self, n_str: str) -> List[int]:
+    def _get_node_count_for_each_region(self, n_str: str) -> list[int]:
         """generates node count for each region from configuration parameter string (e.g. n_db_nodes).
         When parameter string has less regions defined than regions, fills with zero for each missing region.
 
@@ -136,8 +134,8 @@ class DefinitionBuilder(abc.ABC):
         region_count = len(regions)
         return ([int(v) for v in str(n_str).split()] + [0] * region_count)[:region_count]
 
-    def _get_user_data_objects(self, instance_name: str, node_type: NodeTypeType) -> List[SctUserDataObject]:
-        user_data_object_classes: List[Type[SctUserDataObject]] = [
+    def _get_user_data_objects(self, instance_name: str, node_type: NodeTypeType) -> list[SctUserDataObject]:
+        user_data_object_classes: list[type[SctUserDataObject]] = [
             SyslogNgUserDataObject,
             SshdUserDataObject,
             ScyllaUserDataObject,
@@ -159,7 +157,7 @@ class RegionDefinitionBuilder:
     def __init__(self) -> None:
         self._builder_classes = {}
 
-    def register_builder(self, backend: str, builder_class: Type[DefinitionBuilder]) -> None:
+    def register_builder(self, backend: str, builder_class: type[DefinitionBuilder]) -> None:
         """Registers builder for given backend
 
         Must be used before calling RegionDefinitionBuilder for given backend."""

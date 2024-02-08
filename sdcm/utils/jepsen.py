@@ -11,14 +11,12 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import uuid
 import logging
-from typing import Optional
+import uuid
 from functools import cached_property
 
-from sdcm.utils.common import list_logs_by_test_id, get_free_port
-from sdcm.utils.docker_utils import ContainerManager, Container, DockerException
-
+from sdcm.utils.common import get_free_port, list_logs_by_test_id
+from sdcm.utils.docker_utils import Container, ContainerManager, DockerException
 
 JEPSEN_IMAGE = "tjake/jepsen"
 JEPSEN_RESULTS_PORT = 8080
@@ -53,7 +51,7 @@ class JepsenResults:
             raise DockerException(f"{self._jepsen_container}: {res.output.decode('utf-8')}")
 
     @property
-    def jepsen_results_port(self) -> Optional[int]:
+    def jepsen_results_port(self) -> int | None:
         return ContainerManager.get_container_port(self, "jepsen", JEPSEN_RESULTS_PORT)
 
     @staticmethod

@@ -11,19 +11,17 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import sys
-import time
-import logging
 import datetime
 import json
+import logging
 import os
+import sys
+import time
+from collections.abc import Callable
+from functools import cached_property, partial, wraps
 
-from functools import wraps, partial, cached_property
-from typing import Optional, Callable
 from sdcm.sct_events.database import DatabaseLogEvent
-
 from sdcm.sct_events.event_counter import EventCounterContextManager
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,17 +30,16 @@ class Retry(Exception):
     pass
 
 
-class retrying:  # pylint: disable=invalid-name,too-few-public-methods
+class retrying:
     """
         Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
 
-    # pylint: disable=too-many-arguments,redefined-outer-name
     def __init__(self, n=3, sleep_time=1,
                  allowed_exceptions=(Exception,), message="", timeout=0,
                  raise_on_exceeded=True):
         if n:
-            self.n = n  # number of times to retry  # pylint: disable=invalid-name
+            self.n = n  # number of times to retry
         else:
             self.n = sys.maxsize * 2 + 1
         self.sleep_time = sleep_time  # number seconds to sleep between retries
@@ -80,7 +77,7 @@ class retrying:  # pylint: disable=invalid-name,too-few-public-methods
         return inner
 
 
-timeout = partial(retrying, n=0)  # pylint: disable=invalid-name
+timeout = partial(retrying, n=0)
 
 
 def log_run_info(arg):
@@ -113,7 +110,7 @@ def log_run_info(arg):
             class_name = ""
             if args and func.__name__ in dir(args[0]):
                 class_name = " <%s>" % args[0].__class__.__name__
-            action = "%s%s" % (msg, class_name)
+            action = f"{msg}{class_name}"
             start_time = datetime.datetime.now()
             LOGGER.debug("BEGIN: %s", action)
             res = func(*args, **kwargs)
@@ -155,7 +152,7 @@ def measure_time(func):
     return wrapped
 
 
-def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None):
+def latency_calculator_decorator(original_function: Callable | None = None, *, legend: str | None = None):
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
 
@@ -163,12 +160,12 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
     :return: Wrapped method.
     """
     # calling this import here, because of circular import
-    from sdcm.utils import latency  # pylint: disable=import-outside-toplevel
+    from sdcm.utils import latency
 
     def wrapper(func):
 
         @wraps(func)
-        def wrapped(*args, **kwargs):  # pylint: disable=too-many-branches, too-many-locals
+        def wrapped(*args, **kwargs):
             start = time.time()
             start_node_list = args[0].cluster.nodes[:]
             reactor_stall_stats = {}
@@ -243,7 +240,7 @@ class NoValue(Exception):
     ...
 
 
-class optional_cached_property(cached_property):  # pylint: disable=invalid-name,too-few-public-methods
+class optional_cached_property(cached_property):
     """Extension for cached_property from Lib/functools.py with ability to ignore calculated result.
 
     To make it to not cache a value on a property call raise NoValue exception: it will be ignored and

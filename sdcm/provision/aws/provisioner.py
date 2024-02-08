@@ -15,34 +15,50 @@ import contextlib
 import datetime
 import logging
 import time
-from typing import List, Optional, Union
 
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import Instance
 
+from sdcm.provision.aws.constants import (
+    FLEET_LIMIT_EXCEEDED_ERROR,
+    SPOT_CAPACITY_NOT_AVAILABLE_ERROR,
+    SPOT_CNT_LIMIT,
+    SPOT_FLEET_LIMIT,
+    SPOT_REQUEST_TIMEOUT,
+    SPOT_STATUS_UNEXPECTED_ERROR,
+    STATUS_FULFILLED,
+)
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
-from sdcm.provision.aws.utils import ec2_services, ec2_clients, find_instance_by_id, set_tags_on_instances, \
-    wait_for_provision_request_done, create_spot_fleet_instance_request, \
-    create_spot_instance_request
-from sdcm.provision.aws.constants import SPOT_CNT_LIMIT, SPOT_FLEET_LIMIT, SPOT_REQUEST_TIMEOUT, STATUS_FULFILLED, \
-    SPOT_STATUS_UNEXPECTED_ERROR, FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR
-from sdcm.provision.common.provisioner import TagsType, ProvisionParameters, InstanceProvisionerBase
+from sdcm.provision.aws.utils import (
+    create_spot_fleet_instance_request,
+    create_spot_instance_request,
+    ec2_clients,
+    ec2_services,
+    find_instance_by_id,
+    set_tags_on_instances,
+    wait_for_provision_request_done,
+)
+from sdcm.provision.common.provisioner import (
+    InstanceProvisionerBase,
+    ProvisionParameters,
+    TagsType,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 
-class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-few-public-methods
+class AWSInstanceProvisioner(InstanceProvisionerBase):
     # TODO: Make them configurable
     _wait_interval = 5
     _iam_fleet_role = 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role'
 
-    def provision(  # pylint: disable=too-many-arguments
+    def provision(
             self,
             provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
             count: int,
-            tags: Union[List[TagsType], TagsType] = None,
-            names: List[str] = None) -> List[Instance]:
+            tags: list[TagsType] | TagsType = None,
+            names: list[str] = None) -> list[Instance]:
         if tags is None:
             tags = {}
         if isinstance(tags, dict):
@@ -101,7 +117,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
             count: int,
-            tags: List[TagsType]) -> List[Instance]:
+            tags: list[TagsType]) -> list[Instance]:
         instance_parameters_dict = instance_parameters.dict(
             exclude_none=True, exclude_defaults=True, exclude_unset=True, encode_user_data=False)
         LOGGER.info("[%s] Creating {count} on-demand instances using AMI id '%s' with following parameters:\n%s",
@@ -118,7 +134,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
                 set_tags_on_instances(
                     region_name=provision_parameters.region_name,
                     instance_ids=[instance.instance_id],
-                    tags={'Name': 'spot_fleet_{}_{}'.format(instance.instance_id, ind)} | instance_tags,
+                    tags={'Name': f'spot_fleet_{instance.instance_id}_{ind}'} | instance_tags,
                 )
         return instances
 
@@ -127,7 +143,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
             count: int,
-            tags: Union[List[TagsType], TagsType]) -> List[Instance]:
+            tags: list[TagsType] | TagsType) -> list[Instance]:
         rest_to_provision = count
         provisioned_instances = []
         while rest_to_provision:
@@ -157,7 +173,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
             count: int,
-            tags: List[TagsType]) -> List[Instance]:
+            tags: list[TagsType]) -> list[Instance]:
         request_id = create_spot_fleet_instance_request(
             region_name=provision_parameters.region_name,
             count=count,
@@ -186,7 +202,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             set_tags_on_instances(
                 region_name=provision_parameters.region_name,
                 instance_ids=[instance_id],
-                tags={'Name': 'spot_fleet_{}_{}'.format(instance_id, ind)} | instance_tags,
+                tags={'Name': f'spot_fleet_{instance_id}_{ind}'} | instance_tags,
             )
         self._ec2_client(provision_parameters).cancel_spot_fleet_requests(
             SpotFleetRequestIds=[request_id], TerminateInstances=False)
@@ -196,11 +212,11 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
     def _get_provisioned_fleet_instance_ids(
             self,
             provision_parameters: ProvisionParameters,
-            request_ids: List[str]) -> Optional[List[str]]:
+            request_ids: list[str]) -> list[str] | None:
         try:
             resp = self._ec2_client(provision_parameters).describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
             LOGGER.info("%s: - %s", request_ids, resp)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.info("%s: - failed to get status: %s", request_ids, exc)
             return []
         for req in resp['SpotFleetRequestConfigs']:
@@ -250,7 +266,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
             count: int,
-            tags: List[TagsType]) -> List[Instance]:
+            tags: list[TagsType]) -> list[Instance]:
         request_ids = create_spot_instance_request(
             region_name=provision_parameters.region_name,
             count=count,
@@ -278,7 +294,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             set_tags_on_instances(
                 region_name=provision_parameters.region_name,
                 instance_ids=[instance_id],
-                tags={'Name': 'spot_{}_{}'.format(instance_id, ind)} | instance_tags,
+                tags={'Name': f'spot_{instance_id}_{ind}'} | instance_tags,
             )
         self._ec2_client(provision_parameters).cancel_spot_instance_requests(SpotInstanceRequestIds=request_ids)
         return [find_instance_by_id(

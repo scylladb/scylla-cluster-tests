@@ -13,14 +13,13 @@
 
 
 import logging
-from typing import Literal, List, Union, Optional
+from typing import Literal
 
-from pydantic import Field, validator, BaseModel  # pylint: disable=no-name-in-module
+from pydantic import BaseModel, Field, validator
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.sct_config import SCTConfiguration
-
 
 SEED_PROVIDERS = [
     'org.apache.cassandra.locator.SimpleSeedProvider',
@@ -40,7 +39,7 @@ SASLAUTHD_AUTHENTICATOR = 'com.scylladb.auth.SaslauthdAuthenticator'
 LOGGER = logging.getLogger(__file__)
 
 
-class SeedProvider(BaseModel):  # pylint: disable=too-few-public-methods
+class SeedProvider(BaseModel):
     class_name: Literal[
         'org.apache.cassandra.locator.SimpleSeedProvider',
         'org.apache.cassandra.locator.GossipingPropertyFileSnitch',
@@ -55,9 +54,8 @@ class SeedProvider(BaseModel):  # pylint: disable=too-few-public-methods
         'GoogleCloudSnitch',
         'RackInferringSnitch',
     ]
-    parameters: List[dict] = None
+    parameters: list[dict] = None
 
-    # pylint: disable=no-self-argument,no-self-use
     @validator("class_name", pre=True, always=True)
     def set_class_name(cls, class_name: str):
         if class_name.startswith('org.apache.cassandra.locator.'):
@@ -65,7 +63,7 @@ class SeedProvider(BaseModel):  # pylint: disable=too-few-public-methods
         return 'org.apache.cassandra.locator.' + class_name
 
 
-class ServerEncryptionOptions(BaseModel):  # pylint: disable=too-few-public-methods
+class ServerEncryptionOptions(BaseModel):
     internode_encryption: Literal['all', 'none', 'dc', 'rack'] = 'none'
     certificate: str = 'conf/scylla.crt'
     keyfile: str = 'conf/scylla.key'
@@ -74,7 +72,7 @@ class ServerEncryptionOptions(BaseModel):  # pylint: disable=too-few-public-meth
     require_client_auth: bool = False
 
 
-class ClientEncryptionOptions(BaseModel):  # pylint: disable=too-few-public-methods
+class ClientEncryptionOptions(BaseModel):
     enabled: bool = False
     certificate: str = 'conf/scylla.crt'
     keyfile: str = 'conf/scylla.key'
@@ -83,7 +81,7 @@ class ClientEncryptionOptions(BaseModel):  # pylint: disable=too-few-public-meth
     require_client_auth: bool = False
 
 
-class RequestSchedulerOptions(BaseModel):  # pylint: disable=too-few-public-methods
+class RequestSchedulerOptions(BaseModel):
     throttle_limit: int = None
     default_weight: int = 1
     weights: int = 1
@@ -110,7 +108,7 @@ EndPointSnitchType = Literal[
 
 
 class ScyllaYamlAttrBuilderBase(AttrBuilder):
-    params: Union[SCTConfiguration, dict] = Field(as_dict=False)
+    params: SCTConfiguration | dict = Field(as_dict=False)
 
     @property
     def _cluster_backend(self) -> str:
@@ -128,7 +126,7 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         return None
 
     @property
-    def _regions(self) -> List[str]:
+    def _regions(self) -> list[str]:
         if self._cloud_provider == 'aws':
             regions = self.params.get('region_name')
         elif self._cloud_provider == 'gce':
@@ -151,7 +149,7 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         """
         if not self._regions:
             return False
-        return len(self._regions) > 1  # pylint: disable=no-member
+        return len(self._regions) > 1
 
     @property
     def _intra_node_comm_public(self) -> bool:
@@ -161,7 +159,7 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         return self.params.get('intra_node_comm_public')
 
     @property
-    def _authenticator(self) -> Optional[str]:
+    def _authenticator(self) -> str | None:
         return self.params.get('authenticator')
 
     @property
@@ -169,7 +167,7 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         return self._authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator', SASLAUTHD_AUTHENTICATOR]
 
     @property
-    def _authorizer(self) -> Optional[str]:
+    def _authorizer(self) -> str | None:
         return self.params.get('authorizer')
 
     @property

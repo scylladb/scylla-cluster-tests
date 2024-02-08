@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -17,18 +15,17 @@ import copy
 import logging
 import time
 
-from sdcm.utils.common import ParallelObject
 from sdcm.tester import silence
+from sdcm.utils.common import ParallelObject
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes
 
 LOGGER = logging.getLogger(__name__)
 
 
-class TenantMixin:  # pylint: disable=too-many-instance-attributes
+class TenantMixin:
     _testMethodName = "runTest"
 
-    # pylint: disable=too-many-instance-attributes
-    def __init__(self, db_cluster, loaders, monitors,  # pylint: disable=too-many-arguments
+    def __init__(self, db_cluster, loaders, monitors,
                  prometheus_db, params, test_config, cluster_index):
         self.db_cluster = db_cluster
         self.loaders = loaders
@@ -55,7 +52,7 @@ class TenantMixin:  # pylint: disable=too-many-instance-attributes
     def get_str_index(self):
         return f"{self.get_str_index_prefix}-{self.db_cluster.k8s_clusters[0].tenants_number}-tenants"
 
-    def id(self):  # pylint: disable=invalid-name
+    def id(self):
         if "Longevity" in self.__class__.__name__:
             return f"{self.test_config.test_id()}-{self._test_index}"
         # NOTE: performance results should not have unique IDs to be able to be used in comparisons
@@ -68,7 +65,7 @@ class TenantMixin:  # pylint: disable=too-many-instance-attributes
         return self.__str__()
 
 
-def get_tenants(test_class_instance):  # pylint: disable=too-many-branches,too-many-locals
+def get_tenants(test_class_instance):
     parent_test_class = None
     for base in test_class_instance.__class__.__bases__:
         if base.__name__.endswith("Test"):
@@ -135,7 +132,7 @@ def get_tenants(test_class_instance):  # pylint: disable=too-many-branches,too-m
 class MultiTenantTestMixin:
     tenants = None
 
-    def setUp(self):  # pylint: disable=invalid-name
+    def setUp(self):
         super().setUp()
         self.tenants = get_tenants(self)
 

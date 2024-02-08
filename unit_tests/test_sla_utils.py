@@ -4,18 +4,20 @@ import unittest
 from typing import NamedTuple
 
 from sdcm.cluster import BaseNode
+from sdcm.sla.libs.sla_utils import SchedulerRuntimeUnexpectedValue, SlaUtils
 from sdcm.utils.distro import Distro
-from sdcm.utils.loader_utils import (STRESS_ROLE_NAME_TEMPLATE,
-                                     STRESS_ROLE_PASSWORD_TEMPLATE,
-                                     SERVICE_LEVEL_NAME_TEMPLATE)
-from sdcm.sla.libs.sla_utils import SlaUtils, SchedulerRuntimeUnexpectedValue
-from test_lib.sla import Role, UserRoleBase, ServiceLevel
+from sdcm.utils.loader_utils import (
+    SERVICE_LEVEL_NAME_TEMPLATE,
+    STRESS_ROLE_NAME_TEMPLATE,
+    STRESS_ROLE_PASSWORD_TEMPLATE,
+)
+from test_lib.sla import Role, ServiceLevel, UserRoleBase
 from unit_tests.test_cluster import DummyDbCluster
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-class DummyNode(BaseNode):  # pylint: disable=abstract-method
+class DummyNode(BaseNode):
     _system_log = None
     is_enterprise = False
     distro = Distro.CENTOS7
@@ -73,19 +75,16 @@ class FakeServiceLevel(ServiceLevel):
 
 class FakePrometheus:
     @staticmethod
-    # pylint: disable=unused-argument
     def get_scylla_scheduler_runtime_ms(start_time, end_time, node_ip, irate_sample_sec='60s'):
         return {'127.0.0.1': {'sl:default': [410.5785714285715, 400.36428571428576],
                               'sl:sl200_abc': [177.11428571428573, 182.02857142857144],
                               'sl:sl50_abc': [477.11428571428573, 482.02857142857144]}
                 }
 
-    # pylint: disable=unused-argument,no-self-use
     def get_scylla_reactor_utilization(self, start_time, end_time, instance):
         return 100
 
 
-# pylint: disable=too-few-public-methods
 class FakeSession:
     default_timeout = 0
 

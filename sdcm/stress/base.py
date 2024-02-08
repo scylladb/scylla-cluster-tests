@@ -11,25 +11,26 @@
 #
 # Copyright (c) 2019 ScyllaDB
 
+import concurrent.futures
 import logging
 import random
-import concurrent.futures
-from pathlib import Path
 from functools import cached_property
+from pathlib import Path
 
 from sdcm.cluster import BaseLoaderSet
-from sdcm.utils.common import generate_random_string
-from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.remote.libssh2_client.exceptions import Failure
 from sdcm.sct_events import Severity
 from sdcm.sct_events.stress_events import StressEvent
-from sdcm.remote.libssh2_client.exceptions import Failure
+from sdcm.utils.common import generate_random_string
+from sdcm.utils.docker_remote import RemoteDocker
+
 LOGGER = logging.getLogger(__name__)
 
 
-class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
+class DockerBasedStressThread:
     DOCKER_IMAGE_PARAM_NAME = ""  # test yaml param that stores image
 
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None,  # pylint: disable=too-many-arguments
+    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None,
                  round_robin=False, params=None, stop_test_on_failure=True):
         self.loader_set: BaseLoaderSet = loader_set
         self.stress_cmd = stress_cmd
@@ -60,14 +61,14 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         if self.round_robin:
             self.stress_num = 1
             loaders = [self.loader_set.get_loader()]
-            LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
+            LOGGER.debug(f"Round-Robin through loaders, Selected loader is {loaders} ")
         else:
             loaders = self.loader_set.nodes
         self.loaders = loaders
 
         self.max_workers = len(loaders) * self.stress_num
         LOGGER.debug("Starting %d %s Worker threads", self.max_workers, self.__class__.__name__)
-        self.executor = concurrent.futures.ThreadPoolExecutor(  # pylint: disable=consider-using-with
+        self.executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=self.max_workers)
 
     def run(self):

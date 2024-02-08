@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -13,13 +11,13 @@
 #
 # Copyright (c) 2017 ScyllaDB
 
-from sdcm.tester import ClusterTester
 from sdcm import nemesis
+from sdcm.tester import ClusterTester
 
 
 class CorruptThenRepair(ClusterTester):
 
-    def test_destroy_data_then_repair_test_nodes(self):  # pylint: disable=invalid-name
+    def test_destroy_data_then_repair_test_nodes(self):
         # populates 100GB
         write_queue = self.populate_data_parallel(100, blocking=False)
 

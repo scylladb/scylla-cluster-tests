@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -19,7 +17,6 @@ from dataclasses import dataclass
 
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.sct_events.system import InfoEvent
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -105,7 +102,7 @@ class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
         for workload in self.ycsb_workloads:
             self.wait_no_compactions_running()
             self.run_fstrim_on_all_db_nodes()
-            InfoEvent(message="Starting YCSB %s (%s)" % (workload.name, workload.detailed_name)).publish()
+            InfoEvent(message=f"Starting YCSB {workload.name} ({workload.detailed_name})").publish()
             self.run_workload(stress_cmd=self._create_stress_cmd(workload), sub_type=workload.sub_type)
 
 

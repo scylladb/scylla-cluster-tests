@@ -15,14 +15,24 @@ import json
 import os
 import shutil
 import subprocess
-
 from pathlib import Path
-from typing import List, Any, Dict
+from typing import Any
 
-from azure.core.exceptions import ResourceNotFoundError, AzureError
-from azure.mgmt.network.models import (NetworkSecurityGroup, Subnet, PublicIPAddress, NetworkInterface, VirtualNetwork)
+from azure.core.exceptions import AzureError, ResourceNotFoundError
+from azure.mgmt.compute.models import (
+    Image,
+    InstanceViewStatus,
+    RunCommandResult,
+    VirtualMachine,
+)
+from azure.mgmt.network.models import (
+    NetworkInterface,
+    NetworkSecurityGroup,
+    PublicIPAddress,
+    Subnet,
+    VirtualNetwork,
+)
 from azure.mgmt.resource.resources.models import ResourceGroup
-from azure.mgmt.compute.models import VirtualMachine, Image, InstanceViewStatus, RunCommandResult
 
 
 def snake_case_to_camel_case(string):
@@ -32,18 +42,18 @@ def snake_case_to_camel_case(string):
 
 def dict_keys_to_camel_case(dct):
     if isinstance(dct, list):
-        return [dict_keys_to_camel_case(i) if isinstance(i, (dict, list)) else i for i in dct]
-    return {snake_case_to_camel_case(a): dict_keys_to_camel_case(b) if isinstance(b, (dict, list))
+        return [dict_keys_to_camel_case(i) if isinstance(i, dict | list) else i for i in dct]
+    return {snake_case_to_camel_case(a): dict_keys_to_camel_case(b) if isinstance(b, dict | list)
             else b for a, b in dct.items()}
 
 
-class WaitableObject:  # pylint: disable=too-few-public-methods
+class WaitableObject:
 
     def wait(self):
         pass
 
 
-class ResultableObject:  # pylint: disable=too-few-public-methods
+class ResultableObject:
 
     def __init__(self, stdout, stderr):
         self.stdout = stdout
@@ -62,7 +72,7 @@ class FakeResourceGroups:
     def __init__(self, path: Path):
         self.path = path
 
-    def create_or_update(self, resource_group_name: str, parameters: Dict[str, Any]) -> ResourceGroup:
+    def create_or_update(self, resource_group_name: str, parameters: dict[str, Any]) -> ResourceGroup:
         res_group = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}",
             "name": resource_group_name,
@@ -73,22 +83,22 @@ class FakeResourceGroups:
         }
         res_group.update(**parameters)
         (self.path / resource_group_name).mkdir(exist_ok=True)
-        with open(self.path / resource_group_name / "resource_group.json", "w", encoding="utf-8") as file:
-            json.dump(res_group, fp=file, indent=2)
+        with open(self.path / resource_group_name / "resource_group.json", "w", encoding="utf-8") as file_obj:
+            json.dump(res_group, fp=file_obj, indent=2)
         return ResourceGroup.deserialize(res_group)
 
     def get(self, name) -> ResourceGroup:
         try:
-            with open(self.path / name / "resource_group.json", "r", encoding="utf-8") as file:
+            with open(self.path / name / "resource_group.json", encoding="utf-8") as file:
                 return ResourceGroup.deserialize(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Resource group not found") from None
 
-    def list(self) -> List[ResourceGroup]:
+    def list(self) -> list[ResourceGroup]:
         rgs = []
         for name in os.listdir(self.path):
             try:
-                with open(self.path / str(name) / "resource_group.json", "r", encoding="utf-8") as file:
+                with open(self.path / str(name) / "resource_group.json", encoding="utf-8") as file:
                     rgs.append(ResourceGroup.deserialize(json.load(file)))
             except FileNotFoundError:
                 raise ResourceNotFoundError("Resource group not found") from None
@@ -103,19 +113,19 @@ class FakeNetworkSecurityGroup:
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def list(self, resource_group_name: str) -> List[NetworkSecurityGroup]:
+    def list(self, resource_group_name: str) -> list[NetworkSecurityGroup]:
         try:
             files = [file for file in os.listdir(self.path / resource_group_name) if file.startswith("nsg-")]
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
-        for file in files:
-            with open(self.path / resource_group_name / file, "r", encoding="utf-8") as file:
-                elements.append(NetworkSecurityGroup.deserialize(json.load(file)))
+        for file_name in files:
+            with open(self.path / resource_group_name / file_name, encoding="utf-8") as file_obj:
+                elements.append(NetworkSecurityGroup.deserialize(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(self, resource_group_name: str, network_security_group_name: str,
-                               parameters: Dict[str, Any]) -> WaitableObject:
+                               parameters: dict[str, Any]) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
                   f"/Microsoft.Network/networkSecurityGroups/default",
@@ -162,7 +172,7 @@ class FakeNetworkSecurityGroup:
 
     def get(self, resource_group_name: str, network_security_group_name: str) -> NetworkSecurityGroup:
         try:
-            with open(self.path / resource_group_name / f"nsg-{network_security_group_name}.json", "r",
+            with open(self.path / resource_group_name / f"nsg-{network_security_group_name}.json",
                       encoding="utf-8") as file:
                 return NetworkSecurityGroup.deserialize(json.load(file))
         except FileNotFoundError:
@@ -173,18 +183,18 @@ class FakeVirtualNetwork:
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def list(self, resource_group_name: str) -> List[VirtualNetwork]:
+    def list(self, resource_group_name: str) -> list[VirtualNetwork]:
         try:
             files = [file for file in os.listdir(self.path / resource_group_name) if file.startswith("vnet-")]
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
-        for file in files:
-            with open(self.path / resource_group_name / file, "r", encoding="utf-8") as file:
-                elements.append(VirtualNetwork.deserialize(json.load(file)))
+        for file_name in files:
+            with open(self.path / resource_group_name / file_name, encoding="utf-8") as file_obj:
+                elements.append(VirtualNetwork.deserialize(json.load(file_obj)))
         return elements
 
-    def begin_create_or_update(self, resource_group_name: str, virtual_network_name: str, parameters: Dict[str, Any]
+    def begin_create_or_update(self, resource_group_name: str, virtual_network_name: str, parameters: dict[str, Any]
                                ) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
@@ -213,7 +223,7 @@ class FakeVirtualNetwork:
 
     def get(self, resource_group_name: str, virtual_network_name: str) -> NetworkSecurityGroup:
         try:
-            with open(self.path / resource_group_name / f"vnet-{virtual_network_name}.json", "r", encoding="utf-8") as file:
+            with open(self.path / resource_group_name / f"vnet-{virtual_network_name}.json", encoding="utf-8") as file:
                 return VirtualNetwork.deserialize(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Network security group not found") from None
@@ -223,20 +233,20 @@ class FakeSubnet:
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def list(self, resource_group_name: str, virtual_network_name: str) -> List[Subnet]:
+    def list(self, resource_group_name: str, virtual_network_name: str) -> list[Subnet]:
         try:
             files = [file for file in os.listdir(self.path / resource_group_name) if
                      file.startswith(f"subnet-{virtual_network_name}")]
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
-        for file in files:
-            with open(self.path / resource_group_name / file, "r", encoding="utf-8") as file:
-                elements.append(Subnet.deserialize(json.load(file)))
+        for file_name in files:
+            with open(self.path / resource_group_name / file_name, encoding="utf-8") as file_obj:
+                elements.append(Subnet.deserialize(json.load(file_obj)))
         return elements
 
     def begin_create_or_update(self, resource_group_name: str, virtual_network_name: str, subnet_name: str,
-                               subnet_parameters: Dict[str, Any]) -> WaitableObject:
+                               subnet_parameters: dict[str, Any]) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
                   f"/Microsoft.Network/virtualNetworks/{virtual_network_name}/subnets/{subnet_name}",
@@ -263,7 +273,7 @@ class FakeSubnet:
 
     def get(self, resource_group_name: str, virtual_network_name: str, subnet_name: str) -> NetworkSecurityGroup:
         try:
-            with open(self.path / resource_group_name / f"subnet-{virtual_network_name}-{subnet_name}.json", "r",
+            with open(self.path / resource_group_name / f"subnet-{virtual_network_name}-{subnet_name}.json",
                       encoding="utf-8") as file:
                 return Subnet.deserialize(json.load(file))
         except FileNotFoundError:
@@ -274,18 +284,18 @@ class FakeIpAddress:
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def list(self, resource_group_name: str) -> List[PublicIPAddress]:
+    def list(self, resource_group_name: str) -> list[PublicIPAddress]:
         try:
             files = [file for file in os.listdir(self.path / resource_group_name) if file.startswith("ip-")]
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
-        for file in files:
-            with open(self.path / resource_group_name / file, "r", encoding="utf-8") as file:
-                elements.append(PublicIPAddress.deserialize(json.load(file)))
+        for file_name in files:
+            with open(self.path / resource_group_name / file_name, encoding="utf-8") as file_obj:
+                elements.append(PublicIPAddress.deserialize(json.load(file_obj)))
         return elements
 
-    def begin_create_or_update(self, resource_group_name: str, public_ip_address_name: str, parameters: Dict[str, Any]
+    def begin_create_or_update(self, resource_group_name: str, public_ip_address_name: str, parameters: dict[str, Any]
                                ) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
@@ -310,13 +320,13 @@ class FakeIpAddress:
                 "provisioningState": "Succeeded"
             }
         }
-        with open(self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "w", encoding="utf-8") as file:
-            json.dump(base, fp=file, indent=2)
+        with open(self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "w", encoding="utf-8") as file_obj:
+            json.dump(base, fp=file_obj, indent=2)
         return WaitableObject()
 
     def get(self, resource_group_name: str, public_ip_address_name: str) -> PublicIPAddress:
         try:
-            with open(self.path / resource_group_name / f"ip-{public_ip_address_name}.json", "r",
+            with open(self.path / resource_group_name / f"ip-{public_ip_address_name}.json",
                       encoding="utf-8") as file:
                 return PublicIPAddress.deserialize(json.load(file))
         except FileNotFoundError:
@@ -331,18 +341,18 @@ class FakeNetworkInterface:
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def list(self, resource_group_name: str) -> List[NetworkInterface]:
+    def list(self, resource_group_name: str) -> list[NetworkInterface]:
         try:
             files = [file for file in os.listdir(self.path / resource_group_name) if file.startswith("nic-")]
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
-        for file in files:
-            with open(self.path / resource_group_name / file, "r", encoding="utf-8") as file:
-                elements.append(NetworkInterface.deserialize(json.load(file)))
+        for file_name in files:
+            with open(self.path / resource_group_name / file_name, encoding="utf-8") as file_obj:
+                elements.append(NetworkInterface.deserialize(json.load(file_obj)))
         return elements
 
-    def begin_create_or_update(self, resource_group_name: str, network_interface_name: str, parameters: Dict[str, Any]
+    def begin_create_or_update(self, resource_group_name: str, network_interface_name: str, parameters: dict[str, Any]
                                ) -> WaitableObject:
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}/providers"
@@ -419,7 +429,7 @@ class FakeNetworkInterface:
 
     def get(self, resource_group_name: str, network_interface_name: str) -> NetworkInterface:
         try:
-            with open(self.path / resource_group_name / f"nic-{network_interface_name}.json", "r",
+            with open(self.path / resource_group_name / f"nic-{network_interface_name}.json",
                       encoding="utf-8") as file:
                 return NetworkInterface.deserialize(json.load(file))
         except FileNotFoundError:
@@ -430,7 +440,7 @@ class FakeNetworkInterface:
         return WaitableObject()
 
 
-class FakeNetwork:  # pylint: disable=too-few-public-methods
+class FakeNetwork:
 
     def __init__(self, path) -> None:
         self.path: Path = path
@@ -445,18 +455,18 @@ class FakeVirtualMachines:
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def list(self, resource_group_name: str) -> List[VirtualMachine]:
+    def list(self, resource_group_name: str) -> list[VirtualMachine]:
         try:
             files = [file for file in os.listdir(self.path / resource_group_name) if file.startswith("vm-")]
         except FileNotFoundError:
             raise ResourceNotFoundError("No resource group") from None
         elements = []
         for fle in files:
-            with open(self.path / resource_group_name / fle, "r", encoding="utf-8") as file:
+            with open(self.path / resource_group_name / fle, encoding="utf-8") as file:
                 elements.append(VirtualMachine.deserialize(json.load(file)))
         return elements
 
-    def begin_create_or_update(self, resource_group_name: str, vm_name: str, parameters: Dict[str, Any]
+    def begin_create_or_update(self, resource_group_name: str, vm_name: str, parameters: dict[str, Any]
                                ) -> WaitableObject:
         tags = parameters.pop("tags") if "tags" in parameters else {}
         parameters = dict_keys_to_camel_case(parameters)
@@ -544,9 +554,9 @@ class FakeVirtualMachines:
             json.dump(base, fp=file, indent=2)
         return WaitableObject()
 
-    def begin_update(self, resource_group_name: str, vm_name: str, parameters: Dict[str, Any]) -> WaitableObject:
+    def begin_update(self, resource_group_name: str, vm_name: str, parameters: dict[str, Any]) -> WaitableObject:
         try:
-            with open(self.path / resource_group_name / f"vm-{vm_name}.json", "r", encoding="utf-8") as file:
+            with open(self.path / resource_group_name / f"vm-{vm_name}.json", encoding="utf-8") as file:
                 v_m = json.loads(file.read())
         except FileNotFoundError:
             raise ResourceNotFoundError("Virtual Machine not found") from None
@@ -572,32 +582,31 @@ class FakeVirtualMachines:
 
     def get(self, resource_group_name: str, vm_name: str) -> VirtualMachine:
         try:
-            with open(self.path / resource_group_name / f"vm-{vm_name}.json", "r", encoding="utf-8") as file:
+            with open(self.path / resource_group_name / f"vm-{vm_name}.json", encoding="utf-8") as file:
                 return VirtualMachine.deserialize(json.load(file))
         except FileNotFoundError:
             raise ResourceNotFoundError("Virtual Machine not found") from None
 
-    def begin_restart(self, resource_group_name, vm_name  # pylint: disable=unused-argument, no-self-use
+    def begin_restart(self, resource_group_name, vm_name
                       ) -> WaitableObject:
         return WaitableObject()
 
-    # pylint: disable=unused-argument,no-self-use
     def begin_run_command(self, resource_group_name, vm_name, parameters) -> ResultableObject:
-        result = subprocess.run(parameters.script[0], shell=True, capture_output=True,  # pylint: disable=subprocess-run-check
-                                text=True)
+        result = subprocess.run(parameters.script[0], shell=True, capture_output=True,
+                                text=True, check=False)
         return ResultableObject(result.stdout, result.stderr)
 
 
-class FakeImages:  # pylint: disable=too-few-public-methods
+class FakeImages:
     def __init__(self, path: Path) -> None:
         self.path = path
 
-    def list_by_resource_group(self, resource_group_name) -> List[Image]:
+    def list_by_resource_group(self, resource_group_name) -> list[Image]:
         with open(self.path / resource_group_name / "azure_images_list.json", encoding="utf-8") as file:
             return [Image.deserialize(image) for image in json.load(file)]
 
 
-class Compute:  # pylint: disable=too-few-public-methods
+class Compute:
 
     def __init__(self, path) -> None:
         self.path: Path = path
@@ -605,7 +614,7 @@ class Compute:  # pylint: disable=too-few-public-methods
         self.images = FakeImages(self.path)
 
 
-class FakeResourceManagementClient:  # pylint: disable=too-few-public-methods
+class FakeResourceManagementClient:
 
     def __init__(self, path: Path) -> None:
         self.path = path

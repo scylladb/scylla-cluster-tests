@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 
 class NetworkInterfaceNotFound(Exception):
@@ -7,15 +6,15 @@ class NetworkInterfaceNotFound(Exception):
 
 
 @dataclass
-class NetworkInterface:  # pylint: disable=too-many-instance-attributes
-    ipv4_public_address: Optional[str]
+class NetworkInterface:
+    ipv4_public_address: str | None
     # AWS allows to have a few public IPv6 addresses per interface.
     ipv6_public_addresses: [str]
     # AWS allows to have a few private IPv4 addresses per interface.
     ipv4_private_addresses: [str]
     ipv6_private_address: str
     dns_private_name: str
-    dns_public_name: Optional[str]
+    dns_public_name: str | None
     device_index: int
 
 

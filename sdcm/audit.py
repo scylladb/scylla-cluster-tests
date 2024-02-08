@@ -10,15 +10,23 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2023 ScyllaDB
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
-from datetime import datetime, date
-from typing import Literal, Optional, List
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Literal
 
-from cassandra.util import uuid_from_time, datetime_from_uuid1  # pylint: disable=no-name-in-module
+from cassandra.util import (
+    datetime_from_uuid1,
+    uuid_from_time,
+)
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseCluster
 
 LOGGER = logging.getLogger(__name__)
 AuditStore = Literal["none", "table", "syslog"]
@@ -30,9 +38,9 @@ class AuditConfiguration:
     """https://enterprise.docs.scylladb.com/stable/operating-scylla/security/auditing.html"""
 
     store: AuditStore  # if store is none, then audit is disabled
-    categories: List[AuditCategory]
-    tables: List[str]
-    keyspaces: List[str]
+    categories: list[AuditCategory]
+    tables: list[str]
+    keyspaces: list[str]
 
     @classmethod
     def from_scylla_yaml(cls, scylla_yaml):
@@ -44,7 +52,7 @@ class AuditConfiguration:
 
 
 @dataclass
-class AuditLogRow:  # pylint: disable=too-many-instance-attributes
+class AuditLogRow:
     date: date
     node: str
     event_time: datetime
@@ -58,26 +66,26 @@ class AuditLogRow:  # pylint: disable=too-many-instance-attributes
     username: str
 
 
-class AuditLogReader:  # pylint: disable=too-few-public-methods
+class AuditLogReader:
 
     def __init__(self, cluster):
         self._cluster = cluster
 
-    def read(self, from_datetime: Optional[datetime] = None,
-             category: Optional[AuditCategory] = None,
-             operation: Optional[str] = None,
+    def read(self, from_datetime: datetime | None = None,
+             category: AuditCategory | None = None,
+             operation: str | None = None,
              limit_rows: int = 1000
-             ) -> List[AuditLogRow]:
+             ) -> list[AuditLogRow]:
         raise NotImplementedError()
 
 
-class TableAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
+class TableAuditLogReader(AuditLogReader):
 
-    def read(self, from_datetime: Optional[datetime] = None,
-             category: Optional[AuditCategory] = None,
-             operation: Optional[str] = None,
+    def read(self, from_datetime: datetime | None = None,
+             category: AuditCategory | None = None,
+             operation: str | None = None,
              limit_rows: int = 1000
-             ) -> List[AuditLogRow]:
+             ) -> list[AuditLogRow]:
         """Return audit log rows based on the given filters."""
         where_list = []
         if from_datetime:
@@ -108,19 +116,19 @@ class TableAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-met
         return rows
 
 
-def get_audit_log_rows(node,  # pylint: disable=too-many-locals
-                       from_datetime: Optional[datetime] = None,
-                       category: Optional[AuditCategory] = None,
-                       operation: Optional[str] = None,
+def get_audit_log_rows(node,
+                       from_datetime: datetime | None = None,
+                       category: AuditCategory | None = None,
+                       operation: str | None = None,
                        limit_rows: int = 1000
-                       ) -> List[AuditLogRow]:
+                       ) -> list[AuditLogRow]:
     with node.open_system_log(on_datetime=from_datetime) as log_file:
         found_rows = 0
         for line in log_file:
             if '!NOTICE' in line[:120] and 'scylla-audit' in line[:120]:
                 while line[-2] != '"':
                     # read multiline audit log (must end with ")
-                    line += log_file.readline()
+                    line += log_file.readline()  # noqa: PLW2901
                 audit_data = line.split(': "', maxsplit=1)[-1]
                 try:
                     node, cat, consistency, table, keyspace_name, opr, source, username, error = audit_data.split(
@@ -152,11 +160,11 @@ def get_audit_log_rows(node,  # pylint: disable=too-many-locals
                     break
 
 
-class SyslogAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-methods
+class SyslogAuditLogReader(AuditLogReader):
 
-    def read(self, from_datetime: Optional[datetime] = None, category: Optional[AuditCategory] = None,
-             operation: Optional[str] = None,
-             limit_rows: int = 1000) -> List:
+    def read(self, from_datetime: datetime | None = None, category: AuditCategory | None = None,
+             operation: str | None = None,
+             limit_rows: int = 1000) -> list:
         """Return audit log rows from syslog based on the given filters."""
         rows = []
         for node in self._cluster.nodes:
@@ -172,7 +180,7 @@ class SyslogAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-me
 class Audit:
     """Manage audit state and query audit log on Scylla cluster."""
 
-    def __init__(self, cluster: "BaseCluster"):
+    def __init__(self, cluster: BaseCluster):
         self._cluster = cluster
         self._configuration = self._get_audit_configuration()
 
@@ -203,9 +211,9 @@ class Audit:
         LOGGER.debug("Audit configuration completed")
         self._configuration = audit_configuration
 
-    def get_audit_log(self, from_datetime: Optional[datetime] = None, category: Optional[AuditCategory] = None,
-                      operation: Optional[str] = None,
-                      limit_rows: int = 1000) -> List:
+    def get_audit_log(self, from_datetime: datetime | None = None, category: AuditCategory | None = None,
+                      operation: str | None = None,
+                      limit_rows: int = 1000) -> list:
         """Return audit log rows based on the given filters."""
         reader: AuditLogReader
         if not self.is_enabled():

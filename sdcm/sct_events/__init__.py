@@ -14,7 +14,7 @@
 import enum
 import json
 import logging
-from typing import Protocol, Optional, Type, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 
 class Severity(enum.Enum):
@@ -29,12 +29,11 @@ class Severity(enum.Enum):
 @runtime_checkable
 class SctEventProtocol(Protocol):
     base: str
-    type: Optional[str]
-    subtype: Optional[str]
-    event_timestamp: Optional[float]
+    type: str | None
+    subtype: str | None
+    event_timestamp: float | None
     severity: Severity
 
-    # pylint: disable=super-init-not-called
     def __init__(self, *args, **kwargs):
         ...
 
@@ -47,7 +46,7 @@ class SctEventProtocol(Protocol):
                           name: str,
                           /, *,
                           abstract: bool = False,
-                          mixin: Optional[Type] = None,
+                          mixin: type | None = None,
                           **kwargs) -> None:
         ...
 
@@ -62,7 +61,7 @@ class SctEventProtocol(Protocol):
     def publish(self, warn_not_ready: bool = True) -> None:
         ...
 
-    def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None:
+    def publish_or_dump(self, default_logger: logging.Logger | None = None, warn_not_ready: bool = True) -> None:
         ...
 
     def to_json(self) -> str:
@@ -73,7 +72,7 @@ class SctEventProtocol(Protocol):
 _SAVED_DEFAULT = json.JSONEncoder().default  # save default method.
 
 
-def _new_default(self, obj):  # pylint: disable=unused-argument
+def _new_default(self, obj):
     if isinstance(obj, enum.Enum):
         return obj.name  # could also be obj.value
     else:

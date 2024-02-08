@@ -7,17 +7,16 @@ import threading
 import time
 import traceback
 from dataclasses import dataclass, fields
-from typing import Literal, TYPE_CHECKING, get_type_hints, get_origin
+from typing import TYPE_CHECKING, Literal, get_origin, get_type_hints
 
 from prettytable import PrettyTable
 
 from sdcm import wait
 
 if TYPE_CHECKING:
-    from sdcm.cluster import BaseScyllaCluster, BaseCluster
+    from sdcm.cluster import BaseCluster, BaseScyllaCluster
 
 
-# pylint: disable=too-many-instance-attributes
 @dataclass
 class ConfigParams:
     mode: Literal['random', 'table', 'partition', 'aggregate', 'table_and_aggregate']
@@ -95,8 +94,6 @@ class OneOperationStat:
     success: bool = None
     cmd: str = None
 
-# pylint: disable=too-many-instance-attributes
-
 
 class OperationThread:
     """
@@ -149,7 +146,7 @@ class OperationThread:
 
             self.log.debug("Thread operations queue depleted.")
 
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             self.log.error(traceback.format_exc())
             self.log.error("Encountered exception while performing a operation:\n%s", exc)
 

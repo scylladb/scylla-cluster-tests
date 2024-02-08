@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -13,23 +11,23 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import contextlib
 import logging
 import os
 import time
 import traceback
-import contextlib
-
-from typing import Optional
 
 import pytest
 from deepdiff import DeepDiff
 
-from functional_tests.scylla_operator.libs.auxiliary import ScyllaOperatorFunctionalClusterTester, sct_abs_path
+from functional_tests.scylla_operator.libs.auxiliary import (
+    ScyllaOperatorFunctionalClusterTester,
+    sct_abs_path,
+)
 from sdcm.cluster_k8s import ScyllaPodCluster
 from sdcm.utils import version_utils
 
-
-TESTER: Optional[ScyllaOperatorFunctionalClusterTester] = None
+TESTER: ScyllaOperatorFunctionalClusterTester | None = None
 LOGGER = logging.getLogger(__name__)
 
 
@@ -43,17 +41,17 @@ LOGGER = logging.getLogger(__name__)
 # TODO: add support for multiDC setups
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
-def pytest_runtest_makereport(item, call):  # pylint: disable=unused-argument
+def pytest_runtest_makereport(item, call):
     # Populate test result to test function instance
     outcome = yield
     rep = outcome.get_result()
     if rep.skipped:
-        item._test_result = ('SKIPPED', rep.longrepr[2])  # pylint: disable=protected-access
-        TESTER.update_test_status(item.nodeid, *item._test_result)  # pylint: disable=protected-access
+        item._test_result = ('SKIPPED', rep.longrepr[2])
+        TESTER.update_test_status(item.nodeid, *item._test_result)
     elif rep.passed:
-        item._test_result = ('SUCCESS', None)  # pylint: disable=protected-access
+        item._test_result = ('SUCCESS', None)
     elif not rep.passed:
-        item._test_result = ('FAILED', str(rep.longrepr))  # pylint: disable=protected-access
+        item._test_result = ('FAILED', str(rep.longrepr))
 
 
 @pytest.fixture(autouse=True, name="harvest_test_results")
@@ -63,14 +61,14 @@ def fixture_harvest_test_results(request, tester: ScyllaOperatorFunctionalCluste
     def publish_test_result():
         tester.update_test_status(
             request.node.nodeid,
-            *request.node._test_result)  # pylint: disable=protected-access
+            *request.node._test_result)
 
     request.addfinalizer(publish_test_result)
 
 
 @pytest.fixture(autouse=True, scope='package', name="tester")
 def fixture_tester() -> ScyllaOperatorFunctionalClusterTester:
-    global TESTER  # pylint: disable=global-statement
+    global TESTER  # noqa: PLW0603
     os.chdir(sct_abs_path())
     tester_inst = ScyllaOperatorFunctionalClusterTester()
     TESTER = tester_inst  # putting tester global, so we can report skipped test (one with mark.skip)
@@ -175,7 +173,7 @@ def _bring_cluster_back_to_original_state(
             db_cluster.restart_scylla()
         db_cluster.wait_for_nodes_up_and_normal(
             nodes=db_cluster.nodes, verification_node=db_cluster.nodes[0])
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # noqa: BLE001
         tester.healthy_flag = False
         pytest.fail("Failed to bring cluster nodes back to original state due to :\n" +
                     "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))

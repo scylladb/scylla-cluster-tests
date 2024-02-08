@@ -11,22 +11,21 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
 import os
 import re
+import tempfile
 import time
 import uuid
-import tempfile
-import logging
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.remote import FailuresWatcher
+from sdcm.sct_events.loaders import YcsbStressEvent
+from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
 from sdcm.utils import alternator
-from sdcm.utils.common import FileFollowerThread
+from sdcm.utils.common import FileFollowerThread, generate_random_string
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.utils.common import generate_random_string
-from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
 
 LOGGER = logging.getLogger(__name__)
 
@@ -67,7 +66,6 @@ class YcsbStatsPublisher(FileFollowerThread):
             self.set_metric('verify', stat['status'], float(stat['value']))
 
     def run(self):
-        # pylint: disable=too-many-nested-blocks
 
         # 729.39 current ops/sec;
         # [READ: Count=510, Max=195327, Min=2011, Avg=4598.69, 90=5743, 99=12583, 99.9=194815, 99.99=195327]
@@ -103,23 +101,23 @@ class YcsbStatsPublisher(FileFollowerThread):
                             for key, value in match.groupdict().items():
                                 if not key == 'count':
                                     try:
-                                        value = float(value) / 1000.0
+                                        value = float(value) / 1000.0  # noqa: PLW2901
                                     except ValueError:
-                                        value = float(0)
+                                        value = float(0)  # noqa: PLW2901
                                 self.set_metric(operation, key, float(value))
 
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     LOGGER.exception("fail to send metric")
 
 
-class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class YcsbStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.ycsb"
 
     def copy_template(self, docker):
         if self.params.get('alternator_use_dns_routing'):
             target_address = 'alternator'
-        else:
+        else:  # noqa: PLR5501
             if hasattr(self.node_list[0], 'parent_cluster'):
                 target_address = self.node_list[0].parent_cluster.get_node().cql_address
             else:
@@ -129,7 +127,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             dynamodb_teample = dedent('''
                 measurementtype=hdrhistogram
                 dynamodb.awsCredentialsFile = /tmp/aws_empty_file
-                dynamodb.endpoint = http://{0}:{1}
+                dynamodb.endpoint = http://{}:{}
                 dynamodb.connectMax = 200
                 requestdistribution = uniform
                 dynamodb.consistentReads = true
@@ -238,17 +236,16 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'ycsb-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
+        log_file_name = os.path.join(loader.logdir, f'ycsb-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
         LOGGER.debug('ycsb-stress local log: %s', log_file_name)
 
-        def raise_event_callback(sentinel, line):  # pylint: disable=unused-argument
+        def raise_event_callback(sentinel, line):
             if line:
                 YcsbStressEvent.error(node=loader, stress_cmd=stress_cmd, errors=[line, ]).publish()
 
         LOGGER.debug("running: %s", stress_cmd)
 
-        node_cmd = 'cd /YCSB && {}'.format(stress_cmd)
+        node_cmd = f'cd /YCSB && {stress_cmd}'
 
         YcsbStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
 

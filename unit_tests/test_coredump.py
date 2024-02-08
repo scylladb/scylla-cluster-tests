@@ -1,17 +1,22 @@
-import unittest
 import os
-import time
 import tempfile
+import time
+import unittest
 from abc import abstractmethod
 
 from sdcm.cluster import BaseNode
-from sdcm.coredump import CoredumpExportSystemdThread, CoreDumpInfo, CoredumpExportFileThread, CoredumpThreadBase
+from sdcm.coredump import (
+    CoredumpExportFileThread,
+    CoredumpExportSystemdThread,
+    CoreDumpInfo,
+    CoredumpThreadBase,
+)
 from unit_tests.lib.data_pickle import Pickler
 from unit_tests.lib.mock_remoter import MockRemoter
 
 
-class FakeNode(BaseNode):  # pylint: disable=abstract-method
-    # pylint: disable=super-init-not-called
+class FakeNode(BaseNode):
+
     def __init__(self, remoter, logdir):
         self.remoter = remoter
         os.makedirs(logdir, exist_ok=True)
@@ -108,7 +113,7 @@ class CoredumpExportTestBase(unittest.TestCase):
             result_coredump_list = results[coredump_status]
             try:
                 self.assertEqual(expected_coredump_list, result_coredump_list)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 raise AssertionError(
                     f'Got unexpected results for {coredump_status}: {str(result_coredump_list)}\n{str(exc)}') from exc
 

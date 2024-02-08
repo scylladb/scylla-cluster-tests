@@ -12,15 +12,17 @@
 # Copyright (c) 2021 ScyllaDB
 
 import logging
-from time import sleep
 from datetime import datetime, timedelta
+from time import sleep
 
-from sdcm.tester import ClusterTester
-from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
-from sdcm.mgmt.cli import RepairTask
-from sdcm.mgmt.common import get_manager_repo_from_defaults, create_cron_list_from_timedelta
 from mgmt_cli_test import BackupFunctionsMixIn
-
+from sdcm.mgmt import TaskStatus, get_scylla_manager_tool
+from sdcm.mgmt.cli import RepairTask
+from sdcm.mgmt.common import (
+    create_cron_list_from_timedelta,
+    get_manager_repo_from_defaults,
+)
+from sdcm.tester import ClusterTester
 
 LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +54,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                                                auth_token=self.monitors.mgmt_auth_token)
         return mgr_cluster, current_manager_version
 
-    def test_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
+    def test_upgrade(self):
         manager_node = self.monitors.nodes[0]
 
         target_upgrade_server_version = self.params.get('target_scylla_mgmt_server_address')
@@ -70,7 +72,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             node_ip = scylla_manager_yaml["http"].split(":", maxsplit=1)[0]
             scylla_manager_yaml["http"] = f"{node_ip}:{new_manager_http_port}"
             scylla_manager_yaml["prometheus"] = f"{node_ip}:{self.params.get('manager_prometheus_port')}"
-            LOGGER.info("The new Scylla Manager is:\n{}".format(scylla_manager_yaml))
+            LOGGER.info(f"The new Scylla Manager is:\n{scylla_manager_yaml}")
         manager_node.restart_manager_server(port=new_manager_http_port)
         manager_tool = get_scylla_manager_tool(manager_node=manager_node)
         manager_tool.add_cluster(name="cluster_under_test", db_cluster=self.db_cluster,
@@ -277,9 +279,8 @@ def validate_previous_task_details(task, previous_task_details):
             # and as a result it could be a BIT imprecise
             if abs(delta.total_seconds()) > 60:
                 mismatched_details_name_list.append(detail_name)
-        else:
-            if current_value != previous_task_details[detail_name]:
-                mismatched_details_name_list.append(detail_name)
+        elif current_value != previous_task_details[detail_name]:
+            mismatched_details_name_list.append(detail_name)
     complete_error_description = _create_mismatched_details_error_message(previous_task_details,
                                                                           current_task_details,
                                                                           mismatched_details_name_list)

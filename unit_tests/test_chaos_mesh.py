@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -15,24 +13,28 @@
 # pylint: skip-file
 
 from dataclasses import dataclass, field
-from typing import Dict
 
+import pytest
 import yaml
 from invoke import Result
-import pytest
 
-from sdcm.utils.k8s.chaos_mesh import PodFailureExperiment, ExperimentStatus, ChaosMeshTimeout, ChaosMeshExperimentException, \
-    MemoryStressExperiment
+from sdcm.utils.k8s.chaos_mesh import (
+    ChaosMeshExperimentException,
+    ChaosMeshTimeout,
+    ExperimentStatus,
+    MemoryStressExperiment,
+    PodFailureExperiment,
+)
 
 
 @dataclass
 class DummyK8sCluster:
-    _commands: Dict[str, Result] = field(default_factory=dict)
+    _commands: dict[str, Result] = field(default_factory=dict)
     region_name: str = 'fake-region-1'
 
     def apply_file(self, config_path: str):
         """Parses file content to yaml and prints it."""
-        with open(config_path, "r", encoding="utf-8") as config_file:
+        with open(config_path, encoding="utf-8") as config_file:
             print(yaml.safe_load(config_file))
 
     def kubectl(self, command, *args, **kwargs):

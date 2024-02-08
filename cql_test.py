@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -31,7 +29,7 @@ class CQLExampleTest(ClusterTester):
         node = self.db_cluster.nodes[0]
         with self.db_cluster.cql_connection_patient(node) as session:
             self.create_keyspace(keyspace_name='ks', replication_factor=1)
-            # pylint: disable=no-member
+
             session.execute("""
                 CREATE TABLE ks.test1 (
                     k int,

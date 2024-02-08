@@ -11,19 +11,21 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import os
-import uuid
-import time
 import logging
+import os
+import time
+import uuid
 
 from sdcm.loader import CassandraHarryStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events.loaders import CassandraHarryEvent, CASSANDRA_HARRY_ERROR_EVENTS_PATTERNS
-from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.stress_thread import DockerBasedStressThread
+from sdcm.sct_events.loaders import (
+    CASSANDRA_HARRY_ERROR_EVENTS_PATTERNS,
+    CassandraHarryEvent,
+)
 from sdcm.stress.base import format_stress_cmd_error
+from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.common import FileFollowerThread
-
+from sdcm.utils.docker_remote import RemoteDocker
 
 LOGGER = logging.getLogger(__name__)
 
@@ -103,7 +105,7 @@ class CassandraHarryThread(DockerBasedStressThread):
                                                retry=0,
                                                )
                 result = self._parse_harry_summary(docker_run_result.stdout.splitlines())
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 errors_str = format_stress_cmd_error(exc)
                 if "timeout" in errors_str:
                     event_type = CassandraHarryEvent.timeout
@@ -124,7 +126,7 @@ class CassandraHarryThread(DockerBasedStressThread):
         return result
 
     @staticmethod
-    def _parse_harry_summary(lines):  # pylint: disable=too-many-branches
+    def _parse_harry_summary(lines):
         """
         Currently we only check if it succeeds or not.
         succeed sample:
@@ -132,7 +134,7 @@ class CassandraHarryThread(DockerBasedStressThread):
         INFO  [pool-6-thread-1] instance_id_IS_UNDEFINED 2021-01-19 13:46:49,835 Runner.java:255 - Completed
         """
         results = {}
-        if any(['Runner.java:255 - Completed' in line for line in lines]):  # pylint: disable=use-a-generator
+        if any(['Runner.java:255 - Completed' in line for line in lines]):
             results['status'] = 'completed'
         else:
             results['status'] = 'failed'

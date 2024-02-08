@@ -11,25 +11,30 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import re
+import collections
 import json
 import logging
-import collections
 import multiprocessing
-from typing import Tuple, Optional, Callable, Any, Dict, List, cast
-from pathlib import Path
+import re
+from collections import deque as tail
+from collections.abc import Callable
 from functools import partial
 from itertools import chain
-from collections import deque as tail
+from pathlib import Path
+from typing import Any, cast
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import SctEvent
-from sdcm.sct_events.system import TestResultEvent
 from sdcm.sct_events.events_device import get_events_main_device
-from sdcm.sct_events.events_processes import \
-    EVENTS_FILE_LOGGER_ID, EventsProcessesRegistry, BaseEventsProcess, \
-    start_events_process, get_events_process, verbose_suppress
-
+from sdcm.sct_events.events_processes import (
+    EVENTS_FILE_LOGGER_ID,
+    BaseEventsProcess,
+    EventsProcessesRegistry,
+    get_events_process,
+    start_events_process,
+    verbose_suppress,
+)
+from sdcm.sct_events.system import TestResultEvent
 
 EVENTS_LOG: str = "events.log"
 SUMMARY_LOG: str = "summary.log"
@@ -44,8 +49,8 @@ LINE_START_RE = re.compile(r"^\d{4}-\d{2}-\d{2} ")  # date in YYYY-MM-DD format
 LOGGER = logging.getLogger(__name__)
 
 
-class head(list):  # pylint: disable=invalid-name
-    def __init__(self, maxlen: Optional[int] = None):
+class head(list):
+    def __init__(self, maxlen: int | None = None):
         super().__init__()
         if maxlen is None:
             self.append = super().append
@@ -56,7 +61,7 @@ class head(list):  # pylint: disable=invalid-name
             super().append(item)
 
 
-class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing.Process):
+class EventsFileLogger(BaseEventsProcess[tuple[str, Any], None], multiprocessing.Process):
     def __init__(self, _registry: EventsProcessesRegistry):
         base_dir: Path = get_events_main_device(_registry=_registry).events_log_base_dir
 
@@ -117,7 +122,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
             with self.events_summary_log.open("wb", buffering=0) as fobj:
                 fobj.write(json.dumps(dict(self.events_summary), indent=4).encode("utf-8"))
 
-    def get_events_by_category(self, limit: Optional[int] = None) -> Dict[str, List[str]]:
+    def get_events_by_category(self, limit: int | None = None) -> dict[str, list[str]]:
         output = {}
         for severity, log_file in self.events_logs_by_severity.items():
             # Get first `limit' events with CRITICAL severity and last `limit' for other severities.
@@ -134,7 +139,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
                             event.append(line)
                 if event:
                     events_bucket.append("\n".join(event))
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 error_msg = f"{self}: failed to read {log_file}: {exc}"
                 LOGGER.error(error_msg)
                 if not events_bucket:
@@ -147,12 +152,12 @@ start_events_logger = partial(start_events_process, EVENTS_FILE_LOGGER_ID, Event
 get_events_logger = cast(Callable[..., EventsFileLogger], partial(get_events_process, EVENTS_FILE_LOGGER_ID))
 
 
-def get_events_grouped_by_category(limit: Optional[int] = None,
-                                   _registry: Optional[EventsProcessesRegistry] = None) -> Dict[str, List[str]]:
+def get_events_grouped_by_category(limit: int | None = None,
+                                   _registry: EventsProcessesRegistry | None = None) -> dict[str, list[str]]:
     return get_events_logger(_registry=_registry).get_events_by_category(limit=limit)
 
 
-def get_logger_event_summary(_registry: Optional[EventsProcessesRegistry] = None) -> dict:
+def get_logger_event_summary(_registry: EventsProcessesRegistry | None = None) -> dict:
     events_summary_log = get_events_logger(_registry=_registry).events_summary_log
     with verbose_suppress("Failed to read %s", events_summary_log):
         with events_summary_log.open() as fobj:

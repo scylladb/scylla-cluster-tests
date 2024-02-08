@@ -1,11 +1,12 @@
-from typing import NamedTuple, Callable
+from collections.abc import Callable
+from typing import NamedTuple
 
 from sdcm.cluster import BaseNode
 from sdcm.send_email import LongevityEmailReporter
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.tester import ClusterTester
-from sdcm.utils.udf import UDFS
 from sdcm.utils.uda import UDAS
+from sdcm.utils.udf import UDFS
 
 
 class UDVerification(NamedTuple):
@@ -104,7 +105,7 @@ class UDAUDFTest(ClusterTester):
             c7_value = row_result.c7_text
             assert row_query.verifier_func(c2_value, c3_value, c7_value), \
                 "Expected row values to not be None, at least one them was. " \
-                "c2_value: %s, c3_value: %s, c7 value: %s" % (c2_value, c3_value, c7_value)
+                f"c2_value: {c2_value}, c3_value: {c3_value}, c7 value: {c7_value}"
 
             for verification in verifications:
                 self.log.info("Running UDF verification: %s; query: %s", verification.name, verification.query)
@@ -126,5 +127,5 @@ class UDAUDFTest(ClusterTester):
             verification_query_result = session.execute(uda_verification.query).one()
 
         assert uda_verification.verifier_func(verification_query_result, avg_result), \
-            "UDA verifivation failed. UDA result: %s, Builtin AVG result: %s" % (verification_query_result, avg_result)
+            f"UDA verifivation failed. UDA result: {verification_query_result}, Builtin AVG result: {avg_result}"
         self.log.info("Finished running UDA verifications.")

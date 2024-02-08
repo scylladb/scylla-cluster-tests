@@ -55,7 +55,7 @@ def test_can_provision_instances_according_to_sct_configuration(params, test_con
 
 
 def test_fallback_on_demand_when_spot_fails(fallback_on_demand, params, test_config, azure_service, fake_remoter):
-    # pylint: disable=unused-argument
+
     fake_remoter.result_map = {r"sudo cloud-init status --wait": Result(stdout="..... \n status: done", stderr="nic", exited=0),
                                r"ls /tmp/cloud-init": Result(stdout="done", exited=0)}
     provision_sct_resources(params=params, test_config=test_config, azure_service=azure_service)

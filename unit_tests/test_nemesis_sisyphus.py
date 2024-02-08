@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
+
 import yaml
 
-from sdcm.nemesis import Nemesis, SisyphusMonkey
 from sdcm.cluster import BaseScyllaCluster
+from sdcm.nemesis import Nemesis, SisyphusMonkey
 
 PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False)
 
@@ -49,12 +50,12 @@ class FakeTester:
     def get_test_details(self):
         pass
 
-    def id(self):  # pylint: disable=invalid-name,no-self-use
+    def id(self):
         return 0
 
 
 class FakeNemesis(Nemesis):
-    def __new__(cls, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
+    def __new__(cls, tester_obj, termination_event, *args):
         return object.__new__(cls)
 
     def disrupt(self):
@@ -67,7 +68,7 @@ def test_list_all_available_nemesis(generate_file=True):
     tester.params["nemesis_seed"] = '1'
     sisyphus = SisyphusMonkey(tester, None)
 
-    subclasses = sisyphus._get_subclasses()  # pylint: disable=protected-access
+    subclasses = sisyphus._get_subclasses()
     disruption_list, disruptions_dict, disruption_classes = sisyphus.get_list_of_disrupt_methods(
         subclasses_list=subclasses, export_properties=True)
 
@@ -80,7 +81,7 @@ def test_list_all_available_nemesis(generate_file=True):
         with open('data_dir/nemesis_classes.yml', 'w', encoding="utf-8") as outfile2:
             yaml.dump(disruption_classes, outfile2, default_flow_style=False)
 
-    with open('data_dir/nemesis.yml', 'r', encoding="utf-8") as nemesis_file:
+    with open('data_dir/nemesis.yml', encoding="utf-8") as nemesis_file:
         static_nemesis_list = yaml.safe_load(nemesis_file)
 
     assert static_nemesis_list == disruptions_dict

@@ -11,20 +11,22 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List
-import os
-import time
 import getpass
+import os
 import socket
+import time
+
 from fabric import Connection
-from invoke.exceptions import UnexpectedExit, Failure
+from invoke.exceptions import Failure, UnexpectedExit
 from invoke.runners import Result
 from invoke.watchers import StreamWatcher
+
 from sdcm.utils.decorators import retrying
+
 from .base import CommandRunner, RetryableNetworkException
 
 
-class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
+class LocalCmdRunner(CommandRunner):
     def __init__(self, hostname: str = None, user: str = None):
         if hostname is None:
             hostname = socket.gethostname()
@@ -41,12 +43,12 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
     def _create_connection(self) -> Connection:
         return Connection(host=self.hostname, user=self.user)
 
-    def is_up(self, timeout: float = None) -> bool:  # pylint: disable=no-self-use
+    def is_up(self, timeout: float = None) -> bool:
         return True
 
-    def run(self, cmd: str, timeout: Optional[float] = None, ignore_status: bool = False,  # pylint: disable=too-many-arguments
-            verbose: bool = True, new_session: bool = False, log_file: Optional[str] = None, retry: int = 1,
-            watchers: Optional[List[StreamWatcher]] = None, change_context: bool = False) -> Result:
+    def run(self, cmd: str, timeout: float | None = None, ignore_status: bool = False,
+            verbose: bool = True, new_session: bool = False, log_file: str | None = None, retry: int = 1,
+            watchers: list[StreamWatcher] | None = None, change_context: bool = False) -> Result:
 
         watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
@@ -89,17 +91,17 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
         return result
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
-    def receive_files(  # pylint: disable=too-many-arguments,unused-argument
+    def receive_files(
             self, src: str, dst: str, delete_dst: bool = False, preserve_perm: bool = True,
-            preserve_symlinks: bool = False, timeout: float = 300) -> bool:  # pylint: disable=too-many-arguments,unused-argument
+            preserve_symlinks: bool = False, timeout: float = 300) -> bool:
         if src == dst:
             return True
         return self.run(f'cp {src} {dst}', timeout=timeout).ok
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
-    def send_files(  # pylint: disable=too-many-arguments,unused-argument
+    def send_files(
             self, src: str, dst: str, delete_dst: bool = False, preserve_symlinks: bool = False, verbose: bool = False,
-            timeout: float = 300) -> bool:  # pylint: disable=unused-argument
+            timeout: float = 300) -> bool:
         if src == dst:
             return True
         return self.run(f'cp {src} {dst}', timeout=timeout).ok

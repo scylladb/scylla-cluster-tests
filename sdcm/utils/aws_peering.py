@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2022 ScyllaDB
 
-import logging
 import itertools
+import logging
 
 from botocore.exceptions import ClientError
 

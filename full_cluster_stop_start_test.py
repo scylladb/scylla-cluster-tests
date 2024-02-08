@@ -30,7 +30,7 @@ class FullClusterStopStart(ClusterTester):
         time.sleep(60)
         # making sure all nodes are up after RestartSecs are over
         for node in nodes:
-            self.log.info("making sure node '{}' is up".format(node))
+            self.log.info(f"making sure node '{node}' is up")
             node.wait_db_up(verbose=True, timeout=300)
 
         stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_read_cmd'))

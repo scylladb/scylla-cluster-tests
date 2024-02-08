@@ -11,23 +11,23 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
+import logging
 import os
 import re
 import time
 import uuid
-import logging
 from pathlib import Path
 
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events.loaders import LatteStressEvent
+from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.common import (
     FileFollowerThread,
     generate_random_string,
-    get_sct_root_path,
     get_data_dir_path,
+    get_sct_root_path,
 )
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.stress.base import DockerBasedStressThread
 
 LOGGER = logging.getLogger(__name__)
 
@@ -86,15 +86,15 @@ class LatteStatsPublisher(FileFollowerThread):
                 try:
                     match = regex.search(line)
                     if match:
-                        for key, value in match.groupdict().items():
-                            value = float(value)
-                            self.set_metric(self.operation, key, float(value))
+                        for key, _value in match.groupdict().items():
+                            value = float(_value)
+                            self.set_metric(self.operation, key, value)
 
-                except Exception:  # pylint: disable=broad-except
+                except Exception:
                     LOGGER.exception("fail to send metric")
 
 
-class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+class LatteStressThread(DockerBasedStressThread):
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
 
@@ -178,8 +178,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'latte-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
+        log_file_name = os.path.join(loader.logdir, f'latte-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
         LOGGER.debug('latter-stress local log: %s', log_file_name)
 
         LOGGER.debug("running: %s", stress_cmd)
@@ -202,7 +201,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 )
                 return self.parse_final_output(result)
 
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=latte_stress_event, exc=exc)
 
         return {}

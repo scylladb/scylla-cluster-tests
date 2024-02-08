@@ -14,11 +14,18 @@
 import re
 import sys
 import time
-from typing import Any, Optional, Sequence, Type, List, Tuple
+from collections.abc import Sequence
 from traceback import format_stack
+from typing import Any
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, SystemEvent, InformationalEvent, LogEvent, LogEventProtocol
+from sdcm.sct_events.base import (
+    InformationalEvent,
+    LogEvent,
+    LogEventProtocol,
+    SctEvent,
+    SystemEvent,
+)
 from sdcm.sct_events.continuous_event import ContinuousEvent
 
 
@@ -49,19 +56,18 @@ class HWPerforanceEvent(SctEvent):
         return super().msgfmt + ": message={0.message}"
 
 
-class TestFrameworkEvent(InformationalEvent):  # pylint: disable=too-many-instance-attributes
+class TestFrameworkEvent(InformationalEvent):
     __test__ = False  # Mark this class to be not collected by pytest.
 
-    # pylint: disable=too-many-arguments
     def __init__(self,
                  source: Any,
-                 source_method: Optional = None,
-                 args: Optional[Sequence] = None,
-                 kwargs: Optional[dict] = None,
-                 message: Optional = None,
-                 exception: Optional = None,
-                 trace: Optional = None,
-                 severity: Optional[Severity] = None):
+                 source_method: Any | None = None,
+                 args: Sequence | None = None,
+                 kwargs: dict | None = None,
+                 message: Any | None = None,
+                 exception: Any | None = None,
+                 trace: Any | None = None,
+                 severity: Severity | None = None):
 
         if severity is None:
             severity = Severity.ERROR
@@ -156,7 +162,7 @@ class TestStepEvent(ContinuousEvent):
     def __init__(self,
                  step,
                  severity=Severity.NORMAL,
-                 publish_event=True):  # pylint: disable=redefined-builtin,too-many-arguments
+                 publish_event=True):
         self.step = step
         self.duration = None
         self.full_traceback = ""
@@ -200,13 +206,13 @@ class AwsKmsEvent(ThreadFailedEvent):
 
 
 class CoreDumpEvent(InformationalEvent):
-    # pylint: disable=too-many-arguments
+
     def __init__(self,
                  node: Any,
                  corefile_url: str,
                  backtrace: str,
                  download_instructions: str,
-                 source_timestamp: Optional[float] = None):
+                 source_timestamp: float | None = None):
 
         super().__init__(severity=Severity.ERROR)
 
@@ -244,7 +250,7 @@ class TestResultEvent(InformationalEvent, Exception):
     _head = f"{' TEST RESULTS ':=^{_marker_width}}"
     _ending = "=" * _marker_width
 
-    def __init__(self, test_status: str, events: dict, event_timestamp: Optional[float] = None):
+    def __init__(self, test_status: str, events: dict, event_timestamp: float | None = None):
         self._ok = test_status == "SUCCESS"
         super().__init__(severity=Severity.NORMAL if self._ok else Severity.ERROR)
 
@@ -281,9 +287,9 @@ class TestResultEvent(InformationalEvent, Exception):
 
 
 class InstanceStatusEvent(LogEvent, abstract=True):
-    STARTUP: Type[LogEventProtocol]
-    REBOOT: Type[LogEventProtocol]
-    POWER_OFF: Type[LogEventProtocol]
+    STARTUP: type[LogEventProtocol]
+    REBOOT: type[LogEventProtocol]
+    POWER_OFF: type[LogEventProtocol]
 
 
 InstanceStatusEvent.add_subevent_type("STARTUP", severity=Severity.WARNING, regex="kernel: Linux version")
@@ -297,5 +303,5 @@ INSTANCE_STATUS_EVENTS = (
     InstanceStatusEvent.POWER_OFF(),
 )
 
-INSTANCE_STATUS_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+INSTANCE_STATUS_EVENTS_PATTERNS: list[tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex, re.IGNORECASE), event) for event in INSTANCE_STATUS_EVENTS]

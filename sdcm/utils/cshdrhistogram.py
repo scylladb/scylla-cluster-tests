@@ -1,13 +1,11 @@
+import datetime
 import glob
 import os.path
-import datetime
 import sys
-
 from typing import Any
 
 from hdrh.histogram import HdrHistogram
 from hdrh.log import HistogramLogReader
-
 
 CS_HDR_FILE_WC = "*/cs_hdr_*.hdr"
 TIME_INTERVAL = 300

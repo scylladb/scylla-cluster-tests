@@ -10,33 +10,36 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+from __future__ import annotations
 
+import json
 import os
 import re
 import time
-import json
 from abc import abstractmethod
-from typing import List, Optional, Dict
+from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
-from threading import Thread, Event
-from dataclasses import dataclass
+from threading import Event, Thread
+from typing import TYPE_CHECKING
 
 from sdcm.log import SDCMAdapter
 from sdcm.remote import NETWORK_EXCEPTIONS
+from sdcm.sct_events.decorators import raise_event_on_failure
+from sdcm.sct_events.system import CoreDumpEvent
 from sdcm.utils.decorators import timeout
 from sdcm.utils.version_utils import get_systemd_version
-from sdcm.sct_events.system import CoreDumpEvent
-from sdcm.sct_events.decorators import raise_event_on_failure
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 
-# pylint: disable=too-many-instance-attributes
 @dataclass
 class CoreDumpInfo:
     pid: str
-    node: 'BaseNode' = None
+    node: BaseNode = None
     corefile: str = ''
-    source_timestamp: Optional[float] = None
+    source_timestamp: float | None = None
     coredump_info: str = ''
     download_instructions: str = ''
     download_url: str = ''
@@ -58,11 +61,10 @@ class CoreDumpInfo:
             return f'CoreDump[{self.pid}, {self.corefile}]'
         return f'CoreDump[{self.pid}]'
 
-    # pylint: disable=too-many-arguments
     def update(self,
-               node: 'BaseNode' = None,
+               node: BaseNode = None,
                corefile: str = None,
-               source_timestamp: Optional[float] = None,
+               source_timestamp: float | None = None,
                coredump_info: str = None,
                download_instructions: str = None,
                download_url: str = None,
@@ -84,19 +86,19 @@ class CoreDumpInfo:
                 setattr(self, attr_name, attr_value)
 
 
-class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attributes
+class CoredumpThreadBase(Thread):
     lookup_period = 30
     upload_retry_limit = 3
     max_coredump_thread_exceptions = 10
 
-    def __init__(self, node: 'BaseNode', max_core_upload_limit: int):
+    def __init__(self, node: BaseNode, max_core_upload_limit: int):
         self.node = node
         self.log = SDCMAdapter(node.log, extra={"prefix": self.__class__.__name__})
         self.max_core_upload_limit = max_core_upload_limit
-        self.found: List[CoreDumpInfo] = []
-        self.in_progress: List[CoreDumpInfo] = []
-        self.completed: List[CoreDumpInfo] = []
-        self.uploaded: List[CoreDumpInfo] = []
+        self.found: list[CoreDumpInfo] = []
+        self.in_progress: list[CoreDumpInfo] = []
+        self.completed: list[CoreDumpInfo] = []
+        self.uploaded: list[CoreDumpInfo] = []
         self.termination_event = Event()
         self.exception = None
         super().__init__(daemon=True)
@@ -114,7 +116,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             try:
                 self.main_cycle_body()
                 exceptions_count = 0
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # noqa: BLE001
                 self.log.error("Following error occurred: %s", exc)
                 exceptions_count += 1
                 if exceptions_count == self.max_coredump_thread_exceptions:
@@ -128,7 +130,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
         new_cores = self.extract_info_from_core_pids(self.get_list_of_cores(), exclude_cores=self.found)
         self.push_new_cores_to_process(new_cores)
 
-    def push_new_cores_to_process(self, new_cores: List[CoreDumpInfo]):
+    def push_new_cores_to_process(self, new_cores: list[CoreDumpInfo]):
         self.found.extend(new_cores)
         for core_dump in new_cores:
             if 'bash' in core_dump.executable:
@@ -145,9 +147,9 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
 
     def _process_coredumps(
             self,
-            in_progress: List[CoreDumpInfo],
-            completed: List[CoreDumpInfo],
-            uploaded: List[CoreDumpInfo]
+            in_progress: list[CoreDumpInfo],
+            completed: list[CoreDumpInfo],
+            uploaded: list[CoreDumpInfo]
     ):
         """
         Get core files from node and report them
@@ -172,21 +174,21 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                 if result:
                     uploaded.append(core_info)
                     self.publish_event(core_info)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # noqa: BLE001
                 pass
 
     @abstractmethod
-    def get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
+    def get_list_of_cores(self) -> list[CoreDumpInfo] | None:
         ...
 
     def publish_event(self, core_info: CoreDumpInfo):
         try:
             core_info.publish_event()
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             self.log.error(f"Failed to publish coredump event due to the: {str(exc)}")
 
     def extract_info_from_core_pids(
-            self, new_cores: Optional[List[CoreDumpInfo]], exclude_cores: List[CoreDumpInfo]) -> List[CoreDumpInfo]:
+            self, new_cores: list[CoreDumpInfo] | None, exclude_cores: list[CoreDumpInfo]) -> list[CoreDumpInfo]:
         output = []
         for new_core_info in new_cores:
             found = False
@@ -208,10 +210,10 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
         upload_url = f'upload.scylladb.com/{coredump_id}/{os.path.basename(coredump)}'
         self.log.info('Uploading coredump %s to %s', coredump, upload_url)
         self.node.remoter.run("sudo curl --request PUT --fail --show-error --upload-file "
-                              "'%s' 'https://%s'" % (coredump, upload_url))
-        download_url = 'https://storage.cloud.google.com/%s' % upload_url
+                              f"'{coredump}' 'https://{upload_url}'")
+        download_url = f'https://storage.cloud.google.com/{upload_url}'
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
-        download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump)
+        download_instructions = f'gsutil cp gs://{upload_url} .\ngunzip {coredump}'
         core_info.download_url, core_info.download_instructions = download_url, download_instructions
 
     def upload_coredump(self, core_info: CoreDumpInfo):
@@ -225,7 +227,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             core_info.download_instructions = 'Coredump upload in progress'
             self._upload_coredump(core_info)
             return True
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             core_info.download_instructions = 'failed to upload core'
             self.log.error(f"Following error occurred during uploading coredump {core_info.corefile}: {str(exc)}")
             raise
@@ -255,13 +257,13 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                 return coredump
         if not self._is_pigz_installed:
             self._install_pigz()
-        try:  # pylint: disable=unreachable
+        try:
             if not self.node.remoter.run(f'sudo ls {coredump}.gz', verbose=False, ignore_status=True).ok:
                 self.node.remoter.run(f'sudo pigz --fast --keep {coredump}')
             coredump += '.gz'
-        except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
+        except NETWORK_EXCEPTIONS:
             raise
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # noqa: BLE001
             self.log.warning("Failed to compress coredump '%s': %s", coredump, ex)
         return coredump
 
@@ -295,11 +297,11 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         try:
             systemd_version = get_systemd_version(self.node.remoter.run(
                 "systemctl --version", ignore_status=True).stdout)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             self.log.warning("failed to get systemd version:", exc_info=True)
         return systemd_version
 
-    def get_list_of_cores_json(self) -> Optional[List[CoreDumpInfo]]:
+    def get_list_of_cores_json(self) -> list[CoreDumpInfo] | None:
         result = self.node.remoter.run(
             'sudo coredumpctl -q --json=short', verbose=False, ignore_status=True)
         if not result.ok:
@@ -322,7 +324,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                 pid_list.append(CoreDumpInfo(pid=str(dump['pid']), node=self.node))
         return pid_list
 
-    def get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
+    def get_list_of_cores(self) -> list[CoreDumpInfo] | None:
         if self.systemd_version >= 248:
             # since systemd/systemd@0689cfd we have option to get
             # the coredump information in json format
@@ -359,7 +361,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         return pids_list
 
     def update_coredump_info_with_more_information(self, core_info: CoreDumpInfo):
-        # pylint: disable=too-many-branches
+
         coredump_info = self._get_coredumpctl_info(core_info)
         corefile = ''
         executable = ''
@@ -397,7 +399,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         #
         # Coredump could be absent when file was removed
         for line in coredump_info.splitlines():
-            line = line.strip()
+            line = line.strip()  # noqa: PLW2901
             if line.startswith('Executable:'):
                 executable = line[12:].strip()
             elif line.startswith('Command Line:'):
@@ -407,7 +409,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                 # Storage: /var/lib/systemd/coredump/core.vi.1000.6c4de4c206a0476e88444e5ebaaac482.18554.1578994298000000.lz4 (inaccessible)
                 if "inaccessible" in line:
                     continue
-                line = line.replace('(present)', '')
+                line = line.replace('(present)', '')  # noqa: PLW2901
                 corefile = line[line.find(':') + 1:].strip()
             elif line.startswith('Timestamp:'):
                 timestring = None
@@ -430,7 +432,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                     else:
                         raise ValueError(f'Date has unknown format: {timestring}')
                     event_timestamp = datetime.strptime(timestring, fmt).timestamp()
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # noqa: BLE001
                     self.log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {str(exc)}")
         core_info.update(executable=executable, command_line=command_line, corefile=corefile,
                          source_timestamp=event_timestamp, coredump_info=coredump_info)
@@ -441,7 +443,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         """
         Get coredump backtraces.
 
-        :param pid: PID of the core.
+        :param core_info: coredump info.
         :return: fabric.Result output
         """
         output = self.node.remoter.run(
@@ -457,7 +459,7 @@ class CoredumpExportFileThread(CoredumpThreadBase):
     """
     checkup_time_core_to_complete = 1
 
-    def __init__(self, node: 'BaseNode', max_core_upload_limit: int, coredump_directories: List[str]):
+    def __init__(self, node: BaseNode, max_core_upload_limit: int, coredump_directories: list[str]):
         self.coredumps_directories = coredump_directories
         super().__init__(node=node, max_core_upload_limit=max_core_upload_limit)
 
@@ -474,7 +476,7 @@ class CoredumpExportFileThread(CoredumpThreadBase):
             raise RuntimeError("Distro is not supported")
 
     @staticmethod
-    def _extract_core_info_from_file_name(corefile: str) -> Dict[str, str]:
+    def _extract_core_info_from_file_name(corefile: str) -> dict[str, str]:
         data = os.path.splitext(corefile)[0].split('-')
         return {
             'host': data[0],
@@ -485,7 +487,7 @@ class CoredumpExportFileThread(CoredumpThreadBase):
             'source_timestamp': data[5],
         }
 
-    def get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
+    def get_list_of_cores(self) -> list[CoreDumpInfo] | None:
         output = []
         for directory in self.coredumps_directories:
             for corefile in self.node.remoter.sudo(f'ls {directory}', verbose=False, ignore_status=True).stdout.split():

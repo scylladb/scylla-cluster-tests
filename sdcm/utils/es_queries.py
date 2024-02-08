@@ -1,7 +1,5 @@
 import logging
-
 from datetime import datetime, timedelta
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,7 +34,7 @@ class QueryFilter:
         test_details = 'test_details.job_name:\"{}\" '.format(
             self.test_doc['_source']['test_details']['job_name'].split('/')[0])
         test_details += self.test_cmd_details()
-        test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
+        test_details += f' AND test_details.time_completed: {self.date_re}'
         test_details += ' AND test_details.test_name: {}'.format(self.test_name.replace(":", r"\:"))
         return test_details
 
@@ -95,8 +93,8 @@ class PerformanceQueryFilter(QueryFilter):
         test_details = self.build_filter_job_name()
         if not self.use_wide_query:
             test_details += self.test_cmd_details()
-            test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
-        test_details += ' AND {}'.format(self.build_filter_test_name())
+            test_details += f' AND test_details.time_completed: {self.date_re}'
+        test_details += f' AND {self.build_filter_test_name()}'
         return test_details
 
     def build_filter_job_name(self):
@@ -149,7 +147,7 @@ class PerformanceQueryFilter(QueryFilter):
             full_job_name = self.test_doc['_source']['test_details']['job_name']
             if '/' in full_job_name:
                 full_job_name = f'"{full_job_name}"'
-            job_filter_query = r'test_details.job_name.keyword: {} '.format(full_job_name)
+            job_filter_query = rf'test_details.job_name.keyword: {full_job_name} '
 
         return job_filter_query
 
@@ -199,8 +197,8 @@ class QueryFilterCS(QueryFilter):
                         continue
                     param_val = self.test_doc['_source']['test_details'][cassandra_stress][param]
                     if param in ['profile', 'ops']:
-                        param_val = "\"{}\"".format(param_val)
-                    test_details += ' AND test_details.{}.{}: {}'.format(cassandra_stress, param, param_val)
+                        param_val = f"\"{param_val}\""
+                    test_details += f' AND test_details.{cassandra_stress}.{param}: {param_val}'
         return test_details
 
 
@@ -238,7 +236,7 @@ class QueryFilterYCSB(QueryFilter):
                 param_val = self.test_doc['_source']['test_details'][ycsb].get(param)
                 if not param_val:
                     continue
-                test_details += ' AND test_details.{}.{}: {}'.format(ycsb, param, param_val)
+                test_details += f' AND test_details.{ycsb}.{param}: {param_val}'
         return test_details
 
 
@@ -255,7 +253,7 @@ class CDCQueryFilter(QueryFilter):
         test_details = 'test_details.job_name: \"{}\" '.format(
             self.test_doc['_source']['test_details']['job_name'].split('/')[0])
         test_details += self.test_cmd_details()
-        test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
+        test_details += f' AND test_details.time_completed: {self.date_re}'
         test_details += r' AND test_details.sub_type: cdc* '
         return test_details
 

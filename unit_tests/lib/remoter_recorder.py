@@ -12,8 +12,8 @@
 # Copyright (c) 2020 ScyllaDB
 
 import json
-from typing import Optional, List
-from sdcm.remote.remote_base import StreamWatcher, Result
+
+from sdcm.remote.remote_base import Result, StreamWatcher
 from sdcm.remote.remote_cmd_runner import RemoteCmdRunner
 from unit_tests.lib.data_pickle import Pickler
 
@@ -29,9 +29,9 @@ class RemoterRecorder(RemoteCmdRunner):
     """
     responses = {}
 
-    def run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
+    def run(self, cmd: str, timeout: float | None = None,
             ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-            log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None,
+            log_file: str | None = None, retry: int = 1, watchers: list[StreamWatcher] | None = None,
             change_context: bool = False) -> Result:
         try:
             output = super().run(cmd, timeout, ignore_status, verbose, new_session, log_file, retry, watchers, change_context)

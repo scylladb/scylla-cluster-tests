@@ -13,7 +13,6 @@
 import json
 import logging
 from functools import cached_property
-from typing import Dict, List
 
 from sdcm import cluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
@@ -39,7 +38,7 @@ class AzureNode(cluster.BaseNode):
 
     log = LOGGER
 
-    def __init__(self, azure_instance: VmInstance,  # pylint: disable=too-many-arguments
+    def __init__(self, azure_instance: VmInstance,
                  credentials, parent_cluster,
                  node_prefix='node', node_index=1,
                  base_logdir=None, dc_idx=0):
@@ -68,7 +67,7 @@ class AzureNode(cluster.BaseNode):
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
 
     @cached_property
-    def tags(self) -> Dict[str, str]:
+    def tags(self) -> dict[str, str]:
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
 
@@ -120,7 +119,7 @@ class AzureNode(cluster.BaseNode):
                 else:
                     # other EventType's that can be triggered by Azure's maintenance: "Reboot" | "Redeploy" | "Freeze" | "Terminate"
                     self.log.warning(f"Unhandled Azure scheduled event: {event}")
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # noqa: BLE001
             self.log.warning('Error during getting Azure scheduled events: %s', details)
             return 0
         return SPOT_TERMINATION_CHECK_DELAY
@@ -168,13 +167,13 @@ class AzureNode(cluster.BaseNode):
         return
 
 
-class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-attributes
-    def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments, too-many-locals
-                 provisioners: List[AzureProvisioner], credentials,
+class AzureCluster(cluster.BaseCluster):
+    def __init__(self, image_id, root_disk_size,  # noqa: PLR0913
+                 provisioners: list[AzureProvisioner], credentials,
                  cluster_uuid=None, instance_type='Standard_L8s_v3', region_names=None,
                  user_name='root', cluster_prefix='cluster',
                  node_prefix='node', n_nodes=3, params=None, node_type=None):
-        self.provisioners: List[AzureProvisioner] = provisioners
+        self.provisioners: list[AzureProvisioner] = provisioners
         self._image_id = image_id
         self._root_disk_size = root_disk_size
         self._credentials = credentials
@@ -192,7 +191,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
                          node_type=node_type)
         self.log.debug("AzureCluster constructor")
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):  # pylint: disable=too-many-arguments
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False, instance_type=None):
         self.log.info("Adding nodes to cluster")
         nodes = []
 
@@ -221,10 +220,10 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
                              dc_idx=dc_idx)
             node.init()
             return node
-        except Exception as ex:
+        except Exception as ex:  # noqa: BLE001
             raise CreateAzureNodeError('Failed to create node: %s' % ex) from ex
 
-    def _create_instances(self, count, dc_idx=0, instance_type=None) -> List[VmInstance]:
+    def _create_instances(self, count, dc_idx=0, instance_type=None) -> list[VmInstance]:
         region = self._definition_builder.regions[dc_idx]
         assert region, "no region provided, please add `azure_region_name` param"
         pricing_model = PricingModel.SPOT if 'spot' in self.instance_provision else PricingModel.ON_DEMAND
@@ -252,12 +251,12 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
 
 class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 
-    def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments
-                 provisioners: List[AzureProvisioner], credentials,
+    def __init__(self, image_id, root_disk_size,
+                 provisioners: list[AzureProvisioner], credentials,
                  instance_type='Standard_L8s_v3',
                  user_name='ubuntu',
                  user_prefix=None, n_nodes=3, params=None, region_names=None):
-        # pylint: disable=too-many-locals
+
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
         super().__init__(
@@ -283,11 +282,11 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 
 class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
 
-    def __init__(self, image_id, root_disk_size, provisioners, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, image_id, root_disk_size, provisioners, credentials,
                  instance_type='Standard_D2_v4',
                  user_name='centos',
                  user_prefix=None, n_nodes=1, params=None, region_names=None):
-        # pylint: disable=too-many-locals
+
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
         cluster.BaseLoaderSet.__init__(self, params=params)
@@ -309,11 +308,11 @@ class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
 
 class MonitorSetAzure(cluster.BaseMonitorSet, AzureCluster):
 
-    def __init__(self, image_id, root_disk_size, provisioners, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, image_id, root_disk_size, provisioners, credentials,
                  instance_type='Standard_D2_v4',
                  user_name='centos', user_prefix=None, n_nodes=1,
                  targets=None, params=None, region_names=None):
-        # pylint: disable=too-many-locals
+
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
 

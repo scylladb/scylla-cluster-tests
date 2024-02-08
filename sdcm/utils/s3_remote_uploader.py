@@ -13,11 +13,10 @@
 import logging
 import socket
 from os.path import expanduser
-from typing import List
 
 import boto3
 from botocore.response import StreamingBody
-from ssh2.session import Session  # pylint: disable=no-name-in-module
+from ssh2.session import Session
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,7 +24,7 @@ LOGGER = logging.getLogger(__name__)
 class SshOutAsFile(StreamingBody):
     """Wraps channel stream around file-like object for use by s3.upload_fileobj"""
 
-    def __init__(self, channel):  # pylint: disable=super-init-not-called
+    def __init__(self, channel):
         self._chan = channel
 
     def read(self, amt=1024):
@@ -40,7 +39,7 @@ class SshOutAsFile(StreamingBody):
         return buff
 
 
-def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str],  # pylint: disable=too-many-arguments
+def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: list[str],
                                        s3_bucket: str, s3_key: str, max_size_gb: int = 400, public_read_acl: bool = False):
     """Streams given remote files/directories straight to S3 as tar.gz file. Returns download link."""
 

@@ -11,20 +11,18 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
 import logging
 import os
-from typing import Optional
+import time
 from functools import cached_property
 
 import paramiko
-from docker import DockerClient  # pylint: disable=wrong-import-order
-from selenium.webdriver import Remote, ChromeOptions
+from selenium.webdriver import ChromeOptions, Remote
 
-from sdcm.utils.docker_utils import ContainerManager, DOCKER_API_CALL_TIMEOUT
-from sdcm.utils.common import get_free_port, wait_for_port, normalize_ipv6_url
+from docker import DockerClient
+from sdcm.utils.common import get_free_port, normalize_ipv6_url, wait_for_port
+from sdcm.utils.docker_utils import DOCKER_API_CALL_TIMEOUT, ContainerManager
 from sdcm.utils.ssh_agent import SSHAgent
-
 
 WEB_DRIVER_IMAGE = "selenium/standalone-chrome:3.141.59-20210713"
 WEB_DRIVER_REMOTE_PORT = 4444
@@ -42,7 +40,7 @@ class WebDriverContainerMixin:
                     volumes={"/dev/shm": {"bind": "/dev/shm"}, })
 
     @property
-    def web_driver_docker_client(self) -> Optional[DockerClient]:
+    def web_driver_docker_client(self) -> DockerClient | None:
         if not self.ssh_login_info or self.ssh_login_info["key_file"] is None:
             # running with docker backend, no real monitor node, fallback to use local docker
             return None
@@ -126,5 +124,5 @@ class RemoteBrowser:
                 LOGGER.debug("Destroy %s (%s) container", name, self)
                 ContainerManager.destroy_container(self.node, name, ignore_keepalive=True)
                 LOGGER.info("%s (%s) destroyed", name, self)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.error("%s: some exception raised during container '%s' destroying", self, name, exc_info=exc)

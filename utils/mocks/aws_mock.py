@@ -12,15 +12,14 @@
 # Copyright (c) 2021 ScyllaDB
 
 import logging
+from collections import namedtuple
+from itertools import chain
 from pathlib import Path
 from textwrap import dedent
-from itertools import chain
-from collections import namedtuple
 
 from sdcm.utils.common import list_resources_docker
 from sdcm.utils.docker_utils import ContainerManager, DockerException
 from sdcm.utils.get_username import get_username
-
 
 AWS_MOCK_IP_FILE = Path("aws_mock_ip")
 AWS_MOCK_NODE_TYPE = "aws-mock"

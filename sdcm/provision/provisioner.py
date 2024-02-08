@@ -15,7 +15,6 @@ from abc import ABC
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Dict
 
 from invoke import Result
 
@@ -36,17 +35,17 @@ class DataDisk:
 
 
 @dataclass
-class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
+class InstanceDefinition:
     name: str
     image_id: str
     type: str   # instance_type from yaml
     user_name: str
     ssh_key: SSHKey = field(repr=False)
-    tags: Dict[str, str] = field(default_factory=dict)
+    tags: dict[str, str] = field(default_factory=dict)
     arch: VmArch = VmArch.X86
     root_disk_size: int | None = None
-    data_disks: List[DataDisk] | None = None
-    user_data: List[UserDataObject] | None = field(
+    data_disks: list[DataDisk] | None = None
+    user_data: list[UserDataObject] | None = field(
         default_factory=list, repr=False)  # None when no cloud-init use at all
 
 
@@ -69,14 +68,14 @@ class PricingModel(Enum):
 
 
 @dataclass
-class VmInstance:  # pylint: disable=too-many-instance-attributes
+class VmInstance:
     name: str
     region: str
     user_name: str
     ssh_key_name: str
     public_ip_address: str
     private_ip_address: str
-    tags: Dict[str, str]
+    tags: dict[str, str]
     pricing_model: PricingModel
     image: str
     creation_time: datetime | None
@@ -93,7 +92,7 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
         If wait is set to True, waits until machine is up, otherwise, returns when reboot was triggered."""
         self._provisioner.reboot_instance(self.name, wait, hard)
 
-    def add_tags(self, tags: Dict[str, str]) -> None:
+    def add_tags(self, tags: dict[str, str]) -> None:
         """Adds tags to the instance."""
         self._provisioner.add_instance_tags(self.name, tags)
         self.tags.update(tags)
@@ -129,7 +128,7 @@ class Provisioner(ABC):
         return self._az
 
     @classmethod
-    def discover_regions(cls, test_id: str) -> List["Provisioner"]:
+    def discover_regions(cls, test_id: str) -> list["Provisioner"]:
         """Returns provisioner class instance for each region where resources exist."""
         raise NotImplementedError()
 
@@ -142,9 +141,9 @@ class Provisioner(ABC):
         raise NotImplementedError()
 
     def get_or_create_instances(self,
-                                definitions: List[InstanceDefinition],
+                                definitions: list[InstanceDefinition],
                                 pricing_model: PricingModel = PricingModel.SPOT
-                                ) -> List[VmInstance]:
+                                ) -> list[VmInstance]:
         """Create a set of instances specified by a list of InstanceDefinition.
         If instances already exist, returns them."""
         raise NotImplementedError()
@@ -157,7 +156,7 @@ class Provisioner(ABC):
         """Reboot instance by name. """
         raise NotImplementedError()
 
-    def list_instances(self) -> List[VmInstance]:
+    def list_instances(self) -> list[VmInstance]:
         """List instances for given provisioner."""
         raise NotImplementedError()
 
@@ -165,7 +164,7 @@ class Provisioner(ABC):
         """Cleans up all the resources. If wait == True, waits till cleanup fully completes."""
         raise NotImplementedError()
 
-    def add_instance_tags(self, name: str, tags: Dict[str, str]) -> None:
+    def add_instance_tags(self, name: str, tags: dict[str, str]) -> None:
         """Adds tags to instance."""
         raise NotImplementedError()
 
@@ -190,7 +189,7 @@ class ProvisionerFactory:
                                    f"Register it with provisioner_factory.register_provisioner method.")
         return provisioner(test_id, region, availability_zone, **config)
 
-    def discover_provisioners(self, backend: str, test_id: str, **config) -> List[Provisioner]:
+    def discover_provisioners(self, backend: str, test_id: str, **config) -> list[Provisioner]:
         """Discovers regions where resources for given test_id are created.
         Returning provisioner class instance for each region."""
         provisioner = self._classes.get(backend)

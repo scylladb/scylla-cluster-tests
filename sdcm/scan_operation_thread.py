@@ -7,25 +7,40 @@ import tempfile
 import threading
 import time
 import traceback
-from pathlib import Path
 from abc import abstractmethod
+from pathlib import Path
 from string import Template
-from typing import Optional, Type, NamedTuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
-from pytz import utc
 from cassandra import ConsistencyLevel, OperationTimedOut, ReadTimeout
-from cassandra.cluster import ResponseFuture, ResultSet  # pylint: disable=no-name-in-module
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.cluster import (
+    ResponseFuture,
+    ResultSet,
+)
+from cassandra.query import SimpleStatement
+from pytz import utc
 
+from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
-from sdcm.sct_events.database import FullScanEvent, FullPartitionScanReversedOrderEvent, FullPartitionScanEvent, \
-    FullScanAggregateEvent
-from sdcm.utils.database_query_utils import get_table_clustering_order, get_partition_keys
-from sdcm.utils.operations_thread import OperationThreadStats, OneOperationStat, OperationThread, ThreadParams
-from sdcm.db_stats import PrometheusDBStats
+from sdcm.sct_events.database import (
+    FullPartitionScanEvent,
+    FullPartitionScanReversedOrderEvent,
+    FullScanAggregateEvent,
+    FullScanEvent,
+)
 from sdcm.test_config import TestConfig
-from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.database_query_utils import (
+    get_partition_keys,
+    get_table_clustering_order,
+)
+from sdcm.utils.decorators import Retry, retrying
+from sdcm.utils.operations_thread import (
+    OneOperationStat,
+    OperationThread,
+    OperationThreadStats,
+    ThreadParams,
+)
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
@@ -50,7 +65,6 @@ class FullscanException(Exception):
     ...
 
 
-# pylint: disable=too-many-instance-attributes
 class ScanOperationThread(OperationThread):
     """
     Runs fullscan operations according to the parameters specified in the test
@@ -91,8 +105,8 @@ class ScanOperationThread(OperationThread):
 
 class FullscanOperationBase:
     def __init__(self, generator: random.Random, thread_params: ThreadParams, thread_stats: OperationThreadStats,
-                 scan_event: Type[FullScanEvent] | Type[FullPartitionScanEvent]
-                 | Type[FullPartitionScanReversedOrderEvent] | Type[FullScanAggregateEvent]):
+                 scan_event: type[FullScanEvent] | type[FullPartitionScanEvent]
+                 | type[FullPartitionScanReversedOrderEvent] | type[FullScanAggregateEvent]):
         """
         Base class for performing fullscan operations.
         """
@@ -117,9 +131,9 @@ class FullscanOperationBase:
 
     def execute_query(
             self, session, cmd: str,
-            event: Type[FullScanEvent | FullPartitionScanEvent
+            event: type[FullScanEvent | FullPartitionScanEvent
                         | FullPartitionScanReversedOrderEvent]) -> ResultSet:
-        # pylint: disable=unused-argument
+
         self.log.debug('Will run command %s', cmd)
         return session.execute(SimpleStatement(
             cmd,
@@ -128,7 +142,7 @@ class FullscanOperationBase:
         )
 
     def run_scan_event(self, cmd: str,
-                       scan_event: Type[FullScanEvent | FullPartitionScanEvent
+                       scan_event: type[FullScanEvent | FullPartitionScanEvent
                                         | FullPartitionScanReversedOrderEvent] = None) -> OneOperationStat:
         scan_event = scan_event or self.scan_event
         cmd = cmd or self.randomly_form_cql_statement()
@@ -155,7 +169,7 @@ class FullscanOperationBase:
                         self.fetch_result_pages(result=result, read_pages=self.fullscan_stats.read_pages)
                     if not scan_op_event.message:
                         scan_op_event.message = f"{type(self).__name__} operation ended successfully"
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # noqa: BLE001
                     self.log.error(traceback.format_exc())
                     msg = repr(exc)
                     self.current_operation_stat.exceptions.append(repr(exc))
@@ -176,7 +190,7 @@ class FullscanOperationBase:
                     # success is True if there were no exceptions
                     self.current_operation_stat.success = not bool(self.current_operation_stat.exceptions)
                     self.update_stats(self.current_operation_stat)
-                    return self.current_operation_stat  # pylint: disable=lost-exception
+                    return self.current_operation_stat
 
     def update_stats(self, new_stat):
         self.fullscan_stats.stats.append(new_stat)
@@ -231,9 +245,9 @@ class FullPartitionScanOperation(FullscanOperationBase):
                                                'no_filter': {'count': 0, 'total_scan_duration': 0}}
         self.ck_filter = ''
         self.limit = ''
-        self.reversed_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,  # pylint: disable=consider-using-with
+        self.reversed_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,
                                                                  encoding='utf-8')
-        self.normal_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,  # pylint: disable=consider-using-with
+        self.normal_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,
                                                                encoding='utf-8')
 
     def get_table_clustering_order(self) -> str:
@@ -244,14 +258,14 @@ class FullPartitionScanOperation(FullscanOperationBase):
                 session.default_consistency_level = ConsistencyLevel.ONE
                 return get_table_clustering_order(ks_cf=self.fullscan_params.ks_cf,
                                                   ck_name=self.fullscan_params.ck_name, session=session)
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:  # noqa: BLE001
             self.log.error(traceback.format_exc())
             self.log.error('Failed getting table %s clustering order through node %s : %s',
                            self.fullscan_params.ks_cf, node.name,
                            error)
         raise Exception('Failed getting table clustering order from all db nodes')
 
-    def randomly_form_cql_statement(self) -> Optional[tuple[str, str]]:  # pylint: disable=too-many-branches
+    def randomly_form_cql_statement(self) -> tuple[str, str] | None:
         """
         The purpose of this method is to form a random reversed-query out of all options, like:
             select * from scylla_bench.test where pk = 1234 and ck < 4721 and ck > 2549 order by ck desc
@@ -346,7 +360,7 @@ class FullPartitionScanOperation(FullscanOperationBase):
 
     def execute_query(
             self, session, cmd: str,
-            event: Type[FullScanEvent | FullPartitionScanEvent
+            event: type[FullScanEvent | FullPartitionScanEvent
                         | FullPartitionScanReversedOrderEvent]) -> ResponseFuture:
         self.log.debug('Will run command "%s"', cmd)
         session.default_fetch_size = self.fullscan_params.page_size
@@ -356,9 +370,9 @@ class FullPartitionScanOperation(FullscanOperationBase):
     def reset_output_files(self):
         self.normal_query_output.close()
         self.reversed_query_output.close()
-        self.reversed_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,  # pylint: disable=consider-using-with
+        self.reversed_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,
                                                                  encoding='utf-8')
-        self.normal_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,  # pylint: disable=consider-using-with
+        self.normal_query_output = tempfile.NamedTemporaryFile(mode='w+', delete=False,
                                                                encoding='utf-8')
 
     def _compare_output_files(self) -> bool:
@@ -406,7 +420,7 @@ class FullPartitionScanOperation(FullscanOperationBase):
         self.reset_output_files()
         return result
 
-    def run_scan_operation(self, cmd: str = None):  # pylint: disable=too-many-locals
+    def run_scan_operation(self, cmd: str = None):
         self.table_clustering_order = self.get_table_clustering_order()
         queries = self.randomly_form_cql_statement()
 
@@ -456,7 +470,7 @@ class FullScanAggregatesOperation(FullscanOperationBase):
         return cmd
 
     def execute_query(self, session, cmd: str,
-                      event: Type[FullScanEvent | FullPartitionScanEvent
+                      event: type[FullScanEvent | FullPartitionScanEvent
                                   | FullPartitionScanReversedOrderEvent]) -> None:
         self.log.debug('Will run command %s', cmd)
         validate_forward_service_requests_start_time = time.time()

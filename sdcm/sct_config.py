@@ -14,48 +14,45 @@
 """
 Handling Scylla-cluster-test configuration loading
 """
-import json
-# pylint: disable=too-many-lines
-import os
-import re
 import ast
-import logging
 import getpass
+import json
+import logging
+import os
 import pathlib
+import re
 import tempfile
-from typing import List, Union, Set
-
 from distutils.util import strtobool
 
 import anyconfig
 
-from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
+from sdcm import sct_abs_path
+from sdcm.remote import LOCALRUNNER, shell_script_cmd
+from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import (
     ami_built_by_scylla,
+    convert_name_to_ami_if_needed,
     get_ami_tags,
     get_branched_ami,
     get_branched_gce_images,
+    get_sct_root_path,
     get_scylla_ami_versions,
     get_scylla_gce_images_versions,
-    convert_name_to_ami_if_needed,
-    get_sct_root_path,
 )
+from sdcm.utils.gce_utils import get_gce_image_tags
 from sdcm.utils.operations_thread import ConfigParams
 from sdcm.utils.version_utils import (
+    find_scylla_repo,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
     get_scylla_docker_repo_from_version,
-    resolve_latest_repo_symlink,
     get_specific_tag_of_docker_image,
-    find_scylla_repo,
     is_enterprise,
+    resolve_latest_repo_symlink,
 )
-from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
-from sdcm.utils.gce_utils import get_gce_image_tags
-from sdcm.remote import LOCALRUNNER, shell_script_cmd
 
 
 def _str(value: str) -> str:
@@ -71,7 +68,7 @@ def _file(value: str) -> str:
     raise ValueError(f"{value} isn't an existing file")
 
 
-def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:
+def str_or_list(value: str | list[str] | list[list[str]]) -> list[str]:
     if isinstance(value, str):
         return [value]
     if isinstance(value, list):
@@ -84,13 +81,13 @@ def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:
     raise ValueError(f"{value} isn't a string or a list of strings.")
 
 
-def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
+def str_or_list_or_eval(value: str | list[str]) -> list[str]:
     """Convert an environment variable into a Python's list."""
 
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             pass
         return [str(value), ]
 
@@ -99,7 +96,7 @@ def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
         for val in value:
             try:
                 ret_values += [ast.literal_eval(val)]
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # noqa: BLE001
                 ret_values += [str(val)]
         return ret_values
 
@@ -110,34 +107,34 @@ def int_or_list(value):
     try:
         value = int(value)
         return value
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001
         pass
 
     if isinstance(value, str):
         try:
             values = value.split()
-            [int(v) for v in values]  # pylint: disable=expression-not-assigned
+            [int(v) for v in values]
             return value
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             pass
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             pass
 
-    raise ValueError("{} isn't int or list".format(value))
+    raise ValueError(f"{value} isn't int or list")
 
 
 def dict_or_str(value):
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             pass
     if isinstance(value, dict):
         return value
 
-    raise ValueError('"{}" isn\'t a dict'.format(value))
+    raise ValueError(f'"{value}" isn\'t a dict')
 
 
 def boolean(value):
@@ -146,7 +143,7 @@ def boolean(value):
     elif isinstance(value, str):
         return bool(strtobool(value))
     else:
-        raise ValueError("{} isn't a boolean".format(type(value)))
+        raise ValueError(f"{type(value)} isn't a boolean")
 
 
 class SCTConfiguration(dict):
@@ -1633,8 +1630,8 @@ class SCTConfiguration(dict):
     ami_id_params = ['ami_id_db_scylla', 'ami_id_loader', 'ami_id_monitor', 'ami_id_db_cassandra', 'ami_id_db_oracle']
     aws_supported_regions = ['eu-west-1', 'eu-west-2', 'us-west-2', 'us-east-1', 'eu-north-1', 'eu-central-1']
 
-    def __init__(self):
-        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    def __init__(self):  # noqa: PLR0912, PLR0915
+
         super().__init__()
         self.scylla_version = None
         self.is_enterprise = False
@@ -1683,7 +1680,7 @@ class SCTConfiguration(dict):
                         if key not in self.keys():
                             self[key] = value
                         elif len(self[key].split()) < len(region_names):
-                            self[key] += " {}".format(value)
+                            self[key] += f" {value}"
             else:
                 for region in region_names:
                     if region not in self.aws_supported_regions:
@@ -1706,7 +1703,7 @@ class SCTConfiguration(dict):
         dist_type = scylla_linux_distro.split('-')[0]
         dist_version = scylla_linux_distro.split('-')[-1]
 
-        if scylla_version := self.get('scylla_version'):  # pylint: disable=too-many-nested-blocks
+        if scylla_version := self.get('scylla_version'):
             if not self.get('docker_image'):
                 self['docker_image'] = get_scylla_docker_repo_from_version(scylla_version)
             if self.get("cluster_backend") in (
@@ -1723,7 +1720,7 @@ class SCTConfiguration(dict):
                             ami = get_branched_ami(scylla_version=scylla_version, region_name=region, arch=aws_arch)[0]
                         else:
                             ami = get_scylla_ami_versions(version=scylla_version, region_name=region, arch=aws_arch)[0]
-                    except Exception as ex:
+                    except Exception as ex:  # noqa: BLE001
                         raise ValueError(f"AMIs for scylla_version='{scylla_version}' not found in {region} "
                                          f"arch={aws_arch}") from ex
                     self.log.debug("Found AMI %s(%s) for scylla_version='%s' in %s",
@@ -1737,7 +1734,7 @@ class SCTConfiguration(dict):
                     else:
                         # gce_image.name format examples: scylla-4-3-6 or scylla-enterprise-2021-1-2
                         gce_image = get_scylla_gce_images_versions(version=scylla_version)[0]
-                except Exception as ex:
+                except Exception as ex:  # noqa: BLE001
                     raise ValueError(f"GCE image for scylla_version='{scylla_version}' was not found") from ex
 
                 self.log.debug("Found GCE image %s for scylla_version='%s'", gce_image.name, scylla_version)
@@ -1752,7 +1749,7 @@ class SCTConfiguration(dict):
                 for region in azure_region_names:
                     try:
                         azure_image = azure_utils.get_scylla_images(scylla_version, region)[0]
-                    except Exception as ex:
+                    except Exception as ex:  # noqa: BLE001
                         raise ValueError(
                             f"Azure Image for scylla_version='{scylla_version}' not found in {region}") from ex
                     self.log.debug("Found Azure Image %s for scylla_version='%s' in %s",
@@ -1783,7 +1780,7 @@ class SCTConfiguration(dict):
 
         # 6.1) handle oracle_scylla_version if exists
         if (oracle_scylla_version := self.get('oracle_scylla_version')) \
-           and self.get("db_type") == "mixed_scylla":  # pylint: disable=too-many-nested-blocks
+           and self.get("db_type") == "mixed_scylla":
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
                 ami_list = []
                 for region in region_names:
@@ -1795,7 +1792,7 @@ class SCTConfiguration(dict):
                         else:
                             ami = get_scylla_ami_versions(version=oracle_scylla_version,
                                                           region_name=region, arch=aws_arch)[0]
-                    except Exception as ex:
+                    except Exception as ex:  # noqa: BLE001
                         raise ValueError(f"AMIs for oracle_scylla_version='{scylla_version}' not found in {region} "
                                          f"arch={aws_arch}") from ex
 
@@ -1809,7 +1806,7 @@ class SCTConfiguration(dict):
         # 7) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version')
         if new_scylla_version and not 'k8s' in cluster_backend:
-            if not self.get('ami_id_db_scylla') and cluster_backend == 'aws':  # pylint: disable=no-else-raise
+            if not self.get('ami_id_db_scylla') and cluster_backend == 'aws':
                 raise ValueError("'new_version' isn't supported for AWS AMIs")
 
             elif not self.get('new_scylla_repo'):
@@ -1824,7 +1821,7 @@ class SCTConfiguration(dict):
         version_tag = self.get('ami_id_db_scylla_desc') or getpass.getuser()
         user_prefix = self.get('user_prefix') or getpass.getuser()
         if version_tag != user_prefix:
-            self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
+            self['user_prefix'] = f"{user_prefix}-{version_tag}"[:35]
         else:
             self['user_prefix'] = user_prefix[:35]
 
@@ -1913,7 +1910,7 @@ class SCTConfiguration(dict):
         self.log.info(self.dump_config())
 
     @property
-    def region_names(self) -> List[str]:
+    def region_names(self) -> list[str]:
         region_names = self.environment.get('region_name')
         if region_names is None:
             region_names = self.get('region_name')
@@ -1927,7 +1924,7 @@ class SCTConfiguration(dict):
         return output
 
     @property
-    def gce_datacenters(self) -> List[str]:
+    def gce_datacenters(self) -> list[str]:
         gce_datacenters = self.environment.get('gce_datacenter')
         if gce_datacenters is None:
             gce_datacenters = self.get('gce_datacenter')
@@ -1963,7 +1960,7 @@ class SCTConfiguration(dict):
             if opt['env'] in os.environ:
                 try:
                     environment_vars[opt['name']] = opt['type'](os.environ[opt['env']])
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:  # noqa: BLE001
                     raise ValueError(
                         "failed to parse {} from environment variable".format(opt['env'])) from ex
             nested_keys = [key for key in os.environ if key.startswith(opt['env'] + '.')]
@@ -2016,7 +2013,7 @@ class SCTConfiguration(dict):
         opt['is_k8s_multitenant_value'] = False
         try:
             opt['type'](self.get(opt['name']))
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # noqa: BLE001
             if not (self.get("cluster_backend").startswith("k8s")
                     and self.get("k8s_tenants_num") > 1
                     and opt.get("k8s_multitenancy_supported")
@@ -2028,7 +2025,7 @@ class SCTConfiguration(dict):
             for list_element in self.get(opt['name']):
                 try:
                     opt['type'](list_element)
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:  # noqa: BLE001
                     raise ValueError("failed to validate {}".format(opt['name'])) from ex
             opt['is_k8s_multitenant_value'] = True
 
@@ -2042,11 +2039,11 @@ class SCTConfiguration(dict):
                     opt['name'], cur_val_element, choices)
 
     @property
-    def list_of_stress_tools(self) -> Set[str]:
+    def list_of_stress_tools(self) -> set[str]:
         stress_tools = set()
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
-            if not (isinstance(stress_cmds, (list, str)) and stress_cmds):
+            if not (isinstance(stress_cmds, list | str) and stress_cmds):
                 continue
             if isinstance(stress_cmds, str):
                 stress_cmds = [stress_cmds]
@@ -2055,7 +2052,7 @@ class SCTConfiguration(dict):
                 if not stress_cmd:
                     continue
                 if not isinstance(stress_cmd, list):
-                    stress_cmd = [stress_cmd]
+                    stress_cmd = [stress_cmd]  # noqa: PLW2901
                 for cmd in stress_cmd:
                     if stress_tool := cmd.split(maxsplit=2)[0]:
                         stress_tools.add(stress_tool)
@@ -2063,8 +2060,7 @@ class SCTConfiguration(dict):
         return stress_tools
 
     def check_required_files(self):
-        # pylint: disable=too-many-nested-blocks
-        # pylint: disable=too-many-branches
+
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
             if stress_cmds is None:
@@ -2075,9 +2071,9 @@ class SCTConfiguration(dict):
                 if not stress_cmd:
                     continue
                 if not isinstance(stress_cmd, list):
-                    stress_cmd = [stress_cmd]
+                    stress_cmd = [stress_cmd]  # noqa: PLW2901
                 for cmd in stress_cmd:
-                    cmd = cmd.strip(' ')
+                    cmd = cmd.strip(' ')  # noqa: PLW2901
                     if cmd.startswith('latte'):
                         script_name_regx = re.compile(r'([/\w-]*\.rn)')
                         script_name = script_name_regx.search(cmd).group(1)
@@ -2088,7 +2084,7 @@ class SCTConfiguration(dict):
                         continue
                     for option in cmd.split():
                         if option.startswith('profile='):
-                            option = option.split('=', 1)
+                            option = option.split('=', 1)  # noqa: PLW2901
                             if len(option) < 2:
                                 continue
                             profile_path = option[1]
@@ -2159,7 +2155,7 @@ class SCTConfiguration(dict):
         env_keys = {o.split('.')[0] for o in os.environ if o.startswith('SCT_')}
         unknown_env_keys = env_keys.difference(config_keys)
         if unknown_env_keys:
-            output = ["{}={}".format(key, os.environ.get(key)) for key in unknown_env_keys]
+            output = [f"{key}={os.environ.get(key)}" for key in unknown_env_keys]
             raise ValueError("Unsupported environment variables were used:\n\t - {}".format("\n\t - ".join(output)))
 
         # check for unsupported configuration
@@ -2169,7 +2165,7 @@ class SCTConfiguration(dict):
         if unsupported_option:
             res = "Unsupported config option/s found:\n"
             for option in unsupported_option:
-                res += "\t * '{}: {}'\n".format(option, self[option])
+                res += f"\t * '{option}: {self[option]}'\n"
             raise ValueError(res)
 
     def _validate_sct_variable_values(self):
@@ -2190,7 +2186,7 @@ class SCTConfiguration(dict):
             else:
                 region_count[opt] = 1
         if not all(region_count[current_region_param_name] == x for x in region_count.values()):
-            raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
+            raise ValueError(f"not all multi region values are equal: \n\t{region_count}")
 
     def _validate_seeds_number(self):
         seeds_num = self.get('seeds_num')
@@ -2236,7 +2232,7 @@ class SCTConfiguration(dict):
                 backend += "-siren"
             self._check_backend_defaults(backend, self.backend_required_params[backend])
         else:
-            raise ValueError("Unsupported backend [{}]".format(backend))
+            raise ValueError(f"Unsupported backend [{backend}]")
 
     def _check_backend_defaults(self, backend, required_params):
         opts = [o for o in self.config_options if o['name'] in required_params]
@@ -2291,7 +2287,7 @@ class SCTConfiguration(dict):
             if int(partition_range_splitted[1]) < int(partition_range_splitted[0]):
                 raise ValueError(error_message_template.format('<max PK value> should be bigger then <min PK value>. '))
 
-    def verify_configuration_urls_validity(self):  # pylint: disable=too-many-branches
+    def verify_configuration_urls_validity(self):
         """
         Check if ami_id and repo urls are valid
         """
@@ -2354,7 +2350,7 @@ class SCTConfiguration(dict):
         get_branch_version_for_multiple_repositories(
             urls=(self.get(url) for url in repos_to_validate if self.get(url)))
 
-    def get_version_based_on_conf(self):  # pylint: disable=too-many-locals
+    def get_version_based_on_conf(self):
         """
         figure out which version and if it's enterprise version
         base on configuration only, before nodes are up and running
@@ -2460,7 +2456,7 @@ class SCTConfiguration(dict):
         ret = ""
         for opt in self.config_options:
             if opt['help']:
-                help_text = '\n'.join(["# {}".format(l.strip()) for l in opt['help'].splitlines() if l.strip()]) + '\n'
+                help_text = '\n'.join([f"# {l.strip()}" for l in opt['help'].splitlines() if l.strip()]) + '\n'
             else:
                 help_text = ''
             default = self.get_default_value(opt['name'])
@@ -2481,7 +2477,7 @@ class SCTConfiguration(dict):
             raise ValueError('Data volume configuration requires: data_volume_disk_type, data_volume_disk_size')
 
     def _verify_scylla_bench_mode_and_workload_parameters(self):
-        # pylint: disable=too-many-nested-blocks
+
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
             if stress_cmds is None:
@@ -2492,9 +2488,9 @@ class SCTConfiguration(dict):
                 if not stress_cmd:
                     continue
                 if not isinstance(stress_cmd, list):
-                    stress_cmd = [stress_cmd]
+                    stress_cmd = [stress_cmd]  # noqa: PLW2901
                 for cmd in stress_cmd:
-                    cmd = cmd.strip(' ')
+                    cmd = cmd.strip(' ')  # noqa: PLW2901
                     if not cmd.startswith('scylla-bench'):
                         continue
                     if "-mode=" not in cmd:

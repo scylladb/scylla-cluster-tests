@@ -14,17 +14,15 @@
 import logging
 from functools import cached_property
 
-import googleapiclient.errors
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
 import google
 import google.api_core.exceptions
-from google.cloud import storage
-from google.cloud import compute_v1
+import googleapiclient.errors
+from google.cloud import compute_v1, storage
 from google.cloud.compute_v1 import Firewall
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 from sdcm.keystore import KeyStore
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -168,7 +166,7 @@ class GceRegion:
         backup_service_account = None
 
         try:
-            backup_service_account = self.iam.projects().serviceAccounts().create(  # pylint: disable=no-member
+            backup_service_account = self.iam.projects().serviceAccounts().create(
                 name='projects/' + self.project,
                 body={
                     'accountId': self.SCT_BACKUP_SERVICE_ACCOUNT,
@@ -180,7 +178,7 @@ class GceRegion:
         except googleapiclient.errors.HttpError as exc:
             if not exc.status_code == 409:
                 raise
-            service_accounts = self.iam.projects().serviceAccounts().list(  # pylint: disable=no-member
+            service_accounts = self.iam.projects().serviceAccounts().list(
                 name=f'projects/{self.project}', pageSize=100).execute()
             for service in service_accounts['accounts']:
                 if self.SCT_BACKUP_SERVICE_ACCOUNT in service['name']:

@@ -3,29 +3,26 @@ import multiprocessing
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict
 from unittest.mock import MagicMock
 
 from argus.client.sct.client import ArgusSCTClient
-
 
 from sdcm.keystore import KeyStore
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.argus import ArgusError, get_argus_client
-from sdcm.utils.net import get_my_ip
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.get_username import get_username
 from sdcm.utils.ldap import LdapServerNotReady
 from sdcm.utils.metaclasses import Singleton
-
+from sdcm.utils.net import get_my_ip
 
 LOGGER = logging.getLogger(__name__)
 
 
-class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-methods
+class TestConfig(metaclass=Singleton):
     TEST_DURATION = 60
     TEST_WARMUP_TEARDOWN = 60
     SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
@@ -153,7 +150,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             cls.KEEP_ALIVE_MONITOR_NODES = bool(val == 'keep')
 
     @classmethod
-    def should_keep_alive(cls, node_type: Optional[str]) -> bool:
+    def should_keep_alive(cls, node_type: str | None) -> bool:
         if cls.TEST_DURATION >= 11 * 60:
             return True
         if node_type is None:
@@ -171,7 +168,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         cls.MIXED_CLUSTER = val
 
     @classmethod
-    def common_tags(cls) -> Dict[str, str]:
+    def common_tags(cls) -> dict[str, str]:
         job_name = os.environ.get('JOB_NAME')
         tags = dict(RunByUser=get_username(),
                     TestName=str(cls.test_name()),
@@ -242,7 +239,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             syslogng_host = "127.0.0.1"
             syslogng_port = cls.SYSLOGNG_SSH_TUNNEL_LOCAL_PORT
         else:
-            syslogng_host, syslogng_port = cls.SYSLOGNG_ADDRESS  # pylint: disable=unpacking-non-sequence
+            syslogng_host, syslogng_port = cls.SYSLOGNG_ADDRESS
         return syslogng_host, syslogng_port
 
     @classmethod

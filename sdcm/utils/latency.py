@@ -20,7 +20,6 @@ def avg(values):
     return sum(values)/len(values)
 
 
-# pylint: disable=too-many-arguments,too-many-locals,too-many-nested-blocks,too-many-branches
 def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
     res = {}
     prometheus = PrometheusDBStats(host=monitor_node.external_address)
@@ -32,7 +31,7 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
     for precision in cassandra_stress_precision:
         metric = f'c-s {precision}' if precision == 'max' else f'c-s P{precision}'
         if not precision == 'max':
-            precision = f'perc_{precision}'
+            precision = f'perc_{precision}'  # noqa: PLW2901
         query = f'sct_cassandra_stress_{load_type}_gauge{{type="lat_{precision}"}}'
         query_res = prometheus.query(query, start, end)
         latency_values_lst = []

@@ -11,8 +11,8 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import json
+import os
 from collections import namedtuple
 
 import boto3
@@ -24,7 +24,7 @@ KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 
 
-class KeyStore:  # pylint: disable=too-many-public-methods
+class KeyStore:
     def __init__(self):
         self.s3: S3ServiceResource = boto3.resource("s3")
 

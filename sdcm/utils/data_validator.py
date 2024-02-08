@@ -132,19 +132,17 @@
 #     running stress.
 #
 import json
+import logging
 import os
 import re
-import logging
 import uuid
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 from sdcm.sct_events import Severity
+from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.test_config import TestConfig
 from sdcm.utils.database_query_utils import fetch_all_rows
-
 from sdcm.utils.user_profile import get_profile_content
-from sdcm.sct_events.health import DataValidatorEvent
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -153,11 +151,10 @@ class DataForValidation(NamedTuple):
     views: tuple  # list of view names with data for validation
     actual_data: list
     expected_data: list
-    before_update_rows: Optional[list]
-    after_update_rows: Optional[list]
+    before_update_rows: list | None
+    after_update_rows: list | None
 
 
-# pylint: disable=too-many-instance-attributes, too-many-public-methods
 class LongevityDataValidator:
     SUFFIX_FOR_VIEW_AFTER_UPDATE = '_after_update'
     SUFFIX_EXPECTED_DATA_TABLE = '_expect'
@@ -462,33 +459,30 @@ class LongevityDataValidator:
                 message=f"Actual dataset length more then expected ({len(actual_result)} > {len(expected_result)}). "
                         f"Issue #6181"
             ).publish()
+        elif not during_nemesis:
+            assert len(actual_result) == len(expected_result), \
+                'One or more rows are not as expected, suspected LWT wrong update. ' \
+                f'Actual dataset length: {len(actual_result)}, Expected dataset length: {len(expected_result)}'
+
+            assert actual_result == expected_result, \
+                'One or more rows are not as expected, suspected LWT wrong update'
+
+            # Raise info event at the end of the test only.
+            DataValidatorEvent.ImmutableRowsValidator(
+                severity=Severity.NORMAL,
+                message="Validation immutable rows finished successfully"
+            ).publish()
+        elif len(actual_result) < len(expected_result):
+            DataValidatorEvent.ImmutableRowsValidator(
+                severity=Severity.ERROR,
+                error=f"Verify immutable rows. "
+                      f"One or more rows not found as expected, suspected LWT wrong update. "
+                      f"Actual dataset length: {len(actual_result)}, "
+                      f"Expected dataset length: {len(expected_result)}"
+            ).publish()
         else:
-            if not during_nemesis:
-                assert len(actual_result) == len(expected_result), \
-                    'One or more rows are not as expected, suspected LWT wrong update. ' \
-                    'Actual dataset length: {}, Expected dataset length: {}'.format(len(actual_result),
-                                                                                    len(expected_result))
-
-                assert actual_result == expected_result, \
-                    'One or more rows are not as expected, suspected LWT wrong update'
-
-                # Raise info event at the end of the test only.
-                DataValidatorEvent.ImmutableRowsValidator(
-                    severity=Severity.NORMAL,
-                    message="Validation immutable rows finished successfully"
-                ).publish()
-            else:
-                if len(actual_result) < len(expected_result):
-                    DataValidatorEvent.ImmutableRowsValidator(
-                        severity=Severity.ERROR,
-                        error=f"Verify immutable rows. "
-                              f"One or more rows not found as expected, suspected LWT wrong update. "
-                              f"Actual dataset length: {len(actual_result)}, "
-                              f"Expected dataset length: {len(expected_result)}"
-                    ).publish()
-                else:
-                    LOGGER.debug('Verify immutable rows. Actual dataset length: %s, Expected dataset length: %s',
-                                 len(actual_result), len(expected_result))
+            LOGGER.debug('Verify immutable rows. Actual dataset length: %s, Expected dataset length: %s',
+                         len(actual_result), len(expected_result))
 
     def list_of_view_names_for_update_test(self):
         # List of tuples of correlated  view names for validation: before update, after update, expected data
@@ -499,7 +493,7 @@ class LongevityDataValidator:
                         self._validate_updated_per_view, ))
 
     def fetch_data_for_validation_after_update(self, during_nemesis: bool, views_set: tuple, session) -> \
-            Optional[DataForValidation]:
+            DataForValidation | None:
         # views_set[0] - view name with rows before update
         # views_set[1] - view name with rows after update
         # views_set[2] - view name with all expected partition keys
@@ -574,7 +568,6 @@ class LongevityDataValidator:
 
         return logdir
 
-    # pylint: disable=too-many-locals,too-many-branches
     def analyze_updated_data_and_save_in_file(self, data_for_validation: DataForValidation, session, logdir: str):
         actual_data_set = {tuple(item) for item in sorted(data_for_validation.actual_data)}
         expected_data_set = {tuple(item) for item in sorted(data_for_validation.expected_data)}
@@ -621,7 +614,7 @@ class LongevityDataValidator:
 
                 try:
                     row_data.update({key: list(session.execute(query % (select_columns, table)))})
-                except Exception as error:  # pylint: disable=broad-except
+                except Exception as error:  # noqa: BLE001
                     LOGGER.error("Query %s failed. Error: %s", query % table, error)
 
             row_data.update({'source_all_columns': list(session.execute(query % (columns_for_validation,
@@ -649,7 +642,7 @@ class LongevityDataValidator:
                       encoding='utf8') as json_file:
                 try:
                     json.dump(result, json_file)
-                except:   # pylint: disable=bare-except
+                except:
                     json_file.write(str(result))
                 LOGGER.info("analyze_result_debug json: %s", json_file.name)
 
@@ -791,5 +784,4 @@ class LongevityDataValidator:
             ).publish()
         else:
             LOGGER.warning('Deleted row were not found. May be issue #6181. '
-                           'Actual dataset length: {}, Expected dataset length: {}'.format(len(actual_result),
-                                                                                           self.rows_before_deletion))
+                           f'Actual dataset length: {len(actual_result)}, Expected dataset length: {self.rows_before_deletion}')

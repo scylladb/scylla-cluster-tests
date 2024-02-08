@@ -13,12 +13,11 @@
 
 import pprint
 
-from invoke.exceptions import UnexpectedExit, Failure
+from invoke.exceptions import Failure, UnexpectedExit
 
 from performance_regression_test import PerformanceRegressionTest
-from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.sct_events.group_common_events import ignore_operation_errors
-
+from sdcm.utils.decorators import log_run_info, retrying
 
 PP = pprint.PrettyPrinter(indent=2)
 

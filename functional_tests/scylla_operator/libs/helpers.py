@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -12,17 +10,16 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from enum import Enum
 import logging
 import time
-from typing import Union
-import yaml
+from enum import Enum
 
+import yaml
 from kubernetes.client import exceptions as k8s_exceptions
 
 from sdcm.cluster import (
-    DB_LOG_PATTERN_RESHARDING_START,
     DB_LOG_PATTERN_RESHARDING_FINISH,
+    DB_LOG_PATTERN_RESHARDING_START,
 )
 from sdcm.cluster_k8s import (
     SCYLLA_MANAGER_NAMESPACE,
@@ -100,7 +97,7 @@ def scylla_services_names(db_cluster: ScyllaPodCluster) -> list:
             if name not in ('NAME', f"{scylla_cluster_name}-client")]
 
 
-def wait_for_resource_absence(db_cluster: ScyllaPodCluster,  # pylint: disable=too-many-arguments
+def wait_for_resource_absence(db_cluster: ScyllaPodCluster,
                               resource_type: str, resource_name: str,
                               namespace: str = SCYLLA_NAMESPACE,
                               step: int = 2, timeout: int = 60) -> None:
@@ -169,7 +166,7 @@ def reinstall_scylla_manager(db_cluster: ScyllaPodCluster, manager_version: str)
         log.info("Scylla Manager '%s' has successfully been installed", manager_version)
 
 
-def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: Union[str, int, float]):
+def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: str | int | float):
     nodes_data = []
     for node in reversed(db_cluster.nodes):
         liveness_probe_failures = node.follow_system_log(
@@ -198,7 +195,7 @@ def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: Union[str, int,
     # One resharding with 100Gb+ may take about 3-4 minutes. So, set 5 minutes timeout per node.
     for node, liveness_probe_failures, resharding_start, resharding_finish in nodes_data:
         assert wait_for(
-            func=lambda: list(resharding_start),  # pylint: disable=cell-var-from-loop
+            func=lambda: list(resharding_start),
             step=1, timeout=600, throw_exc=False,
             text=f"Waiting for the start of resharding on the '{node.name}' node.",
         ), f"Start of resharding hasn't been detected on the '{node.name}' node."
@@ -207,7 +204,7 @@ def verify_resharding_on_k8s(db_cluster: ScyllaPodCluster, cpus: Union[str, int,
 
         # Wait for the end of resharding
         assert wait_for(
-            func=lambda: list(resharding_finish),  # pylint: disable=cell-var-from-loop
+            func=lambda: list(resharding_finish),
             step=3, timeout=600, throw_exc=False,
             text=f"Waiting for the finish of resharding on the '{node.name}' node.",
         ), f"Finish of the resharding hasn't been detected on the '{node.name}' node."

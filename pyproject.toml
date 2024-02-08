@@ -1,0 +1,19 @@
+[tool.ruff]
+lint.select = ["PL", "YTT", "BLE", "I", "UP", "F401", "F402", "F821", "T10", "EXE", "TID"]
+
+lint.ignore = ["E501", "PLR2004", "COM812", ]
+
+target-version = "py310"
+
+force-exclude = true
+line-length = 240
+respect-gitignore = true
+
+[tool.ruff.lint.pylint]
+max-args = 12
+max-statements = 100
+max-branches = 24
+
+[tool.ruff.lint.extend-per-file-ignores]
+# Also ignore `F401` in all `__init__.py` files.
+"__init__.py" = ["F401"]

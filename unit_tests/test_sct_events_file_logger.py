@@ -15,16 +15,20 @@ import time
 import unittest
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import SpotTerminationEvent
+from sdcm.sct_events.file_logger import (
+    EventsFileLogger,
+    get_events_grouped_by_category,
+    get_events_logger,
+    get_logger_event_summary,
+    start_events_logger,
+)
 from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
-from sdcm.sct_events.file_logger import \
-    EventsFileLogger, start_events_logger, get_events_logger, get_events_grouped_by_category, get_logger_event_summary
-
+from sdcm.sct_events.system import SpotTerminationEvent
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
 class TestFileLogger(unittest.TestCase, EventsUtilsMixin):
-    # pylint: disable=protected-access
+
     def setUp(self) -> None:
         self.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
         start_events_logger(_registry=self.events_processes_registry)

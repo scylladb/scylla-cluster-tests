@@ -13,7 +13,10 @@
 from dataclasses import dataclass
 
 from sdcm.provision.common.configuration_script import SYSLOGNG_LOG_THROTTLE_PER_SECOND
-from sdcm.provision.common.utils import configure_syslogng_target_script, restart_syslogng_service
+from sdcm.provision.common.utils import (
+    configure_syslogng_target_script,
+    restart_syslogng_service,
+)
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 

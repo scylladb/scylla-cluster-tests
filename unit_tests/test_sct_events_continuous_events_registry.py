@@ -1,15 +1,23 @@
-# pylint: disable=no-self-use
+
 
 import uuid
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pytest
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEventRegistryException
-from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping, CompactionEvent, \
-    IndexSpecialColumnErrorEvent, ScyllaServerStatusEvent, DatabaseLogEvent
+from sdcm.sct_events.continuous_event import (
+    ContinuousEventRegistryException,
+    ContinuousEventsRegistry,
+)
+from sdcm.sct_events.database import (
+    CompactionEvent,
+    DatabaseLogEvent,
+    IndexSpecialColumnErrorEvent,
+    ScyllaServerStatusEvent,
+    get_pattern_to_event_to_func_mapping,
+)
 from sdcm.sct_events.loaders import GeminiStressEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.nodetool import NodetoolEvent

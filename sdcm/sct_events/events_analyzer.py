@@ -11,18 +11,22 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import sys
 import logging
+import sys
 import threading
-from typing import Tuple, Any, Optional
 from functools import partial
+from typing import Any
 
 from sdcm.cluster import TestConfig
 from sdcm.sct_events import Severity
-from sdcm.sct_events.events_processes import \
-    EVENTS_ANALYZER_ID, EventsProcessesRegistry, BaseEventsProcess, \
-    start_events_process, get_events_process, verbose_suppress
-
+from sdcm.sct_events.events_processes import (
+    EVENTS_ANALYZER_ID,
+    BaseEventsProcess,
+    EventsProcessesRegistry,
+    get_events_process,
+    start_events_process,
+    verbose_suppress,
+)
 
 LOADERS_EVENTS = \
     {"CassandraStressEvent", "ScyllaBenchEvent", "YcsbStressEvent", "NdbenchStressEvent", "CDCReaderStressEvent"}
@@ -34,7 +38,7 @@ class TestFailure(Exception):
     pass
 
 
-class EventsAnalyzer(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
+class EventsAnalyzer(BaseEventsProcess[tuple[str, Any], None], threading.Thread):
     def run(self) -> None:
         for event_tuple in self.inbound_events():
             with verbose_suppress("EventsAnalyzer failed to process %s", event_tuple):
@@ -51,7 +55,7 @@ class EventsAnalyzer(BaseEventsProcess[Tuple[str, Any], None], threading.Thread)
                 except TestFailure:
                     self.kill_test(sys.exc_info())
 
-    def kill_test(self, backtrace_with_reason, memo={}) -> None:  # pylint: disable=dangerous-default-value
+    def kill_test(self, backtrace_with_reason, memo={}) -> None:
         self.terminate()
         if tester := TestConfig().tester_obj():
             if memo:
@@ -71,7 +75,7 @@ class EventsAnalyzer(BaseEventsProcess[Tuple[str, Any], None], threading.Thread)
 start_events_analyzer = partial(start_events_process, EVENTS_ANALYZER_ID, EventsAnalyzer)
 
 
-def stop_events_analyzer(_registry: Optional[EventsProcessesRegistry] = None) -> None:
+def stop_events_analyzer(_registry: EventsProcessesRegistry | None = None) -> None:
     if analyzer := get_events_process(EVENTS_ANALYZER_ID, _registry=_registry):
         analyzer.stop(timeout=60)
 

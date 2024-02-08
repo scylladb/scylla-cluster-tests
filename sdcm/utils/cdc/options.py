@@ -1,8 +1,6 @@
+import logging
 import re
 import time
-import logging
-
-from typing import Dict, Union, List
 from random import choice, randint
 
 LOGGER = logging.getLogger(__name__)
@@ -29,7 +27,7 @@ CDC_SETTINGS_REGEXP = [CDC_ENABLED_REGEXP,
                        CDC_TTL_REGEXP]
 
 
-def parse_cdc_blob_settings(blob: bytes) -> Dict[str, Union[bool, str]]:
+def parse_cdc_blob_settings(blob: bytes) -> dict[str, bool | str]:
     """parse blob object with cdc setttings
 
     cdc settings stored in MetaTableData as blob.
@@ -60,18 +58,19 @@ def parse_cdc_blob_settings(blob: bytes) -> Dict[str, Union[bool, str]]:
     for regexp in CDC_SETTINGS_REGEXP:
         res = re.search(regexp, blob.decode())
         if res:
-            for key, value in res.groupdict().items():
-                if value in ("false", "off"):
+            for key, _value in res.groupdict().items():
+                if _value in ("false", "off"):
                     value = False
-                elif value == 'true':
+                elif _value == 'true':
                     value = True
-
+                else:
+                    value = _value
                 cdc_settings[key] = value
 
     return cdc_settings
 
 
-def get_table_cdc_properties(session, ks_name: str, table_name: str) -> Dict[str, Union[bool, str]]:
+def get_table_cdc_properties(session, ks_name: str, table_name: str) -> dict[str, bool | str]:
     """Return cdc settings for table
 
     Get cdc settings from table meta data and return dict
@@ -101,7 +100,7 @@ def get_table_cdc_properties(session, ks_name: str, table_name: str) -> Dict[str
     return cdc_settings
 
 
-def toggle_cdc_property(name: str, value: Union[str, bool]) -> Union[bool, str]:
+def toggle_cdc_property(name: str, value: str | bool) -> bool | str:
     if name in ["ttl"]:
         return str(randint(300, 3600))
     else:
@@ -109,5 +108,5 @@ def toggle_cdc_property(name: str, value: Union[str, bool]) -> Union[bool, str]:
         return choice(list(variants))
 
 
-def get_cdc_settings_names() -> List[str]:
+def get_cdc_settings_names() -> list[str]:
     return list(CDC_SETTINGS_NAMES_VALUES.keys())

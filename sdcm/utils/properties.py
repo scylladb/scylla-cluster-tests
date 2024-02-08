@@ -1,4 +1,4 @@
-from typing import Union, TextIO
+from typing import TextIO
 
 
 class PropertiesDict(dict):
@@ -27,7 +27,7 @@ class PropertiesDict(dict):
             yield value
 
 
-def serialize(data: Union[dict, PropertiesDict]) -> str:
+def serialize(data: dict | PropertiesDict) -> str:
     output = []
     items = data.all_items() if isinstance(data, PropertiesDict) else data.items()
     for key, value in items:
@@ -41,7 +41,7 @@ def serialize(data: Union[dict, PropertiesDict]) -> str:
     return '\n'.join(output)
 
 
-def deserialize(data: Union[str, TextIO]) -> PropertiesDict:
+def deserialize(data: str | TextIO) -> PropertiesDict:
     if not isinstance(data, str):
         data = data.read()
     output = PropertiesDict()
@@ -49,11 +49,11 @@ def deserialize(data: Union[str, TextIO]) -> PropertiesDict:
         if not line.strip() or line.lstrip()[0] == '#':
             output[line] = None
             continue
-        line = line.split('=', 1)
-        if len(line) == 2:
-            value = line[1]
+        line_splitted = line.split('=', 1)
+        if len(line_splitted) == 2:
+            value = line_splitted[1]
             comment_pos = value.find('#')
             if comment_pos >= 0:
                 value = value[0:value]
-            output[line[0].strip()] = value.strip().strip('"').strip("'")
+            output[line_splitted[0].strip()] = value.strip().strip('"').strip("'")
     return output

@@ -1,17 +1,22 @@
-from logging import getLogger
 from datetime import datetime, timezone
+from logging import getLogger
 
-from boto3 import client as boto3_client
 from azure.mgmt.compute.models import VirtualMachine
+from boto3 import client as boto3_client
 from google.cloud.compute_v1.types import Instance as GceInstance
 
 from sdcm.utils.azure_utils import AzureService
-from sdcm.utils.cloud_monitor.common import InstanceLifecycle, NA
+from sdcm.utils.cloud_monitor.common import NA, InstanceLifecycle
 from sdcm.utils.cloud_monitor.resources import CloudInstance, CloudResources
-from sdcm.utils.common import aws_tags_to_dict, gce_meta_to_dict, list_instances_aws, list_instances_gce
-from sdcm.utils.pricing import AWSPricing, GCEPricing, AzurePricing
-from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
+from sdcm.utils.common import (
+    aws_tags_to_dict,
+    gce_meta_to_dict,
+    list_instances_aws,
+    list_instances_gce,
+)
 from sdcm.utils.context_managers import environment
+from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
+from sdcm.utils.pricing import AWSPricing, AzurePricing, GCEPricing
 
 LOGGER = getLogger(__name__)
 
@@ -47,7 +52,7 @@ class AWSInstance(CloudInstance):
             for event in result["Events"]:
                 if event['EventName'] == 'RunInstances':
                     return event["Username"]
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Error occurred when trying to find an owner for '%s' in CloudTrail: %s",
                            self._instance['InstanceId'], exc)
         return None

@@ -11,25 +11,24 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List
 import os
 import threading
 
-from fabric import Connection, Config
-from paramiko import SSHException
-from paramiko.ssh_exception import NoValidConnectionsError, AuthenticationException
+from fabric import Config, Connection
+from invoke.exceptions import Failure, UnexpectedExit
 from invoke.watchers import StreamWatcher
-from invoke.exceptions import UnexpectedExit, Failure
+from paramiko import SSHException
+from paramiko.ssh_exception import AuthenticationException, NoValidConnectionsError
 
 from .base import RetryableNetworkException, SSHConnectTimeoutError
 from .remote_base import RemoteCmdRunnerBase
 
 
-class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True):  # pylint: disable=too-many-instance-attributes
+class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True):
     connection: Connection
     ssh_config: Config = None
     ssh_is_up: threading.Event = None
-    ssh_up_thread: Optional[threading.Thread] = None
+    ssh_up_thread: threading.Thread | None = None
     ssh_up_thread_termination: threading.Event = None
     exception_unexpected = UnexpectedExit
     exception_failure = Failure
@@ -65,7 +64,7 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             self.log.debug("%s: sleeping %s seconds before next retry", auth_exception, self.auth_sleep_time)
             self.ssh_up_thread_termination.wait(self.auth_sleep_time)
             return False
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # noqa: BLE001
             self.log.debug(details)
             return False
 
@@ -97,13 +96,12 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
         self.stop_ssh_up_thread()
         super().stop()
 
-    def _run_pre_run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
+    def _run_pre_run(self, cmd: str, timeout: float | None = None,
                      ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-                     log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None):
+                     log_file: str | None = None, retry: int = 1, watchers: list[StreamWatcher] | None = None):
         if not self.is_up(timeout=self.connect_timeout):
             raise SSHConnectTimeoutError(
-                'Unable to run "%s": failed connecting to "%s" during %ss' %
-                (cmd, self.hostname, self.connect_timeout)
+                f'Unable to run "{cmd}": failed connecting to "{self.hostname}" during {self.connect_timeout}s'
             )
 
     def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:

@@ -11,15 +11,24 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import os
-
 import pickle
 import unittest
 from textwrap import dedent
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.system import \
-    StartupTestEvent, TestFrameworkEvent, ElasticsearchEvent, SpotTerminationEvent, ScyllaRepoEvent, InfoEvent, \
-    ThreadFailedEvent, CoreDumpEvent, TestResultEvent, InstanceStatusEvent, INSTANCE_STATUS_EVENTS_PATTERNS
+from sdcm.sct_events.system import (
+    INSTANCE_STATUS_EVENTS_PATTERNS,
+    CoreDumpEvent,
+    ElasticsearchEvent,
+    InfoEvent,
+    InstanceStatusEvent,
+    ScyllaRepoEvent,
+    SpotTerminationEvent,
+    StartupTestEvent,
+    TestFrameworkEvent,
+    TestResultEvent,
+    ThreadFailedEvent,
+)
 
 
 class TestSystemEvents(unittest.TestCase):

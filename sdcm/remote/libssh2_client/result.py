@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 
 @dataclass
-class Result:  # pylint: disable=too-many-instance-attributes
+class Result:
     """
     A copy-cat from invoke.runners.Result
 
@@ -42,20 +42,18 @@ class Result:  # pylint: disable=too-many-instance-attributes
 
     def __str__(self) -> str:
         if self.exited is not None:
-            desc = "Command exited with status {}.".format(self.exited)
+            desc = f"Command exited with status {self.exited}."
         else:
             desc = "Command was not fully executed due to watcher error."
         ret = [desc]
         for stream in ("stdout", "stderr"):
             val = getattr(self, stream)
             ret.append(
-                """=== {} ===
-{}
-""".format(
-                    stream, val.rstrip()
-                )
+                f"""=== {stream} ===
+{val.rstrip()}
+"""
                 if val
-                else "(no {})".format(stream)
+                else f"(no {stream})"
             )
         return "\n".join(ret)
 

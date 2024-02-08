@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
@@ -66,8 +64,8 @@ class ClusterConfigurationTests(ClusterTester):
         addresses = {}
         seeds = []
         for node in self.db_cluster.nodes:
-            if hasattr(node._instance, 'public_dns_name'):  # pylint: disable=protected-access
-                addresses[node.private_ip_address] = node._instance.public_dns_name  # pylint: disable=protected-access
+            if hasattr(node._instance, 'public_dns_name'):
+                addresses[node.private_ip_address] = node._instance.public_dns_name
                 if node.is_seed:
                     seeds.append(node.private_ip_address)
             else:

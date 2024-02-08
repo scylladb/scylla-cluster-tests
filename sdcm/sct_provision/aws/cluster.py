@@ -13,22 +13,32 @@
 
 import abc
 from functools import cached_property
-from typing import List, Dict
 
 from pydantic import BaseModel
+
 from sdcm import cluster
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
+from sdcm.provision.aws.utils import create_cluster_placement_groups_aws
 from sdcm.provision.common.provision_plan import ProvisionPlan
 from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
 from sdcm.provision.common.provisioner import TagsType
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_provision.aws.instance_parameters_builder import ScyllaInstanceParamsBuilder, \
-    LoaderInstanceParamsBuilder, MonitorInstanceParamsBuilder, OracleScyllaInstanceParamsBuilder
-from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder, AWSInstanceUserDataBuilder
-from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_SPOT, INSTANCE_PROVISION_SPOT_FLEET
+from sdcm.sct_provision.aws.instance_parameters_builder import (
+    LoaderInstanceParamsBuilder,
+    MonitorInstanceParamsBuilder,
+    OracleScyllaInstanceParamsBuilder,
+    ScyllaInstanceParamsBuilder,
+)
+from sdcm.sct_provision.aws.user_data import (
+    AWSInstanceUserDataBuilder,
+    ScyllaUserDataBuilder,
+)
+from sdcm.sct_provision.common.utils import (
+    INSTANCE_PROVISION_SPOT,
+    INSTANCE_PROVISION_SPOT_FLEET,
+)
 from sdcm.test_config import TestConfig
-from sdcm.provision.aws.utils import create_cluster_placement_groups_aws
 
 
 class ClusterNode(BaseModel):
@@ -43,7 +53,7 @@ class ClusterNode(BaseModel):
         return self.node_name_prefix + '-' + str(self.node_num)
 
     @property
-    def tags(self) -> Dict[str, str]:
+    def tags(self) -> dict[str, str]:
         return self.parent_cluster.tags | {'NodeIndex': str(self.node_num)}
 
 
@@ -99,19 +109,19 @@ class ClusterBase(BaseModel):
 
     @property
     def cluster_name(self):
-        return '%s-%s' % (cluster.prepend_user_prefix(self._user_prefix, self._cluster_postfix), self._short_id)
+        return f'{cluster.prepend_user_prefix(self._user_prefix, self._cluster_postfix)}-{self._short_id}'
 
     @property
     def placement_group_name(self):
         if self.params.get("use_placement_group") and self._USE_PLACEMENT_GROUP:
-            return '%s-%s' % (
+            return '{}-{}'.format(
                 cluster.prepend_user_prefix(self._user_prefix, "placement_group"), self._short_id)
         else:
             return None
 
     @property
     def _node_prefix(self):
-        return '%s-%s' % (cluster.prepend_user_prefix(self._user_prefix, self._node_postfix), self._short_id)
+        return f'{cluster.prepend_user_prefix(self._user_prefix, self._node_postfix)}-{self._short_id}'
 
     @property
     def _short_id(self):
@@ -121,16 +131,16 @@ class ClusterBase(BaseModel):
     def tags(self):
         return self.common_tags | {"NodeType": str(self._NODE_TYPE), "UserName": self.params.get(self._USER_PARAM)}
 
-    def _az_nodes(self, region_id: int) -> List[int]:
+    def _az_nodes(self, region_id: int) -> list[int]:
         az_nodes = [0] * len(self._azs)
         for node_num in range(self._node_nums[region_id]):
             az_nodes[node_num % len(self._azs)] += 1
         return az_nodes
 
-    def _node_tags(self, region_id: int, az_id: int) -> List[TagsType]:
+    def _node_tags(self, region_id: int, az_id: int) -> list[TagsType]:
         return [node.tags for node in self.nodes if node.region_id == region_id and node.az_id == az_id]
 
-    def _node_names(self, region_id: int, az_id: int) -> List[str]:
+    def _node_names(self, region_id: int, az_id: int) -> list[str]:
         return [node.name for node in self.nodes if node.region_id == region_id and node.az_id == az_id]
 
     @property
@@ -144,11 +154,11 @@ class ClusterBase(BaseModel):
         pass
 
     @cached_property
-    def _regions(self) -> List[str]:
+    def _regions(self) -> list[str]:
         return self.params.region_names
 
     @cached_property
-    def _regions_with_nodes(self) -> List[str]:
+    def _regions_with_nodes(self) -> list[str]:
         output = []
         for region_id, region_name in enumerate(self.params.region_names):
             if len(self._node_nums) <= region_id:
@@ -165,7 +175,7 @@ class ClusterBase(BaseModel):
         return self.params.get('availability_zone').split(',')
 
     @cached_property
-    def _node_nums(self) -> List[int]:
+    def _node_nums(self) -> list[int]:
         node_nums = self.params.get(self._NODE_NUM_PARAM_NAME)
         if isinstance(node_nums, list):
             return [int(num) for num in node_nums]
@@ -173,7 +183,7 @@ class ClusterBase(BaseModel):
             return [node_nums]
         if isinstance(node_nums, str):
             return [int(num) for num in node_nums.split()]
-        raise ValueError('Unexpected value of %s parameter' % (self._NODE_NUM_PARAM_NAME,))
+        raise ValueError(f'Unexpected value of {self._NODE_NUM_PARAM_NAME} parameter')
 
     @property
     def _instance_type(self) -> str:
@@ -184,7 +194,9 @@ class ClusterBase(BaseModel):
         return self.params.get('test_duration')
 
     def _spot_low_price(self, region_id: int) -> float:
-        from sdcm.utils.pricing import AWSPricing  # pylint: disable=import-outside-toplevel
+        from sdcm.utils.pricing import (
+            AWSPricing,
+        )
 
         aws_pricing = AWSPricing()
         on_demand_price = float(aws_pricing.get_on_demand_instance_price(
@@ -205,7 +217,7 @@ class ClusterBase(BaseModel):
         ).provision_plan
 
     def _instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
-        params_builder = self._INSTANCE_PARAMS_BUILDER(  # pylint: disable=not-callable
+        params_builder = self._INSTANCE_PARAMS_BUILDER(
             params=self.params,
             region_id=region_id,
             user_data_raw=self._user_data,
