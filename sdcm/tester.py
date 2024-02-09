@@ -378,6 +378,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
+        self.bisect_ref_value = None
+        self.bisect_result_value = None
 
     def _init_test_duration(self):
         self._stress_duration: int = self.params.get('stress_duration')
@@ -678,6 +680,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=user_entry)
 
     def _init_test_timeout_thread(self) -> threading.Timer:
+        self.start_time = time.time()
         start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
         end_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time + int(self.test_duration) * 60))
         self.log.info('Test start time %s, duration is %s and timeout set to %s',
@@ -946,7 +949,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     PrometheusDBStats(host=monitors.nodes[0].external_address))
         self.prometheus_db = (self.prometheus_db_multitenant or [None])[0]
 
-        self.start_time = time.time()
         self.timeout_thread = self._init_test_timeout_thread()
 
         for db_cluster in self.db_clusters_multitenant:

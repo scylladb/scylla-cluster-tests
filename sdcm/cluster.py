@@ -1734,7 +1734,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             pkg_cmd = 'zypper'
             package_name = f"{package_name}-{package_version}" if package_version else package_name
         else:
-            pkg_cmd = 'apt-get'
+            pkg_cmd = 'DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
             version_prefix = f"={package_version}*" if package_version else ""
             # A workaround for: https://github.com/scylladb/scylla-pkg/issues/2578
             if package_name == "scylla-manager-agent":
@@ -1870,7 +1870,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.sudo('apt-get clean all')
                 self.remoter.sudo('rm -rf /var/cache/apt/')
                 self.remoter.sudo('apt-get update', retry=3)
-                self.remoter.run("echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections")
+                self.remoter.run(
+                    "echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections", ignore_status=True)
         except Exception as ex:  # pylint: disable=broad-except
             self.log.error('Failed to update repo cache: %s', ex)
 
@@ -4598,6 +4599,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             if ":" in scylla_repo.rsplit("/", 1)[-1]:
                 scylla_repo, version = scylla_repo.rsplit(":", 1)
             node.install_scylla(scylla_repo=scylla_repo, scylla_version=version)
+        # remove dependency when using scylla ami but installing from repo
+        node.remoter.sudo("sudo rm /etc/systemd/system/scylla-server.service.requires/scylla-image-*",
+                          ignore_status=True)
 
     @staticmethod
     def _wait_for_preinstalled_scylla(node):
