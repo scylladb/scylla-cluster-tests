@@ -59,6 +59,7 @@ from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThre
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
+from sdcm.reporting.tooling_reporter import PythonDriverReporter
 from sdcm.scan_operation_thread import ScanOperationThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.scylla_bench_thread import ScyllaBenchThread
@@ -359,6 +360,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.init_argus_run()
         self.argus_heartbeat_stop_signal = self.start_argus_heartbeat_thread()
+        PythonDriverReporter(argus_client=self.test_config.argus_client()).report()
         self.localhost = self._init_localhost()
 
         if self.params.get("logs_transport") == 'syslog-ng':
