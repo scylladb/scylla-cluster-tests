@@ -25,6 +25,7 @@ from functools import cached_property
 from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.cluster import BaseLoaderSet, BaseNode
 from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.reporting.tooling_reporter import CassandraStressVersionReporter
 from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
 from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
@@ -342,7 +343,13 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
         result = None
         self._disable_logging_for_cs(loader, cmd_runner)
-
+        try:
+            prefix,  *_ = stress_cmd.split("cassandra-stress", maxsplit=1)
+            reporter = CassandraStressVersionReporter(
+                cmd_runner, prefix, loader.parent_cluster.test_config.argus_client())
+            reporter.report()
+        except Exception:  # pylint: disable=broad-except
+            LOGGER.info("Failed to collect cassandra-stress version information")
         with cleanup_context, \
                 CassandraStressExporter(instance_name=cmd_runner_name,
                                         metrics=nemesis_metrics_obj(),
