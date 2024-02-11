@@ -44,10 +44,14 @@ Example running test using Hydra using `test-cases/PR-provision-test.yaml` confi
 #### Run test locally with AWS backend:
 ```bash
 export SCT_SCYLLA_VERSION=5.2.1
-# configuration needed for running from a local development machine (default communication is via private addresses)
-export SCT_IP_SSH_CONNECTIONS=public
-export SCT_INTRA_NODE_COMM_PUBLIC=true
-hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml
+# Test fails to report to Argus. So we need to disable it
+export SCT_ENABLE_ARGUS=false
+# configuration is needed for running from a local development machine (default communication is via private addresses)
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml --config configurations/network_config/test_communication_public.yaml
+
+# Run with IPv6 configuration
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml --config configurations/network_config/all_addresses_ipv6_public.yaml
+
 ```
 
 #### Run test using [SCT Runner](./docs/sct-runners.md) with AWS backend:
@@ -55,6 +59,8 @@ hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --con
 hydra create-runner-instance --cloud-provider <cloud_name> -r <region_name> -z <az> -t <test-id> -d <run_duration>
 
 export SCT_SCYLLA_VERSION=5.2.1
+# For choose correct network configuration, check test jenkins pipeline.
+# All predefined configurations are located under `configurations/network_config`
 hydra --execute-on-runner <runner-ip|`cat sct_runner_ip> "run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml"
 ```
 
