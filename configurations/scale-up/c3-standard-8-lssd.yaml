@@ -1,0 +1,6 @@
+stress_cmd_w: [
+  "cassandra-stress write no-warmup cl=QUORUM n=500M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=320 -pop seq=1..500M",
+  "cassandra-stress write no-warmup cl=QUORUM n=500M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=320 -pop seq=500M..1000M",
+               ]
+n_loaders: 2
+gce_instance_type_db: 'c3-standard-8-lssd'
