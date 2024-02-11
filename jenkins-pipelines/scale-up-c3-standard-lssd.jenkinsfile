@@ -1,0 +1,12 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'gce',
+    region: 'us-east1',
+    availability_zone: 'a',
+    test_name: 'performance_scale_up_test.ScaleUpTest.test_write_and_rebuild_time',
+    test_config: '''["test-cases/performance/scale-up/scale-up-base.yaml", "configurations/scale-up/c3-standard-8-lssd.yaml"]''',
+)

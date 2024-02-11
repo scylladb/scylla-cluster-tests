@@ -1,0 +1,27 @@
+test_duration: 480
+
+
+n_db_nodes: 3
+
+n_monitor_nodes: 1
+
+#GCE
+use_preinstalled_scylla: false  # required when using non standard instance type
+gce_root_disk_type_db: 'pd-ssd'
+gce_n_local_ssd_disk_db: 0  # c3-xxx-lssd comes with predefined number of ssd's
+gce_instance_type_loader: 'c3-highcpu-8'
+gce_root_disk_type_loader: 'pd-ssd'
+gce_instance_type_monitor: 'n2-highmem-4'
+
+user_prefix: 'perf-scale-up'
+ami_id_db_scylla_desc: 'VERSION_DESC'
+backtrace_decoding: false
+print_kernel_callstack: true
+ # 2023.1.4 as a base to use the same kernel as official image
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/5918161085269747628'
+
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+
+use_mgmt: false
+send_email: false
+email_recipients: ['scylla-perf-results@scylladb.com']
