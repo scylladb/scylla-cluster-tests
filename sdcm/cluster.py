@@ -1200,7 +1200,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def fstrim_scylla_disks(self):
         if not self._is_storage_virtualized():
-            self.remoter.sudo("fstrim -v /var/lib/scylla")
+            result = self.remoter.sudo("fstrim -v /var/lib/scylla", ignore_status=True)
+            if result.failed:
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method='fstrim_scylla_disks',
+                    message=f"fstrim'ming of Scylla disks was failed: stdout: {result.stdout}, stderr: {result.stderr}",
+                    severity=Severity.WARNING).publish_or_dump()
         else:
             TestFrameworkEvent(
                 source=self.__class__.__name__,
@@ -1720,7 +1726,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             pkg_cmd = 'zypper'
             package_name = f"{package_name}-{package_version}" if package_version else package_name
         else:
-            pkg_cmd = 'apt-get'
+            pkg_cmd = 'DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef"'
             version_prefix = f"={package_version}*" if package_version else ""
             # A workaround for: https://github.com/scylladb/scylla-pkg/issues/2578
             if package_name == "scylla-manager-agent":
@@ -4591,6 +4597,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             if ":" in scylla_repo.rsplit("/", 1)[-1]:
                 scylla_repo, version = scylla_repo.rsplit(":", 1)
             node.install_scylla(scylla_repo=scylla_repo, scylla_version=version)
+       # remove dependency when using scylla ami but installing from repo
+        node.remoter.sudo("sudo rm /etc/systemd/system/scylla-server.service.requires/scylla-image-*",
+                          ignore_status=True)
 
     @staticmethod
     def _wait_for_preinstalled_scylla(node):

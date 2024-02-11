@@ -1,0 +1,24 @@
+stress_cmd_w: [
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=1..550M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=550M..1100M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=1100M..1650M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=1650M..2200M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=2200M..2750M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=2750M..3300M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=3300M..3850M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=3850M..4400M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=4400M..4950M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=4950M..5500M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=5500M..6050M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=6050M..6600M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=6600M..7150M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=7150M..7700M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=7700M..8250M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=8250M..8800M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=8800M..9350M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=9350M..9900M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=9900M..10450M",
+  "cassandra-stress write no-warmup cl=QUORUM n=550M -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=350 -pop seq=10450M..11000M"
+]
+n_loaders: 20
+gce_instance_type_db: 'c3-standard-88-lssd'
