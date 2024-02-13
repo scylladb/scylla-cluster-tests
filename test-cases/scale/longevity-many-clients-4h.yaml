@@ -10,9 +10,9 @@ n_db_nodes: 4
 n_loaders: 50
 n_monitor_nodes: 1
 
-instance_type_db: 'i3.metal'
+instance_type_db: 'i4i.metal'
 instance_type_loader: 'c7i.large'
-instance_type_monitor: 'm5.2xlarge'
+instance_type_monitor: 'm6i.2xlarge'
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '031'
 nemesis_multiply_factor: 1

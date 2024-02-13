@@ -25,8 +25,8 @@ n_loaders: 4
 n_monitor_nodes: 1
 
 instance_type_db: 'i3en.3xlarge'
-instance_type_loader: 'c5.2xlarge'
-instance_type_runner: 'r5.2xlarge'
+instance_type_loader: 'c6i.2xlarge'
+instance_type_runner: 'r6i.2xlarge'
 
 cluster_health_check: false
 nemesis_class_name: 'DisruptiveMonkey:1 NonDisruptiveMonkey:2'

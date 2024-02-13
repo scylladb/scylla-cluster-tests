@@ -12,7 +12,7 @@ round_robin: true
 hinted_handoff: 'disabled'  # Turned off so it would not interfere with the creation of missing rows and with the repair
 
 instance_type_db: 'i4i.2xlarge'
-instance_type_loader: 'c5.2xlarge'
+instance_type_loader: 'c6i.2xlarge'
 
 n_db_nodes: 9
 n_loaders: 4

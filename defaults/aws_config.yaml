@@ -4,7 +4,7 @@ instance_provision_fallback_on_demand: false
 region_name:
   - eu-west-1
 user_credentials_path: '~/.ssh/scylla-qa-ec2'
-instance_type_loader: 'c5.xlarge'
+instance_type_loader: 'c6i.xlarge'
 instance_type_monitor: 't3.large'
 # manual on creating loader AMI's: see docs/new_loader_ami.md
 ami_id_loader: 'scylla-qa-loader-ami-v19'

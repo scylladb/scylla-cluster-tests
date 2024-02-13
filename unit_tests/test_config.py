@@ -83,7 +83,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
         os.environ['SCT_N_DB_NODES'] = '2 2'
-        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy ami-dummy2'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
 
@@ -354,7 +354,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_DB_TYPE'] = 'cloud_scylla'
         os.environ['SCT_REGION_NAME'] = 'us-east-1'
         os.environ['SCT_N_DB_NODES'] = '2'
-        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AUTHENTICATOR_USER'] = "user"
         os.environ['SCT_AUTHENTICATOR_PASSWORD'] = "pass"
         os.environ['SCT_CLOUD_CLUSTER_ID'] = "193712947904378"
@@ -792,7 +792,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_30_cs_profile_parse(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_REGION_NAME'] = '["eu-west-1"]'
-        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-dummy'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/cs_user_profile.yaml'
 
@@ -817,7 +817,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_REGION_NAME'] = 'eu-west-1'
         os.environ['SCT_N_DB_NODES'] = '2'
-        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
 
         conf = sct_config.SCTConfiguration()
@@ -903,7 +903,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_DB_TYPE'] = 'cloud_scylla'
         os.environ['SCT_REGION_NAME'] = 'us-east-1'
         os.environ['SCT_N_DB_NODES'] = '2'
-        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i4i.large'
         os.environ['SCT_AUTHENTICATOR_USER'] = "user"
         os.environ['SCT_AUTHENTICATOR_PASSWORD'] = "pass"
         os.environ['SCT_CLOUD_CLUSTER_ID'] = "193712947904378"

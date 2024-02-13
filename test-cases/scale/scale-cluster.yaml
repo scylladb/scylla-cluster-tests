@@ -22,7 +22,7 @@ n_monitor_nodes: 1
 
 # AWS
 instance_type_db: 'i4i.large'
-instance_type_loader: 'c5.xlarge'
+instance_type_loader: 'c6i.xlarge'
 
 # GCP
 gce_instance_type_db: 'n2-highmem-2'

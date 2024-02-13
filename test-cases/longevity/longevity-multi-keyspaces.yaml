@@ -25,7 +25,7 @@ gce_instance_type_db: 'n2-highmem-64'
 gce_n_local_ssd_disk_db: 16
 
 root_disk_size_db: 60 # twice as as default, cause each keyspace generate lots of logs
-instance_type_loader: 'c5.4xlarge'
+instance_type_loader: 'c6i.4xlarge'
 root_disk_size_monitor: 100
 root_disk_size_runner: 120
 

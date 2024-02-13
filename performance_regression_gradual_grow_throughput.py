@@ -29,7 +29,7 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
                              self.REPLICATION_FACTOR)
         # How many standard deviations should span the cluster's memory
         self.CONFIDENCE = 6  # pylint: disable=invalid-name
-        # intance i3.4xlarge
+        # instance i3.4xlarge
         self.INSTANCE_MEMORY_GB = 122  # pylint: disable=invalid-name
         self.GAUSS_CENTER = self.ROW_COUNT // 2  # pylint: disable=invalid-name
         self.GAUSS_SIGMA = int(self.INSTANCE_MEMORY_GB * self.CLUSTER_SIZE * 1024 * 1024 *  # pylint: disable=invalid-name
