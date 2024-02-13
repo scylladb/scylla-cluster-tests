@@ -214,6 +214,11 @@ class VirtualMachineProvider:
                     "deleteOption": "Delete"
                 }
             })
+        elif image_id.startswith("/CommunityGalleries/"):
+            storage_profile['storage_profile'].update({
+                "image_reference": {"community_gallery_image_id": image_id},
+                "deleteOption": "Delete"
+            })
         else:
             image_reference_values = image_id.split(":")
             storage_profile.update({

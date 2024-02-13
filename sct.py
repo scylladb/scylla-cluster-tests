@@ -609,10 +609,10 @@ def list_images(cloud_provider: str, branch: str, version: str, region: str, arc
             case "azure":
                 if arch:
                     click.echo("WARNING:--arch option not implemented currently for Azure machine images.")
-                azure_images = azure_utils.get_scylla_images(scylla_version=version, region_name=region)
+                azure_images = azure_utils.get_released_scylla_images(scylla_version=version, region_name=region)
                 rows = []
                 for image in azure_images:
-                    rows.append(['Azure', image.name, image.id, 'N/A'])
+                    rows.append(['Azure', image.name, image.unique_id, 'N/A'])
                 click.echo(
                     create_pretty_table(rows=rows, field_names=version_fields).get_string(
                         title="Azure Machine Images by version")
