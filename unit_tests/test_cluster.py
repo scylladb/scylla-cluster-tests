@@ -711,6 +711,8 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
     table_names = cluster.get_any_ks_cf_list(docker_scylla, filter_empty_tables=False)
     assert set(table_names) == {'system.runtime_info', 'system_distributed.cdc_generation_timestamps',
                                 'system.config', 'system.local', 'system.token_ring', 'system.clients',
+                                'system.commitlog_cleanups', 'system.discovery', 'system.group0_history',
+                                'system.raft', 'system.raft_snapshot_config', 'system.raft_snapshots', 'system.raft_state',
                                 'system_schema.tables', 'system_schema.columns', 'system.compaction_history',
                                 'system.cdc_local', 'system.versions', 'system_distributed_everywhere.cdc_generation_descriptions_v2',
                                 'system.scylla_local', 'system.cluster_status', 'system.protocol_servers',
