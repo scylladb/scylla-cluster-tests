@@ -1677,11 +1677,21 @@ class SCTConfiguration(dict):
                     azure_region_names = [self.get('azure_region_name')]
 
                 for region in azure_region_names:
-                    azure_image = azure_utils.get_scylla_images(scylla_version, region)[0]
-                    self.log.debug("Found AMI %s for scylla_version='%s' in %s",
+                    try:
+                        if ":" in scylla_version:
+                            azure_image = azure_utils.get_scylla_images(
+                                scylla_version=scylla_version, region_name=region)[0]
+                        else:
+                            azure_image = azure_utils.get_released_scylla_images(
+                                scylla_version=scylla_version, region_name=region)[0]
+                    except Exception as ex:
+                        raise ValueError(
+                            f"Azure Image for scylla_version='{scylla_version}' not found in {region}") from ex
+                    self.log.debug("Found Azure Image %s for scylla_version='%s' in %s",
                                    azure_image.name, scylla_version, region)
                     scylla_azure_images.append(azure_image)
-                self["azure_image_db"] = " ".join(image.id for image in scylla_azure_images)
+                self["azure_image_db"] = " ".join(getattr(image, 'id', None) or getattr(
+                    image, 'unique_id', None) for image in scylla_azure_images)
             elif not self.get('scylla_repo'):
                 self['scylla_repo'] = find_scylla_repo(scylla_version, dist_type, dist_version)
             else:

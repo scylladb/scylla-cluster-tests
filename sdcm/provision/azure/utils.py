@@ -11,15 +11,16 @@
 #
 # Copyright (c) 2022 ScyllaDB
 import logging
+import pprint
 import re
 from contextlib import suppress
 
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
-from azure.mgmt.compute.models import GalleryImageVersion
+from azure.mgmt.compute.models import GalleryImageVersion, CommunityGalleryImageVersion
 
 from sdcm.provision.provisioner import VmArch
 from sdcm.utils.azure_utils import AzureService
-from sdcm.utils.version_utils import SCYLLA_VERSION_GROUPED_RE
+from sdcm.utils.version_utils import SCYLLA_VERSION_GROUPED_RE, is_enterprise
 
 
 LOGGER = logging.getLogger(__name__)
@@ -93,11 +94,49 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
     return output[::-1]
 
 
+def get_released_scylla_images(  # pylint: disable=unused-argument
+        scylla_version: str,
+        region_name: str,
+        arch: VmArch = VmArch.X86,
+        azure_service: AzureService = AzureService()
+
+) -> list[CommunityGalleryImageVersion]:
+    branch_version = '.'.join(scylla_version.split('.')[:2])
+    if is_enterprise(branch_version):
+        gallery_image_name = f'scylla-enterprise-{branch_version}'
+    else:
+        gallery_image_name = f'scylla-{branch_version}'
+    community_gallery_images = azure_service.compute.community_gallery_image_versions.list(
+        location=region_name,
+        gallery_image_name=gallery_image_name,
+        public_gallery_name='scylladb-7e8d8a04-23db-487d-87ec-0e175c0615bb',
+    )
+    community_gallery_images: list[CommunityGalleryImageVersion] = list(community_gallery_images)
+    community_gallery_images.sort(key=lambda x: x.published_date, reverse=True)
+
+    # a specific version was asked, return only that version
+    if branch_version != scylla_version:
+        specific_version = [image for image in community_gallery_images if image.name == scylla_version]
+        assert specific_version, f"`{scylla_version}` wasn't found in:\n{pprint.pformat(community_gallery_images)}"
+        return specific_version
+
+    return community_gallery_images
+
+
 IMAGE_URL_REGEX = re.compile(
     r'.*/resourceGroups/(?P<resource_group_name>.*)/providers/Microsoft.Compute/images/(?P<image_name>.*)')
 
 
+COMMUNITY_IMAGE_URL_REGEX = re.compile(
+    r'.*/CommunityGalleries/(?P<public_gallery_name>.*)/Images/(?P<gallery_image_name>.*)/Versions/(?P<version>.*)')
+
+
 def get_image_tags(link: str) -> dict:
-    params = IMAGE_URL_REGEX.search(link).groupdict()
-    azure_image: GalleryImageVersion = AzureService().compute.images.get(**params)
-    return azure_image.tags
+    if match := IMAGE_URL_REGEX.search(link):
+        params = match.groupdict()
+        azure_image: GalleryImageVersion = AzureService().compute.images.get(**params)
+        return azure_image.tags
+    elif match := COMMUNITY_IMAGE_URL_REGEX.search(link):
+        params = match.groupdict()
+        return dict(scylla_version=params.get('version'), user_data_format_version='3')
+    return {}
