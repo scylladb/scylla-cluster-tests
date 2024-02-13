@@ -1,2 +1,2 @@
-instance_type_runner: c5.2xlarge
+instance_type_runner: c6i.2xlarge
 root_disk_size_runner: 140

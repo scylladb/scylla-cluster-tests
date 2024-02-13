@@ -6,7 +6,7 @@ user_prefix: "perf-thrpt-2vcpus"
 
 n_loaders: 1
 stress_multiplier: 1
-instance_type_loader: 'c5.2xlarge'
+instance_type_loader: 'c6i.2xlarge'
 round_robin: true
 # https://github.com/scylladb/scylla-cluster-tests/issues/5883
 use_hdr_cs_histogram: false

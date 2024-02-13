@@ -28,7 +28,7 @@ n_monitor_nodes: 1
 
 n_loaders: 14
 k8s_n_loader_pods_per_cluster: 1
-instance_type_loader: 'c5.large'
+instance_type_loader: 'c6i.large'
 
 k8s_minio_storage_size: 1024Gi
 
