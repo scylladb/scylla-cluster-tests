@@ -1129,13 +1129,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 f"Failed to get 'ss' binary version\n"
                 f"stdout: {ss_version_result.stdout}\n"
                 f"stderr: {ss_version_result.stderr}")
-            if self.distro.is_rhel_like:
-                self.remoter.sudo("yum install -y iproute", ignore_status=True)
-            elif self.distro.is_sles:
-                self.remoter.sudo("zypper install -y iproute", ignore_status=True)
+            if self.distro.is_rhel_like or self.distro.is_sles:
+                self.install_package("iproute", ignore_status=True)
             else:
-                self.remoter.sudo("apt-get install -y iproute2", ignore_status=True)
-
+                self.install_package("iproute2", ignore_status=True)
         try:
             # Path to `ss' is /usr/sbin/ss for RHEL-like distros and /bin/ss for Debian-based.  Unfortunately,
             # /usr/sbin is not always in $PATH, so need to set it explicitly.

@@ -66,7 +66,7 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=to
     entryfile_path = entryfile_path / 'docker' / 'scylla-sct' / ('entry_ssl.sh' if ssl else 'entry.sh')
 
     alternator_flags = "--alternator-port 8000 --alternator-write-isolation=always"
-    docker_version = "scylladb/scylla-nightly:5.2.0-dev-0.20220820.516089beb0b8"
+    docker_version = docker_scylla_args.get('image', "scylladb/scylla-nightly:5.5.0-dev-0.20240213.314fd9a11f23")
     cluster = LocalScyllaClusterDummy()
 
     if ssl:
@@ -104,6 +104,7 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=to
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
+    scylla.remoter.run('apt-get update')
     wait.wait_for(func=db_up, step=1, text='Waiting for DB services to be up', timeout=120, throw_exc=True)
     wait.wait_for(func=db_alternator_up, step=1, text='Waiting for DB services to be up alternator)',
                   timeout=120, throw_exc=True)
