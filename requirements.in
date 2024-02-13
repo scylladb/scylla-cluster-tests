@@ -41,7 +41,7 @@ google-cloud-storage==2.10.0
 google-cloud-compute==1.13.0
 pip-tools==6.13.0
 azure-identity==1.6.1
-azure-mgmt-compute==23.0.0
+azure-mgmt-compute==30.5.0
 azure-mgmt-network==19.0.0
 azure-mgmt-resource==20.0.0
 azure-mgmt-subscription==1.0.0
