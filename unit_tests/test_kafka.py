@@ -11,13 +11,20 @@
 #
 # Copyright (c) 2023 ScyllaDB
 import os
+import logging
+
 import pytest
 
+from sdcm.stress_thread import CassandraStressThread
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
+from sdcm.kafka.kafka_consumer import KafkaCDCReaderThread
+from unit_tests.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
     pytest.mark.integration,
 ]
+
+LOGGER = logging.getLogger(__name__)
 
 
 @pytest.fixture(name="kafka_cluster", scope="session")
@@ -32,16 +39,21 @@ def fixture_kafka_cluster(tmp_path_factory):
     kafka.stop()
 
 
-@pytest.mark.docker_scylla_args(docker_network="kafka-stack-docker-compose_default")
+@pytest.mark.docker_scylla_args(docker_network="kafka-stack-docker-compose_default",
+                                image="scylladb/scylla-nightly:latest")
 @pytest.mark.sct_config(
     files="unit_tests/test_data/kafka_connectors/scylla-cdc-source-connector.yaml"
 )
-def test_01_kafka_cdc_source_connector(docker_scylla, kafka_cluster, params):
+def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, params, events):
     """
     setup kafka with scylla-cdc-source-connector with docker based scylla node
     - from confluent-hub
     - from GitHub release url
     """
+
+    # pylint: disable=unused-argument,unnecessary-lambda
+    params['kafka_backend'] = 'localstack'
+
     docker_scylla.run_cqlsh(
         "CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 };"
     )
@@ -50,12 +62,32 @@ def test_01_kafka_cdc_source_connector(docker_scylla, kafka_cluster, params):
         '"C0" blob, "C1" blob, "C2" blob, "C3" blob, "C4" blob) WITH  '
         "cdc = {'enabled': true, 'preimage': false, 'postimage': true, 'ttl': 600}"
     )
-
     docker_scylla.parent_cluster.nodes = [docker_scylla]
-    for connector_config in params.get("kafka_connectors"):
-        kafka_cluster.create_connector(
-            db_cluster=docker_scylla.parent_cluster, connector_config=connector_config
-        )
+    connector_config = params.get("kafka_connectors")[0]
+    kafka_cluster.create_connector(
+        db_cluster=docker_scylla.parent_cluster, connector_config=connector_config
+    )
+
+    loader_set = LocalLoaderSetDummy()
+
+    cmd = (
+        """cassandra-stress write cl=ONE n=500 -rate threads=10 """
+    )
+
+    cs_thread = CassandraStressThread(
+        loader_set, cmd, node_list=[docker_scylla], timeout=120, params=params
+    )
+    request.addfinalizer(lambda: cs_thread.kill())
+
+    cs_thread.run()
+    LOGGER.info(cs_thread.get_results())
+
+    reader_thread = KafkaCDCReaderThread(tester=None, params=params, connector_index=0, read_number_of_key=500)
+    request.addfinalizer(lambda: reader_thread.stop())
+
+    reader_thread.start()
+
+    reader_thread.join()
 
 
 @pytest.mark.docker_scylla_args(docker_network="kafka-stack-docker-compose_default")

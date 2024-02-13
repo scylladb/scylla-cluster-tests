@@ -138,7 +138,9 @@ from sdcm.utils.csrangehistogram import CSHistogramTagTypes, CSWorkloadTypes, ma
     make_cs_range_histogram_summary_by_interval
 from sdcm.utils.raft.common import validate_raft_on_nodes
 from sdcm.commit_log_check_thread import CommitLogCheckThread
+from sdcm.kafka.kafka_consumer import KafkaCDCReaderThread
 from test_lib.compaction import CompactionStrategy
+
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
@@ -161,6 +163,8 @@ except ImportError:
 
 
 TEST_LOG = logging.getLogger(__name__)
+
+PYTHON_THREAD_LIST = (KafkaCDCReaderThread,)
 
 
 def teardown_on_exception(method):
@@ -1915,6 +1919,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return self.run_nosqlbench_thread(**params)
         elif stress_cmd.startswith('table_compare'):
             return self.run_table_compare_thread(**params)
+        elif stress_cmd.startswith('python_thread'):
+            return self.run_python_thread(**params)
         else:
             raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
 
@@ -2179,6 +2185,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                   stress_cmd=cmd,
                                   timeout=timeout,
                                   params=self.params).run()
+
+    # pylint: disable=too-many-arguments
+    def run_python_thread(self, stress_cmd, duration=None, **_):
+        timeout = self.get_duration(duration)
+
+        options = dict(item.strip().split("=") for item in stress_cmd.replace('python_thread', '').strip().split(";"))
+        klass_thread = next(iter([t for t in PYTHON_THREAD_LIST if options.get('thread') == t.__name__]), None)
+        assert klass_thread
+        thread = klass_thread(tester=self,
+                              stress_cmd=stress_cmd,
+                              timeout=timeout,
+                              params=self.params, **options)
+        thread.start()
+        return thread
 
     def kill_stress_thread(self):
         if self.loaders:  # the test can fail on provision step and loaders are still not provisioned

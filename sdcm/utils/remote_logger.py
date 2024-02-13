@@ -594,6 +594,7 @@ def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint:
             return SSHGeneralFileLogger(node, target_log_file)
     return None
 
+
 class DockerComposeLogger(CommandClusterLoggerBase):  # pylint: disable=too-few-public-methods
     # pylint: disable=invalid-overridden-method
     @cached_property

@@ -4,8 +4,8 @@ pre_create_keyspace: [
   "CREATE TABLE IF NOT EXISTS keyspace1.standard1 (key blob PRIMARY KEY, \"C0\" blob, \"C1\" blob, \"C2\" blob, \"C3\" blob, \"C4\" blob) WITH  cdc = {'enabled': true, 'preimage': false, 'postimage': true, 'ttl': 600}"
 ]
 
-stress_cmd: ["cassandra-stress write cl=ONE duration=1m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..10000000 -log interval=5",
-             ]
+stress_cmd: ["cassandra-stress write cl=ONE n=1000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..10000000 -log interval=5",
+             "python_thread thread=KafkaCDCReaderThread ; read_number_of_key=1000"]
 
 n_loaders: 1
 n_monitor_nodes: 1
@@ -32,3 +32,8 @@ kafka_connectors:
       "connector.class": "com.scylladb.cdc.debezium.connector.ScyllaConnector"
       "scylla.name": "SCTConnectorNamespace"
       "scylla.table.names": 'keyspace1.standard1'
+      "key.converter": 'org.apache.kafka.connect.json.JsonConverter'
+      "value.converter": 'org.apache.kafka.connect.json.JsonConverter'
+      "key.converter.schemas.enable": true
+      "value.converter.schemas.enable": true
+      "auto.create.topics.enable": true
