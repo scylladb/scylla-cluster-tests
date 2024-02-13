@@ -14,6 +14,8 @@
 import os
 import logging
 from pathlib import Path
+from xml.etree import ElementTree as etree
+from copy import deepcopy
 
 import jenkins
 
@@ -24,6 +26,29 @@ from sdcm.keystore import KeyStore
 DIR_TEMPLATE = Path(__file__).parent.joinpath("folder-template.xml").read_text(encoding="utf-8")
 JOB_TEMPLATE = Path(__file__).parent.joinpath("template.xml").read_text(encoding="utf-8")
 LOGGER = logging.getLogger(__name__)
+
+
+def tree_merge(element_a: etree.Element, element_b: etree.Element):
+    """
+    merge two xml trees A and B, so that each recursively found leaf element of B is added to A.
+    If the element already exists in A, it is replaced with B's version.
+    Tree structure is created in A as required to reflect the position of the leaf element in B.
+
+    Given <top><first><a/><b/></first></top> and  <top><first><c/></first></top>, a merge results in
+    <top><first><a/><b/><c/></first></top> (order not guaranteed)
+    """
+
+    def inner(a_parent: etree.Element, b_parent: etree.Element):
+        for b_child in b_parent:
+            a_child = a_parent.findall('./' + b_child.tag)
+            if not a_child:
+                a_parent.append(b_child)
+            elif b_child.items():
+                inner(a_child[0], b_child)
+
+    res = deepcopy(element_a)
+    inner(res, element_b)
+    return res
 
 
 class JenkinsPipelines:
@@ -38,6 +63,12 @@ class JenkinsPipelines:
         self.sct_branch_name = sct_branch_name
         self.sct_repo = sct_repo
 
+    def reconfig_job(self, new_path, dir_xml_data):
+        current_config = self.jenkins.get_job_config(new_path)
+        dir_xml_data = etree.tostring(tree_merge(etree.fromstring(current_config),
+                                      etree.fromstring(dir_xml_data))).decode()
+        self.jenkins.reconfig_job(new_path, dir_xml_data)
+
     def create_directory(self, name: Path | str, display_name: str):
         try:
             dir_xml_data = DIR_TEMPLATE % dict(sct_display_name=display_name)
@@ -45,7 +76,7 @@ class JenkinsPipelines:
 
             if self.jenkins.job_exists(new_path):
                 LOGGER.info("reconfig folder [%s]", new_path)
-                self.jenkins.reconfig_job(new_path, dir_xml_data)
+                self.reconfig_job(new_path, dir_xml_data)
             else:
                 LOGGER.info("creating folder [%s]", new_path)
                 self.jenkins.create_job(new_path, dir_xml_data)
@@ -70,7 +101,7 @@ class JenkinsPipelines:
         try:
             if self.jenkins.job_exists(job_name):
                 LOGGER.info("%s is used to reconfig job", job_name)
-                self.jenkins.reconfig_job(job_name, xml_data)
+                self.reconfig_job(job_name, xml_data)
             else:
                 LOGGER.info("%s is used to create job", job_name)
                 self.jenkins.create_job(job_name, xml_data)
@@ -93,7 +124,7 @@ class JenkinsPipelines:
             if self.jenkins.job_exists(_job_name):
                 LOGGER.info("%s is used to reconfig job", _job_name)
 
-                self.jenkins.reconfig_job(_job_name, xml_data)
+                self.reconfig_job(_job_name, xml_data)
             else:
                 LOGGER.info("%s is used to create job", _job_name)
                 self.jenkins.create_job(_job_name, xml_data)
