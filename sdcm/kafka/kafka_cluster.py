@@ -28,9 +28,6 @@ from sdcm.kafka.kafka_config import SctKafkaConfiguration
 LOGGER = logging.getLogger(__name__)
 
 
-
-
-
 class LocalKafkaCluster(cluster.BaseCluster):
     def __init__(self, remoter=LOCALRUNNER):
         super().__init__(cluster_prefix="kafka", add_nodes=False)
