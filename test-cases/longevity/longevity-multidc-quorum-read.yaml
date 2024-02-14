@@ -1,0 +1,34 @@
+test_duration: 360
+
+# Workloads
+
+prepare_write_cmd:
+  [
+    "cassandra-stress write no-warmup cl=ALL n=10100200 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10100200 -log interval=5",
+    "cassandra-stress write no-warmup cl=QUORUM n=20100200 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=60 -pop seq=10100201..30200400 -log interval=5"
+  ]
+
+stress_cmd: "cassandra-stress read no-warmup cl=QUORUM n=30200400 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..30200400 -log interval=5"
+
+instance_type_db: 'i4i.2xlarge'
+n_db_nodes: '3 3'
+n_loaders: '1 1'
+n_monitor_nodes: 1
+region_aware_loader: true
+region_name: 'eu-west-1 eu-west-2'
+
+user_prefix: 'multi-dc-QUORUM'
+
+server_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+
+internode_compression: 'all'
+
+use_mgmt: false
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_seed: '032'
+nemesis_interval: 5
+nemesis_filter_seeds: false
