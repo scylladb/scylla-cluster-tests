@@ -157,10 +157,11 @@ class JenkinsPipelines:
         else:
             LOGGER.error(exc)
 
-    def create_job_tree(self, local_path: str | Path,
+    def create_job_tree(self, local_path: str | Path,  # pylint: disable=too-many-arguments
                         create_freestyle_jobs: bool = True,
                         create_pipelines_jobs: bool = True,
-                        template_context: dict | None = None):
+                        template_context: dict | None = None,
+                        job_name_suffix: str = '-test'):
         for root, _, job_files in os.walk(local_path):
             jenkins_path = Path(root).relative_to(local_path)
 
@@ -179,6 +180,6 @@ class JenkinsPipelines:
             for job_file in job_files:
                 job_file = Path(root) / job_file
                 if (job_file.suffix == '.jenkinsfile') and create_pipelines_jobs:
-                    self.create_pipeline_job(job_file, group_name=jenkins_path)
+                    self.create_pipeline_job(job_file, group_name=jenkins_path, job_name_suffix=job_name_suffix)
                 if (job_file.suffix == '.xml') and create_freestyle_jobs:
                     self.create_freestyle_job(job_file, group_name=jenkins_path, template_context=template_context)
