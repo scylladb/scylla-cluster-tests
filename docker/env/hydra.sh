@@ -166,15 +166,6 @@ else
     echo "There is ${DOCKER_REPO}:${VERSION} in local cache, using it."
 fi
 
-# Check for SSH keys
-if [[ -z "$HYDRA_HELP" ]]; then
-    if [ -z "$HYDRA_DRY_RUN" ]; then
-        ${SCT_DIR}/get-qa-ssh-keys.sh
-    else
-        echo ${SCT_DIR}/get-qa-ssh-keys.sh
-    fi
-fi
-
 if [ -z "$HYDRA_DRY_RUN" ]; then
     DOCKER_GROUP_ARGS=()
 else

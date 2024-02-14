@@ -109,7 +109,6 @@ class LongevityPipelineTest:
         docker_run_prefix = self.docker_run_prefix(runner)
         sct_dir = self.sct_path(runner)
         expected = (
-            f'{self.sct_base_path}/get-qa-ssh-keys.sh',
             re.compile(f"{docker_run_prefix} -l TestId=11111111-1111-1111-1111-111111111111"),
             re.compile(f"{docker_run_prefix} -v {sct_dir}:{sct_dir} .* -v /var/run:/run"),
             re.compile(f"{docker_run_prefix} --group-add 1 --group-add 2 --group-add 3"),
