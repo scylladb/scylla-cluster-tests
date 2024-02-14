@@ -258,11 +258,11 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         return cls._argus_client
 
     @classmethod
-    def init_argus_client(cls, params: dict):
+    def init_argus_client(cls, params: dict, test_id: str | None = None):
         if params.get("enable_argus"):
             LOGGER.info("Initializing Argus connection...")
             try:
-                cls._argus_client = get_argus_client(run_id=cls.test_id())
+                cls._argus_client = get_argus_client(run_id=cls.test_id() if not test_id else test_id)
                 return
             except ArgusError as exc:
                 LOGGER.warning("Failed to initialize argus client: %s", exc.message)

@@ -14,11 +14,11 @@
 """
 Handling Scylla-cluster-test configuration loading
 """
-import json
 # pylint: disable=too-many-lines
 import os
 import re
 import ast
+import json
 import logging
 import getpass
 import pathlib
@@ -26,8 +26,8 @@ import tempfile
 from typing import List, Union, Set
 
 from distutils.util import strtobool
-
 import anyconfig
+from argus.client.sct.types import Package
 
 from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
@@ -56,6 +56,7 @@ from sdcm.utils.version_utils import (
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import get_gce_image_tags
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
+from sdcm.test_config import TestConfig
 
 
 def _str(value: str) -> str:
@@ -2162,6 +2163,7 @@ class SCTConfiguration(dict):
         new_scylla_repo = self.get('new_scylla_repo')
         if new_scylla_repo and not self.get('target_upgrade_version'):
             self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
+            self.update_argus_with_version(self.get('target_upgrade_version'), "scylla-server-upgrade-target")
 
     def _check_unexpected_sct_variables(self):
         # check if there are SCT_* environment variable which aren't documented
@@ -2417,7 +2419,23 @@ class SCTConfiguration(dict):
             _is_enterprise = 'enterprise' in docker_repo
         self.scylla_version = scylla_version
         self.is_enterprise = _is_enterprise
+        self.update_argus_with_version(scylla_version, "scylla-server-target")
+
         return scylla_version, _is_enterprise
+
+    def update_argus_with_version(self, scylla_version: str, package_name: str):
+        try:
+            package = Package(name=package_name, date='#NO_DATE',
+                              version=scylla_version,
+                              revision_id='#NO_COMMIT_ID',
+                              build_id="#NO_BUILDID")
+            self.log.info("Saving upgraded Scylla version...")
+            test_config = TestConfig()
+            test_config.init_argus_client(params=self, test_id=self.get("reuse_cluster") or self.get("test_id"))
+            test_config.argus_client().submit_packages([package])
+            test_config.argus_client().update_scylla_version(scylla_version)
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.exception("Failed to save target Scylla version in Argus", exc_info=exc)
 
     def dump_config(self):
         """
