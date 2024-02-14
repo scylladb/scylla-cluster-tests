@@ -1375,7 +1375,9 @@ def create_qa_tools_jobs(username, password, sct_branch, sct_repo, triggers):
     server = JenkinsPipelines(
         username=username, password=password, base_job_dir=base_job_dir,
         sct_branch_name=sct_branch, sct_repo=sct_repo)
-    server.create_job_tree(f'{server.base_sct_dir}/jenkins-pipelines/qa', create_freestyle_jobs=triggers)
+    server.create_job_tree(f'{server.base_sct_dir}/jenkins-pipelines/qa',
+                           create_freestyle_jobs=triggers,
+                           job_name_suffix='')
 
 
 @cli.command('create-performance-jobs',
