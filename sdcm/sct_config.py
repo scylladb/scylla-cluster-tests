@@ -29,7 +29,10 @@ from typing import List, Union, Set
 from distutils.util import strtobool
 import anyconfig
 from argus.client.sct.types import Package
+<<<<<<< HEAD
 from pydantic import BaseModel
+=======
+>>>>>>> 57420794 (fix(sct_config): send argus resolved scylla_versions)
 
 from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
@@ -69,8 +72,11 @@ from sdcm.utils.azure_utils import (
 )
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.test_config import TestConfig
+<<<<<<< HEAD
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
 from sdcm.mgmt.common import AgentBackupParameters
+=======
+>>>>>>> 57420794 (fix(sct_config): send argus resolved scylla_versions)
 
 
 def _str(value: str) -> str:
@@ -2623,6 +2629,7 @@ class SCTConfiguration(dict):
 
     def update_argus_with_version(self, scylla_version: str, package_name: str):
         try:
+<<<<<<< HEAD
             version_regex = ARGUS_VERSION_RE
             if match := version_regex.match(scylla_version):
                 version_info = match.groupdict()
@@ -2650,6 +2657,20 @@ class SCTConfiguration(dict):
             out["mgmt_agent_backup_config"] = mgmt_agent_backup_config.dict(by_alias=True, exclude_none=True)
         return out
 
+=======
+            package = Package(name=package_name, date='#NO_DATE',
+                              version=scylla_version,
+                              revision_id='#NO_COMMIT_ID',
+                              build_id="#NO_BUILDID")
+            self.log.info("Saving upgraded Scylla version...")
+            test_config = TestConfig()
+            test_config.init_argus_client(params=self, test_id=self.get("reuse_cluster") or self.get("test_id"))
+            test_config.argus_client().submit_packages([package])
+            test_config.argus_client().update_scylla_version(scylla_version)
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.exception("Failed to save target Scylla version in Argus", exc_info=exc)
+
+>>>>>>> 57420794 (fix(sct_config): send argus resolved scylla_versions)
     def dump_config(self):
         """
         Dump current configuration to string
