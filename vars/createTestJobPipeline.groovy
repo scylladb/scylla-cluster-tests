@@ -87,11 +87,13 @@ def call() {
                                                     echo "all jobs have been created"
                                                 fi
 
-                                                if [[ "${params.branch}" == "scylla-master" ]] ; then
-                                                    echo "start create qa tools jobs  ......."
-                                                        ./docker/env/hydra.sh create-performance-jobs --triggers --sct_branch branch-perf-v14 --sct_repo ${params.sct_repo}
-                                                    echo "all jobs have been created"
-                                                fi
+                                                # disable auto creating the perf jobs until we'll be running from master
+                                                #if [[ "${params.branch}" == "scylla-master" ]] ; then
+                                                #    echo "start create qa tools jobs  ......."
+                                                #        ./docker/env/hydra.sh create-performance-jobs --triggers --sct_branch branch-perf-v14 --sct_repo ${params.sct_repo}
+                                                #    echo "all jobs have been created"
+                                                #fi
+
                                                 """
                                         }
                                     }
