@@ -329,12 +329,8 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 hdr_logger_context:
             publisher.event_id = cs_stress_event.event_id
             try:
-                # prolong timeout by 10% to avoid killing cassandra-stress process
-                hard_timeout = self.timeout + int(self.timeout * 0.1)
-                # prolong soft timeout by 5%
-                soft_timeout = self.timeout + int(self.timeout * 0.05)
-                with SoftTimeoutContext(timeout=soft_timeout, operation="cassandra-stress"):
-                    result = cmd_runner.run(cmd=node_cmd, timeout=hard_timeout, log_file=log_file_name, retry=0)
+                with SoftTimeoutContext(timeout=self.soft_timeout, operation="cassandra-stress"):
+                    result = cmd_runner.run(cmd=node_cmd, timeout=self.hard_timeout, log_file=log_file_name, retry=0)
             except Exception as exc:  # pylint: disable=broad-except
                 self.configure_event_on_failure(stress_event=cs_stress_event, exc=exc)
 
