@@ -1731,6 +1731,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         8. Restart scylla server.
         9. Verify scylla is up.
         """
+        # Temporary disable due to https://github.com/scylladb/scylla-enterprise/issues/3736
+        if SkipPerIssues('https://github.com/scylladb/scylla-enterprise/issues/3736', self.tester.params):
+            raise UnsupportedNemesis('Disabled due to https://github.com/scylladb/scylla-enterprise/issues/3736')
 
         node = self.target_node
         if self._is_it_on_kubernetes():
