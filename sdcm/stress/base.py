@@ -34,6 +34,11 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         self.loader_set: BaseLoaderSet = loader_set
         self.stress_cmd = stress_cmd
         self.timeout = timeout
+        # prolong timeout by 10% to avoid killing stress process
+        self.hard_timeout = self.timeout + int(self.timeout * 0.1)
+        # prolong soft timeout by 5%
+        self.soft_timeout = self.timeout + int(self.timeout * 0.05)
+
         self.stress_num = stress_num
         self.node_list = node_list or []
         self.round_robin = round_robin
@@ -83,7 +88,7 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
 
     def get_results(self):
         results = []
-        timeout = self.timeout + 120
+        timeout = self.hard_timeout + 120
         LOGGER.debug('Wait for %s stress threads results', self.max_workers)
         for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
             results.append(future.result())
@@ -93,7 +98,7 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
     def verify_results(self):
         results = []
         errors = []
-        timeout = self.timeout + 120
+        timeout = self.hard_timeout + 120
         LOGGER.debug('Wait for %s stress threads to verify', self.max_workers)
         for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
             results.append(future.result())
