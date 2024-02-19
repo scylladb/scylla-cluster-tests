@@ -1,14 +1,13 @@
 <?xml version="1.1" encoding="UTF-8" standalone="no"?><project>
   <actions/>
-  <description>Triggers Master Tests on Nightly basis at 23:45 PM
-</description>
+  <description>Triggers Tier 2 master jobs using custom time</description>
+
   <scm class="hudson.scm.NullSCM"/>
-  <disabled>false</disabled>
-  <triggers>
-    <hudson.triggers.TimerTrigger>
-      <spec>00 2 * * *</spec>
-    </hudson.triggers.TimerTrigger>
-  </triggers>
+  <canRoam>true</canRoam>
+  <disabled>true</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
   <concurrentBuild>false</concurrentBuild>
   <builders/>
   <publishers>
@@ -18,16 +17,16 @@
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>scylla_version=%(sct_branch)s:latest
-region=random
-provision_type=spot
+region=us-east-1
+availability_zone=c
+provision_type=on_demand
 post_behavior_db_nodes=destroy
 post_behavior_monitor_nodes=destroy
-email_recipients=qa@scylladb.com,yaniv.kaul@scylladb.com
-stress_duration=660</properties>
+stress_duration=360</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>nemesis/longevity-5gb-1h-MgmtRepair-aws-test,nemesis/longevity-5gb-1h-CorruptThenRepairMonkey-aws-test,nemesis/longevity-5gb-1h-GrowShrinkClusterNemesis-aws-test,nemesis/longevity-5gb-1h-NodeTerminateAndReplace-aws-test,nemesis/longevity-5gb-1h-MgmtBackupSpecificKeyspaces-aws-test,nemesis/longevity-5gb-1h-MgmtBackup-aws-test</projects>
+          <projects>../tier2/longevity-200gb-48h-network-monkey-test,../tier2/longevity-cdc-8h-multi-dc-topology-changes-test,../tier2/longevity-counters-multidc-test,../tier2/longevity-double-cluster-with-schema-changes-test,../tier2/longevity-large-collections-12h-test,../tier2/longevity-large-partition-2days-reversed-queries-test,../tier2/longevity-lwt-24h-gce-test,../tier2/longevity-multi-keyspaces-60h-test,../tier2/longevity-mv-synchronous-updates-12h-test,../tier2/scale-5000-tables-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
