@@ -65,7 +65,7 @@ def get_random_column_name(session, ks, cf, filter_out_collections: bool = False
 def create_index(session, ks, cf, column) -> str:
     InfoEvent(message=f"Starting creating index: {ks}.{cf}({column})").publish()
     index_name = f"{cf}_{column}_nemesis".lower()
-    session.execute(f'CREATE INDEX {index_name} ON {ks}.{cf}("{column}")')
+    session.execute(f'CREATE INDEX {index_name} ON {ks}.{cf}("{column}")', timeout=600)
     return index_name
 
 
