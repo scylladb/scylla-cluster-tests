@@ -2328,7 +2328,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             query += ' AND COMPACT STORAGE'
 
         self.log.debug('MV create statement: {}'.format(query))
-        session.execute(query)
+        session.execute(query, timeout=600)
 
     def _wait_for_view(self, scylla_cluster, session, key_space, view):
         self.log.debug("Waiting for view {}.{} to finish building...".format(key_space, view))
