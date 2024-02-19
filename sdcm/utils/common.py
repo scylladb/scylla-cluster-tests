@@ -2522,7 +2522,7 @@ class PageFetcher:
         # wait for the first page to arrive, otherwise we may call
         # future.has_more_pages too early, since it should only be
         # called after the first page is returned
-        self.wait(seconds=30)
+        self.wait(seconds=self.future.timeout)
 
     def handle_page(self, rows):
         # occasionally get a final blank page that is useless
