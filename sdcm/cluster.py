@@ -1958,12 +1958,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             else:
                 pkg_scylla_dir = 'scylla-*'
 
+            # increase aio-max-nr to a number allowing us to run multiple seastar
+            # applications in parallel, in case we need to run them as command line tools.
+            # otherwise the scylla server would take up all aio slots in system if required
+            # slots is smaller than what the system can provide.
             install_cmds = dedent(f"""
                 tar xvfz ./unified_package.tar.gz
                 cd {pkg_scylla_dir}
                 ./install.sh --nonroot
                 cd -
                 sudo rm -f /tmp/scylla.yaml
+                echo 'fs.aio-max-nr = 30000000' | sudo tee -a /etc/sysctl.conf
+                sysctl -p
             """)
             # Known issue: https://github.com/scylladb/scylla/issues/7071
             self.remoter.run('bash -cxe "%s"' % install_cmds)
