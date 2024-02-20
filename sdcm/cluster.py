@@ -1954,19 +1954,17 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.run('env', verbose=True, change_context=True)
                 assert 'XDG_RUNTIME_DIR' in self.remoter.run('env', verbose=True).stdout
             if package_version < packaging.version.parse('3'):
-                install_cmds = dedent("""
-                    tar xvfz ./unified_package.tar.gz
-                    ./install.sh --nonroot
-                    sudo rm -f /tmp/scylla.yaml
-                """)
+                pkg_scylla_dir = '.'
             else:
-                install_cmds = dedent("""
-                    tar xvfz ./unified_package.tar.gz
-                    cd ./scylla-*
-                    ./install.sh --nonroot
-                    cd -
-                    sudo rm -f /tmp/scylla.yaml
-                """)
+                pkg_scylla_dir = 'scylla-*'
+
+            install_cmds = dedent(f"""
+                tar xvfz ./unified_package.tar.gz
+                cd {pkg_scylla_dir}
+                ./install.sh --nonroot
+                cd -
+                sudo rm -f /tmp/scylla.yaml
+            """)
             # Known issue: https://github.com/scylladb/scylla/issues/7071
             self.remoter.run('bash -cxe "%s"' % install_cmds)
         else:
