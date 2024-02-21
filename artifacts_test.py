@@ -375,7 +375,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                         # so if there's no time sync services active after the scylla installation, it's fine.
                         # However, in such scenario a warning message should be printed during the scylla installation
                         self.log.warning("No time sync service was installed. "
-                                         "Passable since it's an offline installation.")
+                                         "Is it possible this is because it's an offline installation?")
                 except AssertionError:
                     full_list = self.node.remoter.run('systemctl list-units --full').stdout.strip()
                     self.log.warning("Seems that there was an issue with ntp check. Here's the full list of services "
