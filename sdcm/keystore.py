@@ -13,10 +13,14 @@
 
 import os
 import json
+import hashlib
+from typing import BinaryIO
+from concurrent.futures.thread import ThreadPoolExecutor
 from collections import namedtuple
 
 import boto3
 import paramiko
+from mypy_boto3_s3.client import S3Client
 from mypy_boto3_s3.service_resource import S3ServiceResource
 
 KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
@@ -27,6 +31,7 @@ SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 class KeyStore:  # pylint: disable=too-many-public-methods
     def __init__(self):
         self.s3: S3ServiceResource = boto3.resource("s3")
+        self.s3_client: S3Client = boto3.client("s3")
 
     def get_file_contents(self, file_name):
         obj = self.s3.Object(KEYSTORE_S3_BUCKET, file_name)
@@ -103,6 +108,51 @@ class KeyStore:  # pylint: disable=too-many-public-methods
 
     def get_baremetal_config(self, config_name: str):
         return self.get_json(f"{config_name}.json")
+
+    @staticmethod
+    def calculate_s3_etag(file: BinaryIO, chunk_size=8 * 1024 * 1024):
+        """Calculates the S3 custom e-tag (a specially formatted MD5 hash)"""
+        md5s = []
+
+        while True:
+            data = file.read(chunk_size)
+            if not data:
+                break
+            md5s.append(hashlib.md5(data))
+
+        if len(md5s) == 1:
+            return '"{}"'.format(md5s[0].hexdigest())
+
+        digests = b''.join(m.digest() for m in md5s)
+        digests_md5 = hashlib.md5(digests)
+        return '"{}-{}"'.format(digests_md5.hexdigest(), len(md5s))
+
+    def get_obj_if_needed(self, key, local_path, permissions):
+        """Downloads an object at key to file path, checking to see if an existing file matches the current hash"""
+        tag = self.get_object_etag(key)
+        path = os.path.join(local_path, key)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        dl_flag = True
+        try:
+            with open(path, 'rb') as file_obj:
+                if tag == self.calculate_s3_etag(file_obj):
+                    dl_flag = False
+        except FileNotFoundError:
+            pass
+
+        if dl_flag:
+            self.download_file(filename=key, dest_filename=path)
+            os.chmod(path=path, mode=permissions)
+
+    def sync(self, keys, local_path, permissions=0o777):
+        """Syncs the local and remote S3 copies"""
+        with ThreadPoolExecutor(max_workers=len(keys)) as executor:
+            args = [(key, local_path, permissions) for key in keys]
+            list(executor.map(lambda p: self.get_obj_if_needed(*p), args))
+
+    def get_object_etag(self, key):
+        obj = self.s3_client.head_object(Bucket=KEYSTORE_S3_BUCKET, Key=key)
+        return obj.get('ETag')
 
 
 def pub_key_from_private_key_file(key_file):

@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 import functools
+import socket
 import time
 import logging
 from functools import cached_property
@@ -405,3 +406,15 @@ def get_ssm_ami(parameter: str, region_name) -> str:
     client = boto3.client('ssm', region_name=region_name)
     value = client.get_parameter(Name=parameter)
     return value['Parameter']['Value']
+
+
+def is_using_aws_mock() -> bool:
+    """
+    check if the aws mock host is available or not
+    """
+
+    try:
+        socket.gethostbyname("aws-mock.itself")
+        return True
+    except socket.gaierror:
+        return False

@@ -40,6 +40,7 @@ from argus.backend.util.enums import TestStatus
 
 import sct_ssh
 import sct_scan_issues
+from sdcm.keystore import KeyStore
 from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
 from sdcm.provision.provisioner import VmInstance
@@ -102,7 +103,7 @@ from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_co
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
-from sdcm.utils.aws_utils import AwsArchType
+from sdcm.utils.aws_utils import AwsArchType, is_using_aws_mock
 from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
@@ -188,6 +189,12 @@ class SctLoader(unittest.TestLoader):
 def cli():
     disable_loggers_during_startup()
     try_auth_with_okta()
+
+    if not is_using_aws_mock():
+        key_store = KeyStore()
+        key_store.sync(keys=['scylla-qa-ec2', 'scylla-test', 'scylla_test_id_ed25519'],
+                       local_path=Path('~/.ssh/').expanduser(), permissions=0o0600)
+
     docker_hub_login(remoter=LOCALRUNNER)
 
 
