@@ -199,3 +199,20 @@ def configure_logging(exception_handler=None,  # pylint: disable=too-many-argume
             'loggers': loggers
         }
     logging.config.dictConfig(replace_vars(config, variables))
+
+
+def disable_loggers_during_startup():
+    loggers = {
+        'botocore': {
+            'level': 'CRITICAL'
+        },
+        'boto3': {
+            'level': 'CRITICAL'
+        },
+    }
+    config = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'loggers': loggers
+    }
+    logging.config.dictConfig(config)

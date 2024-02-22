@@ -91,7 +91,7 @@ from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login
 from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                kill_running_monitoring_stack_services)
-from sdcm.utils.log import setup_stdout_logger
+from sdcm.utils.log import setup_stdout_logger, disable_loggers_during_startup
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_builder import AwsCiBuilder, AwsBuilder
 from sdcm.utils.gce_region import GceRegion
@@ -103,6 +103,7 @@ from sdcm.send_email import get_running_instances_for_email_report, read_email_d
     send_perf_email
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
 from sdcm.utils.aws_utils import AwsArchType
+from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
 from sdcm.cluster_k8s import mini_k8s
@@ -132,6 +133,7 @@ def sct_option(name, sct_name, **kwargs):
 def install_callback(ctx, _, value):
     if not value or ctx.resilient_parsing:
         return value
+    LOGGER.info("install-bash-completion current path: %s", os.getcwd())
     shell, path = "bash", Path.home() / '.bash_completion'
     path.write_text((Path(__file__).parent / 'utils' / '.bash_completion').read_text())
     click.echo('%s completion installed in %s' % (shell, path))
@@ -184,7 +186,8 @@ class SctLoader(unittest.TestLoader):
               expose_value=False,
               help="Install paths for extra python packages to install, scylla-cluster-plugins for example")
 def cli():
-    LOGGER.info("install-bash-completion current path: %s", os.getcwd())
+    disable_loggers_during_startup()
+    try_auth_with_okta()
     docker_hub_login(remoter=LOCALRUNNER)
 
 
