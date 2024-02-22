@@ -56,6 +56,7 @@ from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
+from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
@@ -132,7 +133,9 @@ from sdcm.utils.csrangehistogram import CSHistogramTagTypes, CSWorkloadTypes, ma
     make_cs_range_histogram_summary_by_interval
 from sdcm.utils.raft.common import validate_raft_on_nodes
 from sdcm.commit_log_check_thread import CommitLogCheckThread
+from sdcm.kafka.kafka_consumer import KafakaCDCReaderThread
 from test_lib.compaction import CompactionStrategy
+
 
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
@@ -155,6 +158,8 @@ except ImportError:
 
 
 TEST_LOG = logging.getLogger(__name__)
+
+PYTHON_THREAD_LIST = (KafakaCDCReaderThread, )
 
 
 def teardown_on_exception(method):
@@ -801,10 +806,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def prepare_kms_host(self) -> None:
         if (self.params.is_enterprise and ComparableScyllaVersion(self.params.scylla_version) >= '2023.1.3'
-            and self.params.get('cluster_backend') == 'aws'
-            and not self.params.get('scylla_encryption_options')
-            and self.params.get("db_type") != "mixed_scylla"  # oracle probably doesn't support KMS
-            ):
+                and self.params.get('cluster_backend') == 'aws'
+                and not self.params.get('scylla_encryption_options')
+                and self.params.get("db_type") != "mixed_scylla"  # oracle probably doesn't support KMS
+                ):
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"  # pylint: disable=line-too-long
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
             return None
@@ -840,6 +845,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.params["append_scylla_yaml"] = yaml.safe_dump(append_scylla_yaml)
         return None
 
+    def kafka_configure(self):
+        if self.kafka_cluster:
+            for connector_config in self.params.get('kafka_connectors'):
+                self.kafka_cluster.create_connector(db_cluster=self.db_cluster,
+                                                    connector_config=connector_config)
+
     @teardown_on_exception
     @log_run_info
     def setUp(self):  # pylint: disable=too-many-branches,too-many-statements
@@ -856,6 +867,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.loaders = None
         self.monitors = None
         self.siren_manager = None
+        self.kafka_cluster = None
         self.k8s_clusters = []
         self.connections = []
         make_threads_be_daemonic_by_default()
@@ -1554,6 +1566,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             self.monitors = NoMonitorSet()
 
+    def get_cluster_kafka(self):
+        if kafka_backend := self.params.get('kafka_backend'):
+            if kafka_backend == 'localstack':
+                self.kafka_cluster = LocalKafkaCluster()
+                self.kafka_cluster.start()
+            else:
+                raise NotImplementedError(f"{kafka_backend=} not implemented")
+
     @staticmethod
     def _add_and_wait_for_cluster_nodes_in_parallel(clusters):
         def _add_and_wait_for_cluster_nodes(cluster):
@@ -1779,6 +1799,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if cluster_backend is None:
             cluster_backend = 'aws'
 
+        self.get_cluster_kafka()
+
         if cluster_backend in ('aws', 'aws-siren'):
             self.get_cluster_aws(loader_info=loader_info, db_info=db_info,
                                  monitor_info=monitor_info)
@@ -1856,6 +1878,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return self.run_nosqlbench_thread(**params)
         elif stress_cmd.startswith('table_compare'):
             return self.run_table_compare_thread(**params)
+        elif stress_cmd.startswith('python_thread'):
+            return self.run_python_thread(**params)
         else:
             raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
 
@@ -2120,6 +2144,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                   stress_cmd=cmd,
                                   timeout=timeout,
                                   params=self.params).run()
+
+    # pylint: disable=too-many-arguments
+    def run_python_thread(self, stress_cmd, duration=None, **_):
+        timeout = self.get_duration(duration)
+
+        options = dict(item.strip().split("=") for item in stress_cmd.replace('python_thread', '').strip().split(";"))
+        klass_thread = next(iter([t for t in PYTHON_THREAD_LIST if options.get('thread') == t.__name__]), None)
+        assert klass_thread
+        thread = klass_thread(tester=self,
+                              stress_cmd=stress_cmd,
+                              timeout=timeout,
+                              params=self.params, **options)
+        thread.start()
+        return thread
 
     def kill_stress_thread(self):
         if self.loaders:  # the test can fail on provision step and loaders are still not provisioned
@@ -2795,6 +2833,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 k8s_cluster.gather_k8s_logs_by_operator()
                 k8s_cluster.gather_k8s_logs()
 
+        if self.kafka_cluster:
+            with silence(parent=self, name='stopping kafka'):
+                self.kafka_cluster.stop()
         if self.params.get('collect_logs'):
             self.collect_logs()
         self.clean_resources()

@@ -23,6 +23,7 @@ import logging
 import getpass
 import pathlib
 import tempfile
+from copy import deepcopy
 from typing import List, Union, Set
 
 from distutils.util import strtobool
@@ -56,6 +57,7 @@ from sdcm.utils.version_utils import (
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import get_gce_image_tags
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
+from sdcm.kafka.kafka_config import SctKafkaConfiguration
 
 
 def _str(value: str) -> str:
@@ -1523,6 +1525,12 @@ class SCTConfiguration(dict):
         dict(name="run_commit_log_check_thread", env="SCT_RUN_COMMIT_LOG_CHECK_THREAD", type=boolean,
              help="""Run commit log check thread if commitlog_use_hard_size_limit is True"""),
 
+        dict(name="kafka_backend", env="SCT_KAFKA_BACKEND", type=str,
+             help="Enable validation for large cells in system table and logs",
+             choices=("none", "localstack", "vm", "msk")),
+
+        dict(name="kafka_connectors", env="SCT_KAFKA_CONNECTORS", type=str_or_list_or_eval,
+             help="configuration for setup up kafka connectors"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -1914,6 +1922,11 @@ class SCTConfiguration(dict):
 
             if len(nics) > 1 and len(self.region_names) >= 2:
                 raise ValueError("Multiple network interfaces aren't supported for multi region use cases")
+
+        # 18: validate kafka configuration
+        if kafka_connectors := self.get('kafka_connectors'):
+            self['kafka_connectors'] = [SctKafkaConfiguration(**connector)
+                                        for connector in kafka_connectors]
 
     def log_config(self):
         self.log.info(self.dump_config())
@@ -2421,7 +2434,15 @@ class SCTConfiguration(dict):
 
         :return: str
         """
-        return anyconfig.dumps(self, ac_parser="yaml")
+        out = deepcopy(self)
+
+        # handle pydantic object, and convert them back to dicts
+        # TODO: automate the process if we gonna keep using them more, or replace the whole configuration with pydantic/dataclasses
+        if kafka_connectors := self.get('kafka_connectors'):
+            out['kafka_connectors'] = [connector.dict(by_alias=True, exclude_none=True)
+                                       for connector in kafka_connectors]
+
+        return anyconfig.dumps(out, ac_parser="yaml")
 
     def dump_help_config_markdown(self):
         """

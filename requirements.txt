@@ -132,9 +132,9 @@ botocore==1.31.4 \
     #   awscli
     #   boto3
     #   s3transfer
-botocore-stubs==1.34.40 \
-    --hash=sha256:50870a5ac8b638dac575aa26d92506dda8cc38e179f93ce2ffe48197ce054dbf \
-    --hash=sha256:d6322bfb9aa882006fe7f8fc3d8a933a66c5627dcf571e65d65a5233c6c172be
+botocore-stubs==1.34.41 \
+    --hash=sha256:6efa1fa39bd09851fc32869edfe7922a207cc69535aee666956ee5cc0975c87f \
+    --hash=sha256:a79315a7b380759a26a9c42533fd3ede3ef42295089563da52add2751344494a
     # via boto3-stubs
 build==1.0.3 \
     --hash=sha256:538aab1b64f9828977f84bc63ae570b060a8ed1be419e7870b8b4fc5e6ea553b \
@@ -644,6 +644,10 @@ jmespath==1.0.1 \
     # via
     #   boto3
     #   botocore
+kafka-python==2.0.2 \
+    --hash=sha256:04dfe7fea2b63726cd6f3e79a2d86e709d608d74406638c5da33a01d45a9d7e3 \
+    --hash=sha256:2d92418c7cb1c298fa6c7f0fb3519b520d0d7526ac6cb7ae2a4fc65a51a94b6e
+    # via -r requirements.in
 kubernetes==24.2.0 \
     --hash=sha256:9900f12ae92007533247167d14cdee949cd8c7721f88b4a7da5f5351da3834cd \
     --hash=sha256:da19d58865cf903a8c7b9c3691a2e6315d583a98f0659964656dfdf645bf7e49
