@@ -3011,10 +3011,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         @raise_event_on_failure
         def silenced_nodetool_repair_to_fail():
             try:
-                self.target_node.run_nodetool("repair", verbose=False,
+                self.target_node.run_nodetool("repair", verbose=True,
                                               warning_event_on_exception=(UnexpectedExit, Libssh2UnexpectedExit),
                                               error_message="Repair failed as expected. ",
-                                              publish_event=False)
+                                              publish_event=False,
+                                              retry=0)
             except (UnexpectedExit, Libssh2UnexpectedExit):
                 self.log.info('Repair failed as expected')
             except Exception:
