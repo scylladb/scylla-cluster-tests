@@ -363,10 +363,6 @@ if [[ -n "${AWS_MOCK}" ]]; then
     PREPARE_CMD+="; curl -sSk https://aws-mock.itself/install-ca.sh | bash"
 fi
 
-if [[ -z "${HYDRA_HELP}" ]]; then
-    PREPARE_CMD+="; ${SCT_DIR}/get-qa-ssh-keys.sh"
-fi
-
 COMMAND=${HYDRA_COMMAND[0]}
 
 if [[ "$COMMAND" == *'bash'* ]] || [[ "$COMMAND" == *'python'* ]]; then
