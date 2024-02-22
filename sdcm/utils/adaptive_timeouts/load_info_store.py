@@ -201,12 +201,11 @@ class ESAdaptiveTimeoutStore(AdaptiveTimeoutStore):
     """AdaptiveTimeoutStore implementation backed by Elasticsearch."""
 
     def __init__(self):
-        try:
-            self._es = ES()
-            self._index = "sct-adaptive-timeouts"
-        except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.warning("Couldn't initialize ESAdaptiveTimeoutStore: %s", exc)
-            self._es = None
+        self._index = "sct-adaptive-timeouts"
+
+    @cached_property
+    def _es(self):
+        return ES()
 
     # pylint: disable=too-many-arguments
     def store(self, metrics: dict[str, Any], operation: str, duration: float, timeout: float,
