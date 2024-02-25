@@ -27,7 +27,7 @@ email_recipients=qa@scylladb.com,tablets@scylladb.com</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>tablets/longevity-100gb-4h-test,tablets/longevity-harry-2h-test,tablets/longevity-large-partition-8h-test</projects>
+          <projects>tablets/longevity-100gb-4h-test,tablets/longevity-harry-2h-test,tablets/longevity-large-partition-8h-test,tablets/longevity-multidc-multirack-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
