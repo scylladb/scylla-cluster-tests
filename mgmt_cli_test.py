@@ -700,7 +700,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         # Scylla-manager should pick up client encryption setting automatically
         healthcheck_task.wait_for_status(list_status=[TaskStatus.DONE], step=5, timeout=240)
 
-        mgr_cluster.update(client_encrypt=True)
+        mgr_cluster.update(client_encrypt=True, force_non_ssl_session_port=mgr_cluster.sctool.is_minimum_3_2_6_version())
         time.sleep(30)  # Make sure healthcheck task is triggered
         healthcheck_task.wait_for_status(list_status=[TaskStatus.DONE], step=5, timeout=240)
         sleep = 40
