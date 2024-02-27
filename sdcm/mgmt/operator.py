@@ -385,7 +385,7 @@ class OperatorManagerCluster(ManagerCluster):
     def operator_backup_tasks(self) -> List[ScyllaOperatorBackupTask]:
         return self._get_list_of_entities_from_operator('/spec/backups', ScyllaOperatorBackupTask)
 
-    def update(self, name=None, host=None, client_encrypt=None):
+    def update(self, name=None, host=None, client_encrypt=None, force_non_ssl_session_port=False):
         raise NotImplementedError()
 
     def delete_task(self, task: ManagerTask) -> None:
