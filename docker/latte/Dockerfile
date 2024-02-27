@@ -1,6 +1,5 @@
-FROM rust:1.73
+FROM rust:1.76
 
-RUN cargo install --version 0.23.0  latte-cli
-
+RUN cargo install --git https://github.com/scylladb/latte --branch main
 
 CMD ["bash -c"]
