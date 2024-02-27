@@ -195,12 +195,6 @@ SYSTEM_ERROR_EVENTS = (
 SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex, re.IGNORECASE), event) for event in SYSTEM_ERROR_EVENTS]
 
-# BACKTRACE_RE should match those:
-# 2022-03-05T08:33:48+00:00 rolling-*-0-1 !    INFO |   /opt/scylladb/libreloc/libc.so.6+0x35a15
-# 2022-03-05T08:33:48+00:00 rolling-*-0-1 !    INFO |   0x2e8653d
-BACKTRACE_RE = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-9a-f]*$)|'
-                          r'(?P<scylla_bt>0x[0-9a-f]*$)', re.IGNORECASE)
-
 
 class ScyllaHelpErrorEvent(SctEvent, abstract=True):
     duplicate: Type[SctEventProtocol]

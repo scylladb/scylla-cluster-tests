@@ -106,29 +106,12 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
 
     def test_search_system_log(self):
         critical_errors = list(self.node.follow_system_log(start_from_beginning=True))
-        self.assertEqual(34, len(critical_errors))
+        self.assertEqual(33, len(critical_errors))
 
     def test_search_system_log_specific_log(self):
         errors = list(self.node.follow_system_log(
             patterns=['Failed to load schema version'], start_from_beginning=True))
         self.assertEqual(len(errors), 2)
-
-    def test_search_system_interlace_reactor_stall(self):
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
-
-        self._read_and_publish_events()
-
-        with self.get_raw_events_log().open() as events_file:
-            events = [json.loads(line) for line in events_file]
-
-            event_a, event_b = events[-2], events[-1]
-            print(event_a)
-            print(event_b)
-
-            assert event_a["type"] == "REACTOR_STALLED"
-            assert event_a["line_number"] == 0
-            assert event_b["type"] == "REACTOR_STALLED"
-            assert event_b["line_number"] == 3
 
     def test_search_kernel_callstack(self):
         self.node.parent_cluster = {'params': {'print_kernel_callstack': True}}
