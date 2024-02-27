@@ -43,6 +43,8 @@ REPAIR_TIMEOUT_SEC = 7200  # 2 hours
 
 
 new_command_structure_minimum_version = LooseVersion("3.0")
+forcing_tls_minimum_version = LooseVersion("3.2.6")
+
 # TODO: remove these checks once manager 2.6 is no longer supported
 
 
@@ -692,7 +694,7 @@ class ManagerCluster(ScyllaManagerBase):
         cmd = "cluster delete -c {}".format(self.id)
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
-    def update(self, name=None, host=None, client_encrypt=None):  # pylint: disable=too-many-arguments
+    def update(self, name=None, host=None, client_encrypt=None, force_non_ssl_session_port=False):  # pylint: disable=too-many-arguments
         """
         $ sctool cluster update --help
         Modify a cluster
@@ -712,6 +714,8 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += " --host={}".format(host)
         if client_encrypt:
             cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE, SSL_USER_KEY_FILE)
+        if force_non_ssl_session_port:
+            cmd += "  --force-non-ssl-session-port"
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
     def delete_task(self, task: ManagerTask):
@@ -1298,6 +1302,10 @@ class SCTool:
     @property
     def is_v3_cli(self):
         return self.parsed_client_version >= new_command_structure_minimum_version
+
+    @property
+    def is_minimum_3_2_6_version(self):
+        return self.parsed_client_version >= forcing_tls_minimum_version
 
 
 class ScyllaMgmt:
