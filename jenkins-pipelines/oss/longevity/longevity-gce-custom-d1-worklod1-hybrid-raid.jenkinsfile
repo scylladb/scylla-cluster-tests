@@ -4,11 +4,8 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
-    backend: 'aws',
-    region: 'us-east-1',
+    backend: 'gce',
+    region: 'us-east1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-gce-custom-d1-hybrid-raid.yaml',
-
-    timeout: [time: 530, unit: 'MINUTES'],
-    email_recipients: 'qa@scylladb.com'
+    test_config: 'test-cases/longevity/longevity-gce-custom-d1-workload1-hybrid-raid.yaml',
 )

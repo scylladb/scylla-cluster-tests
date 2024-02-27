@@ -909,7 +909,7 @@ class LoaderLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name="*cs-hdr-*.hdr",
                 search_locally=True),
-        FileLog(name='*latte*.log',
+        FileLog(name='*latte*',
                 search_locally=True),
     ]
 
