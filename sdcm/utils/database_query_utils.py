@@ -209,7 +209,8 @@ def fetch_all_rows(session, default_fetch_size, statement, retries: int = 4, tim
         LOGGER.debug("Fetch all rows by statement: %s", statement)
     session.default_fetch_size = default_fetch_size
     session.default_consistency_level = ConsistencyLevel.QUORUM
-    session.default_timeout = timeout
+    if timeout:
+        session.default_timeout = timeout
 
     @retrying(n=retries, sleep_time=5, message='Fetch all rows', raise_on_exceeded=raise_on_exceeded)
     def _fetch_rows() -> list:
