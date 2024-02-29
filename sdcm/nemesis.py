@@ -3016,7 +3016,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                               warning_event_on_exception=(UnexpectedExit, Libssh2UnexpectedExit),
                                               error_message="Repair failed as expected. ",
                                               publish_event=False,
-                                              retry=0)
+                                              retry=1)
             except (UnexpectedExit, Libssh2UnexpectedExit):
                 self.log.info('Repair failed as expected')
             except Exception:
