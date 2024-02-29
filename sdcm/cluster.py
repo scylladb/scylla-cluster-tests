@@ -4389,9 +4389,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                             res = target_node.run_nodetool(
                                 sub_cmd='cfstats', args=ks_cf, timeout=300, retry=3, publish_event=False,
                                 warning_event_on_exception=(Failure, UnexpectedExit, Libssh2_UnexpectedExit))
-                            cf_stats = target_node._parse_cfstats(res.stdout)  # pylint: disable=protected-access
-                            if int(cf_stats["SSTable count"]) > chosen_ks_cf_sstables_num:
-                                chosen_ks_cf, chosen_ks_cf_sstables_num = ks_cf, int(cf_stats["SSTable count"])
+                            if res:
+                                cf_stats = target_node._parse_cfstats(res.stdout)  # pylint: disable=protected-access
+                                if int(cf_stats["SSTable count"]) > chosen_ks_cf_sstables_num:
+                                    chosen_ks_cf, chosen_ks_cf_sstables_num = ks_cf, int(cf_stats["SSTable count"])
+                            else:
+                                self.log.warning("Failed to get cf_stats for the '%s' table", ks_cf)
                         SstableUtils(db_node=target_node, ks_cf=chosen_ks_cf).check_that_sstables_are_encrypted()
                 except SstablesNotFound as exc:
                     self.log.warning(f"Couldn't check the fact of encryption (KMS) for sstables: {exc}")
