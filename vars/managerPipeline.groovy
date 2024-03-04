@@ -145,6 +145,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('downstream_jobs_to_run', '')}",
                    description: 'Comma separated list of downstream jobs to run when the job passes',
                    name: 'downstream_jobs_to_run')
+            string(defaultValue: '',
+                   description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
+                   name: 'requested_by_user')
         }
         options {
             timestamps()

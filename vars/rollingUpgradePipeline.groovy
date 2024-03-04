@@ -70,6 +70,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                    description: 'Gce project to use',
                    name: 'gce_project')
+            string(defaultValue: '',
+                   description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
+                   name: 'requested_by_user')
         }
         options {
             timestamps()
@@ -188,6 +191,10 @@ def call(Map pipelineParams) {
                                                             env
 
                                                             rm -fv ./latest
+
+                                                            if [[ -n "${params.requested_by_user}" ]] ; then
+                                                                export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
+                                                            fi
 
                                                             export SCT_CLUSTER_BACKEND=${params.backend}
 

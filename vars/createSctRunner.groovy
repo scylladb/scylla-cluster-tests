@@ -36,6 +36,10 @@ def call(Map params, Integer test_duration, String region) {
         export SCT_CLUSTER_BACKEND="${params.backend}"
         export SCT_CONFIG_FILES=${test_config}
 
+        if [[ -n "${params.requested_by_user}" ]] ; then
+            export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
+        fi
+
         ./docker/env/hydra.sh create-runner-instance \
             --cloud-provider ${cloud_provider} \
             $region_zone_arg \
