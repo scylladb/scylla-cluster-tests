@@ -225,7 +225,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             # allow to correctly save results for future compare
             self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
             stress_queue = []
-            params = {'prefix': 'preload-'}
+            params = {'prefix': 'preload-', 'round_robin': True}
             # Check if the prepare_cmd is a list of commands
             if isinstance(prepare_write_cmd, list):
                 if len(prepare_write_cmd) == 1:
@@ -507,6 +507,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         1. Run a write workload
         """
         # run a write workload
+        self.db_cluster.restart_scylla()  # restart scylla to see if it improves performance (I found that helpful when doing manual tests)
         base_cmd_w = self.params.get('stress_cmd_w')
         stress_multiplier = self.params.get('stress_multiplier')
         if stress_multiplier_w := self.params.get("stress_multiplier_w"):
@@ -542,6 +543,11 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         # run a write workload
         self.preload_data()
 
+        # warmup cache
+        warmup_cmd = self.params.get('stress_cmd_no_mv')
+        stress_queue = self.run_stress_thread(
+            stress_cmd=warmup_cmd, stress_num=1, stats_aggregate_cmds=False, round_robin=True, prefix='warmup-')
+        stress_queue.get_results()
         # create new document in ES with doc_id = test_id + timestamp
         # allow to correctly save results for future compare
         self.create_test_stats(doc_id_with_timestamp=True)

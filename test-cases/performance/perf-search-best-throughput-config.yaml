@@ -14,7 +14,7 @@ stress_threads_start_num: 50
 num_threads_step: 25
 stress_step_duration: '15m'
 max_deviation: 5 # 5% relative difference
-n_stress_process: 1
+n_stress_process: 4
 
 #AWS
 instance_type_db: 'i2.2xlarge'
@@ -25,14 +25,16 @@ space_node_threshold: 644245094
 ami_id_loader: 'scylla-qa-loader-ami-v19'
 #--------
 #GCE
-use_preinstalled_scylla: true
-gce_instance_type_db: 'n2-highmem-8'
+use_preinstalled_scylla: false
+gce_instance_type_db: 'z3-highmem-88'
 gce_root_disk_type_db: 'pd-ssd'
-gce_n_local_ssd_disk_db: 8
+gce_n_local_ssd_disk_db: 0
 gce_instance_type_loader: 'c3-highcpu-8'
 gce_root_disk_type_loader: 'pd-ssd'
 root_disk_size_loader: 50
 gce_instance_type_monitor: 'n2-highmem-8'
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts'
+
 #------
 user_prefix: 'perf-search'
 

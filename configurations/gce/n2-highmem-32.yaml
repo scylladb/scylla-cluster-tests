@@ -1,2 +1,2 @@
 gce_instance_type_db: 'n2-highmem-32'
-gce_n_local_ssd_disk_db: 8
+gce_n_local_ssd_disk_db: 2
