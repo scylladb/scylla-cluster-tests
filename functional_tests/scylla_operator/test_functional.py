@@ -206,13 +206,18 @@ def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylin
                         assert row["rack"] == k8s_cluster.rack_name
                         assert row["data_center"] == ip_to_dc_map[row["peer"]]
             need_to_collect_logs = False
+            log.info("DB cluster's peers info is correct")
+            return None
         finally:
             if need_to_collect_logs:
                 KubernetesOps.gather_k8s_logs(
                     logdir_path=logdir, kubectl=kubectl, namespaces=[namespace, namespace2])
                 need_to_collect_logs = False
             k8s_cluster.helm(f"uninstall {target_chart_name2} --timeout 120s", namespace=namespace2)
-            kubectl(f"delete namespace {namespace2}", ignore_status=True, timeout=120)
+            try:
+                kubectl(f"delete namespace {namespace2}", ignore_status=True, timeout=120)
+            except invoke.exceptions.CommandTimedOut as exc:
+                log.warning("Deletion of the '%s' namespace timed out: %s", namespace2, exc)
 
     finally:
         if need_to_collect_logs:
