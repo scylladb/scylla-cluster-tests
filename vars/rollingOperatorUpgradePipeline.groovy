@@ -69,6 +69,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_name', '')}",
                    description: 'Name of the test to run',
                    name: 'test_name')
+            string(defaultValue: '',
+                   description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
+                   name: 'requested_by_user')
         }
         options {
             timestamps()

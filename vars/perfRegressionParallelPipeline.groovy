@@ -92,6 +92,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('k8s_enable_tls', '')}",
                    description: 'if true, enable operator tls, and install haproxy ingress controller',
                    name: 'k8s_enable_tls')
+            string(defaultValue: '',
+                   description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
+                   name: 'requested_by_user')
         }
         options {
             timestamps()
@@ -232,6 +235,9 @@ def call(Map pipelineParams) {
 
                                                         rm -fv ./latest
 
+                                                        if [[ -n "${params.requested_by_user}" ]] ; then
+                                                            export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
+                                                        fi
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
                                                         if [[ -n "${params.region}" ]]; then
                                                             export SCT_REGION_NAME=${params.region}

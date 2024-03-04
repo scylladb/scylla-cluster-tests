@@ -68,6 +68,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_name', '')}",
                    description: 'Name of the test to run',
                    name: 'test_name')
+            string(defaultValue: '',
+                   description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
+                   name: 'requested_by_user')
         }
         options {
             timestamps()
@@ -157,6 +160,9 @@ def call(Map pipelineParams) {
                                 export SCT_CONFIG_FILES=${params.test_config}
                                 export SCT_COLLECT_LOGS=false
 
+                                if [[ -n "${params.requested_by_user}" ]] ; then
+                                    export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
+                                fi
                                 if [[ ! -z "${params.scylla_version}" ]]; then
                                     export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                 elif [[ ! -z "${params.scylla_repo}" ]]; then
