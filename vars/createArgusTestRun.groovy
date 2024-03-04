@@ -6,7 +6,9 @@ def call(Map params) {
         set -xe
 
         echo "Creating Argus test run ..."
-
+        if [[ -n "${params.requested_by_user}" ]] ; then
+            export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
+        fi
         export SCT_CLUSTER_BACKEND="${params.backend}"
         export SCT_CONFIG_FILES=${test_config}
 
