@@ -97,6 +97,7 @@ from sdcm.utils.common import (
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
 from sdcm.utils.install import InstallMode
+from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
     check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers, \
@@ -4356,6 +4357,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     AwsKmsEvent(
                         message=f"Failed to rotate AWS KMS key for the '{kms_key_alias_name}' alias",
                         traceback=traceback.format_exc()).publish()
+                if SkipPerIssues("https://github.com/scylladb/scylla-enterprise/issues/3896", self.params):
+                    self.log.warning("KMS encryption check is skipped due to the 'scylla-enterprise/issues/3896'")
+                    continue
                 try:
                     target_node = [node for node in db_cluster.nodes if not node.running_nemesis][0]
                     self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
