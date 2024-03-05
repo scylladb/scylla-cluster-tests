@@ -1167,6 +1167,10 @@ class SCTConfiguration(dict):
                   "to still run [upgrade] test without raft enabled (or disabling raft), so we will have better"
                   "coverage"),
 
+        dict(name="enable_tablets_on_upgrade", env="SCT_ENABLE_TABLETS_ON_UPGRADE", type=boolean,
+             help="By default, the tablets feature is disabled. With this parameter, created for the upgrade test,"
+                  "the tablets feature will only be enabled after the upgrade"),
+
         dict(name="upgrade_node_packages", env="SCT_UPGRADE_NODE_PACKAGES", type=str,
              help=""),
 

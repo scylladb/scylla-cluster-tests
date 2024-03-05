@@ -206,6 +206,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if not self.params.get('disable_raft'):
             scylla_yaml_updates.update({"consistent_cluster_management": True})
 
+        if self.params.get("enable_tablets_on_upgrade"):
+            scylla_yaml_updates.update({"experimental_features": ["tablets", "consistent-topology-changes"]})
+
         if self.params.get('test_sst3'):
             scylla_yaml_updates.update({"enable_sstables_mc_format": True})
 
@@ -368,6 +371,15 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # backup the data
         node.run_nodetool("snapshot")
         node.stop_scylla_server(verify_down=False)
+
+        if self.params.get("enable_tablets_on_upgrade"):
+            with node.remote_scylla_yaml() as scylla_yml:
+                current_experimental_features = scylla_yml.experimental_features
+                current_experimental_features.remove("tablets")
+                current_experimental_features.remove("consistent-topology-changes")
+                if len(current_experimental_features) == 0:
+                    current_experimental_features = None
+                scylla_yml.experimental_features = current_experimental_features
 
         if node.distro.is_rhel_like:
             node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
