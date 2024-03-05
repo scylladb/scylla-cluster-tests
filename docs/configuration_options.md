@@ -275,6 +275,7 @@
 | **<a href="#user-content-new_version" name="new_version">new_version</a>**  | Assign new upgrade version, use it to upgrade to specific minor release. eg: 3.0.1 | N/A | SCT_NEW_VERSION
 | **<a href="#user-content-target_upgrade_version" name="target_upgrade_version">target_upgrade_version</a>**  | Assign target upgrade version, use for decide if the truncate entries test should be run. This test should be performed in case the target upgrade version >= 3.1 | N/A | SCT_TARGET_UPGRADE_VERSION
 | **<a href="#user-content-disable_raft" name="disable_raft">disable_raft</a>**  | As for now, raft will be enable by default in all [upgrade] tests, so this flag will allow usto still run [upgrade] test without raft enabled (or disabling raft), so we will have bettercoverage | True | SCT_DISABLE_RAFT
+| **<a href="#user-content-enable_tablets_on_upgrade" name="enable_tablets_on_upgrade">enable_tablets_on_upgrade</a>**  | Used to enable tablets mid rolling upgrade | False | SCT_ENABLE_TABLETS_ON_UPGRADE
 | **<a href="#user-content-upgrade_node_packages" name="upgrade_node_packages">upgrade_node_packages</a>**  |  | N/A | SCT_UPGRADE_NODE_PACKAGES
 | **<a href="#user-content-test_sst3" name="test_sst3">test_sst3</a>**  |  | N/A | SCT_TEST_SST3
 | **<a href="#user-content-test_upgrade_from_installed_3_1_0" name="test_upgrade_from_installed_3_1_0">test_upgrade_from_installed_3_1_0</a>**  | Enable an option for installed 3.1.0 for work around a scylla issue if it's true | N/A | SCT_TEST_UPGRADE_FROM_INSTALLED_3_1_0
