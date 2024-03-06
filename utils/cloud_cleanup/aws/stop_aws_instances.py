@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 import argparse
-import boto3
 import datetime
 import os
-import pytz
 import time
 import logging
 import sys
+import boto3
+import pytz
 
 
 DRY_RUN = False
@@ -28,9 +28,9 @@ def is_terminated(instance):
     return instance.state['Name'] == 'terminated'
 
 
-def debug(s):
+def debug(msg):
     if VERBOSE:
-        print(s)
+        print(msg)
 
 
 def eprint(*args, **kwargs):
@@ -56,6 +56,7 @@ def keep_alive_tag_val(instance):
                 return tag['Value']
     return ""
 
+
 def keep_alive_action_tag_val(instance):
     if instance.tags is not None:
         for tag in instance.tags:
@@ -70,11 +71,14 @@ def keep_alive_tag_int(instance):
         return int(keep)
     return 0
 
+
 def should_terminate(instance):
     action = keep_alive_action_tag_val(instance)
-    return TERMINATE if  action == '' else action == 'terminate'
+    return TERMINATE if action == '' else action == 'terminate'
 
 # check tags for keep:alive
+
+
 def keep_alive_instance(instance):
     return keep_alive_tag_val(instance).lower() == 'alive'
 
@@ -95,8 +99,9 @@ def stop_instance(instance):
                 }
             ])
             instance.stop()
-    except Exception as e:
-        eprint("stop instance %s error: %s" % (instance.id, str(e)))
+    except Exception as exc:  # pylint: disable=broad-except
+        eprint("stop instance %s error: %s" % (instance.id, str(exc)))
+
 
 def remove_protection(instance):
     try:
@@ -107,8 +112,8 @@ def remove_protection(instance):
                     'Value': False
                 })
             print_instance(instance, "Disabling API Termination protection")
-    except Exception as e:
-        eprint("DisableApiTermination protection %s error: %s" % (instance.id, str(e)))
+    except Exception as exc:  # pylint: disable=broad-except
+        eprint("DisableApiTermination protection %s error: %s" % (instance.id, str(exc)))
 
 
 def terminate_instance(instance):
@@ -121,8 +126,8 @@ def terminate_instance(instance):
                 }
             ])
             instance.terminate()
-    except Exception as e:
-        eprint("terminate instance %s error: %s" % (instance.id, str(e)))
+    except Exception as exc:  # pylint: disable=broad-except
+        eprint("terminate instance %s error: %s" % (instance.id, str(exc)))
 
 
 def print_instance(instance, msg):
@@ -154,12 +159,12 @@ def scan_region_instances(region_name, duration):
         debug("checking instance %s, type %s, tags %s, placement %s, launch_time %s" % (
             instance.id, instance.instance_type, instance.tags, instance.placement, instance.launch_time))
 
-        ka = keep_alive_instance(instance)  # keep:alive
+        kalive = keep_alive_instance(instance)  # keep:alive
         ka_lt = keep_alive_instance_launch_time(instance)  # keep:X_HOURS
         ka_min = keep_alive_instance_duration(instance, duration)
 
-        if ka or ka_lt or ka_min:
-            if ka or ka_lt:
+        if kalive or ka_lt or ka_min:
+            if kalive or ka_lt:
                 keep_alive = keep_alive + 1
                 if VERBOSE:
                     print_instance(instance, "keep alive")
@@ -190,7 +195,7 @@ def clean_region(region_name, duration):
                 stop_instance(instance)
 
     # blind wait stop timeout
-    if len(expired) and not DRY_RUN:
+    if len(expired) > 0 and not DRY_RUN:
         print("region %s: waiting %d instances to stop" % (region_name, len(expired)))
         time.sleep(WAIT)
 
@@ -223,16 +228,16 @@ if __name__ == "__main__":
                             help="do not stop or terminate anything",
                             default=os.environ.get('DRY_RUN', False))
     arg_parser.add_argument("--default-action",
-                        help="The default action when stopping an image (stop/terminate)",
-                        default=os.environ.get('DEFAULT_ACTION', "stop"))
+                            help="The default action when stopping an image (stop/terminate)",
+                            default=os.environ.get('DEFAULT_ACTION', "stop"))
 
-    args = arg_parser.parse_args()
+    arguments = arg_parser.parse_args()
 
-    VERBOSE = bool(args.verbose)
-    WAIT = int(args.wait)
-    DRY_RUN = bool(args.dry_run)
-    TRACE = bool(args.trace)
-    TERMINATE = args.default_action == 'terminate'
+    VERBOSE = bool(arguments.verbose)
+    WAIT = int(arguments.wait)
+    DRY_RUN = bool(arguments.dry_run)
+    TRACE = bool(arguments.trace)
+    TERMINATE = arguments.default_action == 'terminate'
 
     if DRY_RUN:
         print("dry mode on")
@@ -242,4 +247,4 @@ if __name__ == "__main__":
         logging.getLogger('botocore').setLevel(logging.DEBUG)
 
     for region in regions_names():
-        clean_region(region, args.duration)
+        clean_region(region, arguments.duration)
