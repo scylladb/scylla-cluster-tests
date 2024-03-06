@@ -30,6 +30,7 @@ from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
 from sdcm.utils.decorators import log_run_info, latency_calculator_decorator
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes
+from sdcm.utils.bisect_test import bisect_test
 
 KB = 1024
 
@@ -500,6 +501,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             """)
 
     # Base Tests
+    @bisect_test
     def test_write(self):
         """
         Test steps:
@@ -521,6 +523,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             stress_cmd=base_cmd_w, stress_num=stress_multiplier, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
+        self.bisect_result_value = sum([int(result['op rate']) for result in results])
+        self.bisect_ref_value = self.bisect_result_value * 0.95 if self.bisect_ref_value is None else self.bisect_ref_value
         self.build_histogram(PerformanceTestWorkload.WRITE, PerformanceTestType.THROUGHPUT)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_write')

@@ -1523,6 +1523,12 @@ class SCTConfiguration(dict):
         dict(name="run_commit_log_check_thread", env="SCT_RUN_COMMIT_LOG_CHECK_THREAD", type=boolean,
              help="""Run commit log check thread if commitlog_use_hard_size_limit is True"""),
 
+        dict(name="bisect_start_date", env="SCT_BISECT_START_DATE", type=str,
+             help="""Scylla build date from which bisecting should start.
+              Setting this date enables bisection. Format: YYYY-MM-DD"""),
+
+        dict(name="bisect_end_date", env="SCT_BISECT_END_DATE", type=str,
+             help="""Scylla build date until which bisecting should run. Format: YYYY-MM-DD"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

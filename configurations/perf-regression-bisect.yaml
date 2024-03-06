@@ -1,0 +1,5 @@
+test_duration: 1500
+bisect_start_date: '2023-08-31'
+bisect_end_date: '2023-12-02'
+store_perf_results: false
+use_hdr_cs_histogram: false
