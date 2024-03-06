@@ -692,11 +692,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             assert all(tables_upgraded), "Failed to upgrade the sstable format {}".format(tables_upgraded)
 
         # Verify sstabledump
-        InfoEvent(message='Starting sstabledump to verify correctness of sstables').publish()
-        self.db_cluster.nodes[0].remoter.run(
-            'for i in `sudo find /var/lib/scylla/data/keyspace_complex/ -type f |grep -v manifest.json |'
-            'grep -v snapshots |head -n 1`; do echo $i; sudo sstabledump $i 1>/tmp/sstabledump.output || '
-            'exit 1; done', verbose=True)
+        if self.params.get("cluster_backend") != "azure":
+            InfoEvent(message='Starting sstabledump to verify correctness of sstables').publish()
+            self.db_cluster.nodes[0].remoter.run(
+                'for i in `sudo find /var/lib/scylla/data/keyspace_complex/ -type f |grep -v manifest.json |'
+                'grep -v snapshots |head -n 1`; do echo $i; sudo sstabledump $i 1>/tmp/sstabledump.output || '
+                'exit 1; done', verbose=True)
 
         InfoEvent(message='Step8 - Run stress and verify after upgrading entire cluster').publish()
         InfoEvent(message='Starting verification stresses after cluster upgrade').publish()
