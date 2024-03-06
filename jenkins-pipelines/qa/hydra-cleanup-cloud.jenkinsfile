@@ -46,11 +46,20 @@ pipeline {
                 }
             }
         }
-        stage('Run hydra clean_azure.py') {
+        stage('Clean Azure') {
             steps {
                    timeout(time: 15, unit: 'MINUTES') {
                         sctScript """
-                            ./docker/env/hydra.sh python ./utils/cloud_cleanup/azure/clean_azure.py ${params.dryRun ? '--dry-run' : ''}
+                            ./docker/env/hydra.sh python -m utils.cloud_cleanup.azure.clean_azure ${params.dryRun ? '--dry-run' : ''}
+                        """
+                   }
+            }
+        }
+        stage('Clean GCE') {
+            steps {
+                   timeout(time: 15, unit: 'MINUTES') {
+                        sctScript """
+                            ./docker/env/hydra.sh python -m utils.cloud_cleanup.gce.clean_gce ${params.dryRun ? '--dry-run' : ''}
                         """
                    }
             }
