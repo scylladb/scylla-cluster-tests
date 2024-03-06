@@ -15,14 +15,12 @@
 
 import argparse
 import os
-import sys
 from datetime import datetime, timedelta
 from typing import Callable
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from sdcm.utils.azure_utils import AzureService  # pylint: disable=wrong-import-position
-from sdcm.utils.log import setup_stdout_logger  # pylint: disable=wrong-import-position
+from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.log import setup_stdout_logger
 
 LOGGER = setup_stdout_logger()
 azure_service = AzureService()
