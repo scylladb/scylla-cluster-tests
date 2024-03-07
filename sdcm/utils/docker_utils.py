@@ -485,6 +485,9 @@ def docker_hub_login(remoter: CommandRunner) -> None:
     if "Podman Engine" in remoter.run("docker version", ignore_status=True).stdout:
         remoter.log.info("When Podman daemon is used we don't login")
         return
+    if not os.environ.get('JENKINS_URL'):
+        remoter.log.debug("not in jenkins, skipping login to docker hub")
+        return
     docker_hub_creds = get_docker_hub_credentials()
     password_file = remoter.run("mktemp").stdout.strip()
     with remote_file(remoter=remoter, remote_path=password_file) as fobj:
