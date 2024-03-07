@@ -36,9 +36,9 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
                 preserve_ownership=True, preserve_permissions=True, log_change=True):
     filename = os.path.basename(remote_path)
     local_tempfile = os.path.join(tempfile.mkdtemp(prefix='sct'), filename)
-    if preserve_ownership:
+    if preserve_ownership and sudo:
         ownership = remoter.sudo(cmd='stat -c "%U:%G" ' + remote_path).stdout.strip()
-    if preserve_permissions:
+    if preserve_permissions and sudo:
         permissions = remoter.sudo(cmd='stat -c "%a" ' + remote_path).stdout.strip()
 
     wait.wait_for(remoter.receive_files,
@@ -81,9 +81,9 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
         else:
             remoter.run(remote_tempfile_move_cmd)
 
-        if preserve_ownership:
+        if preserve_ownership and sudo:
             remoter.sudo(f"chown {ownership} {remote_path}")
-        if preserve_permissions:
+        if preserve_permissions and sudo:
             remoter.sudo(f"chmod {permissions} {remote_path}")
 
     os.unlink(local_tempfile)
