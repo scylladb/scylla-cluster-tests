@@ -1150,14 +1150,19 @@ def run_pytest(target, backend, config, logdir):
 
     if logdir:
         os.environ['_SCT_LOGDIR'] = logdir
-
-    logfile = os.path.join(get_test_config().logdir(), 'output.log')
+    _logdir = Path(get_test_config().logdir())
+    logfile = _logdir / 'output.log'
+    junit_file = _logdir / 'junit.xml'
     sys.stdout = OutputLogger(logfile, sys.stdout)
     sys.stderr = OutputLogger(logfile, sys.stderr)
     if not target:
         print("argv is referring to the directory or file that contain tests, it can't be empty")
         sys.exit(1)
-    sys.exit(pytest.main(['-s', '-v', '-p', 'no:warnings', target]))
+    return_code = pytest.main(['-s', '-v', f'--junit-xml={junit_file}', '-p', 'no:warnings', target])
+    test_config = get_test_config()
+    # temp, until we'll have API for sending it
+    test_config.argus_client().submit_sct_logs([LogLink(log_name=junit_file.name, log_link=str(junit_file))])
+    sys.exit(return_code)
 
 
 @cli.command("cloud-usage-report", help="Generate and send Cloud usage report")
