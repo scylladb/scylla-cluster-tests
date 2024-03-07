@@ -17,6 +17,8 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
         test_cmd = "run-test"
     }
 
+    try {
+
     sh """#!/bin/bash
     set -xe
     env
@@ -175,4 +177,17 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     fi
     echo "end test ....."
     """
+    }
+    finally
+    {
+        if (functional_test != null && functional_test) {
+            sh """
+                RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                if [[ -n "\${RUNNER_IP}" ]] ; then
+                    ./docker/env/hydra.sh fetch-junit-from-runner \${RUNNER_IP}
+                fi
+            """
+            junit(testResults:"**/junit.xml", keepProperties:true)
+        }
+    }
 }

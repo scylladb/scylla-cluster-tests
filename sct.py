@@ -51,7 +51,7 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners, \
-    update_sct_runner_tags
+    update_sct_runner_tags, list_sct_runners
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import get_argus_client
@@ -1758,6 +1758,24 @@ def finish_argus_test_run(jenkins_status):
         test_config.argus_client().set_sct_run_status(new_status)
     except ArgusClientError:
         LOGGER.error("Failed to submit data to Argus", exc_info=True)
+
+
+@cli.command("fetch-junit-from-runner", help="copy the junit.xml back")
+@click.argument("runner-ip", type=str)
+def fetch_junit(runner_ip):
+    add_file_logger()
+
+    runner = list_sct_runners(test_runner_ip=runner_ip)
+    proxy_command, target_ip, target_username, target_key = sct_ssh.get_proxy_command(runner[0].instance, True)
+    cmd = (f'ssh -tt {proxy_command}'
+           f' -i {target_key} -o "UserKnownHostsFile=/dev/null" '
+           f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 {target_username}@{target_ip} '
+           f'\'find ~/sct-results -iname junit.xml | xargs cat\'')
+
+    output = subprocess.run(['bash', '-c', cmd], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    junit_xml_file = Path('results') / 'junit.xml'
+    junit_xml_file.parent.mkdir(parents=True, exist_ok=True)
+    junit_xml_file.write_text(output.stdout.strip())
 
 
 cli.add_command(sct_ssh.ssh)
