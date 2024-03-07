@@ -213,6 +213,9 @@ def clean_instances(region_name, duration):
 
 
 def keep_alive_volume(volume):
+    if volume.create_time < datetime.datetime.now(tz=pytz.utc) + datetime.timedelta(hours=1):
+        # skipping if created recently and might miss tags yet
+        return True
     # checking tags
     if volume.tags is None:
         return False
@@ -244,7 +247,8 @@ def clean_volumes(region_name):
     count_kept_volume = 0
     count_deleted_volume = 0
     for volume in volumes:
-        debug("checking volume %s %s %s %s" % (volume.id, volume.volume_id, volume.state, volume.tags))
+        debug("checking volume %s %s %s %s %s" %
+              (volume.id, volume.volume_id, volume.state, volume.tags, volume.create_time))
         keep_alive = keep_alive_volume(volume)
         if keep_alive or volume.state == "in-use":
             count_kept_volume = count_kept_volume + 1
