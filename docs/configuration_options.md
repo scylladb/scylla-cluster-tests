@@ -37,7 +37,7 @@
 | **<a href="#user-content-manager_version" name="manager_version">manager_version</a>**  | Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml | 3.2 | SCT_MANAGER_VERSION
 | **<a href="#user-content-target_manager_version" name="target_manager_version">target_manager_version</a>**  | Branch of scylla manager server and agent to upgrade to. Options in defaults/manager_versions.yaml | N/A | SCT_TARGET_MANAGER_VERSION
 | **<a href="#user-content-manager_scylla_backend_version" name="manager_scylla_backend_version">manager_scylla_backend_version</a>**  | Branch of scylla db enterprise to install. Options in defaults/manager_versions.yaml | 2022 | SCT_MANAGER_SCYLLA_BACKEND_VERSION
-| **<a href="#user-content-scylla_mgmt_agent_version" name="scylla_mgmt_agent_version">scylla_mgmt_agent_version</a>**  |  | 3.2.5 | SCT_SCYLLA_MGMT_AGENT_VERSION
+| **<a href="#user-content-scylla_mgmt_agent_version" name="scylla_mgmt_agent_version">scylla_mgmt_agent_version</a>**  |  | 3.2.6 | SCT_SCYLLA_MGMT_AGENT_VERSION
 | **<a href="#user-content-scylla_mgmt_pkg" name="scylla_mgmt_pkg">scylla_mgmt_pkg</a>**  | Url to the scylla manager packages to install for management tests | N/A | SCT_SCYLLA_MGMT_PKG
 | **<a href="#user-content-stress_cmd_lwt_i" name="stress_cmd_lwt_i">stress_cmd_lwt_i</a>**  | Stress command for LWT performance test for INSERT baseline | N/A | SCT_STRESS_CMD_LWT_I
 | **<a href="#user-content-stress_cmd_lwt_d" name="stress_cmd_lwt_d">stress_cmd_lwt_d</a>**  | Stress command for LWT performance test for DELETE baseline | N/A | SCT_STRESS_CMD_LWT_D
@@ -218,7 +218,7 @@
 | **<a href="#user-content-k8s_use_chaos_mesh" name="k8s_use_chaos_mesh">k8s_use_chaos_mesh</a>**  | enables chaos-mesh for k8s testing | N/A | SCT_K8S_USE_CHAOS_MESH
 | **<a href="#user-content-k8s_n_auxiliary_nodes" name="k8s_n_auxiliary_nodes">k8s_n_auxiliary_nodes</a>**  | Number of nodes in auxiliary pool | N/A | SCT_K8S_N_AUXILIARY_NODES
 | **<a href="#user-content-k8s_n_monitor_nodes" name="k8s_n_monitor_nodes">k8s_n_monitor_nodes</a>**  | Number of nodes in monitoring pool that will be used for scylla-operator's deployed monitoring pods. | N/A | SCT_K8S_N_MONITOR_NODES
-| **<a href="#user-content-mgmt_docker_image" name="mgmt_docker_image">mgmt_docker_image</a>**  | Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' | scylladb/scylla-manager:3.2.5 | SCT_MGMT_DOCKER_IMAGE
+| **<a href="#user-content-mgmt_docker_image" name="mgmt_docker_image">mgmt_docker_image</a>**  | Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' | scylladb/scylla-manager:3.2.6 | SCT_MGMT_DOCKER_IMAGE
 | **<a href="#user-content-docker_image" name="docker_image">docker_image</a>**  | Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version | N/A | SCT_DOCKER_IMAGE
 | **<a href="#user-content-docker_network" name="docker_network">docker_network</a>**  | local docker network to use, if there's need to have db cluster connect to other services running in docker | N/A | SCT_DOCKER_NETWORK
 | **<a href="#user-content-s3_baremetal_config" name="s3_baremetal_config">s3_baremetal_config</a>**  |  | N/A | SCT_S3_BAREMETAL_CONFIG
