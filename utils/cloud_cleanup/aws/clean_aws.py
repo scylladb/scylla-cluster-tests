@@ -14,6 +14,7 @@ DRY_RUN = False
 VERBOSE = False
 TRACE = False
 WAIT = 60
+DEFAULT_KEEP_HOURS = 14
 
 
 def is_running(instance):
@@ -178,7 +179,8 @@ def scan_region_instances(region_name, duration):
     return running, keep_alive, expiring, expired
 
 
-def clean_region(region_name, duration):
+def clean_instances(region_name, duration):
+    print("cleaning region %s instances" % region_name)
     running, keep_alive, expiring, expired = scan_region_instances(region_name, duration)
     terminated = 0
     # stop instances
@@ -210,11 +212,103 @@ def clean_region(region_name, duration):
         region_name, len(expired) - terminated, terminated, keep_alive, expiring, running))
 
 
+def keep_alive_volume(volume):
+    # checking tags
+    if volume.tags is None:
+        return False
+    for tag in volume.tags:
+        if tag['Key'] == 'keep' and tag['Value'] == 'alive':
+            return True
+    return False
+
+
+def delete_volume(volume):
+    try:
+        print_volume(volume, "deleting")
+        if not DRY_RUN:
+            volume.delete()
+    except Exception:  # pylint: disable=broad-except
+        pass
+
+
+def print_volume(volume, msg):
+    print("volume %s %s" % (volume.id, msg))
+
+
+def clean_volumes(region_name):
+    print("cleaning region %s volumes" % region_name)
+    ec2 = boto3.resource('ec2', region_name=region_name)
+
+    volumes = ec2.volumes.all()
+
+    count_kept_volume = 0
+    count_deleted_volume = 0
+    for volume in volumes:
+        debug("checking volume %s %s %s %s" % (volume.id, volume.volume_id, volume.state, volume.tags))
+        keep_alive = keep_alive_volume(volume)
+        if keep_alive or volume.state == "in-use":
+            count_kept_volume = count_kept_volume + 1
+            if VERBOSE:
+                print_volume(volume, "kept")
+        else:
+            count_deleted_volume = count_deleted_volume + 1
+            delete_volume(volume)
+            if VERBOSE:
+                print_volume(volume, "deleted")
+
+    print("region %s deleted %d kept %d" % (region_name, count_deleted_volume, count_kept_volume))
+
+
+def keep_alive_address(eip_dict):
+    # checking tags
+    if "Tags" not in eip_dict:
+        return False
+    for tag in eip_dict["Tags"]:
+        if tag['Key'] == 'keep' and tag['Value'] == 'alive':
+            return True
+    return False
+
+
+def release_address(eip_dict, client):
+    try:
+        print_adress(eip_dict, "deleting")
+        if not DRY_RUN:
+            if "AllocationId" in eip_dict:
+                client.release_address(AllocationId=eip_dict['AllocationId'])
+            elif "PublicIp" in eip_dict:
+                client.release_address(PublicIp=eip_dict['PublicIp'])
+    except Exception as exc:  # pylint: disable=broad-except
+        print(exc)
+
+
+def print_adress(eip_dict, msg):
+    if "AllocationId" in eip_dict:
+        print("Address ID %s %s" % (eip_dict["AllocationId"], msg))
+    elif "PublicIp" in eip_dict:
+        print("Address IP %s %s" % (eip_dict["PublicIp"], msg))
+
+
+def clean_ips(region_name):
+    print("cleaning region %s IP's" % region_name)
+    client = boto3.client('ec2', region_name=region_name)
+    addresses_dict = client.describe_addresses()
+    deleted_addresses = 0
+    kept_addresses = 0
+    for eip_dict in addresses_dict['Addresses']:
+        debug(eip_dict)
+        if "NetworkInterfaceId" not in eip_dict and not keep_alive_address(eip_dict):
+            deleted_addresses = deleted_addresses + 1
+            release_address(eip_dict, client)
+        else:
+            kept_addresses = kept_addresses + 1
+    print("region %s deleted %d ip addresses kept %s" % (region_name, deleted_addresses, kept_addresses))
+
+
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser('ec2_stop')
-    arg_parser.add_argument("duration", type=int,
+    arg_parser.add_argument("--duration", type=int,
                             help="duration to keep non-tagged instances running in hours",
-                            default=os.environ.get('DURATION', None))
+                            default=os.environ.get('DURATION', DEFAULT_KEEP_HOURS))
     arg_parser.add_argument("--verbose", action="store_true",
                             help="print processing instances details",
                             default=os.environ.get('VERBOSE', False))
@@ -247,4 +341,6 @@ if __name__ == "__main__":
         logging.getLogger('botocore').setLevel(logging.DEBUG)
 
     for region in regions_names():
-        clean_region(region, arguments.duration)
+        clean_instances(region, arguments.duration)
+        clean_volumes(region)
+        clean_ips(region)

@@ -46,22 +46,37 @@ pipeline {
                 }
             }
         }
+        stage('Clean AWS') {
+            steps {
+                catchError(stageResult: 'FAILURE') {
+                   timeout(time: 15, unit: 'MINUTES') {
+                        sctScript """
+                            ./docker/env/hydra.sh python -m utils.cloud_cleanup.aws.clean_aws ${params.dryRun ? '--dry-run' : ''}
+                        """
+                   }
+                }
+            }
+        }
         stage('Clean Azure') {
             steps {
+                catchError(stageResult: 'FAILURE') {
                    timeout(time: 15, unit: 'MINUTES') {
                         sctScript """
                             ./docker/env/hydra.sh python -m utils.cloud_cleanup.azure.clean_azure ${params.dryRun ? '--dry-run' : ''}
                         """
                    }
+                }
             }
         }
         stage('Clean GCE') {
             steps {
+                catchError(stageResult: 'FAILURE') {
                    timeout(time: 15, unit: 'MINUTES') {
                         sctScript """
                             ./docker/env/hydra.sh python -m utils.cloud_cleanup.gce.clean_gce ${params.dryRun ? '--dry-run' : ''}
                         """
                    }
+                }
             }
         }
     }
