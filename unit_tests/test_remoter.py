@@ -466,7 +466,7 @@ class TestRemoteFile(unittest.TestCase):
         remoter = self.remoter_cls()
         some_file = "/some/path/some.file"
         with remote_file(remoter=remoter, remote_path=some_file,
-                         preserve_ownership=True, preserve_permissions=False) as fobj:
+                         preserve_ownership=True, preserve_permissions=False, sudo=True) as fobj:
             fobj.write("test data")
             assert remoter.command_to_run == f'stat -c "%U:%G" {some_file}'
         assert f"chown bentsi:bentsi {some_file}" == remoter.command_to_run
@@ -475,7 +475,7 @@ class TestRemoteFile(unittest.TestCase):
         remoter = self.remoter_cls()
         some_file = "/some/path/some.file"
         with remote_file(remoter=remoter, remote_path=some_file,
-                         preserve_ownership=False, preserve_permissions=True) as fobj:
+                         preserve_ownership=False, preserve_permissions=True, sudo=True) as fobj:
             fobj.write("test data")
             assert remoter.command_to_run == f'stat -c "%a" {some_file}'
         assert f"chmod 644 {some_file}" == remoter.command_to_run
@@ -484,7 +484,7 @@ class TestRemoteFile(unittest.TestCase):
         remoter = self.remoter_cls()
         some_file = "/some/path/some.file"
         with remote_file(remoter=remoter, remote_path=some_file,
-                         preserve_ownership=False, preserve_permissions=True) as fobj:
+                         preserve_ownership=False, preserve_permissions=True, sudo=True) as fobj:
             fobj.write(remoter.rf_data)
             assert remoter.command_to_run == f'stat -c "%a" {some_file}'
 
