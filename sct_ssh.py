@@ -179,7 +179,7 @@ def select_instance(region: str = None, **tags) -> dict | None:
     question = questionary.select(
         "Select machine: ",
         choices=[
-            Choice(f"aws - {get_tags(vm).get('Name')} - {vm['PublicIpAddress']} {vm['PrivateIpAddress']} - {get_region(vm)}",
+            Choice(f"aws - {get_tags(vm).get('Name')} - {vm.get('PublicIpAddress')} {vm['PrivateIpAddress']} - {get_region(vm)}",
                    value=vm) for vm in aws_vms
         ] + [
             Choice(f"gce - {vm.name} - {list(gce_public_addresses(vm))[0]} {list(gce_private_addresses(vm))[0]} - {vm.zone.split('/')[-1]}",
@@ -227,7 +227,7 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
         return []
 
     choices = [Choice(
-        f"aws - {get_tags(vm).get('Name')} - {vm['PublicIpAddress']} {vm['PrivateIpAddress']} - {get_region(vm)}",
+        f"aws - {get_tags(vm).get('Name')} - {vm.get('PublicIpAddress')} {vm['PrivateIpAddress']} - {get_region(vm)}",
         value=vm) for vm in aws_vms
     ] + [
         Choice(
