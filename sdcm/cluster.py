@@ -1504,13 +1504,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 return build_id_result.stdout.strip()
         return None
 
-    def _remote_yaml(self, path):
+    def _remote_yaml(self, path, sudo=True):
         self.log.debug("Update %s YAML file", path)
         return remote_file(remoter=self.remoter,
                            remote_path=path,
                            serializer=dict_to_yaml_file,
                            deserializer=yaml_file_to_dict,
-                           sudo=True)
+                           sudo=sudo)
 
     def _remote_properties(self, path):
         self.log.debug("Update %s properties configuration file", path)
@@ -5315,7 +5315,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
     def download_scylla_monitoring(self, node):
         install_script = dedent("""
-            sudo rm -rf {0.monitor_install_path_base}
+            rm -rf {0.monitor_install_path_base}
             mkdir -p {0.monitor_install_path_base}
             cd {0.monitor_install_path_base}
             wget https://github.com/scylladb/scylla-monitoring/archive/{0.monitor_branch}.zip
@@ -5450,21 +5450,21 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 monitoring_targets.append(f"{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}")
                 syslog_ng_stats_targets += [f'{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}:9577']
             monitoring_targets = " ".join(monitoring_targets)
-            node.remoter.sudo(shell_script_cmd(f"""\
+            node.remoter.run(shell_script_cmd(f"""\
                 cd {self.monitor_install_path}
                 mkdir -p {self.monitoring_conf_dir}
                 export PATH=/usr/local/bin:$PATH  # hack to enable running on docker
                 python3 genconfig.py -s -n -d {self.monitoring_conf_dir} {monitoring_targets}
             """), verbose=True)
 
-            with node._remote_yaml(f'{self.monitoring_conf_dir}/node_exporter_servers.yml') as exporter_yaml:  # pylint: disable=protected-access
+            with node._remote_yaml(f'{self.monitoring_conf_dir}/node_exporter_servers.yml', sudo=False) as exporter_yaml:  # pylint: disable=protected-access
                 exporter_yaml[0]['targets'] += [f'{normalize_ipv6_url(node.private_ip_address)}:9100']
                 exporter_yaml[0]['targets'] += syslog_ng_stats_targets
                 exporter_yaml[0]['targets'] += [f'{normalize_ipv6_url(get_my_ip())}:9100']
                 exporter_yaml[0]['targets'] = list(set(exporter_yaml[0]['targets']))  # remove duplicates
 
             if self.params.get("cloud_prom_bearer_token"):
-                node.remoter.sudo(shell_script_cmd(f"""\
+                node.remoter.run(shell_script_cmd(f"""\
                     echo "targets: [] " > {self.monitoring_conf_dir}/scylla_servers.yml
                     echo "targets: [] " > {self.monitoring_conf_dir}/node_exporter_servers.yml
                 """), verbose=True)
@@ -5483,11 +5483,11 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         for prometheus_target in manager_prometheus_target_list:
             full_yaml_string += f"  - {prometheus_target}\n"
 
-        node.remoter.sudo(f"echo '{str(full_yaml_string)}' > "
-                          f"{self.monitor_install_path}/prometheus/scylla_manager_servers.yml")
+        node.remoter.run(f"echo '{str(full_yaml_string)}' > "
+                         f"{self.monitor_install_path}/prometheus/scylla_manager_servers.yml")
         # Writing directly to the yaml in the conf dir results in permission denied
-        node.remoter.sudo(f"cp {self.monitor_install_path}/prometheus/scylla_manager_servers.yml "
-                          f"{self.monitoring_conf_dir}/scylla_manager_servers.yml")
+        node.remoter.run(f"cp {self.monitor_install_path}/prometheus/scylla_manager_servers.yml "
+                         f"{self.monitoring_conf_dir}/scylla_manager_servers.yml")
 
     def start_scylla_monitoring(self, node):
         self._create_manager_prometheus_yaml(node=node)
