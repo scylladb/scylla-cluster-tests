@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 
 from pytz import utc
 
-from sdcm.utils.gce_utils import get_gce_compute_instances_client
+from sdcm.utils.context_managers import environment
+from sdcm.utils.gce_utils import get_gce_compute_instances_client, SUPPORTED_PROJECTS
 from sdcm.utils.log import setup_stdout_logger
 
 DEFAULT_KEEP_HOURS = 14
@@ -39,13 +40,12 @@ def clean_gce_instances(instances_client, project_id, dry_run):
     for zone in zones:
         for instance in zone[1].instances:
             vm_creation_time = datetime.fromisoformat(instance.creation_timestamp).astimezone(utc).replace(tzinfo=None)
-
             instance_metadata = {item.key: item.value for item in instance.metadata.items}
             if should_keep(vm_creation_time, get_keep_hours(instance_metadata)):
                 LOGGER.info("keeping instance %s, keep: %s, creation time: %s ", instance.name,
                             instance_metadata.get('keep', 'not set'), vm_creation_time)
                 continue
-            if instance_metadata["keep_action"] == 'terminate':
+            if instance_metadata.get('keep_action', 'terminate') == 'terminate':  # terminate by default if not set
                 if not dry_run:
                     LOGGER.info("terminating instance %s, creation time: %s", instance.name, vm_creation_time)
                     try:
@@ -91,8 +91,7 @@ if __name__ == "__main__":
     if is_dry_run:
         LOGGER.error("'Dry run' mode on")
 
-    projects = ['sct-project-1', 'local-ssd-latency']
-    compute, info = get_gce_compute_instances_client()
-
-    for project in projects:
-        clean_gce_instances(instances_client=compute, project_id=project, dry_run=is_dry_run)
+    for project in SUPPORTED_PROJECTS:
+        with environment(SCT_GCE_PROJECT=project):
+            client, info = get_gce_compute_instances_client()
+            clean_gce_instances(instances_client=client, project_id=info['project_id'], dry_run=is_dry_run)
