@@ -41,6 +41,9 @@ def clean_gce_instances(instances_client, project_id, dry_run):
         for instance in zone[1].instances:
             vm_creation_time = datetime.fromisoformat(instance.creation_timestamp).astimezone(utc).replace(tzinfo=None)
             instance_metadata = {item.key: item.value for item in instance.metadata.items}
+            instance_metadata.update(instance.labels)
+            if "keep-alive" in instance.tags.items:
+                instance_metadata.update({"keep": "alive"})
             if should_keep(vm_creation_time, get_keep_hours(instance_metadata)):
                 LOGGER.info("keeping instance %s, keep: %s, creation time: %s ", instance.name,
                             instance_metadata.get('keep', 'not set'), vm_creation_time)
