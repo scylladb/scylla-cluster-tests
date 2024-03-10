@@ -18,6 +18,7 @@ from typing import Literal, Optional, List
 from cassandra.util import uuid_from_time, datetime_from_uuid1  # pylint: disable=no-name-in-module
 
 from sdcm.sct_events import Severity
+from sdcm.sct_events.group_common_events import decorate_with_context, ignore_ycsb_connection_refused
 from sdcm.sct_events.system import InfoEvent
 
 LOGGER = logging.getLogger(__name__)
@@ -187,6 +188,7 @@ class Audit:
                               severity=Severity.ERROR).publish()
         return audit_config
 
+    @decorate_with_context(ignore_ycsb_connection_refused)
     def configure(self, audit_configuration: AuditConfiguration):
         """Configure audit on all nodes in the cluster and restart them."""
         LOGGER.debug("Configuring audit on all nodes: %s", audit_configuration)
