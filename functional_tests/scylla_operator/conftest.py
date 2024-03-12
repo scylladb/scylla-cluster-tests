@@ -233,5 +233,7 @@ def skip_based_on_operator_version(request: pytest.FixtureRequest, tester: Scyll
 
 @pytest.fixture(autouse=True)
 def skip_if_no_tls(request, tester: ScyllaOperatorFunctionalClusterTester) -> None:
-    if request.node.get_closest_marker('requires_tls') and not tester.params.get('k8s_enable_tls'):
+    if (request.node.get_closest_marker("requires_tls_and_sni")
+            and not tester.params.get("k8s_enable_tls")
+            and not tester.params.get("k8s_enable_sni")):
         pytest.skip('test requires k8s_enable_tls to be enabled')

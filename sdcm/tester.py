@@ -1500,7 +1500,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             k8s_cluster.install_dynamic_local_volume_provisioner(node_pools=scylla_pool)
 
         k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
-        if self.params.get('k8s_enable_tls'):
+        if self.params.get("k8s_enable_sni"):
             k8s_cluster.deploy_ingress_controller(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
         k8s_cluster.deploy_scylla_operator(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
         if self.params.get('use_mgmt'):

@@ -24,6 +24,7 @@ H 02 * * 0</spec>
 scylla_version=latest
 k8s_scylla_operator_helm_repo=https://storage.googleapis.com/scylla-operator-charts/latest
 k8s_scylla_operator_chart_version=latest
+k8s_enable_sni=false
 k8s_enable_tls=false</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
@@ -40,6 +41,7 @@ k8s_enable_tls=false</properties>
 scylla_version=%(release_version)s
 k8s_scylla_operator_helm_repo=https://storage.googleapis.com/scylla-operator-charts/latest
 k8s_scylla_operator_chart_version=latest
+k8s_enable_sni=false
 k8s_enable_tls=false</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
@@ -56,6 +58,7 @@ k8s_enable_tls=false</properties>
 scylla_version=%(release_version)s
 k8s_scylla_operator_helm_repo=https://storage.googleapis.com/scylla-operator-charts/latest
 k8s_scylla_operator_chart_version=latest
+k8s_enable_sni=false
 k8s_enable_tls=false</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>

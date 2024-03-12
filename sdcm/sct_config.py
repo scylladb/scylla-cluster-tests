@@ -924,7 +924,9 @@ class SCTConfiguration(dict):
              help="Number of Scylla clusters to create in the K8S cluster."),
 
         dict(name="k8s_enable_tls", env="SCT_K8S_ENABLE_TLS", type=boolean,
-             help="Defines whether the we enable the operator serverless options"),
+             help="Defines whether we enable the scylla operator TLS feature or not."),
+        dict(name="k8s_enable_sni", env="SCT_K8S_ENABLE_SNI", type=boolean,
+             help="Defines whether we install SNI and use it or not (serverless feature)."),
 
         dict(name="k8s_connection_bundle_file", env="SCT_K8S_CONNECTION_BUNDLE_FILE", type=_file,
              help="Serverless configuration bundle file", k8s_multitenancy_supported=True),
@@ -1918,6 +1920,10 @@ class SCTConfiguration(dict):
 
             if len(nics) > 1 and len(self.region_names) >= 2:
                 raise ValueError("Multiple network interfaces aren't supported for multi region use cases")
+
+        # 18 Validate K8S TLS+SNI values
+        if self.get("k8s_enable_sni") and not self.get("k8s_enable_tls"):
+            raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
 
     def log_config(self):
         self.log.info(self.dump_config())

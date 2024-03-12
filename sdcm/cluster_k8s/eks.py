@@ -143,7 +143,7 @@ def deploy_k8s_eks_cluster(k8s_cluster) -> None:
     k8s_cluster.configure_ebs_csi_driver()
 
     k8s_cluster.deploy_cert_manager(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
-    if params.get('k8s_enable_tls'):
+    if params.get("k8s_enable_sni"):
         k8s_cluster.deploy_ingress_controller(pool_name=k8s_cluster.AUXILIARY_POOL_NAME)
     k8s_cluster.deploy_scylla_operator()
     if params.get("k8s_use_chaos_mesh"):
