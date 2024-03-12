@@ -133,8 +133,12 @@ def call(Map pipelineParams) {
                    name: 'docker_image')
 
             string(defaultValue: "${pipelineParams.get('k8s_enable_tls', '')}",
-                   description: 'if true, enable operator tls, and install haproxy ingress controller',
+                   description: 'if true, enable operator tls feature',
                    name: 'k8s_enable_tls')
+
+            string(defaultValue: "${pipelineParams.get('k8s_enable_sni', '')}",
+                   description: 'if true, install haproxy ingress controller and use it',
+                   name: 'k8s_enable_sni')
 
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                description: 'Gce project to use',

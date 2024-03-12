@@ -1414,7 +1414,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._disrupt_kubernetes_then_replace_scylla_node('drain_k8s_node')
 
     def disrupt_terminate_kubernetes_host_then_replace_scylla_node(self):
-        if (not self.cluster.params.get('k8s_enable_tls')
+        if (not self.cluster.params.get("k8s_enable_sni")
                 and SkipPerIssues('https://github.com/scylladb/scylla-operator/issues/1124', params=self.tester.params)):
             raise UnsupportedNemesis("https://github.com/scylladb/scylla-operator/issues/1124")
         self._disrupt_kubernetes_then_replace_scylla_node('terminate_k8s_host')  # pylint: disable=unreachable

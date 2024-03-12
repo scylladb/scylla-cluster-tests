@@ -33,8 +33,11 @@ def call(Map pipelineParams) {
                    description: '',
                    name: 'scylla_mgmt_agent_version')
             string(defaultValue: "${pipelineParams.get('k8s_enable_tls', '')}",
-                   description: 'if true, enable operator tls, and install haproxy ingress controller',
+                   description: 'if true, enable operator tls feature',
                    name: 'k8s_enable_tls')
+            string(defaultValue: "${pipelineParams.get('k8s_enable_sni', '')}",
+                   description: 'if true, install haproxy ingress controller and use it',
+                   name: 'k8s_enable_sni')
             string(defaultValue: "${pipelineParams.get('test_name', 'longevity_test.LongevityTest.test_custom_time')}",
                    description: '',
                    name: 'test_name')

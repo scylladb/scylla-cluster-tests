@@ -90,8 +90,11 @@ def call(Map pipelineParams) {
                    description: 'Scylla Operator docker image',
                    name: 'k8s_scylla_operator_docker_image')
             string(defaultValue: "${pipelineParams.get('k8s_enable_tls', '')}",
-                   description: 'if true, enable operator tls, and install haproxy ingress controller',
+                   description: 'if true, enable operator tls feature',
                    name: 'k8s_enable_tls')
+            string(defaultValue: "${pipelineParams.get('k8s_enable_sni', '')}",
+                   description: 'if true, install haproxy ingress controller and use it',
+                   name: 'k8s_enable_sni')
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')

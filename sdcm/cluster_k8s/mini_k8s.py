@@ -638,7 +638,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
         if self.params.get("scylla_mgmt_agent_version"):
             images_to_cache.append(
                 "scylladb/scylla-manager-agent:" + self.params.get("scylla_mgmt_agent_version"))
-        if self.params.get('k8s_enable_tls'):
+        if self.params.get("k8s_enable_sni"):
             images_to_cache.extend(self.ingress_controller_images)
 
         # TODO: enable caching of the 'scylla-operator' image when the following bug gets fixed:

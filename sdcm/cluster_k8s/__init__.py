@@ -932,7 +932,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                     if "broadcastOptions" not in expose_options:
                         expose_options["broadcastOptions"] = {}
                     expose_options["broadcastOptions"][f"{broadcast_direction_type}s"] = {"type": ip_type}
-        if self.params.get('k8s_enable_tls') and ComparableScyllaOperatorVersion(
+        if self.params.get('k8s_enable_sni') and ComparableScyllaOperatorVersion(
                 self.scylla_operator_chart_version.split("-")[0]) >= "1.8.0":
             dns_domains = [f"{cluster_name}.sct.scylladb.com"]
             expose_options = {"cql": {"ingress": {

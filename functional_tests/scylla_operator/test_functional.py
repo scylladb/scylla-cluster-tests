@@ -957,7 +957,7 @@ def test_default_dns_policy(db_cluster: ScyllaPodCluster):
 
 
 @pytest.mark.required_operator("v1.8.0")
-@pytest.mark.requires_tls
+@pytest.mark.requires_tls_and_sni
 def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path):
     # pylint: disable=too-many-locals
 
@@ -1008,7 +1008,7 @@ def test_operator_managed_tls(db_cluster: ScyllaPodCluster, tmp_path: path.Path)
 
 
 @pytest.mark.required_operator("v1.8.0")
-@pytest.mark.requires_tls
+@pytest.mark.requires_tls_and_sni
 def test_cloud_bundle_connectivity_python(db_cluster: ScyllaPodCluster):
 
     assert db_cluster.connection_bundle_file, "cloud bundle wasn't found"
@@ -1021,7 +1021,7 @@ def test_cloud_bundle_connectivity_python(db_cluster: ScyllaPodCluster):
 
 
 @pytest.mark.required_operator("v1.8.0")
-@pytest.mark.requires_tls
+@pytest.mark.requires_tls_and_sni
 def test_cloud_bundle_connectivity_cassandra_stress(tester):
 
     assert tester.db_cluster.connection_bundle_file, "cloud bundle wasn't found"
@@ -1043,7 +1043,7 @@ def test_cloud_bundle_connectivity_cassandra_stress(tester):
 
 
 @pytest.mark.required_operator("v1.8.0")
-@pytest.mark.requires_tls
+@pytest.mark.requires_tls_and_sni
 def test_cloud_bundle_connectivity_scylla_bench(tester):
 
     assert tester.db_cluster.connection_bundle_file, "cloud bundle wasn't found"
@@ -1064,7 +1064,7 @@ def test_cloud_bundle_connectivity_scylla_bench(tester):
 
 
 @pytest.mark.required_operator("v1.8.0")
-@pytest.mark.requires_tls
+@pytest.mark.requires_tls_and_sni
 def test_cloud_bundle_connectivity_cqlsh(db_cluster: ScyllaPodCluster):
 
     assert db_cluster.connection_bundle_file, "cloud bundle wasn't found"
