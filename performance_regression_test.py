@@ -15,6 +15,7 @@
 
 
 import os
+import re
 import time
 
 from enum import Enum
@@ -259,6 +260,18 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         if post_prepare_cql_cmds := self.params.get('post_prepare_cql_cmds'):
             self.log.debug("Execute post prepare queries: %s", post_prepare_cql_cmds)
             self._run_cql_commands(post_prepare_cql_cmds)
+
+    def preheat_cache(self):
+        base_cmd_r = self.params.get('stress_cmd_r')
+        if not isinstance(base_cmd_r, list):
+            base_cmd_r = [base_cmd_r]
+        stress_queue = []
+        for stress_cmd in base_cmd_r:
+            stress_cmd = re.sub(r'duration=\d+m', 'duration=15m', stress_cmd)
+            stress_queue.append(self.run_stress_thread(
+                stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=True))
+        for stress in stress_queue:
+            self.get_stress_results(queue=stress, store_results=False)
 
     def _run_cql_commands(self, cmds, node=None):
         node = node if node else self.db_cluster.nodes[0]
@@ -547,7 +560,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.run_fstrim_on_all_db_nodes()
         # run a write workload
         self.preload_data()
-
+        self.preheat_cache()
         # create new document in ES with doc_id = test_id + timestamp
         # allow to correctly save results for future compare
         self.create_test_stats(doc_id_with_timestamp=True)
@@ -585,6 +598,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
         self.preload_data()
+        self.preheat_cache()
         # run a mixed workload
         # create new document in ES with doc_id = test_id + timestamp
         # allow to correctly save results for future compare
