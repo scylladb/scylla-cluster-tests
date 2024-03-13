@@ -404,7 +404,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertNotIn("this is filtered", log_content)
 
     def test_default_filters(self):
-        with self.wait_for_n_events(self.get_events_logger(), count=5):
+        with self.wait_for_n_events(self.get_events_logger(), count=4):
             DatabaseLogEvent.BACKTRACE() \
                 .add_info(node="A",
                           line_number=22,
@@ -413,12 +413,6 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                 .publish()
             DatabaseLogEvent.BACKTRACE() \
                 .add_info(node="A", line_number=22, line="other back trace that shouldn't be filtered") \
-                .publish()
-            DatabaseLogEvent.RUNTIME_ERROR() \
-                .add_info(node="A",
-                          line_number=22,
-                          line="!ERR | scylla[5969]: [shard 1:stat] storage_proxy - exception during mutation write to "
-                               "10.12.0.219: std::runtime_error (view update generator not plugged to push updates)") \
                 .publish()
 
             DatabaseLogEvent.DATABASE_ERROR().add_info(
@@ -443,12 +437,10 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertNotIn("supressed", log_content)
 
         warnings_log_content = self.get_event_log_file("warning.log")
-        assert 'std::runtime_error' in warnings_log_content
         assert 'data_dictionary::no_such_column_family' in warnings_log_content
         assert 'Authentication error' not in warnings_log_content
 
         error_log_content = self.get_event_log_file("error.log")
-        assert 'RUNTIME_ERROR' not in error_log_content
         assert 'data_dictionary::no_such_column_family' not in error_log_content
         assert 'Authentication error' in error_log_content
 

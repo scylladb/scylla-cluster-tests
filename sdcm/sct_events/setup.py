@@ -104,11 +104,6 @@ def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unu
                                     regex='ldap_connection - Seastar read failed: std::system_error '
                                     '(error system:104, read: Connection reset by peer)').publish()
 
-    if SkipPerIssues('scylladb/scylladb#15672', params=sct_config):
-        EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                    event_class=DatabaseLogEvent.RUNTIME_ERROR,
-                                    regex='.*view update generator not plugged to push updates').publish()
-
     if sct_config.get('cluster_backend').startswith("k8s"):
         # cause of issue https://github.com/scylladb/scylla-cluster-tests/issues/6119
         EventsSeverityChangerFilter(new_severity=Severity.WARNING,
