@@ -4332,8 +4332,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self._k8s_disrupt_memory_stress()
             return
 
-        if SkipPerIssues(['scylladb/scylla-cluster-tests#7098',
-                          'scylladb/scylla-cluster-tests#6928'], params=self.tester.params):
+        if SkipPerIssues('scylladb/scylladb#11807', params=self.tester.params):
             # since we might get into uncontrolled situations with this nemesis
             # see https://github.com/scylladb/scylla-cluster-tests/issues/6928
             raise UnsupportedNemesis("Disabled cause of https://github.com/scylladb/scylla-cluster-tests/issues/6928")
