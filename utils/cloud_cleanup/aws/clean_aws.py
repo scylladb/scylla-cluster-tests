@@ -327,7 +327,7 @@ if __name__ == "__main__":
                             default=os.environ.get('DRY_RUN', False))
     arg_parser.add_argument("--default-action",
                             help="The default action when stopping an image (stop/terminate)",
-                            default=os.environ.get('DEFAULT_ACTION', "stop"))
+                            default=os.environ.get('DEFAULT_ACTION', "terminate"))
 
     arguments = arg_parser.parse_args()
 

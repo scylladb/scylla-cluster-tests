@@ -78,7 +78,7 @@ def get_rg_creation_time(resource_group):
 
 
 def get_keep_action(v_m) -> Callable:
-    return v_m.tags.get('keep_action', "stop").lower() if v_m.tags else "stop"
+    return v_m.tags.get('keep_action', "terminate").lower() if v_m.tags else "terminate"
 
 
 def should_keep(creation_time, keep_hours):
