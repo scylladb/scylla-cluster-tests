@@ -844,6 +844,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             "test_name": full_test_name,
             "test_start_time": str(test_start_time),
             "test_version": test_version_info,
+            "test_id": doc["_source"]["test_details"].get("test_id", ""),
             "res_list": res_list,
             "setup_details": self._get_setup_details(doc, is_gce),
             "prometheus_stats": {stat: doc["_source"]["results"].get(stat, {})
@@ -1066,6 +1067,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         last_events, events_summary = self.get_events()
         results = {
             "test_name": full_test_name,
+            "test_id": doc["_source"]["test_details"].get("test_id", ""),
             "test_start_time": str(test_start_time),
             "test_version": test_version_info,
             "base_line": base_line,
@@ -1447,6 +1449,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         last_events, events_summary = self.get_events()
         results = {
+            "test_id": test_id,
             "current_main_test": rp_main_test,
             "results": rp_metrics_table,
             "metric_info": rp_metric_info,
@@ -1480,6 +1483,7 @@ class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(BaseResultsAnalyzer
 
     def check_regression(self, test_name, test_results, test_details):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         results = dict(
+            test_id=test_details.get("test_id", ""),
             stats=test_results,
             test_name=test_name,
             test_details=test_details,
@@ -1505,6 +1509,7 @@ class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
     def check_regression(self, test_name, setup_details, test_results):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         subject = f"Performance Regression Best throughput with configuation - {test_name} - {setup_details['start_time']}"
         results = {
+            "test_id": setup_details.get("test_id", ""),
             "test_name": test_name,
             "setup_details": setup_details,
             "test_results": test_results
