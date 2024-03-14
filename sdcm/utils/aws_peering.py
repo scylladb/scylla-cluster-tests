@@ -71,19 +71,20 @@ class AwsVpcPeering:
 
     @staticmethod
     def configure_route_tables(origin_region, target_region, vpc_peering_id):
-        route_table = origin_region.sct_route_table
-        try:
-            route_table.create_route(DestinationCidrBlock=str(target_region.vpc_ipv4_cidr),
-                                     VpcPeeringConnectionId=vpc_peering_id)
-        except ClientError as ex:
-            if 'already exists' not in str(ex):
-                raise
-        try:
-            route_table.create_route(DestinationIpv6CidrBlock=str(target_region.vpc_ipv6_cidr),
-                                     VpcPeeringConnectionId=vpc_peering_id)
-        except ClientError as ex:
-            if 'already exists' not in str(ex):
-                raise
+        for index in range(AwsRegion.SCT_SUBNET_PER_AZ):
+            route_table = origin_region.sct_route_table(index=index)
+            try:
+                route_table.create_route(DestinationCidrBlock=str(target_region.vpc_ipv4_cidr),
+                                         VpcPeeringConnectionId=vpc_peering_id)
+            except ClientError as ex:
+                if 'already exists' not in str(ex):
+                    raise
+            try:
+                route_table.create_route(DestinationIpv6CidrBlock=str(target_region.vpc_ipv6_cidr),
+                                         VpcPeeringConnectionId=vpc_peering_id)
+            except ClientError as ex:
+                if 'already exists' not in str(ex):
+                    raise
 
     @staticmethod
     def open_security_group(origin_region, target_region):
