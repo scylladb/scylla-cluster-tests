@@ -1733,6 +1733,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 packages_to_install = [f"{pkg}{version_prefix}" for pkg in [
                     package_name] + list(set(result.stdout.splitlines()))]
                 package_name = " ".join(packages_to_install)
+        if self.is_kubernetes():
+            # NOTE: run "update" command because on K8S after each pod recreation we lose previous "update" results.
+            #       And running some old Scylla docker images we may get errors refering to old/removed mirrors.
+            self.remoter.sudo(f"{pkg_cmd} update", ignore_status=ignore_status)
         self.remoter.sudo(f'{pkg_cmd} install -y {package_name}', ignore_status=ignore_status)
 
     def is_apt_lock_free(self) -> bool:
