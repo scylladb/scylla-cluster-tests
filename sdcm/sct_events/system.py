@@ -172,6 +172,17 @@ class TestStepEvent(ContinuousEvent):
         return fmt
 
 
+class PerftuneResultEvent(InformationalEvent):
+    def __init__(self, message: str, severity: Severity):
+        super().__init__(severity=severity)
+
+        self.message = message
+
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": message={0.message}"
+
+
 class InfoEvent(SctEvent):
     def __init__(self, message: str, severity=Severity.NORMAL):
         super().__init__(severity=severity)

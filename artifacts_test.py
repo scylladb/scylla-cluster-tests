@@ -26,6 +26,7 @@ from sdcm.tester import ClusterTester
 from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices
 from sdcm.utils.housekeeping import HousekeepingDB
 from sdcm.utils.common import get_latest_scylla_release, ScyllaProduct
+from sdcm.utils.perftune_validator import PerftuneOutputChecker
 
 STRESS_CMD: str = "/usr/bin/cassandra-stress"
 
@@ -426,6 +427,10 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                                                             expected_status_code=expected_housekeeping_status_code,
                                                             new_row_expected=True,
                                                             backend=backend)
+
+        with self.subTest("Check the output of perftune.py"):
+            perftune_checker = PerftuneOutputChecker(self.node, backend)
+            perftune_checker.compare_perftune_results()
 
         if backend == 'docker':
             with self.subTest("Check docker latest tags"):
