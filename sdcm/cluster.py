@@ -4053,7 +4053,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             r"(?P<load>[\d.]+ [\w]+|\?)\s+"
             r"(?P<tokens>[\d]+)\s+"
             r"(?P<owns>[\w?]+)\s+"
-            r"(?P<host_id>[\w-]+)\s{2,}"
+            r"(?P<host_id>[\w-]+)\s+"
             r"(?P<rack>[\w]+|$)")
 
         for dc in data_centers:
