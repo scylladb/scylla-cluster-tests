@@ -481,6 +481,27 @@ class TestNodetoolStatus(unittest.TestCase):
                            '10.0.198.153': {'state': 'UN', 'load': '?', 'tokens': '256', 'owns': '?',
                                             'host_id': 'fba174cd-917a-40f6-ab62-cc58efaaf301', 'rack': '1a'}}}
 
+    def test_can_get_nodetool_status_typical_with_one_space_after_host_id(self):  # pylint: disable=no-self-use
+        """case for https://github.com/scylladb/scylla-cluster-tests/issues/7274"""
+        resp = "\n".join(["Datacenter: datacenter1",
+                          "=======================",
+                          "Status=Up/Down",
+                          "|/ State=Normal/Leaving/Joining/Moving",
+                          "-- Address    Load      Tokens Owns Host ID                              Rack ",
+                          "UN 172.17.0.2 202.92 KB 256    ?    7b8f86bf-c70c-4246-a273-146057e12431 rack1",
+                          ]
+                         )
+        node = NodetoolDummyNode(resp=resp)
+        db_cluster = DummyScyllaCluster([node])
+
+        status = db_cluster.get_nodetool_status()
+
+        assert status == {'datacenter1':
+                          {'172.17.0.2':
+                           {'state': 'UN', 'load': '202.92KB', 'tokens': '256', 'owns': '?',
+                            'host_id': '7b8f86bf-c70c-4246-a273-146057e12431', 'rack': 'rack1'},
+                           }}
+
     def test_datacenter_name_per_region(self):  # pylint: disable=no-self-use
         resp = "\n".join(["Datacenter: eastus",
                           "==================",
