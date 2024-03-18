@@ -3113,7 +3113,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                     "POD_MEMORY_LIMIT": self.k8s_clusters[current_dc_idx].calculated_loader_memory_limit,
                 },
             )
-            self.k8s_clusters[current_dc_idx].debug(
+            self.k8s_clusters[current_dc_idx].log.debug(
                 "Check the '%s' loaders cluster in the '%s' namespace",
                 self.loader_cluster_name, self.namespace)
             self.k8s_clusters[current_dc_idx].kubectl("get statefulset", namespace=self.namespace)
