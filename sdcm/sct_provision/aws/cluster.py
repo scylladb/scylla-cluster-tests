@@ -22,6 +22,7 @@ from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provision_plan import ProvisionPlan
 from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
 from sdcm.provision.common.provisioner import TagsType
+from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.aws.instance_parameters_builder import ScyllaInstanceParamsBuilder, \
     LoaderInstanceParamsBuilder, MonitorInstanceParamsBuilder, OracleScyllaInstanceParamsBuilder
@@ -288,6 +289,7 @@ class LoaderCluster(ClusterBase):
         return AWSInstanceUserDataBuilder(
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
+            aws_additional_interface=network_interfaces_count(self.params) > 1,
         ).to_string()
 
 
