@@ -62,9 +62,10 @@ class SkipPerIssues:
             match = pattern.search(issue_str.strip())
             if match:
                 obj = match.groupdict()
+                repo_id = obj.get("repo_id") or "scylladb"
                 return Issue(
                     user_id=obj.get("user_id") or "scylladb",
-                    repo_id=obj.get("repo_id") or "scylladb",
+                    repo_id=(repo_id if repo_id != "scylla" else "scylladb"),
                     issue_id=int(obj.get("issue_id"))
                 )
         return None
