@@ -50,8 +50,10 @@ def scan_issue_skips():
 
     params = SCTConfiguration()
     for file_path in Path(get_sct_root_path()).glob("**/*.py"):
-        if file_path.name.startswith("test_") or file_path.name == Path(__file__).name:
-            # skip tests
+        if (file_path.name.startswith("test_")
+                or file_path.name == Path(__file__).name
+                or any(subdir in str(file_path) for subdir in (".tox/", ".venv/", ".env/"))):
+            # skip tests and virtual env files
             continue
         for node in ast.walk(ast.parse(file_path.read_text())):
             if isinstance(node, ast.Call):
