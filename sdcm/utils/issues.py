@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import github
 import github.Auth
-from github.GithubException import UnknownObjectException
+from github.GithubException import UnknownObjectException, RateLimitExceededException
 
 from sdcm.keystore import KeyStore
 from sdcm.sct_config import SCTConfiguration
@@ -87,6 +87,9 @@ class SkipPerIssues:
                                message=f"couldn't find issue: {issue}",
                                severity=Severity.WARNING,
                                trace=sys._getframe().f_back).publish()  # pylint: disable=protected-access
+            return None
+        except RateLimitExceededException as exc:
+            logging.debug('RateLimitExceededException raise: %s', str(exc))
             return None
         except Exception as exc:  # pylint: disable=broad-except
             logging.warning("failed to get issue: %s", issue)
