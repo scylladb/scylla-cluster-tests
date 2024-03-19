@@ -209,8 +209,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         interfaces = []
         for i in range(interfaces_amount):
             interfaces.append({'DeviceIndex': i,
-                               'SubnetId': self._ec2_subnet_id[dc_idx][az_idx],
+                               'SubnetId': self._ec2_subnet_id[dc_idx][az_idx + i],
                                'Groups': self._ec2_security_group_ids[dc_idx]})
+        self.log.debug("interfaces: '%s' - to create_instances", interfaces)
+
         # Can only be associated with a single network interface only with the device index of 0:
         # https://docs.aws.amazon.com/sdkfornet1/latest/apidocs/html/P_Amazon_EC2_Model_InstanceNetworkInterfaceSpecification_
         # AssociatePublicIpAddress.htm
