@@ -110,14 +110,14 @@ def is_ip_ssh_connections_ipv6(params):
 
 
 def network_interfaces_count(params):
-    if params.get("scylla_network_config"):
+    if params and (scylla_network_config := params.get("scylla_network_config")):
         nics = set()
-        for interface in params.get("scylla_network_config"):
+        for interface in scylla_network_config:
             nics.add(interface["nic"])
         return len(nics)
 
-    # TODO: remove next lines when scylla_network_configuration is supported for all backends
     # For non-AWS clusters where new network configuration is not used and "extra_network_interface" parameter is not defined
+    # Another case - jenkins builder
     return 1
 
 

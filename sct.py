@@ -1532,10 +1532,12 @@ def create_runner_instance(cloud_provider, region, availability_zone, instance_t
     add_file_logger()
     sct_runner_ip_path = Path("sct_runner_ip")
     sct_runner_ip_path.unlink(missing_ok=True)
-    sct_runner = get_sct_runner(cloud_provider=cloud_provider, region_name=region, availability_zone=availability_zone)
 
     os.environ.setdefault('SCT_CLUSTER_BACKEND', cloud_provider)
     sct_config = SCTConfiguration()
+    sct_runner = get_sct_runner(cloud_provider=cloud_provider, region_name=region,
+                                availability_zone=availability_zone, params=sct_config)
+
     instance_type = instance_type or sct_config.get('instance_type_runner')
     root_disk_size_gb = root_disk_size_gb or sct_config.get('root_disk_size_runner')
     test_name = test_name or test_id

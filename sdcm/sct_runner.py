@@ -44,7 +44,7 @@ from sdcm.keystore import KeyStore
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance, provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
 from sdcm.utils.common import list_instances_aws, aws_tags_to_dict, list_instances_gce, gce_meta_to_dict
-from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
+from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name, tags_as_ec2_tags, EC2NetworkConfiguration
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_utils import (
     SUPPORTED_PROJECTS,
@@ -71,6 +71,7 @@ if TYPE_CHECKING:
     from mypy_boto3_ec2.literals import InstanceTypeType
 
     from sdcm.keystore import SSHKey
+    from sdcm.sct_config import SCTConfiguration
 
 
 LAUNCH_TIME_FORMAT = "%B %d, %Y, %H:%M:%S"
@@ -143,11 +144,12 @@ class SctRunner(ABC):
     REGULAR_TEST_INSTANCE_TYPE: str
     LONGTERM_TEST_INSTANCE_TYPE: str
 
-    def __init__(self, region_name: str, availability_zone: str = ""):
+    def __init__(self, region_name: str, availability_zone: str = "", params: SCTConfiguration | None = None):
         self.region_name = region_name
         self.availability_zone = availability_zone
         self._instance = None
         self._ssh_pkey_file = None
+        self.params = params
 
     @abstractmethod
     def region_az(self, region_name: str, availability_zone: str) -> str:
@@ -449,8 +451,8 @@ class AwsSctRunner(SctRunner):
     REGULAR_TEST_INSTANCE_TYPE = "m7i-flex.large"  # 2 vcpus, 8G
     LONGTERM_TEST_INSTANCE_TYPE = "m7i-flex.xlarge"  # 4 vcpus, 16G
 
-    def __init__(self, region_name: str, availability_zone: str):
-        super().__init__(region_name=region_name, availability_zone=availability_zone)
+    def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration | None = None):
+        super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)
         if region_name.endswith(tuple(string.ascii_lowercase)):
             region_name = region_name[:-1]
         self.aws_region = AwsRegion(region_name=region_name)
@@ -503,7 +505,7 @@ class AwsSctRunner(SctRunner):
 
         return aws_region.resource.Image(existing_amis[0]["ImageId"])
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-locals
     def _create_instance(self,
                          instance_type: InstanceTypeType,
                          base_image: Any,
@@ -517,10 +519,25 @@ class AwsSctRunner(SctRunner):
             aws_region: AwsRegion = self.aws_region_source
         else:
             aws_region: AwsRegion = self.aws_region
-        subnet = aws_region.sct_subnet(region_az=region_az)
-        assert subnet, f"No SCT subnet found in the source region. " \
-                       f"Use `hydra prepare-regions --cloud-provider aws --region-name {aws_region.region_name}' " \
-                       f"to create cloud env!"
+        ec2_network_configuration_subnets = EC2NetworkConfiguration(
+            regions=[aws_region.region_name], availability_zones=[self.availability_zone], params=self.params).subnets_per_region
+        assert ec2_network_configuration_subnets, f"No SCT subnet found in the source region. " \
+            f"Use `hydra prepare-regions --cloud-provider aws --region-name {aws_region.region_name}' " \
+            f"to create cloud env!"
+
+        subnets = ec2_network_configuration_subnets[aws_region.region_name][self.availability_zone]
+
+        interfaces = []
+        for i, subnet in enumerate(subnets):
+            interfaces.append({
+                "DeviceIndex": i,
+                "SubnetId": subnet,
+                "Groups": [aws_region.sct_security_group.group_id,
+                           aws_region.sct_ssh_security_group.group_id],
+                "DeleteOnTermination": True,
+            })
+            if len(subnets) == 1:
+                interfaces[-1]["AssociatePublicIpAddress"] = not address_pool
 
         LOGGER.info("Creating instance...")
         result = aws_region.resource.create_instances(
@@ -529,14 +546,7 @@ class AwsSctRunner(SctRunner):
             MinCount=1,
             MaxCount=1,
             KeyName=aws_region.SCT_KEY_PAIR_NAME,
-            NetworkInterfaces=[{
-                "DeviceIndex": 0,
-                "AssociatePublicIpAddress": not address_pool,
-                "SubnetId": subnet.subnet_id,
-                "Groups": [aws_region.sct_security_group.group_id,
-                           aws_region.sct_ssh_security_group.group_id],
-                "DeleteOnTermination": True,
-            }],
+            NetworkInterfaces=interfaces,
             TagSpecifications=[{
                 "ResourceType": "instance",
                 "Tags": [{"Key": key, "Value": value} for key, value in tags.items()] +
@@ -570,6 +580,19 @@ class AwsSctRunner(SctRunner):
                 AllowReassociation=False,
             )
             instance = aws_region.resource.Instance(id=instance.instance_id)
+
+        if len(instance.network_interfaces) > 1:
+            for interface in instance.network_interfaces:
+                if interface.attachment['DeviceIndex'] == 0 and interface.association_attribute is None:
+                    response = aws_region.client.allocate_address(Domain='vpc')
+                    eip_allocation_id = response['AllocationId']
+                    aws_region.client.associate_address(
+                        AllocationId=eip_allocation_id,
+                        NetworkInterfaceId=interface.id,
+                    )
+                    aws_region.resource.create_tags(
+                        Resources=[eip_allocation_id], Tags=tags_as_ec2_tags(TestConfig().common_tags()))
+                    break
 
         LOGGER.info("Instance `%s' is running. Waiting for public IP...", instance.instance_id)
         ec2_instance_wait_public_ip(instance=instance)
@@ -694,9 +717,9 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
     FAMILY = "sct-runner-image"
     SCT_NETWORK = "qa-vpc"
 
-    def __init__(self, region_name: str, availability_zone: str):
+    def __init__(self, region_name: str, availability_zone: str,  params: SCTConfiguration | None = None):
         availability_zone = random_zone(region_name)
-        super().__init__(region_name=region_name, availability_zone=availability_zone)
+        super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)
         self.gce_region = region_name
         self.gce_source_region = self.SOURCE_IMAGE_REGION
         self.images_client, info = get_gce_compute_images_client()
@@ -757,7 +780,7 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
     def tags_to_labels(tags: dict[str, str]) -> dict[str, str]:
         return {key.lower(): value.lower().replace(".", "_") for key, value in tags.items()}
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-locals
     def _create_instance(self,
                          instance_type: str,
                          base_image: Any,
@@ -912,8 +935,8 @@ class AzureSctRunner(SctRunner):
     REGULAR_TEST_INSTANCE_TYPE = "Standard_D2_v4"  # 2 vcpus, 8G, recommended by Ubuntu 20.04 LTS image publisher
     LONGTERM_TEST_INSTANCE_TYPE = "Standard_E2s_v3"  # 2 vcpus, 16G, recommended by Ubuntu 20.04 LTS image publisher
 
-    def __init__(self, region_name: str, availability_zone: str):
-        super().__init__(region_name=region_name, availability_zone=availability_zone)
+    def __init__(self, region_name: str, availability_zone: str, params: SCTConfiguration):
+        super().__init__(region_name=region_name, availability_zone=availability_zone, params=params)
         self.azure_region = AzureRegion(region_name=region_name)
         self.azure_region_source = AzureRegion(region_name=self.SOURCE_IMAGE_REGION)
         self.azure_service = self.azure_region.azure_service
@@ -1092,13 +1115,13 @@ class AzureSctRunner(SctRunner):
         resource_mgmt_client.tags.create_or_update_at_scope(scope=instance.id, parameters=params)
 
 
-def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str = "") -> SctRunner:
+def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str = "", params: SCTConfiguration | None = None) -> SctRunner:
     if cloud_provider == "aws":
-        return AwsSctRunner(region_name=region_name, availability_zone=availability_zone)
+        return AwsSctRunner(region_name=region_name, availability_zone=availability_zone, params=params)
     if cloud_provider == "gce":
-        return GceSctRunner(region_name=region_name, availability_zone=availability_zone)
+        return GceSctRunner(region_name=region_name, availability_zone=availability_zone, params=params)
     if cloud_provider == "azure":
-        return AzureSctRunner(region_name=region_name, availability_zone=availability_zone)
+        return AzureSctRunner(region_name=region_name, availability_zone=availability_zone, params=params)
     raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
 
 
