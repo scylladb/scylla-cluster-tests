@@ -4861,6 +4861,25 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.log.info("DB nodes CPU modes: %s", results)
         return results
 
+    def call_read_barrier(self, node: BaseNode):
+        """ Verify all raft commits applied on node
+
+        Any schema/topology changes are committed with Raft on node. Before
+        change is written to node, raft checks that all previous schema/
+        topology changes were applied. Raft triggers read_barrier on node, and
+        node applies all previous changes(commits) before new schema/operation
+        write will be applied. After read barrier finished, it guarantees that
+        node has all schema/topology changes, which was done in cluster before
+        read_barrier started on node.
+        To issue a read barrier it is sufficient to attempt dropping a
+        non-existing table. We need to use `if exists`, otherwise the statement
+        would fail on prepare/validate step which happens before a read barrier is
+        performed
+
+        """
+        with self.cql_connection_patient(node) as session:  # pylint: disable=no-member
+            session.execute("DROP TABLE IF EXISTS noexist_ks.noexist_cf;")
+
 
 class BaseLoaderSet():
 
