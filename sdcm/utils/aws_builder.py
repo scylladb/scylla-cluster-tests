@@ -97,13 +97,12 @@ class AwsBuilder:
     NUM_CPUS = 2
     NUM_EXECUTORS = 4
 
-    def __init__(self, region: AwsRegion, number=1):
+    def __init__(self, region: AwsRegion, params=None, number=1):
         self.region = region
         self.number = number
+        self.params = params
         self.jenkins_info = KeyStore().get_json("jenkins.json")
         self.jenkins = jenkins.Jenkins(**self.jenkins_info)
-        self.runner = AwsSctRunner(region_name=self.region.region_name,
-                                   availability_zone=self.region.availability_zones[0][-1])
 
     @cached_property
     def name(self):
@@ -170,7 +169,7 @@ class AwsBuilder:
 
     def create_launch_template(self):
         click.secho(f"{self.region.region_name}: create_launch_template")
-        runner = AwsSctRunner(region_name=self.region.region_name, availability_zone='a')
+        runner = AwsSctRunner(region_name=self.region.region_name, availability_zone='a', params=None)
         if not runner.image:
             runner.create_image()
         try:
