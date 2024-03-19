@@ -115,11 +115,12 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
 class AWSInstanceUserDataBuilder(UserDataBuilderBase):
     params: Union[SCTConfiguration, dict] = Field(as_dict=False)
     syslog_host_port: tuple[str, int] = None
+    aws_additional_interface: bool = False
 
     def to_string(self) -> str:
         post_boot_script = AWSConfigurationScriptBuilder(
             # Monitoring and loader nodes does not use additional interface
-            aws_additional_interface=False,
+            aws_additional_interface=self.aws_additional_interface,
             aws_ipv6_workaround=is_ip_ssh_connections_ipv6(self.params),
             logs_transport=self.params.get('logs_transport'),
             syslog_host_port=self.syslog_host_port,
