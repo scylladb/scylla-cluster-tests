@@ -843,6 +843,7 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
         test_index = f'latency-during-upgrade-{sub_type}'
         self.create_test_stats(sub_type=sub_type, append_sub_test_to_name=False, test_index=test_index)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
+        time.sleep(60)  # postpone measure steady state latency to skip c-s start period when latency is high
         self.steady_state_latency()
         versions_list = []
 
