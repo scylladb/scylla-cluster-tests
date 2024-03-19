@@ -36,13 +36,21 @@ class SkipPerIssues:
     and would return false if all issues closed.
     """
 
+    _github = None
+
+    @classmethod
+    @property
+    def github(cls):
+        if not cls._github:
+            github_access = KeyStore().get_json("github_access.json")
+            auth = github.Auth.Token(token=github_access["token"])
+            cls._github = github.Github(auth=auth, retry=None)
+            rate = cls._github.get_rate_limit()
+            logging.debug(rate.raw_data)
+        return cls._github
+
     def __init__(self, issues: list[str] | str, params: SCTConfiguration | dict):
         self.params = params
-
-        github_access = KeyStore().get_json("github_access.json")
-        auth = github.Auth.Token(token=github_access["token"])
-        self.github = github.Github(auth=auth)
-
         issues = [issues] if isinstance(issues, str) else issues
 
         self.issues = [self.get_issue_details(issue) for issue in issues]
@@ -72,7 +80,7 @@ class SkipPerIssues:
                                trace=sys._getframe().f_back).publish()  # pylint: disable=protected-access
             return None
         try:
-            return self.github.get_user(issue_parsed.user_id).get_repo(issue_parsed.repo_id).get_issue(issue_parsed.issue_id)
+            return self.github.get_repo(f'{issue_parsed.user_id}/{issue_parsed.repo_id}', lazy=True).get_issue(issue_parsed.issue_id)
         except UnknownObjectException:
             logging.warning("couldn't find issue: %s", issue)
             TestFrameworkEvent(source=self.__class__.__name__,
