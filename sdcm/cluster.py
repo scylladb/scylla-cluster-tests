@@ -1276,7 +1276,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def is_manager_agent_up(self, port=None):
         port = port if port else self.MANAGER_AGENT_PORT
         # When the agent is IP, it should answer an https request of https://NODE_IP:10001/ping with status code 204
-        response = requests.get(f"https://{normalize_ipv6_url(self.external_address)}:{port}/ping", verify=False)
+        response = requests.get(f"https://{normalize_ipv6_url(self.cql_address)}:{port}/ping", verify=False)
         return response.status_code == 204
 
     def wait_manager_agent_up(self, verbose=True, timeout=180):
