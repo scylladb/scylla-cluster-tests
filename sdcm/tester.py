@@ -870,7 +870,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.download_db_packages()
         if self.is_encrypt_keys_needed:
             self.download_encrypt_keys()
-        self.prepare_kms_host()
+        # self.prepare_kms_host()
 
         self.init_resources()
 
