@@ -65,6 +65,7 @@ from google.cloud.compute_v1 import ListImagesRequest, Image as GceImage
 from packaging.version import Version
 from prettytable import PrettyTable
 
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
@@ -628,6 +629,7 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):  # pylint: dis
 
     if cluster_backend in ('aws', 'k8s-eks', ''):
         clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
+        SCTCapacityReservation.cancel(config)
         clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_placement_groups_aws(tags_dict, regions=aws_regions, dry_run=dry_run)

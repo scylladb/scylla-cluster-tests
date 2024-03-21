@@ -8,6 +8,7 @@ from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Instance
 from botocore.exceptions import ClientError, NoRegionError
 
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.utils.decorators import retrying
 from sdcm.utils.aws_utils import tags_as_ec2_tags
 from sdcm.test_config import TestConfig
@@ -381,3 +382,12 @@ class EC2ClientWrapper():
             else:
                 error_message = f"use_placement_group param is true but no placement group with tags {placement_group_tags} found"
                 raise GetPlacementGroupError(error_message)
+
+    @staticmethod
+    def add_capacity_reservation_param(boto3_params, availability_zone):
+        if cr_id := SCTCapacityReservation.reservations.get(availability_zone).get(boto3_params["InstanceType"]):
+            boto3_params['CapacityReservationSpecification'] = {
+                'CapacityReservationTarget': {
+                    'CapacityReservationId': cr_id
+                }
+            }

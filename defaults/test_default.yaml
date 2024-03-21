@@ -236,6 +236,7 @@ simulated_racks: 0
 use_dns_names: false
 
 use_placement_group: false
+use_capacity_reservation: false
 
 validate_large_collections: false
 
