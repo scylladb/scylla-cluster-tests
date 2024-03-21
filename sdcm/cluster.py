@@ -102,6 +102,7 @@ from sdcm.utils.common import (
 )
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
+from sdcm.utils.features import get_enabled_features
 from sdcm.utils.install import InstallMode
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
@@ -5041,6 +5042,14 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         self.log.info("DB nodes CPU modes: %s", results)
         return results
+
+    def is_features_enabled_on_node(self, feature_list: list[str], node: BaseNode):
+        enabled_features_state = []
+        with self.cql_connection_patient_exclusive(node) as session:
+            enabled_features = get_enabled_features(session)
+            for feature in feature_list:
+                enabled_features_state.append(feature in enabled_features)
+        return all(enabled_features_state)
 
 
 class BaseLoaderSet():
