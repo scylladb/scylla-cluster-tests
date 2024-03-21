@@ -34,6 +34,9 @@ from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.file_logger import get_logger_event_summary
 from sdcm.sct_events.event_counter import EventCounterContextManager
+from sdcm.sct_events.setup import enable_default_filters
+from sdcm.sct_config import SCTConfiguration
+from sdcm.utils.context_managers import environment
 
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
@@ -403,7 +406,12 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertIn("this is not filtered", log_content)
         self.assertNotIn("this is filtered", log_content)
 
+    @pytest.mark.integration
     def test_default_filters(self):
+
+        with environment(SCT_CLUSTER_BACKEND='docker'):
+            enable_default_filters(SCTConfiguration())
+
         with self.wait_for_n_events(self.get_events_logger(), count=4):
             DatabaseLogEvent.BACKTRACE() \
                 .add_info(node="A",
