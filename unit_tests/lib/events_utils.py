@@ -17,13 +17,11 @@ import tempfile
 import unittest.mock
 from contextlib import contextmanager
 
-from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, start_events_device, stop_events_device, enable_default_filters
+from sdcm.sct_events.setup import EVENTS_DEVICE_START_DELAY, start_events_device, stop_events_device
 from sdcm.sct_events.events_device import start_events_main_device, get_events_main_device
 from sdcm.sct_events.file_logger import get_events_logger
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
 from sdcm.sct_events.event_counter import get_events_counter
-from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.context_managers import environment
 
 
 class EventsUtilsMixin:
@@ -45,8 +43,6 @@ class EventsUtilsMixin:
             cls.events_processes_registry_patcher.start()
         if events_device:
             start_events_device(_registry=cls.events_processes_registry)
-            with environment(SCT_CLUSTER_BACKEND='docker'):
-                enable_default_filters(SCTConfiguration())
         elif events_main_device:
             start_events_main_device(_registry=cls.events_processes_registry)
             time.sleep(EVENTS_DEVICE_START_DELAY)
