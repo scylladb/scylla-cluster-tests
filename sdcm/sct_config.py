@@ -29,6 +29,7 @@ import anyconfig
 
 from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import (
@@ -1453,6 +1454,10 @@ class SCTConfiguration(dict):
         dict(name="custom_es_index", env="SCT_CUSTOM_ES_INDEX", type=str,
              help="""Use custom ES index for storing test results"""),
 
+        dict(name="use_capacity_reservation", env="SCT_USE_CAPACITY_RESERVATION", type=boolean,
+             help="""reserves instances capacity for whole duration of the test run (AWS only).
+                Fallbacks to next availabilit zone if capacity is not available"""),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -1768,6 +1773,8 @@ class SCTConfiguration(dict):
             if not (authenticator_password and authenticator_user):
                 raise ValueError("For PasswordAuthenticator authenticator authenticator_user and authenticator_password"
                                  " have to be provided")
+
+        SCTCapacityReservation.get_cr_from_aws(self)
 
     def log_config(self):
         self.log.info(self.dump_config())

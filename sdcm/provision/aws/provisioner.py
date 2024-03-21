@@ -20,6 +20,7 @@ from typing import List, Optional, Union
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import Instance
 
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.utils import ec2_services, ec2_clients, find_instance_by_id, set_tags_on_instances, \
     wait_for_provision_request_done, create_spot_fleet_instance_request, \
@@ -104,6 +105,12 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             tags: List[TagsType]) -> List[Instance]:
         instance_parameters_dict = instance_parameters.dict(
             exclude_none=True, exclude_defaults=True, exclude_unset=True, encode_user_data=False)
+        if cr_id := SCTCapacityReservation.reservations.get(provision_parameters.availability_zone).get(instance_parameters.InstanceType):
+            instance_parameters_dict['CapacityReservationSpecification'] = {
+                'CapacityReservationTarget': {
+                    'CapacityReservationId': cr_id
+                }
+            }
         LOGGER.info("[%s] Creating {count} on-demand instances using AMI id '%s' with following parameters:\n%s",
                     provision_parameters.region_name,
                     instance_parameters.ImageId,

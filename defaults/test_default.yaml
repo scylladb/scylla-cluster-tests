@@ -228,3 +228,4 @@ run_fullscan: []
 stress_step_duration: '15m'
 
 use_placement_group: false
+use_capacity_reservation: false
