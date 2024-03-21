@@ -1,2 +1,2 @@
-instance_type_db: 'c6i.large'
+instance_type_db: 'c7i.large'
 user_prefix: 'perf-microbenchmarking-amazon-x86'
