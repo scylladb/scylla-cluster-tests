@@ -52,7 +52,10 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused, \
     ignore_abort_requested_errors, decorate_with_context
 from sdcm.utils import loader_utils
+from sdcm.utils.features import CONSISTENT_TOPOLOGY_CHANGES_FEATURE
+from sdcm.wait import wait_for
 from sdcm.paths import SCYLLA_YAML_PATH
+from sdcm.rest.raft_upgrade_procedure import RaftUpgradeProcedure
 from test_lib.sla import create_sla_auth
 
 NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
@@ -209,7 +212,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             scylla_yaml_updates.update({"consistent_cluster_management": True})
 
         if self.params.get("enable_tablets_on_upgrade"):
-            scylla_yaml_updates.update({"experimental_features": ["tablets", "consistent-topology-changes"]})
+            scylla_yaml_updates.update({"enable_tablets": True})
 
         if self.params.get('test_sst3'):
             scylla_yaml_updates.update({"enable_sstables_mc_format": True})
@@ -375,15 +378,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # backup the data
         node.run_nodetool("snapshot")
         node.stop_scylla_server(verify_down=False)
-
-        if self.params.get("enable_tablets_on_upgrade"):
-            with node.remote_scylla_yaml() as scylla_yml:
-                current_experimental_features = scylla_yml.experimental_features
-                current_experimental_features.remove("tablets")
-                current_experimental_features.remove("consistent-topology-changes")
-                if len(current_experimental_features) == 0:
-                    current_experimental_features = None
-                scylla_yml.experimental_features = current_experimental_features
 
         if node.distro.is_rhel_like:
             node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
@@ -618,7 +612,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         with node_to_update.remote_scylla_yaml() as scylla_yaml:
             scylla_yaml.update(updates)
 
-    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0914, PLR0915
+    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements,too-many-branches  # noqa: PLR0914, PLR0915
         """
         Upgrade half of nodes in the cluster, and start special read workload
         during the stage. Checksum method is changed to xxhash from Scylla 2.2,
@@ -751,10 +745,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         step = 'Step4 - Verify data during mixed cluster mode '
         InfoEvent(message=step).publish()
         self.fill_and_verify_db_data('after rollback the second node')
+
         InfoEvent(message='Repair the first upgraded Node').publish()
-        self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
-        self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
-                                                      step=step)
+        self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair', timeout=7200, coredump_on_timeout=True)
+        self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade, step=step)
 
         with ignore_upgrade_schema_errors():
 
@@ -769,6 +763,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
                 self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                               step=step)
+        InfoEvent(message='Step5.1 - run raft topology upgrade procedure').publish()
+        self.run_raft_topology_upgrade_procedure()
 
         InfoEvent(message='Step6 - Verify stress results after upgrade ').publish()
         InfoEvent(message='Waiting for stress threads to complete after upgrade').publish()
@@ -889,6 +885,26 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         InfoEvent(message='all nodes were upgraded, and last workaround is verified.').publish()
 
+    def run_raft_topology_upgrade_procedure(self):
+        # wait features is enabled on nodes after upgrade
+        feature_state_per_node = []
+        for node in self.db_cluster.nodes:
+            result = wait_for(func=self.db_cluster.is_features_enabled_on_node,
+                              timeout=60,
+                              step=f"Check feature enabled on node {node.name}",
+                              throw_exc=False,
+                              feature_list=[CONSISTENT_TOPOLOGY_CHANGES_FEATURE],
+                              node=node)
+            feature_state_per_node.append(result)
+        if not all(feature_state_per_node):
+            InfoEvent(message="Step5.1 - Consistent topology changes is not supported. Cluster stay with gossip topology mode").publish()
+            return
+        raft_upgrade = RaftUpgradeProcedure(self.db_cluster.nodes[0])
+        raft_upgrade.start_upgrade_procedure()
+        for node in self.db_cluster.nodes:
+            RaftUpgradeProcedure(node).wait_upgrade_procedure_done()
+        InfoEvent(message="Step5.1 - raft topology upgrade procedure done").publish()
+
     def _start_and_wait_for_node_upgrade(self, node: BaseNode, step: int) -> None:
         InfoEvent(
             message=f"Step {step} - Upgrade {node.name} from dc {node.dc_idx}").publish()
@@ -994,6 +1010,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self._start_and_wait_for_node_upgrade(node_to_upgrade, step=next(step))
 
         InfoEvent(message="All nodes were upgraded successfully").publish()
+
+        InfoEvent(message='Run raft topology upgrade procedure').publish()
+        self.run_raft_topology_upgrade_procedure()
 
         InfoEvent(message="Waiting for stress_during_entire_upgrade to finish").publish()
         for stress_thread_pool in stress_thread_pools:
