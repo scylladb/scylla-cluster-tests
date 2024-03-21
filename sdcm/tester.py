@@ -57,6 +57,7 @@ from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
@@ -2706,6 +2707,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @silence()
     def stop_resources(self):  # pylint: disable=no-self-use
         self.log.debug('Stopping all resources')
+        SCTCapacityReservation.cancel(self.params)
         with silence(parent=self, name="Kill Stress Threads"):
             self.kill_stress_thread()
 

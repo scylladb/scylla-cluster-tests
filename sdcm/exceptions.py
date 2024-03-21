@@ -79,3 +79,7 @@ class ExitByEventError(Exception):
 
 class SstablesNotFound(Exception):
     pass
+
+
+class CapacityReservationError(Exception):
+    pass
