@@ -134,7 +134,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'ldap_url_template': 'ldap://1.1.1.1:389/dc=scylla-qa,dc=com?cn?sub?'
                                      '(uniqueMember=uid={USER},ou=Person,dc=scylla-qa,dc=com)',
                 'role_manager': 'com.scylladb.auth.LDAPRoleManager',
-                'saslauthd_socket_path': '/run/saslauthd/mux'
+                'saslauthd_socket_path': '/run/saslauthd/mux',
             },
         )
 
@@ -172,7 +172,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'ldap_url_template': 'ldap://1.1.1.1:389/dc=scylla-qa,dc=com?cn?sub?'
                                      '(uniqueMember=uid={USER},ou=Person,dc=scylla-qa,dc=com)',
                 'role_manager': 'com.scylladb.auth.LDAPRoleManager',
-                'saslauthd_socket_path': '/run/saslauthd/mux'
+                'saslauthd_socket_path': '/run/saslauthd/mux',
             }
         )
 

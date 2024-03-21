@@ -1562,6 +1562,12 @@ class SCTConfiguration(dict):
 
         dict(name="run_scylla_doctor", env="SCT_RUN_SCYLLA_DOCTOR", type=boolean,
              help="Run scylla-doctor in artifact tests"),
+
+        dict(name="enable_force_gossip_topology_changes_on_upgrade",
+             env="SCT_ENABLE_FORCE_GOSSIP_TOPOLOGY_CHANGES_ON_UPGRADE",
+             type=boolean,
+             help="""Enable gossip topology changes (disable raft topology) on upgrade"""),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
