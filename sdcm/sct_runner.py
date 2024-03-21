@@ -19,6 +19,7 @@ import string
 import random
 import tempfile
 import datetime
+import glob
 from contextlib import suppress
 from enum import Enum
 from functools import cached_property
@@ -505,7 +506,7 @@ class AwsSctRunner(SctRunner):
 
         return aws_region.resource.Image(existing_amis[0]["ImageId"])
 
-    # pylint: disable=too-many-arguments,too-many-locals
+    # pylint: disable=too-many-arguments,too-many-locals,too-many-statements
     def _create_instance(self,
                          instance_type: InstanceTypeType,
                          base_image: Any,
@@ -600,7 +601,66 @@ class AwsSctRunner(SctRunner):
         LOGGER.info("Got public IP: %s", instance.public_ip_address)
         self.instance = instance
 
+        # If the SCT runner instance is used as a Docker backend for tests
+        if self.params.get("cluster_backend") == "docker":
+            LOGGER.info("Configure unused disks to use as a persistent storage for Docker.")
+            LOGGER.debug("Connecting to instance...")
+            remoter = self.get_remoter(host=instance.public_ip_address, connect_timeout=120)
+
+            LOGGER.debug("Getting unused disks...")
+            disks = self._get_unused_disks(remoter)
+            LOGGER.debug("The following unused disks are detected: %s", disks)
+            if disks:
+                mount_point = "/mnt/docker-persistent-storage"
+                self._setup_disks(remoter, disks, mount_point)
+                LOGGER.debug("Disks are configured.")
+                self._set_docker_data_root(remoter, mount_point)
+                LOGGER.debug("Persistent storage for Docker is configured.")
+            else:
+                LOGGER.debug("No unused disks found.")
+
+            remoter.stop()
+
         return instance
+
+    @staticmethod
+    def _get_unused_disks(remoter: Any) -> list[str]:
+        result = remoter.run("lsblk -dnpo NAME,TYPE | grep disk | cut -d' ' -f1")
+        devices = result.stdout.strip().splitlines()
+
+        unused = []
+        for device in devices:
+            dev = device.replace("/dev/", '')
+            if len(glob.glob("/sys/class/block/{dev}/{dev}*".format(dev=dev))) == 0:
+                unused.append(device)
+        return unused
+
+    @staticmethod
+    def _setup_disks(remoter: Any, disks: list, mount_point: str) -> None:
+        raid_device = "/dev/md0"
+        raid_level = 0
+        # Create RAID if more than one unused disk is available
+        if len(disks) != 1:
+            remoter.sudo(f"mdadm --create --verbose {raid_device} --level={raid_level} "
+                         f"--raid-devices={len(disks)} " + " ".join(disks))
+            remoter.sudo(f"mkfs.xfs {raid_device}")
+        else:
+            remoter.sudo(f"mkfs.xfs {disks[0]}")
+
+        mount_dev = disks[0] if len(disks) == 1 else raid_device
+        remoter.sudo(f"mkdir -p {mount_point}")
+        remoter.sudo(f"mount {mount_dev} {mount_point}")
+
+        # Ensure that the configured device mounts on boot
+        remoter.sudo(f"sh -c \"echo '{mount_dev} {mount_point} xfs defaults 0 0' >> /etc/fstab\"")
+
+    @staticmethod
+    def _set_docker_data_root(remoter: Any, docker_data_dir: str) -> None:
+        remoter.sudo("systemctl stop docker")
+        remoter.sudo(f"rsync -a /var/lib/docker/ {docker_data_dir}")
+        remoter.sudo("rm -rf /var/lib/docker")
+        remoter.sudo(f"ln -s {docker_data_dir} /var/lib/docker")
+        remoter.sudo("systemctl start docker")
 
     def _stop_image_builder_instance(self, instance: Any) -> None:
         instance.stop()

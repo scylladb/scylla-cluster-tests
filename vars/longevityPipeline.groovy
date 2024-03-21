@@ -22,7 +22,7 @@ def call(Map pipelineParams) {
         }
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
-               description: 'aws|gce|azure',
+               description: 'aws|gce|azure|docker',
                name: 'backend')
 
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
@@ -234,6 +234,10 @@ def call(Map pipelineParams) {
                                     timeout(time: 30, unit: 'MINUTES') {
                                         if (params.backend == 'aws' || params.backend == 'azure') {
                                             provisionResources(params, builder.region)
+                                        } else if (params.backend.contains('docker')) {
+                                            sh """
+                                                echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
+                                            """
                                         } else {
                                             sh """
                                                 echo 'Skipping because non-AWS/Azure backends are not supported'
