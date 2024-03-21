@@ -51,6 +51,7 @@ from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ig
     ignore_abort_requested_errors, decorate_with_context
 from sdcm.utils import loader_utils
 from sdcm.paths import SCYLLA_YAML_PATH
+from sdcm.rest.raft_upgrade_procedure import RaftUpgradeProcedure
 from test_lib.sla import create_sla_auth
 
 NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
@@ -208,6 +209,9 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         if self.params.get("enable_tablets_on_upgrade"):
             scylla_yaml_updates.update({"experimental_features": ["tablets", "consistent-topology-changes"]})
+
+        if self.params.get("enable_raft_topology"):
+            scylla_yaml_updates.update({"experimental_features": ["consistent-topology-changes"]})
 
         if self.params.get('test_sst3'):
             scylla_yaml_updates.update({"enable_sstables_mc_format": True})
@@ -376,6 +380,14 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             with node.remote_scylla_yaml() as scylla_yml:
                 current_experimental_features = scylla_yml.experimental_features
                 current_experimental_features.remove("tablets")
+                current_experimental_features.remove("consistent-topology-changes")
+                if len(current_experimental_features) == 0:
+                    current_experimental_features = None
+                scylla_yml.experimental_features = current_experimental_features
+
+        if self.params.get("enable_raft_topology"):
+            with node.remote_scylla_yaml() as scylla_yml:
+                current_experimental_features = scylla_yml.experimental_features
                 current_experimental_features.remove("consistent-topology-changes")
                 if len(current_experimental_features) == 0:
                     current_experimental_features = None
@@ -758,10 +770,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         step = 'Step4 - Verify data during mixed cluster mode '
         InfoEvent(message=step).publish()
         self.fill_and_verify_db_data('after rollback the second node')
+        # if not self.params.get("enable_raft_topology"):
         InfoEvent(message='Repair the first upgraded Node').publish()
-        self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
-        self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
-                                                      step=step)
+        self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair', timeout=7200, coredump_on_timeout=True)
+        self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade, step=step)
 
         with ignore_upgrade_schema_errors():
 
@@ -776,6 +788,16 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
                 self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                               step=step)
+        if self.params.get("enable_raft_topology"):
+            InfoEvent(message='Step5.1 - run raft topology upgrade procedure')
+
+            raft_upgrade = RaftUpgradeProcedure(self.db_cluster.nodes[0])
+            result = raft_upgrade.start_upgrade_procedure()
+            InfoEvent(message=f'result {result}')
+            InfoEvent("Wait upgrade procedure done")
+            for node in self.db_cluster.nodes:
+                RaftUpgradeProcedure(node).wait_upgrade_procedure_done()
+            InfoEvent(message="Step5.1 - raft topology upgrade procedure done")
 
         InfoEvent(message='Step6 - Verify stress results after upgrade ').publish()
         InfoEvent(message='Waiting for stress threads to complete after upgrade').publish()

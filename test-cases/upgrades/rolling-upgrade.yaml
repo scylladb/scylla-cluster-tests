@@ -1,4 +1,4 @@
-test_duration: 360
+test_duration: 1000
 
 # workloads
 write_stress_during_entire_test: cassandra-stress write no-warmup cl=QUORUM n=20100200 -schema 'keyspace=keyspace_entire_test replication(strategy=NetworkTopologyStrategy,replication_factor=3) compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..20100200 -log interval=5
@@ -41,3 +41,4 @@ gemini_seed: 66
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
 
 use_preinstalled_scylla: false
+enable_raft_topology: true
