@@ -13,6 +13,7 @@
 
 from functools import cached_property
 
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.sct_provision.aws.cluster import (
     OracleDBCluster, DBCluster, LoaderCluster, MonitoringCluster, PlacementGroup)
 from sdcm.sct_provision.common.layout import SCTProvisionLayout
@@ -28,6 +29,7 @@ class SCTProvisionAWSLayout(SCTProvisionLayout, cluster_backend='aws'):
     def provision(self):
         if self.placement_group:
             self.placement_group.provision()
+        SCTCapacityReservation.reserve(self._params)
         if self.db_cluster:
             self.db_cluster.provision()
         if self.monitoring_cluster:

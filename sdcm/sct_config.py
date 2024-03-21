@@ -31,6 +31,7 @@ import anyconfig
 
 from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
+from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import (
@@ -1531,6 +1532,9 @@ class SCTConfiguration(dict):
         dict(name="run_commit_log_check_thread", env="SCT_RUN_COMMIT_LOG_CHECK_THREAD", type=boolean,
              help="""Run commit log check thread if commitlog_use_hard_size_limit is True"""),
 
+        dict(name="use_capacity_reservation", env="SCT_USE_CAPACITY_RESERVATION", type=boolean,
+             help="""reserves instances capacity for whole duration of the test run (AWS only).
+             Fallbacks to next availabilit zone if capacity is not available"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -1926,6 +1930,8 @@ class SCTConfiguration(dict):
         # 18 Validate K8S TLS+SNI values
         if self.get("k8s_enable_sni") and not self.get("k8s_enable_tls"):
             raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
+
+        SCTCapacityReservation.get_cr_from_aws(self)
 
     def log_config(self):
         self.log.info(self.dump_config())

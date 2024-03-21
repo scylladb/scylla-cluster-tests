@@ -1,0 +1,2 @@
+use_capacity_reservation: true
+instance_provision: 'on_demand'
