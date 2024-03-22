@@ -647,12 +647,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 values.set('image.tag', mgmt_docker_image_tag)
 
             scylla_operator_repo_base = self.params.get(
-                'k8s_scylla_operator_docker_image').split('/')[0]
+                'k8s_scylla_operator_docker_image').rsplit('/', 1)[0]
             if scylla_operator_repo_base:
                 values.set('controllerImage.repository', scylla_operator_repo_base)
 
             scylla_operator_image_tag = self.params.get(
-                'k8s_scylla_operator_docker_image').split(':')[-1]
+                'k8s_scylla_operator_docker_image').split(':', 1)[-1]
             if scylla_operator_image_tag:
                 values.set('controllerImage.tag', scylla_operator_image_tag)
 
@@ -730,12 +730,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             # image.tag        -> self.params.get('k8s_scylla_operator_docker_image').split(':')[-1]
 
             scylla_operator_repo_base = self.params.get(
-                'k8s_scylla_operator_docker_image').split('/')[0]
+                'k8s_scylla_operator_docker_image').rsplit('/', 1)[0]
             if scylla_operator_repo_base:
                 values.set('image.repository', scylla_operator_repo_base)
 
             scylla_operator_image_tag = self.params.get(
-                'k8s_scylla_operator_docker_image').split(':')[-1]
+                'k8s_scylla_operator_docker_image').split(':', 1)[-1]
             if scylla_operator_image_tag:
                 values.set('image.tag', scylla_operator_image_tag)
 
