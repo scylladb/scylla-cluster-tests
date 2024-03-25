@@ -1,0 +1,75 @@
+test_duration: 300
+prepare_write_cmd: [
+  "cql-stress-cassandra-stress write no-warmup cl=ALL n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -rate threads=130 -col 'size=FIXED(128) n=8'  -pop 'dist=SEQ(1..108333334)'",
+  "cql-stress-cassandra-stress write no-warmup cl=ALL n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -rate threads=130 -col 'size=FIXED(128) n=8'  -pop 'dist=SEQ(108333335..216666668)'",
+  "cql-stress-cassandra-stress write no-warmup cl=ALL n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -rate threads=130 -col 'size=FIXED(128) n=8'  -pop 'dist=SEQ(216666669..325000002)'",
+  "cql-stress-cassandra-stress write no-warmup cl=ALL n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -rate threads=130 -col 'size=FIXED(128) n=8'  -pop 'dist=SEQ(325000003..433333336)'",
+  "cql-stress-cassandra-stress write no-warmup cl=ALL n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -rate threads=130 -col 'size=FIXED(128) n=8'  -pop 'dist=SEQ(433333337..541666670)'",
+  "cql-stress-cassandra-stress write no-warmup cl=ALL n=108333334 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -rate threads=130 -col 'size=FIXED(128) n=8'  -pop 'dist=SEQ(541666671..650000004)'"
+]
+
+stress_cmd_w: [
+  "cql-stress-cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -rate threads=220 -col 'size=FIXED(128) n=8' -pop 'dist=SEQ(1..325000000)'",
+  "cql-stress-cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -rate threads=220 -col 'size=FIXED(128) n=8' -pop 'dist=SEQ(325000001..650000000)'",
+  "cql-stress-cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -rate threads=220 -col 'size=FIXED(128) n=8' -pop 'dist=SEQ(650000001..975000000)'",
+  "cql-stress-cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -rate threads=220 -col 'size=FIXED(128) n=8' -pop 'dist=SEQ(975000001..1300000000)'"
+]
+stress_cmd_r: [
+  "cql-stress-cassandra-stress read no-warmup cl=QUORUM duration=60m -rate threads=430 -col 'size=FIXED(128) n=8' -pop 'dist=gauss(1..108333334,54166668,54220)'",
+  "cql-stress-cassandra-stress read no-warmup cl=QUORUM duration=60m -rate threads=430 -col 'size=FIXED(128) n=8' -pop 'dist=gauss(108333335..216666668,162500002,54220)'",
+  "cql-stress-cassandra-stress read no-warmup cl=QUORUM duration=60m -rate threads=430 -col 'size=FIXED(128) n=8' -pop 'dist=gauss(216666669..325000002,270833336,54220)'",
+  "cql-stress-cassandra-stress read no-warmup cl=QUORUM duration=60m -rate threads=430 -col 'size=FIXED(128) n=8' -pop 'dist=gauss(325000003..433333336,379166670,54220)'",
+  "cql-stress-cassandra-stress read no-warmup cl=QUORUM duration=60m -rate threads=430 -col 'size=FIXED(128) n=8' -pop 'dist=gauss(433333337..541666670,487500004,54220)'",
+  "cql-stress-cassandra-stress read no-warmup cl=QUORUM duration=60m -rate threads=430 -col 'size=FIXED(128) n=8' -pop 'dist=gauss(541666671..650000004,595833338,54220)'"
+]
+stress_cmd_m: [
+  "cql-stress-cassandra-stress mixed no-warmup cl=QUORUM duration=60m -mode cql3 native -rate threads=350 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..108333334,54166668,542209)'",
+  "cql-stress-cassandra-stress mixed no-warmup cl=QUORUM duration=60m -mode cql3 native -rate threads=350 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(108333335..216666668,162500002,542209)'",
+  "cql-stress-cassandra-stress mixed no-warmup cl=QUORUM duration=60m -mode cql3 native -rate threads=350 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(216666669..325000002,270833336,542209)'",
+  "cql-stress-cassandra-stress mixed no-warmup cl=QUORUM duration=60m -mode cql3 native -rate threads=350 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(325000003..433333336,379166670,542209)'",
+  "cql-stress-cassandra-stress mixed no-warmup cl=QUORUM duration=60m -mode cql3 native -rate threads=350 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(433333337..541666670,487500004,542209)'",
+  "cql-stress-cassandra-stress mixed no-warmup cl=QUORUM duration=60m -mode cql3 native -rate threads=350 -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(541666671..650000004,595833338,542209)'"
+]
+round_robin: true
+# NOTE: following is needed for the K8S case
+k8s_loader_run_type: 'static'
+
+n_db_nodes: 3
+n_loaders: 6
+n_monitor_nodes: 1
+
+
+# AWS
+instance_type_db: 'i4i.4xlarge'
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.small'
+#------
+
+#GCE
+use_preinstalled_scylla: true
+gce_instance_type_db: 'n2-highmem-8'
+gce_root_disk_type_db: 'pd-ssd'
+gce_n_local_ssd_disk_db: 8
+gce_instance_type_loader: 'c3-highcpu-8'
+gce_root_disk_type_loader: 'pd-ssd'
+root_disk_size_loader: 50
+gce_instance_type_monitor: 'n2-highmem-8'
+#------
+
+user_prefix: 'perf-regression-i4i-4x-650gb'
+space_node_threshold: 644245094
+
+backtrace_decoding: false
+print_kernel_callstack: true
+
+store_perf_results: true
+use_mgmt: false
+send_email: true
+email_recipients: ['scylla-perf-results@scylladb.com']
+
+custom_es_index: 'performancestatsv2'
+use_hdr_cs_histogram: false
+
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+
+use_placement_group: true
