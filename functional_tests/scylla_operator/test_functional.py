@@ -40,7 +40,6 @@ from sdcm.cluster_k8s import (
     SCYLLA_OPERATOR_NAMESPACE
 )
 from sdcm.mgmt import TaskStatus
-from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import ParallelObject
 from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
@@ -765,15 +764,6 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     Deploy Scylla using helm chart with only default values.
     Storage capacity expected to be 10Gi
     """
-    # TODO: remove this skip when https://github.com/scylladb/scylla-operator/pull/1603 gets merged
-    if "eks" in db_cluster.params.get("cluster_backend"):
-        for k8s_cluster in db_cluster.k8s_clusters:
-            instance_type_db = k8s_cluster.params.get("instance_type_db")
-            region_name = k8s_cluster.region_name
-            if get_arch_from_instance_type(instance_type=instance_type_db, region_name=region_name) == "arm64":
-                pytest.skip(
-                    "Scylla-manager default version must be 3.2.5 or greater."
-                    " See https://github.com/scylladb/scylla-operator/pull/1603")
 
     target_chart_name, namespace = ("t-default-values",) * 2
     expected_capacity = '10Gi'
@@ -799,7 +789,8 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
             timeout=1200,
         )
 
-        pods_name_and_status = get_pods_and_statuses(db_cluster, namespace=namespace)
+        pods_name_and_status = get_pods_and_statuses(
+            db_cluster, namespace=namespace, label=db_cluster.pod_selector)
 
         assert len(pods_name_and_status) == 3, (
             f"Expected 3 pods to be created in {namespace} namespace "
@@ -826,13 +817,17 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
                 f"Failed to get scylla version from {pod_name_and_status['name']}. "
                 f"Output of command 'scylla --version' is empty")
         need_to_collect_logs = False
-
+        log.info("Scylla clsuter with default info has successfully passed validation")
+        return None
     finally:
         if need_to_collect_logs:
             KubernetesOps.gather_k8s_logs(
                 logdir_path=logdir, kubectl=k8s_cluster.kubectl, namespaces=[namespace])
         k8s_cluster.helm(f"uninstall {target_chart_name} --timeout 120s", namespace=namespace)
-        k8s_cluster.kubectl(f"delete namespace {namespace}")
+        try:
+            k8s_cluster.kubectl(f"delete namespace {namespace}")
+        except invoke.exceptions.CommandTimedOut as exc:
+            log.warning("Deletion of the '%s' namespace timed out: %s", namespace, exc)
 
 
 @pytest.mark.restart_is_used
@@ -896,6 +891,9 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):  # pylint: disable=too-m
         else:
             dict(props).pop(hh_throttle_option_name)
 
+    # NOTE: sleep for some time to avoid race between following restart and configmap object
+    #       update which gets made in the above 'with scylla_yaml() as props' context manager.
+    time.sleep(5)
     db_cluster.restart_scylla()
     for node in db_cluster.nodes:
         with node.actual_scylla_yaml() as props:
@@ -921,8 +919,8 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):  # pylint: disable=too-m
         else:
             props[hh_throttle_option_name] = configmap_scylla_yaml_content[hh_throttle_option_name]
 
+    time.sleep(5)
     db_cluster.restart_scylla()
-
     for node in db_cluster.nodes:
         with node.actual_scylla_yaml() as props:
             assert dict(props).get(hh_enabled_option_name) == original_hinted_handoff
