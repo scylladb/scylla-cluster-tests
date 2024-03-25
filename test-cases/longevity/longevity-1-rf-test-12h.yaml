@@ -1,0 +1,33 @@
+test_duration: 800
+
+prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=100 -clustering-row-count=55555                       -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -validate-data" ,
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=100 -clustering-row-count=55555 -partition-offset=101 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -validate-data",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=100 -clustering-row-count=55555 -partition-offset=201 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -validate-data",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=100 -clustering-row-count=55555 -partition-offset=301 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -validate-data",
+]
+
+prepare_verify_cmd: ["scylla-bench -workload=sequential -mode=read -replication-factor=1 -partition-count=200 -clustering-row-count=55555                      -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -iterations 0 -duration=30m -validate-data",
+                     "scylla-bench -workload=sequential -mode=read -replication-factor=1 -partition-count=200 -clustering-row-count=55555  -partition-offset=201 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -iterations 0 -duration=30m -validate-data"
+]
+
+stress_cmd: ["scylla-bench -workload=sequential -mode=write  -replication-factor=1 -partition-count=150 -clustering-row-count=75555                       -clustering-row-size=uniform:1024..3048   -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=600m -validate-data",
+             "scylla-bench -workload=sequential -mode=write  -replication-factor=1 -partition-count=150 -clustering-row-count=75555 -partition-offset=151  -clustering-row-size=uniform:1024..3048   -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=600m -validate-data",
+             "scylla-bench -workload=sequential -mode=write  -replication-factor=1 -partition-count=150 -clustering-row-count=75555 -partition-offset=301  -clustering-row-size=uniform:1024..3048   -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=600m -validate-data",
+             "scylla-bench -workload=sequential -mode=write  -replication-factor=1 -partition-count=150 -clustering-row-count=75555 -partition-offset=451  -clustering-row-size=uniform:1024..3048   -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=600m -validate-data",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=1 -partition-count=300 -clustering-row-count=75555                        -clustering-row-size=uniform:1024..3048   -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=600m -validate-data",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=1 -partition-count=300 -clustering-row-count=75555 -partition-offset=301  -clustering-row-size=uniform:1024..3048   -concurrency=10 -connection-count=10 -consistency-level=one -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=600m -validate-data",
+]
+
+n_db_nodes: 3
+n_loaders: 2
+n_monitor_nodes: 1
+round_robin: true
+
+instance_type_db: 'i4i.xlarge'
+instance_type_loader: 'c6i.4xlarge'
+
+nemesis_class_name: 'NonDisruptiveMonkey'
+nemesis_interval: 5
+
+user_prefix: 'longevity-1-rf-test-4h'
+space_node_threshold: 64424
