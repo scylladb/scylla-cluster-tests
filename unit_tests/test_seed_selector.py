@@ -36,6 +36,7 @@ class DummyCluster(sdcm.cluster.BaseScyllaCluster):
     def __init__(self, *args, **kwargs):
         self.params = {}
         self.nodes = []
+        self.node_type = "scylla-db"
         super().__init__(*args, **kwargs)
 
     def set_test_params(self, seeds_selector, seeds_num, db_type):
@@ -61,7 +62,7 @@ class TestSeedSelector(unittest.TestCase):
         self.cluster = DummyCluster()
         # Add 3 nodes
         for i in range(1, nodes_number+1):
-            self.cluster.nodes.append(DummyNode(name='node%d' % i, parent_cluster=None,
+            self.cluster.nodes.append(DummyNode(name='node%d' % i, parent_cluster=self.cluster,
                                                 base_logdir=self.temp_dir,
                                                 ssh_login_info=dict(key_file='~/.ssh/scylla-test')))
         for node in self.cluster.nodes:
