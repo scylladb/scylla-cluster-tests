@@ -1771,14 +1771,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             manager_agent_yaml["tls_key_file"] = tls_key_file
             manager_agent_yaml["prometheus"] = f":{self.parent_cluster.params.get('manager_prometheus_port')}"
 
-        self.remoter.sudo(shell_script_cmd("""\
-            systemctl restart scylla-manager-agent
-            systemctl enable scylla-manager-agent
-        """))
-
-        manager_agent_version = self.remoter.run("scylla-manager-agent --version").stdout
-        self.log.info("node %s has scylla-manager-agent version %s", self.name, manager_agent_version)
-
     def update_manager_agent_config(self, region: Optional[str] = None) -> None:
         backup_backend = self.parent_cluster.params.get("backup_bucket_backend")
         backup_backend_config = {}
@@ -1795,9 +1787,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         with self.remote_manager_agent_yaml() as manager_agent_yaml:
             manager_agent_yaml[backup_backend] = backup_backend_config
-
-        self.remoter.sudo("systemctl restart scylla-manager-agent")
-        self.wait_manager_agent_up()
 
     def upgrade_manager_agent(self, scylla_mgmt_address: str, start_agent_after_upgrade: bool = True) -> None:
         self.download_scylla_manager_repo(scylla_mgmt_address)
@@ -3276,6 +3265,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def node_setup(self, node, verbose=False, timeout=3600):
         raise NotImplementedError("Derived class must implement 'node_setup' method!")
 
+    def node_startup(self, node, verbose=False, timeout=3600):
+        raise NotImplementedError("Derived class must implement 'node_startup' method!")
+
     def get_node_ips_param(self, public_ip=True):
         raise NotImplementedError("Derived class must implement 'get_node_ips_param' method!")
 
@@ -3714,14 +3706,15 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
 
         node_list = kwargs.get('node_list', None) or cl_inst.nodes
         timeout = kwargs.get('timeout', None)
-        # remove all arguments which is not supported by BaseScyllaCluster.node_setup method
+        # remove all arguments which are not supported by BaseScyllaCluster.node_setup method
         setup_kwargs = {k: v for k, v in kwargs.items()
                         if k not in ["node_list", "check_node_health", "wait_for_db_logs"]}
 
-        _queue = queue.Queue()
+        setup_queue, setup_results = queue.Queue(), []
+        startup_queue, startup_results = queue.Queue(), []
 
         @raise_event_on_failure
-        def node_setup(_node: BaseNode):
+        def node_setup(_node: BaseNode, task_queue: queue.Queue):
             exception_details = None
             try:
                 cl_inst.node_setup(_node, **setup_kwargs)
@@ -3732,22 +3725,33 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             except Exception:  # pylint: disable=broad-except
                 LOGGER.warning("Failure settings shards for node %s in Argus.", _node)
                 LOGGER.debug("Exception details:\n", exc_info=True)
-            _queue.put((_node, exception_details))
-            _queue.task_done()
+            task_queue.put((_node, exception_details))
+            task_queue.task_done()
 
-        def verify_node_setup(start_time):
+        @raise_event_on_failure
+        def node_startup(_node: BaseNode, task_queue: queue.Queue):
+            exception_details = None
+            try:
+                cl_inst.node_startup(_node, **setup_kwargs)
+            except Exception as ex:  # pylint: disable=broad-except
+                exception_details = (str(ex), traceback.format_exc())
+            task_queue.put((_node, exception_details))
+            task_queue.task_done()
+
+        def verify_node_setup_or_startup(start_time, task_queue: queue.Queue, results: list):
             time_elapsed = time.perf_counter() - start_time
             try:
-                node, setup_exception = _queue.get(block=True, timeout=5)
+                node, setup_exception = task_queue.get(block=True, timeout=5)
                 if setup_exception:
-                    raise NodeSetupFailed(node=node, error_msg=setup_exception[0], traceback_str=setup_exception[1])
+                    raise NodeSetupFailed(
+                        node=node, error_msg=setup_exception[0], traceback_str=setup_exception[1])
                 results.append(node)
                 cl_inst.log.info("(%d/%d) nodes ready, node %s. Time elapsed: %d s",
                                  len(results), len(node_list), str(node), int(time_elapsed))
             except queue.Empty:
                 pass
             if timeout and time_elapsed / 60 > timeout:
-                msg = 'TIMEOUT [%d min]: Waiting for node(-s) setup(%d/%d) expired!' % (
+                msg = 'TIMEOUT [%d min]: Waiting for node(-s) setup/startup(%d/%d) expired!' % (
                     timeout, len(results), len(node_list))
                 cl_inst.log.error(msg)
                 raise NodeSetupTimeout(msg)
@@ -3777,8 +3781,6 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             add_severity_limit_rules([f'{e["rule_pattern"]}={e["default_severity"]}' for e in critical_events])
 
         start_time = time.perf_counter()
-        init_nodes = []
-        results = []
 
         if isinstance(cl_inst, BaseScyllaCluster):
             # Update installed scylla before node setup, scylla server will be start at the end of node_setup
@@ -3786,26 +3788,23 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             cl_inst.update_db_packages(node_list, start_service=False)
 
         with critical_node_setup_events():
+            start_time = time.perf_counter()
+            # setup in parallel
             for node in node_list:
-                if isinstance(cl_inst, BaseScyllaCluster) \
-                        and not getattr(cl_inst, 'params', {}).get('use_legacy_cluster_init'):
-                    init_nodes.append(node)
-                    start_time = time.perf_counter()
-                    node_setup(node)
-                    verify_node_setup(start_time)
-                else:
-                    setup_thread = threading.Thread(target=node_setup, name='NodeSetupThread',
-                                                    args=(node,), daemon=True)
-                    setup_thread.start()
-                    if isinstance(cl_inst, BaseScyllaCluster):
-                        cl_inst.log.info("Wait 120 seconds before next node setup")
-                        time.sleep(120)
-
-            while len(results) != len(node_list):
-                verify_node_setup(start_time)
-
+                current_setup_thread = threading.Thread(
+                    target=node_setup, args=(node, setup_queue), daemon=True)
+                current_setup_thread.start()
+            while len(setup_results) != len(node_list):
+                verify_node_setup_or_startup(start_time, setup_queue, setup_results)
+            # startup serially
+            for node in node_list:
+                node_startup(node, startup_queue)
+            while len(startup_results) != len(node_list):
+                verify_node_setup_or_startup(start_time, startup_queue, startup_results)
+            # Check DB nodes for UN
             if isinstance(cl_inst, BaseScyllaCluster):
-                cl_inst.wait_for_nodes_up_and_normal(nodes=node_list, verification_node=node_list[0], timeout=timeout)
+                cl_inst.wait_for_nodes_up_and_normal(
+                    nodes=node_list, verification_node=node_list[0], timeout=timeout)
 
         time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug('TestConfig duration -> %s s', int(time_elapsed))
@@ -3819,7 +3818,6 @@ class ClusterNodesNotReady(Exception):
 
 
 class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-instance-attributes, too-many-statements
-    node_setup_requires_scylla_restart = True
     name: str
     nodes: List[BaseNode]
     log: logging.Logger
@@ -4437,7 +4435,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         kms_key_rotation_thread.start()
         return None
 
-    def scylla_configure_non_root_installation(self, node, devname, verbose, timeout):
+    def scylla_configure_non_root_installation(self, node, devname):
         node.stop_scylla_server(verify_down=False)
         node.remoter.run(f'{INSTALL_DIR}/sbin/scylla_setup --nic {devname} --no-raid-setup',
                          verbose=True, ignore_status=True)
@@ -4450,10 +4448,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             f"sed -ie 's/^listen_address: .*/listen_address: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
         node.remoter.run(
             f"sed -ie 's/^rpc_address: .*/rpc_address: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
-
-        node.start_scylla_server(verify_up=False, verify_up_timeout=timeout)
-        node.wait_db_up(verbose=verbose, timeout=timeout)
-        node.wait_jmx_up(verbose=verbose, timeout=200)
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches,too-many-statements,too-many-locals
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
@@ -4480,93 +4474,104 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if self.params.get("use_preinstalled_scylla") and node.is_scylla_installed(raise_if_not_installed=True):
             install_scylla = False
 
-        if not self.test_config.REUSE_CLUSTER:
-            node.disable_daily_triggered_services()
-            if self.params.get('logs_transport') == 'syslog-ng':
-                SyslogNgExporterSetup().install(node)
-
-            nic_devname = node.get_nic_devices()[0]
-            if install_scylla:
-                self._scylla_install(node)
-            else:
-                self.log.info("Waiting for preinstalled Scylla")
-                self._wait_for_preinstalled_scylla(node)
-                self.log.info("Done waiting for preinstalled Scylla")
-            if self.params.get('print_kernel_callstack'):
-                save_kallsyms_map(node=node)
-            if node.is_nonroot_install:
-                self.scylla_configure_non_root_installation(node=node, devname=nic_devname,
-                                                            verbose=verbose, timeout=timeout)
-                return
-
-            if self.test_config.BACKTRACE_DECODING:
-                node.install_scylla_debuginfo()
-
-            if self.test_config.MULTI_REGION or self.params.get('simulated_racks') > 1:
-                SnitchConfig(node=node, datacenters=self.datacenter).apply()  # pylint: disable=no-member
-            node.config_setup(append_scylla_args=self.get_scylla_args())
-
-            self._scylla_post_install(node, install_scylla, nic_devname)
-            # prepare and start saslauthd service
-            if self.params.get('prepare_saslauthd'):
-                prepare_and_start_saslauthd_service(node)
-
-            if self.node_setup_requires_scylla_restart:
-                node.stop_scylla_server(verify_down=False)
-                node.clean_scylla_data()
-                node.remoter.sudo(cmd="rm -f /etc/scylla/ami_disabled", ignore_status=True)
-
-                if self.is_additional_data_volume_used():
-                    result = node.remoter.sudo(cmd="scylla_io_setup")
-                    if result.ok:
-                        self.log.info("Scylla_io_setup result: %s", result.stdout)
-
-                if self.params.get('gce_setup_hybrid_raid'):
-                    gce_n_local_ssd_disk_db = self.params.get('gce_n_local_ssd_disk_db')
-                    gce_pd_ssd_disk_size_db = self.params.get('gce_pd_ssd_disk_size_db')
-                    if not (gce_n_local_ssd_disk_db > 0 and gce_pd_ssd_disk_size_db > 0):
-                        msg = f"Hybrid RAID cannot be configured without NVMe ({gce_n_local_ssd_disk_db}) " \
-                              f"and PD-SSD ({gce_pd_ssd_disk_size_db})"
-                        raise ValueError(msg)
-
-                    # The script to configure a hybrid RAID is named "hybrid_raid.py" and located on the private repository.
-                    hybrid_raid_script = "hybrid_raid.py"
-                    target_path = os.path.join("/tmp", hybrid_raid_script)
-                    node.remoter.send_files(
-                        src=f"{get_sct_root_path()}/scylla-qa-internal/custom_d1/{hybrid_raid_script}", dst=target_path)
-
-                    # /dev/sdb is the additional SSD that is used for creting RAID-1 along with the other NVMEs (RAID-0)
-                    hybrid_raid_setup_cmd = f"sudo python3 {target_path} --nvme-raid-level 0 --write-mostly-device /dev/sdb --duplex"
-                    # The timeout value is dependent on the SSD size and might have to be adjusted if a fixed "standard"
-                    # disk size is agreed to be used (should be around 370GB).
-                    # So this make sure the "mdadm --create" command will get enough time to finish.
-                    node.remoter.run('sudo bash -cxe "%s"' % hybrid_raid_setup_cmd, timeout=7200)
-
-                for config_file_path in self.params.get('scylla_d_overrides_files'):
-                    config_file = Path(get_sct_root_path()) / config_file_path
-                    with remote_file(remoter=node.remoter,
-                                     remote_path=f'/etc/scylla.d/{config_file.name}',
-                                     sudo=True) as fobj:
-                        fobj.truncate(0)  # first clear the file
-                        fobj.write(config_file.read_text())
-
-                node.start_scylla_server(verify_up=False)
-
-            # code to increase java heap memory to scylla-jmx (because of #7609)
-            if jmx_memory := self.params.get("jmx_heap_memory"):
-                node.increase_jmx_heap_memory(jmx_memory)
-                node.restart_scylla_jmx()
-
-            self.log.debug('io.conf right after reboot: %s', node.remoter.sudo('cat /etc/scylla.d/io.conf').stdout)
-
-            if self.params.get('use_mgmt'):
-                self.install_scylla_manager(node)
-        else:
+        if self.test_config.REUSE_CLUSTER:
             self._reuse_cluster_setup(node)
+            return
+
+        node.disable_daily_triggered_services()
+        if self.params.get('logs_transport') == 'syslog-ng':
+            SyslogNgExporterSetup().install(node)
+
+        nic_devname = node.get_nic_devices()[0]
+        if install_scylla:
+            self._scylla_install(node)
+        else:
+            self.log.info("Waiting for preinstalled Scylla")
+            self._wait_for_preinstalled_scylla(node)
+            self.log.info("Done waiting for preinstalled Scylla")
+        if self.params.get('print_kernel_callstack'):
+            save_kallsyms_map(node=node)
+        if node.is_nonroot_install:
+            self.scylla_configure_non_root_installation(node=node, devname=nic_devname)
+            return
+
+        if self.test_config.BACKTRACE_DECODING:
+            node.install_scylla_debuginfo()
+
+        if self.test_config.MULTI_REGION or self.params.get('simulated_racks') > 1:
+            SnitchConfig(node=node, datacenters=self.datacenter).apply()  # pylint: disable=no-member
+        node.config_setup(append_scylla_args=self.get_scylla_args())
+
+        self._scylla_post_install(node, install_scylla, nic_devname)
+        # prepare and start saslauthd service
+        if self.params.get('prepare_saslauthd'):
+            prepare_and_start_saslauthd_service(node)
+
+        node.stop_scylla_server(verify_down=False)
+        node.clean_scylla_data()
+        node.remoter.sudo(cmd="rm -f /etc/scylla/ami_disabled", ignore_status=True)
+
+        if self.is_additional_data_volume_used():
+            result = node.remoter.sudo(cmd="scylla_io_setup")
+            if result.ok:
+                self.log.info("Scylla_io_setup result: %s", result.stdout)
+
+        if self.params.get('gce_setup_hybrid_raid'):
+            gce_n_local_ssd_disk_db = self.params.get('gce_n_local_ssd_disk_db')
+            gce_pd_ssd_disk_size_db = self.params.get('gce_pd_ssd_disk_size_db')
+            if not (gce_n_local_ssd_disk_db > 0 and gce_pd_ssd_disk_size_db > 0):
+                msg = f"Hybrid RAID cannot be configured without NVMe ({gce_n_local_ssd_disk_db}) " \
+                      f"and PD-SSD ({gce_pd_ssd_disk_size_db})"
+                raise ValueError(msg)
+
+            # The script to configure a hybrid RAID is named "hybrid_raid.py" and located on the private repository.
+            hybrid_raid_script = "hybrid_raid.py"
+            target_path = os.path.join("/tmp", hybrid_raid_script)
+            node.remoter.send_files(
+                src=f"{get_sct_root_path()}/scylla-qa-internal/custom_d1/{hybrid_raid_script}", dst=target_path)
+
+            # /dev/sdb is the additional SSD that is used for creting RAID-1 along with the other NVMEs (RAID-0)
+            hybrid_raid_setup_cmd = f"sudo python3 {target_path} --nvme-raid-level 0 --write-mostly-device /dev/sdb --duplex"
+            # The timeout value is dependent on the SSD size and might have to be adjusted if a fixed "standard"
+            # disk size is agreed to be used (should be around 370GB).
+            # So this make sure the "mdadm --create" command will get enough time to finish.
+            node.remoter.run('sudo bash -cxe "%s"' % hybrid_raid_setup_cmd, timeout=7200)
+
+        for config_file_path in self.params.get('scylla_d_overrides_files'):
+            config_file = Path(get_sct_root_path()) / config_file_path
+            with remote_file(remoter=node.remoter,
+                             remote_path=f'/etc/scylla.d/{config_file.name}',
+                             sudo=True) as fobj:
+                fobj.truncate(0)  # first clear the file
+                fobj.write(config_file.read_text())
+
+        # code to increase java heap memory to scylla-jmx (because of #7609)
+        if jmx_memory := self.params.get("jmx_heap_memory"):
+            node.increase_jmx_heap_memory(jmx_memory)
+
+        if self.params.get('use_mgmt'):
+            self.install_scylla_manager(node)
+
+    def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):
+        if not self.test_config.REUSE_CLUSTER:
+            self.log.debug('io.conf before reboot: %s', node.remoter.sudo('cat /etc/scylla.d/io.conf').stdout)
+            node.start_scylla_server(verify_up=False)
+            if self.params.get("jmx_heap_memory"):
+                node.restart_scylla_jmx()
+            self.log.debug(
+                'io.conf right after reboot: %s', node.remoter.sudo('cat /etc/scylla.d/io.conf').stdout)
+            if self.params.get('use_mgmt'):
+                node.remoter.sudo(shell_script_cmd("""\
+                    systemctl restart scylla-manager-agent
+                    systemctl enable scylla-manager-agent
+                """))
+                node.wait_manager_agent_up()
+                manager_agent_version = node.remoter.run("scylla-manager-agent --version").stdout
+                node.log.info("node %s has scylla-manager-agent version %s", node.name, manager_agent_version)
+
         node.wait_db_up(verbose=verbose, timeout=timeout)
         nodes_status = node.get_nodes_status()
         check_nodes_status(nodes_status=nodes_status, current_node=node)
-
         self.clean_replacement_node_options(node)
 
     def install_scylla_manager(self, node):
@@ -4967,6 +4972,9 @@ class BaseLoaderSet():
         # Login to Docker Hub.
         docker_hub_login(remoter=node.remoter)
 
+    def node_startup(self, node, verbose=False, db_node_address=None, **kwargs):
+        pass
+
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
         pass
@@ -5225,6 +5233,9 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         node.start_alert_manager_thread()  # remove when start task threads will be started after node setup
         if self.params.get("use_mgmt"):
             self.install_scylla_manager(node)
+
+    def node_startup(self, node, **kwargs):  # pylint: disable=unused-argument
+        pass
 
     def install_scylla_manager(self, node):
         if self.params.get("scylla_repo_m"):

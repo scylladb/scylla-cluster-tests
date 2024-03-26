@@ -2396,6 +2396,9 @@ class PodCluster(cluster.BaseCluster):
     def node_setup(self, node, verbose=False, timeout=3600):
         raise NotImplementedError("Derived class must implement 'node_setup' method!")
 
+    def node_startup(self, node, verbose=False, timeout=3600):
+        raise NotImplementedError("Derived class must implement 'node_startup' method!")
+
     def get_node_ips_param(self, public_ip=True):
         raise NotImplementedError("Derived class must implement 'get_node_ips_param' method!")
 
@@ -2466,8 +2469,6 @@ class PodCluster(cluster.BaseCluster):
 
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disable=too-many-public-methods
-    node_setup_requires_scylla_restart = False
-
     def __init__(self,
                  k8s_clusters: List[KubernetesCluster],
                  scylla_cluster_name: Optional[str] = None,
@@ -2707,6 +2708,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
         self.node_config_setup()
+
+    def node_startup(self, node: BaseScyllaPodContainer, verbose: bool = False, timeout: int = 3600):
+        pass
 
     @cached_property
     def scylla_manager_cluster_name(self):  # pylint: disable=invalid-overridden-method
@@ -3068,6 +3072,10 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
 
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
+
+    def node_startup(self, node: BasePodContainer, verbose: bool = False,
+                     db_node_address: Optional[str] = None, **kwargs) -> None:
+        pass
 
     def _get_docker_image(self):
         if loader_image := self.params.get('stress_image.cassandra-stress'):
