@@ -77,8 +77,6 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=to
     extra_docker_opts = (f'-p 8000 -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
                          f' -v {ssl_dir}:/etc/scylla/ssl_conf'
                          ' --entrypoint /entry.sh')
-    if docker_network:
-        extra_docker_opts += f' --network={docker_network}'
 
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
                           command_line=f"--smp 1 --experimental 1 {alternator_flags}",
