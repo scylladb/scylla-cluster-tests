@@ -64,6 +64,7 @@ class NodeBootstrapAbortManager:
         try:
             LOGGER.debug("Starting bootstrap process %s", self.bootstrap_node.name)
             self.bootstrap_node.parent_cluster.node_setup(self.bootstrap_node, verbose=True)
+            self.bootstrap_node.parent_cluster.node_startup(self.bootstrap_node, verbose=True)
             LOGGER.debug("Node %s was bootstrapped", self.bootstrap_node.name)
         except Exception as exc:  # pylint: disable=broad-except
             LOGGER.error("Setup failed for node %s with err %s", self.bootstrap_node.name, exc)
