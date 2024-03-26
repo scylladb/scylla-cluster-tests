@@ -479,6 +479,16 @@ class FunctionalEmailReporter(LongevityEmailReporter):
     email_template_file = "results_functional.html"
 
 
+class ScaleUpEmailReporter(LongevityEmailReporter):
+    _fields = (
+        "grafana_screenshots",
+        "grafana_snapshots",
+        "ingest_time",
+        "rebuild_duration",
+    )
+    email_template_file = "results_scale_up.html"
+
+
 class UpgradeEmailReporter(BaseEmailReporter):
     _fields = (
         "grafana_screenshots",
@@ -603,6 +613,8 @@ def build_reporter(name: str,
         return SnitchEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "PerfSimpleQuery" in name:
         return PerfSimpleQueryReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "ScaleUp" in name:
+        return ScaleUpEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 
