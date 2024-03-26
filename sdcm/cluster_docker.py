@@ -496,7 +496,7 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
             except Exception as exc:  # pylint: disable=broad-except
                 self.log.error(f"Stopping scylla monitoring failed with {str(exc)}")
             try:
-                node.remoter.sudo(f"rm -rf '{self._monitor_install_path_base}'")
+                node.remoter.sudo(f"rm -rf '{self.monitor_install_path_base}'")
                 self.log.error("Cleaning up scylla monitoring succeeded")
             except Exception as exc:  # pylint: disable=broad-except
                 self.log.error(f"Cleaning up scylla monitoring failed with {str(exc)}")
