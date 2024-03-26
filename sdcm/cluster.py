@@ -5209,35 +5209,49 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         self.grafana_port = 3000
         self.prometheus_retention = "365d"
         self.monitor_branch = self.params.get('monitor_branch')
-        self._monitor_install_path_base = None
-        self.phantomjs_installed = False
         self.grafana_start_time = 0
         self._sct_dashboard_json_file = None
         self.test_config = TestConfig()
         self.monitor_id = monitor_id or self.test_config.test_id()
 
+    @cached_property
+    def is_formal_monitor_image(self):
+        return self._is_formal_monitor_image(self.nodes[0]) and not self.monitor_branch
+
+    @staticmethod
+    def _is_formal_monitor_image(node):
+        home = Path('/home/ubuntu')
+        formal_monitoring_file = home / 'scylla-grafana-monitoring-scylla-monitoring' / 'CURRENT_VERSION.sh'
+        formal_image = node.remoter.run(f'test -e {formal_monitoring_file}', ignore_status=True)
+        return formal_image.ok
+
     @staticmethod
     @retrying(n=5)
-    def get_monitor_install_path_base(node):
-        return os.path.join(node.remoter.run("echo $HOME").stdout.strip(), "sct-monitoring")
+    def get_monitor_install_path_base(node) -> Path:
+        home = Path(node.remoter.run("echo $HOME").stdout.strip())
+        if BaseMonitorSet._is_formal_monitor_image(node):
+            return Path('/home/ubuntu')
+        else:
+            return home / 'sct-monitoring'
+
+    @cached_property
+    def monitor_install_path_base(self) -> Path:
+        return self.get_monitor_install_path_base(self.nodes[0])
 
     @property
-    def monitor_install_path_base(self):
-        if not self._monitor_install_path_base:
-            self._monitor_install_path_base = self.get_monitor_install_path_base(self.nodes[0])
-        return self._monitor_install_path_base
+    def monitor_install_path(self) -> Path:
+        if self.is_formal_monitor_image:
+            return self.monitor_install_path_base / 'scylla-grafana-monitoring-scylla-monitoring'
+        else:
+            return self.monitor_install_path_base / "scylla-monitoring-src"
 
     @property
-    def monitor_install_path(self):
-        return os.path.join(self.monitor_install_path_base, "scylla-monitoring-src")
-
-    @property
-    def monitoring_conf_dir(self):
-        return os.path.join(self.monitor_install_path, "config")
+    def monitoring_conf_dir(self) -> Path:
+        return self.monitor_install_path / "config"
 
     @property
     def monitoring_data_dir(self):
-        return os.path.join(self.monitor_install_path_base, "scylla-monitoring-data")
+        return self.monitor_install_path_base / "scylla-monitoring-data"
 
     @staticmethod
     def get_node_ips_param(public_ip=True):
@@ -5374,11 +5388,21 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
     def wait_for_init(self, *args, **kwargs):
         pass
 
-    @staticmethod
-    def install_scylla_monitoring_prereqs(node):  # pylint: disable=invalid-name
+    def install_scylla_monitoring_prereqs(self, node):  # pylint: disable=invalid-name
+        prepared_image = node.remoter.run('test -e ~/PREPARED-MONITOR', ignore_status=True)
+        if prepared_image.ok or self.is_formal_monitor_image:
+            node.log.debug('Skip monitor `install_scylla_monitoring_prereqs` for using a prepared AMI')
+            if self.formal_monitor_image:
+                node.install_package('unzip')
+                node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
+                node.remoter.run(cmd='sudo systemctl restart docker', timeout=60)
+                docker_hub_login(remoter=node.remoter)
+            return
+
+        node.update_repo_cache()
+
         if node.distro.is_rhel_like:
             node.install_epel()
-            node.update_repo_cache()
             node.install_package(package_name="unzip wget python36 python36-pip")
             prereqs_script = dedent("""
                 python3 -m pip install --upgrade pip
@@ -5650,7 +5674,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
     @log_run_info
     def install_scylla_monitoring(self, node):
         self.install_scylla_monitoring_prereqs(node)
-        self.download_scylla_monitoring(node)
+        if not self.is_formal_monitor_image:
+            self.download_scylla_monitoring(node)
 
     def get_grafana_annotations(self, node):
         annotations_url = "http://{node_ip}:{grafana_port}/api/annotations?limit=10000"

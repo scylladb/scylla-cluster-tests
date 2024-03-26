@@ -8,7 +8,7 @@ instance_type_loader: 'c6i.xlarge'
 instance_type_monitor: 't3.large'
 # manual on creating loader AMI's: see docs/new_loader_ami.md
 ami_id_loader: 'scylla-qa-loader-ami-v20-ubuntu22'
-ami_id_monitor: 'ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20231207' # ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20231207Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2023-12-07
+ami_id_monitor: 'scylladb-monitor-4-6-2-2024-02-13t08-06-04z'
 
 availability_zone: 'a'
 root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
@@ -69,3 +69,6 @@ scylla_network_config:
   use_dns: false
   nic: 0  #  If ipv4 and public is True it has to be primary network interface (device index is 0)
 # TODO: end
+
+# we are using monitor images, see `ami_id_monitor`
+monitor_branch: null
