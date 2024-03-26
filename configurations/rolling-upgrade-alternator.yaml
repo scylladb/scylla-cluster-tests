@@ -21,3 +21,4 @@ alternator_secret_access_key: 'password'
 
 alternator_port: 8080
 alternator_use_dns_routing: true
+docker_network: 'ycsb_net'

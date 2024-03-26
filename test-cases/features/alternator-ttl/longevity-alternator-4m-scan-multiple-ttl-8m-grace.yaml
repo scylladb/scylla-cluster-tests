@@ -89,6 +89,7 @@ user_prefix: 'longevity-alternator-multiple-ttl'
 
 alternator_port: 8080
 alternator_use_dns_routing: true
+docker_network: 'ycsb_net'
 
 alternator_enforce_authorization: true
 alternator_access_key_id: 'alternator'

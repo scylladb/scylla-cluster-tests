@@ -76,6 +76,7 @@ def create_cql_ks_and_table(docker_scylla):
     )
 
 
+@pytest.mark.docker_scylla_args(docker_network='ycsb_net')
 def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
     loader_set = LocalLoaderSetDummy()
     params.update(TEST_PARAMS)
