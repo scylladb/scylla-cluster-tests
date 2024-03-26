@@ -5390,12 +5390,16 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         prepared_image = node.remoter.run('test -e ~/PREPARED-MONITOR', ignore_status=True)
         if prepared_image.ok or self.is_formal_monitor_image:
             node.log.debug('Skip monitor `install_scylla_monitoring_prereqs` for using a prepared AMI')
+<<<<<<< HEAD
             if self.is_formal_monitor_image:
                 # own the monitoring folder, since in some of the images (GCE), it's under the same user we
                 # are using for testing
                 user = node.ssh_login_info['user']
                 node.remoter.sudo(f"chown -R {user}:{user} {self.monitor_install_path_base}")
 
+=======
+            if self.formal_monitor_image:
+>>>>>>> aaca6347 (feature(monitoring): switch to use prepared images)
                 node.install_package('unzip')
                 node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
                 node.remoter.run(cmd='sudo systemctl restart docker', timeout=60)
@@ -5406,6 +5410,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
         if node.distro.is_rhel_like:
             node.install_epel()
+<<<<<<< HEAD
             node.install_package(package_name="unzip wget python3 python3-pip")
             # get-docker.sh doesn't support Rocky, thus docker should be installed from repo via dnf install
             if node.distro.is_rocky:
@@ -5419,6 +5424,10 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                     sh get-docker.sh
                 """)
             prereqs_script = dedent(f"""
+=======
+            node.install_package(package_name="unzip wget python36 python36-pip")
+            prereqs_script = dedent("""
+>>>>>>> aaca6347 (feature(monitoring): switch to use prepared images)
                 python3 -m pip install --upgrade pip
                 python3 -m pip install pyyaml
                 {install_docker_cmd}
