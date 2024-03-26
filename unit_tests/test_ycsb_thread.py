@@ -26,11 +26,11 @@ from unit_tests.lib.alternator_utils import ALTERNATOR_PORT, ALTERNATOR, TEST_PA
 
 pytestmark = [
     pytest.mark.usefixtures("events", "create_table", "create_cql_ks_and_table"),
-    pytest.mark.skip(reason="those are integration tests only"),
+    pytest.mark.integration,
 ]
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def create_table(docker_scylla):
     def create_endpoint_url(node):
         if running_in_docker():
@@ -46,7 +46,7 @@ def create_table(docker_scylla):
     ALTERNATOR.create_table(node=docker_scylla, table_name=alternator.consts.TABLE_NAME)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def create_cql_ks_and_table(docker_scylla):
     if running_in_docker():
         address = f"{docker_scylla.internal_ip_address}:9042"
@@ -233,5 +233,6 @@ def test_04_insert_new_data(docker_scylla):
         new_items=new_items,
         schema=alternator.schemas.HASH_AND_STR_RANGE_SCHEMA,
     )
-    diff = ALTERNATOR.compare_table_data(node=docker_scylla, table_data=new_items)
-    assert diff
+    data = ALTERNATOR.scan_table(node=docker_scylla)
+    assert {row[schema_keys[0]]: row[schema_keys[1]]
+            for row in new_items} == {row[schema_keys[0]]: row[schema_keys[1]] for row in data}
