@@ -312,6 +312,8 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
 
         node.stop_scylla_server(verify_down=False)
         node.remoter.sudo('rm -Rf /var/lib/scylla/data/*')  # Clear data folder to drop wrong cluster name data.
+
+    def node_startup(self, node, verbose=False, timeout=3600):
         node.start_scylla_server(verify_up=False)
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
