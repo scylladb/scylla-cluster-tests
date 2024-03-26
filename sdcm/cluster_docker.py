@@ -52,12 +52,19 @@ class NodeContainerMixin:
         volumes = {
             '/var/run/docker.sock': {"bind": '/var/run/docker.sock', "mode": "rw"},
         }
+
+        smp = 1
+        if self.node_type == 'db':
+            scylla_args = self.parent_cluster.params.get('append_scylla_args')
+            smp_match = re.search(r'--smp\s(\d+)', scylla_args)
+            smp = int(smp_match.group(1)) if smp_match else 1
+
         return dict(name=self.name,
                     image=self.node_container_image_tag,
                     command=f'--seeds="{seed_ip}"' if seed_ip else None,
                     volumes=volumes,
                     network=self.parent_cluster.params.get('docker_network'),
-                    nano_cpus=10**9)  # Same as `docker run --cpus=1 ...' CLI command.
+                    nano_cpus=smp*10**9)  # Same as `docker run --cpus=N ...' CLI command.
 
 
 class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstract-method
