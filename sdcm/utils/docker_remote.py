@@ -3,7 +3,10 @@ import shlex
 from functools import cached_property, cache
 from pathlib import Path
 
+from invoke.exceptions import UnexpectedExit
+
 from sdcm.cluster import BaseNode
+from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 
 LOGGER = logging.getLogger(__name__)
 
@@ -14,6 +17,9 @@ class RemoteDocker(BaseNode):
         self._internal_ip_address = None
         self.log = LOGGER
         ports = " ".join([f'-p {port}:{port}' for port in ports]) if ports else ""
+        if docker_network:
+            extra_docker_opts += f" --network {docker_network}"
+            self.create_network(docker_network)
         res = self.node.remoter.run(
             f'{self.sudo_needed} docker run {extra_docker_opts} -d {ports} {image_name} {command_line}',
             verbose=True, retry=3)
@@ -68,6 +74,16 @@ class RemoteDocker(BaseNode):
     @cached_property
     def sudo_needed(self):
         return 'sudo ' if self.running_in_docker else ''
+
+    def create_network(self, docker_network):
+        try:
+            ret = self.node.remoter.run(f"docker network create {docker_network}").stdout.strip()
+            LOGGER.debug(ret)
+        except (UnexpectedExit, Libssh2_UnexpectedExit) as ex:
+            if 'already exists' in str(ex):
+                pass
+            else:
+                raise
 
     def get_port(self, internal_port):
         """

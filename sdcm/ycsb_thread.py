@@ -225,14 +225,16 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             dns = RemoteDocker(loader, self.params.get('stress_image.alternator-dns'),
                                command_line=f'python3 /dns_server.py {self.db_node_to_query(loader)} '
                                             f'{self.params.get("alternator_port")}',
-                               extra_docker_opts=f'--label shell_marker={self.shell_marker}')
+                               extra_docker_opts=f'--label shell_marker={self.shell_marker}',
+                               docker_network=self.params.get('docker_network'))
             dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
 
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
         docker = RemoteDocker(loader, self.docker_image_name,
-                              extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}')
+                              extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}',
+                              docker_network=self.params.get('docker_network'))
         self.copy_template(docker)
         stress_cmd = self.build_stress_cmd()
 

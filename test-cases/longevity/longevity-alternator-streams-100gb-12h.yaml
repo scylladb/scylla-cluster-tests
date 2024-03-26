@@ -52,5 +52,6 @@ experimental_features:
 alternator_port: 8080
 dynamodb_primarykey_type: HASH
 alternator_use_dns_routing: true
+docker_network: 'ycsb_net'
 
 use_mgmt: false # just to make setup quicker for now

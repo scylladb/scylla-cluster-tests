@@ -51,6 +51,7 @@ user_prefix: 'alternator-ttl-4-loaders-no-lwt-sisyphus'
 
 alternator_port: 8080
 alternator_use_dns_routing: true
+docker_network: 'ycsb_net'
 
 alternator_enforce_authorization: true
 alternator_access_key_id: 'alternator'
