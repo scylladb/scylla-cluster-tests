@@ -3670,6 +3670,16 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def cluster_backend(self):
         return self.params.get("cluster_backend")
 
+    def disable_scylla_metrics(self):
+        for node in self.nodes:
+            node.remoter.run(
+                """curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json' -d '[{"source_labels": ["__name__"], "action": "drop", "target_label": "level", "regex": ".*"}]' 'http://localhost:10000/v2/metrics-config/'""")  # pylint: disable=line-too-long
+
+    def enable_scylla_metrics(self):
+        for node in self.nodes:
+            node.remoter.run(
+                """curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json' -d '[{"source_labels": ["__name__"], "action": "keep", "target_label": "level", "regex": ".*"}]' 'http://localhost:10000/v2/metrics-config/'""")  # pylint: disable=line-too-long
+
 
 class NodeSetupFailed(Exception):
     def __init__(self, node, error_msg, traceback_str=""):
