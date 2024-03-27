@@ -1,0 +1,34 @@
+test_duration: 330
+
+prepare_write_cmd:  ["cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=100 -clustering-row-count=5555                       -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data" ,
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=200 -clustering-row-count=5555 -partition-offset=101 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=200 -clustering-row-count=5555 -partition-offset=301 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=1 -partition-count=200 -clustering-row-count=5555 -partition-offset=501 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s"
+]
+
+prepare_verify_cmd: ["cassandra-stress read  cl=QUORUM duration=30m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+                     "scylla-bench -workload=sequential -mode=read -replication-factor=1 -partition-count=50 -clustering-row-count=5555                      -clustering-row-size=uniform:1024..2048 -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 1 -validate-data",
+                     "scylla-bench -workload=sequential -mode=read -replication-factor=1 -partition-count=50 -clustering-row-count=5555 -partition-offset=51 -clustering-row-size=uniform:1024..2048 -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 1 -validate-data"
+]
+
+stress_cmd: ["cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress mixed  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress mixed  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=100 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=1 -partition-count=50 -clustering-row-count=5555                        -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=210m -validate-data",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=1 -partition-count=50 -clustering-row-count=5555 -partition-offset=51   -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=210m -validate-data",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=1 -partition-count=600 -clustering-row-count=5555 -partition-offset=101   -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=210m",
+             "scylla-bench -workload=sequential -mode=write  -replication-factor=1 -partition-count=600 -clustering-row-count=5555 -partition-offset=101   -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=210m"
+            ]
+
+n_db_nodes: 3
+n_loaders: 2
+n_monitor_nodes: 1
+
+instance_type_db: 'i4i.xlarge'
+
+nemesis_class_name: 'NonDisruptiveMonkey'
+nemesis_interval: 5
+
+user_prefix: 'longevity-1-rf-test-4h'
+space_node_threshold: 64424
