@@ -20,3 +20,5 @@ internode_encryption: 'all'
 test_duration: 60
 user_prefix: 'artifacts-ubuntu2004-fips'
 aws_fallback_to_next_availability_zone: true
+scylla_apt_keys:
+  - '491C93B9DE7496A7'  # ScyllaDB Package Signing Key 2024 <security@scylladb.com>
