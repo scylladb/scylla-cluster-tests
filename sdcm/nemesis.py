@@ -598,10 +598,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return str(self.__class__)
 
     def _kill_scylla_daemon(self):
-        with EventsSeverityChangerFilter(new_severity=Severity.WARNING,
-                                         event_class=CassandraStressLogEvent,
-                                         regex=".*Connection reset by peer.*",
-                                         extra_time_to_expiration=30):
+        with (EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                          event_class=CassandraStressLogEvent,
+                                          regex=".*Connection reset by peer.*",
+                                          extra_time_to_expiration=30),
+              DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,  # Ignoring hints_manager error
+                             line="Segment truncation at", node=self.target_node)):
             self.log.info('Kill all scylla processes in %s', self.target_node)
             self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
 
