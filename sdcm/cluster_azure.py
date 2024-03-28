@@ -245,6 +245,9 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         # todo lukasz: why gce cluster didn't have to implement this?
         raise NotImplementedError("node_setup should not run")
 
+    def node_startup(self, node, verbose=False, timeout=3600):
+        raise NotImplementedError("'node_startup' should not run")
+
     def wait_for_init(self):
         # todo lukasz: why gce cluster didn't have to implement this?
         raise NotImplementedError("wait_for_init should not run")
