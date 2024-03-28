@@ -26,6 +26,7 @@ from collections import OrderedDict
 from uuid import UUID
 
 from cassandra import InvalidRequest
+from cassandra.query import SimpleStatement, FETCH_SIZE_UNSET  # pylint: disable=no-name-in-module
 from cassandra.util import sortedset, SortedSet  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
 from cassandra.protocol import ProtocolException  # pylint: disable=no-name-in-module
@@ -40,6 +41,7 @@ from sdcm.utils.version_utils import ComparableScyllaVersion
 LOGGER = logging.getLogger(__name__)
 
 
+# pylint: disable=too-many-public-methods
 class FillDatabaseData(ClusterTester):
     """
     Fill scylla with many types of records, tables and data types (taken from dtest) originally by Andrei.
@@ -3030,29 +3032,26 @@ class FillDatabaseData(ClusterTester):
             return match.groupdict()["table_name"]
         return None
 
-    @staticmethod
-    def cql_create_simple_tables(session, rows):
+    def cql_create_simple_tables(self, session, rows):
         """ Create tables for truncate test """
         create_query = "CREATE TABLE IF NOT EXISTS truncate_table%d (my_id int PRIMARY KEY, col1 int, value int) " \
             "with cdc = {'enabled': true, 'ttl': 0}"
         for i in range(rows):
-            session.execute(create_query % i)
+            self.run_query_with_retry(session=session, query=create_query % i)
             # Added sleep after each created table
             time.sleep(15)
 
-    @staticmethod
-    def cql_insert_data_to_simple_tables(session, rows):  # pylint: disable=invalid-name
+    def cql_insert_data_to_simple_tables(self, session, rows):  # pylint: disable=invalid-name
         def insert_query():
             return f'INSERT INTO truncate_table{i} (my_id, col1, value) VALUES ( {k}, {k}, {k})'
         for i in range(rows):  # pylint: disable=unused-variable
             for k in range(100):  # pylint: disable=unused-variable
-                session.execute(insert_query())
+                self.run_query_with_retry(session=session, query=insert_query())
 
-    @staticmethod
-    def cql_truncate_simple_tables(session, rows):
+    def cql_truncate_simple_tables(self, session, rows):
         truncate_query = 'TRUNCATE TABLE truncate_table%d'
         for i in range(rows):
-            session.execute(truncate_query % i)
+            self.run_query_with_retry(session=session, query=truncate_query % i)
 
     def fill_db_data_for_truncate_test(self, insert_rows):
         # Prepare connection and keyspace
@@ -3137,7 +3136,7 @@ class FillDatabaseData(ClusterTester):
         # Refs: https://github.com/scylladb/scylla/issues/5235
         time.sleep(30)
         for truncate in truncates:
-            session.execute(truncate)
+            self.run_query_with_retry(session=session, query=truncate)
 
     @property
     def parsed_scylla_version(self):
@@ -3220,7 +3219,7 @@ class FillDatabaseData(ClusterTester):
                                 for node in self.db_cluster.nodes:
                                     node.remoter.run(insert.replace('#REMOTER_RUN', ''))
                             else:
-                                session.execute(insert)
+                                self.run_query_with_retry(session=session, query=insert)
                         except Exception as ex:
                             LOGGER.exception("failed to insert: %s", insert)
                             raise ex
@@ -3255,11 +3254,10 @@ class FillDatabaseData(ClusterTester):
                 LOGGER.exception(item['queries'][i])
                 raise ex
 
-    @staticmethod
-    def _run_invalid_queries(item, session):
+    def _run_invalid_queries(self, item, session):
         for i in range(len(item['invalid_queries'])):
             try:
-                session.execute(item['invalid_queries'][i])
+                self.run_query_with_retry(session=session, query=item['invalid_queries'][i])
                 # self.fail("query '%s' is not valid" % item['invalid_queries'][i])
                 LOGGER.error("query '%s' is valid", item['invalid_queries'][i])
             except InvalidRequest as ex:
@@ -3309,8 +3307,16 @@ class FillDatabaseData(ClusterTester):
                             item["cdc_tables"][cdc_table] = self.get_cdc_log_rows(session, cdc_table)
                             LOGGER.debug(item["cdc_tables"][cdc_table])
 
+    @staticmethod
+    @retrying(n=3)
+    def run_query_with_retry(session, query, **kwargs):
+        return session.execute(SimpleStatement(query,
+                                               fetch_size=kwargs.get("fetch_size", FETCH_SIZE_UNSET),
+                                               consistency_level=kwargs.get("consistency_level")),
+                               timeout=kwargs.get("timeout", 60))
+
     def get_cdc_log_rows(self, session, cdc_log_table):
-        return list(session.execute(f"select * from {self.base_ks}.{cdc_log_table}"))
+        return list(self.run_query_with_retry(session=session, query=f"select * from {self.base_ks}.{cdc_log_table}"))
 
     def fill_db_data(self):
         """
@@ -3373,7 +3379,8 @@ class FillDatabaseData(ClusterTester):
         def fill_table():
             for i in range(1000):
                 random_int = random.randint(1, 1000000)
-                session.execute(f'INSERT INTO paged_query_test (k, v1, v2) VALUES ({i}, {random_int}, {random_int+i})')
+                self.run_query_with_retry(session=session,
+                                          query=f'INSERT INTO paged_query_test (k, v1, v2) VALUES ({i}, {random_int}, {random_int+i})')
         node = self.db_cluster.nodes[-1]
         with self.db_cluster.cql_connection_patient(node, keyspace=keyspace) as session:
             session.default_consistency_level = ConsistencyLevel.QUORUM
@@ -3382,7 +3389,7 @@ class FillDatabaseData(ClusterTester):
             fill_table()
             statement = f'select * from {keyspace}.paged_query_test;'
             self.log.info('running now session.execute')
-            full_query_res = self.rows_to_list(session.execute(statement))
+            full_query_res = self.rows_to_list(self.run_query_with_retry(session=session, query=statement))
             if not full_query_res:
                 assert f'Query "{statement}" returned no entries'
             self.log.info('running now fetch_all_rows')
