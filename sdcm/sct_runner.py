@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-#pylint: disable=too-many-lines
+# pylint: disable=too-many-lines
 from __future__ import annotations
 
 import logging
@@ -802,7 +802,6 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
                                        "block-project-ssh-keys": "true",
                                        "ssh-keys": f"{self.LOGIN_USER}:{self.key_pair.public_key.decode()}",
                                    },
-                                   network_tags=["keep-alive"],
                                    service_accounts=[{
                                        'email': KeyStore().get_gcp_credentials()['client_email'],
                                        'scopes': ['https://www.googleapis.com/auth/cloud-platform'],
