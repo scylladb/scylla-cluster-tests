@@ -130,7 +130,14 @@ def get_profile_content(stress_cmd):
     else:
         raise FileNotFoundError(f"Profile is not found in stress command: '{stress_cmd}'")
 
-    cs_profile = find_file_under_sct_dir(filename=profile_file, sub_folder=profile_path)
+    try:
+        cs_profile = find_file_under_sct_dir(filename=profile_file, sub_folder=profile_path)
+    except FileNotFoundError as exc:
+        # NOTE: filenames may be dynamically updated with some suffixes and be placed under the '/tmp' dir.
+        if profile_path.startswith("/tmp"):
+            cs_profile = f"{profile_path}/{profile_file}"
+        else:
+            raise FileNotFoundError from exc
 
     with open(cs_profile, encoding="utf-8") as yaml_stream:
         profile = yaml.safe_load(yaml_stream)
