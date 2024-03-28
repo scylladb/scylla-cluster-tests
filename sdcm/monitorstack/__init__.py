@@ -415,6 +415,22 @@ def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_vers
     templ_yaml["scrape_configs"] = list(filter(remove_sct_metrics, templ_yaml["scrape_configs"]))
     prom_tmpl_file.write_text(yaml.safe_dump(templ_yaml))
 
+    # clear alert manager configuration to the minimal need config
+    alert_manager_config = Path(monitoring_dockers_dir) / 'prometheus' / 'rule_config.yml'
+    alert_manager_config.write_text(dedent("""
+        global:
+          resolve_timeout: 5m
+        route:
+          receiver: "null"
+          group_by:
+          - job
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 12h
+        receivers:
+        - name: "null"
+    """).strip())
+
     cmd = dedent("""cd {monitoring_dockers_dir};
             # patch to make podman work for result that don't have https://github.com/scylladb/scylla-monitoring/pull/2149
             sed -i 's/DOCKER_HOST/HOST_ADDRESS/' *.sh
