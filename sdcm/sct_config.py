@@ -1531,6 +1531,9 @@ class SCTConfiguration(dict):
         dict(name="run_commit_log_check_thread", env="SCT_RUN_COMMIT_LOG_CHECK_THREAD", type=boolean,
              help="""Run commit log check thread if commitlog_use_hard_size_limit is True"""),
 
+        dict(name="enable_raft_topology", env="SCT_ENABLE_RAFT_TOPOLOGY", type=boolean,
+             help="""Enable raft topology""")
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
