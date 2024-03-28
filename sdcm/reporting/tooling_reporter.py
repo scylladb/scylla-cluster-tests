@@ -64,6 +64,17 @@ class PythonDriverReporter(ToolReporterBase):
 class CassandraStressVersionReporter(ToolReporterBase):
     # pylint: disable=too-few-public-methods
     TOOL_NAME = "cassandra-stress"
+    VERSION_CACHE = {}
+
+    def __init__(self, runner: CommandRunner, command_prefix: PYTHON_DRIVER_VERSION = None, argus_client: ArgusSCTClient = None) -> None:
+        self.driver_version: str | None = None
+        super().__init__(runner, command_prefix, argus_client)
+
+    def _is_duplicate_version(self, version, driver_version):
+        if values := self.VERSION_CACHE.get(version):
+            return driver_version in values if driver_version else True
+
+        return False
 
     def _collect_version_info(self) -> None:
         output = self.runner.run(f"{self.command_prefix} {self.TOOL_NAME} version")
@@ -85,3 +96,20 @@ class CassandraStressVersionReporter(ToolReporterBase):
         self.version = f"{result.get('cassandra-stress', '#FAILED_CHECK_LOGS')}"
         if driver_version := result.get("scylla-java-driver"):
             self.version += f" (with java-driver {driver_version})"
+            self.driver_version = driver_version
+
+        cached_driver_versions: list[str] = self.VERSION_CACHE.get(self.version, [])
+        if self.driver_version:
+            cached_driver_versions.append(self.driver_version)
+        self.VERSION_CACHE[self.version] = cached_driver_versions
+
+    def report(self) -> None:
+        self._collect_version_info()
+        if self._is_duplicate_version(self.version, self.driver_version):
+            LOGGER.warning("%s: Skipping reporting, version already reported...", self)
+            return
+        if not self.version:
+            LOGGER.warning("%s: Version not collected, skipping report...", self)
+            return
+        self._report_to_log()
+        self._report_to_argus()
