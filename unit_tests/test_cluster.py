@@ -50,6 +50,7 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):  # pylint: disable=abstrac
         self.params = params
         self.added_password_suffix = False
         self.log = logging.getLogger(__name__)
+        self.node_type = "scylla-db"
 
 
 class DummyDbLogReader(DbLogReader):
@@ -70,6 +71,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             base_logdir=self.temp_dir,
             ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
         )
+        dummy_node.parent_cluster = DummyDbCluster(nodes=[dummy_node])
         dummy_node.init()
         dummy_node.remoter = DummyRemote()
         return dummy_node
@@ -283,6 +285,7 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
                               parent_cluster=None,
                               base_logdir=self.temp_dir,
                               ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+        self.node.parent_cluster = DummyDbCluster([self.node])
 
     def test_no_scylla_binary_rhel_like(self):
         self.node.remoter = VersionDummyRemote(self, (
@@ -655,6 +658,7 @@ def test_base_node_cpuset(cat_results, expected_core_number):
         base_logdir=tempfile.mkdtemp(),
         ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
     )
+    dummy_node.parent_cluster = DummyDbCluster([dummy_node])
     dummy_node.init()
     cat_results_obj = type("FakeGrepResults", (), {
         "stdout": f'#\n# some comment\nCPUSET="--cpuset {cat_results} "'
@@ -683,6 +687,7 @@ def test_base_node_cpuset_not_configured(cat_results):
         base_logdir=tempfile.mkdtemp(),
         ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
     )
+    dummy_node.parent_cluster = DummyDbCluster([dummy_node])
     dummy_node.init()
     cat_results_obj = type("FakeCatResults", (), {"stdout": cat_results})
     dummy_node.remoter = type("FakeRemoter", (), {

@@ -300,6 +300,51 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._kernel_version = None
         self._uuid = None
         self.scylla_network_configuration = None
+        self._datacenter_name = None
+        self._node_rack = None
+
+    def _is_node_ready_run_scylla_commands(self) -> bool:
+        """
+        When node is just created and started to configure, during first node initializing, it is impossible to connect to the node yet and
+        `remoter` object is None. So we cannot connect to the node and run there needed commands.
+
+        When `remoter` is ready but cluster is not configured yet, `nodetool status` (and other Scylla commands) cannot be run.
+        Wait when it became available.
+        """
+        # During first cluster remoter is not available and may cause to failure
+        if not self.remoter:
+            self.log.warning("Remoter is not available")
+            return False
+
+        # During first cluster initializing the status info is not available and may cause to failure
+        if not self.db_up():
+            self.log.warning("Running Scylla commands are not available. Scylla cluster is not configured yet")
+            return False
+
+        return True
+
+    @property
+    def datacenter(self) -> str:
+        if not self._datacenter_name:
+            if self.parent_cluster.node_type == "scylla-db":
+                if self._is_node_ready_run_scylla_commands():
+                    datacenter_name_per_region = self.parent_cluster.get_datacenter_name_per_region(db_nodes=[self])
+                    self._datacenter_name = datacenter_name_per_region[self.region] if datacenter_name_per_region else None
+            else:
+                self._datacenter_name = self.region
+
+        return self._datacenter_name
+
+    @property
+    def node_rack(self) -> str:
+        if not self._node_rack:
+            if self.parent_cluster.node_type == "scylla-db":
+                if self._is_node_ready_run_scylla_commands():
+                    rack_names = self.parent_cluster.get_rack_names_per_datacenter_and_rack_idx(db_nodes=[self])
+                    self._node_rack = list(rack_names.values())[0]
+            else:
+                self._node_rack = str(self.rack)
+        return self._node_rack
 
     @property
     def network_interfaces(self):
@@ -344,6 +389,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 public_ip=self.public_ip_address,
                 private_ip=self.ip_address,
                 region=self.region,
+                # dc_name=self.datacenter,
+                # rack_name=self.rack,
                 provider=self.parent_cluster.cluster_backend,
                 shards_amount=shards,
                 state=ResourceState.RUNNING,
@@ -929,15 +976,24 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def silence_alert(self, alert_name, duration=None, start=None, end=None):
         return AlertSilencer(self._alert_manager, alert_name, duration, start, end)
 
+    def _dc_info_str(self):
+        dc_info = []
+        if len(self.parent_cluster.params.region_names) > 1 and self.datacenter:
+            dc_info.append(f"dc name: {self.datacenter}")
+        if self.parent_cluster.racks_count > 1 and self.node_rack:
+            dc_info.append(f"rack: {self.node_rack})")
+
+        return f' ({", ".join(dc_info)})' if dc_info else ""
+
     def __str__(self):
         # TODO: when new network_configuration will be supported by all backends, copy this function from sdcm.cluster_aws.AWSNode.__str__
         #  to here
-        return 'Node %s [%s | %s%s] (seed: %s)' % (
+        return 'Node %s [%s | %s%s]%s' % (
             self.name,
             self.public_ip_address,
             self.private_ip_address,
             " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
-            self.is_seed)
+            self._dc_info_str())
 
     def restart(self):
         raise NotImplementedError('Derived classes must implement restart')
