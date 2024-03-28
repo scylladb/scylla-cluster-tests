@@ -5629,6 +5629,16 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         scylla_manager_servers_arg = ""
         if self.params.get("use_mgmt"):
             scylla_manager_servers_arg = f'-N `realpath "{self.monitoring_conf_dir}/scylla_manager_servers.yml"`'
+
+        # clear alert manager configuration to the minimal need config
+        with node._remote_yaml(f'{self.monitor_install_path}/prometheus/rule_config.yml', sudo=False) \
+                as alert_manager_config:  # pylint: disable=protected-access
+            alert_manager_config.clear()
+            alert_manager_config['global'] = dict(resolve_timeout='5m')
+            alert_manager_config['route'] = dict(receiver="null", group_by=["job"],
+                                                 group_wait='30s', group_interval='5m', repeat_interval='12h')
+            alert_manager_config['receivers'] = [{'name': "null"}]
+
         run_script = dedent(f"""
             cd -P {self.monitor_install_path}
             mkdir -p {self.monitoring_data_dir}
