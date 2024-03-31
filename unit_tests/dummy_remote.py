@@ -24,6 +24,7 @@ from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 class DummyOutput:
     def __init__(self, stdout):
         self.stdout = stdout
+        self.stderr = stdout
 
 
 class DummyRemote:
