@@ -409,6 +409,8 @@ class DummyCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=too-few-p
         self.nodes = []
         self.params = params
         self.name = 'dummy_cluster'
+        self.node_type = "scylla-db"
+        self.racks_count = 0
 
     @property
     def seed_nodes_addresses(self):

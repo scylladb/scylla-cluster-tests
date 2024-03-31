@@ -439,12 +439,12 @@ class AWSNode(cluster.BaseNode):
         else:
             node_private_ip = self.private_ip_address
 
-        return 'Node %s [%s | %s%s] (seed: %s)' % (
+        return 'Node %s [%s | %s%s]%s' % (
             self.name,
             self.public_ip_address,
             node_private_ip,
             " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
-            self.is_seed)
+            self._dc_info_str())
 
     @property
     def network_interfaces(self):

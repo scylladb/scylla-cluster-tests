@@ -51,6 +51,7 @@ from invoke.exceptions import CommandTimedOut
 from sdcm import sct_abs_path, cluster
 from sdcm.cluster import DeadNode, ClusterNodesNotReady
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
+from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config
 from sdcm.test_config import TestConfig
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import LOCALRUNNER, NETWORK_EXCEPTIONS
@@ -1522,6 +1523,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             container='scylla-manager',
             cluster_prefix='mgr-',
             node_prefix='mgr-node-',
+            params=init_and_verify_sct_config(),
             n_nodes=1
         )
 
@@ -1764,6 +1766,15 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
             dc_idx=dc_idx,
             rack=rack)
         self.k8s_cluster = self.parent_cluster.k8s_clusters[self.dc_idx]
+        self._rack_name = None
+
+    @property
+    def node_rack(self) -> str:
+        if not self._rack_name:
+            if pod := self._pod:
+                self._rack_name = pod.metadata.labels.get("scylla/rack", "")
+
+        return self._rack_name
 
     @cached_property
     def pod_replace_timeout(self) -> int:
