@@ -12,6 +12,8 @@
 # Copyright (c) 2016 ScyllaDB
 
 # pylint: disable=too-many-lines
+from __future__ import annotations
+
 import contextlib
 import queue
 import logging
@@ -2602,7 +2604,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                          CHECK_NODE_HEALTH_RETRY_DELAY, self.name)
             time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
 
-    def get_nodes_status(self):
+    def get_nodes_status(self) -> dict[BaseNode, dict]:
         nodes_status = {}
         try:
             statuses = self.parent_cluster.get_nodetool_status(verification_node=self)
@@ -2660,7 +2662,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return peers_details
 
     @retrying(n=5, sleep_time=10, raise_on_exceeded=False)
-    def get_gossip_info(self):
+    def get_gossip_info(self) -> dict[BaseNode, dict]:
         gossip_info = self.run_nodetool('gossipinfo', verbose=False, warning_event_on_exception=(Exception,),
                                         publish_event=False)
         LOGGER.debug("get_gossip_info: %s", gossip_info)
@@ -3180,7 +3182,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def dead_nodes_ip_address_list(self):
         return [node.ip_address for node in self.dead_nodes_list]
 
-    def get_ip_to_node_map(self):
+    def get_ip_to_node_map(self) -> dict[str, BaseNode]:
         """returns {ip: node} map for all nodes in cluster to get node by ip"""
         return {ip: node for node in self.nodes for ip in node.get_all_ip_addresses()}
 
@@ -3219,8 +3221,12 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         db_nodes = db_nodes if db_nodes else self.nodes
         status = db_nodes[0].get_nodes_status()
 
+        # intersection of asked nodes and nodes returned by nodetool status
+        # since topology might change during this command execution
+        actual_db_nodes = set(status.keys()).intersection(db_nodes)
+
         rack_names_mapping = {}
-        for (region, rack), nodes in self.nodes_by_racks_idx_and_regions(nodes=db_nodes).items():
+        for (region, rack), nodes in self.nodes_by_racks_idx_and_regions(nodes=actual_db_nodes).items():
             rack_names_mapping[(region, rack)] = status[nodes[0]]['rack']
 
         return rack_names_mapping
