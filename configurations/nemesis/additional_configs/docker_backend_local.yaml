@@ -1,8 +1,8 @@
 test_duration: 90
 
 prepare_write_cmd:
-    - "cassandra-stress write cl=QUORUM n=1048576 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=80 -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
-    - "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10000 -clustering-row-count=100 -clustering-row-size=uniform:128..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data"
+    - "cassandra-stress write cl=QUORUM n=1048576 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=30 throttle=2000/s -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
+    - "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10000 -clustering-row-count=100 -clustering-row-size=uniform:128..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data -max-rate=1000"
 
 stress_cmd:
     - "cassandra-stress write cl=QUORUM duration=60m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=30 throttle=2000/s -pop seq=1..5048570 -col 'n=FIXED(8) size=FIXED(128)' -log interval=5"
@@ -21,7 +21,7 @@ nemesis_filter_seeds: false
 nemesis_during_prepare: true
 
 # NOTE: the parameters reduce footprint of scylla cluster for docker backend, comparing to default values
-append_scylla_args: '--smp 1 --memory 5G'
+append_scylla_args: '--smp 1 --memory 2G'
 use_mgmt: false
 monitor_swap_size: 0
 
@@ -29,3 +29,9 @@ monitor_swap_size: 0
 #       https://github.com/scylladb/scylla-cluster-tests/issues/7287 is fixed
 server_encrypt: false
 client_encrypt: false
+
+# TODO: remove this when we'll run this in jenkins
+enable_argus: false
+
+# cause of issue https://github.com/scylladb/scylla-monitoring/issues/2246, we should use the older monitoring version
+monitor_branch: 'branch-4.5'
