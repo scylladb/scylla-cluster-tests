@@ -275,13 +275,6 @@ class CommandNodeLoggerBase(CommandLoggerBase, metaclass=ABCMeta):
         super().__init__(target_log_file)
 
 
-class DockerScyllaLogger(CommandNodeLoggerBase):
-    # pylint: disable=invalid-overridden-method
-    @cached_property
-    def _logger_cmd(self) -> str:
-        return f'docker logs -f {self._node.name} 2>&1 | grep scylla >>{self._target_log_file}'
-
-
 class DockerGeneralLogger(CommandNodeLoggerBase):
     # pylint: disable=invalid-overridden-method
     @cached_property
@@ -577,8 +570,6 @@ class KubernetesWrongSchedulingLogger(CommandClusterLoggerBase):
 
 def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint: disable=too-many-return-statements
     if logs_transport == 'docker':
-        if 'db-node' in node.name:
-            return DockerScyllaLogger(node, target_log_file)
         return DockerGeneralLogger(node, target_log_file)
     if logs_transport == 'kubectl':
         return KubectlGeneralLogger(node, target_log_file)
