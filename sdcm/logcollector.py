@@ -150,7 +150,11 @@ class BaseMonitoringEntity(BaseLogEntity):
                 return None, None, None
             result = node.remoter.run(
                 f"cat {basedir}/{name}/monitor_version", ignore_status=True, verbose=False)
+<<<<<<< HEAD
         except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+=======
+        except Exception as details:  # pylint: disable=broad-except
+>>>>>>> 78d21aa6 (fix(logcolletor): find the folder for monitor installation)
             LOGGER.error("Failed to get monitoring version: %s", details)
             return None, None, None
 
