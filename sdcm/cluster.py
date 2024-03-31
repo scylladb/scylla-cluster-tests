@@ -5394,7 +5394,12 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         prepared_image = node.remoter.run('test -e ~/PREPARED-MONITOR', ignore_status=True)
         if prepared_image.ok or self.is_formal_monitor_image:
             node.log.debug('Skip monitor `install_scylla_monitoring_prereqs` for using a prepared AMI')
-            if self.formal_monitor_image:
+            if self.is_formal_monitor_image:
+                # own the monitoring folder, since in some of the images (GCE), it's under the same user we
+                # are using for testing
+                user = node.ssh_login_info['user']
+                node.remoter.sudo(f"chown -R {user}:{user} {self.monitor_install_path_base}")
+
                 node.install_package('unzip')
                 node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
                 node.remoter.run(cmd='sudo systemctl restart docker', timeout=60)
