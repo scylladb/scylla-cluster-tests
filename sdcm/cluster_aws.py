@@ -428,6 +428,14 @@ class AWSNode(cluster.BaseNode):
                          node_prefix=node_prefix,
                          dc_idx=dc_idx, rack=rack)
 
+    def __str__(self):
+        return 'Node %s [%s | %s%s]%s' % (
+            self.name,
+            self.public_ip_address,
+            self.private_ip_address,
+            " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
+            self._dc_info_str())
+
     def init(self):
         LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
         self._instance_wait_safe(self._instance.wait_until_running)

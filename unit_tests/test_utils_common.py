@@ -19,7 +19,8 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from sdcm.cluster import BaseNode
+from sdcm import sct_config
+from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 from sdcm.utils.distro import Distro
 from sdcm.utils.common import convert_metric_to_ms, download_dir_from_cloud
 from sdcm.utils.sstable import load_inventory
@@ -99,6 +100,18 @@ class Remoter:  # pylint: disable=too-few-public-methods
                 file.write(f"{line}\n")
 
 
+class DummyDbCluster(BaseCluster, BaseScyllaCluster):  # pylint: disable=abstract-method
+    # pylint: disable=super-init-not-called
+    def __init__(self, nodes):
+        self.nodes = nodes
+        self.params = sct_config.SCTConfiguration()
+        self.params["region_name"] = "test_region"
+        self.racks_count = 0
+        self.added_password_suffix = False
+        self.log = logging.getLogger(__name__)
+        self.node_type = "scylla-db"
+
+
 class DummyNode(BaseNode):  # pylint: disable=abstract-method
     _system_log = None
     is_enterprise = False
@@ -157,6 +170,7 @@ class TestSstableLoadUtils(unittest.TestCase):
     def setUpClass(cls):
         cls.node = DummyNode(name='test_node', parent_cluster=None,
                              base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+        cls.node.parent_cluster = DummyDbCluster([cls.node])
         cls.node.init()
 
     def setUp(self):
