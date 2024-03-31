@@ -144,13 +144,14 @@ class BaseMonitoringEntity(BaseLogEntity):
         try:
             basedir = self.get_monitoring_base_dir(node)
             result = node.remoter.run(
-                f'ls {basedir} | grep scylla-monitoring-src', ignore_status=True, verbose=False)
+                rf"ls {basedir} | grep 'scylla-monitoring-src\|scylla-grafana-monitoring-scylla-monitoring'",
+                ignore_status=True, verbose=False)
             name = result.stdout.strip()
             if not name:
                 LOGGER.error("Dir with scylla monitoring stack was not found")
                 return None, None, None
             result = node.remoter.run(
-                f"cat {basedir}/scylla-monitoring-src/monitor_version", ignore_status=True, verbose=False)
+                f"cat {basedir}/{name}/monitor_version", ignore_status=True, verbose=False)
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.error("Failed to get monitoring version: %s", details)
             return None, None, None
