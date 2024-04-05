@@ -77,9 +77,9 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
 
     def run(self):
         self.configure_executer()
-        for loader_idx, loader in enumerate(self.loaders):
+        for loader in self.loaders:
             for cpu_idx in range(self.stress_num):
-                self.results_futures += [self.executor.submit(self._run_stress, *(loader, loader_idx, cpu_idx))]
+                self.results_futures += [self.executor.submit(self._run_stress, *(loader, loader.node_index, cpu_idx))]
 
         return self
 
