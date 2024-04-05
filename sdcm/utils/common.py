@@ -414,7 +414,7 @@ class ParallelObject:
         self.disable_logging = disable_logging
         self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)  # pylint: disable=consider-using-with
 
-    def run(self, func: Callable, ignore_exceptions=False, unpack_objects: bool = False):
+    def run(self, func: Callable, ignore_exceptions=False, unpack_objects: bool = False) -> List[ParallelObjectResult]:
         """Run callable object "disrupt_func" in parallel
 
         Allow to run callable object in parallel.

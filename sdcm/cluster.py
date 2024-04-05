@@ -46,6 +46,7 @@ import yaml
 import requests
 from paramiko import SSHException
 from tenacity import RetryError
+from invoke import Result
 from invoke.exceptions import UnexpectedExit, Failure
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
@@ -2562,9 +2563,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return f"{self.add_install_prefix('/usr/bin/nodetool')} {options} {sub_cmd} {args}"
 
     # pylint: disable=inconsistent-return-statements
-    def run_nodetool(self, sub_cmd, args="", options="", timeout=None,
-                     ignore_status=False, verbose=True, coredump_on_timeout=False,
-                     warning_event_on_exception=None, error_message="", publish_event=True, retry=1):
+    def run_nodetool(self, sub_cmd: str, args: str = "", options: str = "", timeout: int = None,
+                     ignore_status: bool = False, verbose: bool = True, coredump_on_timeout: bool = False,
+                     warning_event_on_exception: Exception = None, error_message: str = "", publish_event: bool = True, retry: int = 1
+                     ) -> Result:
         """
             Wrapper for nodetool command.
             Command format: nodetool [options] command [args]
@@ -3180,7 +3182,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         self.log = SDCMAdapter(LOGGER, extra={'prefix': str(self)})
         self.log.info('Init nodes')
-        self.nodes = []
+        self.nodes: List[BaseNode] = []
         self.instance_provision = params.get('instance_provision')
         self.params = params
         self.datacenter = region_names or []

@@ -65,6 +65,7 @@ from sdcm.scan_operation_thread import ScanOperationThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.cassandra_harry_thread import CassandraHarryThread
+from sdcm.teardown_validators import teardown_validators_list
 from sdcm.tombstone_gc_verification_thread import TombstoneGcVerificationThread
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
 from sdcm.utils.aws_kms import AwsKms
@@ -2798,6 +2799,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.teardown_started = True
         with silence(parent=self, name='Sending test end event'):
             InfoEvent(message="TEST_END").publish()
+        self.log.info("Post test validators are starting...")
+        for validator_class in teardown_validators_list:
+            for db_cluster in self.db_clusters_multitenant:
+                validator_class(self.params, db_cluster).validate()
         self.log.info('TearDown is starting...')
         self.stop_timeout_thread()
         self.stop_event_analyzer()

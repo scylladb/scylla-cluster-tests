@@ -242,3 +242,11 @@ validate_large_collections: false
 scylla_d_overrides_files: []
 
 run_commit_log_check_thread: true
+
+# teardown validators
+teardown_validators:
+  scrub:
+    enabled: false
+    timeout: 1200
+    keyspace: ''
+    table: ''
