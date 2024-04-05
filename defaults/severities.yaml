@@ -140,3 +140,5 @@ TestStepEvent: ERROR
 CpuNotHighEnoughEvent: ERROR
 HWPerforanceEvent: CRITICAL
 CommitLogCheckErrorEvent: ERROR
+ValidatorEvent: ERROR
+ScrubValidationErrorEvent: ERROR
