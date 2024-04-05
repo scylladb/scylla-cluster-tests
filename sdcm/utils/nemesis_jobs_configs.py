@@ -11,6 +11,7 @@ NEMESIS_REQUIRED_ADDITIONAL_CONFIGS = {
     "SlaDecreaseSharesDuringLoad": ["configurations/nemesis/additional_configs/sla_config.yaml"],
     "PauseLdapNemesis": ["configurations/ldap-authorization.yaml"],
     "ToggleLdapConfiguration": ["configurations/ldap-authorization.yaml"],
+    "docker": ["configurations/nemesis/additional_configs/docker_backend_local.yaml"],
 }
 
 # TODO: this definition should be removed when network configuration new mechanism will be supported by all backends.

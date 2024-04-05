@@ -21,6 +21,7 @@ class NemesisJobGenerator:
         "aws": "eu-west-1",
         "gce": "us-east1",
         "azure": "eastus",
+        "docker": "eu-west-1"
     }
 
     def __init__(self, base_job: str = None, base_dir: str | Path = Path("."), backend: str = None) -> 'NemesisJobGenerator':
@@ -109,12 +110,14 @@ class NemesisJobGenerator:
 
     def create_job_files_from_template(self) -> list[Path]:
         pipeline_files = []
+        backend_config = config.NEMESIS_REQUIRED_ADDITIONAL_CONFIGS.get(self.backend, [])
         for cls in self.nemesis_class_list:
             additional_configs = config.NEMESIS_REQUIRED_ADDITIONAL_CONFIGS.get(cls, [])
             additional_params = config.NEMESIS_ADDITIONAL_PIPELINE_PARAMS.get(cls, {})
             config_name = [
                 str(self.nemesis_test_config_dir / f"{self.base_job}-nemesis.yaml"),
                 str(self.nemesis_test_config_dir / f"{cls}.yaml"),
+                *backend_config,
                 *additional_configs,
             ]
             job_file_name = f"{self.base_job}-{cls}-{self.backend}.jenkinsfile"
