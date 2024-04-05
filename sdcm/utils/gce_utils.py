@@ -468,6 +468,10 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
 
     if "z3-highmem" in machine_type:
         instance.scheduling.on_host_maintenance = "TERMINATE"
+        network_interface.nic_type = "GVNIC"
+        network_performance_config = compute_v1.NetworkPerformanceConfig()
+        network_performance_config.total_egress_bandwidth_tier = "TIER_1"
+        instance.network_performance_config = network_performance_config
 
     if spot:
         # Set the Spot VM setting
