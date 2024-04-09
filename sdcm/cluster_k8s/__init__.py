@@ -1808,8 +1808,14 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         return os.path.join(self.logdir, "system.log")
 
     @property
-    def region(self):
+    def vm_region(self):
         return self.k8s_cluster.region_name
+
+    @property
+    def region(self):
+        if self.parent_cluster.params.get('simulated_regions'):
+            raise ValueError("K8S backends don't support 'simulated_regions' SCT config")
+        return self.vm_region
 
     def start_journal_thread(self):
         self._journal_thread = get_system_logging_thread(logs_transport="k8s_client",

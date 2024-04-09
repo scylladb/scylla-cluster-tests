@@ -58,6 +58,10 @@ class PhysicalMachineNode(cluster.BaseNode):
         return self._public_ip
 
     @property
+    def vm_region(self):
+        return "baremetal"
+
+    @property
     def region(self):
         return "baremetal"
 

@@ -147,7 +147,7 @@ class GCENode(cluster.BaseNode):
         pass
 
     @property
-    def region(self):
+    def vm_region(self):
         return self._instance.zone.split('/')[-1][:-2]
 
     @property
@@ -509,12 +509,14 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             return []
         self.log.info("Adding nodes to cluster")
         nodes = []
+        instance_dc = 0 if self.params.get("simulated_regions") else dc_idx
         if self.test_config.REUSE_CLUSTER:
-            instances = self._get_instances(dc_idx)
+            instances = self._get_instances(instance_dc)
             if not instances:
                 raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
         else:
-            instances = self._create_instances(count, dc_idx, enable_auto_bootstrap, instance_type=instance_type)
+            instances = self._create_instances(
+                count, instance_dc, enable_auto_bootstrap, instance_type=instance_type)
 
         self.log.debug('instances: %s', instances)
         if instances:

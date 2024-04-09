@@ -336,9 +336,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.test_config.set_duration(self._duration)
         cluster_backend = self.params.get('cluster_backend')
         if cluster_backend in ('aws', 'k8s-eks'):
-            self.test_config.set_multi_region(len(self.params.region_names) > 1)
+            self.test_config.set_multi_region(
+                (self.params.get("simulated_regions") or 0) > 1 or len(self.params.region_names) > 1)
         elif cluster_backend in ('gce', 'k8s-gke'):
-            self.test_config.set_multi_region(len(self.params.gce_datacenters) > 1)
+            self.test_config.set_multi_region(
+                (self.params.get("simulated_regions") or 0) > 1 or len(self.params.gce_datacenters) > 1)
+        elif cluster_backend == "azure":
+            self.test_config.set_multi_region((self.params.get("simulated_regions") or 0) > 1)
 
         if self.params.get("backup_bucket_backend") == "azure":
             self.test_config.set_backup_azure_blob_credentials()
@@ -1219,7 +1223,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             credentials=self.credentials,
             user_prefix=user_prefix,
             params=self.params,
-            region_names=None,
+            region_names=regions,
         )
         self.db_cluster = ScyllaAzureCluster(image_id=azure_image,
                                              root_disk_size=db_info['disk_size'],

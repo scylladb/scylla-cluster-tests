@@ -55,7 +55,7 @@ class LocalNode(BaseNode):
         return "127.0.0.1"
 
     @property
-    def region(self):
+    def vm_region(self):
         return "eu-north-1"
 
     @property

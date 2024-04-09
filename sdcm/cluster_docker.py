@@ -198,6 +198,10 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         return "docker"
 
     @property
+    def vm_region(self):
+        return "docker"
+
+    @property
     def region(self):
         return "docker"
 
