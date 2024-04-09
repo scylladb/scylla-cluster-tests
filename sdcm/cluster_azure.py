@@ -43,10 +43,11 @@ class AzureNode(cluster.BaseNode):
                  credentials, parent_cluster,
                  node_prefix='node', node_index=1,
                  base_logdir=None, dc_idx=0, rack=0):
-        region = parent_cluster.params.get('azure_region_name')[dc_idx]
-        name = f"{node_prefix}-{region}-{node_index}".lower()
         self.node_index = node_index
+        self.dc_idx = dc_idx
+        self.parent_cluster = parent_cluster
         self._instance = azure_instance
+        name = f"{node_prefix}-{self.region}-{node_index}".lower()
         self.last_event_document_incarnation = -1
         ssh_login_info = {'hostname': None,
                           'user': azure_instance.user_name,
@@ -90,7 +91,7 @@ class AzureNode(cluster.BaseNode):
         return ip_tuple
 
     @property
-    def region(self):
+    def vm_region(self):
         return self._instance.region
 
     def set_hostname(self):
@@ -197,7 +198,8 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         self.log.info("Adding nodes to cluster")
         nodes = []
 
-        instances = self._create_instances(count, dc_idx, instance_type=instance_type)
+        instance_dc = 0 if self.params.get("simulated_regions") else dc_idx
+        instances = self._create_instances(count, instance_dc, instance_type=instance_type)
 
         self.log.debug('instances: %s', instances)
         for node_index, instance in enumerate(instances, start=self._node_index + 1):

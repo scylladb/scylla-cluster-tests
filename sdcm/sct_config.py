@@ -1518,6 +1518,9 @@ class SCTConfiguration(dict):
         dict(name="custom_es_index", env="SCT_CUSTOM_ES_INDEX", type=str,
              help="""Use custom ES index for storing test results"""),
 
+        dict(name="simulated_regions", env="SCT_SIMULATED_REGIONS", type=int, choices=[0, 2, 3, 4, 5],
+             help="""Defines how many regions must be simulated on the Scylla config side. If set then
+             nodes will be provisioned only using the very first real region defined in the configuration."""),
         dict(name="simulated_racks", env="SCT_SIMULATED_RACKS", type=int,
              help="""Forces GossipingPropertyFileSnitch (regardless `endpoint_snitch`) to simulate racks.
              Provide number of racks to simulate."""),
@@ -1883,8 +1886,8 @@ class SCTConfiguration(dict):
                     raise ValueError(
                         f" Got error: {repr(exp)}, on item '{param}'") from exp
 
-        # 15 Force endpoint_snitch to GossipingPropertyFileSnitch if using simulated_racks
-        if self.get("simulated_racks") > 1:
+        # 15 Force endpoint_snitch to GossipingPropertyFileSnitch if using simulated_regions or simulated_racks
+        if (self.get("simulated_regions") or 0) > 1 or (self.get("simulated_racks") or 0) > 1:
             if snitch := self.get("endpoint_snitch"):
                 assert snitch.endswith("GossipingPropertyFileSnitch"), \
                     f"Simulating racks requires endpoint_snitch to be GossipingPropertyFileSnitch while it set to {self['endpoint_snitch']}"
@@ -2138,7 +2141,8 @@ class SCTConfiguration(dict):
         db_type = self.get('db_type')
         self._check_version_supplied(backend)
         self._check_per_backend_required_values(backend)
-        if backend in ['aws', 'gce'] and db_type != 'cloud_scylla':
+        if backend in ('aws', 'gce') and db_type != 'cloud_scylla' and (
+                self.get('simulated_regions') or 0) < 2:
             self._check_multi_region_params(backend)
 
         self._verify_data_volume_configuration(backend)

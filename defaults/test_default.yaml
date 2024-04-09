@@ -230,6 +230,7 @@ custom_es_index: ''
 run_fullscan: []
 
 stress_step_duration: '15m'
+simulated_regions: 0
 simulated_racks: 0
 
 use_dns_names: false
