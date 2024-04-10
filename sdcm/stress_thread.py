@@ -377,7 +377,8 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
     def run(self):
         self.configure_executer()
-        for loader_idx, loader in enumerate(self.loaders):
+        for loader in self.loaders:
+            loader_idx = loader.node_index
             for cpu_idx in range(self.stress_num):
                 for ks_idx in range(1, self.keyspace_num + 1):
                     self.results_futures += [self.executor.submit(self._run_cs_stress,
