@@ -42,7 +42,7 @@ class AzureNode(cluster.BaseNode):
     def __init__(self, azure_instance: VmInstance,  # pylint: disable=too-many-arguments
                  credentials, parent_cluster,
                  node_prefix='node', node_index=1,
-                 base_logdir=None, dc_idx=0):
+                 base_logdir=None, dc_idx=0, rack=0):
         region = parent_cluster.params.get('azure_region_name')[dc_idx]
         name = f"{node_prefix}-{region}-{node_index}".lower()
         self.node_index = node_index
@@ -57,7 +57,8 @@ class AzureNode(cluster.BaseNode):
                          ssh_login_info=ssh_login_info,
                          base_logdir=base_logdir,
                          node_prefix=node_prefix,
-                         dc_idx=dc_idx)
+                         dc_idx=dc_idx,
+                         rack=rack)
 
     def init(self) -> None:
         super().init()
@@ -200,7 +201,9 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
 
         self.log.debug('instances: %s', instances)
         for node_index, instance in enumerate(instances, start=self._node_index + 1):
-            node = self._create_node(instance, node_index, dc_idx)
+            # in case rack is not specified, spread nodes to different racks
+            node_rack = node_index % self.racks_count if rack is None else rack
+            node = self._create_node(instance, node_index, dc_idx, rack=node_rack)
             nodes.append(node)
             self.nodes.append(node)
             self.log.info("Added node: %s", node.name)
@@ -210,7 +213,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         self.log.info('added nodes: %s', nodes)
         return nodes
 
-    def _create_node(self, instance, node_index, dc_idx):
+    def _create_node(self, instance, node_index, dc_idx, rack):
         try:
             node = AzureNode(azure_instance=instance,
                              credentials=self._credentials[0],
@@ -218,7 +221,8 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
                              node_prefix=self.node_prefix,
                              node_index=node_index,
                              base_logdir=self.logdir,
-                             dc_idx=dc_idx)
+                             dc_idx=dc_idx,
+                             rack=rack)
             node.init()
             return node
         except Exception as ex:
