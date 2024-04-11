@@ -13,4 +13,4 @@
 
 - Add New configuration option and document them (in `sdcm/sct_config.py`)
 - Add unit tests to cover my changes (under `unit-test/` folder)
-- Update the Readme/doc folder relevent to this change (if needed)
+- Update the Readme/doc folder relevant to this change (if needed)
