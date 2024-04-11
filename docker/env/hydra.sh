@@ -24,6 +24,18 @@ AWS_MOCK=""
 HYDRA_DRY_RUN=""
 HYDRA_HELP=""
 
+function die () {
+    msg="$1"
+    if [[ -n "$msg" ]]; then
+        echo "$(basename $0): $msg." 1>&2
+    fi
+    cat <<EOF 1>&2
+
+Run \`$0 --help' to print the full help message.
+EOF
+    exit 1
+}
+
 export SCT_TEST_ID=${SCT_TEST_ID:-$(uuidgen)}
 export GIT_USER_EMAIL=$(git config --get user.email)
 
