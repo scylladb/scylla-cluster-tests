@@ -33,7 +33,9 @@ RUN apt-get update && \
         docker-ce-cli && \
     rm -rf /var/lib/apt/lists/* && \
     echo "autostart=false" >> /etc/supervisord.conf.d/scylla-server.conf && \
-    echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf
+    echo "user=scylla" >> /etc/supervisord.conf.d/scylla-server.conf && \
+    echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf && \
+    echo "user=scylla" >> /etc/supervisord.conf.d/scylla-housekeeping.conf
 
 COPY ./etc/scylla-manager.conf /etc/supervisord.conf.d/scylla-manager.conf
 COPY ./etc/sshd.conf /etc/supervisord.conf.d/sshd.conf

@@ -19,7 +19,9 @@ RUN yum -y install \
         rsync && \
     yum clean all && \
     echo "autostart=false" >> /etc/supervisord.conf.d/scylla-server.conf && \
+    echo "user=scylla" >> /etc/supervisord.conf.d/scylla-server.conf && \
     echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf && \
+    echo "user=scylla" >> /etc/supervisord.conf.d/scylla-housekeeping.conf && \
     sed -i "\:/dev/stderr:d" /etc/bashrc && \
     useradd -G wheel -p 00hzYw5m.HyAY $USER && \
     echo "$USER  ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers && \
