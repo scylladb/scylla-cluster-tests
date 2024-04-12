@@ -99,12 +99,7 @@ class SstableLoadUtils:
         table_folder = f"/var/lib/scylla/data/{keyspace_name}/{upload_dir}" if not table_name else upload_dir
 
         # Extract tarball again (in case create_schema=True) directly to Scylla table upload folder to simplify the code
-        # and prevent changes of permissions and increasing possibility of failures with "Permission denied" error
-        if node.is_docker():
-            node.remoter.run(f'tar xvfz {test_data.sstable_file} -C {table_folder}/upload/')
-        else:
-            node.remoter.sudo(
-                f'tar xvfz {test_data.sstable_file} -C {table_folder}/upload/', user='scylla')
+        node.remoter.sudo(f'tar xvfz {test_data.sstable_file} -C {table_folder}/upload/', user='scylla')
 
         # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
         node.remoter.sudo(f'rm -f {table_folder}/upload/schema.cql')

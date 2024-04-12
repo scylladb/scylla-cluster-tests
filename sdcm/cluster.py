@@ -1257,10 +1257,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         mark_exists = self.remoter.run('test -e %s' % mark_path, ignore_status=True, verbose=verbose).ok
         if self.uuid and not mark_exists:
             self.remoter.run(cmd % self.uuid, ignore_status=True)
-            if self.is_docker():
-                self.remoter.sudo('touch %s' % mark_path, verbose=verbose)
-            else:
-                self.remoter.sudo('touch %s' % mark_path, verbose=verbose, user='scylla')
+            self.remoter.sudo('touch %s' % mark_path, verbose=verbose, user='scylla')
 
     def wait_db_up(self, verbose=True, timeout=3600):
         text = None
