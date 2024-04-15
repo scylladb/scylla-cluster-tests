@@ -39,6 +39,9 @@ class SshOutAsFile(StreamingBody):
                 break
         return buff
 
+    def readable(self):
+        return True
+
 
 def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str],  # pylint: disable=too-many-arguments
                                        s3_bucket: str, s3_key: str, max_size_gb: int = 400, public_read_acl: bool = False):
