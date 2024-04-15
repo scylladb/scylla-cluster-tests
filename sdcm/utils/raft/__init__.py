@@ -263,8 +263,9 @@ class Raft(RaftFeatureOperations):
         LOGGER.debug("Difference between group0 and token ring: %s", diff)
         num_of_nodes = len(self._node.parent_cluster.nodes)
         LOGGER.debug("Number of nodes in sct cluster %s", num_of_nodes)
+        non_voters_ids = self.get_group0_non_voters()
 
-        return not diff and len(group0_ids) == len(token_ring_ids) == num_of_nodes
+        return not diff and not non_voters_ids and len(group0_ids) == len(token_ring_ids) == num_of_nodes
 
 
 class NoRaft(RaftFeatureOperations):
