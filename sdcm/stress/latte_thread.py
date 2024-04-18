@@ -98,7 +98,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
 
-    def build_stress_cmd(self, cmd_runner):
+    def build_stress_cmd(self, cmd_runner, loader):
         hosts = " ".join([i.cql_address for i in self.node_list])
 
         # extract the script so we know which files to mount into the docker image
@@ -119,13 +119,24 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             ssl_config += (' --ssl --ssl-ca /etc/scylla/ssl_conf/client/catest.pem '
                            '--ssl-cert /etc/scylla/ssl_conf/client/test.crt '
                            '--ssl-key /etc/scylla/ssl_conf/client/test.key')
+        datacenter = ""
+        if self.loader_set.test_config.MULTI_REGION:
+            # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
+            # not for loader nodes. So call next function for DB nodes
+            datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
+            if loader_dc := datacenter_name_per_region.get(loader.region):
+                datacenter = f"--datacenter {loader_dc}"
+            else:
+                LOGGER.error(
+                    "Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
+                    loader.region, datacenter_name_per_region)
 
         cmd_runner.run(
             cmd=f'latte schema {script_name} {ssl_config} -- {hosts}',
             timeout=self.timeout,
             retry=0,
         )
-        stress_cmd = f'{self.stress_cmd} {ssl_config} -q -- {hosts} '
+        stress_cmd = f'{self.stress_cmd} {ssl_config} {datacenter} -q -- {hosts} '
 
         return stress_cmd
 
@@ -174,7 +185,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         cmd_runner = cleanup_context = RemoteDocker(loader, self.docker_image_name,
                                                     extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker}')
-        stress_cmd = self.build_stress_cmd(cmd_runner)
+        stress_cmd = self.build_stress_cmd(cmd_runner, loader)
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
