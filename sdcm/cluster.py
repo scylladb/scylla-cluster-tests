@@ -4643,12 +4643,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):
         if not self.test_config.REUSE_CLUSTER:
-            self.log.debug('io.conf before reboot: %s', node.remoter.sudo('cat /etc/scylla.d/io.conf').stdout)
+            self.log.debug('io.conf before reboot: %s', node.remoter.sudo(
+                f'cat {node.add_install_prefix("/etc/scylla.d/io.conf")}').stdout)
             node.start_scylla_server(verify_up=False)
             if self.params.get("jmx_heap_memory"):
                 node.restart_scylla_jmx()
             self.log.debug(
-                'io.conf right after reboot: %s', node.remoter.sudo('cat /etc/scylla.d/io.conf').stdout)
+                'io.conf right after reboot: %s', node.remoter.sudo(f'cat {node.add_install_prefix("/etc/scylla.d/io.conf")}').stdout)
             if self.params.get('use_mgmt'):
                 node.remoter.sudo(shell_script_cmd("""\
                     systemctl restart scylla-manager-agent
