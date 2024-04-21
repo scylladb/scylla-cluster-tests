@@ -64,7 +64,8 @@ class WebDriverContainerMixin:
 class RemoteBrowser:
     def __init__(self, node, use_tunnel=True):
         self.node = node
-        backend = self.node.parent_cluster.params.get("cluster_backend")
+        backend = self.node.parent_cluster.params.get(
+            "cluster_backend") if hasattr(self.node, 'parent_cluster') else None
         self.use_tunnel = bool(self.node.ssh_login_info and use_tunnel and backend not in ('docker',))
 
     @cached_property
