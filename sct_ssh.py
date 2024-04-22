@@ -92,8 +92,6 @@ def guess_username(instance: dict | compute_v1.Instance) -> str:
 
     node_type = get_tags(instance).get('NodeType')
     node_type = node_type.lower() if node_type else node_type
-    if node_type in ['monitor', 'loader']:
-        return 'centos'
     if node_type == 'builder':
         return 'jenkins'
     elif node_type == 'db-cluster':
