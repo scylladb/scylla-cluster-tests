@@ -9,7 +9,7 @@ scylla_repo: ''
 manager_version: '3.2'
 manager_scylla_backend_version: '2021'  # Notice: that centos, ubuntu 20 and debian 10 monitors use 2021, while debian 9, ubuntu 16 and ubuntu 18 use 2020, since we support both
 
-scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.6.repo'
+scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list'
 
 experimental: true
 round_robin: false
@@ -21,7 +21,7 @@ db_nodes_shards_selection: 'default'
 
 # for for version selection
 scylla_linux_distro: 'ubuntu-focal'
-scylla_linux_distro_loader: 'centos'
+scylla_linux_distro_loader: 'ubuntu-jammy'
 ssh_transport: 'libssh2'
 system_auth_rf: 3
 
