@@ -276,10 +276,10 @@ class SCTConfiguration(dict):
                      WARNING: can't be used together with 'ami_id_db_oracle'"""),
 
         dict(name="scylla_linux_distro", env="SCT_SCYLLA_LINUX_DISTRO", type=str,
-             help="""The distro name and family name to use [centos/ubuntu-xenial/debian-jessie]"""),
+             help="""The distro name and family name to use. Example: 'ubuntu-jammy' or 'debian-bookworm'."""),
 
         dict(name="scylla_linux_distro_loader", env="SCT_SCYLLA_LINUX_DISTRO_LOADER", type=str,
-             help="""The distro name and family name to use [centos/ubuntu-xenial/debian-jessie]"""),
+             help="""The distro name and family name to use. Example: 'ubuntu-jammy' or 'debian-bookworm'."""),
 
         dict(name="scylla_repo_m", env="SCT_SCYLLA_REPO_M", type=str,
              help="Url to the repo of scylla version to install scylla from for managment tests"),
