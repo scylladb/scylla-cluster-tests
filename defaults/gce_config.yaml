@@ -4,8 +4,8 @@ gce_network: 'qa-vpc'
 gce_project: '' # empty mean default one, can be overwritten to use different one
 
 gce_image_db: '' # so we can use `scylla_version` as needed
-gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
-gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts'
+gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts'
 gce_image_username: 'scylla-test'
 
 gce_instance_type_loader: 'e2-standard-2'
