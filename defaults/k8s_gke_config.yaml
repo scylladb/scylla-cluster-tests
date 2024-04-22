@@ -1,7 +1,6 @@
 instance_provision: 'on_demand'
 gce_datacenter: 'us-east1'
 gce_network: 'qa-vpc'
-gce_image_username: 'scylla-test'
 
 gke_cluster_version: '1.27'
 gke_k8s_release_channel: ''
@@ -53,7 +52,6 @@ gce_instance_type_loader: 'e2-standard-4'
 # NOTE: if we do not specify 'k8s_n_loader_pods_per_cluster' then value of the 'n_loaders' is used
 n_loaders: 1
 
-gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
 gce_instance_type_monitor: 'e2-medium'
 gce_root_disk_type_monitor: 'pd-standard'
 root_disk_size_monitor: 50

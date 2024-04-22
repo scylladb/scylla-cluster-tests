@@ -235,7 +235,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
-        os.environ['SCT_GCE_IMAGE_DB'] = 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+        os.environ['SCT_GCE_IMAGE_DB'] = (
+            'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7')
 
         expected_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list'
         with unittest.mock.patch.object(sct_config, 'get_branch_version', return_value="4.7.dev", clear=True), \
@@ -247,14 +248,16 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(conf.get('scylla_repo'),
                          expected_repo)
         self.assertEqual(conf.get('scylla_repo_loader'),
-                         "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.6.repo")
+                         "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list")
 
     def test_12_scylla_version_repo_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
-        os.environ['SCT_GCE_IMAGE_DB'] = 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+        os.environ['SCT_GCE_IMAGE_DB'] = (
+            'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7')
+        os.environ['SCT_SCYLLA_REPO_LOADER'] = 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo'
 
         expected_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list'
         with unittest.mock.patch.object(sct_config, 'get_branch_version', return_value="4.7.dev", clear=True), \
@@ -272,6 +275,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-local-kind'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
+        os.environ['SCT_SCYLLA_REPO_LOADER'] = 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
