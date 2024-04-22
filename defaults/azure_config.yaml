@@ -19,10 +19,8 @@ root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)
 root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra space for a larger swap
 loader_swap_size: 10240  #10GB SWAP space
 azure_image_username: 'scyllaadm'
-# used prepared centos7 AMI for loader
 ami_loader_user: 'ubuntu'
-scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/debian/scylla-4.6-buster.list'
-# centos7 is used for monitor
+scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list'
 ami_monitor_user: 'ubuntu'
 
 ami_id_db_scylla: ''
