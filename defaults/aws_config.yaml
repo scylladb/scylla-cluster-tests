@@ -7,7 +7,7 @@ user_credentials_path: '~/.ssh/scylla-qa-ec2'
 instance_type_loader: 'c5.xlarge'
 instance_type_monitor: 't3.large'
 # manual on creating loader AMI's: see docs/new_loader_ami.md
-ami_id_loader: 'scylla-qa-loader-ami-v19'
+ami_id_loader: 'scylla-qa-loader-ami-v20-ubuntu22'
 ami_id_monitor: 'ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20231207' # ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20231207Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2023-12-07
 
 availability_zone: 'a'
@@ -16,9 +16,7 @@ root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)
 root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra space for a larger swap
 loader_swap_size: 10240  #10GB SWAP space
 ami_db_scylla_user: 'scyllaadm'
-# used prepared centos7 AMI for loader
-ami_loader_user: 'centos'
-# ubuntu is used for monitor
+ami_loader_user: 'ubuntu'
 ami_monitor_user: 'ubuntu'
 aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
 
