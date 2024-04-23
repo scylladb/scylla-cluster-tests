@@ -9,8 +9,8 @@ ip_ssh_connections: 'private'
 scylla_repo: ''
 
 manager_version: '3.2'
-manager_scylla_backend_version: '2022'
-# Notice: that centos (default monitor), ubuntu 22, ubuntu 20 and debian 11 monitors use 2022, while debian 10 ubuntu 18 use 2021, since we support both
+manager_scylla_backend_version: '2024'
+# Notice: that centos (default monitor), ubuntu 22, ubuntu 20 and debian 11 monitors use 2024, while debian 10 ubuntu 18 use 2023, since we support both
 
 scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-5.2.repo'
 
