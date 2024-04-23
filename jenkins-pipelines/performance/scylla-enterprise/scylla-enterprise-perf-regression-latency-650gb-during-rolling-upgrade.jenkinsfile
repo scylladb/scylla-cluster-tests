@@ -7,6 +7,6 @@ perfRegressionParallelPipeline(
     base_versions: '',  // auto mode
     backend: "aws",
     test_name: "performance_regression_test.PerformanceRegressionUpgradeTest",
-    test_config: """["test-cases/performance/perf-regression-upgrade.yaml"]""",
+    test_config: """["test-cases/performance/perf-regression-latency-650gb-upgrade.yaml"]""",
     sub_tests: ["test_latency_write_with_upgrade", "test_latency_read_with_upgrade", "test_latency_mixed_with_upgrade"]
 )
