@@ -135,19 +135,21 @@ class CommandRunner(metaclass=ABCMeta):
 
     def _print_command_results(self, result: Result, verbose: bool, ignore_status: bool):
         """When verbose=True and ignore_status=True that means nothing will be printed in any case"""
+        hostname = self.hostname
         if verbose and not result.failed:
             if result.stderr:
-                self.log.debug('STDERR: %s', result.stderr)
+                self.log.debug('<%s>: STDERR: %s', hostname, result.stderr)
 
-            self.log.debug('Command "%s" finished with status %s', result.command, result.exited)
+            self.log.debug('<%s>: Command "%s" finished with status %s', hostname, result.command, result.exited)
             return
 
         if verbose and result.failed and not ignore_status:
-            self.log.error('Error executing command: "%s"; Exit status: %s', result.command, result.exited)
+            self.log.error('<%s>: Error executing command: "%s"; Exit status: %s',
+                           hostname, result.command, result.exited)
             if result.stdout:
-                self.log.debug('STDOUT: %s', result.stdout[-240:])
+                self.log.debug('<%s>: STDOUT: %s', hostname, result.stdout[-240:])
             if result.stderr:
-                self.log.debug('STDERR: %s', result.stderr)
+                self.log.debug('<%s>: STDERR: %s', hostname, result.stderr)
             return
 
     @staticmethod

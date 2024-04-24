@@ -193,7 +193,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
 
         :raises: invoke.exceptions.UnexpectedExit, invoke.exceptions.Failure if the remote copy command failed.
         """
-        self.log.debug('Receive files (src) %s -> (dst) %s', src, dst)
+        self.log.debug('<%s>: Receive files (src) %s -> (dst) %s', self.hostname, src, dst)
         # Start a master SSH connection if necessary.
 
         if isinstance(src, str):
@@ -213,7 +213,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                 self.log.debug(result.exited)
                 try_scp = False
             except (self.exception_failure, self.exception_unexpected) as ex:
-                self.log.warning("Trying scp, rsync failed: %s", ex)
+                self.log.warning("<%s>: Trying scp, rsync failed: %s", self.hostname, ex)
                 # Make sure master ssh available
                 files_received = False
 
@@ -236,12 +236,12 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                     if self._is_error_retryable(ex.result.stderr):
                         raise RetryableNetworkException(ex.result.stderr, original=ex) from ex
                     raise
-                self.log.debug("Command %s with status %s", result.command, result.exited)
+                self.log.debug("<%s>: Command %s with status %s", self.hostname, result.command, result.exited)
                 if result.exited:
                     files_received = False
                 # Avoid "already printed" message without real error
                 if result.stderr:
-                    self.log.debug("Stderr: %s", result.stderr)
+                    self.log.debug("<%s>: Stderr: %s", self.hostname, result.stderr)
                     files_received = False
 
         if not preserve_perm:
@@ -282,7 +282,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         """
 
         # pylint: disable=too-many-branches,too-many-locals
-        self.log.debug('Send files (src) %s -> (dst) %s', src, dst)
+        self.log.debug('<%s>: Send files (src) %s -> (dst) %s', self.hostname, src, dst)
         # Start a master SSH connection if necessary.
         source_is_dir = False
         if isinstance(src, str):
@@ -301,7 +301,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                 LocalCmdRunner().run(rsync)
                 try_scp = False
             except (self.exception_failure, self.exception_unexpected) as details:
-                self.log.warning("Trying scp, rsync failed: %s", details)
+                self.log.warning("<%s>: Trying scp, rsync failed: %s", self.hostname, details)
                 files_sent = False
 
         if try_scp:
@@ -349,7 +349,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                     if self._is_error_retryable(ex.result.stderr):
                         raise RetryableNetworkException(ex.result.stderr, original=ex) from ex
                     raise
-                self.log.debug('Command %s with status %s', result.command, result.exited)
+                self.log.debug('<%s>: Command %s with status %s', self.hostname, result.command, result.exited)
                 if result.exited:
                     files_sent = False
         return files_sent
@@ -362,7 +362,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         # don't try to use it for any future file transfers.
         self._use_rsync = self._check_rsync()
         if not self._use_rsync:
-            self.log.warning("Command rsync not available -- disabled")
+            self.log.warning("<%s>: Command rsync not available -- disabled", self.hostname)
         return self._use_rsync
 
     def _check_rsync(self) -> bool:
@@ -518,7 +518,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                      ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
                      watchers: Optional[List[StreamWatcher]] = None):
         if verbose:
-            self.log.debug('Running command "%s"...', cmd)
+            self.log.debug('<%s>: Running command "%s"...', self.hostname, cmd)
         start_time = time.perf_counter()
         command_kwargs = dict(
             command=cmd, warn=ignore_status,
