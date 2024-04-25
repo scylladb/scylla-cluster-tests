@@ -1191,20 +1191,27 @@ def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str
     raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
 
 
-def list_sct_runners(test_runner_ip: str = None, verbose: bool = True) -> list[SctRunnerInfo]:
+def list_sct_runners(backend: str = None, test_runner_ip: str = None, verbose: bool = True) -> list[SctRunnerInfo]:
     if verbose:
         log = LOGGER.info
     else:
         log = LOGGER.debug
-    log("Looking for SCT runner instances...")
-    sct_runner_classes = (AwsSctRunner, GceSctRunner, AzureSctRunner, )
+    log("Looking for SCT runner instances (backend is '%s')...", backend)
+    if "aws" in (backend or "") or backend in ("k8s-eks", "docker"):
+        sct_runner_classes = (AwsSctRunner, )
+    elif "gce" in (backend or "") or backend == "k8s-gke":
+        sct_runner_classes = (GceSctRunner, )
+    elif "azure" in (backend or ""):
+        sct_runner_classes = (AzureSctRunner, )
+    else:
+        sct_runner_classes = (AwsSctRunner, GceSctRunner, AzureSctRunner, )
     sct_runners = chain.from_iterable(cls.list_sct_runners(verbose=False) for cls in sct_runner_classes)
 
     if test_runner_ip:
         if sct_runner_info := next((runner for runner in sct_runners if test_runner_ip in runner.public_ips), None):
             sct_runners = [sct_runner_info, ]
         else:
-            LOGGER.warning("No SCT Runners found to remove (IP: %s)", test_runner_ip)
+            LOGGER.warning("No SCT Runners were found (Backend: '%s', IP: '%s')", backend, test_runner_ip)
             return []
     else:
         sct_runners = list(sct_runners)
@@ -1214,7 +1221,7 @@ def list_sct_runners(test_runner_ip: str = None, verbose: bool = True) -> list[S
     return sct_runners
 
 
-def update_sct_runner_tags(test_runner_ip: str = None, test_id: str = None, tags: dict = None):
+def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test_id: str = None, tags: dict = None):
     LOGGER.info("Test runner ip in update_sct_runner_tags: %s; test_id: %s", test_runner_ip, test_id)
     if not test_runner_ip and not test_id:
         raise ValueError("update_sct_runner_tags requires either the "
@@ -1223,9 +1230,9 @@ def update_sct_runner_tags(test_runner_ip: str = None, test_id: str = None, tags
     runner_to_update = None
 
     if test_runner_ip:
-        runner_to_update = list_sct_runners(test_runner_ip=test_runner_ip)
+        runner_to_update = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip)
     elif test_id:
-        listed_runners = list_sct_runners(verbose=False)
+        listed_runners = list_sct_runners(backend=backend, verbose=False)
         runner_to_update = [runner for runner in listed_runners if runner.test_id == test_id]
 
     if not runner_to_update:
@@ -1272,10 +1279,11 @@ def _manage_runner_keep_tag_value(utc_now: datetime,
 
 def clean_sct_runners(test_status: str,
                       test_runner_ip: str = None,
+                      backend: str = None,
                       dry_run: bool = False,
                       force: bool = False) -> None:
     # pylint: disable=too-many-branches,too-many-statements
-    sct_runners_list = list_sct_runners(test_runner_ip=test_runner_ip)
+    sct_runners_list = list_sct_runners(backend=backend, test_runner_ip=test_runner_ip)
     timeout_flag = False
     runners_terminated = 0
     end_message = ""
