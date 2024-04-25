@@ -6,7 +6,7 @@
       "corefile": "/var/lib/scylla/coredumps/45d8a24d50d3-5711-0-0-6-1600105104.core",
       "source_timestamp": 1600105104.0,
       "coredump_info": "",
-      "download_instructions": "gsutil cp gs://upload.scylladb.com/45d8a24d50d3-5711-0-0-6-1600105104.core/45d8a24d50d3-5711-0-0-6-1600105104.core.gz .\ngunzip /var/lib/scylla/coredumps/45d8a24d50d3-5711-0-0-6-1600105104.core.gz",
+      "download_instructions": "gsutil cp gs://upload.scylladb.com/45d8a24d50d3-5711-0-0-6-1600105104.core/45d8a24d50d3-5711-0-0-6-1600105104.core.gz .\ngunzip 45d8a24d50d3-5711-0-0-6-1600105104.core.gz",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/45d8a24d50d3-5711-0-0-6-1600105104.core/45d8a24d50d3-5711-0-0-6-1600105104.core.gz",
       "command_line": "/usr/bin/scylla --log-to-syslog 0 --log-to-stdout 1 --default-log-level info --",
       "executable": ""
@@ -17,7 +17,7 @@
       "corefile": "/var/lib/scylla/coredumps/ac7d8023a369-41537-0-0-11-1600150672.core",
       "source_timestamp": 1600150672.0,
       "coredump_info": "",
-      "download_instructions": "gsutil cp gs://upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz .\ngunzip /var/lib/scylla/coredumps/ac7d8023a369-41537-0-0-11-1600150672.core.gz",
+      "download_instructions": "gsutil cp gs://upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz .\ngunzip ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "command_line": "/bin/bash /scylla-housekeeping-service.sh",
       "executable": ""
@@ -31,7 +31,7 @@
       "corefile": "/var/lib/scylla/coredumps/ac7d8023a369-41537-0-0-11-1600150672.core",
       "source_timestamp": 1600150672.0,
       "coredump_info": "",
-      "download_instructions": "gsutil cp gs://upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz .\ngunzip /var/lib/scylla/coredumps/ac7d8023a369-41537-0-0-11-1600150672.core.gz",
+      "download_instructions": "gsutil cp gs://upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz .\ngunzip ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "command_line": "/bin/bash /scylla-housekeeping-service.sh",
       "executable": ""
@@ -42,7 +42,7 @@
       "corefile": "/var/lib/scylla/coredumps/45d8a24d50d3-5711-0-0-6-1600105104.core",
       "source_timestamp": 1600105104.0,
       "coredump_info": "",
-      "download_instructions": "gsutil cp gs://upload.scylladb.com/45d8a24d50d3-5711-0-0-6-1600105104.core/45d8a24d50d3-5711-0-0-6-1600105104.core.gz .\ngunzip /var/lib/scylla/coredumps/45d8a24d50d3-5711-0-0-6-1600105104.core.gz",
+      "download_instructions": "gsutil cp gs://upload.scylladb.com/45d8a24d50d3-5711-0-0-6-1600105104.core/45d8a24d50d3-5711-0-0-6-1600105104.core.gz .\ngunzip 45d8a24d50d3-5711-0-0-6-1600105104.core.gz",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/45d8a24d50d3-5711-0-0-6-1600105104.core/45d8a24d50d3-5711-0-0-6-1600105104.core.gz",
       "command_line": "/usr/bin/scylla --log-to-syslog 0 --log-to-stdout 1 --default-log-level info --",
       "executable": ""
@@ -55,7 +55,7 @@
       "corefile": "/var/lib/scylla/coredumps/ac7d8023a369-41537-0-0-11-1600150672.core",
       "source_timestamp": 1600150672.0,
       "coredump_info": "",
-      "download_instructions": "gsutil cp gs://upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz .\ngunzip /var/lib/scylla/coredumps/ac7d8023a369-41537-0-0-11-1600150672.core.gz",
+      "download_instructions": "gsutil cp gs://upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz .\ngunzip ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "command_line": "/bin/bash /scylla-housekeeping-service.sh",
       "executable": ""
@@ -66,7 +66,7 @@
       "corefile": "/var/lib/scylla/coredumps/45d8a24d50d3-5711-0-0-6-1600105104.core",
       "source_timestamp": 1600105104.0,
       "coredump_info": "",
-      "download_instructions": "gsutil cp gs://upload.scylladb.com/45d8a24d50d3-5711-0-0-6-1600105104.core/45d8a24d50d3-5711-0-0-6-1600105104.core.gz .\ngunzip /var/lib/scylla/coredumps/45d8a24d50d3-5711-0-0-6-1600105104.core.gz",
+      "download_instructions": "gsutil cp gs://upload.scylladb.com/45d8a24d50d3-5711-0-0-6-1600105104.core/45d8a24d50d3-5711-0-0-6-1600105104.core.gz .\ngunzip 45d8a24d50d3-5711-0-0-6-1600105104.core.gz",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/45d8a24d50d3-5711-0-0-6-1600105104.core/45d8a24d50d3-5711-0-0-6-1600105104.core.gz",
       "command_line": "/usr/bin/scylla --log-to-syslog 0 --log-to-stdout 1 --default-log-level info --",
       "executable": ""

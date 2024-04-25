@@ -211,7 +211,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                               "'%s' 'https://%s'" % (coredump, upload_url))
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
-        download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump)
+        download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump.rsplit('/', 1)[-1])
         core_info.download_url, core_info.download_instructions = download_url, download_instructions
 
     def upload_coredump(self, core_info: CoreDumpInfo):
@@ -396,7 +396,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         #                 #7  0x0000000000794222 main (scylla)
         #
         # Coredump could be absent when file was removed
-        for line in coredump_info.splitlines():
+        for line in coredump_info:
             line = line.strip()
             if line.startswith('Executable:'):
                 executable = line[12:].strip()
@@ -433,20 +433,36 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                 except Exception as exc:  # pylint: disable=broad-except
                     self.log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {str(exc)}")
         core_info.update(executable=executable, command_line=command_line, corefile=corefile,
-                         source_timestamp=event_timestamp, coredump_info=coredump_info)
+                         source_timestamp=event_timestamp, coredump_info="\n".join(coredump_info)+"\n")
 
-    # @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS,
-    #           message="Retrying on getting coredump backtrace")
-    def _get_coredumpctl_info(self, core_info: CoreDumpInfo):
+    def _filter_out_modules_info(self, core_info: str) -> List[str]:
+        """filters all lines between 'Found module' and 'Stack trace of' lines."""
+        lines = core_info.splitlines()
+        removed_lines = []
+        filtered_lines = []
+        skip = False
+        for line in lines:
+            if 'Found module' in line:
+                skip = True
+            if 'Stack trace of' in line:
+                skip = False
+            if not skip:
+                filtered_lines.append(line)
+            else:
+                removed_lines.append(line)
+        self.log.debug("Coredump Modules info:\n %s", "\n".join(removed_lines))
+        return filtered_lines
+
+    def _get_coredumpctl_info(self, core_info: CoreDumpInfo) -> List[str]:
         """
-        Get coredump backtraces.
+        Get coredump info with filtered out unnecessary data as list of lines.
 
-        :param pid: PID of the core.
-        :return: fabric.Result output
+        :param core_info: CoreDumpInfo containing PID of the core.
+        :return: list[str]
         """
         output = self.node.remoter.run(
             f'sudo coredumpctl info --no-pager --no-legend {core_info.pid}', verbose=False, ignore_status=False)
-        return output.stdout + output.stderr
+        return self._filter_out_modules_info(output.stdout + output.stderr)
 
 
 class CoredumpExportFileThread(CoredumpThreadBase):
