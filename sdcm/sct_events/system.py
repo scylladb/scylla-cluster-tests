@@ -227,8 +227,9 @@ class CoreDumpEvent(InformationalEvent):
             fmt += "corefile_url={0.corefile_url}\n"
         if self.backtrace:
             fmt += "backtrace={0.backtrace}\n"
+            fmt += "Info about modules can be found in SCT logs by search for 'Coredump Modules info'\n"
         if self.download_instructions:
-            fmt += "download_instructions={0.download_instructions}\n"
+            fmt += "download_instructions:\n{0.download_instructions}\n"
 
         return fmt
 
