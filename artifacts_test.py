@@ -342,7 +342,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         with self.subTest("check node_exporter liveness"):
             node_info_service = NodeLoadInfoServices().get(self.node)
             assert node_info_service.cpu_load_5
-            assert node_info_service.get_memory_available()
+            assert node_info_service.get_node_boot_time_seconds()
 
         # We don't install any time sync service in docker, so the test is unnecessary:
         # https://github.com/scylladb/scylla/tree/master/dist/docker/etc/supervisord.conf.d
