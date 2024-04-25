@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import github
 import github.Auth
+import github.Issue
 from github.GithubException import UnknownObjectException, RateLimitExceededException
 
 from sdcm.keystore import KeyStore
@@ -90,7 +91,10 @@ class SkipPerIssues:
             return None
         except RateLimitExceededException as exc:
             logging.debug('RateLimitExceededException raise: %s', str(exc))
-            return None
+            # as a temporary measure return an "open" issue each time we hit rate limiting
+            # this would mean that we would assume issue is open, and enable the skips needed, without having the
+            # actual data of the issue
+            return github.Issue.Issue(requester=None, headers={}, attributes=dict(state='open'), completed=True)
         except Exception as exc:  # pylint: disable=broad-except
             logging.warning("failed to get issue: %s", issue)
             TestFrameworkEvent(source=self.__class__.__name__,
