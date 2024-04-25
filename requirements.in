@@ -46,7 +46,7 @@ azure-mgmt-network==19.0.0
 azure-mgmt-resource==20.0.0
 azure-mgmt-subscription==1.0.0
 azure-mgmt-resourcegraph==8.0.0
-pydantic==1.10.8
+pydantic==1.10.13
 azure-storage-blob==12.16.0
 questionary==1.10.0
 pbr==5.11.1
