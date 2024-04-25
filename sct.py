@@ -1197,7 +1197,7 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     if backend is None:
         if os.environ.get('SCT_CLUSTER_BACKEND', None) is None:
-            os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+            os.environ['SCT_CLUSTER_BACKEND'] = backend = 'aws'
     else:
         os.environ['SCT_CLUSTER_BACKEND'] = backend
 
@@ -1225,7 +1225,7 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
             table.add_row([current_cluster_type, link])
 
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
-    update_sct_runner_tags(test_id=collector.test_id, tags={"logs_collected": True})
+    update_sct_runner_tags(backend=backend, test_id=collector.test_id, tags={"logs_collected": True})
 
     if collector.test_id:
         store_logs_in_argus(test_id=UUID(collector.test_id), logs=collected_logs)
@@ -1580,11 +1580,14 @@ def set_runner_tags(runner_ip, tags):
 @cli.command("clean-runner-instances", help="Clean all unused SCT runner instances")
 @click.option("-ip", "--runner-ip", required=False, type=str, default="")
 @click.option("-ts", "--test-status", type=str, help="The result of the test run")
+@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends),
+              help="Specific backend to use")
 @click.option('--dry-run', is_flag=True, default=False, help='dry run')
 @click.option("--force", is_flag=True, default=False, help="Skip cleaning logic and terminate the instance")
-def clean_runner_instances(runner_ip, test_status, dry_run, force):
+def clean_runner_instances(runner_ip, test_status, backend, dry_run, force):
     add_file_logger()
-    clean_sct_runners(test_runner_ip=runner_ip, test_status=test_status, dry_run=dry_run, force=force)
+    clean_sct_runners(
+        test_runner_ip=runner_ip, test_status=test_status, backend=backend, dry_run=dry_run, force=force)
 
 
 @cli.command("run-aws-mock", help="Start AWS Mock server Docker container")
@@ -1764,10 +1767,12 @@ def finish_argus_test_run(jenkins_status):
 
 @cli.command("fetch-junit-from-runner", help="copy the junit.xml back")
 @click.argument("runner-ip", type=str)
-def fetch_junit(runner_ip):
+@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends),
+              help="Allows to skip making backend detection API calls.")
+def fetch_junit(runner_ip, backend):
     add_file_logger()
 
-    runner = list_sct_runners(test_runner_ip=runner_ip)
+    runner = list_sct_runners(backend=backend, test_runner_ip=runner_ip)
     proxy_command, target_ip, target_username, target_key = sct_ssh.get_proxy_command(runner[0].instance, True)
     cmd = (f'ssh -tt {proxy_command}'
            f' -i {target_key} -o "UserKnownHostsFile=/dev/null" '

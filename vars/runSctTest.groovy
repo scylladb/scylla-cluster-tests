@@ -187,7 +187,7 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
             sh """
                 RUNNER_IP=\$(cat sct_runner_ip||echo "")
                 if [[ -n "\${RUNNER_IP}" ]] ; then
-                    ./docker/env/hydra.sh fetch-junit-from-runner \${RUNNER_IP}
+                    ./docker/env/hydra.sh fetch-junit-from-runner \${RUNNER_IP} --backend ${params.backend}
                 fi
             """
             junit(testResults:"**/junit.xml", keepProperties:true)
