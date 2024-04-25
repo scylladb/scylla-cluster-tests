@@ -1065,10 +1065,11 @@ def integration_tests(test):
     # setup prerequisites for the integration test is identical
     # to the kind local functional tests
     # TODO: to refactor setup_prerequisites out of LocalKindCluster
+    sct_config = SCTConfiguration()
     local_cluster = mini_k8s.LocalKindCluster(
         software_version="",
         user_prefix="",
-        params={},
+        params=sct_config,
     )
     local_cluster.setup_prerequisites()
 
