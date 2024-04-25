@@ -95,7 +95,8 @@ class TestSystemEvents(unittest.TestCase):
             str(event),
             "(CoreDumpEvent Severity.ERROR) period_type=one-time "
             "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e node=node1\ncorefile_url=url1\nbacktrace=b1\n"
-            "download_instructions=d1\n",
+            "Info about modules can be found in SCT logs by search for 'Coredump Modules info'\n"
+            "download_instructions:\nd1\n",
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
