@@ -43,7 +43,13 @@ from sct_ssh import ssh_run_cmd
 from sdcm.keystore import KeyStore
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance, provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
-from sdcm.utils.common import list_instances_aws, aws_tags_to_dict, list_instances_gce, gce_meta_to_dict
+from sdcm.utils.common import (
+    aws_tags_to_dict,
+    gce_meta_to_dict,
+    list_instances_aws,
+    list_instances_gce,
+    str_to_bool,
+)
 from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_utils import (
@@ -656,7 +662,7 @@ class AwsSctRunner(SctRunner):
                     launch_time=instance["LaunchTime"],
                     keep=tags.get("keep"),
                     keep_action=tags.get("keep_action"),
-                    logs_collected=tags.get("logs_collected")
+                    logs_collected=str_to_bool(tags.get("logs_collected")),
                 ))
         return sct_runners
 
@@ -742,16 +748,16 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
             return None
 
     @staticmethod
-    def set_tags(sct_runner_info: SctRunnerInfo,
-                 tags: dict):
-        LOGGER.info("Setting SCT runner labels to: %s", tags)
+    def set_tags(sct_runner_info: SctRunnerInfo, tags: dict):
+        tags_to_create = {str(k): str(v).lower() for k, v in tags.items()}
+        LOGGER.info("Setting SCT runner labels to: %s", tags_to_create)
         instances_client, info = get_gce_compute_instances_client()
         gce_set_labels(instances_client=instances_client,
                        instance=sct_runner_info.instance,
-                       new_labels=tags,
+                       new_labels=tags_to_create,
                        project=info['project_id'],
                        zone=sct_runner_info.region_az)
-        LOGGER.info("SCT runner tags set to: %s", tags)
+        LOGGER.info("SCT runner tags set to: %s", tags_to_create)
 
     @staticmethod
     def tags_to_labels(tags: dict[str, str]) -> dict[str, str]:
@@ -880,7 +886,7 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
                 launch_time=launch_time,
                 keep=tags.get("keep"),
                 keep_action=tags.get("keep_action"),
-                logs_collected=tags.get("logs_collected")
+                logs_collected=str_to_bool(tags.get("logs_collected")),
             ))
         return sct_runners
 
@@ -1065,7 +1071,7 @@ class AzureSctRunner(SctRunner):
                 test_id=instance.tags.get("TestId"),
                 keep=instance.tags.get("keep"),
                 keep_action=instance.tags.get("keep_action"),
-                logs_collected=instance.tags.get("logs_collected")
+                logs_collected=str_to_bool(instance.tags.get("logs_collected")),
             ))
         return sct_runners
 
@@ -1074,21 +1080,22 @@ class AzureSctRunner(SctRunner):
         sct_runner_info.cloud_service_instance.delete_virtual_machine(virtual_machine=sct_runner_info.instance)
 
     @staticmethod
-    def set_tags(sct_runner_info: SctRunnerInfo,
-                 tags: dict):
+    def set_tags(sct_runner_info: SctRunnerInfo, tags: dict):
         resource_mgmt_client = sct_runner_info.cloud_service_instance.resource
         instance: VirtualMachine = sct_runner_info.instance
 
+        tags_to_create = {str(k): str(v) for k, v in tags.items()}
         params = TagsPatchResource.from_dict(
             {
                 "operation": TagsPatchOperation.MERGE.value,  # pylint:disable=no-member
                 "properties": {
-                    "tags": tags
+                    "tags": tags_to_create,
                 }
             }
         )
-
-        resource_mgmt_client.tags.create_or_update_at_scope(scope=instance.id, parameters=params)
+        LOGGER.info("Setting SCT runner labels to: %s", tags_to_create)
+        resource_mgmt_client.tags.update_at_scope(scope=instance.id, parameters=params)
+        LOGGER.info("SCT runner tags set to: %s", tags_to_create)
 
 
 def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str = "") -> SctRunner:
