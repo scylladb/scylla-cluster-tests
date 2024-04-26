@@ -182,6 +182,16 @@ def generate_random_string(length):
         random.choice(string.ascii_uppercase + string.digits) for x in range(length - 1))
 
 
+def str_to_bool(bool_as_str: str) -> bool:
+    if isinstance(bool_as_str, bool):
+        return bool_as_str
+    elif isinstance(bool_as_str, str):
+        return bool_as_str.lower() in ("true", "yes", "y", "1")
+    elif bool_as_str is None:
+        return False
+    raise ValueError("'bool_as_str' is of the unexpected type: %s" % type(bool_as_str))
+
+
 def get_data_dir_path(*args):
     sct_root_path = get_sct_root_path()
     data_dir = os.path.join(sct_root_path, "data_dir", *args)
