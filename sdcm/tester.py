@@ -912,12 +912,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             else:
                 self.set_system_auth_rf(db_cluster=db_cluster)
 
-            db_node_address = db_cluster.nodes[0].ip_address
             if self.loaders and not self.loaders_multitenant:
                 self.loaders_multitenant = [self.loaders]
             for loaders in self.loaders_multitenant:
                 if loaders:
-                    loaders.wait_for_init(db_node_address=db_node_address)
+                    loaders.wait_for_init()
 
         # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
         if self.cs_db_cluster:
