@@ -10,9 +10,11 @@ from sdcm.rest.remote_curl_client import RemoteCurlClient
 
 
 def get_max_disk_size_metric(db_cluster):
+    node = db_cluster.nodes[0]
+    node.wait_native_transport()
     return RemoteCurlClient(
         host="localhost:10000", endpoint="commitlog",
-        node=db_cluster.nodes[0]).run_remoter_curl(method="GET", path="metrics/max_disk_size", params=None).stdout
+        node=node).run_remoter_curl(method="GET", path="metrics/max_disk_size", params=None).stdout
 
 
 @dataclass
