@@ -3084,14 +3084,12 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
     def node_setup(self,
                    node: BasePodContainer,
                    verbose: bool = False,
-                   db_node_address: Optional[str] = None,
                    **kwargs) -> None:
 
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
 
-    def node_startup(self, node: BasePodContainer, verbose: bool = False,
-                     db_node_address: Optional[str] = None, **kwargs) -> None:
+    def node_startup(self, node: BasePodContainer, verbose: bool = False, **kwargs) -> None:
         pass
 
     def _get_docker_image(self):

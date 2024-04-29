@@ -5014,7 +5014,7 @@ class BaseLoaderSet():
                 self.log.error("Error get gemini version: %s", details)
         return self._gemini_version
 
-    def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):  # pylint: disable=unused-argument
+    def node_setup(self, node, verbose=False, **kwargs):  # pylint: disable=unused-argument
         # pylint: disable=too-many-statements,too-many-branches
 
         self.log.info('Setup in BaseLoaderSet')
@@ -5074,9 +5074,6 @@ class BaseLoaderSet():
         node.download_scylla_repo(scylla_repo_loader)
         node.install_package(f'{node.scylla_pkg()}-tools')
 
-        if db_node_address is not None:
-            node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
-
         node.wait_cs_installed(verbose=verbose)
 
         # install docker
@@ -5093,11 +5090,11 @@ class BaseLoaderSet():
         # Login to Docker Hub.
         docker_hub_login(remoter=node.remoter)
 
-    def node_startup(self, node, verbose=False, db_node_address=None, **kwargs):
+    def node_startup(self, node, verbose=False, **kwargs):
         pass
 
     @wait_for_init_wrap
-    def wait_for_init(self, verbose=False, db_node_address=None):
+    def wait_for_init(self, verbose=False):
         pass
 
     @staticmethod
