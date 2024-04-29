@@ -1617,7 +1617,7 @@ class SCTConfiguration(dict):
         "k8s-local-kind-gce": [
             sct_abs_path('defaults/k8s_local_kind_gce_config.yaml'),
             sct_abs_path('defaults/k8s_local_kind_config.yaml')],
-        "k8s-gke": [sct_abs_path('defaults/k8s_gke_config.yaml')],
+        "k8s-gke": [sct_abs_path('defaults/gce_config.yaml'), sct_abs_path('defaults/k8s_gke_config.yaml')],
         "k8s-eks": [sct_abs_path('defaults/aws_config.yaml'), sct_abs_path('defaults/k8s_eks_config.yaml')],
     }
 
