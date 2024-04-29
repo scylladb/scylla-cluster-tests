@@ -21,7 +21,7 @@ from sdcm.provision.common.utils import (
     configure_syslogng_target_script,
     restart_syslogng_service,
     configure_ssh_accept_rsa)
-
+from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
 SYSLOGNG_SSH_TUNNEL_LOCAL_PORT = 5000
 SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
@@ -44,18 +44,30 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     def _wait_before_running_script() -> str:
         return ''
 
+    @staticmethod
+    def _skip_if_already_run() -> str:
+        """syslog-ng requires restart to retrigger sending logs in case it was configured before sct-runner"""
+        return f'if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ]; then sudo systemctl restart syslog-ng; exit 0; fi\n'
+
+    @staticmethod
+    def _mark_script_as_done() -> str:
+        return f"mkdir -p {CLOUD_INIT_SCRIPTS_PATH} && touch {CLOUD_INIT_SCRIPTS_PATH}/done"
+
     def _start_script(self) -> str:
         script = '#!/bin/bash\n'
         script += 'set -x\n'
         script += self._wait_before_running_script()
+        script += self._skip_if_already_run()
         if self.disable_ssh_while_running:
             script += 'systemctl stop sshd || true\n'
         return script
 
     def _end_script(self) -> str:
+        script = ""
         if self.disable_ssh_while_running:
-            return 'systemctl start sshd || true\n'
-        return ''
+            script += 'systemctl start sshd || true\n'
+        script += self._mark_script_as_done()
+        return script
 
     def _script_body(self) -> str:
         # Whenever you change it please keep in mind that:
