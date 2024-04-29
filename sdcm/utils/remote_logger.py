@@ -333,9 +333,14 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
             #       It is needed because the 'self._stream.close()' will wait
             #       until the 'self.READ_REQUEST_TIMEOUT' ends and so in each of the pod threads
             #       which get closed serially.
-            sock_obj = socket.fromfd(self._stream.fileno(), socket.AF_INET, socket.SOCK_STREAM)
-            sock_obj.shutdown(socket.SHUT_RDWR)
-            sock_obj.close()
+            try:
+                sock_obj = socket.fromfd(self._stream.fileno(), socket.AF_INET, socket.SOCK_STREAM)
+                sock_obj.shutdown(socket.SHUT_RDWR)
+                sock_obj.close()
+            except AttributeError as exc:
+                # NOTE: try-block is added to cover cases when following bug gets reproduced (rare):
+                #       https://github.com/scylladb/scylla-cluster-tests/issues/6191
+                self._log.warning("Closing of the socket for the 'self._stream' object has failed: %s", exc)
         self._thread.join(timeout)
         self._file_object.close()
 
