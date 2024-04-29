@@ -15,15 +15,14 @@ import abc
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
-    configure_sshd_script,
-    restart_sshd_service,
-    install_syslogng_service,
-    configure_syslogng_target_script,
-    restart_syslogng_service,
-    configure_ssh_accept_rsa)
+    configure_rsyslog_target_script, configure_sshd_script, restart_sshd_service, restart_rsyslog_service,
+    install_syslogng_service, configure_syslogng_target_script, restart_syslogng_service,
+    configure_rsyslog_rate_limits_script, configure_rsyslog_set_hostname_script, configure_ssh_accept_rsa)
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
-SYSLOGNG_SSH_TUNNEL_LOCAL_PORT = 5000
+RSYSLOG_SSH_TUNNEL_LOCAL_PORT = 5000
+RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL = 600
+RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST = 20000
 SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
 
 
