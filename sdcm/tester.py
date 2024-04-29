@@ -13,6 +13,7 @@
 # pylint: disable=too-many-lines
 from collections import defaultdict
 from copy import deepcopy
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 
 import random
@@ -884,70 +885,100 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 if not k8s_cluster.chaos_mesh.initialized:
                     k8s_cluster.chaos_mesh.initialize()
 
-        if self.db_cluster and not self.db_clusters_multitenant:
-            self.db_clusters_multitenant = [self.db_cluster]
-        for db_cluster in self.db_clusters_multitenant:
-            if not (db_cluster and db_cluster.nodes):
-                continue
-            if self.params.get('use_legacy_cluster_init'):
-                self.legacy_init_nodes(db_cluster=db_cluster)
-            else:
-                self.init_nodes(db_cluster=db_cluster)
+        def _create_db_clusters():
+            if self.db_cluster and not self.db_clusters_multitenant:
+                self.db_clusters_multitenant = [self.db_cluster]
+            for db_cluster in self.db_clusters_multitenant:
+                if not (db_cluster and db_cluster.nodes):
+                    continue
+                if self.params.get('use_legacy_cluster_init'):
+                    self.legacy_init_nodes(db_cluster=db_cluster)
+                else:
+                    self.init_nodes(db_cluster=db_cluster)
 
-            if self.params.get('use_ldap'):
-                with temp_authenticator(db_cluster.nodes[0], "org.apache.cassandra.auth.PasswordAuthenticator"):
-                    # running `set_system_auth_rf()` before changing authorization/authentication protocols
+                if self.params.get('use_ldap'):
+                    with temp_authenticator(db_cluster.nodes[0], "org.apache.cassandra.auth.PasswordAuthenticator"):
+                        # running `set_system_auth_rf()` before changing authorization/authentication protocols
+                        self.set_system_auth_rf(db_cluster=db_cluster)
+
+                        self._setup_ldap_roles(db_cluster=db_cluster)
+                        if self.params.get('ldap_server_type') == LdapServerType.MS_AD:
+                            change_default_password(node=db_cluster.nodes[0],
+                                                    user=self.params.get('authenticator_user'),
+                                                    password=self.params.get('authenticator_password'))
+                            # TODO: Replace with strong password generation
+                else:
                     self.set_system_auth_rf(db_cluster=db_cluster)
 
-                    self._setup_ldap_roles(db_cluster=db_cluster)
-                    if self.params.get('ldap_server_type') == LdapServerType.MS_AD:
-                        change_default_password(node=db_cluster.nodes[0],
-                                                user=self.params.get('authenticator_user'),
-                                                password=self.params.get('authenticator_password'))
-                        # TODO: update proper loader and monitor in multi-tenant case.
-                        #       Now it updates only the first ones all the time.
-                        self.loaders.added_password_suffix = True
-                        # TODO: Replace with strong password generation
-                        self.monitors.added_password_suffix = True
-            else:
-                self.set_system_auth_rf(db_cluster=db_cluster)
-
+        def _create_loaders():
             if self.loaders and not self.loaders_multitenant:
                 self.loaders_multitenant = [self.loaders]
             for loaders in self.loaders_multitenant:
                 if loaders:
                     loaders.wait_for_init()
 
-        # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
-        if self.cs_db_cluster:
-            init_value = self.params.get("use_mgmt")
-            self.params["use_mgmt"] = False
-            self.init_nodes(db_cluster=self.cs_db_cluster)
-            self.params["use_mgmt"] = init_value
+        def _create_gemini_cluster():
+            # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
+            if self.cs_db_cluster:
+                self.init_nodes(db_cluster=self.cs_db_cluster)
+
+        def _create_monitors():
+            if self.monitors and not self.monitors_multitenant:
+                self.monitors_multitenant = [self.monitors]
+
+            if self.monitors_multitenant:
+                monitors_init_in_parallel = ParallelObject(
+                    timeout=3600,
+                    objects=[[monitor] for monitor in self.monitors_multitenant],
+                    num_workers=len(self.monitors_multitenant))
+                monitors_init_in_parallel.run(
+                    func=(lambda m: m.wait_for_init()),
+                    unpack_objects=True, ignore_exceptions=False)
+
+        def _db_post_validation():
+            for db_cluster in self.db_clusters_multitenant:
+                if db_cluster:
+                    db_cluster.validate_seeds_on_all_nodes()
+                    validate_raft_on_nodes(nodes=db_cluster.nodes)
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [
+                executor.submit(_create_db_clusters),
+                executor.submit(_create_loaders),
+                executor.submit(_create_monitors),
+                executor.submit(_create_gemini_cluster)
+            ]
+
+            for future in as_completed(futures):
+                future.result()
+
+            if self.params.get('use_ldap') and self.params.get('ldap_server_type') == LdapServerType.MS_AD:
+                for loaders in self.loaders_multitenant:
+                    if loaders:
+                        loaders.added_password_suffix = True
+                for monitors in self.monitors_multitenant:
+                    monitors.added_password_suffix = True
+
+            futures = [
+                executor.submit(_db_post_validation),
+                executor.submit(self.argus_collect_packages),
+                executor.submit(self.argus_get_scylla_version)
+            ]
+
+            for db_cluster in self.db_clusters_multitenant:
+                if db_cluster:
+                    db_cluster.start_kms_key_rotation_thread()
+
+            for future in as_completed(futures):
+                future.result()
 
         if self.create_stats:
             self.create_test_stats()
             # sync test_start_time with ES
             self.start_time = self.get_test_start_time()
 
-        if self.monitors and not self.monitors_multitenant:
-            self.monitors_multitenant = [self.monitors]
-
-        if self.monitors_multitenant:
-            monitors_init_in_parallel = ParallelObject(
-                timeout=3600,
-                objects=[[monitor] for monitor in self.monitors_multitenant],
-                num_workers=len(self.monitors_multitenant))
-            monitors_init_in_parallel.run(
-                func=(lambda m: m.wait_for_init()),
-                unpack_objects=True, ignore_exceptions=False)
-
-        self.argus_collect_packages()
-        self.argus_get_scylla_version()
-
         # cancel reuse cluster - for new nodes added during the test
         self.test_config.reuse_cluster(False)
-
         for monitors in self.monitors_multitenant:
             if monitors and monitors.nodes:
                 self.prometheus_db_multitenant.append(
@@ -956,12 +987,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.start_time = time.time()
         self.timeout_thread = self._init_test_timeout_thread()
-
-        for db_cluster in self.db_clusters_multitenant:
-            if db_cluster:
-                db_cluster.validate_seeds_on_all_nodes()
-                validate_raft_on_nodes(nodes=db_cluster.nodes)
-                db_cluster.start_kms_key_rotation_thread()
 
         if self.params.get('run_commit_log_check_thread'):
             self.run_commit_log_check_thread(self.get_duration(None))
