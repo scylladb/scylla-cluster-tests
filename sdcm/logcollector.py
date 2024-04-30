@@ -824,7 +824,9 @@ class ScyllaLogCollector(LogCollector):
                     CommandLog(name='scylla-manager-agent.yaml',
                                command=f'cat {SCYLLA_MANAGER_AGENT_YAML_PATH}'),
                     CommandLog(name='setup_scripts_errors.log',
-                               command='for i in /var/tmp/scylla/*.log;do echo [$i]; cat $i;done')
+                               command='for i in /var/tmp/scylla/*.log;do echo [$i]; cat $i;done'),
+                    CommandLog(name='scylla_doctor.vitals.json',
+                               command='cat *.vitals.json'),
                     ]
     cluster_log_type = "db-cluster"
     cluster_dir_prefix = "db-cluster"
