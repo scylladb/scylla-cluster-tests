@@ -2322,6 +2322,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         with self.remote_manager_yaml() as manager_yaml:
             manager_yaml["tls_cert_file"] = tls_cert_file
             manager_yaml["tls_key_file"] = tls_key_file
+            manager_yaml["config_cache"] = {"update_frequency": "1m"}
             manager_yaml["prometheus"] = f":{self.parent_cluster.params.get('manager_prometheus_port')}"
 
         if self.is_docker():
