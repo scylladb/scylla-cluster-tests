@@ -30,3 +30,7 @@ space_node_threshold: 64424
 round_robin: true
 
 seeds_num: 3
+
+teardown_validators:
+  scrub:
+    enabled: true
