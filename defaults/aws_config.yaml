@@ -8,6 +8,7 @@ instance_type_loader: 'c6i.xlarge'
 instance_type_monitor: 't3.large'
 # manual on creating loader AMI's: see docs/new_loader_ami.md
 ami_id_loader: 'scylla-qa-loader-ami-v20-ubuntu22'
+# manual on updating monitor images see: docs/monitoring-images.md
 ami_id_monitor: 'scylladb-monitor-4-6-2-2024-02-13t08-06-04z'
 
 availability_zone: 'a'
