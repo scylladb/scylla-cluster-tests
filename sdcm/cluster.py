@@ -5740,7 +5740,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                     # NOTE: monitoring-4.7 expects that node export metrics are part of exactly the "node_export" job
                     if scrape_config.get("job_name", "unknown") != job_name:
                         continue
-                    if "static_configs" not in base_scrape_configs[i]:
+                    if "static_configs" not in scrape_config:
                         base_scrape_configs[i]["static_configs"] = []
                     base_scrape_configs[i]["static_configs"] += static_config_list
                     break
