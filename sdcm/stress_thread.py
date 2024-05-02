@@ -327,7 +327,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 cmd_runner, prefix, loader.parent_cluster.test_config.argus_client())
             reporter.report()
         except Exception:  # pylint: disable=broad-except
-            LOGGER.info("Failed to collect cassandra-stress version information")
+            LOGGER.info("Failed to collect cassandra-stress version information", exc_info=True)
         with cleanup_context, \
                 CassandraStressExporter(instance_name=cmd_runner_name,
                                         metrics=nemesis_metrics_obj(),
