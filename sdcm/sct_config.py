@@ -679,7 +679,7 @@ class SCTConfiguration(dict):
              type=_str, k8s_multitenancy_supported=True,
              help="""Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis"""),
 
-        dict(name="cluster_target_size", env="SCT_CLUSTER_TARGET_SIZE", type=int,
+        dict(name="cluster_target_size", env="SCT_CLUSTER_TARGET_SIZE", type=int_or_space_separated_ints,
              help="""Used for scale test: max size of the cluster"""),
 
         dict(name="space_node_threshold", env="SCT_SPACE_NODE_THRESHOLD",
