@@ -36,7 +36,7 @@ List<Integer> call(Map params, String region){
         Integer stressEndup = 10
         testDuration = prepareDuration + stressDuration + stressEndup
     }
-    Integer testStartupTimeout = 20
+    Integer testStartupTimeout = 80
     Integer testTeardownTimeout = 40
     Integer collectLogsTimeout = 90
     Integer resourceCleanupTimeout = 30
