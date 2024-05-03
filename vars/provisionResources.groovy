@@ -67,19 +67,21 @@ def call(Map params, String region){
 
     if [[ -n "${params.scylla_ami_id ? params.scylla_ami_id : ''}" ]] ; then
         export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
-    elif [[ -n "${params.gce_image_db ? params.gce_image_db : ''}" ]] ; then
+    fi
+    if [[ -n "${params.gce_image_db ? params.gce_image_db : ''}" ]] ; then
         export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
-    elif [[ -n "${params.azure_image_db ? params.azure_image_db : ''}" ]] ; then
+    fi
+    if [[ -n "${params.azure_image_db ? params.azure_image_db : ''}" ]] ; then
         export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
-    elif [[ -n "${params.scylla_version ? params.scylla_version : ''}" ]] ; then
+    fi
+    if [[ -n "${params.scylla_version ? params.scylla_version : ''}" ]] ; then
         export SCT_SCYLLA_VERSION="${params.scylla_version}"
-    elif [[ -n "${params.scylla_repo ? params.scylla_repo : ''}" ]] ; then
+    fi
+    if [[ -n "${params.scylla_repo ? params.scylla_repo : ''}" ]] ; then
         export SCT_SCYLLA_REPO="${params.scylla_repo}"
-    elif [[ "${params.backend ? params.backend : ''}" == *"k8s"* ]] ; then
-        echo "Kubernetes backend can have empty scylla version. It will be taken from defaults of the scylla helm chart"
-    else
-        echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_GCE_IMAGE_DB"
-        exit 1
+    fi
+    if [[ -n "${params.new_scylla_repo ? params.new_scylla_repo : ''}" ]] ; then
+        export SCT_NEW_SCYLLA_REPO="${params.new_scylla_repo}"
     fi
 
     if [[ -n "${params.oracle_scylla_version ? params.oracle_scylla_version : ''}" ]] ; then
