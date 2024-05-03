@@ -150,6 +150,23 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
+
+            // NOTE: Optional parameters for BYO ScyllaDB stage
+            string(defaultValue: '',
+                   description: 'Custom "scylladb" repo to use. Leave empty if byo is not needed. If specified then need to define "base_versions" param explicitly.',
+                   name: 'byo_scylla_repo')
+            string(defaultValue: '',
+                   description: 'Branch of the custom "scylladb" repo. Leave empty if byo is not needed.',
+                   name: 'byo_scylla_branch')
+            string(defaultValue: './byo',
+                   description: 'Used when byo scylladb repo+branch is provided. Default "./byo"',
+                   name: 'byo_job_path')
+            string(defaultValue: 'scylla',
+                   description: '"scylla" or "scylla-enterprise". Default is "scylla".',
+                   name: 'byo_default_product')
+            string(defaultValue: 'next',
+                   description: 'Default branch to be used for scylla and other repositories. Default is "next".',
+                   name: 'byo_default_branch')
         }
         options {
             timestamps()
@@ -209,6 +226,21 @@ def call(Map pipelineParams) {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
                                         (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('BYO Scylladb [optional]') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 240, unit: 'MINUTES') {
+                                        byoScylladb(params, true)
                                     }
                                 }
                             }
