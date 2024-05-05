@@ -1246,6 +1246,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return self.is_port_used(port=self.CQL_PORT, service_name="scylla-server")
 
     def jmx_up(self):
+        if not self.is_service_exists(service_name='scylla-jmx'):
+            return True
         return self.is_port_used(port=7199, service_name="scylla-jmx")
 
     def cs_installed(self, cassandra_stress_bin=None):
@@ -1314,12 +1316,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return self._parse_cfstats(result.stdout)
 
     def wait_jmx_up(self, verbose=True, timeout=None):
+        if not self.is_service_exists(service_name='scylla-jmx'):
+            return
+
         text = None
         if verbose:
             text = '%s: Waiting for JMX service to be up' % self.name
         wait.wait_for(func=self.jmx_up, step=60, text=text, timeout=timeout, throw_exc=True)
 
     def wait_jmx_down(self, verbose=True, timeout=None):
+        if not self.is_service_exists(service_name='scylla-jmx'):
+            return
+
         text = None
         if verbose:
             text = '%s: Waiting for JMX service to be down' % self.name
@@ -2193,12 +2201,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return self._kernel_version
 
     def increase_jmx_heap_memory(self, jmx_memory):
-        jmx_file = '/opt/scylladb/jmx/scylla-jmx'
-        self.log.info('changing scylla-jmx heap memory to avoid 5k crashing jmx')
-        self.remoter.run(f"sudo sed -i 's/Xmx256m/Xmx{jmx_memory}m/' {jmx_file}")
-        self.log.info('changed scylla-jmx heap memory')
-        self.remoter.run(f"sudo grep Xmx {jmx_file}")
-        self.log.info('result after changing scylla-jmx heap above')
+        if self.is_service_exists(service_name='scylla-jmx'):
+            jmx_file = '/opt/scylladb/jmx/scylla-jmx'
+            self.log.info('changing scylla-jmx heap memory to avoid 5k crashing jmx')
+            self.remoter.run(f"sudo sed -i 's/Xmx256m/Xmx{jmx_memory}m/' {jmx_file}")
+            self.log.info('changed scylla-jmx heap memory')
+            self.remoter.run(f"sudo grep Xmx {jmx_file}")
+            self.log.info('result after changing scylla-jmx heap above')
 
     @log_run_info
     def scylla_setup(self, disks, devname: str):
@@ -2223,7 +2232,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.run('sudo cat /etc/scylla.d/io.conf')
 
         self.remoter.run('sudo systemctl enable scylla-server.service')
-        self.remoter.run('sudo systemctl enable scylla-jmx.service')
+        if self.is_service_exists(service_name='scylla-jmx'):
+            self.remoter.run('sudo systemctl enable scylla-jmx.service')
 
     def upgrade_mgmt(self, scylla_mgmt_address, start_manager_after_upgrade=True):
         self.log.debug("Upgrade scylla-manager via repo: %s", scylla_mgmt_address)
@@ -2379,6 +2389,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def get_service_status(self, service_name: str, timeout: int = 500, ignore_status=False):
         return self._service_cmd(service_name=service_name, cmd='status', timeout=timeout, ignore_status=ignore_status)
 
+    def is_service_exists(self,  service_name: str, timeout: int = 500) -> bool:
+        return self.remoter.run(f"systemctl list-unit-files | grep {service_name}.service",
+                                timeout=timeout, ignore_status=True).return_code == 0
+
     def start_service(self, service_name: str, timeout: int = 500, ignore_status=False):
         self._service_cmd(service_name=service_name, cmd='start', timeout=timeout, ignore_status=ignore_status)
 
@@ -2402,6 +2416,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.wait_db_up(timeout=verify_up_timeout)
 
     def start_scylla_jmx(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
+        if not self.is_service_exists(service_name='scylla-jmx'):
+            return
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
         self.start_service(service_name='scylla-jmx', timeout=timeout)
@@ -2439,6 +2455,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.wait_db_down(timeout=timeout)
 
     def stop_scylla_jmx(self, verify_up=False, verify_down=True, timeout=300):
+        if not self.is_service_exists(service_name='scylla-jmx'):
+            return
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
         self.stop_service(service_name='scylla-jmx', timeout=timeout)
@@ -2461,6 +2479,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.wait_db_up(timeout=verify_up_timeout)
 
     def restart_scylla_jmx(self, verify_up_before=False, verify_up_after=True, timeout=300):
+        if not self.is_service_exists(service_name='scylla-jmx'):
+            return
         if verify_up_before:
             self.wait_jmx_up(timeout=timeout)
         self.restart_service(service_name='scylla-jmx', timeout=timeout)
