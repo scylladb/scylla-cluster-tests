@@ -125,8 +125,9 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
     def check_scylla(self):
         self.node.run_nodetool("status")
-        self.run_cassandra_stress("write n=10000 -mode cql3 native -pop seq=1..10000")
-        self.run_cassandra_stress("mixed duration=1m -mode cql3 native -rate threads=10 -pop seq=1..10000")
+        if self.node.remoter.run(f"test -e '{STRESS_CMD}'", ignore_status=True).return_code == 0:
+            self.run_cassandra_stress("write n=10000 -mode cql3 native -pop seq=1..10000")
+            self.run_cassandra_stress("mixed duration=1m -mode cql3 native -rate threads=10 -pop seq=1..10000")
 
     def check_cqlsh(self):
         output = self.node.run_cqlsh("desc keyspaces")
