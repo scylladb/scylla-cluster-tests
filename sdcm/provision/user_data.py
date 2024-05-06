@@ -18,7 +18,7 @@ from typing import List, Dict
 
 import yaml
 
-CLOUD_INIT_SCRIPTS_PATH = "/tmp/cloud-init"
+CLOUD_INIT_SCRIPTS_PATH = "/var/lib/sct/cloud-init"
 
 
 @dataclass
