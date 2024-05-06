@@ -67,13 +67,13 @@ def test_user_data_builder_generates_valid_yaml_from_single_user_data_object():
     assert user_data_yaml.startswith("#cloud-config\n"), "user-data yaml must start with #cloud-config"
     assert loaded_yaml['packages'] == ['some-pkg-to-install']
     assert loaded_yaml['runcmd'][0] == \
-        "cd /tmp/cloud-init; bash -eux /tmp/cloud-init/0_ExampleUserDataObject.sh; test  $? = 0 " \
-        "|| touch /tmp/cloud-init/0_ExampleUserDataObject.sh.failed"
+        "cd /var/lib/sct/cloud-init; bash -eux /var/lib/sct/cloud-init/0_ExampleUserDataObject.sh; test  $? = 0 " \
+        "|| touch /var/lib/sct/cloud-init/0_ExampleUserDataObject.sh.failed"
     script_file = loaded_yaml['write_files'][0]
-    assert script_file["path"] == "/tmp/cloud-init/0_ExampleUserDataObject.sh"
+    assert script_file["path"] == "/var/lib/sct/cloud-init/0_ExampleUserDataObject.sh"
     assert user_data_object_1.script_to_run in script_file["content"]
     assert script_file["permissions"] == '0644'
-    assert loaded_yaml['runcmd'][1] == "mkdir -p /tmp/cloud-init && touch /tmp/cloud-init/done"
+    assert loaded_yaml['runcmd'][1] == "mkdir -p /var/lib/sct/cloud-init && touch /var/lib/sct/cloud-init/done"
 
 
 def test_user_data_can_merge_user_data_objects_yaml():
@@ -100,7 +100,7 @@ def test_only_done_runcmd_in_yaml_when_no_user_data_objects():
 
     assert not loaded_yaml["packages"]
     assert not loaded_yaml["write_files"]
-    assert loaded_yaml["runcmd"] == ['mkdir -p /tmp/cloud-init && touch /tmp/cloud-init/done']
+    assert loaded_yaml["runcmd"] == ['mkdir -p /var/lib/sct/cloud-init && touch /var/lib/sct/cloud-init/done']
 
 
 def test_only_done_runcmd_in_yaml_when_no_applicable_user_data_objects():
@@ -110,4 +110,4 @@ def test_only_done_runcmd_in_yaml_when_no_applicable_user_data_objects():
 
     assert not loaded_yaml["packages"]
     assert not loaded_yaml["write_files"]
-    assert loaded_yaml["runcmd"] == ['mkdir -p /tmp/cloud-init && touch /tmp/cloud-init/done']
+    assert loaded_yaml["runcmd"] == ['mkdir -p /var/lib/sct/cloud-init && touch /var/lib/sct/cloud-init/done']
