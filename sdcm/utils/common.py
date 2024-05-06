@@ -3075,7 +3075,7 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
 
     for region, instance_list in aws_placement_groups.items():
         if not instance_list:
-            LOGGER.info("There are no placement groups to remove in AWS region %s", region)
+            LOGGER.debug("There are no placement groups to remove in AWS region %s", region)
             continue
         client: EC2Client = boto3.client('ec2', region_name=region)
         for instance in instance_list:
@@ -3084,8 +3084,8 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
             if not dry_run:
                 try:
                     response = client.delete_placement_group(GroupName=name)
-                    LOGGER.debug("Done. Result: %s\n", response)
+                    LOGGER.info("Placement group deleted: %s\n", response)
                 except Exception as ex:  # pylint: disable=broad-except
-                    LOGGER.info("Failed with: %s", str(ex))
+                    LOGGER.debug("Failed to delete placement group: %s", str(ex))
                     raise
 # ----------
