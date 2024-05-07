@@ -22,6 +22,3 @@ ip_ssh_connections: 'private'
 manager_prometheus_port: 10091
 
 aws_instance_profile_name_db: 'qa-scylla-manager-backup-instance-profile'
-
-ami_monitor_user: 'centos'
-ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
