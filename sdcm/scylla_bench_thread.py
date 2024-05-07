@@ -21,6 +21,7 @@ from enum import Enum
 
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR
 from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.stress_thread import DockerBasedStressThread
@@ -145,13 +146,29 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         return sb_summary, errors
 
-    def create_stress_cmd(self, stress_cmd):
+    def create_stress_cmd(self, stress_cmd, loader, cmd_runner):
         if self.connection_bundle_file:
             stress_cmd = f'{stress_cmd.strip()} -cloud-config-path={self.target_connection_bundle_file}'
         else:
             # Select first seed node to send the scylla-bench cmds
             ips = ",".join([n.cql_address for n in self.node_list])
             stress_cmd = f'{stress_cmd.strip()} -nodes {ips}'
+
+            if self.params.get("client_encrypt"):
+                for ssl_file in loader.ssl_conf_dir.iterdir():
+                    if ssl_file.is_file():
+                        cmd_runner.send_files(str(ssl_file),
+                                              str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
+                                              verbose=True)
+                stress_cmd = f'{stress_cmd.strip()} -tls -tls-ca-cert-file {SCYLLA_SSL_CONF_DIR}/ca.pem'
+
+                if self.params.get("client_encrypt_mtls"):
+                    stress_cmd = (f'{stress_cmd.strip()} -tls-client-key-file {SCYLLA_SSL_CONF_DIR}/test.key '
+                                  f'-tls-client-cert-file {SCYLLA_SSL_CONF_DIR}/test.crt')
+
+                    # TBD: update after https://github.com/scylladb/scylla-bench/issues/140 is resolved
+                    # server_names = ' '.join(f'-tls-server-name {ip}' for ip in ips.split(","))
+                    # stress_cmd = f'{stress_cmd.strip()} -tls-host-verification {server_names}'
 
         return stress_cmd
 
@@ -197,7 +214,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             os.makedirs(loader.logdir, exist_ok=True)
 
         log_file_name = os.path.join(loader.logdir, f'scylla-bench-l{loader_idx}-{uuid.uuid4()}.log')
-        stress_cmd = self.create_stress_cmd(stress_cmd)
+        stress_cmd = self.create_stress_cmd(stress_cmd, loader, cmd_runner)
         with ScyllaBenchStressExporter(instance_name=cmd_runner_name,
                                        metrics=nemesis_metrics_obj(),
                                        stress_operation=self.sb_mode,

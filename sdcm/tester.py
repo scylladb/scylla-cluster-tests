@@ -63,6 +63,8 @@ from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
+from sdcm.provision.helpers.certificate import (
+    create_ca, import_ca_to_jks_truststore, update_certificate, cleanup_ssl_config)
 from sdcm.reporting.tooling_reporter import PythonDriverReporter
 from sdcm.scan_operation_thread import ScanOperationThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
@@ -76,7 +78,7 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_services, \
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
 from sdcm.utils.ci_tools import get_job_name, get_job_url
-from sdcm.utils.common import format_timestamp, wait_ami_available, update_certificates, \
+from sdcm.utils.common import format_timestamp, wait_ami_available, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, rows_to_list, \
     make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, change_default_password
 from sdcm.utils.cql_utils import cql_quote_if_needed
@@ -799,8 +801,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         db_cluster.update_seed_provider()
 
     @staticmethod
-    def update_certificates():
-        update_certificates()
+    def update_certificate():
+        update_certificate()
 
     def get_event_summary(self) -> dict:
         return get_logger_event_summary(_registry=self.events_processes_registry)
@@ -899,7 +901,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_clusters = []
         self.connections = []
         make_threads_be_daemonic_by_default()
-        self.update_certificates()
+
+        self.create_ca()
 
         # download rpms for update_db_packages
         if self.params.get('update_db_packages'):
@@ -2021,9 +2024,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
 
-        if self.params.get("client_encrypt") and ' -tls' not in stress_cmd:
-            stress_cmd += ' -tls '
-
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         bench_thread = ScyllaBenchThread(
@@ -2911,6 +2911,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.stop_event_device()
         if self.params.get('collect_logs'):
             self.collect_sct_logs()
+        with silence(parent=self, name='Cleaning up SSL config directory'):
+            cleanup_ssl_config()
 
         self.finalize_teardown()
         self.argus_finalize_test_run()
@@ -3709,3 +3711,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             workload=CSWorkloadTypes(stress_operation),
             path=self.loaders.logdir, start_time=start_time, end_time=end_time,
             interval=time_interval, tag_type=tag_type)
+
+    def create_ca(self):
+        """Create Certificate Authority and Java truststore"""
+        create_ca()
+        import_ca_to_jks_truststore(self.localhost)

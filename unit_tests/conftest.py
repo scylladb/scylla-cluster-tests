@@ -19,14 +19,17 @@ from pathlib import Path
 import pytest
 
 from sdcm import wait, sct_config
+from sdcm.localhost import LocalHost
 from sdcm.cluster import BaseNode
 from sdcm.prometheus import start_metrics_server
 from sdcm.provision import provisioner_factory
+from sdcm.provision.helpers.certificate import (
+    create_ca, create_certificate, import_ca_to_jks_truststore, SCYLLA_SSL_CONF_DIR, CLIENT_FACING_CERTFILE,
+    CLIENT_FACING_KEYFILE, CA_CERT_FILE, CA_KEY_FILE, CLIENT_CERT_FILE, CLIENT_KEY_FILE)
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_provision import region_definition_builder
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.utils.common import update_certificates
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
 
@@ -73,12 +76,18 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=to
         curr_dir = os.getcwd()
         try:
             os.chdir(Path(__file__).parent.parent)
-            update_certificates()
+            create_ca()
+            localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
+            import_ca_to_jks_truststore(localhost)
+            create_certificate(CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, cname="scylladb",
+                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
+            create_certificate(CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb",
+                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
         finally:
             os.chdir(curr_dir)
     ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
     extra_docker_opts = (f'-p 8000 -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
-                         f' -v {ssl_dir}:/etc/scylla/ssl_conf'
+                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}'
                          ' --entrypoint /entry.sh')
 
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
@@ -108,6 +117,7 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=to
                   timeout=120, throw_exc=True)
 
     yield scylla
+
     scylla.kill()
 
 

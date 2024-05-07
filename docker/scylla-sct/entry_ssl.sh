@@ -5,10 +5,10 @@ if [[ ! $(grep 'skip_wait_for_gossip_to_settle' /etc/scylla/scylla.yaml) ]]; the
 cat <<EOM >> /etc/scylla/scylla.yaml
 
 client_encryption_options:
-  certificate: /etc/scylla/ssl_conf/client/test.crt
+  certificate: /etc/scylla/ssl_conf/client-facing.crt
   enabled: true
-  keyfile: /etc/scylla/ssl_conf/client/test.key
-  truststore: /etc/scylla/ssl_conf/client/catest.pem
+  keyfile: /etc/scylla/ssl_conf/client-facing.key
+  truststore: /etc/scylla/ssl_conf/ca.pem
 EOM
 
 /docker-entrypoint.py $*

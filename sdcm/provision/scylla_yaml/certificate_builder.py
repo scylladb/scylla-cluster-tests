@@ -10,15 +10,30 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-import os
-from functools import cached_property
+import configparser
+from functools import cached_property, lru_cache
+from pathlib import Path
 from typing import Optional, Any
 
 from pydantic import Field
 
-from sdcm.provision.helpers.certificate import install_client_certificate, CLIENT_CERTFILE, CLIENT_KEYFILE, CLIENT_TRUSTSTORE
+from sdcm.provision.helpers.certificate import (
+    install_client_certificate, CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, CA_CERT_FILE,
+    SERVER_CERT_FILE, SERVER_KEY_FILE, SCYLLA_SSL_CONF_DIR)
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, ClientEncryptionOptions, \
     ServerEncryptionOptions
+from sdcm.utils.common import get_data_dir_path
+
+CQLSHRC_FILE = get_data_dir_path('ssl_conf', 'client', 'cqlshrc')
+
+
+@lru_cache(maxsize=1)
+def update_cqlshrc(cqlshrc_file: str = CQLSHRC_FILE, client_encrypt: bool = False) -> None:
+    config = configparser.ConfigParser()
+    config.read(cqlshrc_file)
+    config['ssl']['validate'] = 'true' if client_encrypt else 'false'
+    with open(cqlshrc_file, 'w', encoding='utf-8') as file:
+        config.write(file)
 
 
 # Disabling no-member since can't import BaseNode from 'sdcm.cluster' due to a circular import
@@ -30,19 +45,21 @@ class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     node: Any = Field(as_dict=False)
 
     @cached_property
-    def _ssl_files_path(self) -> str:
-        install_client_certificate(self.node.remoter)
-        return '/etc/scylla/ssl_conf'
+    def _ssl_files_path(self) -> Path:
+        install_client_certificate(self.node.remoter, self.node.ip_address)
+        return SCYLLA_SSL_CONF_DIR
 
     @property
     def client_encryption_options(self) -> Optional[ClientEncryptionOptions]:
         if not self.params.get('client_encrypt'):
             return None
+        update_cqlshrc(client_encrypt=self.params.get('client_encrypt'))
         return ClientEncryptionOptions(
             enabled=True,
-            certificate=os.path.join(self._ssl_files_path, 'client', os.path.basename(CLIENT_CERTFILE)),
-            keyfile=os.path.join(self._ssl_files_path, 'client', os.path.basename(CLIENT_KEYFILE)),
-            truststore=os.path.join(self._ssl_files_path, 'client', os.path.basename(CLIENT_TRUSTSTORE)),
+            certificate=str(self._ssl_files_path / CLIENT_FACING_CERTFILE.name),
+            keyfile=str(self._ssl_files_path / CLIENT_FACING_KEYFILE.name),
+            truststore=str(self._ssl_files_path / CA_CERT_FILE.name),
+            require_client_auth=self.params.get('client_encrypt_mtls')
         )
 
     @property
@@ -51,7 +68,8 @@ class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
             return None
         return ServerEncryptionOptions(
             internode_encryption=self.params.get('internode_encryption'),
-            certificate=self._ssl_files_path + '/db.crt',
-            keyfile=self._ssl_files_path + '/db.key',
-            truststore=self._ssl_files_path + '/cadb.pem',
+            certificate=str(self._ssl_files_path / SERVER_CERT_FILE.name),
+            keyfile=str(self._ssl_files_path / SERVER_KEY_FILE.name),
+            truststore=str(self._ssl_files_path / CA_CERT_FILE.name),
+            require_client_auth=self.params.get('server_encrypt_mtls')
         )

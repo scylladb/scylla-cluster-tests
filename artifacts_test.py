@@ -22,6 +22,7 @@ import requests
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import ScyllaHousekeepingServiceEvent
+from sdcm.provision.helpers.certificate import c_s_transport_str
 from sdcm.tester import ClusterTester
 from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices
 from sdcm.utils.housekeeping import HousekeepingDB
@@ -124,7 +125,9 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
     def run_cassandra_stress(self, args: str):
         stress_cmd = f"{self.node.add_install_prefix(STRESS_CMD)} {args} -node {self.node.ip_address}"
         if self.params.get('client_encrypt'):
-            stress_cmd += " -transport 'truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra'"
+            transport_str = c_s_transport_str(self.params.get('client_encrypt_mtls'))
+            stress_cmd += f" -transport '{transport_str}'"
+
         result = self.node.remoter.run(stress_cmd)
         assert "java.io.IOException" not in result.stdout
         assert "java.io.IOException" not in result.stderr

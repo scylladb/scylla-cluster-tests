@@ -65,3 +65,6 @@ fabric.properties
 
 # Linux swap files range from .saa to .swp (used by vim and some other apps)
 *.s[a-w][a-p]
+
+# SSL artifacts
+data_dir/ssl_conf/

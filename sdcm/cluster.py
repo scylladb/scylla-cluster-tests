@@ -68,8 +68,9 @@ from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder
 from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificateAttrBuilder
 from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
-from sdcm.provision.helpers.certificate import install_client_certificate, install_encryption_at_rest_files, CLIENT_KEYFILE, \
-    CLIENT_CERTFILE, CLIENT_TRUSTSTORE
+from sdcm.provision.helpers.certificate import (
+    install_client_certificate, install_encryption_at_rest_files, create_certificate,
+    export_pem_cert_to_pkcs12_keystore, CA_CERT_FILE, CA_KEY_FILE, JKS_TRUSTSTORE_FILE)
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd, RetryableNetworkException
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
@@ -169,6 +170,8 @@ HOUR_IN_SEC: int = 60 * MINUTE_IN_SEC
 MAX_TIME_WAIT_FOR_NEW_NODE_UP: int = HOUR_IN_SEC * 8
 MAX_TIME_WAIT_FOR_ALL_NODES_UP: int = MAX_TIME_WAIT_FOR_NEW_NODE_UP + HOUR_IN_SEC
 MAX_TIME_WAIT_FOR_DECOMMISSION: int = HOUR_IN_SEC * 6
+
+NODE_CONFIG_SETUP_LOCK = threading.Lock()
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1719,7 +1722,19 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 f"{self.scylla_server_sysconfig_path}")
 
     def config_client_encrypt(self):
-        install_client_certificate(self.remoter)
+        install_client_certificate(self.remoter, self.ip_address)
+
+    def create_node_certificate(self, cert_file, cert_key):
+        create_certificate(
+            cert_file, cert_key, self.name, ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE,
+            ip_addresses=[self.ip_address, self.public_ip_address],
+            dns_names=[self.public_dns_name, self.private_dns_name])
+
+    @cached_property
+    def ssl_conf_dir(self):
+        ssl_dir = Path(get_data_dir_path('ssl_conf')) / self.ip_address
+        ssl_dir.mkdir(parents=True, exist_ok=True)
+        return ssl_dir
 
     @retrying(n=3, sleep_time=10, allowed_exceptions=(AssertionError,), message="Retrying on getting scylla repo")
     def download_scylla_repo(self, scylla_repo):
@@ -3464,8 +3479,12 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             auth_provider = None
 
         if ssl_context is None and self.params.get('client_encrypt'):
+            if 'db' in node.node_type:
+                cert_name, key_name = "db.crt", "db.key"
+            else:
+                cert_name, key_name = "test.crt", "test.key"
             ssl_context = self.create_ssl_context(
-                keyfile=CLIENT_KEYFILE, certfile=CLIENT_CERTFILE, truststore=CLIENT_TRUSTSTORE)
+                keyfile=node.ssl_conf_dir / key_name, certfile=node.ssl_conf_dir / cert_name, truststore=CA_CERT_FILE)
         self.log.debug("ssl_context: %s", str(ssl_context))
 
         kwargs = dict(contact_points=node_ips, port=port, ssl_context=ssl_context)
@@ -4591,6 +4610,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             else:
                 datacenters = self.datacenter  # pylint: disable=no-member
             SnitchConfig(node=node, datacenters=datacenters).apply()
+
+        # Create node certificate for internode communication
+        node.create_node_certificate(node.ssl_conf_dir / 'db.crt', node.ssl_conf_dir / 'db.key')
+        # Create client facing node certificate, for client-to-node communication
+        node.create_node_certificate(node.ssl_conf_dir / 'client-facing.crt', node.ssl_conf_dir / 'client-facing.key')
+        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+            shutil.copy(src, node.ssl_conf_dir)
         node.config_setup(append_scylla_args=self.get_scylla_args())
 
         self._scylla_post_install(node, install_scylla, nic_devname)
@@ -5022,8 +5048,14 @@ class BaseLoaderSet():
             self.log.info("Don't install anything because bare loaders requested")
             return
 
+        node.create_node_certificate(node.ssl_conf_dir / 'test.crt', node.ssl_conf_dir / 'test.key')
+        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+            shutil.copy(src, node.ssl_conf_dir)
         if self.params.get('client_encrypt'):
-            node.config_client_encrypt()
+            export_pem_cert_to_pkcs12_keystore(node.ssl_conf_dir / 'test.crt', node.ssl_conf_dir / 'test.key',
+                                               node.ssl_conf_dir / 'keystore.p12')
+            if self.params.get('use_prepared_loaders'):
+                node.config_client_encrypt()
 
         # Install java-8 for workaround hdrhistogram
         if node.distro.is_rhel_like:

@@ -75,6 +75,8 @@ parallel_node_operations: false  # supported from Scylla 6.0
 
 server_encrypt: false
 client_encrypt: false
+client_encrypt_mtls: false
+server_encrypt_mtls: false
 
 scylla_encryption_options: ''
 

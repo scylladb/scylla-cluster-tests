@@ -16,9 +16,11 @@
 import os
 import shutil
 import logging
+from pathlib import Path
 
 from sdcm.remote import LocalCmdRunner
 from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
+from sdcm.utils.common import get_data_dir_path
 
 
 class DummyOutput:
@@ -81,6 +83,10 @@ class LocalNode(BaseNode):
     def restart(self):
         pass
 
+    @property
+    def ssl_conf_dir(self):
+        return Path(get_data_dir_path('ssl_conf'))
+
 
 class LocalLoaderSetDummy(BaseCluster):
     # pylint: disable=super-init-not-called,abstract-method
@@ -96,6 +102,9 @@ class LocalLoaderSetDummy(BaseCluster):
     @staticmethod
     def is_kubernetes():
         return False
+
+    def get_loader(self):
+        return self.nodes[0]
 
 
 class LocalScyllaClusterDummy(BaseScyllaCluster):
