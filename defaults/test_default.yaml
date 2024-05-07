@@ -74,6 +74,8 @@ hinted_handoff: 'disabled'
 
 server_encrypt: false
 client_encrypt: false
+client_encrypt_mtls: false
+server_encrypt_mtls: false
 
 scylla_encryption_options: ''
 

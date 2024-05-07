@@ -71,6 +71,7 @@ from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
+from sdcm.provision.helpers.certificate import update_certificate
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -96,7 +97,7 @@ from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import (get_db_tables, generate_random_string,
-                               update_certificates, reach_enospc_on_node, clean_enospc_on_node,
+                               reach_enospc_on_node, clean_enospc_on_node,
                                parse_nodetool_listsnapshots,
                                update_authenticator, ParallelObject,
                                ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table)
@@ -4241,7 +4242,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.get_scylla_config_param("server_encryption_options"))["certificate"]
         in_place_crt = self.target_node.remoter.run(f"cat {ssl_files_location}",
                                                     ignore_status=True).stdout
-        update_certificates()
+        update_certificate()
         node_system_logs = {}
 
         if SkipPerIssues('https://github.com/scylladb/scylladb/issues/7909', params=self.tester.params):

@@ -484,6 +484,12 @@ class SCTConfiguration(dict):
         dict(name="client_encrypt", env="SCT_CLIENT_ENCRYPT", type=boolean,
              help="when enable scylla will use encryption on the client side"),
 
+        dict(name="client_encrypt_mtls", env="SCT_CLIENT_ENCRYPT_MTLS", type=boolean,
+             help="when enabled scylla will enforce mutual authentication when client-to-node encryption is enabled"),
+
+        dict(name="server_encrypt_mtls", env="SCT_SERVER_ENCRYPT_MTLS", type=boolean,
+             help="when enabled scylla will enforce mutual authentication when node-to-node encryption is enabled"),
+
         dict(name="hinted_handoff", env="SCT_HINTED_HANDOFF", type=str,
              help="when enable or disable scylla hinted handoff (enabled/disabled)"),
 

@@ -10,26 +10,54 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-
+import io
+import ipaddress
+import shutil
+import tarfile
+from datetime import datetime, timedelta
+from pathlib import Path
 from textwrap import dedent
+from typing import Any
+
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization.pkcs12 import serialize_key_and_certificates
+from cryptography import x509
+from cryptography.x509.oid import NameOID
 
 from sdcm.remote import shell_script_cmd
 from sdcm.utils.common import get_data_dir_path
+from sdcm.utils.docker_utils import ContainerManager, DockerException
 
-CLIENT_KEYFILE = get_data_dir_path('ssl_conf', "client/test.key")
-CLIENT_CERTFILE = get_data_dir_path('ssl_conf', "client/test.crt")
-CLIENT_TRUSTSTORE = get_data_dir_path('ssl_conf', "client/catest.pem")
+SCYLLA_SSL_CONF_DIR = Path('/etc/scylla/ssl_conf')
+CA_CERT_FILE = Path(get_data_dir_path('ssl_conf', 'ca.pem'))
+CA_KEY_FILE = Path(get_data_dir_path('ssl_conf', 'ca.key'))
+
+# Cluster artifacts
+SERVER_KEY_FILE = Path(get_data_dir_path('ssl_conf', 'db.key'))
+SERVER_CERT_FILE = Path(get_data_dir_path('ssl_conf', 'db.crt'))
+SERVER_CSR_FILE = Path(get_data_dir_path('ssl_conf', 'db.csr'))
+CLIENT_FACING_KEYFILE = Path(get_data_dir_path('ssl_conf', 'client-facing.key'))
+CLIENT_FACING_CERTFILE = Path(get_data_dir_path('ssl_conf', 'client-facing.crt'))
+
+# Client artifacts
+CLIENT_KEY_FILE = Path(get_data_dir_path('ssl_conf', 'test.key'))
+CLIENT_CERT_FILE = Path(get_data_dir_path('ssl_conf', 'test.crt'))
+JKS_TRUSTSTORE_FILE = Path(get_data_dir_path('ssl_conf', 'truststore.jks'))
 
 
-def install_client_certificate(remoter):
-    if remoter.run('ls /etc/scylla/ssl_conf', ignore_status=True).ok:
+def install_client_certificate(remoter, node_identifier):
+    if remoter.run(f'ls {SCYLLA_SSL_CONF_DIR}', ignore_status=True).ok:
         return
-    remoter.send_files(src=get_data_dir_path('ssl_conf'), dst='/tmp/')  # pylint: disable=not-callable
-    setup_script = dedent("""
+    dst = '/tmp/ssl_conf'
+    remoter.run(f'mkdir -p {dst}')
+    remoter.send_files(src=str(Path(get_data_dir_path('ssl_conf')) / node_identifier) + '/', dst=dst)
+    remoter.send_files(src=str(Path(get_data_dir_path('ssl_conf')) / 'client'), dst=dst)  # pylint: disable=not-callable
+    setup_script = dedent(f"""
         mkdir -p ~/.cassandra/
         cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
         sudo mkdir -p /etc/scylla/
-        sudo rm -rf /etc/scylla/ssl_conf/
+        sudo rm -rf {SCYLLA_SSL_CONF_DIR}
         sudo mv -f /tmp/ssl_conf/ /etc/scylla/
     """)
     remoter.run('bash -cxe "%s"' % setup_script)
@@ -46,3 +74,223 @@ def install_encryption_at_rest_files(remoter):
         chown -R scylla:scylla /etc/scylla /etc/encrypt_conf
     """)))
     remoter.sudo("md5sum /etc/encrypt_conf/*.pem", ignore_status=True)
+
+
+def create_ca(cname: str = 'scylladb.com', password: str = 'scylladb', valid_days: int = 365) -> None:
+    """Generate and save a key and certificate for CA."""
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COUNTRY_NAME, 'US'),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, 'California'),
+            x509.NameAttribute(NameOID.LOCALITY_NAME, 'Mountain View'),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'ScyllaDB'),
+            x509.NameAttribute(NameOID.COMMON_NAME, cname),
+        ]
+    )
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.utcnow())
+        .not_valid_after(datetime.utcnow() + timedelta(days=valid_days))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()), critical=False)
+        .sign(private_key, hashes.SHA256())
+    )
+
+    with open(file=CA_CERT_FILE, mode='wb') as file:
+        file.write(cert.public_bytes(serialization.Encoding.PEM))
+    with open(file=CA_KEY_FILE, mode='wb') as file:
+        file.write(
+            private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.BestAvailableEncryption(password.encode())
+            )
+        )
+
+
+# pylint: disable=too-many-arguments,too-many-locals
+def create_certificate(
+        cert_file: Path, key_file: Path, cname: str, ca_cert_file: Path = None, ca_key_file: Path = None,
+        password: str = 'scylladb', ip_addresses: list = None, dns_names: list = None, valid_days: int = 365) -> None:
+    """
+    Generate/save CSR, certificate and key.
+
+    Certificate is immediately signed by the CA, so CSR is not used. But it is needed later in some test scenarios
+    that update the certificate using the CSR.
+    """
+    private_key = sign_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COUNTRY_NAME, 'IL'),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, 'Tel Aviv'),
+            x509.NameAttribute(NameOID.LOCALITY_NAME, 'Herzelia'),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'ScyllaDB'),
+            x509.NameAttribute(NameOID.COMMON_NAME, cname),
+        ]
+    )
+
+    alt_names = [x509.DNSName(cname)]
+    if ip_addresses:
+        alt_names.extend([x509.IPAddress(ipaddress.IPv4Address(ip)) for ip in ip_addresses])
+    if dns_names:
+        alt_names.extend([x509.DNSName(dns) for dns in dns_names])
+
+    if ca_cert_file and ca_key_file:
+        with open(ca_cert_file, 'rb') as file:
+            ca_cert = x509.load_pem_x509_certificate(file.read())
+            issuer = ca_cert.subject
+        with open(ca_key_file, 'rb') as file:
+            sign_key = serialization.load_pem_private_key(file.read(), password=password.encode())
+
+    # Create and save CSR for the cert
+    server_csr = (
+        x509.CertificateSigningRequestBuilder()
+        .subject_name(subject)
+        .add_extension(x509.SubjectAlternativeName(alt_names), critical=False)
+        .sign(private_key, hashes.SHA256())
+    )
+    with open(SERVER_CSR_FILE, 'wb') as csr_file:
+        csr_file.write(server_csr.public_bytes(serialization.Encoding.PEM))
+
+    # Building the certificate
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.utcnow())
+        .not_valid_after(datetime.utcnow() + timedelta(days=valid_days))
+        .add_extension(x509.SubjectAlternativeName(alt_names), critical=False)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(private_key.public_key()), critical=False)
+        .sign(sign_key, hashes.SHA256())
+    )
+
+    with open(file=cert_file, mode='wb') as file:
+        file.write(cert.public_bytes(serialization.Encoding.PEM))
+    with open(file=key_file, mode='wb') as file:
+        file.write(
+            private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption())
+        )
+
+
+def import_ca_to_jks_truststore(
+        localhost, cert_file: Path = CA_CERT_FILE, jks_file: Path = JKS_TRUSTSTORE_FILE,
+        jks_password: str = 'cassandra') -> None:
+    """Convert a PEM formatted certificate to a Java truststore."""
+    with open(cert_file, encoding="utf-8") as file:
+        cert = file.read()
+
+    java = ContainerManager.run_container(localhost, 'java')
+
+    # Create tar archive with CA and put it to container
+    tar_stream = io.BytesIO()
+    with tarfile.open(fileobj=tar_stream, mode='w') as tar:
+        tarinfo = tarfile.TarInfo(name='ca.pem')
+        tarinfo.size = len(cert)
+        tar.addfile(tarinfo, io.BytesIO(cert.encode('utf-8')))
+    tar_stream.seek(0)
+    java.put_archive('/tmp', tar_stream)
+
+    # Import CA to Java truststore
+    tmp_cert_path = Path('/tmp/ca.pem')
+    tmp_truststore_path = Path('/tmp/truststore.jks')
+    _ = java.exec_run(f'rm {tmp_truststore_path}')  # delete truststore if it exists (needed for local SCT runs)
+    exit_code, output = java.exec_run(
+        f'keytool -importcert -noprompt -file {tmp_cert_path} -keystore {tmp_truststore_path} '
+        f'-storepass {jks_password}')
+    if exit_code != 0:
+        raise DockerException(f"Error importing CA certificate to Java truststore: {output.decode('utf-8')}")
+
+    # Copy and extract truststore tar archive from container
+    tar_stream, _ = java.get_archive(tmp_truststore_path)
+
+    file_obj = io.BytesIO()
+    for chunk in tar_stream:
+        file_obj.write(chunk)
+    file_obj.seek(0)
+    with tarfile.open(fileobj=file_obj) as tar:
+        member = tar.getmember(tmp_truststore_path.name)
+        with tar.extractfile(member) as truststore_file:
+            with open(jks_file, 'wb') as output_file:
+                output_file.write(truststore_file.read())
+
+
+def export_pem_cert_to_pkcs12_keystore(
+        cert_file: Path, cert_key_file: Path, dst_pkcs12_file: Path,
+        cert_key_password: Any = None, p12_password: str = 'cassandra') -> None:
+    """Export a PEM formatted certificate to a PKCS12 keystore."""
+    with open(cert_file, 'rb') as file:
+        cert = x509.load_pem_x509_certificate(file.read())
+    with open(cert_key_file, 'rb') as file:
+        if password := cert_key_password:
+            password = cert_key_password.encode()
+        key = serialization.load_pem_private_key(file.read(), password=password)
+
+    pkcs12 = serialize_key_and_certificates(
+        name=b'scylladb', key=key, cert=cert, cas=None,
+        encryption_algorithm=serialization.BestAvailableEncryption(p12_password.encode()))
+    with open(dst_pkcs12_file, 'wb') as file:
+        file.write(pkcs12)
+
+
+def cleanup_ssl_config():
+    """Remove SCT ssl_config artifacts that are dynamically created during the test"""
+    ssl_conf_dir = Path(get_data_dir_path('ssl_conf'))
+    for item in ssl_conf_dir.iterdir():
+        if item.is_dir() and item.name not in {'client', 'example'}:
+            shutil.rmtree(item)
+        elif item.is_file():
+            item.unlink()
+
+
+def update_certificate(
+        db_csr_file: Path = SERVER_CSR_FILE, db_crt_file: Path = SERVER_CERT_FILE,
+        ca_file: Path = CA_CERT_FILE, ca_key_file: Path = CA_KEY_FILE, password: str = 'scylladb') -> None:
+    """Update server certificate."""
+    # Load CSR, CA certificate and key
+    with open(db_csr_file, 'rb') as file:
+        csr = x509.load_pem_x509_csr(file.read())
+    with open(ca_file, 'rb') as file:
+        ca_cert = x509.load_pem_x509_certificate(file.read())
+    with open(ca_key_file, 'rb') as file:
+        ca_key = serialization.load_pem_private_key(file.read(), password=password.encode())
+
+    san_extension = csr.extensions.get_extension_for_oid(x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value
+
+    # Create new certificate
+    new_cert = (
+        x509.CertificateBuilder()
+        .subject_name(csr.subject)
+        .issuer_name(ca_cert.subject)
+        .public_key(csr.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.utcnow())
+        .not_valid_after(datetime.utcnow() + timedelta(days=180))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(csr.public_key()), critical=False)
+        .add_extension(san_extension, critical=False)  # Add SAN extension from CSR
+        .sign(private_key=ca_key, algorithm=hashes.SHA256())
+    )
+
+    # Write new certificate to file
+    with open(db_crt_file, 'wb') as crt_file:
+        crt_file.write(new_cert.public_bytes(serialization.Encoding.PEM))
+
+
+def c_s_transport_str(client_mtls: bool) -> str:
+    """Build transport string for cassandra-stress."""
+    transport_str = f'truststore={SCYLLA_SSL_CONF_DIR}/truststore.jks truststore-password=cassandra'
+    if client_mtls:
+        transport_str = (
+            f'{transport_str} keystore={SCYLLA_SSL_CONF_DIR}/keystore.p12 keystore-password=cassandra')
+    return transport_str

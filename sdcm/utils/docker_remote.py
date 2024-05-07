@@ -7,10 +7,12 @@ from invoke.exceptions import UnexpectedExit
 
 from sdcm.cluster import BaseNode
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
+from sdcm.utils.common import get_data_dir_path
 
 LOGGER = logging.getLogger(__name__)
 
 
+# pylint: disable=too-many-public-methods
 class RemoteDocker(BaseNode):
     def __init__(self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts="", docker_network=None):  # pylint: disable=too-many-arguments
         self.node = node
@@ -135,6 +137,10 @@ class RemoteDocker(BaseNode):
 
     def restart(self):
         pass
+
+    @property
+    def ssl_conf_dir(self):
+        return Path(get_data_dir_path('ssl_conf'))
 
     def __str__(self):
         return f'RemoteDocker [{self.image_name}] on [{self.node}]'

@@ -25,6 +25,7 @@ from functools import cached_property
 from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.cluster import BaseLoaderSet, BaseNode
 from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, c_s_transport_str
 from sdcm.reporting.tooling_reporter import CassandraStressVersionReporter
 from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
@@ -181,8 +182,8 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             # put the credentials into the right place into -mode section
             stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*credentials), stress_cmd)
         if self.client_encrypt and 'transport' not in stress_cmd:
-            stress_cmd += \
-                " -transport 'truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra'"
+            transport_str = c_s_transport_str(self.params.get('client_encrypt_mtls'))
+            stress_cmd += f" -transport '{transport_str}'"
 
         stress_cmd = self.adjust_cmd_connection_options(stress_cmd, loader, cmd_runner)
 
@@ -310,11 +311,10 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 stress_cmd = replace_scylla_qa_internal_path(stress_cmd, loader_profile_path)
 
         if self.client_encrypt:
-            ssl_conf_dir = Path(get_data_dir_path('ssl_conf', 'client'))
-            for ssl_file in ssl_conf_dir.iterdir():
+            for ssl_file in loader.ssl_conf_dir.iterdir():
                 if ssl_file.is_file():
                     cmd_runner.send_files(str(ssl_file),
-                                          str(Path('/etc/scylla/ssl_conf/client') / ssl_file.name),
+                                          str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
                                           verbose=True)
 
         if connection_bundle_file := self.connection_bundle_file:

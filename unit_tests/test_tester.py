@@ -82,10 +82,6 @@ class ClusterTesterForTests(ClusterTester):
     def _init_logging(self):
         pass
 
-    @staticmethod
-    def update_certificates():
-        pass
-
     def argus_finalize_test_run(self):
         pass
 
@@ -180,6 +176,9 @@ class ClusterTesterForTests(ClusterTester):
         time.sleep(0.5)
         super().stop_event_device()
 
+    def create_ca(self):
+        pass
+
 
 class SubtestAndTeardownFailsTest(ClusterTesterForTests):
     def test(self):
@@ -270,8 +269,8 @@ class SetupFailsTest(ClusterTesterForTests):
         super().__init__(*args)
         self.addCleanup(self._validate_results)
 
-    def update_certificates(self):
-        raise RuntimeError('update_certificates failed')
+    def prepare_kms_host(self):
+        raise RuntimeError('prepare_kms_host failed')
 
     def test(self):
         pass
@@ -283,7 +282,7 @@ class SetupFailsTest(ClusterTesterForTests):
         super()._validate_results()
         self._remove_errors_from_unittest_results(self._outcome)
         assert self.event_summary == {'NORMAL': 2, 'ERROR': 1}
-        assert 'update_certificates failed' in self.final_event.events['ERROR'][0]
+        assert 'prepare_kms_host failed' in self.final_event.events['ERROR'][0]
         assert self.final_event.test_status == 'FAILED'
 
 

@@ -19,12 +19,12 @@ import logging
 from pathlib import Path
 
 from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR
 from sdcm.sct_events.loaders import LatteStressEvent
 from sdcm.utils.common import (
     FileFollowerThread,
     generate_random_string,
     get_sct_root_path,
-    get_data_dir_path,
 )
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.stress.base import DockerBasedStressThread
@@ -110,15 +110,15 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         ssl_config = ''
         if self.params['client_encrypt']:
-            ssl_conf_dir = Path(get_data_dir_path('ssl_conf', 'client'))
-            for ssl_file in ssl_conf_dir.iterdir():
+            for ssl_file in loader.ssl_conf_dir.iterdir():
                 if ssl_file.is_file():
                     cmd_runner.send_files(str(ssl_file),
-                                          str(Path('/etc/scylla/ssl_conf/client') / ssl_file.name),
+                                          str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
                                           verbose=True)
-            ssl_config += (' --ssl --ssl-ca /etc/scylla/ssl_conf/client/catest.pem '
-                           '--ssl-cert /etc/scylla/ssl_conf/client/test.crt '
-                           '--ssl-key /etc/scylla/ssl_conf/client/test.key')
+
+            ssl_config += (f' --ssl --ssl-ca {SCYLLA_SSL_CONF_DIR}/ca.pem '
+                           f'--ssl-cert {SCYLLA_SSL_CONF_DIR}/test.crt '
+                           f'--ssl-key {SCYLLA_SSL_CONF_DIR}/test.key')
         datacenter = ""
         if self.loader_set.test_config.MULTI_REGION:
             # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,

@@ -20,7 +20,7 @@
     "internode_encryption": "all",
     "certificate": "/etc/scylla/ssl_conf/db.crt",
     "keyfile": "/etc/scylla/ssl_conf/db.key",
-    "truststore": "/etc/scylla/ssl_conf/cadb.pem"
+    "truststore": "/etc/scylla/ssl_conf/ca.pem"
   },
   "experimental_features": [],
   "saslauthd_socket_path": "/run/saslauthd/mux",

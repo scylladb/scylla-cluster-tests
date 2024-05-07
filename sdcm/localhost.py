@@ -14,6 +14,7 @@
 import logging
 from typing import Optional
 
+from sdcm.utils.java import JavaContainerMixin
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.k8s import HelmContainerMixin
 from sdcm.utils.gce_utils import GcloudContainerMixin
@@ -23,7 +24,8 @@ from sdcm.utils.syslogng import SyslogNGContainerMixin
 LOGGER = logging.getLogger(__name__)
 
 
-class LocalHost(SyslogNGContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin):
+class LocalHost(SyslogNGContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin,
+                JavaContainerMixin):
     def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
         self._containers = {}
         self.tags = {}

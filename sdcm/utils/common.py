@@ -2197,22 +2197,6 @@ def wait_ami_available(client, ami_id):
                 )
 
 
-def update_certificates(db_csr='data_dir/ssl_conf/example/db.csr', cadb_pem='data_dir/ssl_conf/cadb.pem',
-                        cadb_key='data_dir/ssl_conf/example/cadb.key', db_crt='data_dir/ssl_conf/db.crt'):
-    """
-    Update the certificate of server encryption, which might be expired.
-    """
-    try:
-        localrunner = LocalCmdRunner()
-        localrunner.run(f'openssl x509 -req -in {db_csr} -CA {cadb_pem} -CAkey {cadb_key} -CAcreateserial '
-                        f'-out {db_crt} -days 365')
-        localrunner.run(f'openssl x509 -enddate -noout -in {db_crt}')
-        new_crt = localrunner.run(f'cat {db_crt}').stdout
-    except Exception as ex:  # pylint: disable=broad-except
-        raise Exception('Failed to update certificates by openssl: %s' % ex) from None
-    return new_crt
-
-
 # Make it mockable.
 def _s3_download_file(client, bucket, key, local_file_path):
     return client.download_file(bucket, key, local_file_path)
