@@ -1542,6 +1542,13 @@ class SCTConfiguration(dict):
         dict(name="use_capacity_reservation", env="SCT_USE_CAPACITY_RESERVATION", type=boolean,
              help="""reserves instances capacity for whole duration of the test run (AWS only).
              Fallbacks to next availabilit zone if capacity is not available"""),
+
+        dict(name="bisect_start_date", env="SCT_BISECT_START_DATE", type=str,
+             help="""Scylla build date from which bisecting should start.
+              Setting this date enables bisection. Format: YYYY-MM-DD"""),
+
+        dict(name="bisect_end_date", env="SCT_BISECT_END_DATE", type=str,
+             help="""Scylla build date until which bisecting should run. Format: YYYY-MM-DD"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

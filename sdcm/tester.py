@@ -389,6 +389,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
+        self.bisect_ref_value = None
+        self.bisect_result_value = None
 
     def _init_test_duration(self):
         self._stress_duration: int = self.params.get('stress_duration')
