@@ -25,6 +25,7 @@ def get_distro_name(distro_object):
         Distro.DEBIAN11: "debian11",
         Distro.UBUNTU20: "ubuntu20",
         Distro.UBUNTU22: "ubuntu22",
+        Distro.UBUNTU24: "ubuntu24",
         Distro.OEL7: "centos7",
         Distro.OEL8: "centos8",
         Distro.ROCKY8: "centos8",
