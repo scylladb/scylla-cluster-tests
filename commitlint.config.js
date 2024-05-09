@@ -1,11 +1,11 @@
 module.exports = {
     rules: {
         // Header
-        "header-max-length": [2, "always", 72],
+        "header-max-length": [2, "always", 100],
         // Subject
         'subject-empty': [2, 'never'],
         'subject-full-stop': [2, 'never', '.'],
-        'subject-max-length': [2, 'always', 85],
+        'subject-max-length': [2, 'always', 100],
         'subject-min-length': [2, 'always', 10],
         // Type
         'type-enum': [2,'always',['ci','docs','feature','fix','improvement','perf','refactor','revert','style','test', 'unit-test']],
