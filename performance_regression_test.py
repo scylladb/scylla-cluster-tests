@@ -102,8 +102,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                       result['latency 95th percentile'],
                       result['latency 99th percentile'],
                       result['latency 99.9th percentile'],
-                      result['Total partitions'],
-                      result['Total errors'])
+                      result['total partitions'],
+                      result['total errors'])
 
     def get_test_xml(self, result, test_name=''):
         test_content = """
@@ -155,8 +155,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             result['latency 95th percentile'],
             result['latency 99th percentile'],
             result['latency 99.9th percentile'],
-            result['Total partitions'],
-            result['Total errors'])
+            result['total partitions'],
+            result['total errors'])
 
         return test_content
 
