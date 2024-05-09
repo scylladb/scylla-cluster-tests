@@ -820,6 +820,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"  # pylint: disable=line-too-long
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
             return None
+        if scylla_encryption_options.get("key_provider") == 'none':
+            self.params['scylla_encryption_options'] = ''
+            return None
         kms_host = (yaml.safe_load(scylla_encryption_options) or {}).get("kms_host") or ''
         if 'auto' not in kms_host:
             return None
