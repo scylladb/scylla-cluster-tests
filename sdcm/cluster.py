@@ -2316,6 +2316,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             manager_yaml["tls_key_file"] = tls_key_file
             manager_yaml["prometheus"] = f":{self.parent_cluster.params.get('manager_prometheus_port')}"
 
+            # `config_cache` parameter was introduced in version 3.2.7-0.20240509, skip this for older versions.
+            version = self.remoter.run(
+                "sctool version | grep 'Client version:' | awk -F': ' '{print $2}'").stdout.strip()
+            # example of version returned - 3.2.3~0.20231019.5b0db89a
+            if ComparableScyllaVersion(version) >= "3.2.7-0.20240509":
+                manager_yaml["config_cache"] = {"update_frequency": "1m"}
+
         if self.is_docker():
             self.remoter.sudo("supervisorctl restart scylla-manager")
             res = self.remoter.sudo("supervisorctl status scylla-manager")
