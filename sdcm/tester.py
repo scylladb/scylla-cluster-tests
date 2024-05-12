@@ -37,7 +37,6 @@ from invoke.exceptions import UnexpectedExit, Failure
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
 from cassandra.cluster import Session  # pylint: disable=no-name-in-module
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
@@ -1010,9 +1009,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info("Going to create alternator tables")
             if self.params.get('alternator_enforce_authorization'):
                 with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-                    session.execute(SimpleStatement("""
-                        INSERT INTO system_auth.roles (role, salted_hash) VALUES (%s, %s)
-                    """, consistency_level=ConsistencyLevel.ALL),
+                    session.execute("CREATE ROLE %s WITH PASSWORD = %s",
                                     (self.params.get('alternator_access_key_id'),
                                      self.params.get('alternator_secret_access_key')))
 
