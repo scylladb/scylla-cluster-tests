@@ -98,8 +98,7 @@ class ScyllaDoctor:
         LOGGING.debug(pprint.pformat(result))
 
     def analyze_and_verify_results(self):
-        scylla_doctor_result = json.loads(self.node.remoter.run(
-            f"cat {self.json_result_file}", verbose=False).stdout.strip())
+        scylla_doctor_result = json.loads(self.run(f"cat {self.json_result_file}"))
 
         LOGGING.debug("Scylla-doctor output: %s", pprint.pformat(scylla_doctor_result))
 
