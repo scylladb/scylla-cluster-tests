@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import logging
 from concurrent.futures.thread import ThreadPoolExecutor
 from itertools import chain
 from pprint import pformat
-from typing import NamedTuple
+from typing import NamedTuple, TYPE_CHECKING
 
 import boto3
+from cassandra import InvalidRequest
 from mypy_boto3_dynamodb import DynamoDBClient, DynamoDBServiceResource
 from mypy_boto3_dynamodb.service_resource import Table
 
@@ -12,6 +15,9 @@ from sdcm.utils.alternator import schemas, enums, consts
 from sdcm.utils.alternator.consts import TABLE_NAME, NO_LWT_TABLE_NAME
 from sdcm.utils.common import normalize_ipv6_url
 from sdcm.utils.context_managers import environment
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,12 +45,27 @@ class Alternator:
             address = normalize_ipv6_url(node.external_address)
         return "{}://{}:{}".format(web_protocol, address, self.params.get("alternator_port"))
 
+    @staticmethod
+    def get_salted_hash(node: BaseNode, username: str) -> str:
+        with node.parent_cluster.cql_connection_patient_exclusive(node) as session:
+            for ks in ("system_auth_v2", "system_auth"):
+                try:
+                    response = session.execute(f"SELECT salted_hash FROM {ks}.roles WHERE role=%s;", (username,))
+                except InvalidRequest:
+                    continue
+                return next(iter(response)).salted_hash
+
     def get_dynamodb_api(self, node) -> AlternatorApi:
         endpoint_url = self.create_endpoint_url(node=node)
         if endpoint_url not in self.alternator_apis:
-            aws_params = dict(endpoint_url=endpoint_url, aws_access_key_id=self.params.get("alternator_access_key_id"),
-                              aws_secret_access_key=self.params.get("alternator_secret_access_key"),
+            aws_params = dict(endpoint_url=endpoint_url,
                               region_name="None")
+            if self.params.get('alternator_enforce_authorization'):
+                aws_access_key_id = self.params.get("alternator_access_key_id")
+                aws_params.update(
+                    aws_access_key_id=aws_access_key_id,
+                    aws_secret_access_key=self.get_salted_hash(node, username=aws_access_key_id)
+                )
             # NOTE: add CA bundle info for HTTPS case
             env_vars = {}
             if "https" in endpoint_url:
