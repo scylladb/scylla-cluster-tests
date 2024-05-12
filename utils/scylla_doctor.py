@@ -45,6 +45,10 @@ class ScyllaDoctor:
         return version
 
     def install_scylla_doctor(self):
+        if self.node.parent_cluster.cluster_backend == "docker":
+            self.run('apt update')
+            self.node.install_package('ethtool')
+
         self.node.install_package('wget')
         self.node.remoter.run(f"wget {self.SCYLLA_DOCTOR_LATEST_ON_AWS}/{self.SCYLLA_DOCTOR_EXECUTOR}")
         self.node.remoter.run(f"wget {self.SCYLLA_DOCTOR_LATEST_ON_AWS}/{self.SCYLLA_DOCTOR_CONF}")
@@ -87,15 +91,29 @@ class ScyllaDoctor:
                                        f"Scylla doctor version: {self.version}")
 
         # Search for created scylla-logs tar.gz
-        result = self.node.remoter.run("ls scylla_logs_*.tar.gz", verbose=False)
-        self.scylla_logs_file = result.stdout.strip()
-        assert self.scylla_logs_file, (f"Scylla log archive {self.scylla_logs_file} has not been created. "
-                                       f"Scylla doctor version: {self.version}")
+        # Scylla Docker does not collect Scylla cluster logs - https://github.com/scylladb/field-engineering/issues/2288
+        if self.node.parent_cluster.cluster_backend != "docker":
+            result = self.node.remoter.run("ls scylla_logs_*.tar.gz", verbose=False)
+            self.scylla_logs_file = result.stdout.strip()
+            assert self.scylla_logs_file, (f"Scylla log archive {self.scylla_logs_file} has not been created. "
+                                           f"Scylla doctor version: {self.version}")
 
     def analyze_vitals(self):
         LOGGING.info("Analyze vitals")
         result = self.run(sd_command=f"{self.scylla_doctor_exec} --load-vitals {self.json_result_file} --verbose")
         LOGGING.debug(pprint.pformat(result))
+
+    def filter_out_failed_collectors(self, collector):
+        # FirewallRulesCollector return empty result - https://github.com/scylladb/field-engineering/issues/2248
+        if collector == "FirewallRulesCollector":
+            return True
+
+        # https://github.com/scylladb/field-engineering/issues/2288
+        if (self.node.parent_cluster.cluster_backend == "docker" and
+                collector in ["StorageConfigurationCollector", "PerftuneSystemConfigurationCollector"]):
+            return True
+
+        return False
 
     def analyze_and_verify_results(self):
         scylla_doctor_result = json.loads(self.run(f"cat {self.json_result_file}"))
@@ -104,8 +122,10 @@ class ScyllaDoctor:
 
         failed_collectors = {}
         for collector, value in scylla_doctor_result.items():
-            if value["status"]:
-                # FirewallRulesCollector return empty result - https://github.com/scylladb/field-engineering/issues/2248
-                if collector != "FirewallRulesCollector":
+            # Status 0 - succeeded
+            # Status 1 - failed
+            # Status 2 - the collector cannot be proceeded, skipped
+            if value["status"] == 1:
+                if not self.filter_out_failed_collectors(collector=collector):
                     failed_collectors[collector] = value
         assert not failed_collectors, f"Failed collectors: {failed_collectors}. Scylla doctor version: {self.version}"
