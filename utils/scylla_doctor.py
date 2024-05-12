@@ -113,6 +113,10 @@ class ScyllaDoctor:
                 collector in ["StorageConfigurationCollector", "PerftuneSystemConfigurationCollector"]):
             return True
 
+        # https://github.com/scylladb/scylladb/issues/18631
+        if self.node.distro.is_amazon2 and collector in ["CPUSetCollector", "PerftuneSystemConfigurationCollector"]:
+            return True
+
         return False
 
     def analyze_and_verify_results(self):
