@@ -1,16 +1,22 @@
+from __future__ import annotations
+
 import logging
 from concurrent.futures.thread import ThreadPoolExecutor
 from itertools import chain
 from pprint import pformat
-from typing import NamedTuple
+from typing import NamedTuple, TYPE_CHECKING
 
 import boto3
+from cassandra import InvalidRequest
 from mypy_boto3_dynamodb import DynamoDBClient, DynamoDBServiceResource
 from mypy_boto3_dynamodb.service_resource import Table
 
 from sdcm.utils.alternator import schemas, enums, consts
 from sdcm.utils.alternator.consts import TABLE_NAME, NO_LWT_TABLE_NAME
 from sdcm.utils.common import normalize_ipv6_url
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,15 +38,33 @@ class Alternator:
     def create_endpoint_url(self, node):
         return 'http://{}:{}'.format(normalize_ipv6_url(node.external_address), self.params.get("alternator_port"))
 
+    @staticmethod
+    def get_salted_hash(node: BaseNode, username: str) -> str:
+        with node.parent_cluster.cql_connection_patient_exclusive(node) as session:
+            for ks in ("system_auth_v2", "system_auth"):
+                try:
+                    response = session.execute(f"SELECT salted_hash FROM {ks}.roles WHERE role=%s;", (username,))
+                except InvalidRequest:
+                    continue
+                return next(iter(response)).salted_hash
+
     def get_dynamodb_api(self, node) -> AlternatorApi:
         endpoint_url = self.create_endpoint_url(node=node)
         if endpoint_url not in self.alternator_apis:
-            aws_params = dict(endpoint_url=endpoint_url, aws_access_key_id=self.params.get("alternator_access_key_id"),
-                              aws_secret_access_key=self.params.get("alternator_secret_access_key"),
+            aws_params = dict(endpoint_url=endpoint_url,
                               region_name="None")
+
+            if self.params.get('alternator_enforce_authorization'):
+                aws_access_key_id = self.params.get("alternator_access_key_id")
+                aws_params.update(
+                    aws_access_key_id=aws_access_key_id,
+                    aws_secret_access_key=self.get_salted_hash(node, username=aws_access_key_id)
+                )
+
             resource: DynamoDBServiceResource = boto3.resource('dynamodb', **aws_params)
             client: DynamoDBClient = boto3.client('dynamodb', **aws_params)
             self.alternator_apis[endpoint_url] = AlternatorApi(resource=resource, client=client)
+
         return self.alternator_apis[endpoint_url]
 
     def set_write_isolation(self, node, isolation, table_name=consts.TABLE_NAME):

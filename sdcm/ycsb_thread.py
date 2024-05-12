@@ -154,7 +154,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
             aws_empty_file = dedent(f""""
                 accessKey = {self.params.get('alternator_access_key_id')}
-                secretKey = {self.params.get('alternator_secret_access_key')}
+                secretKey = {alternator.api.Alternator.get_salted_hash(node=self.node_list[0], username=self.params.get('alternator_secret_access_key'))}
             """)
 
             with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
