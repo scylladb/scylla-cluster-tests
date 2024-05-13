@@ -695,16 +695,16 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         healthcheck_task = mgr_cluster.get_healthcheck_task()
 
         self.db_cluster.enable_client_encrypt()
-        time.sleep(30)  # Make sure healthcheck task is triggered
 
-        # Scylla-manager should pick up client encryption setting automatically
-        healthcheck_task.wait_for_status(list_status=[TaskStatus.DONE], step=5, timeout=240)
-
+        # SM caches scylla nodes configuration and the healthcheck svc is independent from the cache updates.
+        # Cache is being updated periodically, every 1 minute following the manager config for SCT.
+        # We need to wait until SM is aware about the configuration change.
         mgr_cluster.update(
             client_encrypt=True,
             force_non_ssl_session_port=mgr_cluster.sctool.is_minimum_3_2_6_or_snapshot
         )
-        time.sleep(30)  # Make sure healthcheck task is triggered
+        time.sleep(90)
+
         healthcheck_task.wait_for_status(list_status=[TaskStatus.DONE], step=5, timeout=240)
         sleep = 40
         self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
