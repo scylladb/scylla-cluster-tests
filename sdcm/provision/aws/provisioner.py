@@ -105,7 +105,8 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             tags: List[TagsType]) -> List[Instance]:
         instance_parameters_dict = instance_parameters.dict(
             exclude_none=True, exclude_defaults=True, exclude_unset=True, encode_user_data=False)
-        if cr_id := SCTCapacityReservation.reservations.get(provision_parameters.availability_zone).get(instance_parameters.InstanceType):
+        if cr_id := SCTCapacityReservation.reservations.get(provision_parameters.availability_zone, {}).get(
+                instance_parameters.InstanceType):
             instance_parameters_dict['CapacityReservationSpecification'] = {
                 'CapacityReservationTarget': {
                     'CapacityReservationId': cr_id
