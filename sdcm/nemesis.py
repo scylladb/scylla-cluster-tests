@@ -34,7 +34,7 @@ from contextlib import ExitStack, contextmanager
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial
 from collections import defaultdict, Counter, namedtuple
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, Future
 from threading import Lock
 from types import MethodType  # pylint: disable=no-name-in-module
 
@@ -1827,8 +1827,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 else:
                     rate = 3
                 multiple_disrupt_methods = disrupt_methods * rate
-                random.shuffle(multiple_disrupt_methods)
+                if not predefined_sequence:
+                    random.shuffle(multiple_disrupt_methods)
                 self._random_sequence = multiple_disrupt_methods
+
             # consume the random sequence
             disrupt_method = self._random_sequence.pop()
 
@@ -5008,6 +5010,256 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.restart_scylla_server()
             raise
 
+    def disrupt_parallel_bootstrap(self):
+        timeout = 3600
+        num_parallel_ops = self.tester.params.get("nemesis_add_node_cnt")
+        if num_parallel_ops < 2:
+            raise UnsupportedNemesis("Required nemesis_add_node_cnt > 1")
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Nemesis will not be run on kubernetes")
+
+        self.log.info("Adding new nodes to cluster...")
+        InfoEvent(message='StartEvent - Adding new nodes to cluster').publish()
+        new_nodes = self.cluster.add_nodes(
+            count=num_parallel_ops, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)
+        self.monitoring_set.reconfigure_scylla_monitoring()
+        for node in new_nodes:
+            self.set_current_running_nemesis(node=node)  # prevent to run nemesis on new node when running in parallel
+
+        # since we need this logic before starting a node, and in `use_preinstalled_scylla: false` case
+        # scylla is not yet installed or target node was terminated, we should use an alive node without nemesis for version,
+        # it should be up and with scylla executable available
+        with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="Parallel_bootstrap_operation") as verification_node:
+            try:
+                with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.nodes[0], timeout=timeout):
+                    self.cluster.wait_for_init(node_list=new_nodes, timeout=timeout, check_node_health=False)
+                self.cluster.set_seeds()
+                self.cluster.update_seed_provider()
+            except (NodeSetupFailed, NodeSetupTimeout):
+                self.log.warning("TestConfig of the '%s' failed, removing it from list of nodes" % new_nodes)
+                raise
+            self.cluster.wait_for_nodes_up_and_normal(nodes=self.cluster.nodes)
+
+            group0_state = verification_node.raft.get_group0_members()
+            non_voters = verification_node.raft.get_group0_non_voters()
+            assert verification_node.raft.is_cluster_topology_consistent(), \
+                f"Bad cluster state {group0_state}, with non-voters {non_voters}"
+        for node in new_nodes:
+            self.unset_current_running_nemesis(node)
+
+    def disrupt_parallel_decommission(self):
+        """
+        TODO: add support for multidc configuration
+        """
+        @raise_event_on_failure
+        def decommission_node(node: BaseNode):
+            InfoEvent(message=f"Decommission node {node.name}")
+            self.decommission_node(node)
+            InfoEvent(message=f"Node {node.name} was decommissioned").publish()
+
+        num_parallel_ops = self.tester.params.get("nemesis_add_node_cnt")
+        # need to have quorum for topology operations. if after decommission nodes
+        # quorum will be lost, skip nemesis
+        InfoEvent(
+            message=f"Will be quorum preserved {len(self.cluster.nodes) - num_parallel_ops >= len(self.cluster.nodes) // 2 + 1}").publish()
+        InfoEvent(message=f"Num parallel ops: {num_parallel_ops}").publish()
+        InfoEvent(message=f"Num of nodes in : {len(self.cluster.nodes)}").publish()
+
+        if len(self.cluster.nodes) - num_parallel_ops <= len(self.cluster.nodes) // 2 + 1:
+            raise UnsupportedNemesis("After decommission quorum should stay")
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Nemesis will not be run on kubernetes")
+
+        decommission_futures: list[Future] = []
+        self.unset_current_running_nemesis(self.target_node)
+        with ThreadPoolExecutor(max_workers=num_parallel_ops) as pool:
+            for _ in range(num_parallel_ops):
+                free_nodes = self._get_target_nodes()
+                InfoEvent(message=f"Free nodes {[node.name for node in free_nodes]}").publish()
+                self.log.info("Free nodes %s", [node.name for node in free_nodes])
+                self.set_target_node()
+                InfoEvent(message=f"Choose target node {self.target_node.name}").publish()
+                self.log.info("Choose target node %s", self.target_node.name)
+                decommission_futures.append(pool.submit(decommission_node, self.target_node))
+
+        for future in decommission_futures:
+            exc = future.exception()
+            if exc:
+                raise exc
+
+        self.cluster.wait_for_nodes_up_and_normal(timeout=300)
+
+        with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="Verification_node") as verification_node:
+            group0_state = verification_node.raft.get_group0_members()
+            non_voters = verification_node.raft.get_group0_non_voters()
+            assert verification_node.raft.is_cluster_topology_consistent(), \
+                f"Bad cluster state {group0_state}, with non-voters {non_voters}"
+
+    def disrupt_parallel_replace(self):
+        timeout=3600
+        num_parallel_ops = self.tester.params.get("nemesis_add_node_cnt")
+        if num_parallel_ops < 2:
+            raise UnsupportedNemesis("Required nemesis_add_node_cnt > 1")
+
+        InfoEvent(
+            message=f"Will be quorum preserved {len(self.cluster.nodes) - num_parallel_ops >= len(self.cluster.nodes) // 2 + 1}").publish()
+        InfoEvent(message=f"Num parallel ops: {num_parallel_ops}").publish()
+        InfoEvent(message=f"Num of nodes in : {len(self.cluster.nodes)}").publish()
+
+        if len(self.cluster.nodes) - num_parallel_ops <= len(self.cluster.nodes) // 2 + 1:
+            raise UnsupportedNemesis("After replace quorum should stay")
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Nemesis will not be run on kubernetes")
+
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Nemesis will not be run on kubernetes")
+
+        self.unset_current_running_nemesis(self.target_node)
+        free_nodes = self._get_target_nodes()
+        InfoEvent(message=f"Free nodes {[node.name for node in free_nodes]}").publish()
+        self.log.info("Free nodes %s", [node.name for node in free_nodes])
+        if len(free_nodes) < num_parallel_ops:
+            raise UnsupportedNemesis("No enough free nodes")
+
+        random.shuffle(free_nodes)
+        replaced_nodes = free_nodes[:num_parallel_ops]
+        host_ids_of_replaced_nodes = [node.host_id for node in replaced_nodes]
+        old_ips_of_replaced_nodes = [node.ip_address for node in replaced_nodes]
+
+        for node in replaced_nodes:
+            self.cluster.terminate_node(node)
+
+        self.log.info("Adding new nodes to cluster...")
+        InfoEvent(message='StartEvent - Adding new nodes to cluster').publish()
+        new_nodes = self.cluster.add_nodes(
+            count=num_parallel_ops, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)
+        self.monitoring_set.reconfigure_scylla_monitoring()
+        for node in new_nodes:
+            self.set_current_running_nemesis(node=node)  # prevent to run nemesis on new node when running in parallel
+
+        self.log.info("Update scylla yaml")
+        with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="Parallel_replace_operation") as verification_node:
+            for node, replace_host_id, replace_old_ip in zip(new_nodes, host_ids_of_replaced_nodes, old_ips_of_replaced_nodes):
+                if verification_node.is_replacement_by_host_id_supported:
+                    node.replacement_host_id = replace_host_id
+                else:
+                    node.replacement_node_ip = replace_old_ip
+
+                with node.remote_scylla_yaml() as scylla_yaml:
+                    scylla_yaml.ignore_dead_nodes_for_replace = ",".join(
+                        [host_id for host_id in host_ids_of_replaced_nodes if host_id != replace_host_id])
+
+        # since we need this logic before starting a node, and in `use_preinstalled_scylla: false` case
+        # scylla is not yet installed or target node was terminated, we should use an alive node without nemesis for version,
+        # it should be up and with scylla executable available
+        self.log.info("Wait 2 minutes")
+        time.sleep(120)
+        with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="Parallel_bootstrap_operation") as verification_node:
+            try:
+                with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.nodes[0], timeout=timeout):
+                    self.cluster.wait_for_init(node_list=new_nodes, timeout=timeout, check_node_health=False)
+                self.cluster.set_seeds()
+                self.cluster.update_seed_provider()
+            except (NodeSetupFailed, NodeSetupTimeout):
+                self.log.warning("TestConfig of the '%s' failed, removing it from list of nodes" % new_nodes)
+                raise
+            self.cluster.wait_for_nodes_up_and_normal(nodes=self.cluster.nodes)
+
+            group0_state = verification_node.raft.get_group0_members()
+            non_voters = verification_node.raft.get_group0_non_voters()
+            assert verification_node.raft.is_cluster_topology_consistent(), \
+                f"Bad cluster state {group0_state}, with non-voters {non_voters}"
+        for node in new_nodes:
+            self.unset_current_running_nemesis(node)
+
+    def disrupt_parallel_removenode(self):
+        num_parallel_ops = self.tester.params.get("nemesis_add_node_cnt")
+        if num_parallel_ops < 2:
+            raise UnsupportedNemesis("Required nemesis_add_node_cnt > 1")
+
+        InfoEvent(
+            message=f"Will be quorum preserved {len(self.cluster.nodes) - num_parallel_ops >= len(self.cluster.nodes) // 2 + 1}").publish()
+        InfoEvent(message=f"Num parallel ops: {num_parallel_ops}").publish()
+        InfoEvent(message=f"Num of nodes in : {len(self.cluster.nodes)}").publish()
+
+        if len(self.cluster.nodes) - num_parallel_ops <= len(self.cluster.nodes) // 2 + 1:
+            raise UnsupportedNemesis("After replace quorum should stay")
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Nemesis will not be run on kubernetes")
+
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Nemesis will not be run on kubernetes")
+
+        free_nodes = self._get_target_nodes()
+        InfoEvent(message=f"Free nodes {[node.name for node in free_nodes]}").publish()
+        self.log.info("Free nodes %s", [node.name for node in free_nodes])
+        if len(free_nodes) < num_parallel_ops:
+            raise UnsupportedNemesis("No enough free nodes")
+
+        random.shuffle(free_nodes)
+        removing_nodes = free_nodes[:num_parallel_ops]
+        host_ids_of_replaced_nodes = [node.host_id for node in removing_nodes]
+
+        for node in removing_nodes:
+            self.cluster.terminate_node(node)
+
+        # wait node are down
+        time.sleep(60)
+
+        @retrying(n=3, sleep_time=5, message="Removing node from cluster...")
+        @raise_event_on_failure
+        def remove_node(working_node: BaseNode, target_node_host_id: str, ignore_nodes_host_ids: list[str]):
+            removenode_reject_msg = r"Rejected removenode operation.*the node being removed is alive"
+            ignore_dead_nodes_parameter = f"--ignore-dead-nodes {','.join(ignore_nodes_host_ids)}" or ""
+            # nodetool removenode 'host_id'
+            self.log.info("Running removenode command on {}, Removing node with the following host_id: {}"
+                          .format(working_node.ip_address, target_node_host_id))
+            with adaptive_timeout(Operations.REMOVE_NODE, working_node, timeout=HOUR_IN_SEC * 48):
+                res = working_node.run_nodetool("removenode {} {}".format(
+                    target_node_host_id, ignore_dead_nodes_parameter), ignore_status=True, verbose=True)
+            if res.failed and re.match(removenode_reject_msg, res.stdout + res.stderr):
+                raise Exception(f"Removenode was rejected {res.stdout}\n{res.stderr}")
+
+            return res.exit_status
+
+        removenodes_futures: list[Future] = []
+        with ThreadPoolExecutor(max_workers=num_parallel_ops) as pool:
+            for _ in range(num_parallel_ops):
+                if host_ids_of_replaced_nodes:
+                    removenode_host_id = host_ids_of_replaced_nodes.pop(0)
+                else:
+                    removenode_host_id = ""
+
+                future = pool.submit(remove_node, self.target_node, removenode_host_id, host_ids_of_replaced_nodes)
+                # need to wait log message on coordinator.
+                time.sleep(60)
+                removenodes_futures.append(future)
+
+        results = []
+        for future in removenodes_futures:
+            result = future.result(timeout=3600)
+            if exc := future.exception():
+                raise exc
+
+            results.append(result)
+
+        assert all({res == 0 for res in results}), "Not all remonove nodes are finished successfully. Check lots"
+
+        self.cluster.wait_for_nodes_up_and_normal(timeout=300)
+
+        with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="Verification_node") as verification_node:
+            group0_state = verification_node.raft.get_group0_members()
+            non_voters = verification_node.raft.get_group0_non_voters()
+            assert verification_node.raft.is_cluster_topology_consistent(), \
+                f"Bad cluster state {group0_state}, with non-voters {non_voters}"
+
+        for node in self.cluster.nodes:
+            try:
+                self.repair_nodetool_repair(node=node, publish_event=False)
+            except Exception as details:  # pylint: disable=broad-except
+                self.log.error(f"failed to execute repair command "
+                               f"on node {node} due to the following error: {str(details)}")
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
     """
@@ -6564,3 +6816,37 @@ class EndOfQuotaNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_end_of_quota_nemesis()
+
+
+class ParallelNodesBootstrap(Nemesis):
+
+    disruptive = True
+
+    def disrupt(self):
+        self.disrupt_parallel_bootstrap()
+
+
+class ParallelNodesDecommission(Nemesis):
+
+    disruptive = True
+
+    def disrupt(self):
+        self.disrupt_parallel_decommission()
+
+
+class ParallelTopologyOperations(Nemesis):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disrupt_methods_list = [
+            'disrupt_parallel_bootstrap',
+            'disrupt_parallel_decommission',
+            'disrupt_parallel_bootstrap',
+            'disrupt_parallel_replace',
+            'disrupt_parallel_decommission',
+            'disrupt_parallel_bootstrap',
+            'disrupt_parallel_removenode'
+        ]
+
+    def disrupt(self):
+        self.disrupt_methods_list *= 5
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list, predefined_sequence=True)
