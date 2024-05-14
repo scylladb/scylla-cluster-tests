@@ -16,8 +16,7 @@ azure_image_monitor: 'Canonical:0001-com-ubuntu-server-focal:20_04-lts-gen2:20.0
 availability_zone: ''
 root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
 root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)
-root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra space for a larger swap
-loader_swap_size: 10240  #10GB SWAP space
+root_disk_size_loader: 20  # GB, Increase loader disk in order to have extra space for a larger swap
 azure_image_username: 'scyllaadm'
 ami_loader_user: 'ubuntu'
 scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-5.2.list'

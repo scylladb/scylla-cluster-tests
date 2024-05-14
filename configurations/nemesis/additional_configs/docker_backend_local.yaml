@@ -26,7 +26,6 @@ instance_type_runner: 'i4i.xlarge'
 # NOTE: the parameters reduce footprint of scylla cluster for docker backend, comparing to default values
 append_scylla_args: '--smp 1 --memory 2G'
 use_mgmt: false
-monitor_swap_size: 0
 
 # NOTE: encryption should be disabled until
 #       https://github.com/scylladb/scylla-cluster-tests/issues/7287 is fixed
