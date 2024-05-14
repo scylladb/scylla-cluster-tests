@@ -5,9 +5,9 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 managerPipeline(
     backend: 'aws',
-    region: '''["us-east-1", "us-west-2"]''',
+    region: 'us-west-2',
     test_name: 'mgmt_cli_test.MgmtCliTest.test_backup_feature',
-    test_config: '''["test-cases/manager/manager-regression-multiDC-set-distro.yaml", "configurations/manager/200gb_dataset.yaml"]''',
+    test_config: '''["test-cases/manager/manager-regression-singleDC-set-distro.yaml", "configurations/manager/200gb_dataset.yaml"]''',
 
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
