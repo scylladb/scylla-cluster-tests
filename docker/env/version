@@ -1,1 +1,5 @@
+<<<<<<< HEAD
 1.60-update-azure-compute-for-branch-2024.1
+=======
+1.64-update-argus-dc-rack-name-0.12.2-r2
+>>>>>>> a7e68c8c (improvement(sdcm/cluster): Store dc and rack information in argus)
