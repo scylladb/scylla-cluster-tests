@@ -2876,25 +2876,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         result = self.remoter.run("sudo bash -ce '%s'" % cmds)
         LOGGER.debug(result.stdout)
 
-    def create_swap_file(self, size=1024):
-        """Create swap file on instance
-
-        Create swap file on instance with size 1MB * 1024 = 1GB
-        :param size: size of swap file in MB, defaults to 1024MB
-        :type size: number, optional
-        """
-        commands = dedent("""sudo /bin/dd if=/dev/zero of=/var/sct_configured_swapfile bs=1M count={}
-                          sudo /sbin/mkswap /var/sct_configured_swapfile
-                          sudo chmod 600 /var/sct_configured_swapfile
-                          sudo /sbin/swapon /var/sct_configured_swapfile""".format(size))
-        self.log.info("Add swap file to %s", self)
-        result = self.remoter.run(commands, ignore_status=True)
-        if not result.ok:
-            self.log.warning("Swap file was not created on node %s.\nError details: %s", self, result.stderr)
-        result = self.remoter.run("grep /sct_configured_swapfile /proc/swaps", ignore_status=True)
-        if "sct_configured_swapfile" not in result.stdout:
-            self.log.warning("Swap file is not used on node %s.\nError details: %s", self, result.stderr)
-
     def set_hostname(self):
         self.log.warning('Method set_hostname is not implemented for %s' % self.__class__.__name__)
 
@@ -5019,13 +5000,6 @@ class BaseLoaderSet():
 
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
-        # add swap file
-        if not TestConfig.REUSE_CLUSTER:
-            swap_size = self.params.get("loader_swap_size")
-            if not swap_size:
-                self.log.info("Swap file for the loader is not configured")
-            else:
-                node.create_swap_file(swap_size)
 
         if node.distro.is_rhel_like:
             node.install_epel()
@@ -5331,13 +5305,6 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
     def node_setup(self, node, **kwargs):  # pylint: disable=unused-argument
         self.log.info('TestConfig in BaseMonitorSet')
         node.wait_ssh_up()
-        # add swap file
-        if not self.test_config.REUSE_CLUSTER:
-            monitor_swap_size = self.params.get("monitor_swap_size")
-            if not monitor_swap_size:
-                self.log.info("Swap file for the monitor is not configured")
-            else:
-                node.create_swap_file(monitor_swap_size)
         # update repo cache and system after system is up
         node.update_repo_cache()
         self.mgmt_auth_token = self.monitor_id  # pylint: disable=attribute-defined-outside-init

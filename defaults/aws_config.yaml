@@ -14,8 +14,7 @@ ami_id_monitor: 'scylladb-monitor-4-6-2-2024-02-13t08-06-04z'
 availability_zone: 'a'
 root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
 root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)
-root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra space for a larger swap
-loader_swap_size: 10240  #10GB SWAP space
+root_disk_size_loader: 20
 ami_db_scylla_user: 'scyllaadm'
 ami_loader_user: 'ubuntu'
 ami_monitor_user: 'ubuntu'
