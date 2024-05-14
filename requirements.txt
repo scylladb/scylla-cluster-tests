@@ -122,9 +122,7 @@ boto3==1.28.4 \
 boto3-stubs[dynamodb,ec2,pricing,s3]==1.28.4 \
     --hash=sha256:7a68d2a456d995318a6237eb5c6039f63b6a9bf902f216ff2261f87015fbb1c3 \
     --hash=sha256:a5b1cb7cdfd83f34b573c9af4eda80a62638f2ac78fae9c972721d3837e1b918
-    # via
-    #   -r requirements.in
-    #   boto3-stubs
+    # via -r requirements.in
 botocore==1.31.4 \
     --hash=sha256:1c14ac4521af707a7a407cee0e22695ce3e95c0f1a0c974e21cb25a3ce78a538 \
     --hash=sha256:f9738a23b03c55c2958ebdee65273afeda80deaeefebe595887fc3251e48293a
@@ -1088,7 +1086,6 @@ pyjwt[crypto]==2.8.0 \
     # via
     #   msal
     #   pygithub
-    #   pyjwt
 pylint==2.11.1 \
     --hash=sha256:0f358e221c45cbd4dad2a1e4b883e75d28acdcccd29d40c76eb72b307269b126 \
     --hash=sha256:2c9843fff1a88ca0ad98a256806c82c5a8f86086e7ccbdb93297d86c3f90c436
