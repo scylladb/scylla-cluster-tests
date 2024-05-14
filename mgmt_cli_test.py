@@ -349,9 +349,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.test_mgmt_cluster_crud()
         with self.subTest('Mgmt cluster Health Check'):
             self.test_mgmt_cluster_healthcheck()
-        # test_healthcheck_change_max_timeout requires a multi dc run. And since ipv6 cannot run in multi dc, this test
-        # function will be skipped for ipv6 runs.
-        if self.db_cluster.nodes[0].test_config.IP_SSH_CONNECTIONS != "ipv6":
+        # test_healthcheck_change_max_timeout requires a multi dc run
+        if self.db_cluster.nodes[0].test_config.MULTI_REGION:
             with self.subTest('Basic test healthcheck change max timeout'):
                 self.test_healthcheck_change_max_timeout()
         with self.subTest('Basic test suspend and resume'):
