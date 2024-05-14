@@ -388,6 +388,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 resource_type=self.node_type,
                 public_ip=self.public_ip_address,
                 private_ip=self.ip_address,
+                dc_name="",
+                rack_name="",
                 region=self.region,
                 provider=self.parent_cluster.cluster_backend,
                 shards_amount=shards,
@@ -404,6 +406,14 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             client.update_shards_for_resource(name=self.name, new_shards=shards)
         except Exception:  # pylint: disable=broad-except
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
+
+    def update_rack_info_in_argus(self, dc_name: str, rack_name: str):
+        try:
+            client = self.test_config.argus_client()
+            client.update_resource(name=self.name, update_data={"instance_info": {
+                                   "rack_name": rack_name, "dc_name": dc_name}})
+        except Exception:  # pylint: disable=broad-except
+            LOGGER.error("Encountered an unhandled exception while updating resource in Argus", exc_info=True)
 
     def _terminate_node_in_argus(self):
         try:
@@ -3807,6 +3817,8 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
                 exception_details = (str(ex), traceback.format_exc())
             try:
                 _node.update_shards_in_argus()
+                LOGGER.info("DC: %s | Rack: %s", _node.datacenter, _node.node_rack)
+                _node.update_rack_info_in_argus(_node.datacenter, _node.node_rack)
             except Exception:  # pylint: disable=broad-except
                 LOGGER.warning("Failure settings shards for node %s in Argus.", _node)
                 LOGGER.debug("Exception details:\n", exc_info=True)
@@ -3890,6 +3902,12 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             if isinstance(cl_inst, BaseScyllaCluster):
                 cl_inst.wait_for_nodes_up_and_normal(
                     nodes=node_list, verification_node=node_list[0], timeout=timeout)
+            for node in node_list:
+                try:
+                    node.update_rack_info_in_argus(node.datacenter, node.node_rack)
+                except Exception:  # pylint: disable=broad-except
+                    LOGGER.warning("Failure settings dc/rack infomration for %s in Argus.", node)
+                    LOGGER.debug("Exception details:\n", exc_info=True)
 
         time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug('TestConfig duration -> %s s', int(time_elapsed))
