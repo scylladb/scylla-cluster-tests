@@ -1691,9 +1691,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def process_scylla_args(self, append_scylla_args=''):
         if append_scylla_args:
             scylla_help = self.remoter.run(
-                f"{self.add_install_prefix('/usr/bin/scylla')} --help", ignore_status=True).stdout
+                f"{self.add_install_prefix('/usr/bin/scylla')} --help", ignore_status=True, verbose=False).stdout
             scylla_help_seastar = self.remoter.run(
-                f"{self.add_install_prefix('/usr/bin/scylla')} --help-seastar", ignore_status=True).stdout
+                f"{self.add_install_prefix('/usr/bin/scylla')} --help-seastar", ignore_status=True, verbose=False).stdout
             scylla_arg_parser = ScyllaArgParser.from_scylla_help(
                 help_text=f"{scylla_help}\n{scylla_help_seastar}",
                 duplicate_cb=lambda dups: ScyllaHelpErrorEvent.duplicate(
