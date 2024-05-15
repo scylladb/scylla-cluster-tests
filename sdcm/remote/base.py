@@ -84,7 +84,7 @@ class CommandRunner(metaclass=ABCMeta):
     def _setup_watchers(self, verbose: bool, log_file: str, additional_watchers: list) -> List[StreamWatcher]:
         watchers = additional_watchers if additional_watchers else []
         if verbose:
-            watchers.append(OutputWatcher(self.log))
+            watchers.append(OutputWatcher(self.log, self.hostname))
         if log_file:
             watchers.append(LogWriteWatcher(log_file))
         return watchers
@@ -209,8 +209,9 @@ class CommandRunner(metaclass=ABCMeta):
 
 
 class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
-    def __init__(self, log: logging.Logger):
+    def __init__(self, log: logging.Logger, hostname: str):
         super().__init__()
+        self.hostname = hostname
         self.len = 0
         self.log = log
 
@@ -219,13 +220,13 @@ class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
 
         while '\n' in stream_buffer:
             out_buf, rest_buf = stream_buffer.split('\n', 1)
-            self.log.debug(out_buf)
+            self.log.debug("<%s>: " + out_buf, self.hostname)
             stream_buffer = rest_buf
         self.len = len(stream) - len(stream_buffer)
         return []
 
     def submit_line(self, line: str):
-        self.log.debug(line.rstrip('\n'))
+        self.log.debug("<%s>: " + line.rstrip('\n'), self.hostname)
 
 
 class LogWriteWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
