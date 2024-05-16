@@ -34,7 +34,8 @@ class JepsenTest(ClusterTester):
     @log_run_info
     def setup_jepsen(self):
         remoter = self.jepsen_node.remoter
-        remoter.sudo("apt-get install -y openjdk-11-jre openjdk-11-jre-headless libjna-java gnuplot graphviz git")
+        remoter.sudo(
+            "apt-get install -o DPkg::Lock::Timeout=300 -y openjdk-11-jre openjdk-11-jre-headless libjna-java gnuplot graphviz git")
         remoter.run(shell_script_cmd("""\
             curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein
             chmod +x lein

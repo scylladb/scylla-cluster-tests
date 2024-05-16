@@ -294,7 +294,7 @@ class ScyllaNodeBenchmarkRunner:
         try:
             LOGGER.info("Installing Ubuntu prerequisites for the node benchmarks...")
             for pkg in package_list:
-                self._node.install_package(pkg, wait_for_package_manager=False)
+                self._node.install_package(pkg)
             LOGGER.info("Ubuntu prerequisites for the node benchmarks installed.")
         except Exception as exc:
             LOGGER.warning("Failed to install Ubuntu prerequisites for the node benchmarking tools. "

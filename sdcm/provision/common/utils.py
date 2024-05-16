@@ -178,10 +178,7 @@ def install_syslogng_service():
                 done
 
                 for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
-                    while ! find /proc/*/fd -lname /var/lib/dpkg/lock-frontend -exec false {} + -quit ; do
-                        sleep 1
-                    done
-                    apt-get install -y syslog-ng || true
+                    apt-get install -o DPkg::Lock::Timeout=300 -y syslog-ng || true
                     if dpkg-query --show syslog-ng ; then
                         SYSLOG_NG_INSTALLED=1
                         break
