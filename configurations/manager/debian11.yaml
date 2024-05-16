@@ -1,2 +1,3 @@
 ami_id_monitor: 'ami-09a41e26df464c548'  # Debian Bullseye image - debian-11-amd64-20220503-998
 ami_monitor_user: 'admin'
+monitor_branch: 'branch-4.6'  # Pass it as debian image is not the formal monitor image
