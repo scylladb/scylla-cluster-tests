@@ -5426,7 +5426,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         elif node.distro.is_debian:
             node.install_package(
                 package_name='apt-transport-https ca-certificates curl software-properties-common gnupg2')
-            node.remoter.sudo('curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -', retry=3)
+            node.remoter.sudo(
+                'bash -ce "curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -"', retry=3)
             node.remoter.sudo(
                 cmd='add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"')
             node.remoter.sudo(cmd="apt update")
