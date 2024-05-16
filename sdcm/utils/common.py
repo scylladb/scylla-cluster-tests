@@ -2988,13 +2988,12 @@ def prepare_and_start_saslauthd_service(node):
         """)
     else:
         setup_script = dedent("""
-            sudo apt-get install -y sasl2-bin
+            sudo apt-get install -o DPkg::Lock::Timeout=300 -y sasl2-bin
             sudo systemctl enable saslauthd
             echo -e 'MECHANISMS=ldap\nSTART=yes\n' | sudo tee -a /etc/default/saslauthd
             sudo touch /etc/saslauthd.conf
             sudo adduser scylla sasl  # to avoid the permission issue of unit socket
         """)
-    node.wait_apt_not_running()
     node.remoter.run('bash -cxe "%s"' % setup_script)
     if node.parent_cluster.params.get('ldap_server_type') == LdapServerType.MS_AD:
         conf = node.get_saslauthd_ms_ad_config()
