@@ -1866,6 +1866,11 @@ class SCTConfiguration(dict):
                 raise ValueError("For PasswordAuthenticator authenticator authenticator_user and authenticator_password"
                                  " have to be provided")
 
+        if self.get('alternator_enforce_authorization'):
+            if not self.get('authenticator') or not self.get('authorizer'):
+                raise ValueError(
+                    "When enabling `alternator_enforce_authorization` both `authenticator` and `authorizer` should be defined")
+
         # 13) validate stress and prepare duration:
         if stress_duration := self.get('stress_duration'):
             try:
