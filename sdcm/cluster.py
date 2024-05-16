@@ -1397,21 +1397,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run(cmd)
             self.remoter.run('sudo systemctl restart node-exporter.service')
 
-    def apt_running(self):
-        try:
-            result = self.remoter.run('sudo lsof /var/lib/dpkg/lock', ignore_status=True)
-            return result.exit_status == 0
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.error('Failed to check if APT is running in the background. Error details: %s', details)
-            return False
-
-    def wait_apt_not_running(self, verbose=True):
-        text = None
-        if verbose:
-            text = '%s: Waiting for apt to finish running in the background' % self.name
-        wait.wait_for(func=lambda: not self.apt_running(), step=60,
-                      text=text, throw_exc=False)
-
     def wait_db_down(self, verbose=True, timeout=3600, check_interval=60):
         text = None
         if verbose:
@@ -1781,14 +1766,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def install_package(self,
                         package_name: str,
                         package_version: str = None,
-                        wait_step: int = 30,
-                        wait_timeout: int = 60,
-                        wait_for_package_manager: bool = True,
                         ignore_status: bool = False) -> None:
-        if self.distro.is_ubuntu and wait_for_package_manager:
-            wait.wait_for(func=self.is_apt_lock_free, step=wait_step,
-                          timeout=wait_timeout, text='Checking if package manager is free',
-                          throw_exc=False)
         if self.distro.is_rhel_like:
             pkg_cmd = 'yum'
             package_name = f"{package_name}-{package_version}*" if package_version else package_name
@@ -1796,11 +1774,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             pkg_cmd = 'zypper'
             package_name = f"{package_name}-{package_version}" if package_version else package_name
         else:
-            pkg_cmd = 'DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef"'
+            pkg_cmd = ('DEBIAN_FRONTEND=noninteractive apt-get '
+                       '-o DPkg::Lock::Timeout=120 -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef"')
             version_prefix = f"={package_version}*" if package_version else ""
-            # A workaround for: https://github.com/scylladb/scylla-pkg/issues/2578
-            if package_name == "scylla-manager-agent":
-                self.remoter.sudo('apt --fix-broken install -y', ignore_status=ignore_status)
             if version_prefix:
                 # get versioned dependencies as apt always get's the latest version which are not compatible
                 result = self.remoter.run(
@@ -1814,12 +1790,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             #       And running some old Scylla docker images we may get errors refering to old/removed mirrors.
             self.remoter.sudo(f"{pkg_cmd} update", ignore_status=ignore_status)
         self.remoter.sudo(f'{pkg_cmd} install -y {package_name}', ignore_status=ignore_status)
-
-    def is_apt_lock_free(self) -> bool:
-        # NOTE: dockerized Scylla doesn't have the 'lsof' package by default
-        result = self.remoter.sudo("which lsof || apt-get install -y lsof", ignore_status=True)
-        result = self.remoter.sudo("lsof /var/lib/dpkg/lock", ignore_status=True)
-        return result.exit_status == 1
 
     def install_manager_agent(self, package_path: Optional[str] = None) -> None:
         package_name = "scylla-manager-agent"
@@ -1870,7 +1840,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo("zypper update scylla-manager-agent -y")
         else:
             self.remoter.sudo("apt-get update", ignore_status=True)
-            self.remoter.sudo("apt-get install -y scylla-manager-agent")
+            self.remoter.sudo("apt-get install -o DPkg::Lock::Timeout=300 -y scylla-manager-agent")
         self.remoter.sudo("scyllamgr_agent_setup -y")
         if start_agent_after_upgrade:
             if self.is_docker():
@@ -2972,13 +2942,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo('systemctl stop apt-daily-upgrade.timer', ignore_status=True)
             self.remoter.sudo('systemctl stop apt-daily.service', ignore_status=True)
             self.remoter.sudo('systemctl stop apt-daily-upgrade.service', ignore_status=True)
-            self.wait_apt_not_running()
             self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*unattended-upgrades', ignore_status=True)
             self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*auto-upgrades', ignore_status=True)
             self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*periodic', ignore_status=True)
             self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*update-notifier', ignore_status=True)
-            self.remoter.sudo('apt-get remove -y unattended-upgrades', ignore_status=True)
-            self.remoter.sudo('apt-get remove -y update-manager', ignore_status=True)
+            self.remoter.sudo('apt-get remove -o DPkg::Lock::Timeout=300 -y unattended-upgrades', ignore_status=True)
+            self.remoter.sudo('apt-get remove -o DPkg::Lock::Timeout=300 -y update-manager', ignore_status=True)
 
     def get_nic_devices(self) -> List:
         """Returns list of ethernet network interfaces"""
@@ -4557,7 +4526,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 assert int(result.stdout) == 1, "Even though Ubuntu pro is enabled, FIPS is not enabled"
                 # https://ubuntu.com/tutorials/using-the-ua-client-to-enable-fips#4-enabling-fips-crypto-modules
         node.update_repo_cache()
-        node.install_package('lsof net-tools', wait_for_package_manager=True)
+        node.install_package('lsof net-tools')
         install_scylla = True
 
         if self.params.get("use_preinstalled_scylla") and node.is_scylla_installed(raise_if_not_installed=True):
