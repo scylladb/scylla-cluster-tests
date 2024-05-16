@@ -960,9 +960,8 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             node.run_startup_script()
             return
 
-        node.wait_apt_not_running()
         node.remoter.run('sudo apt-get update')
-        node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
+        node.remoter.run('sudo apt-get install -o DPkg::Lock::Timeout=300 -y openjdk-6-jdk')
 
     @cluster.wait_for_init_wrap
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):  # pylint: disable=too-many-arguments
