@@ -135,7 +135,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         if 'dynamodb' in self.stress_cmd:
             dynamodb_teample = dedent('''
                 measurementtype=hdrhistogram
-                dynamodb.awsCredentialsFile = /tmp/aws_empty_file
+                dynamodb.awsCredentialsFile = /tmp/aws_dummy_credentials_file
                 dynamodb.endpoint = {0}://{1}:{2}
                 dynamodb.connectMax = 200
                 requestdistribution = uniform
@@ -157,11 +157,16 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                     dynamodb.primaryKey = {alternator.consts.HASH_KEY_NAME}
                     dynamodb.primaryKeyType = {alternator.enums.YCSBSchemaTypes.HASH_SCHEMA.value}
                 ''')
-
-            aws_empty_file = dedent(f""""
-                accessKey = {self.params.get('alternator_access_key_id')}
-                secretKey = {alternator.api.Alternator.get_salted_hash(node=self.node_list[0], username=self.params.get('alternator_secret_access_key'))}
-            """)
+            if self.params.get('alternator_enforce_authorization'):
+                aws_credentials_content = dedent(f""""
+                    accessKey = {self.params.get('alternator_access_key_id')}
+                    secretKey = {alternator.api.Alternator.get_salted_hash(node=self.node_list[0], username=self.params.get('alternator_access_key_id'))}
+                """)
+            else:
+                aws_credentials_content = dedent(f""""
+                    accessKey = {self.params.get('alternator_access_key_id')}
+                    secretKey = {self.params.get('alternator_secret_access_key')}
+                """)
 
             with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
                 tmp_file.write(dynamodb_teample)
@@ -169,9 +174,9 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 cmd_runner.send_files(tmp_file.name, os.path.join('/tmp', 'dynamodb.properties'))
 
             with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
-                tmp_file.write(aws_empty_file)
+                tmp_file.write(aws_credentials_content)
                 tmp_file.flush()
-                cmd_runner.send_files(tmp_file.name, os.path.join('/tmp', 'aws_empty_file'))
+                cmd_runner.send_files(tmp_file.name, os.path.join('/tmp', 'aws_dummy_credentials_file'))
             if is_kubernetes:
                 if web_protocol == "https":
                     if ca_bundle_path := getattr(self.node_list[0], "alternator_ca_bundle_path", None):
