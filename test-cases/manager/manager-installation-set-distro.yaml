@@ -1,0 +1,9 @@
+test_duration: 60
+
+instance_type_db: 'i4i.large'
+
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 1
+
+user_prefix: manager-installation

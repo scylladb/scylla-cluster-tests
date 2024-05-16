@@ -1147,3 +1147,33 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                 f'Task {current_task_status} did not remain in "{TaskStatus.STOPPED}" status, but instead ' \
                 f'reached "{current_task_status}" status'
         self.log.info('finishing test_suspend_and_resume_without_starting_tasks')
+
+    def test_manager_installed_and_functional(self):
+        """Verify that the Manager is installed and functional.
+
+        The test is intended for execution on non-main OS distributions (for example, debian10)
+        where the main goal is to execute installation test.
+        The rest of the checks are executed on Ubuntu distribution in test_manager_sanity.
+        """
+        self.log.info('starting test_manager_installed_and_functional')
+
+        manager_node = self.monitors.nodes[0]
+        scylla_node = self.db_cluster.nodes[0]
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
+
+        # Check scylla-manager and scylla-manager-agent are up and running (/ping endpoint)
+        manager_node.is_manager_server_up()
+        scylla_node.is_manager_agent_up()
+
+        # Check the sctool version method is callable
+        self.log.info("Got Manager's version: %s", manager_tool.sctool.version)
+
+        # Add cluster and verify hosts health
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                               auth_token=self.monitors.mgmt_auth_token)
+        dict_host_health = mgr_cluster.get_hosts_health()
+        for host_health in dict_host_health.values():
+            assert host_health.status == HostStatus.UP, "Host status is not 'UP'"
+            assert host_health.rest_status == HostRestStatus.UP, "Host REST status is not 'UP'"
+
+        self.log.info('finishing test_manager_installed_and_functional')
