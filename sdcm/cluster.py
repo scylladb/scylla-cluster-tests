@@ -279,7 +279,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._scylla_manager_journal_thread = None
         self._decoding_backtraces_thread = None
         self._init_system = None
-        self.db_init_finished = False
 
         self._short_hostname = None
         self._alert_manager: Optional[PrometheusAlertManagerListener] = None
@@ -1204,36 +1203,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
 
     def is_port_used(self, port: int, service_name: str) -> bool:
-        # Check that "ss" is present and install if absent
-        ss_version_result = self.remoter.run("ss --version || echo ss_not_found", retry=5)
-        if "ss_not_found" in ss_version_result.stdout:
-            self.log.debug(
-                f"Failed to get 'ss' binary version\n"
-                f"stdout: {ss_version_result.stdout}\n"
-                f"stderr: {ss_version_result.stderr}")
-            if self.distro.is_rhel_like:
-                self.remoter.sudo("yum install -y iproute", ignore_status=True)
-            elif self.distro.is_sles:
-                self.remoter.sudo("zypper install -y iproute", ignore_status=True)
-            else:
-                self.remoter.sudo("apt-get install -y iproute2", ignore_status=True)
-
+        """Wait for the port to be used for the specified timeout. Returns True if used and False otherwise."""
         try:
-            # Path to `ss' is /usr/sbin/ss for RHEL-like distros and /bin/ss for Debian-based.  Unfortunately,
-            # /usr/sbin is not always in $PATH, so need to set it explicitly.
-            #
-            # Output of `ss -ln' command in case of used port:
-            #   $ ss -ln '( sport = :8000 )'
-            #   Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
-            #   tcp   LISTEN     0      5                      *:8000                               *:*
-            #
-            # And if there are no processes listening on the port:
-            #   $ ss -ln '( sport = :8001 )'
-            #   Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
-            #
-            # Can't avoid the header by using `-H' option because of ss' core on Ubuntu 18.04.
-            cmd = f"PATH=/bin:/usr/sbin ss -ln '( sport = :{port} )'"
-            return len(self.remoter.run(cmd, verbose=False).stdout.splitlines()) > 1
+            cmd = f"grep -m1 :{port:04X} /proc/net/tcp /proc/net/tcp6"
+            result = self.remoter.run(cmd, verbose=False, ignore_status=True)
+            if result.ok:
+                return True
+            if result.return_code == 1:
+                # this is the case output is empty
+                return False
+            else:
+                self.log.error("Error checking for '%s' on port %s: rc:", service_name, port, result)
+                return False
         except Exception as details:  # pylint: disable=broad-except
             self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
             return False
@@ -1326,33 +1307,29 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self._uuid = result.stdout.strip()
         return self._uuid
 
-    def _report_housekeeping_uuid(self, verbose=False):
+    def _report_housekeeping_uuid(self):
         """
         report uuid of test db nodes to ScyllaDB
         """
         mark_path = '/var/lib/scylla-housekeeping/housekeeping.uuid.marked'
         cmd = 'curl "https://i6a5h9l1kl.execute-api.us-east-1.amazonaws.com/prod/check_version?uu=%s&mark=scylla"'
 
-        mark_exists = self.remoter.run('test -e %s' % mark_path, ignore_status=True, verbose=verbose).ok
-        if self.uuid and not mark_exists:
-            self.remoter.run(cmd % self.uuid, ignore_status=True)
-            if self.is_docker():
-                self.remoter.sudo('touch %s' % mark_path, verbose=verbose)
-            else:
-                self.remoter.sudo('touch %s' % mark_path, verbose=verbose, user='scylla')
+        try:
+            mark_exists = self.remoter.run('test -e %s' % mark_path, ignore_status=True, verbose=False).ok
+            if self.uuid and not mark_exists:
+                self.remoter.run(cmd % self.uuid, ignore_status=True)
+                self.remoter.sudo('touch %s' % mark_path, verbose=False, user='scylla')
+        except Exception as details:  # pylint: disable=broad-except
+            self.log.error('Failed to report housekeeping uuid. Error details: %s', details)
 
     def wait_db_up(self, verbose=True, timeout=3600):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be up' % self.name
 
-        wait.wait_for(func=self.db_up, step=60, text=text, timeout=timeout,
+        wait.wait_for(func=self.db_up, step=5, text=text, timeout=timeout,
                       throw_exc=True, stop_event=self.stop_wait_db_up_event)
-        self.db_init_finished = True
-        try:
-            self._report_housekeeping_uuid(verbose=True)
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.error('Failed to report housekeeping uuid. Error details: %s', details)
+        threading.Thread(target=self._report_housekeeping_uuid, daemon=True).start()
 
     def is_manager_agent_up(self, port=None):
         port = port if port else self.MANAGER_AGENT_PORT
