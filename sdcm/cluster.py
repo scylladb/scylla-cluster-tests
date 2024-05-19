@@ -86,7 +86,6 @@ from sdcm.utils.common import (
     S3Storage,
     ScyllaCQLSession,
     PageFetcher,
-    deprecation,
     get_data_dir_path,
     verify_scylla_repo_file,
     normalize_ipv6_url,
@@ -279,7 +278,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._db_log_reader_thread = None
         self._scylla_manager_journal_thread = None
         self._decoding_backtraces_thread = None
-        self._init_system = None
         self.db_init_finished = False
 
         self._short_hostname = None
@@ -940,19 +938,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._spot_monitoring_thread = threading.Thread(
             target=self.spot_monitoring_thread, name='SpotMonitoringThread', daemon=True)
         self._spot_monitoring_thread.start()
-
-    @property
-    def init_system(self):
-        deprecation("consider to use node.distro.uses_systemd property instead")
-        if self._init_system is None:
-            result = self.remoter.run('journalctl --version',
-                                      ignore_status=True)
-            if result.exit_status == 0:
-                self._init_system = 'systemd'
-            else:
-                self._init_system = 'sysvinit'
-
-        return self._init_system
 
     def start_journal_thread(self):
         logs_transport = self.parent_cluster.params.get("logs_transport")
@@ -1709,10 +1694,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             elif self.distro.is_sles:
                 self.remoter.sudo("zypper install -y scylla-gdb", verbose=True, ignore_status=True)
 
-        if self.init_system == "systemd":
-            self.fix_scylla_server_systemd_config()
+        self.fix_scylla_server_systemd_config()
 
     def fix_scylla_server_systemd_config(self):
+        if self.is_docker():
+            # we don't have systemd working inside docker
+            return
+
         systemd_version = get_systemd_version(self.remoter.run("systemctl --version", ignore_status=True).stdout)
         if systemd_version >= 240:
             self.log.debug("systemd version %d >= 240: we can change FinalKillSignal", systemd_version)
