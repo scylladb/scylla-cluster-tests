@@ -486,10 +486,6 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method,too-many-instance-
     def process_scylla_args(self, append_scylla_args=''):
         pass
 
-    @property
-    def init_system(self):
-        return 'systemd'
-
     def fix_scylla_server_systemd_config(self):
         pass
 

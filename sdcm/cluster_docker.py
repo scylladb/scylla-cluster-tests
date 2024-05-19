@@ -200,11 +200,6 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         return self.parent_cluster.source_image
 
     @property
-    def init_system(self):
-        """systemd is not used in Docker"""
-        return "docker"
-
-    @property
     def vm_region(self):
         return "docker"
 
