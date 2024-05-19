@@ -2780,8 +2780,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                       auth_params=auth_params, use_keyspace=use_keyspace, timeout=timeout,
                       connect_timeout=connect_timeout, ssl_params=ssl_params)
 
+        # cqlsh uses rpc_address/broadcast_rps_address.
         host = '' if self.is_docker() else self.cql_address
-        # host = '' if self.is_docker() else self.scylla_listen_address
         # escape double quotes, that might be on keyspace/tables names
         command = '"{}"'.format(command.strip().replace('"', '\\"'))
 
