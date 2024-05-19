@@ -1348,7 +1348,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def is_manager_agent_up(self, port=None):
         port = port if port else self.MANAGER_AGENT_PORT
         # When the agent is IP, it should answer an https request of https://NODE_IP:10001/ping with status code 204
-        response = requests.get(f"https://{normalize_ipv6_url(self.cql_address)}:{port}/ping", verify=False)
+        # Scylla Manager Agent uses Scylla listen/broadcast address - https://manager.docs.scylladb.com/stable/config/
+        # scylla-manager-agent-config.html#:~:text=value.%0A%23auth_token%3A-,%23%20Bind%20REST%20API%20to,-the%20specified%20TCP
+        response = requests.get(f"https://{normalize_ipv6_url(self.scylla_listen_address)}:{port}/ping", verify=False)
         return response.status_code == 204
 
     def wait_manager_agent_up(self, verbose=True, timeout=180):
