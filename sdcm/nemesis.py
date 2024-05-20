@@ -82,6 +82,7 @@ from sdcm.sct_events.group_common_events import (
     ignore_no_space_errors,
     ignore_scrub_invalid_errors,
     ignore_stream_mutation_fragments_errors,
+    ignore_raft_topology_cmd_failing,
     ignore_ycsb_connection_refused,
     decorate_with_context,
     ignore_reactor_stall_errors,
@@ -3853,7 +3854,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for expected_start_failed_context in self.target_node.raft.get_severity_change_filters_scylla_start_failed(
                     terminate_pattern.timeout):
                 stack.enter_context(expected_start_failed_context)
-            with ignore_stream_mutation_fragments_errors():
+            with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing():
                 ParallelObject(objects=[trigger, watcher], timeout=full_operations_timeout).call_objects()
             if new_node := decommission_post_action():
                 new_node.wait_node_fully_start()
@@ -3932,21 +3933,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 "This nemesis logic is not compatible with K8S approach "
                 "for handling Scylla member's decommissioning.")
 
-        with ignore_stream_mutation_fragments_errors():
+        with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing():
             self.start_and_interrupt_decommission_streaming()
 
     def disrupt_rebuild_streaming_err(self):
         """
         Stop rebuild in middle to trigger some streaming fails, then rebuild the data on the node.
         """
-        with ignore_stream_mutation_fragments_errors():
+        with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing():
             self.start_and_interrupt_rebuild_streaming()
 
     def disrupt_repair_streaming_err(self):
         """
         Stop repair in middle to trigger some streaming fails, then rebuild the data on the node.
         """
-        self.start_and_interrupt_repair_streaming()
+        with ignore_raft_topology_cmd_failing():
+            self.start_and_interrupt_repair_streaming()
 
     def _corrupt_data_file(self):
         """Randomly corrupt data file by dd"""
