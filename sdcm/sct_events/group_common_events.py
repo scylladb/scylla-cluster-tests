@@ -298,6 +298,42 @@ def ignore_stream_mutation_fragments_errors():
         yield
 
 
+@contextmanager
+def ignore_raft_topology_cmd_failing():
+    with ExitStack() as stack:
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - raft_topology_cmd failed with: seastar::abort_requested_exception \(abort requested\)",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - raft_topology_cmd failed with: raft::request_aborted \(Request is aborted by a caller\)",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - send_raft_topology_cmd\(stream_ranges\) failed with exception \(node state is decommissioning\)",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - send_raft_topology_cmd\(stream_ranges\) failed with exception \(node state is rebuilding\)",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - send_raft_topology_cmd\(stream_ranges\) failed with exception \(node state is replacing\)",
+            extra_time_to_expiration=30
+        ))
+        yield
+
+
 def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
     """
     helper to decorate a function to run with a list of callables that return context managers

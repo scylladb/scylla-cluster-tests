@@ -8,7 +8,7 @@ from sdcm.exceptions import BootstrapStreamErrorFailure
 from sdcm.cluster import BaseNode, BaseScyllaCluster, BaseMonitorSet
 from sdcm.wait import wait_for
 from sdcm.sct_events.group_common_events import decorate_with_context, \
-    ignore_stream_mutation_fragments_errors, ignore_ycsb_connection_refused
+    ignore_stream_mutation_fragments_errors, ignore_ycsb_connection_refused, ignore_raft_topology_cmd_failing
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.common import ParallelObject
 
@@ -117,7 +117,7 @@ class NodeBootstrapAbortManager:
 
         wait_operations_timeout = (self.SUCCESS_BOOTSTRAP_TIMEOUT + self.INSTANCE_START_TIMEOUT
                                    + terminate_pattern.timeout + abort_action_timeout)
-        with ignore_stream_mutation_fragments_errors(), contextlib.ExitStack() as stack:
+        with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing(), contextlib.ExitStack() as stack:
             for expected_start_failed_context in self.verification_node.raft.get_severity_change_filters_scylla_start_failed(
                     terminate_pattern.timeout):
                 stack.enter_context(expected_start_failed_context)
@@ -142,7 +142,9 @@ class NodeBootstrapAbortManager:
                 self.verification_node.raft.clean_group0_garbage(raise_exception=True)
                 LOGGER.debug("Clean old scylla data and restart scylla service")
                 self.bootstrap_node.clean_scylla_data()
-            with adaptive_timeout(operation=Operations.NEW_NODE, node=self.verification_node, timeout=3600) as bootstrap_timeout:
+            with ignore_raft_topology_cmd_failing(), \
+                    adaptive_timeout(operation=Operations.NEW_NODE, node=self.verification_node, timeout=3600) as bootstrap_timeout:
+
                 self.bootstrap_node.start_scylla_server(verify_up_timeout=bootstrap_timeout, verify_down=True)
                 self.bootstrap_node.start_scylla_jmx()
             self.db_cluster.check_nodes_up_and_normal(
