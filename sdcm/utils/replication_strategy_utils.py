@@ -1,11 +1,13 @@
+from __future__ import annotations
 import ast
 import re
 
 from contextlib import ContextDecorator
-from typing import Callable, Dict
+from typing import Callable, Dict, TYPE_CHECKING
 
-from sdcm.cluster import BaseNode
 from sdcm.utils.cql_utils import cql_quote_if_needed
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 
 class ReplicationStrategy:  # pylint: disable=too-few-public-methods

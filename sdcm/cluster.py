@@ -80,6 +80,10 @@ from sdcm.snitch_configuration import SnitchConfig
 from sdcm.utils import properties
 from sdcm.utils.adaptive_timeouts import Operations, adaptive_timeout
 from sdcm.utils.aws_kms import AwsKms
+from sdcm.utils.replication_strategy_utils import (
+    ReplicationStrategy,
+    NetworkTopologyReplicationStrategy,
+)
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.common import (
@@ -177,6 +181,27 @@ LOGGER = logging.getLogger(__name__)
 def remove_if_exists(file_path):
     if os.path.exists(file_path):
         os.remove(file_path)
+
+
+def nodes_by_region(nodes) -> dict:
+    """:returns {region_name: [list of nodes]}"""
+    grouped_by_region = defaultdict(list)
+    for node in nodes:
+        grouped_by_region[node.region].append(node)
+    return grouped_by_region
+
+
+def get_datacenter_name_per_region(db_nodes):
+    datacenter_name_per_region = {}
+    for region, nodes in nodes_by_region(nodes=db_nodes).items():
+        if status := nodes[0].get_nodes_status():
+            # If `nodetool status` failed to get status for the node
+            if dc_name := status.get(nodes[0], {}).get('dc'):
+                datacenter_name_per_region[region] = dc_name
+        else:
+            LOGGER.error("Failed to get nodes status from node %s", nodes[0].name)
+
+    return datacenter_name_per_region
 
 
 class NodeError(Exception):
@@ -3135,6 +3160,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.info('Waiting for native_transport to be ready')
         self.wait_native_transport()
 
+    @property
+    def is_tablets_enabled(self):
+        with self.remote_scylla_yaml() as scylla_yml:
+            current_experimental_features = scylla_yml.experimental_features
+            return "tablets" in current_experimental_features
+
 
 class FlakyRetryPolicy(RetryPolicy):
 
@@ -3290,10 +3321,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def nodes_by_region(self, nodes=None) -> dict:
         """:returns {region_name: [list of nodes]}"""
         nodes = nodes if nodes else self.nodes
-        grouped_by_region = defaultdict(list)
-        for node in nodes:
-            grouped_by_region[node.region].append(node)
-        return grouped_by_region
+        return nodes_by_region(nodes)
 
     def nodes_by_racks_idx_and_regions(self, nodes: list[BaseNode] | None = None) -> dict[tuple[str, str], list[BaseNode]]:
         """:returns {(region, rack): [list of nodes]}"""
@@ -3303,17 +3331,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             grouped_by_racks[(str(node.region), str(node.rack))].append(node)
         return grouped_by_racks
 
-    def get_datacenter_name_per_region(self, db_nodes=None):
-        datacenter_name_per_region = {}
-        for region, nodes in self.nodes_by_region(nodes=db_nodes).items():
-            if status := nodes[0].get_nodes_status():
-                # If `nodetool status` failed to get status for the node
-                if dc_name := status.get(nodes[0], {}).get('dc'):
-                    datacenter_name_per_region[region] = dc_name
-            else:
-                LOGGER.error("Failed to get nodes status from node %s", nodes[0].name)
-
-        return datacenter_name_per_region
+    @staticmethod
+    def get_datacenter_name_per_region(db_nodes=None):
+        return get_datacenter_name_per_region(db_nodes)
 
     def get_rack_names_per_datacenter_and_rack_idx(self, db_nodes: list[BaseNode] | None = None):
         db_nodes = db_nodes if db_nodes else self.nodes
@@ -4924,9 +4944,30 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def decommission(self, node: BaseNode, timeout: int | float = None):
+        if node.is_tablets_enabled:
+            self.decrease_rf_of_all_test_ks(region_to_decrease=node.region)
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
             node.run_nodetool("decommission", timeout=timeout, retry=0)
         self.verify_decommission(node)
+
+    def decrease_rf_of_all_test_ks(self, region_to_decrease):
+        execution_node = random.choice([node for node in self.nodes if not node.running_nemesis])
+        test_keyspaces = self.get_test_keyspaces()
+        node_list_per_region = nodes_by_region(self.nodes)
+        dc_names_by_region = get_datacenter_name_per_region(self.nodes)
+        datacenters = {}
+        for region in node_list_per_region:
+            datacenters.update({dc_names_by_region[region]: len(node_list_per_region[region])})
+        dc_to_decrease = dc_names_by_region[region_to_decrease]
+        self.log.debug("Number of nodes by datacenter %s", datacenters)
+        for keyspace in test_keyspaces:
+            replication_strategy = ReplicationStrategy.get(execution_node, keyspace)
+            if isinstance(replication_strategy, NetworkTopologyReplicationStrategy):
+                current_rf = replication_strategy.replication_factors
+                if datacenters[dc_to_decrease] == int(current_rf[dc_to_decrease]):
+                    datacenters[dc_to_decrease] -= 1
+                    NetworkTopologyReplicationStrategy(**datacenters).apply(execution_node, keyspace)
+                    self.wait_for_schema_agreement()
 
     @property
     def scylla_manager_node(self) -> BaseNode:
