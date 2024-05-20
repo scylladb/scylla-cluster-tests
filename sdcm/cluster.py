@@ -2742,7 +2742,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         for row in cql_results:
             peer = row.peer
             try:
-                ipaddress.ip_address(row.peer)
+                # make sure we use ipv6 long format (some tools remove leading zeros)
+                peer = ipaddress.ip_address(row.peer).exploded
             except ValueError as exc:
                 current_err = f"Peer '{peer}' is not an IP address, err: {exc}\n"
                 LOGGER.warning(current_err)
@@ -2774,7 +2775,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if line.startswith('SCHEMA:'):
                 schema = line.replace('SCHEMA:', '')
             elif line.startswith('RPC_ADDRESS:'):
-                ip = line.replace('RPC_ADDRESS:', '')
+                # make sure we use ipv6 long format (some tools remove leading zeros)
+                ip = ipaddress.ip_address(line.replace('RPC_ADDRESS:', '')).exploded
             elif line.startswith('STATUS:'):
                 status = line.replace('STATUS:', '').split(',')[0]
             elif line.startswith('DC:'):
