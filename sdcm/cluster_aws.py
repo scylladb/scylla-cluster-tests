@@ -12,7 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 # pylint: disable=too-many-lines, too-many-public-methods
-
+import ipaddress
 import json
 import logging
 import os
@@ -460,7 +460,9 @@ class AWSNode(cluster.BaseNode):
         for interface in self._instance.network_interfaces:
             private_ip_addresses = [private_address["PrivateIpAddress"]
                                     for private_address in interface.private_ip_addresses]
-            ipv6_addresses = [ipv6_address['Ipv6Address'] for ipv6_address in interface.ipv6_addresses]
+            # make sure we use ipv6 long format (some tools remove leading zeros)
+            ipv6_addresses = [ipaddress.ip_address(
+                ipv6_address['Ipv6Address']).exploded for ipv6_address in interface.ipv6_addresses]
             device_indexes.append(interface.attachment['DeviceIndex'])
             ipv4_public_address = interface.association_attribute['PublicIp'] if interface.association_attribute else None
             dns_public_name = interface.association_attribute['PublicDnsName'] if interface.association_attribute else None
