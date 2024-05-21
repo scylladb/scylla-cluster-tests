@@ -1,3 +1,3 @@
-ami_id_monitor: 'ami-09a41e26df464c548'  # Debian Bullseye image - debian-11-amd64-20220503-998, region - us-east-1
+ami_id_monitor: 'resolve:ssm:/aws/service/debian/release/11/latest/amd64'  # Debian Bullseye latest image
 ami_monitor_user: 'admin'
 monitor_branch: 'branch-4.6'  # Pass it as debian image is not the formal monitor image
