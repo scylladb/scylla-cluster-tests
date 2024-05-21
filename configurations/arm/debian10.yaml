@@ -1,5 +1,9 @@
 ami_db_scylla_user: 'admin'
 ami_id_db_scylla: 'resolve:ssm:/aws/service/debian/release/10/latest/arm64'  # Debian Bullseye latest image
+<<<<<<< HEAD
+=======
+
+>>>>>>> 10e123ee (feature(artifacts-tests): use ssm link for images)
 region_name: 'eu-west-1'
 instance_type_db: 'im4gn.xlarge'
 # enhanced network isn't supported
