@@ -815,6 +815,16 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                           'scylla-qa-internal/custom_d1/rolling_upgrade_dataset1.yaml'])
         self.assertEqual(duration_per_cs_profile, ['60m', '20m'])
 
+    @pytest.mark.integration
+    def test_32_resolve_aws_ssm_links(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'resolve:ssm:/aws/service/debian/release/11/latest/amd64'
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        assert conf["ami_id_db_scylla"].startswith('ami-')
+
 
 if __name__ == "__main__":
     unittest.main()
