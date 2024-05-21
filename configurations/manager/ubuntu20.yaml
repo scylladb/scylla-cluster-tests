@@ -1,3 +1,3 @@
-ami_id_monitor: 'ami-042e8287309f5df03'  # Canonical, Ubuntu, 20.04 LTS, amd64 focal image build on 2021-02-23, region - us-east-1
+ami_id_monitor: 'resolve:ssm:/aws/service/canonical/ubuntu/server/20.04/stable/current/amd64/hvm/ebs-gp2/ami-id'  # Canonical, Ubuntu, 20.04 LTS, amd64 focal latest image
 ami_monitor_user: 'ubuntu'
 monitor_branch: 'branch-4.6'  # Pass it as debian image is not the formal monitor image

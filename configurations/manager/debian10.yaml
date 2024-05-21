@@ -1,4 +1,4 @@
-ami_id_monitor: 'ami-0d164bbd0c3b2cbd5'  # Debian buster image - debian-10-amd64-20240430-1733, region - us-east-1
+ami_id_monitor: 'resolve:ssm:/aws/service/debian/release/10/latest/amd64'  # Debian Buster latest image
 ami_monitor_user: 'admin'
 monitor_branch: 'branch-4.6'  # Pass it as debian image is not the formal monitor image
 
