@@ -20,7 +20,9 @@ from sdcm.provision.common.utils import (
     install_syslogng_service,
     configure_syslogng_target_script,
     restart_syslogng_service,
-    configure_ssh_accept_rsa)
+    configure_ssh_accept_rsa,
+    install_syslogng_exporter,
+)
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
 SYSLOGNG_SSH_TUNNEL_LOCAL_PORT = 5000
@@ -86,6 +88,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
                 hostname=self.hostname,
             )
             script += restart_syslogng_service()
+            script += install_syslogng_exporter()
 
         if self.configure_sshd:
             script += configure_sshd_script()

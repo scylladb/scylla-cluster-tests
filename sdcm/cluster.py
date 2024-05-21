@@ -56,7 +56,7 @@ from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from argus.backend.util.enums import ResourceState
-from sdcm.node_exporter_setup import NodeExporterSetup, SyslogNgExporterSetup
+from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.db_log_reader import DbLogReader
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
@@ -4596,8 +4596,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             return
 
         node.disable_daily_triggered_services()
-        if self.params.get('logs_transport') == 'syslog-ng':
-            SyslogNgExporterSetup().install(node)
 
         nic_devname = node.get_nic_devices()[0]
         if install_scylla:

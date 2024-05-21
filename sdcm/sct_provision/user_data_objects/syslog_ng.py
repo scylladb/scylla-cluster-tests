@@ -13,7 +13,7 @@
 from dataclasses import dataclass
 
 from sdcm.provision.common.configuration_script import SYSLOGNG_LOG_THROTTLE_PER_SECOND
-from sdcm.provision.common.utils import configure_syslogng_target_script, restart_syslogng_service
+from sdcm.provision.common.utils import configure_syslogng_target_script, restart_syslogng_service, install_syslogng_exporter
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 
@@ -37,3 +37,15 @@ class SyslogNgUserDataObject(SctUserDataObject):
                                                   hostname=self.instance_name)
         script += restart_syslogng_service()
         return script
+
+
+@dataclass
+class SyslogNgExporterUserDataObject(SctUserDataObject):
+
+    @property
+    def is_applicable(self) -> bool:
+        return self.params.get('logs_transport') == 'syslog-ng'
+
+    @property
+    def script_to_run(self) -> str:
+        return install_syslogng_exporter()
