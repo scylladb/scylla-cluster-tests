@@ -23,7 +23,7 @@ from sdcm.sct_provision.common.types import NodeTypeType
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 from sdcm.sct_provision.user_data_objects.scylla import ScyllaUserDataObject
 from sdcm.sct_provision.user_data_objects.sshd import SshdUserDataObject
-from sdcm.sct_provision.user_data_objects.syslog_ng import SyslogNgUserDataObject
+from sdcm.sct_provision.user_data_objects.syslog_ng import SyslogNgUserDataObject, SyslogNgExporterUserDataObject
 from sdcm.test_config import TestConfig
 
 
@@ -139,6 +139,7 @@ class DefinitionBuilder(abc.ABC):
     def _get_user_data_objects(self, instance_name: str, node_type: NodeTypeType) -> List[SctUserDataObject]:
         user_data_object_classes: List[Type[SctUserDataObject]] = [
             SyslogNgUserDataObject,
+            SyslogNgExporterUserDataObject,
             SshdUserDataObject,
             ScyllaUserDataObject,
         ]

@@ -162,3 +162,36 @@ def install_syslogng_service():
             echo "Unsupported distro"
         fi
     """)
+
+
+def install_syslogng_exporter():
+    return dedent("""\
+    curl -L -O https://github.com/brandond/syslog_ng_exporter/releases/download/0.1.0/syslog_ng_exporter
+    chmod +x syslog_ng_exporter
+    mv syslog_ng_exporter /usr/local/bin
+
+    if [ -e /etc/systemd/system/syslog_ng_exporter.service ]; then
+        rm /etc/systemd/system/syslog_ng_exporter.service
+    fi
+
+    cat <<EOM >> /etc/systemd/system/syslog_ng_exporter.service
+    [Unit]
+    Description=Syslog-ng metrics Exporter
+    Wants=network.target network-online.target
+    After=network.target network-online.target
+
+    [Service]
+    Type=simple
+    ExecStart=/usr/local/bin/syslog_ng_exporter
+    StandardOutput=journal
+    StandardError=journal
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+    EOM
+
+    systemctl daemon-reload
+    systemctl enable syslog_ng_exporter.service
+    systemctl start syslog_ng_exporter.service
+""")
