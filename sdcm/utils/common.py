@@ -71,8 +71,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_kms import AwsKms
-from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType, get_scylla_images_ec2_resource
-
+from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType, get_scylla_images_ec2_resource, get_ssm_ami
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
@@ -90,7 +89,6 @@ from sdcm.utils.gce_utils import (
     get_gce_storage_client,
 )
 from sdcm.utils.context_managers import environment
-
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
@@ -1966,6 +1964,14 @@ def convert_name_to_ami_if_needed(ami_id_param: str, region_names: list[str],) -
               ami-06878d265978313ca ami-03df6dea56f8aa618 ami-0039da1f3917fa8e3'
     """
     param_values = ami_id_param.split()
+
+    if len(param_values) == 1 and param_values[0].startswith("resolve:ssm:"):
+        ssm_name = param_values[0].replace("resolve:ssm:", "")
+        ami_list: list[str] = []
+        for region_name in region_names:
+            ami_list.append(get_ssm_ami(ssm_name, region_name=region_name))
+        return " ".join(ami_list)
+
     if len(param_values) == 1 and not param_values[0].startswith("ami-"):
         ami_list: list[str] = []
         for region_name in region_names:
