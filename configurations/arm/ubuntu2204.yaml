@@ -1,5 +1,5 @@
 ami_db_scylla_user: 'ubuntu'
-ami_id_db_scylla: 'ami-022c8ce295ce9ac4c'  # ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-arm64-server-20220506
+ami_id_db_scylla: 'resolve:ssm:/aws/service/canonical/ubuntu/server/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id'  # Canonical, Ubuntu, 22.04 LTS, amd64 focal latest image
 region_name: 'eu-west-1'
 instance_type_db: 'im4gn.xlarge'
 use_preinstalled_scylla: false

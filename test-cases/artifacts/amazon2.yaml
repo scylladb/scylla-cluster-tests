@@ -1,5 +1,5 @@
 ami_db_scylla_user: 'ec2-user'
-ami_id_db_scylla: 'ami-099a8245f5daa82bf'
+ami_id_db_scylla: 'resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 root_disk_size_db: 50
 backtrace_decoding: false
 cluster_backend: 'aws'
