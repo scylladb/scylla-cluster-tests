@@ -1842,7 +1842,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             
 
             # consume the random sequence
-            disrupt_method = self._random_sequence.pop()
+            disrupt_method = self._random_sequence.pop(0)
         InfoEvent(message=f"Sequence of methods: {self._random_sequence}")
         self.execute_disrupt_method(disrupt_method)
 
