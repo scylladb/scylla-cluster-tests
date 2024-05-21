@@ -1839,7 +1839,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 if not predefined_sequence:
                     random.shuffle(multiple_disrupt_methods)
                 self._random_sequence = multiple_disrupt_methods
-            
+
 
             # consume the random sequence
             disrupt_method = self._random_sequence.pop(0)
@@ -5082,15 +5082,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         decommission_futures: list[Future] = []
         self.unset_current_running_nemesis(self.target_node)
+        free_nodes = self._get_target_nodes()
+        InfoEvent(message=f"Free nodes {[node.name for node in free_nodes]}").publish()
+        random.shuffle(free_nodes)
+        decommission_nodes = free_nodes[:num_parallel_ops]
+        InfoEvent(message=f"Decommissioning nodes {[node.name for node in decommission_nodes]}").publish()
         with ThreadPoolExecutor(max_workers=num_parallel_ops) as pool:
-            for _ in range(num_parallel_ops):
-                free_nodes = self._get_target_nodes()
-                InfoEvent(message=f"Free nodes {[node.name for node in free_nodes]}").publish()
-                self.log.info("Free nodes %s", [node.name for node in free_nodes])
-                self.set_target_node()
-                InfoEvent(message=f"Choose target node {self.target_node.name}").publish()
-                self.log.info("Choose target node %s", self.target_node.name)
-                decommission_futures.append(pool.submit(decommission_node, self.target_node))
+            for node in decommission_nodes:
+                self.set_current_running_nemesis(node)
+                InfoEvent(message=f"Choose target node {node.name}").publish()
+                self.log.info("Choose target node %s", node.name)
+                decommission_futures.append(pool.submit(decommission_node, node))
 
         for future in decommission_futures:
             exc = future.exception()
