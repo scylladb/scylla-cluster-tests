@@ -1802,9 +1802,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                attr[0].startswith('disrupt_') and
                                callable(attr[1])]
         else:
-            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
-                               attr[0] in disrupt_methods and
-                               callable(attr[1])]
+            if not predefined_sequence:
+                disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
+                                attr[0] in disrupt_methods and
+                                callable(attr[1])]
+            else:
+                all_methods = {attr[0]: attr[1] for attr in inspect.getmembers(self) if
+                                attr[0] in disrupt_methods and
+                                callable(attr[1])}
+                saved_orders = []
+                for method in disrupt_methods:
+                    saved_orders.append(all_methods.get(method))
+                disrupt_methods = saved_orders
         if not disrupt_methods:
             self.log.warning("No monkey to run")
             return
@@ -1830,10 +1839,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 if not predefined_sequence:
                     random.shuffle(multiple_disrupt_methods)
                 self._random_sequence = multiple_disrupt_methods
+            
 
             # consume the random sequence
             disrupt_method = self._random_sequence.pop()
-
+        InfoEvent(message=f"Sequence of methods: {self._random_sequence}")
         self.execute_disrupt_method(disrupt_method)
 
     def execute_disrupt_method(self, disrupt_method):
@@ -5065,7 +5075,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message=f"Num parallel ops: {num_parallel_ops}").publish()
         InfoEvent(message=f"Num of nodes in : {len(self.cluster.nodes)}").publish()
 
-        if len(self.cluster.nodes) - num_parallel_ops <= len(self.cluster.nodes) // 2 + 1:
+        if len(self.cluster.nodes) - num_parallel_ops < len(self.cluster.nodes) // 2 + 1:
             raise UnsupportedNemesis("After decommission quorum should stay")
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Nemesis will not be run on kubernetes")
@@ -5106,7 +5116,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message=f"Num parallel ops: {num_parallel_ops}").publish()
         InfoEvent(message=f"Num of nodes in : {len(self.cluster.nodes)}").publish()
 
-        if len(self.cluster.nodes) - num_parallel_ops <= len(self.cluster.nodes) // 2 + 1:
+        if len(self.cluster.nodes) - num_parallel_ops < len(self.cluster.nodes) // 2 + 1:
             raise UnsupportedNemesis("After replace quorum should stay")
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Nemesis will not be run on kubernetes")
@@ -5182,7 +5192,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message=f"Num parallel ops: {num_parallel_ops}").publish()
         InfoEvent(message=f"Num of nodes in : {len(self.cluster.nodes)}").publish()
 
-        if len(self.cluster.nodes) - num_parallel_ops <= len(self.cluster.nodes) // 2 + 1:
+        if len(self.cluster.nodes) - num_parallel_ops < len(self.cluster.nodes) // 2 + 1:
             raise UnsupportedNemesis("After replace quorum should stay")
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Nemesis will not be run on kubernetes")
