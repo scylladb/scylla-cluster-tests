@@ -150,6 +150,8 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             node_ip_list = [n.cql_address for n in node_list]
 
             stress_cmd += ",".join(node_ip_list)
+            if self.params.get("non_shard_aware_loaders"):
+                stress_cmd += " -port native=9042"
         return stress_cmd
 
     def adjust_cmd_connection_options(self, stress_cmd: str, loader, cmd_runner) -> str:

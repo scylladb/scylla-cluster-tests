@@ -1,1 +1,1 @@
-scylla_encryption_options: "{'key_provider': 'none'}"
+scylla_encryption_options: '{"key_provider": "none"}'

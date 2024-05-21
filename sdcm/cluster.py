@@ -5060,6 +5060,9 @@ class BaseLoaderSet():
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         node.remoter.sudo("bash -cxe \"echo '*\t\thard\tcore\t\tunlimited\n*\t\tsoft\tcore\t\tunlimited' "
                           ">> /etc/security/limits.d/20-coredump.conf\"")
+        if self.params.get('non_shard_aware_loaders'):
+            node.remoter.sudo("iptables -A OUTPUT -p tcp --dport 19042 -j DROP", verbose=True)
+
         if result.exit_status == 0:
             self.log.debug('Skip loader setup for using a prepared AMI')
             return

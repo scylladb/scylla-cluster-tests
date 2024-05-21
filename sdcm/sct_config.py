@@ -295,6 +295,9 @@ class SCTConfiguration(dict):
         dict(name="scylla_repo_loader", env="SCT_SCYLLA_REPO_LOADER", type=str,
              help="Url to the repo of scylla version to install c-s for loader"),
 
+        dict(name="non_shard_aware_loaders", env="SCT_NON_SHARD_AWARE_LOADERS", type=boolean,
+             help="If True, loader will not use shard awareness by rejecting 19042 outgoing traffic"),
+
         dict(name="scylla_mgmt_address", env="SCT_SCYLLA_MGMT_ADDRESS",
              type=str,
              help="Url to the repo of scylla manager version to install for management tests"),

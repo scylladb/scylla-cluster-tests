@@ -641,7 +641,7 @@ def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
 
     tags = {"TestId": test_id, }
 
-    instances = list_instances_aws(tags_dict=tags, group_as_region=True, running=True)
+    instances = list_instances_aws(tags_dict=tags, group_as_region=True, running=True, verbose=True)
     for region in instances:
         for instance in instances[region]:
             # NOTE: K8S nodes created by autoscaler never have 'Name' set.
