@@ -1,2 +1,2 @@
-ami_id_monitor: 'ami-09a41e26df464c548'  # Debian Bullseye image - debian-11-amd64-20220503-998
+ami_id_monitor: 'resolve:ssm:/aws/service/debian/release/11/latest/amd64'  # Debian Bullseye latest image
 ami_monitor_user: 'admin'
