@@ -216,6 +216,32 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Provision Resources') {
+                steps {
+                    catchError() {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 30, unit: 'MINUTES') {
+                                        if (params.backend == 'aws' || params.backend == 'azure') {
+                                            provisionResources(params, builder.region)
+                                        } else if (params.backend.contains('docker')) {
+                                            sh """
+                                                echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
+                                            """
+                                        } else {
+                                            sh """
+                                                echo 'Skipping because non-AWS/Azure backends are not supported'
+                                            """
+                                        }
+                                        completed_stages['provision_resources'] = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Run SCT Test') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
@@ -311,6 +337,7 @@ def call(Map pipelineParams) {
                                         fi
                                         echo "end test ....."
                                         """
+                                        completed_stages['run_tests'] = true
                                     }
                                 }
                             }
@@ -361,6 +388,7 @@ def call(Map pipelineParams) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: collectLogsTimeout, unit: 'MINUTES') {
                                         runCollectLogs(params, builder.region)
+                                        completed_stages['collect_logs'] = true
                                     }
                                 }
                             }
@@ -408,6 +436,7 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     cleanSctRunners(params, currentBuild)
+                                    completed_stages['clean_sct_runner'] = true
                                 }
                             }
                         }
@@ -434,13 +463,19 @@ def call(Map pipelineParams) {
         post {
             always {
                 script {
+                    def provision_resources = completed_stages['provision_resources']
+                    def run_tests = completed_stages['run_tests']
                     def collect_logs = completed_stages['collect_logs']
                     def clean_resources = completed_stages['clean_resources']
                     def send_email = completed_stages['send_email']
+                    def clean_sct_runner = completed_stages['clean_sct_runner']
                     sh """
-                        echo "$collect_logs"
-                        echo "$clean_resources"
-                        echo "$send_email"
+                        echo "'provision_resources' stage is completed: $provision_resources"
+                        echo "'run_tests' stage is completed: $run_tests"
+                        echo "'collect_logs' stage is completed: $collect_logs"
+                        echo "'clean_resources' stage is completed: $clean_resources"
+                        echo "'send_email' stage is completed: $send_email"
+                        echo "'clean_sct_runner' stage is completed: $clean_sct_runner"
                     """
                     if (!completed_stages['clean_resources']) {
                         catchError {
