@@ -5107,6 +5107,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert verification_node.raft.is_cluster_topology_consistent(), \
                 f"Bad cluster state {group0_state}, with non-voters {non_voters}"
 
+        test_keyspaces = self.cluster.get_test_keyspaces()
+        for node in self.cluster.nodes:
+            with adaptive_timeout(Operations.CLEANUP, node=node, timeout=HOUR_IN_SEC * 48):
+                for keyspace in test_keyspaces:
+                    node.run_nodetool(sub_cmd='cleanup', args=keyspace, retry=0)
+
     def disrupt_parallel_replace(self):
         timeout=3600
         num_parallel_ops = self.tester.params.get("nemesis_add_node_cnt")
@@ -5150,7 +5156,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.set_current_running_nemesis(node=node)  # prevent to run nemesis on new node when running in parallel
 
         self.log.info("Update scylla yaml")
-        with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="Parallel_replace_operation") as verification_node:
+        with self.run_nemesis(node_list=free_nodes, nemesis_label="Parallel_replace_operation") as verification_node:
             for node, replace_host_id, replace_old_ip in zip(new_nodes, host_ids_of_replaced_nodes, old_ips_of_replaced_nodes):
                 if verification_node.is_replacement_by_host_id_supported:
                     node.replacement_host_id = replace_host_id
@@ -5166,7 +5172,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # it should be up and with scylla executable available
         self.log.info("Wait 2 minutes")
         time.sleep(120)
-        with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="Parallel_bootstrap_operation") as verification_node:
+        with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="Parallel_replace_operation") as verification_node:
             try:
                 with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.nodes[0], timeout=timeout):
                     self.cluster.wait_for_init(node_list=new_nodes, timeout=timeout, check_node_health=False)
@@ -6853,10 +6859,11 @@ class ParallelTopologyOperations(Nemesis):
             'disrupt_parallel_bootstrap',
             'disrupt_parallel_decommission',
             'disrupt_parallel_bootstrap',
+            'disrupt_parallel_removenode'
             'disrupt_parallel_replace',
             'disrupt_parallel_decommission',
             'disrupt_parallel_bootstrap',
-            'disrupt_parallel_removenode'
+
         ]
 
     def disrupt(self):
