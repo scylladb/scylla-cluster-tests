@@ -6859,7 +6859,7 @@ class ParallelTopologyOperations(Nemesis):
             'disrupt_parallel_bootstrap',
             'disrupt_parallel_decommission',
             'disrupt_parallel_bootstrap',
-            'disrupt_parallel_removenode'
+            'disrupt_parallel_removenode',
             'disrupt_parallel_replace',
             'disrupt_parallel_decommission',
             'disrupt_parallel_bootstrap',
