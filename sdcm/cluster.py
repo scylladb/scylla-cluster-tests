@@ -1985,7 +1985,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if not nonroot:
             self.install_package(package_name='xfsprogs mdadm')
 
-        if not self.distro.is_rocky9:  # centos/rocky 9 and above don't have python2 anymore
+        if not self.distro.is_rocky9 and not self.distro.is_ubuntu24:  # centos/rocky9/ubuntu24.04 and above don't have python2 anymore
             self.install_package(package_name='python2')
         # Offline install does't provide openjdk-11, it has to be installed in advance
         # https://github.com/scylladb/scylla-jmx/issues/127
