@@ -50,7 +50,7 @@ from invoke import Result
 from invoke.exceptions import UnexpectedExit, Failure
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
-from cassandra.cluster import Cluster as ClusterDriver  # pylint: disable=no-name-in-module
+from cassandra.cluster import Cluster as ClusterDriver, Session  # pylint: disable=no-name-in-module
 from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-module
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy
@@ -4968,6 +4968,38 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         self.log.info("DB nodes CPU modes: %s", results)
         return results
+
+    @staticmethod
+    def get_supported_features(session: Session) -> list[str]:
+        """
+        helper function to get supported_features from a running cluster,
+        if you need from a specific node use `patient_exclusive_cql_connection` session
+        """
+        result = session.execute("SELECT supported_features FROM system.local WHERE key='local'").one()
+        # NOTE: since row_factory can be different on different tests, we need to support multiple options
+        if isinstance(result, dict):
+            result = result["supported_features"]
+        elif isinstance(result, tuple):
+            result = result[0]
+        else:
+            raise NotImplementedError(f"unsupported row_factory={session.row_factory}")
+        return result.split(",")
+
+    @staticmethod
+    def get_enabled_features(session: Session) -> list[str]:
+        """
+        helper function to get supported_features from a running cluster,
+        if you need from a specific node use `patient_exclusive_cql_connection` session
+        """
+        result = session.execute("SELECT value FROM system.scylla_local WHERE key='enabled_features'").one()
+        # NOTE: since row_factory can be different on different tests, we need to support multiple options
+        if isinstance(result, dict):
+            result = result["value"]
+        elif isinstance(result, tuple):
+            result = result[0]
+        else:
+            raise NotImplementedError(f"unsupported row_factory={session.row_factory}")
+        return result.split(",")
 
 
 class BaseLoaderSet():
