@@ -15,9 +15,16 @@ import abc
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
-    configure_rsyslog_target_script, configure_sshd_script, restart_sshd_service, restart_rsyslog_service,
-    install_syslogng_service, configure_syslogng_target_script, restart_syslogng_service,
-    configure_rsyslog_rate_limits_script, configure_rsyslog_set_hostname_script, configure_ssh_accept_rsa)
+    configure_sshd_script,
+    restart_sshd_service,
+    install_syslogng_service,
+    configure_syslogng_target_script,
+    restart_syslogng_service,
+    configure_rsyslog_rate_limits_script,
+    configure_rsyslog_target_script,
+    configure_rsyslog_set_hostname_script,
+    restart_rsyslog_service,
+)
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
 RSYSLOG_SSH_TUNNEL_LOCAL_PORT = 5000
@@ -94,7 +101,6 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
 
         if self.configure_sshd:
             script += configure_sshd_script()
-            script += configure_ssh_accept_rsa()
             script += restart_sshd_service()
         elif self.disable_ssh_while_running:
             script += 'systemctl start sshd || true\n'
