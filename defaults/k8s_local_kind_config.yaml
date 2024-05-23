@@ -32,7 +32,7 @@ n_monitor_nodes: 0
 k8s_n_monitor_nodes: 1
 k8s_deploy_monitoring: false
 
-user_credentials_path: '~/.ssh/scylla-test'
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
 use_preinstalled_scylla: true
 backtrace_decoding: false
 

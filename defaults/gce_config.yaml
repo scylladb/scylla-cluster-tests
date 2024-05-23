@@ -29,7 +29,7 @@ gce_setup_hybrid_raid: false
 gce_pd_ssd_disk_size_loader: 0
 gce_pd_ssd_disk_size_monitor: 0
 
-user_credentials_path: '~/.ssh/scylla-test'
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
 
 backup_bucket_location: 'manager-backup-tests-sct-project-1-us-east1'
 backup_bucket_backend: 'gcs'
