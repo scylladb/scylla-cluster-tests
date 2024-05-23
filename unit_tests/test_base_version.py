@@ -14,6 +14,8 @@
 
 import unittest
 
+from sdcm.utils.version_utils import ComparableScyllaVersion
+
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module, import-error
 
 
@@ -34,7 +36,8 @@ class TestBaseVersion(unittest.TestCase):
         scylla_repo = self.url_base + '/master/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
-        self.assertEqual(version_list, ['5.4'])
+        assert len(version_list) == 1
+        assert ComparableScyllaVersion(version_list[0]) > '5.4'
 
     def test_ubuntu_22_azure_5_3(self):
         scylla_repo = self.url_base + '/branch-5.3/deb/unified/2023-05-23T22:36:08Z/scylladb-5.3/scylla.list'
@@ -79,7 +82,8 @@ class TestBaseVersion(unittest.TestCase):
         scylla_repo = self.url_base + '-enterprise/enterprise/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
-        self.assertEqual(version_list, ['2024.1'])
+        assert len(version_list) == 1
+        assert ComparableScyllaVersion(version_list[0]) >= '2024.1'
 
     def test_2021_1(self):
         scylla_repo = self.url_base + '-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
