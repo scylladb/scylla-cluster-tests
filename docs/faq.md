@@ -122,7 +122,7 @@ hydra attach-test-sg --user `whoami`
    ● sct-runner-1.6-instance-988e89c7 - 44.192.128.164 10.12.1.184 - us-east-1
 
 # select which machine you want to expose publicly, and a SG would be attached to them
-ssh -i ~/.ssh/scylla-qa-ec2 ubuntu@44.192.58.53
+ssh -i ~/.ssh/scylla_test_id_ed25519 ubuntu@44.192.58.53
 # keep in mind the user name and key, can be different between backend or between tests
 ```
 
