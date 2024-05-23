@@ -82,10 +82,10 @@ class TestRemoteCmdRunners(unittest.TestCase):
       result of LocalCmdRunner
 
     To be ran manually, user under which test is ran have to have
-      ~/.ssh/scylla-qa-ec2 key in it's ~/.ssh/authorized_keys
+      ~/.ssh/scylla_test_id_ed25519 key in it's ~/.ssh/authorized_keys
     """
     log = getLogger()
-    key_file = '~/.ssh/scylla-qa-ec2'
+    key_file = '~/.ssh/scylla_test_id_ed25519'
 
     @staticmethod
     def _create_and_run_twice_in_same_thread(remoter_type, key_file, stmt, kwargs, paramiko_thread_results):

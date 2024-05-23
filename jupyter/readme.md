@@ -33,7 +33,7 @@ Steps explain how to use it on SCT runner. There’s also possibility to run it 
     ```bash
     create sct-runner
     hydra create-runner-instance -r eu-west-1 -z a -c aws -t xxxxxxxx-aef7-4257-b7f5-f45b980abaaa -d 600
-    ssh -i ~/.ssh/scylla-qa-ec2 ubuntu@<sct-runner-ip>
+    ssh -i ~/.ssh/scylla_test_id_ed25519 ubuntu@<sct-runner-ip>
     ```
     Next steps run on SCT-runner
 2. Git clone SCT
@@ -75,7 +75,7 @@ Steps explain how to use it on SCT runner. There’s also possibility to run it 
 
     ```bash
     # create ssh tunnel
-    ssh -N -f -L 127.0.0.1:8888:127.0.0.1:8888 -i ~/.ssh/scylla-qa-ec2 ubuntu@<sct-runner-ip>
+    ssh -N -f -L 127.0.0.1:8888:127.0.0.1:8888 -i ~/.ssh/scylla_test_id_ed25519 ubuntu@<sct-runner-ip>
     ```
 
 7. Open web browser (or attach to Pycharm) this link:
