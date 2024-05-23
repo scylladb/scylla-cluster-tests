@@ -25,6 +25,7 @@ from sdcm.utils.version_utils import (
     RepositoryDetails,
     ScyllaFileType,
     SCYLLA_VERSION_GROUPED_RE,
+    ARGUS_VERSION_RE,
     VERSION_NOT_FOUND_ERROR,
 )
 
@@ -398,6 +399,21 @@ def test_scylla_version_grouped_regexp(full_version, version, date, commit_id):
     assert parsed_version.group("version") == version
     assert parsed_version.group("date") == date
     assert parsed_version.group("commit_id") == commit_id
+
+
+@pytest.mark.parametrize("full_version,short,date,commit_id", (
+    ("5.1.dev-0.20220713.15ed0a441e18", "5.1.dev", "20220713", "15ed0a441e18"),
+    ("5.0.1-20220719.b177dacd3", "5.0.1", "20220719", "b177dacd3"),
+    ("5.0.1-20220719.b177dacd3 with build-id 217f31634f8c8722cadcfe57ade8da58af05d415", "5.0.1", "20220719", "b177dacd3"),
+    ("2022.1~rc5-20220515.6a1e89fbb", "2022.1~rc5", "20220515", "6a1e89fbb"),
+    ("2022.2.dev-20220715.6fd8d82112e1", "2022.2.dev", "20220715", "6fd8d82112e1"),
+    ("4.6.rc2-20220102.e8a1cfb6f", "4.6.rc2", "20220102", "e8a1cfb6f")
+))
+def test_scylla_version_for_argus_regexp(full_version, short, date, commit_id):
+    parsed_version = ARGUS_VERSION_RE.match(full_version)
+    assert parsed_version.group("short") == short
+    assert parsed_version.group("date") == date
+    assert parsed_version.group("commit") == commit_id
 
 
 @pytest.mark.integration
