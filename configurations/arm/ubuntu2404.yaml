@@ -6,4 +6,4 @@ use_preinstalled_scylla: false
 append_scylla_setup_args: ' --no-ec2-check '
 # use_mgmt: false
 
-user_credentials_path: '~/.ssh/scylla-qa-ec2'
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'

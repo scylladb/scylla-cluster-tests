@@ -12,7 +12,7 @@ def call(String sct_latest_dir) {
             eval \$(ssh-agent -k)
         }
         trap clean_ssh_agent EXIT
-        ssh-add ~/.ssh/scylla-qa-ec2
+        ssh-add ~/.ssh/scylla_test_id_ed25519
 
         if [[ ! -z "${sct_runner_ip}" ]] ; then
             rsync -L -ar -e "ssh -o StrictHostKeyChecking=no" --delete ubuntu@${sct_runner_ip}:/home/ubuntu/sct-results ${sct_latest_dir}
