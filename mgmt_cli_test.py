@@ -91,8 +91,9 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
             cmd = dedent("""
                 echo 'deb https://packages.cloud.google.com/apt cloud-sdk main' | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
                 curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-                sudo apt-get update && sudo apt-get install google-cloud-cli
+                sudo apt-get update
             """)
+            node.install_package("google-cloud-cli")
         else:
             raise NotImplementedError("At the moment, we only support debian installation")
         self._run_cmd_with_retry(executor=node.remoter.run, cmd=shell_script_cmd(cmd))
