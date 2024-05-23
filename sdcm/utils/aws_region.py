@@ -34,7 +34,7 @@ class AwsRegion:
     SCT_SUBNET_NAME = "SCT-2-subnet-{availability_zone}"
     SCT_INTERNET_GATEWAY_NAME = "SCT-2-igw"
     SCT_ROUTE_TABLE_NAME = "SCT-2-rt"
-    SCT_KEY_PAIR_NAME = "scylla-qa-ec2"  # TODO: change legacy name to sct-keypair-aws
+    SCT_KEY_PAIR_NAME = "scylla_test_id_ed25519"  # TODO: change legacy name to sct-keypair-aws
     SCT_SSH_GROUP_NAME = 'SCT-ssh-sg'
 
     def __init__(self, region_name):

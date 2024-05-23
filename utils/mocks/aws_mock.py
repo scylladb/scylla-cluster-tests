@@ -71,11 +71,11 @@ class AwsMock:
         container = ContainerManager.run_container(self, "aws_mock")
         res = container.exec_run(["bash", "-cxe", dedent("""\
             mkdir -p /src/s3/scylla-qa-keystore
-            ssh-keygen -q -b 2048 -t rsa -N "" -C aws_mock -f /src/s3/scylla-qa-keystore/scylla-qa-ec2
+            ssh-keygen -q -b 2048 -t ed25519 -N "" -C aws_mock -f /src/s3/scylla-qa-keystore/scylla_test_id_ed25519
             chown -R nginx:nginx /src/s3/scylla-qa-keystore
             useradd ubuntu
             mkdir -m 700 -p /home/ubuntu/.ssh
-            cp /src/s3/scylla-qa-keystore/scylla-qa-ec2.pub /home/ubuntu/.ssh/authorized_keys
+            cp /src/s3/scylla-qa-keystore/scylla_test_id_ed25519.pub /home/ubuntu/.ssh/authorized_keys
             chown -R ubuntu:ubuntu /home/ubuntu/.ssh
         """)])
         if res.exit_code:
