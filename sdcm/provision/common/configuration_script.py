@@ -20,7 +20,6 @@ from sdcm.provision.common.utils import (
     install_syslogng_service,
     configure_syslogng_target_script,
     restart_syslogng_service,
-    configure_ssh_accept_rsa,
     install_syslogng_exporter,
     disable_daily_apt_triggers,
 )
@@ -89,7 +88,6 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
 
         if self.configure_sshd:
             script += configure_sshd_script()
-            script += configure_ssh_accept_rsa()
             script += restart_sshd_service()
 
         return script
