@@ -26,6 +26,8 @@ from sdcm.utils.common import (
     get_free_port,
     list_instances_gce,
     gce_meta_to_dict,
+    SSH_KEY_AWS_DEFAULT,
+    SSH_KEY_GCE_DEFAULT,
 )
 from sdcm.utils.gce_utils import (
     gce_public_addresses,
@@ -113,9 +115,9 @@ def get_proxy_command(instance: dict | compute_v1.Instance,
 
 
 def gce_get_proxy_command(instance: compute_v1.Instance, strict_host_checking: bool):
+    target_key = f'~/.ssh/{SSH_KEY_GCE_DEFAULT}'
     if "sct-network-only" in instance.tags.items and "sct-allow-public" not in instance.tags.items:
         target_username = 'scylla-test'
-        target_key = '~/.ssh/scylla-test'
         bastion = gce_find_bastion_for_instance()
         bastion_username, bastion_ip = guess_username(bastion), list(gce_public_addresses(bastion))[0]
         target_ip = list(gce_private_addresses(instance))[0]
@@ -127,12 +129,12 @@ def gce_get_proxy_command(instance: compute_v1.Instance, strict_host_checking: b
         target_ip = list(gce_public_addresses(instance))[0]
         proxy_command = ''
         target_username = 'scylla-test'
-        target_key = '~/.ssh/scylla-test'
     return proxy_command, target_ip, target_username, target_key
 
 
 def aws_get_proxy_command(instance: dict, force_use_public_ip: bool, strict_host_checking: bool = False) -> [str, str, str]:
     aws_region = AwsRegion(get_region(instance))
+    target_key = f'~/.ssh/{SSH_KEY_AWS_DEFAULT}'
 
     if aws_region.sct_vpc.vpc_id == instance["VpcId"] and not force_use_public_ip:
         # if we are the current VPC setup, proxy via bastion needed
@@ -142,14 +144,14 @@ def aws_get_proxy_command(instance: dict, force_use_public_ip: bool, strict_host
         strict_host_check = ""
         if not strict_host_checking:
             strict_host_check = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
-        proxy_command = f'-o ProxyCommand="ssh {strict_host_check} -i ~/.ssh/scylla-qa-ec2 -W %h:%p {bastion_username}@{bastion_ip}"'
+        proxy_command = f'-o ProxyCommand="ssh {strict_host_check} -i {target_key} -W %h:%p {bastion_username}@{bastion_ip}"'
     else:
         # all other older machine/builders, we connect via public address
         target_ip = instance["PublicIpAddress"]
         proxy_command = ''
 
     target_username = guess_username(instance)
-    return proxy_command, target_ip, target_username, '~/.ssh/scylla-qa-ec2'
+    return proxy_command, target_ip, target_username, target_key
 
 
 def select_instance(region: str = None, **tags) -> dict | None:
