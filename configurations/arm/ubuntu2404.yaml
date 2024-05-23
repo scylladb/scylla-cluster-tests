@@ -1,0 +1,9 @@
+ami_db_scylla_user: 'ubuntu'
+ami_id_db_scylla: 'resolve:ssm:/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id'
+instance_type_db: 'im4gn.xlarge'
+use_preinstalled_scylla: false
+# enhanced network isn't supported
+append_scylla_setup_args: ' --no-ec2-check '
+# use_mgmt: false
+
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
