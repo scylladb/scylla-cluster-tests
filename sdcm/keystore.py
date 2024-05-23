@@ -69,7 +69,7 @@ class KeyStore:  # pylint: disable=too-many-public-methods
                       private_key=self.get_file_contents(file_name=name))
 
     def get_ec2_ssh_key_pair(self):
-        return self.get_ssh_key_pair(name="scylla-qa-ec2")
+        return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
 
     def get_gce_ssh_key_pair(self):
         return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
