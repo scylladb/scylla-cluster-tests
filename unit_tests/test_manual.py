@@ -43,7 +43,7 @@ class Node:  # pylint: disable=no-init,too-few-public-methods
     def __init__(self):
         self.ssh_login_info = {'hostname': '34.253.205.91',
                                'user': 'centos',
-                               'key_file': '~/.ssh/scylla-qa-ec2'}
+                               'key_file': '~/.ssh/scylla_test_id_ed25519'}
 
         self.remoter = RemoteCmdRunnerBase.create_remoter(**self.ssh_login_info)
         self.ip_address = '34.253.205.91'

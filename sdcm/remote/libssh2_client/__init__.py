@@ -242,7 +242,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
 
     >>> from sdcm.remote.libssh2_client import Client
     >>> from sdcm.remote.libssh2_client.exceptions import UnexpectedExit
-    >>> cl = Client(host='127.0.0.1', pkey='/home/dkropachev/.ssh/scylla-qa-ec2')
+    >>> cl = Client(host='127.0.0.1', pkey='/home/dkropachev/.ssh/scylla_test_id_ed25519')
     >>> cl.connect()
     >>> try:
     ...     res = cl.run('asdasdasdasd')
