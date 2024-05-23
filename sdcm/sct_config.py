@@ -46,6 +46,7 @@ from sdcm.utils.common import (
 )
 from sdcm.utils.operations_thread import ConfigParams
 from sdcm.utils.version_utils import (
+    ARGUS_VERSION_RE,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
     get_scylla_docker_repo_from_version,
@@ -2447,15 +2448,18 @@ class SCTConfiguration(dict):
 
     def update_argus_with_version(self, scylla_version: str, package_name: str):
         try:
-            package = Package(name=package_name, date='#NO_DATE',
-                              version=scylla_version,
-                              revision_id='#NO_COMMIT_ID',
-                              build_id="#NO_BUILDID")
-            self.log.info("Saving upgraded Scylla version...")
-            test_config = TestConfig()
-            test_config.init_argus_client(params=self, test_id=self.get("reuse_cluster") or self.get("test_id"))
-            test_config.argus_client().submit_packages([package])
-            test_config.argus_client().update_scylla_version(scylla_version)
+            version_regex = ARGUS_VERSION_RE
+            if match := version_regex.match(scylla_version):
+                version_info = match.groupdict()
+                package = Package(name=package_name, date=version_info.get("date", "#NO_DATE"),
+                                  version=version_info["short"],
+                                  revision_id=version_info.get("commit", "#NO_COMMIT"),
+                                  build_id="#NO_BUILDID")
+                self.log.info("Saving upgraded Scylla version...")
+                test_config = TestConfig()
+                test_config.init_argus_client(params=self, test_id=self.get("reuse_cluster") or self.get("test_id"))
+                test_config.argus_client().submit_packages([package])
+                test_config.argus_client().update_scylla_version(version_info["short"])
         except Exception as exc:  # pylint: disable=broad-except
             self.log.exception("Failed to save target Scylla version in Argus", exc_info=exc)
 
