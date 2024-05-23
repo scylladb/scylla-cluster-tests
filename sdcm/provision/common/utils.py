@@ -121,6 +121,7 @@ def configure_sshd_script():
     """)
 
 
+<<<<<<< HEAD
 def configure_ssh_accept_rsa():
     return dedent("""
     if (( $(ssh -V 2>&1 | tr -d "[:alpha:][:blank:][:punct:]" | cut -c-2) >= 88 )); then
@@ -133,6 +134,8 @@ def configure_ssh_accept_rsa():
     """)
 
 
+=======
+>>>>>>> 587f770a (fix(ssh): remove hack to enable ssh rsa keys)
 def restart_sshd_service():
     return "systemctl restart sshd || true\n"
 
