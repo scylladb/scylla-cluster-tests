@@ -311,11 +311,11 @@ if [[ -n "$RUNNER_IP" ]]; then
     trap clean_ssh_agent EXIT
 
     if [ -z "$HYDRA_DRY_RUN" ]; then
-        ssh-add ~/.ssh/scylla-qa-ec2
+        ssh-add ~/.ssh/scylla_test_id_ed25519
         ssh-add ~/.ssh/scylla-test
         ssh-add ~/.ssh/scylla_test_id_ed25519
     else
-        echo ssh-add ~/.ssh/scylla-qa-ec2
+        echo ssh-add ~/.ssh/scylla_test_id_ed25519
         echo ssh-add ~/.ssh/scylla-test
         echo ssh-add ~/.ssh/scylla_test_id_ed25519
     fi
