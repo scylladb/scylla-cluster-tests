@@ -8,6 +8,8 @@ managerPipeline(
     region: 'us-east-1',
     test_name: 'mgmt_cli_test.MgmtCliTest.test_backup_and_restore_only_data',
     test_config: 'test-cases/manager/manager-backup-restore-set-dataset.yaml',
+    mgmt_restore_params: "{'batch_size': 2, 'parallel': 1}",
+    agent_backup_params: "{'checkers': 100, 'transfers': 2, 'low_level_retries': 20}",
 
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
