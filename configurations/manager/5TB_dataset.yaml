@@ -1,0 +1,14 @@
+test_duration: 7200
+
+prepare_write_cmd: ["cassandra-stress write cl=ALL n=1342200000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..1342200000",
+                    "cassandra-stress write cl=ALL n=1342200000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1342200001..2684400000",
+                    "cassandra-stress write cl=ALL n=1342200000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=2684400001..4026600000",
+                    "cassandra-stress write cl=ALL n=1342200000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=4026600001..5368800000"]
+
+stress_read_cmd: ["cassandra-stress read cl=ONE n=1342200000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..1342200000",
+                  "cassandra-stress read cl=ONE n=1342200000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1342200001..2684400000",
+                  "cassandra-stress read cl=ONE n=1342200000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=2684400001..4026600000",
+                  "cassandra-stress read cl=ONE n=1342200000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=4026600001..5368800000"]
+
+instance_type_db: 'i4i.4xlarge'
+instance_type_loader: 'c6i.4xlarge'
