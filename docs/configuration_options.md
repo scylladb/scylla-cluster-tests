@@ -362,3 +362,5 @@
 | **<a href="#user-content-use_capacity_reservation" name="use_capacity_reservation">use_capacity_reservation</a>**  | reserves instances capacity for whole duration of the test run (AWS only).<br>Fallbacks to next availabilit zone if capacity is not available | N/A | SCT_USE_CAPACITY_RESERVATION
 | **<a href="#user-content-bisect_start_date" name="bisect_start_date">bisect_start_date</a>**  | Scylla build date from which bisecting should start.<br>Setting this date enables bisection. Format: YYYY-MM-DD | N/A | SCT_BISECT_START_DATE
 | **<a href="#user-content-bisect_end_date" name="bisect_end_date">bisect_end_date</a>**  | Scylla build date until which bisecting should run. Format: YYYY-MM-DD | N/A | SCT_BISECT_END_DATE
+| **<a href="#user-content-mgmt_restore_params" name="mgmt_restore_params">mgmt_restore_params</a>**  | Manager restore operation specific parameters: batch_size, parallel | N/A | SCT_MGMT_RESTORE_PARAMS
+| **<a href="#user-content-mgmt_agent_backup_config" name="mgmt_agent_backup_config">mgmt_agent_backup_config</a>**  | Manager agent backup general configuration: checkers, transfers, low_level_retries | N/A | SCT_MGMT_AGENT_BACKUP_CONFIG

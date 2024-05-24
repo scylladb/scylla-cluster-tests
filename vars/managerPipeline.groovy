@@ -60,6 +60,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
                description: 'Supported: us-east-1 | eu-west-1 | eu-west-2 | eu-north-1 | eu-central-1 | us-west-2 | random (randomly select region)',
                name: 'region')
+            string(defaultValue: "${pipelineParams.get('n_db_nodes', '')}",
+               description: 'Number of db nodes. If case of multiDC cluster, use a space-separated string, for example "2 1"',
+               name: 'n_db_nodes')
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
@@ -141,6 +144,21 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_name', '')}",
                    description: 'Name of the test to run',
                    name: 'test_name')
+
+            string(defaultValue: "${pipelineParams.get('mgmt_restore_params', '')}",
+                   description: """The dict with restore operation specific parameters: batch_size, parallel.
+                                   For example, {'batch_size': 2, 'parallel': 1}""",
+                   name: 'mgmt_restore_params')
+
+            string(defaultValue: "${pipelineParams.get('mgmt_agent_backup_config', '')}",
+                   description: """Backup general configuration for the agent (scylla-manager-agent.yaml):
+                                   checkers, transfers, low_level_retries.
+                                   For example, {'checkers': 100, 'transfers': 2, 'low_level_retries': 20}""",
+                   name: 'mgmt_agent_backup_config')
+
+            string(defaultValue: "${pipelineParams.get('keyspace_num', '')}",
+                   description: 'Number of keyspaces to create. If > 1, cassandra-stress inserts the data into each keyspace',
+                   name: 'keyspace_num')
 
             string(defaultValue: "${pipelineParams.get('downstream_jobs_to_run', '')}",
                    description: 'Comma separated list of downstream jobs to run when the job passes',
@@ -262,6 +280,11 @@ def call(Map pipelineParams) {
                                         export SCT_CLUSTER_BACKEND="${params.backend}"
                                         export SCT_REGION_NAME=${region}
                                         export SCT_GCE_DATACENTER=${datacenter}
+
+                                        if [[ ! -z "${params.n_db_nodes}" ]] ; then
+                                            export SCT_N_DB_NODES=${params.n_db_nodes}
+                                        fi
+
                                         if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
                                             export SCT_AZURE_REGION_NAME=${params.azure_region_name}
                                         fi
@@ -324,6 +347,18 @@ def call(Map pipelineParams) {
 
                                         if [[ ! -z "${params.scylla_mgmt_pkg}" ]] ; then
                                             export SCT_SCYLLA_MGMT_PKG="${params.scylla_mgmt_pkg}"
+                                        fi
+
+                                        if [[ ! -z "${params.mgmt_restore_params}" ]] ; then
+                                            export SCT_MGMT_RESTORE_PARAMS="${params.mgmt_restore_params}"
+                                        fi
+
+                                        if [[ ! -z "${params.mgmt_agent_backup_config}" ]] ; then
+                                            export SCT_MGMT_AGENT_BACKUP_CONFIG="${params.mgmt_agent_backup_config}"
+                                        fi
+
+                                        if [[ ! -z "${params.keyspace_num}" ]] ; then
+                                            export SCT_KEYSPACE_NUM="${params.keyspace_num}"
                                         fi
 
                                         echo "start test ......."

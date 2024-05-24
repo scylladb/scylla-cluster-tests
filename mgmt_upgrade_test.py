@@ -180,7 +180,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
     def update_all_agent_config_files(self):
         region_name = self.params.get("backup_bucket_region") or self.params.get("region_name").split()[0]
         for node in self.db_cluster.nodes:
-            node.update_manager_agent_config(region=region_name)
+            node.update_manager_agent_backup_config(region=region_name)
         sleep(60)
 
     def get_email_data(self):
