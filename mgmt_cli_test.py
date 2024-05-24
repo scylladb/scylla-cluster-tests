@@ -22,6 +22,7 @@ import re
 import time
 from textwrap import dedent
 from datetime import datetime
+from dataclasses import dataclass
 
 import boto3
 
@@ -44,6 +45,12 @@ from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_s
 from sdcm.utils.gce_utils import get_gce_storage_client
 from sdcm.utils.azure_utils import AzureService
 from sdcm.exceptions import FilesNotCorrupted
+
+
+@dataclass
+class ManagerTestMetrics:
+    backup_time = "N/A"
+    restore_time = "N/A"
 
 
 class BackupFunctionsMixIn(LoaderUtilsMixin):
@@ -190,16 +197,18 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
                                                  keyspace_and_table_list=per_keyspace_tables_dict)
 
     def restore_backup_with_task(self, mgr_cluster, snapshot_tag, timeout, restore_schema=False, restore_data=False,
-                                 location_list=None):
+                                 location_list=None, batch_size=None, parallel=None):
         location_list = location_list if location_list else self.locations
         restore_task = mgr_cluster.create_restore_task(restore_schema=restore_schema, restore_data=restore_data,
-                                                       location_list=location_list, snapshot_tag=snapshot_tag)
+                                                       location_list=location_list, snapshot_tag=snapshot_tag,
+                                                       batch_size=batch_size, parallel=parallel)
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
         assert restore_task.status == TaskStatus.DONE, f"Restoration of {snapshot_tag} has failed!"
         InfoEvent(message=f'The restore task has ended successfully. '
                           f'Restore run time: {restore_task.duration}.').publish()
         if restore_schema:
             self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
+        return restore_task
 
     def run_verification_read_stress(self):
         stress_queue = []
@@ -274,6 +283,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     CLUSTER_NAME = "mgr_cluster1"
     LOCALSTRATEGY_KEYSPACE_NAME = "localstrategy_keyspace"
     NETWORKSTRATEGY_KEYSPACE_NAME = "networkstrategy_keyspace"
+
+    manager_test_metrics = ManagerTestMetrics()
 
     def _ensure_and_get_cluster(self, manager_tool, force_add: bool = False):
         """Get the cluster if it is already added, otherwise add it to manager.
@@ -456,9 +467,23 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         InfoEvent(message=f'The backup task has ended successfully. Backup run time: {backup_task.duration}').publish()
-        self.db_cluster.nodes[0].run_cqlsh('TRUNCATE keyspace1.standard1')
-        self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
-                                      timeout=110000, restore_data=True)
+        self.manager_test_metrics.backup_time = backup_task.duration
+
+        keyspace_num = self.params.get('keyspace_num') or 1
+        for i in range(1, keyspace_num + 1):
+            self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE keyspace{i}.standard1')
+
+        if restore_params := self.params.get('mgmt_restore_params'):
+            batch_size = restore_params.batch_size
+            parallel = restore_params.parallel
+        else:
+            batch_size, parallel = None, None
+
+        task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
+                                             timeout=110000, restore_data=True, batch_size=batch_size,
+                                             parallel=parallel)
+        self.manager_test_metrics.restore_time = task.duration
+
         self.run_verification_read_stress()
 
     def test_restore_multiple_backup_snapshots(self):  # pylint: disable=too-many-locals

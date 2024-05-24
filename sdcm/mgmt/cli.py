@@ -531,7 +531,8 @@ class ManagerCluster(ScyllaManagerBase):
     def set_cluster_id(self, value: str):
         self.id = value
 
-    def create_restore_task(self, restore_schema=False, restore_data=False, location_list=None, snapshot_tag=None):
+    def create_restore_task(self, restore_schema=False, restore_data=False,  # pylint: disable=too-many-arguments
+                            location_list=None, snapshot_tag=None, batch_size=None, parallel=None):
         cmd = f"restore -c {self.id}"
         if restore_schema:
             cmd += " --restore-schema"
@@ -542,6 +543,10 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += " --location {} ".format(locations_names)
         if snapshot_tag:
             cmd += f" --snapshot-tag {snapshot_tag}"
+        if batch_size:
+            cmd += f" --batch-size {batch_size}"
+        if parallel:
+            cmd += f" --parallel {parallel}"
 
         res = self.sctool.run(cmd=cmd, parse_table_res=False)
         task_id = res.stdout.strip()
