@@ -26,6 +26,11 @@ from typing import List, Union, Set
 from distutils.util import strtobool
 
 import anyconfig
+<<<<<<< HEAD
+=======
+from argus.client.sct.types import Package
+from pydantic import BaseModel
+>>>>>>> cfe415ac (feature(manager): add new parameters in manager pipeline)
 
 from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
@@ -51,6 +56,13 @@ from sdcm.utils.version_utils import (
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import get_gce_image_tags
+<<<<<<< HEAD
+=======
+from sdcm.remote import LOCALRUNNER, shell_script_cmd
+from sdcm.test_config import TestConfig
+from sdcm.kafka.kafka_config import SctKafkaConfiguration
+from sdcm.mgmt.common import RestoreParameters, AgentBackupParameters
+>>>>>>> cfe415ac (feature(manager): add new parameters in manager pipeline)
 
 
 def _str(value: str) -> str:
@@ -133,6 +145,19 @@ def dict_or_str(value):
         return value
 
     raise ValueError('"{}" isn\'t a dict'.format(value))
+
+
+def dict_or_str_or_pydantic(value):
+    if isinstance(value, str):
+        try:
+            return ast.literal_eval(value)
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            pass
+
+    if isinstance(value, (dict, BaseModel)):
+        return value
+
+    raise ValueError('"{}" isn\'t a dict, str or Pydantic model'.format(value))
 
 
 def boolean(value):
@@ -1035,6 +1060,14 @@ class SCTConfiguration(dict):
         dict(name="scylla_mgmt_upgrade_to_repo", env="SCT_SCYLLA_MGMT_UPGRADE_TO_REPO", type=str,
              help="Url to the repo of scylla manager version to upgrade to for management tests"),
 
+        dict(name="mgmt_restore_params", env="SCT_MGMT_RESTORE_PARAMS", type=dict_or_str_or_pydantic,
+             help="Manager restore operation specific parameters: batch_size, parallel. "
+                  "For example, {'batch_size': 100, 'parallel': 10}"),
+
+        dict(name="mgmt_agent_backup_config", env="SCT_MGMT_AGENT_BACKUP_CONFIG", type=dict_or_str_or_pydantic,
+             help="Manager agent backup general configuration: checkers, transfers, low_level_retries. "
+                  "For example, {'checkers': 100, 'transfers': 2, 'low_level_retries': 20}"),
+
         # PerformanceRegressionTest
         dict(name="partition_range_with_data_validation", env="SCT_PARTITION_RANGE_WITH_DATA_VALIDATION", type=str,
              help="""Relevant for scylla-bench. Hold range (min - max) of PKs values for partitions that data was
@@ -1825,6 +1858,61 @@ class SCTConfiguration(dict):
                     f"Simulating racks requires endpoint_snitch to be GossipingPropertyFileSnitch while it set to {self['endpoint_snitch']}"
             self["endpoint_snitch"] = "org.apache.cassandra.locator.GossipingPropertyFileSnitch"
 
+<<<<<<< HEAD
+=======
+        # 16 Validate use_dns_names
+        if self.get("use_dns_names"):
+            if cluster_backend not in ("aws",):
+                raise ValueError(f"use_dns_names is not supported for {cluster_backend} backend")
+
+        # 17 Validate scylla network configuration mandatory values
+        if scylla_network_config := self.get("scylla_network_config"):
+            check_list = {"listen_address": None, "rpc_address": None,
+                          "broadcast_rpc_address": None, "broadcast_address": None, "test_communication": None}
+            number2word = {1: "first", 2: "second", 3: "third"}
+            nics = set()
+            for i, address_config in enumerate(scylla_network_config):
+                for param in ["address", "ip_type", "public", "nic"]:
+                    if address_config.get(param) is None:
+                        raise ValueError(
+                            f"'{param}' parameter value for {number2word[i + 1]} address is not defined. It is must parameter")
+
+                if address_config["ip_type"] == "ipv4" and address_config["nic"] == 1 and address_config["public"] is True:
+                    raise ValueError(
+                        "If ipv4 and public is True it has to be primary network interface, it means device index (nic) is 0")
+
+                nics.add(address_config["nic"])
+                if address_config["address"] not in check_list:
+                    continue
+
+                check_list[address_config["address"]] = True
+
+            if not_defined_address := ",".join([key for key, value in check_list.items() if value is None]):
+                raise ValueError(f"Interface address(es) were not defined: {not_defined_address}")
+
+            if len(nics) > 1 and len(self.region_names) >= 2:
+                raise ValueError("Multiple network interfaces aren't supported for multi region use cases")
+
+        # 18 Validate K8S TLS+SNI values
+        if self.get("k8s_enable_sni") and not self.get("k8s_enable_tls"):
+            raise ValueError("'k8s_enable_sni=true' requires 'k8s_enable_tls' also to be 'true'.")
+
+        SCTCapacityReservation.get_cr_from_aws(self)
+
+        # 19: validate kafka configuration
+        if kafka_connectors := self.get('kafka_connectors'):
+            self['kafka_connectors'] = [SctKafkaConfiguration(**connector)
+                                        for connector in kafka_connectors]
+
+        # 20 Validate Manager restore parameters
+        if restore_params := self.get("mgmt_restore_params"):
+            self["mgmt_restore_params"] = RestoreParameters(**restore_params)
+
+        # 21 Validate Manager agent backup general parameters
+        if backup_params := self.get("mgmt_agent_backup_config"):
+            self["mgmt_agent_backup_config"] = AgentBackupParameters(**backup_params)
+
+>>>>>>> cfe415ac (feature(manager): add new parameters in manager pipeline)
     def log_config(self):
         self.log.info(self.dump_config())
 
@@ -2231,6 +2319,97 @@ class SCTConfiguration(dict):
         get_branch_version_for_multiple_repositories(
             urls=(self.get(url) for url in repos_to_validate if self.get(url)))
 
+<<<<<<< HEAD
+=======
+    def get_version_based_on_conf(self):  # pylint: disable=too-many-locals
+        """
+        figure out which version and if it's enterprise version
+        base on configuration only, before nodes are up and running
+        so test configuration can set up things which need to happen
+        before nodes are up
+
+        this is information is cached on the SCTConfiguration object
+        :return: tuple - (scylla_version, is_enterprise)
+        """
+        backend = self.get('cluster_backend')
+        scylla_version = None
+        _is_enterprise = False
+
+        if unified_package := self.get('unified_package'):
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                LOCALRUNNER.run(shell_script_cmd(f"""
+                    cd {tmpdirname}
+                    curl {unified_package} -o ./unified_package.tar.gz
+                    tar xvfz ./unified_package.tar.gz
+                    """), verbose=False)
+
+                scylla_version = next(pathlib.Path(tmpdirname).glob('**/SCYLLA-VERSION-FILE')).read_text()
+                scylla_product = next(pathlib.Path(tmpdirname).glob('**/SCYLLA-PRODUCT-FILE')).read_text()
+                _is_enterprise = scylla_product == 'scylla-enterprise'
+        elif not self.get('use_preinstalled_scylla'):
+            scylla_repo = self.get('scylla_repo')
+            scylla_version = get_branch_version(scylla_repo)
+            _is_enterprise = is_enterprise(scylla_version)
+        elif self.get('db_type') == 'cloud_scylla':
+            _is_enterpise = True
+        elif backend == 'aws':
+            amis = self.get('ami_id_db_scylla').split()
+            region_name = self.region_names[0]
+            tags = get_ami_tags(ami_id=amis[0], region_name=region_name)
+            scylla_version = tags.get('scylla_version') or tags.get('ScyllaVersion')
+            _is_enterprise = is_enterprise(scylla_version)
+        elif backend == 'gce':
+            images = self.get('gce_image_db').split()
+            tags = get_gce_image_tags(images[0])
+            scylla_version = tags.get('scylla_version').replace('-', '.')
+            _is_enterprise = is_enterprise(scylla_version)
+        elif backend == 'azure':
+            images = self.get('azure_image_db').split()
+            tags = azure_utils.get_image_tags(images[0])
+            scylla_version = tags.get('scylla_version')
+            _is_enterprise = is_enterprise(scylla_version)
+        elif backend == 'docker' or 'k8s' in backend:
+            docker_repo = self.get('docker_image')
+            scylla_version = self.get('scylla_version')
+            _is_enterprise = 'enterprise' in docker_repo
+        self.scylla_version = scylla_version
+        self.is_enterprise = _is_enterprise
+        self.update_argus_with_version(scylla_version, "scylla-server-target")
+
+        return scylla_version, _is_enterprise
+
+    def update_argus_with_version(self, scylla_version: str, package_name: str):
+        try:
+            version_regex = ARGUS_VERSION_RE
+            if match := version_regex.match(scylla_version):
+                version_info = match.groupdict()
+                package = Package(name=package_name, date=version_info.get("date", "#NO_DATE"),
+                                  version=version_info["short"],
+                                  revision_id=version_info.get("commit", "#NO_COMMIT"),
+                                  build_id="#NO_BUILDID")
+                self.log.info("Saving upgraded Scylla version...")
+                test_config = TestConfig()
+                test_config.init_argus_client(params=self, test_id=self.get("reuse_cluster") or self.get("test_id"))
+                test_config.argus_client().submit_packages([package])
+                test_config.argus_client().update_scylla_version(version_info["short"])
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.exception("Failed to save target Scylla version in Argus", exc_info=exc)
+
+    def dict(self):
+        out = deepcopy(self)
+
+        # handle pydantic object, and convert them back to dicts
+        # TODO: automate the process if we gonna keep using them more, or replace the whole configuration with pydantic/dataclasses
+        if kafka_connectors := self.get('kafka_connectors'):
+            out['kafka_connectors'] = [connector.dict(by_alias=True, exclude_none=True)
+                                       for connector in kafka_connectors]
+        if mgmt_restore_params := self.get("mgmt_restore_params"):
+            out["mgmt_restore_params"] = mgmt_restore_params.dict(by_alias=True, exclude_none=True)
+        if mgmt_agent_backup_config := self.get("mgmt_agent_backup_config"):
+            out["mgmt_agent_backup_config"] = mgmt_agent_backup_config.dict(by_alias=True, exclude_none=True)
+        return out
+
+>>>>>>> cfe415ac (feature(manager): add new parameters in manager pipeline)
     def dump_config(self):
         """
         Dump current configuration to string

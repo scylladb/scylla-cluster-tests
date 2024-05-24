@@ -1800,6 +1800,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             manager_agent_yaml["tls_key_file"] = tls_key_file
             manager_agent_yaml["prometheus"] = f":{self.parent_cluster.params.get('manager_prometheus_port')}"
 
+<<<<<<< HEAD
         self.remoter.sudo(shell_script_cmd("""\
             systemctl restart scylla-manager-agent
             systemctl enable scylla-manager-agent
@@ -1809,6 +1810,16 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.info("node %s has scylla-manager-agent version %s", self.name, manager_agent_version)
 
     def update_manager_agent_config(self, region: Optional[str] = None) -> None:
+=======
+    def update_manager_agent_backup_config(self, region: Optional[str] = None,
+                                           general_config: Optional[dict[str, str]] = None) -> None:
+        """Update manager agent yaml configuration:
+        1. Backup backend configuration (s3, gcs or azure section in scylla-manager-agent.yaml) - is updated always,
+        independently on input parameters.
+        2. Backup general configuration (rclone section in scylla-manager-agent.yaml) - is updated only
+        if general_config is provided.
+        """
+>>>>>>> cfe415ac (feature(manager): add new parameters in manager pipeline)
         backup_backend = self.parent_cluster.params.get("backup_bucket_backend")
         backup_backend_config = {}
         if backup_backend == "s3":
@@ -1824,6 +1835,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         with self.remote_manager_agent_yaml() as manager_agent_yaml:
             manager_agent_yaml[backup_backend] = backup_backend_config
+            if general_config:
+                manager_agent_yaml["rclone"] = general_config
 
         self.remoter.sudo("systemctl restart scylla-manager-agent")
         self.wait_manager_agent_up()
@@ -4505,7 +4518,15 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.remoter.run(f"mkdir -p {pkg_path}")
             node.remoter.send_files(src=f"{pkg_path}*.rpm", dst=pkg_path)
         node.install_manager_agent(package_path=pkg_path)
-        node.update_manager_agent_config(region=self.params.get("backup_bucket_region"))
+
+        if self.params.get("mgmt_agent_backup_config"):
+            agent_backup_general_config = self.params.get("mgmt_agent_backup_config").dict()
+        else:
+            agent_backup_general_config = None
+        node.update_manager_agent_backup_config(
+            region=self.params.get("backup_bucket_region"),
+            general_config=agent_backup_general_config,
+        )
 
     def _scylla_install(self, node):
         node.update_repo_cache()
