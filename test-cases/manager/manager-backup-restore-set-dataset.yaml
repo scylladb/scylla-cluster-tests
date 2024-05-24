@@ -1,5 +1,7 @@
 round_robin: true
 
+instance_type_db: 'i4i.2xlarge'
+
 region_name: us-east-1
 n_db_nodes: 3
 n_loaders: 4
