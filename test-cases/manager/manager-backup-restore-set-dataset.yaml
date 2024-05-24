@@ -1,0 +1,13 @@
+round_robin: true
+
+region_name: us-east-1
+n_db_nodes: 3
+n_loaders: 4
+n_monitor_nodes: 1
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"
+
+user_prefix: manager-restore
+space_node_threshold: 6442
