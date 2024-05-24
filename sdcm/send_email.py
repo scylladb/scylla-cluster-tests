@@ -350,6 +350,10 @@ class MgmtEmailReporter(BaseEmailReporter):
     _fields = (
         "manager_server_repo",
         "manager_agent_repo",
+        "agent_backup_config",
+        "restore_parameters",
+        "backup_time",
+        "restore_time",
     )
     email_template_file = "results_manager.html"
 
