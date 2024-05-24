@@ -452,10 +452,26 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.log.info("Prepare data for email")
 
         email_data = self._get_common_email_data()
-        email_data.update({"manager_server_repo": self.params.get("scylla_mgmt_address"),
-                           "manager_agent_repo": self.params.get("scylla_mgmt_agent_address") or
-                           self.params.get("scylla_mgmt_address"), })
 
+        restore_parameters = self.params.get("mgmt_restore_params")
+        if restore_parameters:
+            restore_parameters = restore_parameters.dict()
+
+        agent_backup_config = self.params.get("mgmt_agent_backup_config")
+        if agent_backup_config:
+            agent_backup_config = agent_backup_config.dict()
+
+        email_data.update(
+            {
+                "manager_server_repo": self.params.get("scylla_mgmt_address"),
+                "manager_agent_repo": (self.params.get("scylla_mgmt_agent_address") or
+                                       self.params.get("scylla_mgmt_address")),
+                "backup_time": str(self.manager_test_metrics.backup_time),
+                "restore_time": str(self.manager_test_metrics.restore_time),
+                "restore_parameters": restore_parameters,
+                "agent_backup_config": agent_backup_config,
+            }
+        )
         return email_data
 
     def test_backup_and_restore_only_data(self):
