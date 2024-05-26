@@ -18,7 +18,8 @@ def get_persistent_snapshots():  # Snapshot sizes (dict keys) are in GB
 
 def get_distro_name(distro_object):
     known_distro_dict = {
-        Distro.AMAZON2: "centos7",
+        Distro.AMAZON2: "centos8",
+        Distro.AMAZON2023: "centos8",
         Distro.CENTOS7: "centos7",
         Distro.CENTOS8: "centos8",
         Distro.DEBIAN10: "debian10",
