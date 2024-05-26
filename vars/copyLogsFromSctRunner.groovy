@@ -12,6 +12,10 @@ def call(String sct_latest_dir) {
             eval \$(ssh-agent -k)
         }
         trap clean_ssh_agent EXIT
+
+        # still need to sync scylla-test, until replacing keys in jenkins
+        ssh-add ~/.ssh/scylla-qa-ec2
+        ssh-add ~/.ssh/scylla-test
         ssh-add ~/.ssh/scylla_test_id_ed25519
 
         if [[ ! -z "${sct_runner_ip}" ]] ; then

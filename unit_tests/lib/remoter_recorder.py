@@ -23,7 +23,7 @@ class RemoterRecorder(RemoteCmdRunner):
     Example:
     >>> from unit_tests.lib.remoter_recorder import RemoterRecorder
     >>> import getpass
-    >>> remoter = RemoterRecorder(hostname='127.0.0.1', user=getpass.getuser(), key_file='~/.ssh/scylla-qa-ec2')
+    >>> remoter = RemoterRecorder(hostname='127.0.0.1', user=getpass.getuser(), key_file='~/.ssh/scylla_test_id_ed25519')
     >>> remoter.run('echo "Do something with remoter"')
     >>> remoter.save_responses_to_file('/tmp/test1_remoter.json')
     """
