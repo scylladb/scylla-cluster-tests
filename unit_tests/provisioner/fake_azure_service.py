@@ -509,7 +509,7 @@ class FakeVirtualMachines:
                             "publicKeys": [
                                 {
                                     "path": "/home/lukasz/.ssh/authorized_keys",
-                                    "keyData": "ssh-rsa fake_key_data== scylla-qa-ec2\n"
+                                    "keyData": "ssh-rsa fake_key_data== scylla_test_id_ed25519\n"
                                 }
                             ]
                         },
