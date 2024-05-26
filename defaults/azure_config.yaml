@@ -4,7 +4,7 @@ spot_max_price: 0.60
 instance_provision_fallback_on_demand: true
 azure_region_name:
   - eastus
-user_credentials_path: '~/.ssh/scylla-qa-ec2'
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
 
 azure_instance_type_db: 'Standard_L8s_v3'
 azure_instance_type_loader: 'Standard_F4s_v2'

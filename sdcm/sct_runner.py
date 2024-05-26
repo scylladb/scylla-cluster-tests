@@ -942,7 +942,7 @@ class AzureSctRunner(SctRunner):
 
     @cached_property
     def key_pair(self) -> SSHKey:
-        return KeyStore().get_gce_ssh_key_pair()  # scylla-test
+        return KeyStore().get_azure_ssh_key_pair()  # scylla-test
 
     def _image(self, image_type: ImageType = ImageType.SOURCE) -> Any:
         with suppress(AzureResourceNotFoundError):
