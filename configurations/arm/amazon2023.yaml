@@ -1,0 +1,6 @@
+ami_id_db_scylla: 'resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-arm64'  # Amazon Linux 2023 LTS Arm64 latest AMI
+instance_type_db: 'im4gn.xlarge'
+use_preinstalled_scylla: false
+# enhanced network isn't supported
+append_scylla_setup_args: ' --no-ec2-check '
+use_mgmt: false
