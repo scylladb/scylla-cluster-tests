@@ -211,6 +211,25 @@ CPE_NAME="cpe:2.3:o:amazon:amazon_linux:2"
 HOME_URL="https://amazonlinux.com/"
 """,
 
+    "Amazon Linux 2023": """\
+NAME="Amazon Linux"
+VERSION="2023"
+ID="amzn"
+ID_LIKE="fedora"
+VERSION_ID="2023"
+PLATFORM_ID="platform:al2023"
+PRETTY_NAME="Amazon Linux 2023.4.20240513"
+ANSI_COLOR="0;33"
+CPE_NAME="cpe:2.3:o:amazon:amazon_linux:2023"
+HOME_URL="https://aws.amazon.com/linux/amazon-linux-2023/"
+DOCUMENTATION_URL="https://docs.aws.amazon.com/linux/"
+SUPPORT_URL="https://aws.amazon.com/premiumsupport/"
+BUG_REPORT_URL="https://github.com/amazonlinux/amazon-linux-2023"
+VENDOR_NAME="AWS"
+VENDOR_URL="https://aws.amazon.com/"
+SUPPORT_END="2028-03-15"
+""",
+
     "Rocky Linux 8": """\
 NAME="Rocky Linux"
 VERSION="8.5 (Green Obsidian)"
@@ -333,6 +352,12 @@ class TestDistro(unittest.TestCase):  # pylint: disable=too-many-public-methods
         self.assertTrue(Distro.AMAZON2.is_amazon2)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2"])
         self.assertTrue(distro.is_amazon2)
+        self.assertTrue(distro.is_rhel_like)
+
+    def test_amazon2023(self):
+        self.assertTrue(Distro.AMAZON2023.is_amazon2023)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2023"])
+        self.assertTrue(distro.is_amazon2023)
         self.assertTrue(distro.is_rhel_like)
 
     def test_rocky8(self):
