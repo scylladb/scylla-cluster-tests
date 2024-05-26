@@ -13,7 +13,7 @@ stress_multiplier: 1
 instance_type_db: 'i3.2xlarge'
 
 cluster_backend: baremetal
-user_credentials_path: '~/.ssh/scylla-qa-ec2'
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
 
 use_preinstalled_scylla: false
 run_db_node_benchmarks: false
