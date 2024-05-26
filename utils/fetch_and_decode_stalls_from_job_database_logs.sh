@@ -5,7 +5,7 @@
 #   $1 - cluster logs path under job folder (for example: ~/avocado/job-results/latest/test-results/1-longevity_test.py\:LongevityTest.test_custom_time/julia-sst2-2mv-100-backpressure-db-cluster-1e0e59be)
 #   $2 - node IP: it's needed for decoding. Will use credential file (see below)
 #   $3 - OS user on the host, where job logs are located and where the script will be run
-# *** The credential file has to be on the host, where script is running: ~/.ssh/scylla-qa-ec2. It's hard-coded in the script
+# *** The credential file has to be on the host, where script is running: ~/.ssh/scylla_test_id_ed25519. It's hard-coded in the script
 # Information about the decoded backtraces location will be printed out by script on the console.
 
 # Usage:    ./fetch_and_decode_stalls_from_job_database_logs.sh <logs path> <node IP> <local OS user>
@@ -118,14 +118,14 @@ echo "*********************** Finished. Found backtraces are places in $unique_s
 # Decode backtraces
 #
 decoded_file_name="$unique_stalls_dir/decoded_backtraces.log"
-ssh  -a -x   -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=300 -l centos -p 22 -i ~/.ssh/scylla-qa-ec2 $NODE_IP "true"
+ssh  -a -x   -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=300 -l centos -p 22 -i ~/.ssh/scylla_test_id_ed25519 $NODE_IP "true"
 
 for file in $(find $unique_stalls_dir -type f); do
 	echo "Decoding of $(basename -- $file) file ...."
 	echo "============================ $(basename -- $file)  ================================" >> $decoded_file_name
 	cat $file >> $decoded_file_name
 	backtrace=$(less $file | egrep "0x|/lib" |awk 'ORS=" "')
-	ssh  -a -x   -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=300 -l centos -p 22 -i ~/.ssh/scylla-qa-ec2 $NODE_IP "addr2line -Cpife /usr/lib/debug/bin/scylla.debug $backtrace" >> $decoded_file_name
+	ssh  -a -x   -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=300 -l centos -p 22 -i ~/.ssh/scylla_test_id_ed25519 $NODE_IP "addr2line -Cpife /usr/lib/debug/bin/scylla.debug $backtrace" >> $decoded_file_name
 	echo "$(yes '' | sed 2q)" >> $decoded_file_name
 done
 # Print 3 empty lines
