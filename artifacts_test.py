@@ -26,6 +26,7 @@ from sdcm.tester import ClusterTester
 from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices
 from sdcm.utils.housekeeping import HousekeepingDB
 from sdcm.utils.common import get_latest_scylla_release, ScyllaProduct
+from sdcm.utils.decorators import retrying
 from sdcm.utils.issues import SkipPerIssues
 from utils.scylla_doctor import ScyllaDoctor
 
@@ -56,6 +57,9 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
         super().tearDown()
 
+    # since this logic id depended on code run by SCT to mark uuid as test, since commit 617026aa, this code it run in the background
+    # and not being waited for, so we need to compensate for it here with retries
+    @retrying(n=5, sleep_time=10, allowed_exceptions=(AssertionError,))
     def check_scylla_version_in_housekeepingdb(self, prev_id: int, expected_status_code: str,
                                                new_row_expected: bool, backend: str) -> int:
         """
