@@ -48,6 +48,8 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config():
     os.environ.update(env_config._asdict())
     config = SCTConfiguration()
     tags = TestConfig.common_tags()
+    # TODO: switch to  get_azure_ssh_key_pair()
+    #  temporary using gce keypair, until replacing keys in jenkins, and all backend would be using same key (including runners)
     ssh_key = KeyStore().get_gce_ssh_key_pair()
     prefix = config.get('user_prefix')
     builder = region_definition_builder.get_builder(params=config, test_config=test_config)
