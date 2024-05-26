@@ -14,6 +14,7 @@ import abc
 from dataclasses import dataclass
 from functools import cache
 from typing import List, Dict, Type
+from pathlib import Path
 
 from sdcm.keystore import KeyStore, SSHKey
 from sdcm.provision.provisioner import InstanceDefinition
@@ -124,10 +125,9 @@ class DefinitionBuilder(abc.ABC):
             )
         return region_definitions
 
-    @staticmethod
     @cache
-    def _get_ssh_key() -> SSHKey:
-        return KeyStore().get_gce_ssh_key_pair()
+    def _get_ssh_key(self) -> SSHKey:
+        return KeyStore().get_ssh_key_pair(name=Path(self.params.get("user_credentials_path")).name)
 
     def _get_node_count_for_each_region(self, n_str: str) -> List[int]:
         """generates node count for each region from configuration parameter string (e.g. n_db_nodes).
