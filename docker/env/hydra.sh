@@ -308,6 +308,7 @@ if [[ -n "$RUNNER_IP" ]]; then
 
     trap clean_ssh_agent EXIT
 
+    # TODO: still need to sync scylla-test, until replacing keys in jenkins
     if [ -z "$HYDRA_DRY_RUN" ]; then
         ssh-add ~/.ssh/scylla-test
         ssh-add ~/.ssh/scylla_test_id_ed25519
