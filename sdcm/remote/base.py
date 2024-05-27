@@ -222,13 +222,13 @@ class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
 
         while '\n' in stream_buffer:
             out_buf, rest_buf = stream_buffer.split('\n', 1)
-            self.log.debug("<%s>: " + out_buf, self.hostname)
+            self.log.debug("<%s>: %s", self.hostname, out_buf)
             stream_buffer = rest_buf
         self.len = len(stream) - len(stream_buffer)
         return []
 
     def submit_line(self, line: str):
-        self.log.debug("<%s>: " + line.rstrip('\n'), self.hostname)
+        self.log.debug("<%s>: %s", self.hostname, line.rstrip('\n'))
 
 
 class LogWriteWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
