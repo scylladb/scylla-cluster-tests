@@ -2443,7 +2443,7 @@ class SCTConfiguration(dict):
             amis = self.get('ami_id_db_scylla').split()
             region_name = self.region_names[0]
             tags = get_ami_tags(ami_id=amis[0], region_name=region_name)
-            scylla_version = tags.get('scylla_version')
+            scylla_version = tags.get('scylla_version') or tags.get('ScyllaVersion')
             _is_enterprise = is_enterprise(scylla_version)
         elif backend == 'gce':
             images = self.get('gce_image_db').split()
