@@ -1264,6 +1264,30 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
 
+    def _add_and_init_new_cluster_node_parallel(self, count, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=0):
+        self.log.info("Adding %s new nodes to cluster...", count)
+        InfoEvent(message=f'StartEvent - Adding {count} new nodes to cluster').publish()
+        new_nodes = self.cluster.add_nodes(
+            count=count, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)
+        self.monitoring_set.reconfigure_scylla_monitoring()
+
+        try:
+            with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.nodes[0], timeout=timeout):
+                self.cluster.wait_for_init(node_list=new_nodes, timeout=timeout, check_node_health=False)
+            self.cluster.set_seeds()
+            self.cluster.update_seed_provider()
+        except (NodeSetupFailed, NodeSetupTimeout):
+            self.log.warning("TestConfig of the '%s' failed, removing them from list of nodes" % new_nodes)
+            for node in new_nodes:
+                self.cluster.nodes.remove(node)
+            self.log.warning("Nodes will not be terminated. Please terminate manually!!!")
+            raise
+        for new_node in new_nodes:
+            new_node.wait_native_transport()
+        self.cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
+        InfoEvent(message="FinishEvent - New Nodes are up and normal").publish()
+        return new_nodes
+
     @decorate_with_context(ignore_ycsb_connection_refused)
     def _terminate_cluster_node(self, node):
         self.cluster.terminate_node(node)
@@ -3989,6 +4013,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def add_new_node(self, rack=0):
         return self._add_and_init_new_cluster_node(rack=rack)
 
+    @latency_calculator_decorator(legend="Adding new nodes parallel")
+    def add_new_nodes_parallel(self, count=1, rack=0):
+        return self._add_and_init_new_cluster_node_parallel(count=count, rack=rack)
+
     @latency_calculator_decorator(legend="Decommission node: remove node from cluster")
     def decommission_node(self, node):
         self.cluster.decommission(node)
@@ -4022,6 +4050,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._grow_cluster(rack=None)
         self._shrink_cluster(rack=None)
 
+    def disrupt_grow_shrink_cluster_parallel(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+        self._grow_cluster_parallel(rack=None)
+        self._shrink_cluster(rack=None)
+
     # NOTE: version limitation is caused by the following:
     #       - https://github.com/scylladb/scylla-enterprise/issues/3211
     #       - https://github.com/scylladb/scylladb/issues/14184
@@ -4048,6 +4084,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             InfoEvent(message=f'GrowCluster - Done adding New node {added_node.name}').publish()
         self.log.info("Finish cluster grow")
         time.sleep(self.interval)
+
+    def _grow_cluster_parallel(self, rack=None):
+        if rack is None:
+            rack = 0
+        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
+        self.log.info("Start grow cluster on %s nodes", add_nodes_number)
+        InfoEvent(message=f"Start grow cluster on {add_nodes_number} nodes").publish()
+        self.add_new_nodes_parallel(count=add_nodes_number, rack=rack)
+        self.log.info("Finish cluster grow")
+        time.sleep(3600)  # TODO: replace with proper wait for tablets to be balanced
 
     def _shrink_cluster(self, rack=None):
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
@@ -5260,6 +5306,15 @@ class GrowShrinkClusterNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_grow_shrink_cluster()
+
+
+class GrowShrinkClusterParallelNemesis(Nemesis):
+    disruptive = True
+    kubernetes = False
+    topology_changes = True
+
+    def disrupt(self):
+        self.disrupt_grow_shrink_cluster_parallel()
 
 
 class AddRemoveRackNemesis(Nemesis):

@@ -330,7 +330,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
         if nemesis:
             interval = self.params.get('nemesis_interval')
-            time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
+            time.sleep(5 * 60)  # Sleeping one interval (in minutes) before starting the nemesis
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis(interval=interval, cycles_count=1)
             self._stop_load_when_nemesis_threads_end()
