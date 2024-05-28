@@ -593,9 +593,7 @@ class AWSNode(cluster.BaseNode):
 
     @cached_property
     def private_dns_name(self) -> str:
-        result = self.remoter.run(
-            'curl http://169.254.169.254/latest/meta-data/local-hostname', verbose=False)
-        return result.stdout.strip()
+        return self.scylla_network_configuration.dns_private_name
 
     def _get_ipv6_ip_address(self) -> Optional[str]:
         return self.scylla_network_configuration.interface_ipv6_address
