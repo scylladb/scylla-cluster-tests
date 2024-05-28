@@ -275,6 +275,18 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     LOCALSTRATEGY_KEYSPACE_NAME = "localstrategy_keyspace"
     NETWORKSTRATEGY_KEYSPACE_NAME = "networkstrategy_keyspace"
 
+    def _ensure_and_get_cluster(self, manager_tool, force_add: bool = False):
+        """Get the cluster if it is already added, otherwise add it to manager.
+        Use force_add=True if you want to re-add the cluster (delete and add again) even if it already added.
+        """
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME)
+        if not mgr_cluster or force_add:
+            if mgr_cluster:
+                mgr_cluster.delete()
+            mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                                   auth_token=self.monitors.mgmt_auth_token)
+        return mgr_cluster
+
     def test_mgmt_repair_nemesis(self):
         """
             Test steps:
@@ -1073,9 +1085,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         # task types: backup/repair
         self.log.info('starting test_suspend_and_resume_{}'.format(task_type))
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
-            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
-                                        auth_token=self.monitors.mgmt_auth_token)
+        # re-add the cluster to make the backup task run from scratch, otherwise it may be very fast and
+        # the test is not able to catch the required statuses
+        mgr_cluster = self._ensure_and_get_cluster(manager_tool, force_add=True)
         if task_type == "backup":
             suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
         elif task_type == "repair":
@@ -1096,9 +1108,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         test_name_filler = "after_duration_passed" if wait_for_duration else "before_duration_passed"
         self.log.info('starting test_suspend_with_on_resume_start_tasks_flag_{}'.format(test_name_filler))
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
-            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
-                                        auth_token=self.monitors.mgmt_auth_token)
+        # re-add the cluster to make the backup task run from scratch, otherwise it may run very fast and
+        # the test won't be able to catch the required statuses
+        mgr_cluster = self._ensure_and_get_cluster(manager_tool, force_add=True)
         task_type = random.choice(["backup", "repair"])
         if task_type == "backup":
             suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
@@ -1130,9 +1142,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def test_suspend_and_resume_without_starting_tasks(self):
         self.log.info('starting test_suspend_and_resume_without_starting_tasks')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
-            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
-                                        auth_token=self.monitors.mgmt_auth_token)
+        # re-add the cluster to make the backup task run from scratch, otherwise it may be very fast and
+        # the test is not able to catch the required statuses
+        mgr_cluster = self._ensure_and_get_cluster(manager_tool, force_add=True)
         suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
