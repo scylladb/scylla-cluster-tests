@@ -54,20 +54,18 @@ from sdcm.utils.common import (
     get_sct_root_path,
     normalize_ipv6_url, create_remote_storage_dir,
 )
-from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.context_managers import environment
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
 from sdcm.utils.get_username import get_username
 from sdcm.utils.k8s import KubernetesOps
-from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
 from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 from sdcm.utils.gce_utils import gce_public_addresses, gce_private_addresses
 
 LOGGER = logging.getLogger(__name__)
 
 
-class CollectingNode(AutoSshContainerMixin, WebDriverContainerMixin):
+class CollectingNode:
     # pylint: disable=too-few-public-methods,too-many-instance-attributes
     logdir = None
 
@@ -440,7 +438,7 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
     ]
 
     grafana_port = 3000
-    grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}{path}?from={st}&to=now&refresh=1d"
+    grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}/render{path}?from={st}&to=now&refresh=1d"
     sct_base_path = get_sct_root_path()
 
     def __init__(self, *args, **kwargs):
@@ -450,17 +448,7 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
             test_start_time = time.time() - (6 * 3600)
         self.start_time = str(test_start_time).split('.', maxsplit=1)[0] + '000'
         self.grafana_dashboards = self.base_grafana_dashboards + kwargs.pop("extra_entities", [])
-        self.remote_browser = None
         super().__init__(*args, **kwargs)
-
-    def close_browser(self):
-        if self.remote_browser:
-            LOGGER.info('Grafana - browser quit')
-            self.remote_browser.quit()
-
-    def destory_webdriver_container(self):
-        if self.remote_browser:
-            self.remote_browser.destroy_containers()
 
     def get_version(self, node):
         _, _, version = self.get_monitoring_version(node)
@@ -479,8 +467,8 @@ class GrafanaScreenShot(GrafanaEntity):
     Extends:
         GrafanaEntity
     """
+    DEFAULT_SNAPSHOT_WIDTH = 1920
 
-    @retrying(n=5)
     def get_grafana_screenshot(self, node, local_dst):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
@@ -491,7 +479,6 @@ class GrafanaScreenShot(GrafanaEntity):
             return screenshots
 
         try:
-            self.remote_browser = RemoteBrowser(node)
             for dashboard in self.grafana_dashboards:
                 try:
                     dashboard_metadata = MonitoringStack.get_dashboard_by_title(
@@ -512,11 +499,13 @@ class GrafanaScreenShot(GrafanaEntity):
                                                                         dashboard.name,
                                                                         datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
                                                                         node.name))
-                    self.remote_browser.open(grafana_url, dashboard.resolution)
-                    dashboard.scroll_to_bottom(self.remote_browser.browser)
-                    dashboard.wait_panels_loading(self.remote_browser.browser)
                     LOGGER.debug("Get screenshot for url %s, save to %s", grafana_url, screenshot_path)
-                    self.remote_browser.get_screenshot(grafana_url, screenshot_path)
+                    with requests.get(grafana_url, stream=True,
+                                      params=dict(width=self.DEFAULT_SNAPSHOT_WIDTH, height=-1)) as response:
+                        response.raise_for_status()
+                        with open(screenshot_path, 'wb') as output_file:
+                            for chunk in response.iter_content(chunk_size=8192):
+                                output_file.write(chunk)
                     screenshots.append(screenshot_path)
                 except Exception as details:  # pylint: disable=broad-except
                     LOGGER.error("Error get screenshot %s: %s", dashboard.name, details, exc_info=True)
@@ -526,84 +515,11 @@ class GrafanaScreenShot(GrafanaEntity):
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.error("Error taking monitor screenshot: %s, traceback: %s", details, traceback.format_exc())
             return []
-        finally:
-            self.close_browser()
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         node.logdir = local_dst
         os.makedirs(local_dst, exist_ok=True)
         return self.get_grafana_screenshot(node, local_dst)
-
-
-class GrafanaSnapshot(GrafanaEntity):
-    """Grafana snapshot
-
-    Collect Grafana snapshot
-
-    Extends:
-        GrafanaEntity
-    """
-    @retrying(n=5)
-    def get_grafana_snapshot(self, node):
-        """
-            Take snapshot of the Grafana per-server-metrics dashboard and upload to S3
-        """
-        snapshots = []
-        version = self.get_version(node)
-        if not version:
-            return snapshots
-        try:
-            self.remote_browser = RemoteBrowser(node)
-            monitoring_ui.Login(self.remote_browser.browser,
-                                ip=normalize_ipv6_url(node.grafana_address),
-                                port=self.grafana_port).use_default_creds()
-            for dashboard in self.grafana_dashboards:
-                try:
-                    dashboard_metadata = MonitoringStack.get_dashboard_by_title(
-                        grafana_ip=normalize_ipv6_url(node.grafana_address),
-                        port=self.grafana_port,
-                        title=dashboard.title)
-                    if not dashboard_metadata:
-                        LOGGER.error("Dashboard '%s' was not found", dashboard.title)
-                        continue
-
-                    grafana_url = self.grafana_entity_url_tmpl.format(
-                        node_ip=normalize_ipv6_url(node.grafana_address),
-                        grafana_port=self.grafana_port,
-                        path=dashboard_metadata["url"],
-                        st=self.start_time)
-                    LOGGER.info("Get snapshot link for url %s", grafana_url)
-                    self.remote_browser.open(grafana_url, dashboard.resolution)
-                    dashboard.scroll_to_bottom(self.remote_browser.browser)
-                    dashboard.wait_panels_loading(self.remote_browser.browser)
-
-                    snapshots.append(dashboard.get_snapshot(self.remote_browser.browser))
-                except Exception as details:  # pylint: disable=broad-except
-                    LOGGER.error("Error get snapshot %s: %s, traceback: %s",
-                                 dashboard.name, details, traceback.format_exc())
-
-            LOGGER.info(snapshots)
-            return snapshots
-
-        except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error("Error taking monitor snapshot: %s, traceback: %s", details, traceback.format_exc())
-            return []
-        finally:
-            self.close_browser()
-
-    def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
-        node.logdir = local_dst
-        os.makedirs(local_dst, exist_ok=True)
-        snapshots = self.get_grafana_snapshot(node)
-        snapshots_file = os.path.join(local_dst, "grafana_snapshots")
-        with open(snapshots_file, "w", encoding="utf-8") as f:  # pylint: disable=invalid-name
-            for snapshot in snapshots:
-                f.write(snapshot + '\n')
-
-        return {'links': snapshots, 'file': snapshots_file}
-
-    def __del__(self):
-        self.destory_webdriver_container()
 
 
 class LogCollector:
@@ -950,7 +866,6 @@ class MonitorLogCollector(LogCollector):
         PrometheusSnapshots(name='prometheus_data'),
         MonitoringStack(name='monitoring-stack'),
         GrafanaScreenShot(name='grafana-screenshot'),
-        GrafanaSnapshot(name='grafana-snapshot')
     ]
     cluster_log_type = "monitor-set"
     cluster_dir_prefix = "monitor-set"
