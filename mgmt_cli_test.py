@@ -93,10 +93,10 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
                 curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
                 sudo apt-get update
             """)
+            self._run_cmd_with_retry(executor=node.remoter.run, cmd=shell_script_cmd(cmd))
             node.install_package("google-cloud-cli")
         else:
             raise NotImplementedError("At the moment, we only support debian installation")
-        self._run_cmd_with_retry(executor=node.remoter.run, cmd=shell_script_cmd(cmd))
 
     def install_azcopy_dependencies(self, node):
         self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd("""\
