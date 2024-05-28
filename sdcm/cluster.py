@@ -3224,6 +3224,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.coredumps = {}
         super().__init__()
 
+    def __str__(self):
+        return f"{self.__class__.__name__}:{self.name}"
+
     @cached_property
     def test_config(self) -> TestConfig:  # pylint: disable=no-self-use
         return TestConfig()
