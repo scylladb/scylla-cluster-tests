@@ -1522,7 +1522,10 @@ def create_runner_image(cloud_provider, region, availability_zone):
     if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
-    sct_runner = get_sct_runner(cloud_provider=cloud_provider, region_name=region, availability_zone=availability_zone)
+    os.environ.setdefault('SCT_CLUSTER_BACKEND', cloud_provider)
+    sct_config = SCTConfiguration()
+    sct_runner = get_sct_runner(cloud_provider=cloud_provider, region_name=region,
+                                availability_zone=availability_zone, params=sct_config)
     sct_runner.create_image()
 
 
