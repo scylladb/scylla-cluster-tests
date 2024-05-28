@@ -463,9 +463,6 @@ class SCTConfiguration(dict):
         dict(name="seeds_num", env="SCT_SEEDS_NUM", type=int,
              help="""Number of seeds to select"""),
 
-        dict(name="send_email", env="SCT_SEND_EMAIL", type=boolean,
-             help="""If true would send email out of the performance regression test"""),
-
         dict(name="email_recipients", env="SCT_EMAIL_RECIPIENTS", type=str_or_list,
              help="""list of email of send the performance regression test to"""),
 

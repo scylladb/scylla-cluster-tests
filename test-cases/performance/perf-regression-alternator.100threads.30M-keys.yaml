@@ -53,7 +53,6 @@ user_prefix: 'perf-alternator'
 space_node_threshold: 644245094
 
 store_perf_results: true
-send_email: true
 email_recipients: ['scylla-perf-results@scylladb.com', 'alternator@scylladb.com']
 
 print_kernel_callstack: true

@@ -125,8 +125,7 @@ from sdcm.logcollector import (
     ScyllaLogCollector,
     SirenManagerLogCollector,
 )
-from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, \
-    save_email_data_to_file
+from sdcm.send_email import build_reporter, save_email_data_to_file
 from sdcm.utils import alternator
 from sdcm.utils.profiler import ProfilerFactory
 from sdcm.remote import RemoteCmdRunnerBase
@@ -2891,7 +2890,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.save_email_data()
         self.argus_collect_gemini_results()
         self.destroy_localhost()
-        self.send_email()
         self.stop_event_device()
         if self.params.get('collect_logs'):
             self.collect_sct_logs()
@@ -3536,37 +3534,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if relocatable_pkg := email_data.get("relocatable_pkg"):
             self.test_config.argus_client().submit_packages(
                 [Package(name="relocatable_pkg", date="", version=relocatable_pkg, revision_id="", build_id="")])
-
-    @silence()
-    def send_email(self):
-        """Send email with test results on teardown
-
-        The method is used to send email with test results.
-        Child class should implement the method get_mail_data
-        which return the dict with 2 required fields:
-            email_template, email_subject
-        """
-        send_email = self.params.get('send_email')
-        email_results_file = os.path.join(self.logdir, "email_data.json")
-        email_data = read_email_data_from_file(email_results_file)
-
-        if get_username() == "jenkins":
-            self.log.info("Email will be sent by pipeline stage")
-            return
-
-        if send_email and email_data:
-            email_data["reporter"] = self.email_reporter.__class__.__name__
-            email_data['nodes'] = get_running_instances_for_email_report(self.test_id)
-            try:
-                if self.email_reporter:
-                    self.email_reporter.send_report(email_data)
-                else:
-                    self.log.warning('Test is not configured to send html reports')
-
-            except Exception as details:  # pylint: disable=broad-except
-                self.log.error("Error during sending email: {}".format(details))
-        else:
-            self.log.warning("Email is not configured: %s or no email data: %s", send_email, email_data)
 
     def get_email_data(self):  # pylint: disable=no-self-use
         """prepare data to generate and send via email
