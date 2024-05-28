@@ -103,7 +103,6 @@ from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_g
     check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers, \
     check_group0_tokenring_consistency, CHECK_NODE_HEALTH_RETRIES, CHECK_NODE_HEALTH_RETRY_DELAY
 from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property
-from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.test_config import TestConfig
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 from sdcm.utils.version_utils import (
@@ -126,7 +125,7 @@ from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.monitorstack.ui import AlternatorDashboard
-from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3, \
+from sdcm.logcollector import GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3, \
     save_kallsyms_map, collect_diagnostic_data
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, \
     LDAP_PORT, DEFAULT_PWD_SUFFIX
@@ -229,7 +228,7 @@ class UserRemoteCredentials():
         pass
 
 
-class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     CQL_PORT = 9042
     CQL_SSL_PORT = 9142
     MANAGER_AGENT_PORT = 10001
@@ -5598,7 +5597,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             mkdir -p {self.monitoring_data_dir}
             echo "" > UA.sh
             PATH=$PATH:/usr/sbin ./start-all.sh \
-            -D "{labels}" \
+            -D "{labels} --env RENDERING_VIEWPORT_MAX_HEIGHT=15000 --env RENDERING_VIEWPORT_DEVICE_SCALE_FACTOR=4" \
             -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
             -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
             {scylla_manager_servers_arg} \
@@ -5674,12 +5673,10 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             return {}
 
         screenshot_links = []
-        snapshot_links = []
         for node in self.nodes:
             screenshot_links.extend(self.get_grafana_screenshots(node, test_start_time))
-            snapshot_links.extend(self.get_grafana_snapshots(node, test_start_time))
 
-        return {'screenshots': screenshot_links, 'snapshots': snapshot_links}
+        return {'screenshots': screenshot_links}
 
     def get_grafana_screenshots(self, node: BaseNode, test_start_time: float) -> list[str]:
         screenshot_links = []
@@ -5697,20 +5694,6 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             screenshot_links.append(S3Storage().upload_file(screenshot, s3_path))
 
         return screenshot_links
-
-    def get_grafana_snapshots(self, node: BaseNode, test_start_time: float) -> list[str]:
-        snapshot_links = []
-        grafana_extra_dashboards = []
-        if 'alternator_port' in self.params:
-            grafana_extra_dashboards = [AlternatorDashboard()]
-
-        snapshots_collector = GrafanaSnapshot(name="grafana-snapshot",
-                                              test_start_time=test_start_time,
-                                              extra_entities=grafana_extra_dashboards)
-        snapshots_data = snapshots_collector.collect(node, self.logdir)
-        snapshot_links.extend(snapshots_data.get('links', []))
-
-        return snapshot_links
 
     def upload_annotations_to_s3(self):
         annotations_url = ''
