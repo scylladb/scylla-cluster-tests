@@ -61,6 +61,9 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             except KeyError as exc:
                 LOGGER.warning("Failed to cache %s instance. Probably is pending deletion. Error: %s", v_m.name, exc)
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(region={self.region}, az={self.availability_zone})"
+
     @staticmethod
     def _convert_az_to_zone(availability_zone: str) -> str:
         """Azure uses numbers for availiability zones, while in tests we use letters.
