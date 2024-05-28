@@ -28,7 +28,6 @@ append_scylla_yaml: |
   experimental_features:
     - cdc
 
-send_email: true
 email_recipients: ['scylla-perf-results@scylladb.com', 'cdc@scylladb.com']
 backtrace_decoding: false
 print_kernel_callstack: true

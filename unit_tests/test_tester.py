@@ -94,7 +94,7 @@ class ClusterTesterForTests(ClusterTester):
         return None
 
     @silence()
-    def send_email(self):
+    def save_email_data(self):
         pass
 
     def tearDown(self):
@@ -187,7 +187,7 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
         raise ValueError('Main test also failed')
 
     @silence()
-    def send_email(self):
+    def save_email_data(self):
         raise ValueError()
 
     def _validate_results(self):
@@ -196,7 +196,7 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
         #  under hydra unit_test it stops running it and you don't see exception from next subtest.
         assert self.event_summary == {'NORMAL': 2, 'ERROR': 2}
         assert 'Subtest1 failed' in self.events['ERROR'][0]
-        assert 'send_email' in self.events['ERROR'][1]
+        assert 'save_email_data' in self.events['ERROR'][1]
         assert self.final_event.test_status == 'FAILED'
 
 
@@ -234,7 +234,7 @@ class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
         assert False, 'Main test also failed'
 
     @silence()
-    def send_email(self):
+    def save_email_data(self):
         raise ValueError()
 
     def _validate_results(self):
@@ -243,7 +243,7 @@ class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
         #  under hydra unit_test it stops running it and you don't see exception from next subtest.
         assert self.event_summary == {'NORMAL': 2, 'ERROR': 2}
         assert 'Subtest1 failed' in self.events['ERROR'][0]
-        assert 'send_email' in self.events['ERROR'][1]
+        assert 'save_email_data' in self.events['ERROR'][1]
         assert self.final_event.test_status == 'FAILED'
 
 
@@ -252,13 +252,13 @@ class TeardownFailsTest(ClusterTesterForTests):
         pass
 
     @silence()
-    def send_email(self):
+    def save_email_data(self):
         raise ValueError()
 
     def _validate_results(self):
         super()._validate_results()
         assert self.event_summary == {'NORMAL': 2, 'ERROR': 1}
-        assert 'send_email' in self.final_event.events['ERROR'][0]
+        assert 'save_email_data' in self.final_event.events['ERROR'][0]
         assert self.final_event.test_status == 'FAILED'
 
 

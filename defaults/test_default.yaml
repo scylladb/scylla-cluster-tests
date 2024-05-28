@@ -65,7 +65,6 @@ update_db_packages: ''
 logs_transport: "syslog-ng"
 
 store_perf_results: false
-send_email: false
 email_recipients: ['qa@scylladb.com']
 email_subject_postfix: ''
 
