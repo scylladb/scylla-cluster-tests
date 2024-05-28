@@ -29,6 +29,9 @@ class LocalHost(SyslogNGContainerMixin, GcloudContainerMixin, HelmContainerMixin
         self.tags = {}
         self.name = (f"{user_prefix}-" if user_prefix else "") + "localhost" + (f"-{test_id}" if test_id else "")
 
+    def __str__(self):
+        return f"{self.__class__.__name__}: {self.name}"
+
     @property
     def ldap_ports(self) -> Optional[dict]:
         return {'ldap_port': ContainerManager.get_container_port(self, "ldap", LDAP_PORT),
