@@ -51,6 +51,16 @@ class ScyllaNetworkConfiguration:
         return self.listen_address
 
     @property
+    def dns_private_name(self):
+        if broadcast_address_config := [conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"]:
+            if not (interface := [conf for conf in self.network_interfaces if broadcast_address_config[0]["nic"] == conf.device_index]):
+                raise NetworkInterfaceNotFound(f"Not found network interface with device_index {broadcast_address_config[0]['nic']}. "
+                                               f"Check 'scylla_network_config' definition in the test configuration")
+            return interface[0].dns_private_name
+
+        return self.network_interfaces[0].dns_private_name
+
+    @property
     def broadcast_address_ip_type(self):
         # If multiple network interface is defined on the node, private address in the `nodetool status` is IP that defined in
         # broadcast_address. Keep this output in correlation with `nodetool status`
