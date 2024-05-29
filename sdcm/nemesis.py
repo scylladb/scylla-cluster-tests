@@ -2495,11 +2495,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
              (*) The other available values of 'disabled' / 'immediate' are not tested by
              this nemesis since not applicable to a longevity test.
         """
-        all_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
-
-        if not all_ks_cfs:
+        # This nemesis can not be run on table with RF = 1:
+        #   ConfigurationException: tombstone_gc option with mode = repair not supported for table with RF one or local replication strategy
+        # We do not run tests with local strategy ({'class': 'org.apache.cassandra.locator.LocalStrategy'}), so I do not add this filter
+        if not (all_ks_cfs := self.cluster.get_non_system_ks_cf_list(db_node=self.target_node,
+                                                                     filter_func=self.cluster.is_ks_rf_one)):
             raise UnsupportedNemesis(
-                'Non-system keyspace and table are not found. toggle_table_gc_mode nemesis can\'t run')
+                'Any table with RF != 1 is not found. disrupt_toggle_table_gc_mode nemesis can\'t run')
 
         keyspace_table = random.choice(all_ks_cfs)
         keyspace, table = keyspace_table.split('.')
@@ -4494,11 +4496,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # no need to switch as already is NetworkTopology
                 continue
             self.log.info(f"Switching replication strategy to Network for '{keyspace}' keyspace")
-            if keyspace == "system_auth" and replication_strategy.replication_factor != len(nodes_by_region[region]):
+            if keyspace == "system_auth" and replication_strategy.replication_factors[0] != len(nodes_by_region[region]):
                 self.log.warning(f"system_auth keyspace is not replicated on all nodes "
-                                 f"({replication_strategy.replication_factor}/{len(nodes_by_region[region])}).")
+                                 f"({replication_strategy.replication_factors[0]}/{len(nodes_by_region[region])}).")
             network_replication = NetworkTopologyReplicationStrategy(
-                **{dc_name: replication_strategy.replication_factor})
+                **{dc_name: replication_strategy.replication_factors[0]})  # pylint: disable=protected-access
             network_replication.apply(node, keyspace)
 
     def disrupt_add_remove_dc(self) -> None:
@@ -4536,7 +4538,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     strategy = ReplicationStrategy.get(node, keyspace)
                     assert isinstance(strategy, NetworkTopologyReplicationStrategy), \
                         "Should have been already switched to NetworkStrategy"
-                    strategy.replication_factors.update({new_dc_name: 1})
+                    strategy.replication_factors_per_dc.update({new_dc_name: 1})  # pylint: disable=protected-access
                     replication_strategy_setter(**{keyspace: strategy})
                 InfoEvent(message='execute rebuild on new datacenter').publish()
                 with wait_for_log_lines(node=new_node, start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
