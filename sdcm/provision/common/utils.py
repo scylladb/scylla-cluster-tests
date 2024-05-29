@@ -148,7 +148,7 @@ def install_syslogng_service():
                 done
 
                 for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
-                    apt-get install -o DPkg::Lock::Timeout=300 -y syslog-ng || true
+                    DEBIAN_FRONTEND=noninteractive apt-get install -o DPkg::Lock::Timeout=300 -y syslog-ng || true
                     if dpkg-query --show syslog-ng ; then
                         SYSLOG_NG_INSTALLED=1
                         break
