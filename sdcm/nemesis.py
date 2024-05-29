@@ -50,7 +50,6 @@ from sdcm.cluster import (
     BaseCluster,
     BaseNode,
     BaseScyllaCluster,
-    ClusterNodesNotReady,
     DB_LOG_PATTERN_RESHARDING_START,
     DB_LOG_PATTERN_RESHARDING_FINISH,
     MAX_TIME_WAIT_FOR_NEW_NODE_UP,
@@ -3344,7 +3343,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     self.target_node, duration, rate=rate_limit, limit=limit, buffer=10000)
         experiment.start()
         experiment.wait_until_finished()
-        self._wait_all_nodes_un()
+        self.cluster.wait_all_nodes_un()
 
     def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
         # pylint: disable=too-many-locals
@@ -3393,7 +3392,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             time.sleep(wait_time)
         finally:
             self.target_node.traffic_control(None)
-            self._wait_all_nodes_un()
+            self.cluster.wait_all_nodes_un()
 
     def _disrupt_network_block_k8s(self, list_of_timeout_options):
         duration = f"{random.choice(list_of_timeout_options)}s"
@@ -3401,7 +3400,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         experiment.start()
         experiment.wait_until_finished()
         time.sleep(15)
-        self._wait_all_nodes_un()
+        self.cluster.wait_all_nodes_un()
 
     def disrupt_network_block(self):
         list_of_timeout_options = [10, 60, 120, 300, 500]
@@ -3424,12 +3423,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             time.sleep(wait_time)
         finally:
             self.target_node.traffic_control(None)
-            self._wait_all_nodes_un()
-
-    @retrying(n=15, sleep_time=5, allowed_exceptions=ClusterNodesNotReady)
-    def _wait_all_nodes_un(self):
-        for node in self.cluster.nodes:
-            self.cluster.check_nodes_up_and_normal(verification_node=node)
+            self.cluster.wait_all_nodes_un()
 
     def disrupt_remove_node_then_add_node(self):  # pylint: disable=too-many-branches
         """
@@ -3754,7 +3748,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             time.sleep(wait_time)
         finally:
             self.target_node.start_network_interface()
-            self._wait_all_nodes_un()
+            self.cluster.wait_all_nodes_un()
 
     def _call_disrupt_func_after_expression_logged(self,
                                                    log_follower: Iterable[str],
