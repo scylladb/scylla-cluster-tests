@@ -746,6 +746,36 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
     assert set(table_names) == {'mview.users', '"123_keyspace"."120users"', '"123_keyspace".users'}
 
 
+@pytest.mark.integration
+def test_filter_out_ks_with_rf_one(docker_scylla, params, events):  # pylint: disable=unused-argument
+
+    cluster = DummyScyllaCluster([docker_scylla])
+    cluster.params = params
+
+    with cluster.cql_connection_patient(docker_scylla) as session:
+        session.execute(
+            "CREATE KEYSPACE mview WITH replication = {'class': 'org.apache.cassandra.locator.SimpleStrategy', 'replication_factor': '1'} "
+            "AND durable_writes = true AND tablets = {'enabled': false}")
+        session.execute(
+            "CREATE TABLE mview.users (username text, first_name text, last_name text, password text, email text, "
+            "last_access timeuuid, PRIMARY KEY(username))")
+        session.execute(
+            "INSERT INTO mview.users (username, first_name, last_name, password) VALUES "
+            "('fruch', 'Israel', 'Fruchter', '1111')")
+        session.execute(
+            "CREATE KEYSPACE mview2 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 2}")
+        session.execute(
+            "CREATE TABLE mview2.users (username text, first_name text, last_name text, password text, email text, "
+            "last_access timeuuid, PRIMARY KEY(username))")
+        session.execute(
+            "INSERT INTO mview2.users (username, first_name, last_name, password) VALUES "
+            "('fruch', 'Israel', 'Fruchter', '1111')")
+        docker_scylla.run_nodetool('flush')
+
+        table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_func=cluster.is_ks_rf_one)
+        assert table_names == ['mview2.users']
+
+
 class TestNodetool(unittest.TestCase):
     def test_describering_parsing(self):  # pylint: disable=no-self-use
         """ Test "nodetool describering" output parsing """
