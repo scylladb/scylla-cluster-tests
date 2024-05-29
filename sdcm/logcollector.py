@@ -1540,13 +1540,8 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                 global_ip=self.get_aws_ip_address(instance),
                 tags={**self.tags, "NodeType": "loader", }))
 
-    @staticmethod
-    def gce_first_public_ip(instance):
-        return gce_public_addresses(instance)[0]
-
-    @staticmethod
-    def gce_first_private_ip(instance):
-        return gce_private_addresses(instance)[0]
+    def get_gce_ip_address(self, instance):
+        return gce_public_addresses(instance)[0] if ssh_connection_ip_type(self.params) == 'public' else gce_private_addresses(instance)[0]
 
     def get_gce_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
@@ -1554,38 +1549,38 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         for instance in filtered_instances['db_nodes']:
             self.db_cluster.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
-                                                      "hostname": self.gce_first_private_ip(instance),
+                                                      "hostname": self.get_gce_ip_address(instance),
                                                       "user": self.params.get('gce_image_username'),
                                                       "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
-                                                  global_ip=self.gce_first_public_ip(instance),
+                                                  global_ip=self.get_gce_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "scylla-db", }))
         for instance in filtered_instances['monitor_nodes']:
             self.monitor_set.append(CollectingNode(name=instance.name,
                                                    ssh_login_info={
-                                                       "hostname": self.gce_first_private_ip(instance),
+                                                       "hostname": self.get_gce_ip_address(instance),
                                                        "user": self.params.get('gce_image_username'),
                                                        "key_file": self.params.get('user_credentials_path')},
                                                    instance=instance,
-                                                   global_ip=self.gce_first_public_ip(instance),
+                                                   global_ip=self.get_gce_ip_address(instance),
                                                    tags={**self.tags, "NodeType": "monitor", }))
         for instance in filtered_instances['loader_nodes']:
             self.loader_set.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
-                                                      "hostname": self.gce_first_private_ip(instance),
+                                                      "hostname": self.get_gce_ip_address(instance),
                                                       "user": self.params.get('gce_image_username'),
                                                       "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
-                                                  global_ip=self.gce_first_public_ip(instance),
+                                                  global_ip=self.get_gce_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "loader", }))
         for instance in filtered_instances['kubernetes_nodes']:
             self.kubernetes_set.append(CollectingNode(name=instance.name,
                                                       ssh_login_info={
-                                                          "hostname": self.gce_first_private_ip(instance),
+                                                          "hostname": self.get_gce_ip_address(instance),
                                                           "user": self.params.get('gce_image_username'),
                                                           "key_file": self.params.get('user_credentials_path')},
                                                       instance=instance,
-                                                      global_ip=self.gce_first_public_ip(instance),
+                                                      global_ip=self.get_gce_ip_address(instance),
                                                       tags={**self.tags, "NodeType": "loader", }))
         if self.params.get("use_cloud_manager"):
             self.find_and_append_cloud_manager_instance_to_collecting_nodes()
@@ -1621,11 +1616,11 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         for instance in filtered_instances['db_nodes']:
             self.db_cluster.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
-                                                      "hostname": self.gce_first_public_ip(instance),
+                                                      "hostname": self.get_gce_ip_address(instance),
                                                       "user": 'scylla-test',
                                                       "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
-                                                  global_ip=self.gce_first_public_ip(instance),
+                                                  global_ip=self.get_gce_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "scylla-db", }))
         self.monitor_set.append(CollectingNode(name=f"monitor-node-{self.test_id}-0",
                                                global_ip='127.0.0.1',
@@ -1634,11 +1629,11 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         for instance in filtered_instances['loader_nodes']:
             self.loader_set.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
-                                                      "hostname": self.gce_first_public_ip(instance),
+                                                      "hostname": self.get_gce_ip_address(instance),
                                                       "user": 'scylla-test',
                                                       "key_file": self.params.get('user_credentials_path')},
                                                   instance=instance,
-                                                  global_ip=self.gce_first_public_ip(instance),
+                                                  global_ip=self.get_gce_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "loader", }))
 
     def get_running_cluster_sets(self, backend):
