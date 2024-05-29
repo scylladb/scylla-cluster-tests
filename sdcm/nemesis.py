@@ -73,6 +73,7 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.provision.helpers.certificate import update_certificate, TLSAssets
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
+from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
@@ -4015,7 +4016,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @latency_calculator_decorator(legend="Adding new nodes parallel")
     def add_new_nodes_parallel(self, count=1, rack=0):
-        return self._add_and_init_new_cluster_node_parallel(count=count, rack=rack)
+        nodes = self._add_and_init_new_cluster_node_parallel(count=count, rack=rack)
+        self._wait_for_tablets_balanced()
+        return nodes
 
     @latency_calculator_decorator(legend="Decommission node: remove node from cluster")
     def decommission_node(self, node):
@@ -4056,6 +4059,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.steady_state_latency()
             self.has_steady_run = True
         self._grow_cluster_parallel(rack=None)
+        self.log.info("Doubling the load on the cluster")
+        stress_queue = self.tester.run_stress_thread(
+            stress_cmd=self.tester.stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=1800)
+        results = self.tester.get_stress_results(queue=stress_queue, store_results=False)
+        self.log.info(f"Double load results: {results}")
         self._shrink_cluster(rack=None)
 
     # NOTE: version limitation is caused by the following:
@@ -4093,7 +4101,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message=f"Start grow cluster on {add_nodes_number} nodes").publish()
         self.add_new_nodes_parallel(count=add_nodes_number, rack=rack)
         self.log.info("Finish cluster grow")
-        time.sleep(3600)  # TODO: replace with proper wait for tablets to be balanced
+        time.sleep(300)  # TODO: currently, just in case, to be removed
 
     def _shrink_cluster(self, rack=None):
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
@@ -5064,6 +5072,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.warning("'%s' node will be restarted to make the CQL work again", self.target_node)
             self.target_node.restart_scylla_server()
             raise
+
+    def _wait_for_tablets_balanced(self):
+        """
+        Waiting for tablets to be balanced using REST API.
+
+        doing it several times as there's a risk of:
+        "currently a small time window after adding nodes and before load balancing starts during which
+        topology may appear as quiesced because the state machine goes through an idle state before it enters load balancing state"
+        """
+        time.sleep(60)  # one minute gap before checking, just to give some time to state machine
+        client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=self.cluster.nodes[0])
+        self.log.info("Waiting for tablets to be balanced")
+        for _ in range(3):
+            client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology", params={}, timeout=3600)
+            time.sleep(5)
+        self.log.info("Tablets are balanced")
 
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements  # noqa: PLR0915
