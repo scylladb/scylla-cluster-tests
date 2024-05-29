@@ -32,10 +32,24 @@ import ipaddress
 import shlex
 from decimal import Decimal, ROUND_UP
 from importlib import import_module
+<<<<<<< HEAD
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Literal
 from datetime import datetime, timezone
+||||||| parent of ff1140673 (improvement(cluster): filter out keyspace by replication factor)
+from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr
+from datetime import datetime
+=======
+from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
+from datetime import datetime
+>>>>>>> ff1140673 (improvement(cluster): filter out keyspace by replication factor)
 from textwrap import dedent
+<<<<<<< HEAD
 from functools import cached_property, wraps, partial
+||||||| parent of ff1140673 (improvement(cluster): filter out keyspace by replication factor)
+from functools import cached_property, wraps
+=======
+from functools import cached_property, wraps, lru_cache
+>>>>>>> ff1140673 (improvement(cluster): filter out keyspace by replication factor)
 from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -158,6 +172,8 @@ from sdcm.exceptions import (
     NodeNotReady,
     SstablesNotFound,
 )
+from sdcm.utils.replication_strategy_utils import ReplicationStrategy
+
 
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
@@ -3240,6 +3256,22 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.coredumps = {}
         super().__init__()
 
+<<<<<<< HEAD
+||||||| parent of ff1140673 (improvement(cluster): filter out keyspace by replication factor)
+    def __str__(self):
+        return f"{self.__class__.__name__}:{self.name}"
+
+=======
+    @lru_cache(maxsize=None)
+    def get_keyspace_info(self, keyspace_name: str, db_node: BaseNode):  # pylint: disable=no-self-use
+        replication_strategy = ReplicationStrategy.get(db_node, keyspace_name)
+        logging.debug("Replication strategy for keyspace %s: %s", keyspace_name, replication_strategy)
+        return replication_strategy
+
+    def __str__(self):
+        return f"{self.__class__.__name__}:{self.name}"
+
+>>>>>>> ff1140673 (improvement(cluster): filter out keyspace by replication factor)
     @cached_property
     def test_config(self) -> TestConfig:  # pylint: disable=no-self-use
         return TestConfig()
@@ -3602,21 +3634,29 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         del kwargs["self"]
         return self.cql_connection_exclusive(**kwargs)
 
+    def is_ks_rf_one(self, keyspace_name: str, node: BaseNode, **kwarg) -> bool:  # pylint: disable=unused-argument
+        ks_rf = self.get_keyspace_info(keyspace_name, node)
+        self.log.debug("%s replication_factors", set(ks_rf.replication_factors))
+        return set(ks_rf.replication_factors) == {1}
+
     def get_non_system_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
                                   filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
-                                  filter_by_keyspace: list = None) -> List[str]:
+                                  filter_by_keyspace: list = None,
+                                  filter_func: Callable[[...], bool] = None) -> List[str]:
         return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
                                        filter_out_mv=filter_out_mv, filter_empty_tables=filter_empty_tables,
-                                       filter_out_system=True, filter_out_cdc_log_tables=True, filter_by_keyspace=filter_by_keyspace)
+                                       filter_out_system=True, filter_out_cdc_log_tables=True, filter_by_keyspace=filter_by_keyspace,
+                                       filter_func=filter_func)
 
-    def get_any_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
+    def get_any_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments,too-many-statements
                            filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
                            filter_out_system=False, filter_out_cdc_log_tables=False,
-                           filter_by_keyspace: list = None) -> List[str]:
+                           filter_by_keyspace: list = None, filter_func: Callable[[...], bool] = None) -> List[str]:
         regular_column_names = ["keyspace_name", "table_name"]
         materialized_view_column_names = ["keyspace_name", "view_name"]
         regular_table_names, materialized_view_table_names = set(), set()
         where_clause = ""
+
         if filter_by_keyspace:
             where_clause = ", ".join([f"'{ks}'" for ks in filter_by_keyspace])
             where_clause = f" WHERE keyspace_name in ({where_clause})"
@@ -3652,6 +3692,10 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 if filter_out_cdc_log_tables and getattr(row, column_names[1]).endswith(cdc.options.CDC_LOGTABLE_SUFFIX):
                     continue
 
+                if filter_func is not None:
+                    if filter_func(keyspace_name=getattr(row, column_names[0]), node=db_node, table_name=getattr(row, column_names[1])):
+                        continue
+
                 result.add(table_name)
 
             if is_column_type and filter_empty_tables:
@@ -3671,6 +3715,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                     if not has_data:
                         result.discard(table_name)
 
+            if filter_func is not None:
+                self.get_keyspace_info.cache_clear()  # pylint: disable=no-member
             return result
 
         with self.cql_connection_patient(db_node, connect_timeout=600) as session:
