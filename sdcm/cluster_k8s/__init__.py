@@ -1783,6 +1783,9 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def configure_remote_logging(self):
         self.k8s_cluster.log.debug("No need to configure remote logging on k8s")
 
+    def wait_for_cloud_init(self):
+        pass
+
     @staticmethod
     def is_docker() -> bool:
         return True
