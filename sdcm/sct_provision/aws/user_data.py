@@ -60,7 +60,6 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
             aws_ipv6_workaround=is_ip_ssh_connections_ipv6(self.params),
             syslog_host_port=self.syslog_host_port,
             logs_transport=self.params.get('logs_transport'),
-            disable_ssh_while_running=True,
         ).to_string()
         LOGGER.debug("post_boot_script: %s", post_boot_script)
         return base64.b64encode(post_boot_script.encode('utf-8')).decode('ascii')
@@ -124,6 +123,5 @@ class AWSInstanceUserDataBuilder(UserDataBuilderBase):
             aws_ipv6_workaround=is_ip_ssh_connections_ipv6(self.params),
             logs_transport=self.params.get('logs_transport'),
             syslog_host_port=self.syslog_host_port,
-            disable_ssh_while_running=True,
         ).to_string()
         return post_boot_script

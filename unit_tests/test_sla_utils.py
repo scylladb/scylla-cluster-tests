@@ -24,6 +24,9 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
         super().init()
         self.remoter.stop()
 
+    def wait_for_cloud_init(self):
+        pass
+
     def jmx_up(self):
         return True
 

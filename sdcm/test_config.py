@@ -231,7 +231,6 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         return ConfigurationScriptBuilder(
             syslog_host_port=host_port,
             logs_transport=cls._tester_obj.params.get('logs_transport') if cls._tester_obj else "syslog-ng",
-            disable_ssh_while_running=True,
         ).to_string()
 
     @classmethod

@@ -55,6 +55,9 @@ class LocalNode(BaseNode):
     def ip_address(self):
         return "127.0.0.1"
 
+    def wait_for_cloud_init(self):
+        pass
+
     @property
     def vm_region(self):
         return "eu-north-1"

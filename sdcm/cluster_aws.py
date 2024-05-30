@@ -42,6 +42,7 @@ from sdcm.provision.common.utils import configure_hosts_set_hostname_script
 from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration, is_ip_ssh_connections_ipv6, \
     network_interfaces_count, ssh_connection_ip_type
 from sdcm.provision.scylla_yaml import SeedProvider
+from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.sct_provision.aws.cluster import PlacementGroup
 
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
@@ -502,6 +503,9 @@ class AWSNode(cluster.BaseNode):
         self.log.debug("Node %s network_interfaces: %s", self.name,
                        self.scylla_network_configuration.network_interfaces)
         super().init()
+
+    def wait_for_cloud_init(self):
+        wait_cloud_init_completes(self.remoter, self)
 
     @property
     def short_hostname(self):
