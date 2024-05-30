@@ -4045,6 +4045,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 InfoEvent(f'FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error '
                           f'{str(exc)}').publish()
 
+    @latency_calculator_decorator(legend="Decommission node: remove node from cluster")
+    def decommission_nodes_parallel(self, add_nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue,
+                                    dc_idx: Optional[int] = None):
+        parallel_obj = ParallelObject(objects=self.cluster.nodes[:add_nodes_number], timeout=7200)
+        try:
+            InfoEvent(f'StartEvent - ShrinkCluster started decommissioning {add_nodes_number} nodes').publish()
+            parallel_obj.run(self.cluster.decommission, ignore_exceptions=False, unpack_objects=True)
+            InfoEvent(f'FinishEvent - ShrinkCluster has done decommissioning {add_nodes_number} nodes').publish()
+        except Exception as exc:  # pylint: disable=broad-except
+            InfoEvent(f'FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error '
+                      f'{str(exc)}').publish()
+
     def disrupt_grow_shrink_cluster(self):
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
         if not self.has_steady_run and sleep_time_between_ops:
@@ -4061,7 +4073,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._grow_cluster_parallel(rack=None)
         self.log.info("Doubling the load on the cluster")
         stress_queue = self.tester.run_stress_thread(
-            stress_cmd=self.tester.stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=1800)
+            stress_cmd=self.tester.stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=30)
         results = self.tester.get_stress_results(queue=stress_queue, store_results=False)
         self.log.info(f"Double load results: {results}")
         self._shrink_cluster(rack=None)
@@ -4128,11 +4140,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # Currently on kubernetes first two nodes of each rack are getting seed status
         # Because of such behavior only way to get them decommission is to enable decommissioning
         # TBD: After https://github.com/scylladb/scylla-operator/issues/292 is fixed remove is_seed parameter
-        self.decommission_nodes(
-            decommission_nodes_number,
-            rack,
-            is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
-            dc_idx=self.target_node.dc_idx)
+        if self.cluster.parallel_startup:
+            self.decommission_nodes_parallel(
+                decommission_nodes_number,
+                rack,
+                is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
+                dc_idx=self.target_node.dc_idx)
+        else:
+            self.decommission_nodes(
+                decommission_nodes_number,
+                rack,
+                is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
+                dc_idx=self.target_node.dc_idx)
         num_of_nodes = len(self.cluster.nodes)
         self.log.info("Cluster shrink finished. Current number of nodes %s", num_of_nodes)
         InfoEvent(message=f'Cluster shrink finished. Current number of nodes {num_of_nodes}').publish()
