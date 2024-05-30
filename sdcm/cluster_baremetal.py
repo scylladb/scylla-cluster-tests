@@ -54,6 +54,9 @@ class PhysicalMachineNode(cluster.BaseNode):
         self.set_hostname()
         self.run_startup_script()
 
+    def wait_for_cloud_init(self):
+        pass
+
     def _get_public_ip_address(self) -> Optional[str]:
         return self._public_ip
 

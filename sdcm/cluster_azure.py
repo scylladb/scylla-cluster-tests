@@ -69,6 +69,9 @@ class AzureNode(cluster.BaseNode):
         self.remoter.sudo("systemctl mask auditd", ignore_status=True)
         self.remoter.sudo("systemctl daemon-reload", ignore_status=True)
 
+    def wait_for_cloud_init(self):
+        pass  # azure for it, on resources creation
+
     @cached_property
     def tags(self) -> Dict[str, str]:
         return {**super().tags,

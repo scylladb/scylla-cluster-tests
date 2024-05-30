@@ -86,6 +86,9 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
             assert int(container.labels["NodeIndex"]) == node_index, "Container labeled with wrong index."
             self._containers["node"] = container
 
+    def wait_for_cloud_init(self):
+        pass
+
     @property
     def network_interfaces(self):
         pass
@@ -402,6 +405,9 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
                          node_prefix=node_prefix,
                          ssh_login_info=ssh_login_info)
         self.node_index = node_index
+
+    def wait_for_cloud_init(self):
+        pass
 
     @staticmethod
     def is_docker() -> bool:

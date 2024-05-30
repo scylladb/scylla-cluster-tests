@@ -140,6 +140,9 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     def system_log(self, log: str):
         self._system_log = log
 
+    def wait_for_cloud_init(self):
+        pass
+
     def set_hostname(self) -> None:
         pass
 
