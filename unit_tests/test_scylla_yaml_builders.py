@@ -496,6 +496,9 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method,too-many-instance-
         # disable all background threads
         pass
 
+    def wait_for_cloud_init(self):
+        pass
+
     def set_hostname(self):
         pass
 

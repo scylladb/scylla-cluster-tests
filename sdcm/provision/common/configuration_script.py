@@ -31,7 +31,6 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     syslog_host_port: tuple[str, int] = None
     logs_transport: str = 'syslog-ng'
     configure_sshd: bool = True
-    disable_ssh_while_running: bool = False
     hostname: str = ''
 
     def to_string(self) -> str:
@@ -58,14 +57,10 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         script += 'set -x\n'
         script += self._wait_before_running_script()
         script += self._skip_if_already_run()
-        if self.disable_ssh_while_running:
-            script += 'systemctl stop sshd || true\n'
         return script
 
     def _end_script(self) -> str:
         script = ""
-        if self.disable_ssh_while_running:
-            script += 'systemctl start sshd || true\n'
         script += self._mark_script_as_done()
         return script
 
@@ -91,6 +86,5 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
             script += configure_sshd_script()
             script += configure_ssh_accept_rsa()
             script += restart_sshd_service()
-        elif self.disable_ssh_while_running:
-            script += 'systemctl start sshd || true\n'
+
         return script

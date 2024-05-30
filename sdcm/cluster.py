@@ -146,6 +146,7 @@ from sdcm.paths import (
     SCYLLA_MANAGER_TLS_KEY_FILE,
 )
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
+
 from sdcm.exceptions import (
     KillNemesis,
     NodeNotReady,
@@ -362,6 +363,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         # Start task threads after ssh is up, otherwise the dense ssh attempts from task
         # threads will make SCT builder to be blocked by sshguard of gce instance.
         self.wait_ssh_up(verbose=True)
+        self.wait_for_cloud_init()
         if not self.test_config.REUSE_CLUSTER:
             self.set_hostname()
             self.configure_remote_logging()
@@ -2864,6 +2866,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         result = self.remoter.run("sudo bash -ce '%s'" % cmds)
         LOGGER.debug(result.stdout)
 
+    def wait_for_cloud_init(self):
+        raise NotImplementedError()
+
     def set_hostname(self):
         self.log.warning('Method set_hostname is not implemented for %s' % self.__class__.__name__)
 
@@ -2873,7 +2878,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         script = ConfigurationScriptBuilder(
             syslog_host_port=self.test_config.get_logging_service_host_port(),
             logs_transport=self.parent_cluster.params.get('logs_transport'),
-            disable_ssh_while_running=False,
             hostname=self.name,
         ).to_string()
         self.remoter.sudo(shell_script_cmd(script, quote="'"))
@@ -5827,6 +5831,9 @@ class LocalNode(BaseNode):
         raise NotImplementedError()
 
     def _init_port_mapping(self):
+        pass
+
+    def wait_for_cloud_init(self):
         pass
 
     def _init_remoter(self, ssh_login_info):

@@ -26,6 +26,7 @@ from google.cloud import compute_v1
 
 from sdcm import cluster
 from sdcm.provision.network_configuration import ssh_connection_ip_type
+from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.utils.gce_utils import (
@@ -110,6 +111,9 @@ class GCENode(cluster.BaseNode):
         time.sleep(10)
 
         super().init()
+
+    def wait_for_cloud_init(self):
+        wait_cloud_init_completes(self.remoter, self)
 
     @cached_property
     def tags(self) -> Dict[str, str]:
