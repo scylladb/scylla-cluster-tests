@@ -59,7 +59,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
 
     # since this logic id depended on code run by SCT to mark uuid as test, since commit 617026aa, this code it run in the background
     # and not being waited for, so we need to compensate for it here with retries
-    @retrying(n=5, sleep_time=10, allowed_exceptions=(AssertionError,))
+    @retrying(n=15, sleep_time=10, allowed_exceptions=(AssertionError,))
     def check_scylla_version_in_housekeepingdb(self, prev_id: int, expected_status_code: str,
                                                new_row_expected: bool, backend: str) -> int:
         """
