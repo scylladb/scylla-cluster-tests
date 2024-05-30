@@ -4,5 +4,3 @@ stress_after_cluster_upgrade: cassandra-stress read no-warmup cl=QUORUM n=302004
 
 
 n_db_nodes: 4
-
-enable_tablets_on_upgrade: true

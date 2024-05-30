@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'gemini_test.GeminiTest.test_load_random_with_nemesis',
-    test_config: '''["test-cases/gemini/gemini-8h-large-num-columns.yaml", "configurations/raft/enable_raft_experimental.yaml"]''',
+    test_config: '''["test-cases/gemini/gemini-8h-large-num-columns.yaml"]''',
 
     timeout: [time: 540, unit: 'MINUTES'],
     email_recipients: 'qa@scylladb.com'

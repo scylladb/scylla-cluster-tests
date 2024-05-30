@@ -1686,10 +1686,10 @@ def configure_jenkins_builders(cloud_provider, regions):
 def get_nemesis_list(backend, config):
     """
     # usage via command line:
-    hydra nemesis-list -c test-cases/longevity/longevity-cdc-100gb-4h.yaml -c configurations/tablets.yaml
+    hydra nemesis-list -c test-cases/longevity/longevity-cdc-100gb-4h.yaml
 
     # usage with environment variables
-    export SCT_CONFIG_FILES='["test-cases/longevity/longevity-cdc-100gb-4h.yaml", "configurations/tablets.yaml"]'
+    export SCT_CONFIG_FILES='["test-cases/longevity/longevity-cdc-100gb-4h.yaml"]'
     hydra nemesis-list
 
     """

@@ -7,6 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: '''["eu-west-1", "us-west-2", "us-east-1"]''',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-counters-multidc.yaml", "configurations/raft/enable_raft_experimental.yaml"]'''
+    test_config: '''["test-cases/longevity/longevity-counters-multidc.yaml"]'''
 
 )
