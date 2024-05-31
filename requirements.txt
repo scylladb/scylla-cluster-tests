@@ -247,9 +247,9 @@ cachetools==5.3.3 \
     --hash=sha256:0abad1021d3f8325b2fc1d2e9c8b9c9d57b04c3932657a72465447332c24d945 \
     --hash=sha256:ba29e2dfa0b8b556606f097407ed1aa62080ee108ab0dc5ec9d6a723a007d105
     # via google-auth
-certifi==2024.2.2 \
-    --hash=sha256:0569859f95fc761b18b45ef421b1290a0f65f147e92a1e5eb3e635f9a5e4e66f \
-    --hash=sha256:dc383c07b76109f368f6106eee2b593b04a011ea4d55f652c6ca24a754d1cdd1
+certifi==2024.6.2 \
+    --hash=sha256:3cd43f1c6fa7dedc5899d69d3ad0398fd018ad1a17fba83ddaf78aa46c747516 \
+    --hash=sha256:ddc6c8ce995e6987e7faf5e3f1b02b302836a0e5d98ece18392cb1a36c72ad56
     # via
     #   elasticsearch
     #   kubernetes
@@ -489,9 +489,9 @@ distlib==0.3.8 \
     --hash=sha256:034db59a0b96f8ca18035f36290806a9a6e6bd9d1ff91e45a7f172eb17e51784 \
     --hash=sha256:1530ea13e350031b6312d8580ddb6b27a104275a31106523b8f123787f494f64
     # via virtualenv
-docker==4.4.4 \
-    --hash=sha256:d3393c878f575d3a9ca3b94471a3c89a6d960b35feb92f033c0de36cc9d934db \
-    --hash=sha256:f3607d5695be025fa405a12aca2e5df702a57db63790c73b927eb6a94aac60af
+docker==7.1.0 \
+    --hash=sha256:ad8c70e6e3f8926cb8a92619b832b4ea5299e2831c14284663184e200546fa6c \
+    --hash=sha256:c96b93b7f0a746f9e77d325bcfb87422a3d8bd4f03136ae8a85b37f1898d5fc0
     # via
     #   -r requirements.in
     #   tcconfig
@@ -1264,10 +1264,6 @@ paramiko==3.4.0 \
 path==16.14.0 \
     --hash=sha256:8ee37703cbdc7cc83835ed4ecc6b638226fb2b43b7b45f26b620589981a109a5 \
     --hash=sha256:dbaaa7efd4602fd6ba8d82890dc7823d69e5de740a6e842d9919b0faaf2b6a8e
-    # via path-py
-path-py==12.5.0 \
-    --hash=sha256:8d885e8b2497aed005703d94e0fd97943401f035e42a136810308bff034529a8 \
-    --hash=sha256:a43e82eb2c344c3fd0b9d6352f6b856f40b8b7d3d65cc05978b42c3715668496
     # via tcconfig
 pathlib2==2.3.7.post1 \
     --hash=sha256:5266a0fd000452f1b3467d782f079a4343c63aaa119221fbdc4e39577489ca5b \
@@ -1502,9 +1498,9 @@ pynacl==1.5.0 \
     # via
     #   paramiko
     #   pygithub
-pyparsing==2.4.7 \
-    --hash=sha256:c203ec8783bf771a155b207279b9bccb8dea02d8f0c9e5f8ead507bc3246ecc1 \
-    --hash=sha256:ef9d7589ef3c200abe66653d3f1ab1033c3c419ae9b9bdb1240a85b024efc88b
+pyparsing==3.1.2 \
+    --hash=sha256:a1bac0ce561155ecc3ed78ca94d3c9378656ad4c94c1270de543f621420f94ad \
+    --hash=sha256:f9db75911801ed778fe61bb643079ff86601aca99fcae6345aa67292038fb742
     # via
     #   httplib2
     #   packaging
@@ -1658,9 +1654,9 @@ questionary==1.10.0 \
 repodataparser @ https://github.com/fruch/repodataParser/archive/py3.zip \
     --hash=sha256:3424db354bb58a6bd254546f3499510cb0b5c1543835cd92bc7dfe01b7bf828d
     # via -r requirements.in
-requests==2.31.0 \
-    --hash=sha256:58cd2187c01e70e6e26505bca751777aa9f2ee0b7f4300988b709f44e013003f \
-    --hash=sha256:942c5a758f98d790eaed1a29cb6eefc7ffb0d1cf7af05c3d2791656dbd6ad1e1
+requests==2.32.2 \
+    --hash=sha256:dd951ff5ecf3e3b3aa26b40703ba77495dab41da839ae72ef3c8e5d8e2433289 \
+    --hash=sha256:fc06670dd0ed212426dfeb94fc1b983d917c4f9847c863f313c9dfaaffb7c23c
     # via
     #   -r requirements.in
     #   argus-alm
@@ -1750,7 +1746,6 @@ six==1.16.0 \
     # via
     #   azure-core
     #   azure-identity
-    #   docker
     #   fido2
     #   furl
     #   geomet
@@ -1810,9 +1805,9 @@ ssh2-python==1.0.0 \
     --hash=sha256:ddcba606818f28719d25c4a14789cc9b88714385e26e52d45ce967068ed7ad83 \
     --hash=sha256:fc8f46d0d883d77462122a4cdb1dcff9a890923bd3525f061a2eb3563c7c5612
     # via -r requirements.in
-subprocrunner==1.6.0 \
-    --hash=sha256:1c1e928db282e7453853744290908d04047a8fb3b49ff1e7f8284e6a3be3a810 \
-    --hash=sha256:8ed357578c2b11b54ed2bce15fc169adf71349830a11a333d16f6057e33e1c81
+subprocrunner==2.0.1 \
+    --hash=sha256:3723226a1bf6b51569fd8f82aa4f0588eef7adf129d16aac8b317555624e8f69 \
+    --hash=sha256:778e1bcec011b3214d247bf65c42b26f3d3f0a25d12188def6b9574c6671e166
     # via tcconfig
 tabledata==1.3.3 \
     --hash=sha256:4abad1c996d8607e23b045b44dc0c5f061668f3c37585302c5f6c84c93a89962 \
@@ -1820,9 +1815,9 @@ tabledata==1.3.3 \
     # via
     #   simplesqlite
     #   sqliteschema
-tcconfig==0.26.0 \
-    --hash=sha256:8c73d868f555e0c316033b6d76d2362828e3f017896918f059e7c8993ff2fe17 \
-    --hash=sha256:b4b064f96c28f7a171552e2854c04849585fd47aba6df46539a0de776a4eebbc
+tcconfig==0.28.1 \
+    --hash=sha256:268d6302d889b41a8f1008e55648d60bf4ad68801ad50e8be247b0772c80cf73 \
+    --hash=sha256:ae23c21f25831b10da2869ccc0f2efd853c56984722de37b41ae65f6a055f124
     # via -r requirements.in
 tenacity==8.0.1 \
     --hash=sha256:43242a20e3e73291a28bcbcacfd6e000b02d3857a9a9fff56b297a27afdc932f \
@@ -1859,9 +1854,9 @@ types-s3transfer==0.10.1 \
     --hash=sha256:02154cce46528287ad76ad1a0153840e0492239a0887e8833466eccf84b98da0 \
     --hash=sha256:49a7c81fa609ac1532f8de3756e64b58afcecad8767933310228002ec7adff74
     # via boto3-stubs
-typing-extensions==4.12.0 \
-    --hash=sha256:8cbcdc8606ebcb0d95453ad7dc5065e6237b6aa230a31e81d0f440c30fed5fd8 \
-    --hash=sha256:b349c66bea9016ac22978d800cfff206d5f9816951f12a7d0ec5578b0a819594
+typing-extensions==4.12.1 \
+    --hash=sha256:6024b58b69089e5a89c347397254e35f1bf02a907728ec7fee9bf0fe837d203a \
+    --hash=sha256:915f5e35ff76f56588223f15fdd5938f9a1cf9195c0de25130c627e4d597f6d1
     # via
     #   azure-core
     #   azure-storage-blob
@@ -1882,6 +1877,7 @@ urllib3==1.26.18 \
     --hash=sha256:f8ecc1bba5667413457c529ab955bf8c67b45db799d159066261719e328580a0
     # via
     #   botocore
+    #   docker
     #   elasticsearch
     #   gimme-aws-creds
     #   kubernetes
@@ -1906,9 +1902,7 @@ webencodings==0.5.1 \
 websocket-client==1.8.0 \
     --hash=sha256:17b44cc997f5c498e809b22cdf2d9c7a9e71c02c8cc2b6c56e7c2d1239bfa526 \
     --hash=sha256:3239df9f44da632f96012472805d40a23281a991027ce11d2f45a6f24ac4c3da
-    # via
-    #   docker
-    #   kubernetes
+    # via kubernetes
 wheel==0.43.0 \
     --hash=sha256:465ef92c69fa5c5da2d1cf8ac40559a8c940886afcef87dcf14b9470862f1d85 \
     --hash=sha256:55c570405f142630c6b9f72fe09d9b67cf1477fcf543ae5b8dcb1f5b7377da81
@@ -2066,9 +2060,9 @@ yarl==1.9.4 \
     # via
     #   aiohttp
     #   okta
-zipp==3.19.0 \
-    --hash=sha256:952df858fb3164426c976d9338d3961e8e8b3758e2e059e0f754b8c4262625ee \
-    --hash=sha256:96dc6ad62f1441bcaccef23b274ec471518daf4fbbc580341204936a5a3dddec
+zipp==3.19.1 \
+    --hash=sha256:2828e64edb5386ea6a52e7ba7cdb17bb30a73a858f5eb6eb93d8d36f5ea26091 \
+    --hash=sha256:35427f6d5594f4acf82d25541438348c26736fa9b3afa2754bcd63cdb99d8e8f
     # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
@@ -2084,4 +2078,3 @@ setuptools==70.0.0 \
     #   astroid
     #   kubernetes
     #   pip-tools
-    #   tcconfig
