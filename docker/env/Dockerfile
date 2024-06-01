@@ -11,6 +11,8 @@ RUN curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
 RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
 RUN echo 'deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main' | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
 RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+RUN curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o  /usr/share/keyrings/adoptium.gpg
+RUN echo "deb [signed-by=/usr/share/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee -a /etc/apt/sources.list.d/adoptium.list
 
 # Download, build and install Python packages.
 FROM apt_base as python_packages
@@ -31,6 +33,8 @@ ENV PYTHONWARNINGS=ignore:unclosed \
 COPY --from=apt_repos /etc/apt/trusted.gpg /etc/apt/sources.list /etc/apt/
 COPY --from=apt_repos /usr/share/keyrings/cloud.google.gpg /usr/share/keyrings/cloud.google.gpg
 COPY --from=apt_repos /etc/apt/sources.list.d/google-cloud-sdk.list /etc/apt/sources.list.d/google-cloud-sdk.list
+COPY --from=apt_repos /usr/share/keyrings/adoptium.gpg /usr/share/keyrings/adoptium.gpg
+COPY --from=apt_repos /etc/apt/sources.list.d/adoptium.list /etc/apt/sources.list.d/adoptium.list
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get install -y --no-install-recommends \
         google-cloud-sdk \
@@ -49,6 +53,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         wget \
         psmisc \
         procps \
+        temurin-11-jdk \
         docker-ce-cli \
         docker-compose-plugin && \
     apt-get clean && \
