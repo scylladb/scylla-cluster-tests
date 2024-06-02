@@ -19,11 +19,13 @@ from pprint import pformat
 from types import SimpleNamespace  # pylint: disable=no-name-in-module
 from typing import List, Optional, Union, Any, Tuple, Protocol
 from functools import cache
+import itertools
 
 import docker
 from docker.errors import DockerException, NotFound, ImageNotFound, NullResource, BuildError
 from docker.models.images import Image
 from docker.models.containers import Container
+from docker.utils.json_stream import json_stream
 
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.base import CommandRunner
@@ -367,6 +369,39 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         LOGGER.debug("%s: container `%s' unregistered", instance, name)
 
     @classmethod
+    def build_with_progress_prints(cls, docker_client, image_tag, **kwargs):
+        """
+        build image while printing the progress to log
+
+        this is using the low level api.build, and the logic
+        is copied from images.build command, but with added logging
+        so user following the log could see the progress as
+        it happening
+        """
+        resp = docker_client.api.build(tag=image_tag, **kwargs)
+        last_event = None
+        image_id = None
+        LOGGER.info(">>> Build log for Docker image `%s': >>>", image_tag)
+        result_stream, internal_stream = itertools.tee(json_stream(resp))
+        for chunk in internal_stream:
+            if 'error' in chunk:
+                raise BuildError(chunk['error'], result_stream)
+            if 'stream' in chunk:
+                LOGGER.info(chunk["stream"].rstrip())
+                match = re.search(
+                    r'(^Successfully built |sha256:)([0-9a-f]+)$',
+                    chunk['stream']
+                )
+                if match:
+                    image_id = match.group(2)
+            last_event = chunk
+        LOGGER.info("<<<")
+        if image_id:
+            return docker_client.images.get(image_id)
+        else:
+            raise BuildError(last_event or 'Unknown', result_stream)
+
+    @classmethod
     def build_container_image(cls, instance: INodeWithContainerManager, name: str, **extra_build_args) -> Image:
         assert name is not None, "None is not allowed as a container name"
 
@@ -399,19 +434,9 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
             getattr(instance, f"{name.family}_container_image_build_args", cls._build_args)(**extra_build_args))
 
         LOGGER.debug("Build arguments for Docker image `%s':\n%s,", image_tag, pformat(build_args, indent=8))
-        try:
-            image, logs = docker_client.images.build(tag=image_tag, **dockerfile_args, **build_args)
-        except BuildError as docker_build_error:
-            LOGGER.critical("Build log:\n%s",
-                            "\n".join(item['stream'] for item in docker_build_error.build_log if "stream" in item))
-            raise
 
-        LOGGER.debug(">>> Build log for Docker image `%s': >>>", image_tag)
-        for entry in logs:
-            if "stream" in entry:
-                LOGGER.debug(entry["stream"].rstrip())
-        LOGGER.debug("<<<")
-
+        image = cls.build_with_progress_prints(docker_client=docker_client,
+                                               image_tag=image_tag, **dockerfile_args, **build_args)
         return image
 
     @classmethod
