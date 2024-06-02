@@ -1535,7 +1535,9 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                 tags={**self.tags, "NodeType": "loader", }))
 
     def get_gce_ip_address(self, instance):
-        return gce_public_addresses(instance)[0] if ssh_connection_ip_type(self.params) == 'public' else gce_private_addresses(instance)[0]
+        return gce_public_addresses(instance)[0] if \
+            self.params.get('ip_ssh_connections') == 'public' \
+            else gce_private_addresses(instance)[0]
 
     def get_gce_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
