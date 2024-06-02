@@ -48,7 +48,7 @@ class Alternator:
     @staticmethod
     def get_salted_hash(node: BaseNode, username: str) -> str:
         with node.parent_cluster.cql_connection_patient_exclusive(node) as session:
-            for ks in ("system_auth_v2", "system_auth"):
+            for ks in ("system", "system_auth_v2", "system_auth"):
                 try:
                     response = session.execute(f"SELECT salted_hash FROM {ks}.roles WHERE role=%s;", (username,))
                 except InvalidRequest:
