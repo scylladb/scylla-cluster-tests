@@ -35,6 +35,7 @@ class TenantMixin:  # pylint: disable=too-many-instance-attributes
         self.monitors = monitors
         self.prometheus_db = prometheus_db
         self.params = copy.deepcopy(params)
+        self.kafka_cluster = None
         self.log = logging.getLogger(self.__class__.__name__)
         self._es_doc_type = "test_stats"
         self._stats = self._init_stats()
