@@ -57,6 +57,7 @@ from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThread
+from sdcm.mgmt import get_scylla_manager_tool
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
@@ -497,6 +498,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.test_config.argus_client().submit_packages(packages_to_submit)
         except Exception:  # pylint: disable=broad-except
             self.log.error("Unable to collect package versions for Argus - skipping...", exc_info=True)
+
+    def argus_collect_manager_version(self):
+        if self.params.get('use_mgmt'):
+            manager_tool = get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+            self.log.info("Saving manager version in Argus...")
+            # sctool.version output:
+            #   [['Client version: 3.2.8-0.20240517.5f324acd2'], ['Server version: 3.2.8-0.20240517.5f324acd2']]
+            client_version, server_version, *_ = (version[0].split(":")[1].strip()
+                                                  for version in manager_tool.sctool.version)
+            manager_packages = [Package(name="scylla-manager-client", date="",
+                                        version=client_version, revision_id="", build_id=""),
+                                Package(name="scylla-manager-server", date="",
+                                        version=server_version, revision_id="", build_id="")]
+            self.test_config.argus_client().submit_packages(manager_packages)
 
     def generate_operator_packages(self) -> list[Package]:
         operator_packages = []
@@ -964,7 +979,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             futures = [
                 executor.submit(_db_post_validation),
                 executor.submit(self.argus_collect_packages),
-                executor.submit(self.argus_get_scylla_version)
+                executor.submit(self.argus_get_scylla_version),
+                executor.submit(self.argus_collect_manager_version),
             ]
 
             for db_cluster in self.db_clusters_multitenant:
