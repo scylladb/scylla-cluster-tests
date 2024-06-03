@@ -17,7 +17,8 @@ LOGGER = logging.getLogger(__name__)
 supported_src_oss = {'2021.1': '4.3', '2022.1': '5.0',
                      '2022.2': '5.1', '2023.1': '5.2', '2024.1': '5.4', '2024.2': '6.0'}
 # If new support distro shared repo with others, we need to assign the start support versions. eg: centos8
-start_support_versions = {'centos-8': {'scylla': '4.1', 'enterprise': '2021.1'}}
+start_support_versions = {'centos-8': {'scylla': '4.1', 'enterprise': '2021.1'},
+                          'centos-9': {'scylla': '5.4', 'enterprise': '2024.1'}}
 start_support_backend = {'azure': {'scylla': '5.2', 'enterprise': '2023.1'}}
 
 # list of version that are available, but aren't supported, and we should test upgrades from
