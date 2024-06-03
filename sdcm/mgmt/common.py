@@ -22,6 +22,7 @@ def get_distro_name(distro_object):
         Distro.AMAZON2023: "centos8",
         Distro.CENTOS7: "centos7",
         Distro.CENTOS8: "centos8",
+        Distro.CENTOS9: "centos8",
         Distro.DEBIAN10: "debian10",
         Distro.DEBIAN11: "debian11",
         Distro.UBUNTU20: "ubuntu20",

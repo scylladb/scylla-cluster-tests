@@ -104,6 +104,12 @@ class TestBaseVersion(unittest.TestCase):
         version_list = general_test(scylla_repo, linux_distro)
         self.assertEqual(['5.0', '2021.1', '2022.1'], version_list)
 
+    def test_2024_1_with_centos9(self):
+        scylla_repo = self.url_base + '-enterprise/enterprise-2024.1/rpm/centos/latest/scylla.repo'
+        linux_distro = 'centos-9'
+        version_list = general_test(scylla_repo, linux_distro)
+        self.assertEqual(['5.4', '2024.1'], version_list)
+
     def test_2022_2(self):
         scylla_repo = self.url_base + '-enterprise/enterprise-2022.2/rpm/centos/2022-10-09T10:39:11Z/scylla.repo'
         linux_distro = 'centos'
