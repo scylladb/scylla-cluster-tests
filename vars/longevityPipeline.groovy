@@ -227,7 +227,7 @@ def call(Map pipelineParams) {
             }
             stage('Provision Resources') {
                 steps {
-                    catchError() {
+                    catchError(stageResult: 'FAILURE') {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
