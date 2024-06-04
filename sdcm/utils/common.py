@@ -54,6 +54,7 @@ from pathlib import Path
 
 import requests
 import boto3
+from invoke import UnexpectedExit
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from mypy_boto3_ec2.service_resource import Image as EC2Image
@@ -67,6 +68,7 @@ from prettytable import PrettyTable
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
@@ -2106,7 +2108,7 @@ def get_ami_tags(ami_id, region_name):
             return {}
 
 
-def get_db_tables(session, ks, with_compact_storage=True):
+def get_db_tables(session, keyspace_name, node, with_compact_storage=True):
     """
     Return tables from keystore based on their compact storage feature
     Arguments:
@@ -2116,12 +2118,19 @@ def get_db_tables(session, ks, with_compact_storage=True):
 
     """
     output = []
-    for table in list(session.cluster.metadata.keyspaces[ks].tables.keys()):
-        table_code = session.cluster.metadata.keyspaces[ks].tables[table].as_cql_query()
-        if with_compact_storage is None:
-            output.append(table)
-        elif ("with compact storage" in table_code.lower()) == with_compact_storage:
-            output.append(table)
+    for row in list(session.execute(f"select table_name from system_schema.tables where keyspace_name='{keyspace_name}'")):
+        try:
+            create_table_statement = node.run_cqlsh(f"describe {keyspace_name}.{row.table_name}").stdout.upper()
+        except (UnexpectedExit, Libssh2_UnexpectedExit) as err:
+            # SCT issue https://github.com/scylladb/scylla-cluster-tests/issues/7240
+            # May happen when disrupt_add_remove_dc nemesis run in parallel to the disrupt_add_drop_column
+            LOGGER.error("Failed to describe '%s.%s' table. Maybe the table has been deleted. Error: %s",
+                         keyspace_name, row.table_name, err.result.stderr)
+            continue
+
+        if with_compact_storage is None or (("WITH COMPACT STORAGE" in create_table_statement) == with_compact_storage):
+            output.append(row.table_name)
+
     return output
 
 
