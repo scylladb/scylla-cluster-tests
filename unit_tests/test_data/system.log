@@ -577,32 +577,4 @@
 [10.0.73.70] [stdout] Apr 02 18:43:21 info   | scylla[124]:  [shard 10] stream_session - [Stream #30488900-5577-11e9-848d-000000000007] Start sending ks=keyspace1, cf=standard1, estimated_partitions=2829114, with new rpc streaming
 [10.0.73.70] [stdout] Apr 02 18:43:21 info   | scylla[124]:  [shard 13] stream_session - [Stream #30488900-5577-11e9-848d-000000000007] Start sending ks=keyspace1, cf=standard1, estimated_partitions=2796216, with new rpc streaming
 [10.0.73.70] [stdout] Apr 02 18:43:21 info   | scylla[124]:  [shard 11] stream_session - [Stream #30488900-5577-11e9-848d-000000000007] Start sending ks=keyspace1, cf=standard1, estimated_partitions=2816990, with new rpc streaming
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: Reactor stalled for 2252 ms on shard 2.
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: Backtrace:
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000006c5af2
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000005d41ac
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000005d4666
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: /lib64/libpthread.so.0+0x000000000000f5cf
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000005b129f
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: /lib64/libpthread.so.0+0x000000000000f5cf
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x000000000162c3d3
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000014daf0f
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000015e45b0
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000015ce1df
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000015cf52a
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000015d1483
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000013ac7f5
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x000000000123d5cc
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x000000000123df5a
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x000000000126ba1d
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000013ea347
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000013ea17b
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000013ea9ee
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000007374fc
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000005b4ade
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x00000000005b4ca1
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x0000000000687a37
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x000000000068c1fa
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: 0x000000000077535d
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: /lib64/libpthread.so.0+0x0000000000007dd4
-[10.0.73.70] [stdout] Apr 02 18:44:40 info   | scylla[124]: /lib64/libc.so.6+0x00000000000fdeac
+2023-12-22T00:30:19.363+00:00 longevity-encrypt-at-rest-50gb-1d-m-db-node-ad2ca6a9-4     !INFO | scylla[6221]: Reactor stalled for 749 ms on shard 12. Backtrace: 0x54458e3 0x5444d40 0x54460b0 0x3cb5f 0x10dd0b 0x549286b 0x546e0bc 0x546e213 0x54561c4 0x5457447 0x5478131 0x542872a 0x8b19c 0x10cc5f

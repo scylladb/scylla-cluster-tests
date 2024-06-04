@@ -17,10 +17,11 @@ from multiprocessing import Queue
 import unittest
 from functools import cached_property
 
+import pytest
+
 from sdcm.cluster import TestConfig
 from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
-
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.test_utils_common import DummyNode
 from unit_tests.lib.events_utils import EventsUtilsMixin
@@ -38,14 +39,6 @@ class DummyDbLogReader(DbLogReader):
 
 
 class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
-    @classmethod
-    def setUpClass(cls):
-        cls.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.teardown_events_processes()
-
     @cached_property
     def test_config(self):
         result = TestConfig()
@@ -103,7 +96,11 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self._db_log_reader_no_decoding._read_and_publish_events()  # pylint: disable=protected-access
 
     def setUp(self):
+        self.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system.log')
+
+    def tearDown(self):
+        self.teardown_events_processes()
 
     def test_01_reactor_stall_is_not_decoded_if_disabled(self):
         self.monitor_node.start_decode_on_monitor_node_thread()
@@ -144,38 +141,15 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
                 self.assertEqual(event['backtrace'].strip(),
                                  "addr2line -Cpife scylla_debug_info_file {}".format(' '.join(event['raw_backtrace'].split("\n"))))
 
-    def test_03_decode_interlace_reactor_stall(self):  # pylint: disable=invalid-name
-
-        self.test_config.DECODING_QUEUE = Queue()
-        self.test_config.BACKTRACE_DECODING = True
-
-        self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
-
-        self._read_and_publish_events()  # pylint: disable=protected-access
-
-        self.monitor_node.termination_event.set()
-        self.monitor_node.stop_task_threads()
-        self.monitor_node.wait_till_tasks_threads_are_stopped()
-
-        events = []
-        with self.get_raw_events_log().open() as events_file:
-            for line in events_file.readlines():
-                events.append(json.loads(line))
-
-        assert any(event.get('raw_backtrace') for event in events), "should have at least one backtrace"
-        for event in events:
-            if event.get('backtrace') and event.get('raw_backtrace'):
-                self.assertEqual(event['backtrace'].strip(),
-                                 "addr2line -Cpife scylla_debug_info_file {}".format(' '.join(event['raw_backtrace'].split("\n"))))
-
+    @pytest.mark.skip("sct doesn't support multiline backtraces anymore")
     def test_04_decode_backtraces_core(self):
+        # TODO: change the test one aborts would be print in one line
 
         self.test_config.DECODING_QUEUE = Queue()
         self.test_config.BACKTRACE_DECODING = True
 
-        self.monitor_node.start_decode_on_monitor_node_thread()
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_core.log')
+        self.monitor_node.start_decode_on_monitor_node_thread()
 
         self._read_and_publish_events()
 
