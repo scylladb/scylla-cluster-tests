@@ -15,7 +15,7 @@ import logging
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel  # pylint: disable=no-name-in-module
 
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.common.provision_plan import ProvisionPlan
@@ -30,7 +30,7 @@ class ProvisionType(str, Enum):
     SPOT = 'spot'
 
 
-class ProvisionPlanBuilder(BaseModel):
+class ProvisionPlanBuilder(BaseModel):  # pylint: disable=too-few-public-methods
     initial_provision_type: ProvisionType
     duration: int = None
     fallback_provision_on_demand: bool

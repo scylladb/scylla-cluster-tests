@@ -152,7 +152,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
         with self.subTest("Executing the 'backup list' and 'backup files' commands on a older version backup"
                           " with newer version manager"):
             current_backup_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
-            assert pre_upgrade_backup_task_files == current_backup_files,\
+            assert pre_upgrade_backup_task_files == current_backup_files, \
                 f"Backup task of the task {backup_task.id} is not identical after the manager upgrade:" \
                 f"\nbefore the upgrade:\n{pre_upgrade_backup_task_files}\nafter the upgrade:\n{current_backup_files}"
             mgr_cluster.sctool.run(cmd=f" backup list -c {mgr_cluster.id}", is_verify_errorless_result=True)

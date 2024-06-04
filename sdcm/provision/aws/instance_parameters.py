@@ -14,23 +14,23 @@
 import base64
 from typing import List, Optional, Literal, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel  # pylint: disable=no-name-in-module
 
 from sdcm.provision.common.provisioner import InstanceParamsBase
 
 
-class AWSNetworkInterfaces(BaseModel):
+class AWSNetworkInterfaces(BaseModel):  # pylint: disable=too-few-public-methods
     DeviceIndex: int
     SubnetId: str
     Groups: List[str]
 
 
-class AWSInstanceProfile(BaseModel):
+class AWSInstanceProfile(BaseModel):  # pylint: disable=too-few-public-methods
     Name: str = None
     Arn: str = None
 
 
-class AWSDiskMappingEbsInfo(BaseModel):
+class AWSDiskMappingEbsInfo(BaseModel):  # pylint: disable=too-few-public-methods
     VolumeType: Literal['standard', 'io1', 'io2', 'gp2', 'sc1', 'st1', 'gp3']
     VolumeSize: int
     VirtualName: str = None
@@ -43,18 +43,18 @@ class AWSDiskMappingEbsInfo(BaseModel):
     Encrypted: bool = None
 
 
-class AWSDiskMapping(BaseModel):
+class AWSDiskMapping(BaseModel):  # pylint: disable=too-few-public-methods
     DeviceName: str
     Ebs: AWSDiskMappingEbsInfo
 
 
-class AWSPlacementInfo(BaseModel):
+class AWSPlacementInfo(BaseModel):  # pylint: disable=too-few-public-methods
     AvailabilityZone: str
     GroupName: str = None
     Tenancy: Literal['default', 'dedicated', 'host'] = 'default'
 
 
-class AWSInstanceParams(InstanceParamsBase):
+class AWSInstanceParams(InstanceParamsBase):  # pylint: disable=too-few-public-methods
     # pylint: disable=invalid-name
     ImageId: str
     KeyName: str
