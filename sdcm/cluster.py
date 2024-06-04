@@ -499,9 +499,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             scylla_yml.replace_address_first_boot = self.replacement_node_ip
         if self.replacement_host_id:
             scylla_yml.replace_node_first_boot = self.replacement_host_id
-        if append_scylla_yaml := self.parent_cluster.params.get('append_scylla_yaml'):
-            append_scylla_yaml = yaml.safe_load(append_scylla_yaml)
-            if any(substr in append_scylla_yaml for substr in (
+        if append_scylla_yaml := self.parent_cluster.params.get('append_scylla_yaml') or {}:
+            if any(key in append_scylla_yaml for key in (
                     "system_key_directory", "system_info_encryption", "kmip_hosts")):
                 install_encryption_at_rest_files(self.remoter)
             for kms_host_name, kms_host_data in append_scylla_yaml.get("kms_hosts", {}).items():
@@ -4434,7 +4433,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             return None
         kms_key_rotation_interval = self.params.get("kms_key_rotation_interval") or 60
         kms_key_alias_name = ""
-        append_scylla_yaml = yaml.safe_load(self.params.get("append_scylla_yaml") or "") or {}
+        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
         for kms_host_name, kms_host_data in append_scylla_yaml.get("kms_hosts", {}).items():
             if "auto" in kms_host_name:
                 kms_key_alias_name = kms_host_data["master_key"]

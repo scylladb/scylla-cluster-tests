@@ -536,7 +536,7 @@ class SCTConfiguration(dict):
         dict(name="append_scylla_args_oracle", env="SCT_APPEND_SCYLLA_ARGS_ORACLE", type=str,
              help="More arguments to append to oracle command line"),
 
-        dict(name="append_scylla_yaml", env="SCT_APPEND_SCYLLA_YAML", type=str,
+        dict(name="append_scylla_yaml", env="SCT_APPEND_SCYLLA_YAML", type=dict_or_str,
              help="More configuration to append to /etc/scylla/scylla.yaml"),
 
         # Nemesis config options

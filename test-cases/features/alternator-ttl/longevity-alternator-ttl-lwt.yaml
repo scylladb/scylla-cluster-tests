@@ -47,5 +47,5 @@ authorizer: 'CassandraAuthorizer'
 # Set 'alternator_ttl_period_in_seconds' to 7 minutes for the TTL scan interval.
 experimental_features:
   - alternator-ttl
-append_scylla_yaml: |
+append_scylla_yaml:
   alternator_ttl_period_in_seconds: 420
