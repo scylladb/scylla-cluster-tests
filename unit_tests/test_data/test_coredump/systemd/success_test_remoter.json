@@ -105,7 +105,7 @@
       "exit_status": 0
     }
   ],
-  "sudo curl --request PUT --fail --show-error --upload-file '/var/lib/systemd/coredump/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4' 'https://upload.scylladb.com/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000./core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4'": [
+  "sudo curl --request PUT --fail --show-error --upload-file '/var/lib/systemd/coredump/hardlinks/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4' 'https://upload.scylladb.com/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000./core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4'": [
     {
       "__instance__": "invoke.exceptions.UnexpectedExit",
       "result": {
@@ -124,7 +124,7 @@
       "exit_status": 0
     }
   ],
-  "sudo curl --request PUT --fail --show-error --upload-file '/var/lib/systemd/coredump/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000.lz4' 'https://upload.scylladb.com/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000./core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000.lz4'": [
+  "sudo curl --request PUT --fail --show-error --upload-file '/var/lib/systemd/coredump/hardlinks/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000.lz4' 'https://upload.scylladb.com/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000./core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000.lz4'": [
     {
       "__instance__": "fabric.runners.Result",
       "stderr": "  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\r  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\r  0 60.5M    0     0    0 65536      0   153k  0:06:43 --:--:--  0:06:43  153k\r  5 60.5M    0     0    5 3520k      0  2703k  0:00:22  0:00:01  0:00:21 2701k\r 11 60.5M    0     0   11 7232k      0  3187k  0:00:19  0:00:02  0:00:17 3185k\r 15 60.5M    0     0   15 9856k      0  3062k  0:00:20  0:00:03  0:00:17 3061k\r 20 60.5M    0     0   20 12.3M      0  2993k  0:00:20  0:00:04  0:00:16 2992k\r 25 60.5M    0     0   25 15.4M      0  2997k  0:00:20  0:00:05  0:00:15 3241k\r 30 60.5M    0     0   30 18.3M      0  3017k  0:00:20  0:00:06  0:00:14 3099k\r 35 60.5M    0     0   35 21.4M      0  3027k  0:00:20  0:00:07  0:00:13 2954k\r 40 60.5M    0     0   40 24.5M      0  3050k  0:00:20  0:00:08  0:00:12 3042k\r 45 60.5M    0     0   45 27.4M      0  3045k  0:00:20  0:00:09  0:00:11 3089k\r 50 60.5M    0     0   50 30.6M      0  3061k  0:00:20  0:00:10  0:00:10 3128k\r 55 60.5M    0     0   55 33.8M      0  3086k  0:00:20  0:00:11  0:00:09 3172k\r 61 60.5M    0     0   61 37.1M      0  3112k  0:00:19  0:00:12  0:00:07 3235k\r 67 60.5M    0     0   67 41.0M      0  3170k  0:00:19  0:00:13  0:00:06 3366k\r 74 60.5M    0     0   74 45.1M      0  3249k  0:00:19  0:00:14  0:00:05 3626k\r 82 60.5M    0     0   82 50.0M      0  3362k  0:00:18  0:00:15  0:00:03 3983k\r 92 60.5M    0     0   92 55.7M      0  3520k  0:00:17  0:00:16  0:00:01 4495k\r100 60.5M  100   381  100 60.5M     21  3510k  0:00:18  0:00:17  0:00:01 4408k\r100 60.5M  100   381  100 60.5M     21  3509k  0:00:18  0:00:17  0:00:01 4531k\n",
@@ -133,7 +133,7 @@
       "exit_status": 0
     }
   ],
-  "sudo curl --request PUT --fail --show-error --upload-file '/var/lib/systemd/coredump/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000.lz4' 'https://upload.scylladb.com/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000./core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000.lz4'": [
+  "sudo curl --request PUT --fail --show-error --upload-file '/var/lib/systemd/coredump/hardlinks/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000.lz4' 'https://upload.scylladb.com/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000./core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000.lz4'": [
     {
       "__instance__": "invoke.exceptions.UnexpectedExit",
       "result": {
@@ -148,6 +148,69 @@
       "__instance__": "fabric.runners.Result",
       "stderr": "  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n\r  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0\r  0 60.6M    0     0    0  192k      0   365k  0:02:50 --:--:--  0:02:50  365k\r  7 60.6M    0     0    7 4928k      0  3148k  0:00:19  0:00:01  0:00:18 3148k\r 13 60.6M    0     0   13 8384k      0  3329k  0:00:18  0:00:02  0:00:16 3328k\r 19 60.6M    0     0   19 11.9M      0  3458k  0:00:17  0:00:03  0:00:14 3457k\r 26 60.6M    0     0   26 15.8M      0  3585k  0:00:17  0:00:04  0:00:13 3585k\r 32 60.6M    0     0   32 19.7M      0  3661k  0:00:16  0:00:05  0:00:11 4007k\r 39 60.6M    0     0   39 23.7M      0  3716k  0:00:16  0:00:06  0:00:10 3895k\r 45 60.6M    0     0   45 27.6M      0  3770k  0:00:16  0:00:07  0:00:09 3992k\r 50 60.6M    0     0   50 30.3M      0  3592k  0:00:17  0:00:08  0:00:09 3684k\r 54 60.6M    0     0   54 33.0M      0  3539k  0:00:17  0:00:09  0:00:08 3499k\r 58 60.6M    0     0   58 35.1M      0  3420k  0:00:18  0:00:10  0:00:08 3154k\r 61 60.6M    0     0   61 37.5M      0  3328k  0:00:18  0:00:11  0:00:07 2818k\r 65 60.6M    0     0   65 39.8M      0  3251k  0:00:19  0:00:12  0:00:07 2474k\r 69 60.6M    0     0   69 42.1M      0  3191k  0:00:19  0:00:13  0:00:06 2483k\r 73 60.6M    0     0   73 44.5M      0  3138k  0:00:19  0:00:14  0:00:05 2366k\r 77 60.6M    0     0   77 46.8M      0  3089k  0:00:20  0:00:15  0:00:05 2392k\r 81 60.6M    0     0   81 49.3M      0  3056k  0:00:20  0:00:16  0:00:04 2430k\r 85 60.6M    0     0   85 51.8M      0  3032k  0:00:20  0:00:17  0:00:03 2481k\r 90 60.6M    0     0   90 54.7M      0  3023k  0:00:20  0:00:18  0:00:02 2571k\r 95 60.6M    0     0   95 58.0M      0  3041k  0:00:20  0:00:19  0:00:01 2763k\r100 60.6M  100   381  100 60.6M     18  2941k  0:00:21  0:00:21 --:--:-- 2530k\r100 60.6M  100   381  100 60.6M     18  2941k  0:00:21  0:00:21 --:--:-- 2525k\n",
       "stdout": "<?xml version='1.0' encoding='UTF-8'?><Error><Code>AccessDenied</Code><Message>Access denied.</Message><Details>Anonymous caller does not have storage.objects.delete access to upload.scylladb.com/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000./core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000.lz4.</Details></Error>",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+    "sudo ln /var/lib/systemd/coredump/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4 /var/lib/systemd/coredump/hardlinks/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4": [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "sudo ln /var/lib/systemd/coredump/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000.lz4 /var/lib/systemd/coredump/hardlinks/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000.lz4": [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "sudo ln /var/lib/systemd/coredump/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000.lz4 /var/lib/systemd/coredump/hardlinks/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000.lz4": [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "sudo mkdir -p /var/lib/systemd/coredump/hardlinks": [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "sudo rm -f /var/lib/systemd/coredump/hardlinks/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4": [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "sudo rm -f /var/lib/systemd/coredump/hardlinks/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000.lz4": [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "sudo rm -f /var/lib/systemd/coredump/hardlinks/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000.lz4": [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "",
+      "stderr": "",
       "exited": 0,
       "exit_status": 0
     }
