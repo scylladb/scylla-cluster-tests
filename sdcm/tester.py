@@ -504,7 +504,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.error("Unable to collect package versions for Argus - skipping...", exc_info=True)
 
     def argus_collect_manager_version(self):
-        if self.params.get('use_mgmt'):
+        if self.monitors.nodes and self.params.get('use_mgmt'):
             manager_tool = get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
             self.log.info("Saving manager version in Argus...")
             # sctool.version output:

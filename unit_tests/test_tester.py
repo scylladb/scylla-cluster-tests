@@ -97,6 +97,9 @@ class ClusterTesterForTests(ClusterTester):
     def save_email_data(self):
         pass
 
+    def argus_collect_manager_version(self):
+        pass
+
     def tearDown(self):
         super().tearDown()
         self._validate_results()
