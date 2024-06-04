@@ -20,6 +20,5 @@ jepsen_test_count: 5
 jepsen_test_run_policy: any
 bare_loaders: true
 
-append_scylla_yaml: |
-  experimental_features:
-    - raft
+experimental_features:
+  - raft

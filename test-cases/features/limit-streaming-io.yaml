@@ -40,5 +40,5 @@ store_perf_results: false
 send_email: true
 email_recipients: ["qa@scylladb.com"]
 
-append_scylla_yaml: |
+append_scylla_yaml:
   stream_io_throughput_mb_per_sec: 300

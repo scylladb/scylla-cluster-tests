@@ -825,7 +825,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return append_scylla_yaml and (
             'system_key_directory' in append_scylla_yaml or
             'system_info_encryption' in append_scylla_yaml or
-            'kmip_hosts:' in append_scylla_yaml
+            'kmip_hosts' in append_scylla_yaml
         )
 
     def prepare_kms_host(self) -> None:
@@ -846,7 +846,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         aws_kms.create_alias(kms_key_alias_name=alias_name)
 
         # Add kms_host with the dynamically created alias to the 'append_scylla_yaml'
-        append_scylla_yaml = yaml.safe_load(self.params.get("append_scylla_yaml") or '') or {}
+        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
         if "kms_hosts" not in append_scylla_yaml:
             append_scylla_yaml["kms_hosts"] = {}
         append_scylla_yaml["kms_hosts"][kms_host] = {
@@ -866,7 +866,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             'kms_host': kms_host,
         }
         self.log.warning("`user_info_encryption` and `system_info_encryption` are configured to use KMS by default")
-        self.params["append_scylla_yaml"] = yaml.safe_dump(append_scylla_yaml)
+        self.params["append_scylla_yaml"] = append_scylla_yaml
         return None
 
     @teardown_on_exception
@@ -3034,7 +3034,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         Configure encryption at-rest for all test tables if needed,
         sleep a while to wait the workload starts and test tables are created
         """
-        append_scylla_yaml = yaml.safe_load(self.params.get("append_scylla_yaml") or '') or {}
+        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
 
         if ((scylla_encryption_options := self.params.get('scylla_encryption_options'))
             and 'write' in stress_command
