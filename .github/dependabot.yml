@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+
+    allow:
+      - dependency-name: "scylla-driver"
+        dependency-type: "direct"
+
+    reviewers:
+      - "scylladb/qa-maintainers"
+    assignees:
+      - "scylladb/qa-maintainers"
