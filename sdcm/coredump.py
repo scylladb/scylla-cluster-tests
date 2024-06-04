@@ -22,6 +22,7 @@ from functools import cached_property
 from threading import Thread, Event
 from dataclasses import dataclass
 from pathlib import Path
+from contextlib import contextmanager
 
 from sdcm.log import SDCMAdapter
 from sdcm.remote import NETWORK_EXCEPTIONS
@@ -223,6 +224,10 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             download_instructions += f'\nunlz4 {coredump.name}'
         core_info.download_url, core_info.download_instructions = download_url, download_instructions
 
+    @contextmanager
+    def hard_link_corefile(self, corefile):  # pylint: disable=unused-argument,no-self-use
+        yield
+
     def upload_coredump(self, core_info: CoreDumpInfo):
         if core_info.download_url:
             return False
@@ -232,7 +237,10 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
         try:
             self.log.debug(f'Start uploading file: {core_info.corefile}')
             core_info.download_instructions = 'Coredump upload in progress'
-            self._upload_coredump(core_info)
+            with self.hard_link_corefile(core_info.corefile) as hard_link:
+                if hard_link:
+                    core_info.corefile = str(hard_link)
+                self._upload_coredump(core_info)
             return True
         except Exception as exc:  # pylint: disable=broad-except
             core_info.download_instructions = 'failed to upload core'
@@ -307,6 +315,16 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         except Exception:  # pylint: disable=broad-except
             self.log.warning("failed to get systemd version:", exc_info=True)
         return systemd_version
+
+    @contextmanager
+    def hard_link_corefile(self, corefile):
+        hard_links_path = Path(corefile).parent / 'hardlinks'
+        link_path = hard_links_path / Path(corefile).name
+        self.node.remoter.sudo(f'mkdir -p {hard_links_path}', ignore_status=True)
+        self.log.debug(f'doing: ln {corefile} {link_path}')
+        self.node.remoter.sudo(f'ln {corefile} {link_path}', ignore_status=True)
+        yield link_path
+        self.node.remoter.sudo(f'rm -f {link_path}', ignore_status=True)
 
     def get_list_of_cores_json(self) -> Optional[List[CoreDumpInfo]]:
         result = self.node.remoter.run(
