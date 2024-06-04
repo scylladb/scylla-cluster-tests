@@ -2764,11 +2764,11 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         if self.params.get("server_encrypt"):
             raise NotImplementedError("server_encrypt is not supported by k8s-* backends yet")
 
-        append_scylla_yaml = self.params.get("append_scylla_yaml")
+        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
 
         if append_scylla_yaml:
-            unsupported_options = ("system_key_directory", "system_info_encryption", "kmip_hosts:", )
-            if any(substr in append_scylla_yaml for substr in unsupported_options):
+            unsupported_options = ("system_key_directory", "system_info_encryption", "kmip_hosts", )
+            if any(option in append_scylla_yaml for option in unsupported_options):
                 raise NotImplementedError(
                     f"{unsupported_options} are not supported in append_scylla_yaml by k8s-* backends yet")
 
