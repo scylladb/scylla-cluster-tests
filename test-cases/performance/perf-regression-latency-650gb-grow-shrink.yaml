@@ -13,8 +13,18 @@ stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=2850m -schema
 stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=250 fixed=16000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,9750000)' "
 stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=250 fixed=15000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,6500000)' "
 
+# OSS cmd's for 80%
+#stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=2850m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=250 fixed=24000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..62500000 "
+#stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=250 fixed=20000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,9750000)' "
+#stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=250 fixed=17000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,6500000)' "
+
+# Enterprise cmd's for 80%
+#stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=2850m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=250 fixed=27000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..62500000 "
+#stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=250 fixed=24000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,9750000)' "
+#stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=250 fixed=22000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,6500000)' "
+
 n_db_nodes: 3
-nemesis_add_node_cnt: 3
+nemesis_add_node_cnt: 9
 n_loaders: 4
 n_monitor_nodes: 1
 
