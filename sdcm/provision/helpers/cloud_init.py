@@ -44,10 +44,9 @@ def wait_cloud_init_completes(remoter: RemoteCmdRunnerBase, instance: VmInstance
 
 def log_user_data_scripts_errors(remoter: RemoteCmdRunnerBase) -> bool:
     errors_found = False
-    result = remoter.run(f"ls {CLOUD_INIT_SCRIPTS_PATH}")
-    ls_errors = result.stderr
-    if ls_errors:
-        LOGGER.error("Error listing generated scripts: %s", ls_errors)
+    result = remoter.run(f"ls {CLOUD_INIT_SCRIPTS_PATH}", ignore_status=True)
+    if result.failed:
+        LOGGER.error("Error listing generated scripts: return_code: %s, stderr: %s", result.return_code, result.stderr)
         errors_found = True
     files_list = result.stdout
     if not files_list:
