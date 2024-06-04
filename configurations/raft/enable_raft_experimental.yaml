@@ -1,3 +1,2 @@
-append_scylla_yaml: |
-  experimental_features:
-    - consistent-topology-changes
+experimental_features:
+  - consistent-topology-changes
