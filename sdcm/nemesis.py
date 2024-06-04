@@ -2040,7 +2040,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if tables_to_skip is None:
             tables_to_skip = {}
         to_be_skipped_default = tables_to_skip.get('*', '').split(',')
-        with self.cluster.cql_connection_patient(self.tester.db_cluster.nodes[0]) as session:
+        with self.cluster.cql_connection_patient(self.target_node) as session:
             query_result = session.execute('SELECT keyspace_name FROM system_schema.keyspaces;')
             for result_rows in query_result:
                 keyspaces.extend([row.lower()
@@ -2055,7 +2055,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     to_be_skipped = []
                 else:
                     to_be_skipped = to_be_skipped.split(',') + to_be_skipped_default
-                tables = get_db_tables(session, ks, with_compact_storage=False)
+                tables = get_db_tables(session=session,
+                                       keyspace_name=ks,
+                                       node=self.target_node,
+                                       with_compact_storage=False)
                 if to_be_skipped:
                     tables = [table for table in tables if table not in to_be_skipped]
                 if not tables:
