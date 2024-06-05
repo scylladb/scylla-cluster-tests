@@ -74,29 +74,31 @@ class LocalNode(BaseNode):
 
 class LocalLoaderSetDummy(BaseCluster):
     # pylint: disable=super-init-not-called,abstract-method
-    def __init__(self, nodes=None):
+    def __init__(self, nodes=None, params=None):
         self.name = "LocalLoaderSetDummy"
-        self.params = {}
+        self.params = params or {}
+        self.added_password_suffix = False
         self.nodes = nodes if nodes is not None else [LocalNode("loader_node", parent_cluster=self)]
 
-    @staticmethod
-    def get_db_auth():
-        return None
+    def add_nodes(self, *args, **kwargs):
+        raise NotImplementedError
 
     @staticmethod
     def is_kubernetes():
         return False
 
 
-class LocalScyllaClusterDummy(BaseScyllaCluster):
+class LocalScyllaClusterDummy(BaseScyllaCluster, BaseCluster):
     # pylint: disable=super-init-not-called
-    def __init__(self):
+    def __init__(self, params=None):
         self.name = "LocalScyllaClusterDummy"
-        self.params = {}
+        self.params = params or {}
+        self.added_password_suffix = False
+        self.log = logging.getLogger(self.name)
+        self._node_cycle = None
 
-    @staticmethod
-    def get_db_auth():
-        return None
+    def add_nodes(self, *args, **kwargs):
+        raise NotImplementedError
 
     def get_ip_to_node_map(self):
         """returns {ip: node} map for all nodes in cluster to get node by ip"""

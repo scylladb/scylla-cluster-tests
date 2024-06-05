@@ -118,6 +118,9 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
         super().__init__(*args, **kwargs)
         # remove the ndbench command, and parse the rest of the ; separated values
         stress_cmd = re.sub(r'^ndbench', '', self.stress_cmd)
+        if credentials := self.loader_set.get_db_auth():
+            stress_cmd += f'; cass.username={credentials[0]} ; cass.password={credentials[1]}'
+
         self.stress_cmd = ' '.join([f'-Dndbench.config.{param.strip()}' for param in stress_cmd.split(';')])
         timeout = '' if 'cli.timeoutMillis' in self.stress_cmd else f'-Dndbench.config.cli.timeoutMillis={self.timeout * 1000}'
         self.stress_cmd = f'./gradlew {timeout}' \

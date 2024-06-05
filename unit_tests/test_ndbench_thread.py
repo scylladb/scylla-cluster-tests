@@ -12,7 +12,7 @@ pytestmark = [
 
 
 def test_01_cql_api(request, docker_scylla, params):
-    loader_set = LocalLoaderSetDummy()
+    loader_set = LocalLoaderSetDummy(params=params)
     cmd = (
         "ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=20000000 ; "
         "numReaders=8; numWriters=8 ; cass.writeConsistencyLevel=QUORUM ; "
@@ -34,7 +34,7 @@ def test_02_cql_kill(request, docker_scylla, params):
     """
     verifies that kill command on the NdBenchStressThread is working
     """
-    loader_set = LocalLoaderSetDummy()
+    loader_set = LocalLoaderSetDummy(params=params)
     cmd = (
         "ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=20000000 ; "
         "numReaders=8; numWriters=8 ; cass.writeConsistencyLevel=QUORUM ; "
@@ -60,7 +60,7 @@ def test_03_dynamodb_api(request, docker_scylla, events, params):
     """
 
     # start a command that would yield errors
-    loader_set = LocalLoaderSetDummy()
+    loader_set = LocalLoaderSetDummy(params=params)
     cmd = (
         f"ndbench cli.clientName=DynamoDBKeyValue ; numKeys=20000000 ; "
         f"numReaders=8; numWriters=8 ; readRateLimit=7200 ; writeRateLimit=1800; "
@@ -91,7 +91,7 @@ def test_03_dynamodb_api(request, docker_scylla, events, params):
 
 
 def test_04_verify_data(request, docker_scylla, events, params):
-    loader_set = LocalLoaderSetDummy()
+    loader_set = LocalLoaderSetDummy(params=params)
     cmd = (
         "ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=30 ; "
         "readEnabled=false; numReaders=0; numWriters=1 ; cass.writeConsistencyLevel=QUORUM ; "
