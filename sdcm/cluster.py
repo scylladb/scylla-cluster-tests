@@ -2231,7 +2231,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
         if self.distro.is_rhel_like:
             self.install_epel()
-            self.remoter.sudo("yum install python36-PyYAML -y", retry=3)
+            self.install_package("python3-PyYAML")
         elif self.distro.is_sles:
             self.remoter.sudo("zypper install python36-PyYAML -y", retry=3)
         elif not self.distro.is_debian_like:
@@ -5390,12 +5390,22 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
         if node.distro.is_rhel_like:
             node.install_epel()
-            node.install_package(package_name="unzip wget python36 python36-pip")
-            prereqs_script = dedent("""
+            node.install_package(package_name="unzip wget python3 python3-pip")
+            # get-docker.sh doesn't support Rocky, thus docker should be installed from repo via dnf install
+            if node.distro.is_rocky:
+                install_docker_cmd = dedent("""
+                    dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+                    dnf install -y docker-ce docker-ce-cli containerd.io
+                """)
+            else:
+                install_docker_cmd = dedent("""
+                    curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
+                    sh get-docker.sh
+                """)
+            prereqs_script = dedent(f"""
                 python3 -m pip install --upgrade pip
                 python3 -m pip install pyyaml
-                curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
-                sh get-docker.sh
+                {install_docker_cmd}
                 systemctl start docker
             """)
         elif node.distro.is_ubuntu:
