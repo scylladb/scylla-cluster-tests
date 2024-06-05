@@ -50,10 +50,12 @@ class Alternator:
         with node.parent_cluster.cql_connection_patient_exclusive(node) as session:
             for ks in ("system", "system_auth_v2", "system_auth"):
                 try:
-                    response = session.execute(f"SELECT salted_hash FROM {ks}.roles WHERE role=%s;", (username,))
+                    response = session.execute(f"SELECT salted_hash FROM {ks}.roles WHERE role=%s;", (username,)).one()
                 except InvalidRequest:
                     continue
-                return next(iter(response)).salted_hash
+                if response:
+                    return response.salted_hash
+            raise ValueError("couldn't find the salted_hash")
 
     def get_dynamodb_api(self, node) -> AlternatorApi:
         endpoint_url = self.create_endpoint_url(node=node)
