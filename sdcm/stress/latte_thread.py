@@ -98,7 +98,11 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
 
+<<<<<<< HEAD
     def build_stress_cmd(self, cmd_runner):
+=======
+    def build_stress_cmd(self, cmd_runner, loader):  # pylint: disable=too-many-locals
+>>>>>>> 22d60115 (fix(integration-tests): enable auth by default)
         hosts = " ".join([i.cql_address for i in self.node_list])
 
         # extract the script so we know which files to mount into the docker image
@@ -116,16 +120,43 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     cmd_runner.send_files(str(ssl_file),
                                           str(Path('/etc/scylla/ssl_conf/client') / ssl_file.name),
                                           verbose=True)
+<<<<<<< HEAD
             ssl_config += (' --ssl --ssl-ca /etc/scylla/ssl_conf/client/catest.pem '
                            '--ssl-cert /etc/scylla/ssl_conf/client/test.crt '
                            '--ssl-key /etc/scylla/ssl_conf/client/test.key')
+=======
+
+            ssl_config += (f' --ssl --ssl-ca {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT} '
+                           f'--ssl-cert {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT} '
+                           f'--ssl-key {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY}')
+
+        auth_config = ''
+        if credentials := self.loader_set.get_db_auth():
+            auth_config = f' --user {credentials[0]} --password {credentials[1]}'
+
+        datacenter = ""
+        if self.loader_set.test_config.MULTI_REGION:
+            # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
+            # not for loader nodes. So call next function for DB nodes
+            datacenter_name_per_region = self.loader_set.get_datacenter_name_per_region(db_nodes=self.node_list)
+            if loader_dc := datacenter_name_per_region.get(loader.region):
+                datacenter = f"--datacenter {loader_dc}"
+            else:
+                LOGGER.error(
+                    "Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
+                    loader.region, datacenter_name_per_region)
+>>>>>>> 22d60115 (fix(integration-tests): enable auth by default)
 
         cmd_runner.run(
-            cmd=f'latte schema {script_name} {ssl_config} -- {hosts}',
+            cmd=f'latte schema {script_name} {ssl_config} {auth_config} -- {hosts}',
             timeout=self.timeout,
             retry=0,
         )
+<<<<<<< HEAD
         stress_cmd = f'{self.stress_cmd} {ssl_config} -q -- {hosts} '
+=======
+        stress_cmd = f'{self.stress_cmd} {ssl_config} {auth_config} {datacenter} -q -- {hosts} '
+>>>>>>> 22d60115 (fix(integration-tests): enable auth by default)
 
         return stress_cmd
 
@@ -208,4 +239,3 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         return {}
         # TODOs:
         # 1) take back the report workload..3.0.8.p128.t1.c1.20231025.220812.json
-        # 2) support user/password

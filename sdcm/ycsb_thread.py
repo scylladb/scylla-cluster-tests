@@ -152,12 +152,12 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                     dynamodb.primaryKeyType = {alternator.enums.YCSBSchemaTypes.HASH_SCHEMA.value}
                 ''')
             if self.params.get('alternator_enforce_authorization'):
-                aws_credentials_content = dedent(f""""
+                aws_credentials_content = dedent(f"""
                     accessKey = {self.params.get('alternator_access_key_id')}
                     secretKey = {alternator.api.Alternator.get_salted_hash(node=self.node_list[0], username=self.params.get('alternator_access_key_id'))}
                 """)
             else:
-                aws_credentials_content = dedent(f""""
+                aws_credentials_content = dedent(f"""
                     accessKey = {self.params.get('alternator_access_key_id')}
                     secretKey = {self.params.get('alternator_secret_access_key')}
                 """)

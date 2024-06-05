@@ -723,7 +723,7 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
                                 'system.cdc_local', 'system.versions', 'system_distributed_everywhere.cdc_generation_descriptions_v2',
                                 'system.scylla_local', 'system.cluster_status', 'system.protocol_servers',
                                 'system_distributed.cdc_streams_descriptions_v2', 'system_schema.keyspaces',
-                                'system.size_estimates', 'system_schema.scylla_tables', 'system_auth.roles',
+                                'system.size_estimates', 'system_schema.scylla_tables',
                                 'system.scylla_table_schema_history', 'system_schema.views',
                                 'system_distributed.view_build_status', 'system.built_views',
                                 'mview.users_by_first_name', 'mview.users_by_last_name', 'mview.users',
@@ -731,13 +731,18 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
                                 'system.hints', 'system.large_cells', 'system.large_partitions', 'system.large_rows',
                                 'system.paxos', 'system.peer_events', 'system.peers', 'system.range_xfers', 'system.repair_history',
                                 'system.scylla_views_builds_in_progress', 'system.snapshots', 'system.sstable_activity',
-                                'system.truncated', 'system.views_builds_in_progress', 'system_auth.role_attributes',
-                                'system_auth.role_members', 'system_distributed.service_levels', 'system_schema.aggregates',
+                                'system.truncated', 'system.views_builds_in_progress',
+                                'system_distributed.service_levels', 'system_schema.aggregates',
                                 'system_schema.computed_columns', 'system_schema.dropped_columns', 'system_schema.functions',
                                 'system_schema.indexes', 'system_schema.scylla_aggregates', 'system_schema.scylla_keyspaces',
                                 'system_schema.triggers', 'system_schema.types', 'system_schema.view_virtual_columns',
                                 'system_traces.events', 'system_traces.node_slow_log', 'system_traces.node_slow_log_time_idx',
                                 'system_traces.sessions', 'system_traces.sessions_time_idx',
+                                'system.role_attributes', 'system.role_members', 'system.role_permissions',
+                                'system.roles', 'system.service_levels_v2',
+                                'system.tablets',
+                                'system.topology', 'system.topology_requests',
+                                'system.cdc_generations_v3',
                                 '"123_keyspace"."120users"', '"123_keyspace".users'}
 
     table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=False, filter_out_mv=True)
@@ -751,6 +756,31 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
     assert set(table_names) == {'mview.users', '"123_keyspace"."120users"', '"123_keyspace".users'}
 
 
+<<<<<<< HEAD
+=======
+@pytest.mark.integration
+def test_filter_out_ks_with_rf_one(docker_scylla, params, events):  # pylint: disable=unused-argument
+
+    cluster = DummyScyllaCluster([docker_scylla])
+    cluster.params = params
+
+    with cluster.cql_connection_patient(docker_scylla) as session:
+        session.execute(
+            "CREATE KEYSPACE mview WITH replication = {'class': 'org.apache.cassandra.locator.SimpleStrategy', 'replication_factor': '1'} "
+            "AND durable_writes = true AND tablets = {'enabled': false}")
+        session.execute(
+            "CREATE TABLE mview.users (username text, first_name text, last_name text, password text, email text, "
+            "last_access timeuuid, PRIMARY KEY(username))")
+        session.execute(
+            "INSERT INTO mview.users (username, first_name, last_name, password) VALUES "
+            "('fruch', 'Israel', 'Fruchter', '1111')")
+        docker_scylla.run_nodetool('flush')
+
+        table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_func=cluster.is_ks_rf_one)
+        assert table_names == []
+
+
+>>>>>>> 22d60115 (fix(integration-tests): enable auth by default)
 class TestNodetool(unittest.TestCase):
     def test_describering_parsing(self):  # pylint: disable=no-self-use
         """ Test "nodetool describering" output parsing """
