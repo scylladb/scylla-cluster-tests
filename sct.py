@@ -14,6 +14,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 # pylint: disable=too-many-lines
+from datetime import datetime, timezone, timedelta
 import os
 import re
 import sys
@@ -59,6 +60,7 @@ from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
 from sdcm.utils.common import (
+    S3Storage,
     aws_tags_to_dict,
     create_pretty_table,
     clean_cloud_resources,
@@ -1783,6 +1785,45 @@ def fetch_junit(runner_ip, backend):
     junit_xml_file = Path('results') / 'junit.xml'
     junit_xml_file.parent.mkdir(parents=True, exist_ok=True)
     junit_xml_file.write_text(output.stdout.strip())
+
+
+@cli.command("upload", help="Upload arbitrary log/screenshot to s3 corresponding to the test_id")
+@click.option("--test-id", type=str, required=True)
+@click.option("--use-argus/--no-use-argus", default=True)
+@click.argument("file-path", type=str, required=True)
+def upload_artifact_file(test_id: str, file_path: str, use_argus: bool):
+    add_file_logger()
+    if use_argus:
+        params = SCTConfiguration()
+        params["test_id"] = test_id
+        test_config = get_test_config()
+        test_config.set_test_id_only(params.get('test_id'))
+        test_config.init_argus_client(params)
+        client = test_config.argus_client()
+        try:
+            client.get_status()
+        except ArgusClientError:
+            LOGGER.error("Failed getting status for %s in Argus, aborting...", test_id)
+            return
+    else:
+        client = get_test_config().argus_client()  # MagicMock
+
+    image_exts = [".jpg", ".png"]
+    file = Path(file_path)
+    if file.exists():
+        timestamp = datetime.now(timezone(timedelta(hours=0, minutes=0)))
+        subfolder = timestamp.strftime("upload_%Y%m%d_%H%M%S")
+        s3_path = f"{test_id}/{subfolder}"
+        LOGGER.info("Going to upload %s to S3...", file.absolute())
+        s3 = S3Storage()
+        file_url = s3.upload_file(file.absolute(), s3_path)
+        LOGGER.info("Uploaded %s to %s", file.absolute(), file_url)
+        client.submit_sct_logs([LogLink(log_name=file.name, log_link=file_url)])
+        if file.suffix in image_exts:
+            client.submit_screenshots([file_url])
+    else:
+        LOGGER.error("File %s does not exist", file.absolute())
+        return
 
 
 cli.add_command(sct_ssh.ssh)
