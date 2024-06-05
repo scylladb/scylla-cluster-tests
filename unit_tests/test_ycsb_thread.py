@@ -16,6 +16,7 @@ import re
 import pytest
 import requests
 from cassandra.cluster import Cluster  # pylint: disable=no-name-in-module
+from cassandra.auth import PlainTextAuthProvider
 
 from sdcm.utils import alternator
 from sdcm.utils.decorators import timeout
@@ -25,13 +26,31 @@ from unit_tests.dummy_remote import LocalLoaderSetDummy
 from unit_tests.lib.alternator_utils import ALTERNATOR_PORT, ALTERNATOR, TEST_PARAMS
 
 pytestmark = [
-    pytest.mark.usefixtures("events", "create_table", "create_cql_ks_and_table"),
+    pytest.mark.usefixtures("events"),
     pytest.mark.integration,
 ]
 
 
+@pytest.fixture(scope="function", name="cql_driver")
+def fixture_cql_driver(docker_scylla):
+    if running_in_docker():
+        address = f"{docker_scylla.internal_ip_address}:9042"
+    else:
+        address = docker_scylla.get_port("9042")
+    node_ip, port = address.split(":")
+    port = int(port)
+    return Cluster([node_ip], port=port,
+                   auth_provider=PlainTextAuthProvider(username='cassandra', password='cassandra'))
+
+
 @pytest.fixture(scope="function")
-def create_table(docker_scylla):
+def create_table(docker_scylla, cql_driver):
+
+    with cql_driver.connect() as session:
+        session.execute("CREATE ROLE %s WITH PASSWORD = %s",
+                        (TEST_PARAMS.get('alternator_access_key_id'),
+                         TEST_PARAMS.get('alternator_secret_access_key')))
+
     def create_endpoint_url(node):
         if running_in_docker():
             endpoint_url = f"http://{node.internal_ip_address}:{ALTERNATOR_PORT}"
@@ -47,16 +66,9 @@ def create_table(docker_scylla):
 
 
 @pytest.fixture(scope="function")
-def create_cql_ks_and_table(docker_scylla):
-    if running_in_docker():
-        address = f"{docker_scylla.internal_ip_address}:9042"
-    else:
-        address = docker_scylla.get_port("9042")
-    node_ip, port = address.split(":")
-    port = int(port)
+def create_cql_ks_and_table(cql_driver):
 
-    cluster_driver = Cluster([node_ip], port=port)
-    session = cluster_driver.connect()
+    session = cql_driver.connect()
     session.execute(
         """create keyspace ycsb WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 1 };"""
     )
@@ -76,10 +88,11 @@ def create_cql_ks_and_table(docker_scylla):
     )
 
 
+@pytest.mark.usefixtures("create_table")
 @pytest.mark.docker_scylla_args(docker_network='ycsb_net')
 def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
-    loader_set = LocalLoaderSetDummy()
     params.update(TEST_PARAMS)
+    loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
         "bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=1000000 "
@@ -116,11 +129,13 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address, params):
     assert float(output[0]["latency 99th percentile"]) > 0
 
 
+@pytest.mark.usefixtures("create_table")
+@pytest.mark.docker_scylla_args(docker_network='ycsb_net')
 def test_02_dynamodb_api_dataintegrity(
     request, docker_scylla, prom_address, events, params
 ):
-    loader_set = LocalLoaderSetDummy()
     params.update(TEST_PARAMS)
+    loader_set = LocalLoaderSetDummy(params=params)
 
     # 2. do write without dataintegrity=true
     cmd = (
@@ -179,9 +194,11 @@ def test_02_dynamodb_api_dataintegrity(
     assert "=ERROR" in cat["ERROR"][1]
 
 
+@pytest.mark.usefixtures("create_cql_ks_and_table")
+@pytest.mark.docker_scylla_args(docker_network='ycsb_net')
 def test_03_cql(request, docker_scylla, prom_address, params):
-    loader_set = LocalLoaderSetDummy()
     params.update(TEST_PARAMS)
+    loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
         "bin/ycsb load scylla -P workloads/workloada -threads 5 -p recordcount=1000000 "
@@ -212,6 +229,7 @@ def test_03_cql(request, docker_scylla, prom_address, params):
     ycsb_thread.get_results()
 
 
+@pytest.mark.usefixtures("create_table")
 def test_04_insert_new_data(docker_scylla):
     schema = alternator.schemas.HASH_AND_STR_RANGE_SCHEMA
     schema_keys = [key_details["AttributeName"] for key_details in schema["KeySchema"]]

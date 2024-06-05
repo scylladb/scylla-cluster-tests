@@ -98,7 +98,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
 
-    def build_stress_cmd(self, cmd_runner, loader):
+    def build_stress_cmd(self, cmd_runner, loader):  # pylint: disable=too-many-locals
         hosts = " ".join([i.cql_address for i in self.node_list])
 
         # extract the script so we know which files to mount into the docker image
@@ -119,6 +119,11 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             ssl_config += (f' --ssl --ssl-ca {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT} '
                            f'--ssl-cert {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT} '
                            f'--ssl-key {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY}')
+
+        auth_config = ''
+        if credentials := self.loader_set.get_db_auth():
+            auth_config = f' --user {credentials[0]} --password {credentials[1]}'
+
         datacenter = ""
         if self.loader_set.test_config.MULTI_REGION:
             # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
@@ -132,11 +137,11 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     loader.region, datacenter_name_per_region)
 
         cmd_runner.run(
-            cmd=f'latte schema {script_name} {ssl_config} -- {hosts}',
+            cmd=f'latte schema {script_name} {ssl_config} {auth_config} -- {hosts}',
             timeout=self.timeout,
             retry=0,
         )
-        stress_cmd = f'{self.stress_cmd} {ssl_config} {datacenter} -q -- {hosts} '
+        stress_cmd = f'{self.stress_cmd} {ssl_config} {auth_config} {datacenter} -q -- {hosts} '
 
         return stress_cmd
 
@@ -219,4 +224,3 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         return {}
         # TODOs:
         # 1) take back the report workload..3.0.8.p128.t1.c1.20231025.220812.json
-        # 2) support user/password
