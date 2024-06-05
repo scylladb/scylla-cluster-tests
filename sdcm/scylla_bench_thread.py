@@ -109,8 +109,9 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout, stress_num=stress_num,
                          node_list=node_list, round_robin=round_robin, params=params,
                          stop_test_on_failure=stop_test_on_failure)
-        if credentials and 'username=' not in self.stress_cmd:
-            self.stress_cmd += " -username {} -password {}".format(*credentials)
+        if credentials := self.loader_set.get_db_auth():
+            if 'username=' not in self.stress_cmd:
+                self.stress_cmd += " -username {} -password {}".format(*credentials)
 
         if not any(opt in self.stress_cmd for opt in ('-error-at-row-limit', '-error-limit')):
             result = re.search(r"-retry-number[= ]+(\d+) ", self.stress_cmd)
