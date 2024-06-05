@@ -31,7 +31,7 @@ pytestmark = [
     ],
 )
 def test_01_scylla_bench(request, docker_scylla, params, extra_cmd):
-    loader_set = LocalLoaderSetDummy()
+    loader_set = LocalLoaderSetDummy(params=params)
     if extra_cmd == "cloud-config":
         params["k8s_connection_bundle_file"] = "/home/fruch/Downloads/k8s_config.yaml"
         docker_scylla.parent_cluster.params = params
