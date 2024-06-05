@@ -53,7 +53,7 @@ def prom_address():
 
 
 @pytest.fixture(name='docker_scylla', scope='function')
-def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=too-many-locals
+def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: disable=too-many-locals
     docker_scylla_args = {}
     if test_marker := request.node.get_closest_marker("docker_scylla_args"):
         docker_scylla_args = test_marker.kwargs
@@ -66,8 +66,8 @@ def fixture_docker_scylla(request: pytest.FixtureRequest):  # pylint: disable=to
     entryfile_path = entryfile_path / 'docker' / 'scylla-sct' / ('entry_ssl.sh' if ssl else 'entry.sh')
 
     alternator_flags = "--alternator-port 8000 --alternator-write-isolation=always"
-    docker_version = docker_scylla_args.get('image', "scylladb/scylla-nightly:5.5.0-dev-0.20240213.314fd9a11f23")
-    cluster = LocalScyllaClusterDummy()
+    docker_version = docker_scylla_args.get('image', "scylladb/scylla-nightly:6.1.0-dev-0.20240605.2c3f7c996f98")
+    cluster = LocalScyllaClusterDummy(params=params)
 
     if ssl:
         curr_dir = os.getcwd()
@@ -135,7 +135,12 @@ def fixture_params(request: pytest.FixtureRequest):
 
     os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
     params = sct_config.SCTConfiguration()  # pylint: disable=attribute-defined-outside-init
-
+    params.update(dict(
+        authenticator='PasswordAuthenticator',
+        authenticator_user='cassandra',
+        authenticator_password='cassandra',
+        authorizer='CassandraAuthorizer',
+    ))
     yield params
 
     for k in os.environ:
