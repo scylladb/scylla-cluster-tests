@@ -132,3 +132,13 @@ ssh -i ~/.ssh/scylla-qa-ec2 ubuntu@44.192.58.53
 # this would clear all of the dockers used by monitoring stack that are currently running
 docker rm -f -v $(docker ps --filter name=agraf\|aprom\|aalert -a -q)
 ```
+
+## How can I upload a relevant log file that was missed by SCT and report it to Argus?
+
+The command `upload` provides such functionality:
+
+```bash
+hydra upload --test-id <uuid> path/to/file
+```
+
+In case you don't want to report to Argus / Argus is missing the test run for this id you can use `--no-use-argus` to skip that part.
