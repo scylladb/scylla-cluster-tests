@@ -97,6 +97,7 @@ from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_g
 from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.test_config import TestConfig
+from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 from sdcm.utils.version_utils import (
     assume_version,
     get_gemini_version,
@@ -1465,6 +1466,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     scylla_debug_file = self.copy_scylla_debug_info(obj["node"], obj["debug_file"])
                 output = self.decode_raw_backtrace(scylla_debug_file, " ".join(event.raw_backtrace.split('\n')))
                 event.backtrace = output.stdout
+                the_map = FindIssuePerBacktrace()
+                if issue_url := the_map.find_issue(backtrace_type=event.type, decoded_backtrace=event.backtrace):
+                    event.known_issue = issue_url
+                    self.log.debug("Found issue for %s event: %s", event.event_id, event.known_issue)
             except queue.Empty:
                 pass
             except Exception as details:  # pylint: disable=broad-except
