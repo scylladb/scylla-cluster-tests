@@ -3865,9 +3865,12 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
                 current_setup_thread.start()
             while len(setup_results) != len(node_list):
                 verify_node_setup_or_startup(start_time, setup_queue, setup_results)
-            # startup serially
+            # startup
             for node in node_list:
-                node_startup(node, startup_queue)
+                if cl_inst.parallel_startup:
+                    threading.Thread(target=node_startup, args=(node, startup_queue), daemon=True).start()
+                else:
+                    node_startup(node, startup_queue)
             while len(startup_results) != len(node_list):
                 verify_node_setup_or_startup(start_time, startup_queue, startup_results)
             # Check DB nodes for UN
@@ -3905,6 +3908,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.test_config = TestConfig()
         self._node_cycle = None
         self.params = kwargs.get('params', {})
+        self.parallel_node_operations = self.params.get("parallel_node_operations") or False
         super().__init__(*args, **kwargs)
 
     def get_node_ips_param(self, public_ip=True):
@@ -3919,6 +3923,22 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def get_rack_nodes(self, rack: int) -> list:
         return sorted([node for node in self.nodes if node.rack == rack], key=lambda n: n.name)
+
+    @cached_property
+    def parallel_startup(self):
+        parallel_startup = False
+        if self.parallel_node_operations:
+            node = self.nodes[0]
+            if node.is_enterprise:
+                parallel_startup = ComparableScyllaVersion(node.scylla_version) >= "2024.2.0~dev"
+            else:
+                parallel_startup = ComparableScyllaVersion(node.scylla_version) >= "6.0.0"
+        if parallel_startup:
+            LOGGER.info("Starting nodes in parallel")
+        else:
+            LOGGER.info("Starting nodes sequentially")
+
+        return parallel_startup
 
     @cached_property
     def proposed_scylla_yaml(self) -> ScyllaYaml:
@@ -4982,6 +5002,10 @@ class BaseLoaderSet():
                 self.log.error("Error get gemini version: %s", details)
         return self._gemini_version
 
+    @property
+    def parallel_startup(self):
+        return False
+
     def node_setup(self, node, verbose=False, **kwargs):  # pylint: disable=unused-argument
         # pylint: disable=too-many-statements,too-many-branches
 
@@ -5202,6 +5226,10 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         self._sct_dashboard_json_file = None
         self.test_config = TestConfig()
         self.monitor_id = monitor_id or self.test_config.test_id()
+
+    @property
+    def parallel_startup(self):
+        return False
 
     @cached_property
     def is_formal_monitor_image(self):
