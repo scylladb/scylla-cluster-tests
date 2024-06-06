@@ -102,7 +102,6 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
-    scylla.remoter.run('apt-get update')
     wait.wait_for(func=db_up, step=1, text='Waiting for DB services to be up', timeout=120, throw_exc=True)
     wait.wait_for(func=db_alternator_up, step=1, text='Waiting for DB services to be up alternator)',
                   timeout=120, throw_exc=True)
