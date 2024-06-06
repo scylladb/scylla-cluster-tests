@@ -141,10 +141,10 @@ def install_syslogng_service():
             else
                 cat /etc/apt/sources.list
                 for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
-                    if apt-get -y update 2>&1 | tee /tmp/syslog_ng_install.output || grep NO_PUBKEY \
-        /tmp/syslog_ng_install.output; then
+                    if apt-get -y update ; then
                         break
                     fi
+                    sleep 0.5
                 done
 
                 for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
