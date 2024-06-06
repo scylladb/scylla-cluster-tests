@@ -666,7 +666,12 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                           'ycsb': 'scylladb/something_else',
                           'kcl': 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC',
                           'harry': 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816',
+<<<<<<< HEAD
                           'latte': 'scylladb/hydra-loaders:latte-rust1_73-20231025'})
+=======
+                          'latte': 'scylladb/hydra-loaders:latte-0.25.2-scylladb',
+                          'cql-stress-cassandra-stress': 'docker.io/scylladb/hydra-loaders:cql-stress-cassandra-stress-20240606'})
+>>>>>>> bfae0fe6 (feature(cql-stress): update to latest version)
 
         self.assertEqual(conf.get('stress_image.gemini'), 'scylladb/hydra-loaders:gemini-v1.8.6')
         self.assertEqual(conf.get('stress_image.non-exist'), None)
