@@ -35,7 +35,8 @@ gemini_cmd: "gemini -d --duration 2h \
 --max-mutation-retries 5 --max-mutation-retries-backoff 500ms \
 --async-objects-stabilization-attempts 5 --async-objects-stabilization-backoff 500ms \
 --replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}\" \
---table-options \"cdc={'enabled': true}\" --test-username cassandra --test-password cassandra"
+--test-username cassandra --test-password cassandra"
+
 gemini_seed: 66
 
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
