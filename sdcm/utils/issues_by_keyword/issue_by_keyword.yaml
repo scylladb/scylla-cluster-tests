@@ -1,0 +1,12 @@
+REACTOR_STALLED: # event type
+  - keyword: row_cache::upgrade_entry
+    issue: https://github.com/scylladb/scylladb/issues/2577
+
+  - keyword: partition_entry::upgrade
+    issue: https://github.com/scylladb/scylladb/issues/2577
+
+  - keyword: utils::uleb64_express_encode
+    issue: https://github.com/scylladb/scylladb/issues/8828
+
+  - keyword: logalloc::region_impl::object_descriptor::encode stalls
+    issue: https://github.com/scylladb/scylladb/issues/8828
