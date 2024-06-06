@@ -446,6 +446,7 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
         self.backtrace = None
         self.raw_backtrace = None
         self.subcontext = []
+        self.known_issue = None
 
         self._ready_to_publish: bool = False  # set it to True in `.add_info()'
 
@@ -497,6 +498,8 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
             fmt += " line_number={0.line_number}"
         if self.node is not None:
             fmt += " node={0.node}"
+        if self.known_issue:
+            fmt += " known_issue={0.known_issue}"
         if self.line is not None:
             fmt += "\n{0.line}"
         if self.backtrace:
