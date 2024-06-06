@@ -5484,10 +5484,10 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         if node.distro.is_ubuntu:
             node.remoter.run(f'sed -i "s/python3/python3.6/g" {self.monitor_install_path}/*.py')
 
-    def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # pylint: disable=too-many-locals
+    def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # pylint: disable=too-many-locals,too-many-branches
         cloud_prom_bearer_token = self.params.get('cloud_prom_bearer_token')
 
-        if sct_metrics:
+        if sct_metrics and not self.params.get("reuse_cluster"):
             temp_dir = tempfile.mkdtemp()
             template_fn = "prometheus.yml.template"
             prometheus_yaml_template = os.path.join(self.monitor_install_path, "prometheus", template_fn)
@@ -5498,17 +5498,32 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             with open(local_template_tmp, encoding="utf-8") as output_file:
                 templ_yaml = yaml.safe_load(output_file)
                 self.log.debug("Configs %s" % templ_yaml)
-            loader_targets_list = ["[%s]:9100" % getattr(node, self.DB_NODES_IP_ADDRESS)
-                                   for node in self.targets["loaders"].nodes]
 
-            # remove those jobs if exists, for support of 'reuse_cluster: true'
-            def remove_sct_metrics(metric):
-                return metric['job_name'] not in ['stress_metrics', 'sct_metrics']
-            templ_yaml["scrape_configs"] = list(filter(remove_sct_metrics, templ_yaml["scrape_configs"]))
+            loader_targets_per_dc = {}
+            for loader in self.targets["loaders"].nodes:
+                if loader.region not in loader_targets_per_dc:
+                    loader_targets_per_dc[loader.region] = {"targets": [], "labels": {"dc": loader.region}}
+                loader_targets_per_dc[loader.region]["targets"].append(
+                    f"{normalize_ipv6_url(getattr(loader, self.DB_NODES_IP_ADDRESS))}:9100")
+
+            def update_scrape_configs(base_scrape_configs, static_config_list, job_name="node_exporter"):
+                for i, scrape_config in enumerate(base_scrape_configs):
+                    # NOTE: monitoring-4.7 expects that node export metrics are part of exactly the "node_export" job
+                    if scrape_config.get("job_name", "unknown") != job_name:
+                        continue
+                    if "static_configs" not in base_scrape_configs[i]:
+                        base_scrape_configs[i]["static_configs"] = []
+                    base_scrape_configs[i]["static_configs"] += static_config_list
+                    break
+                else:
+                    base_scrape_configs.append({
+                        "job_name": "node_exporter",
+                        "honor_labels": True,
+                        "static_configs": static_config_list,
+                    })
 
             scrape_configs = templ_yaml["scrape_configs"]
-            scrape_configs.append(dict(job_name="stress_metrics", honor_labels=True,
-                                       static_configs=[dict(targets=loader_targets_list)]))
+            update_scrape_configs(scrape_configs, list(loader_targets_per_dc.values()))
 
             if cloud_prom_bearer_token:
                 cloud_prom_path = self.params.get('cloud_prom_path')
@@ -5532,12 +5547,13 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                                            static_configs=[dict(targets=graphite_exporter_target_list)]))
 
             if self.sct_ip_port:
-                scrape_configs.append(dict(job_name="sct_metrics", honor_labels=True,
-                                           static_configs=[dict(targets=[self.sct_ip_port])]))
+                sct_targets = [{"targets": [self.sct_ip_port], "labels": {"dc": "sct-runner"}}]
+                update_scrape_configs(scrape_configs, sct_targets)
             with open(local_template, "w", encoding="utf-8") as output_file:
                 yaml.safe_dump(templ_yaml, output_file, default_flow_style=False)  # to remove tag !!python/unicode
             node.remoter.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True)
 
+            self.log.debug("Updated prometheus config: %s", templ_yaml)
             LOCALRUNNER.run(f"rm -rf {temp_dir}", ignore_status=True)
 
         self.reconfigure_scylla_monitoring()
@@ -5599,25 +5615,49 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
     @retrying(n=5, sleep_time=10, allowed_exceptions=(Failure, UnexpectedExit),
               message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
+        scylla_targets_per_dc = {}
+        node_export_targets_per_dc = {}
+        node_export_targets_per_dc = {"sct-runner": {
+            "labels": {"dc": "sct-runner"}, "targets": [f'{normalize_ipv6_url(get_my_ip())}:9100'],
+        }}
+        for db_node in self.targets["db_cluster"].nodes:
+            if db_node.region not in scylla_targets_per_dc:
+                scylla_targets_per_dc[db_node.region] = []
+            if db_node.region not in node_export_targets_per_dc:
+                node_export_targets_per_dc[db_node.region] = {"labels": {"dc": db_node.region}, "targets": []}
+            db_node_as_target = f"{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}"
+            scylla_targets_per_dc[db_node.region].append(db_node_as_target)
+
+            # NOTE: DB host node metrics
+            node_export_targets_per_dc[db_node.region]["targets"].append(db_node_as_target)
+            # NOTE: DB node syslog-ng metrics
+            node_export_targets_per_dc[db_node.region]["targets"].append(
+                f'{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}:9577')
+        # NOTE: per-dc metrics get configured like the following:
+        #       genconfig.py ... -dc dc1:192.168.1.1,192.168.1.2 -dc dc2:192.168.2.1,192.168.2.2
+        scylla_targets = ""
+        for region, targets_list in scylla_targets_per_dc.items():
+            targets = ",".join(targets_list)
+            scylla_targets += f"-dc {region}:{targets} "
+
         for node in self.nodes:
-            monitoring_targets = []
-            syslog_ng_stats_targets = []
-            for db_node in self.targets["db_cluster"].nodes:
-                monitoring_targets.append(f"{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}")
-                syslog_ng_stats_targets += [f'{normalize_ipv6_url(getattr(db_node, self.DB_NODES_IP_ADDRESS))}:9577']
-            monitoring_targets = " ".join(monitoring_targets)
+            if "monitor" not in node_export_targets_per_dc:
+                node_export_targets_per_dc["monitor"] = {"labels": {"dc": "monitor"}, "targets": []}
+            node_export_targets_per_dc["monitor"]["targets"].append(
+                f'{normalize_ipv6_url(node.private_ip_address)}:9100')
+
+        for node in self.nodes:
             node.remoter.run(shell_script_cmd(f"""\
                 cd {self.monitor_install_path}
                 mkdir -p {self.monitoring_conf_dir}
                 export PATH=/usr/local/bin:$PATH  # hack to enable running on docker
-                python3 genconfig.py -s -n -d {self.monitoring_conf_dir} {monitoring_targets}
+                python3 genconfig.py -s -n -d {self.monitoring_conf_dir} {scylla_targets}
             """), verbose=True)
 
             with node._remote_yaml(f'{self.monitoring_conf_dir}/node_exporter_servers.yml', sudo=False) as exporter_yaml:  # pylint: disable=protected-access
-                exporter_yaml[0]['targets'] += [f'{normalize_ipv6_url(node.private_ip_address)}:9100']
-                exporter_yaml[0]['targets'] += syslog_ng_stats_targets
-                exporter_yaml[0]['targets'] += [f'{normalize_ipv6_url(get_my_ip())}:9100']
-                exporter_yaml[0]['targets'] = list(set(exporter_yaml[0]['targets']))  # remove duplicates
+                exporter_yaml.clear()
+                for dc_data in node_export_targets_per_dc.values():
+                    exporter_yaml.append(dc_data)
 
             if self.params.get("cloud_prom_bearer_token"):
                 node.remoter.run(shell_script_cmd(f"""\
