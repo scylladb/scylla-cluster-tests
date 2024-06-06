@@ -50,7 +50,7 @@ from invoke import Result
 from invoke.exceptions import UnexpectedExit, Failure
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
-from cassandra.cluster import Cluster as ClusterDriver  # pylint: disable=no-name-in-module
+from cassandra.cluster import Cluster as ClusterDriver, Session  # pylint: disable=no-name-in-module
 from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-module
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy
@@ -4951,6 +4951,57 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         self.log.info("DB nodes CPU modes: %s", results)
         return results
+
+    @staticmethod
+    def get_supported_features(session: Session) -> list[str]:
+        """
+        helper function to get supported_features from a running cluster,
+        if you need from a specific node use `patient_exclusive_cql_connection` session
+        """
+        result = session.execute("SELECT supported_features FROM system.local WHERE key='local'").one()
+        # NOTE: since row_factory can be different on different tests, we need to support multiple options
+        if isinstance(result, dict):
+            result = result["supported_features"]
+        elif isinstance(result, tuple):
+            result = result[0]
+        else:
+            raise NotImplementedError(f"unsupported row_factory={session.row_factory}")
+        return result.split(",")
+
+    @staticmethod
+    def get_enabled_features(session: Session) -> list[str]:
+        """
+        helper function to get supported_features from a running cluster,
+        if you need from a specific node use `patient_exclusive_cql_connection` session
+        """
+        result = session.execute("SELECT value FROM system.scylla_local WHERE key='enabled_features'").one()
+        # NOTE: since row_factory can be different on different tests, we need to support multiple options
+        if isinstance(result, dict):
+            result = result["value"]
+        elif isinstance(result, tuple):
+            result = result[0]
+        else:
+            raise NotImplementedError(f"unsupported row_factory={session.row_factory}")
+        return result.split(",")
+
+    def call_read_barrier(self, node: BaseNode):
+        """ Verify all raft commits applied on node
+
+        Any schema/topology changes are committed with Raft on node. Before
+        change is written to node, raft checks that all previous schema/
+        topology changes were applied. Raft triggers read_barrier on node, and
+        node applies all previous changes(commits) before new schema/operation
+        write will be applied. After read barrier finished, it guarantees that
+        node has all schema/topology changes, which was done in cluster before
+        read_barrier started on node.
+        To issue a read barrier it is sufficient to attempt dropping a
+        non-existing table. We need to use `if exists`, otherwise the statement
+        would fail on prepare/validate step which happens before a read barrier is
+        performed
+
+        """
+        with self.cql_connection_patient(node) as session:  # pylint: disable=no-member
+            session.execute("DROP TABLE IF EXISTS noexist_ks.noexist_cf;")
 
 
 class BaseLoaderSet():
