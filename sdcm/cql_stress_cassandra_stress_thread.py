@@ -97,6 +97,13 @@ class CqlStressCassandraStressThread(CassandraStressThread):
             stress_cmd = re.sub(r' seq=[\s]*([\d]+\.\.[\d]+)',
                                 r" 'dist=SEQ(\1)'", stress_cmd)
 
+        credentials = self.loader_set.get_db_auth()
+        if credentials and 'user=' not in stress_cmd:
+            if '-mode' in stress_cmd:
+                # put the credentials into the right place into -mode section
+                stress_cmd = re.sub(r'(-mode.*?)(-)?', r'\1 user={} password={} \2'.format(*credentials), stress_cmd)
+            else:
+                stress_cmd += ' -mode user={} password={} '.format(*credentials)
         stress_cmd = self.adjust_cmd_node_option(stress_cmd, loader, cmd_runner)
         return stress_cmd
 

@@ -27,12 +27,12 @@ pytestmark = [
 
 
 def test_01_cql_stress_cassandra_stress(request, docker_scylla, prom_address, params):
-    loader_set = LocalLoaderSetDummy()
+    loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
         """cql-stress-cassandra-stress write cl=ONE duration=1m """
         """-schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) """
-        """compaction(strategy=SizeTieredCompactionStrategy)' """
+        """compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 """
         """-rate threads=10 -pop seq=1..10000000"""
     )
 
@@ -68,7 +68,7 @@ def test_01_cql_stress_cassandra_stress(request, docker_scylla, prom_address, pa
 
 
 def test_02_cql_stress_cassandra_stress_multi_region(request, docker_scylla, params):
-    loader_set = LocalLoaderSetDummy()
+    loader_set = LocalLoaderSetDummy(params=params)
     loader_set.test_config.set_multi_region(True)
     request.addfinalizer(
         lambda: loader_set.test_config.set_multi_region(False))
