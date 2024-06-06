@@ -7590,7 +7590,7 @@
         "steppedLine": false,
         "targets": [
           {
-          "expr": "avg(irate(scylla_scheduler_runtime_ms{group=~\"sl:.*\"} [30s] )) by (group, instance)",
+          "expr": "avg(irate(scylla_scheduler_runtime_ms{group=~\"sl:.*\", dc=~\"$dc\"} [30s] )) by (dc, group, instance)",
           "format": "time_series",
           "interval": "15s",
           "intervalFactor": 1,
@@ -7742,7 +7742,7 @@
             "datasource": "prometheus",
             "editorMode": "code",
             "exemplar": false,
-            "expr": "increase(syslog_ng_destination_messages_processed_total[10m])",
+            "expr": "increase(syslog_ng_destination_messages_processed_total{dc=~\"$dc\"}[10m])",
             "format": "time_series",
             "instant": false,
             "intervalFactor": 1,
@@ -7753,7 +7753,7 @@
           {
             "datasource": "prometheus",
             "editorMode": "code",
-            "expr": "increase(syslog_ng_destination_messages_dropped_total[10m])",
+            "expr": "increase(syslog_ng_destination_messages_dropped_total{dc=~\"$dc\"}[10m])",
             "format": "time_series",
             "intervalFactor": 1,
             "legendFormat": "Dropped {{instance}}",
