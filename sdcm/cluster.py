@@ -156,8 +156,6 @@ from sdcm.exceptions import (
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
 SCYLLA_DIR = "/var/lib/scylla"
-TEST_USER = 'scylla-test'
-INSTALL_DIR = f"/home/{TEST_USER}/scylladb"
 
 DB_LOG_PATTERN_RESHARDING_START = "(?i)database - Resharding"
 DB_LOG_PATTERN_RESHARDING_FINISH = "(?i)storage_service - Restarting a node in NORMAL"
@@ -574,6 +572,11 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         return _distro
 
     @cached_property
+    def offline_install_dir(self) -> Path:
+        home = Path(self.remoter.run("echo $HOME").stdout.strip())
+        return home / 'scylladb'
+
+    @cached_property
     def is_nonroot_install(self):
         return self.parent_cluster.params.get("unified_package") \
             and self.parent_cluster.params.get("nonroot_offline_install")
@@ -703,7 +706,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def extract_seeds_from_scylla_yaml(self):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'), 'scylla.yaml')
         wait.wait_for(func=self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml', timeout=300,
-                      throw_exc=True, src=self.add_install_prefix(SCYLLA_YAML_PATH), dst=yaml_dst_path)
+                      throw_exc=True, src=str(self.add_install_prefix(SCYLLA_YAML_PATH)), dst=yaml_dst_path)
         with open(yaml_dst_path, encoding="utf-8") as yaml_stream:
             try:
                 conf_dict = yaml.safe_load(yaml_stream)
@@ -2354,7 +2357,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def journalctl(self):
         return self.wrap_cmd_with_permission('journalctl')
 
-    def add_install_prefix(self, abs_path):
+    def add_install_prefix(self, abs_path) -> Path:
         """
         nonroot install included all files inside a install root directory,
         it's different with root install.
@@ -2363,15 +2366,15 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if not self.is_nonroot_install:
             return abs_path
         checklist = {
-            SCYLLA_YAML_PATH: f'{INSTALL_DIR}{SCYLLA_YAML_PATH}',
-            SCYLLA_PROPERTIES_PATH: f'{INSTALL_DIR}{SCYLLA_PROPERTIES_PATH}',
-            '/etc/scylla.d/io.conf': f'{INSTALL_DIR}/etc/scylla.d/io.conf',
-            '/usr/bin/scylla': f'{INSTALL_DIR}/bin/scylla',
-            '/usr/bin/nodetool': f'{INSTALL_DIR}/share/cassandra/bin/nodetool',
-            '/usr/bin/cqlsh': f'{INSTALL_DIR}/share/cassandra/bin/cqlsh',
-            '/usr/bin/cassandra-stress': f'{INSTALL_DIR}/share/cassandra/bin/cassandra-stress',
+            SCYLLA_YAML_PATH: self.offline_install_dir / SCYLLA_YAML_PATH[1:],
+            SCYLLA_PROPERTIES_PATH: self.offline_install_dir / SCYLLA_PROPERTIES_PATH[1:],
+            '/etc/scylla.d/io.conf': self.offline_install_dir / 'etc/scylla.d/io.conf',
+            '/usr/bin/scylla': self.offline_install_dir / 'bin/scylla',
+            '/usr/bin/nodetool': self.offline_install_dir / 'share/cassandra/bin/nodetool',
+            '/usr/bin/cqlsh': self.offline_install_dir / 'share/cassandra/bin/cqlsh',
+            '/usr/bin/cassandra-stress': self.offline_install_dir / 'share/cassandra/bin/cassandra-stress',
         }
-        return checklist.get(abs_path, INSTALL_DIR + abs_path)
+        return checklist.get(abs_path, self.offline_install_dir / abs_path)
 
     def _service_cmd(self, service_name: str, cmd: str, timeout: int = 500, ignore_status=False):
         cmd = f'{self.systemctl} {cmd} {service_name}.service'
@@ -4535,17 +4538,17 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def scylla_configure_non_root_installation(self, node, devname):
         node.stop_scylla_server(verify_down=False)
-        node.remoter.run(f'{INSTALL_DIR}/sbin/scylla_setup --nic {devname} --no-raid-setup',
+        node.remoter.run(f'{node.offline_install_dir}/sbin/scylla_setup --nic {devname} --no-raid-setup',
                          verbose=True, ignore_status=True)
         # simple config
         node.remoter.run(
-            f"echo 'cluster_name: \"{self.name}\"' >> {INSTALL_DIR}/etc/scylla/scylla.yaml")  # pylint: disable=no-member
+            f"echo 'cluster_name: \"{self.name}\"' >> {node.offline_install_dir}/etc/scylla/scylla.yaml")  # pylint: disable=no-member
         node.remoter.run(
-            f"sed -ie 's/- seeds: .*/- seeds: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
+            f"sed -ie 's/- seeds: .*/- seeds: {node.ip_address}/g' {node.offline_install_dir}/etc/scylla/scylla.yaml")
         node.remoter.run(
-            f"sed -ie 's/^listen_address: .*/listen_address: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
+            f"sed -ie 's/^listen_address: .*/listen_address: {node.ip_address}/g' {node.offline_install_dir}/etc/scylla/scylla.yaml")
         node.remoter.run(
-            f"sed -ie 's/^rpc_address: .*/rpc_address: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
+            f"sed -ie 's/^rpc_address: .*/rpc_address: {node.ip_address}/g' {node.offline_install_dir}/etc/scylla/scylla.yaml")
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches,too-many-statements,too-many-locals
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
