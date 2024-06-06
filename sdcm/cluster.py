@@ -1995,6 +1995,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         # https://github.com/scylladb/scylla-jmx/issues/127
         if self.distro.is_amazon2:
             self.remoter.sudo('amazon-linux-extras install java-openjdk11')
+        elif self.distro.is_amazon2023:
+            self.install_package(package_name="java-11-amazon-corretto-headless")
         elif self.distro.is_rhel_like:
             self.install_package(package_name='java-11-openjdk-headless')
         elif self.distro.is_sles:
