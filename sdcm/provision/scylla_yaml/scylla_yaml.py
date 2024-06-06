@@ -339,6 +339,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     audit_categories: str = None  # None
     audit_tables: str = None  # None
     audit_keyspaces: str = None  # None
+    enable_tablets: bool = None  # False, but default scylla.yaml sets to true in some versions
 
     compaction_collection_items_count_warning_threshold: int = None  # None
 

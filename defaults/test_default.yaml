@@ -71,7 +71,7 @@ email_subject_postfix: ''
 collect_logs: false
 
 hinted_handoff: 'disabled'
-parallel_node_operations: false  # supported from Scylla 6.0
+parallel_node_operations: true  # supported from Scylla 6.0
 
 server_encrypt: false
 client_encrypt: false
@@ -216,7 +216,7 @@ stress_image:
   kcl: 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'
   harry: 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816'
   latte: 'scylladb/hydra-loaders:latte-0.25.2-scylladb'
-  cql-stress-cassandra-stress: 'scylladb/hydra-loaders:cql-stress-cassandra-stress-20240119'
+  cql-stress-cassandra-stress: 'scylladb/hydra-loaders:cql-stress-cassandra-stress-20240606'
 
 service_level_shares: [1000]
 
