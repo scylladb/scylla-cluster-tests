@@ -655,9 +655,25 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
+<<<<<<< HEAD
         stress_image = conf.get('stress_image')
         self.assertEqual(stress_image['ndbench'], 'scylladb/hydra-loaders:ndbench-jdk8-A')
         self.assertEqual(stress_image['nosqlbench'], 'scylladb/hydra-loaders:nosqlbench-A')
+=======
+        self.assertEqual(conf.get('stress_image'),
+                         {'alternator-dns': 'scylladb/hydra-loaders:alternator-dns-0.1',
+                          'cassandra-stress': 'scylla-bench',
+                          'cdc-stresser': 'scylladb/hydra-loaders:cdc-stresser-A',
+                          'gemini': 'scylladb/hydra-loaders:gemini-v1.8.6',
+                          'ndbench': 'scylladb/hydra-loaders:ndbench-jdk8-A',
+                          'nosqlbench': 'scylladb/hydra-loaders:nosqlbench-A',
+                          'scylla-bench': 'scylladb/something',
+                          'ycsb': 'scylladb/something_else',
+                          'kcl': 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC',
+                          'harry': 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816',
+                          'latte': 'scylladb/hydra-loaders:latte-0.25.2-scylladb',
+                          'cql-stress-cassandra-stress': 'docker.io/scylladb/hydra-loaders:cql-stress-cassandra-stress-20240606'})
+>>>>>>> bfae0fe6 (feature(cql-stress): update to latest version)
 
         self.assertEqual(conf.get('stress_image.scylla-bench'), 'scylladb/something')
         self.assertEqual(conf.get('stress_image.non-exist'), None)
