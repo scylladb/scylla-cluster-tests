@@ -13,11 +13,13 @@
 
 import unittest
 import re
+from pathlib import Path
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.database import \
     DatabaseLogEvent, FullScanEvent, IndexSpecialColumnErrorEvent, TOLERABLE_REACTOR_STALL, SYSTEM_ERROR_EVENTS
+from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 
 
 class TestDatabaseLogEvent(unittest.TestCase):
@@ -63,6 +65,16 @@ class TestDatabaseLogEvent(unittest.TestCase):
         self.assertEqual(event2.node, "n2")
         self.assertEqual(event2.line, f"{TOLERABLE_REACTOR_STALL} ms")
         self.assertEqual(event2.line_number, 2)
+
+    def test_find_issue_by_reactor_stall(self):
+        with Path(__file__).parent.joinpath("test_data/reactor_stalls_with_known_issue.log").open(encoding="utf-8") as sct_log:
+            backtrace = sct_log.readlines()
+
+        find_issue_obj = FindIssuePerBacktrace()
+        event = DatabaseLogEvent.REACTOR_STALLED().add_info("node4", "Reactor stalled for 45 ms", 1)
+        issue_url = find_issue_obj.find_issue(backtrace_type=event.type, decoded_backtrace="\n".join(backtrace))
+        event.known_issue = issue_url
+        self.assertEqual(event.known_issue, "https://github.com/scylladb/scylladb/issues/8828")
 
     def test_kernel_callstack_severity(self):
         event1 = DatabaseLogEvent.KERNEL_CALLSTACK()
