@@ -26,7 +26,6 @@ from datetime import datetime
 import boto3
 
 from invoke import exceptions
-from pkg_resources import parse_version
 
 from sdcm import mgmt
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
@@ -251,13 +250,7 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
         number_of_nodes = self.params.get("n_db_nodes")
         number_of_loaders = self.params.get("n_loaders")
 
-        scylla_version = self.db_cluster.nodes[0].scylla_version
-        if parse_version(scylla_version).release[0] == 2019:
-            # Making sure scylla version is 2019.1.x
-            throttle_per_node = 10666
-        else:
-            throttle_per_node = 14666
-
+        throttle_per_node = 14666
         throttle_per_loader = int(throttle_per_node * number_of_nodes / number_of_loaders)
         stress_cmd = stress_cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader))
         stress_thread = self.run_stress_thread(stress_cmd=stress_cmd)
