@@ -23,6 +23,7 @@ import time
 import re
 
 from collections import OrderedDict
+from functools import cached_property
 from uuid import UUID
 
 from cassandra import InvalidRequest
@@ -32,9 +33,11 @@ from cassandra.protocol import ProtocolException  # pylint: disable=no-name-in-m
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.database_query_utils import fetch_all_rows
-from sdcm.utils.decorators import retrying
+from sdcm.utils.decorators import retrying, optional_cached_property
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
 from sdcm.utils.version_utils import ComparableScyllaVersion
+from sdcm.utils.features import is_tablets_feature_enabled
+from sdcm.utils.issues import SkipPerIssues
 
 
 LOGGER = logging.getLogger(__name__)
@@ -51,8 +54,6 @@ class FillDatabaseData(ClusterTester):
     NULL_VALUES_SUPPORT_ENTERPRISE_MIN_VERSION = "2021.1.3"
     NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION = "4.4.rc0"
     NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_ENTERPRISE_MIN_VERSION = "2021.1.dev"
-    CDC_SUPPORT_MIN_VERSION = "4.3"
-    CDC_SUPPORT_MIN_ENTERPRISE_VERSION = "2021.1.dev"
 
     base_ks = "keyspace_fill_db_data"
     # List of dictionaries for all items tables and their data
@@ -3030,11 +3031,13 @@ class FillDatabaseData(ClusterTester):
             return match.groupdict()["table_name"]
         return None
 
-    @staticmethod
-    def cql_create_simple_tables(session, rows):
+    def cql_create_simple_tables(self, session, rows):
         """ Create tables for truncate test """
-        create_query = "CREATE TABLE IF NOT EXISTS truncate_table%d (my_id int PRIMARY KEY, col1 int, value int) " \
-            "with cdc = {'enabled': true, 'ttl': 0}"
+        create_query = "CREATE TABLE IF NOT EXISTS truncate_table%d (my_id int PRIMARY KEY, col1 int, value int) "
+        # Cannot create CDC log for a table,
+        # because keyspace uses tablets.See issue  scylladb/scylladb#16317.
+        if self.enable_cdc_for_tables:
+            create_query += "with cdc = {'enabled': true, 'ttl': 0}"
         for i in range(rows):
             session.execute(create_query % i)
             # Added sleep after each created table
@@ -3117,7 +3120,9 @@ class FillDatabaseData(ClusterTester):
                 self.all_verification_items[test_num]['skip_condition'] = True
                 with self._execute_and_log(f'Created tables for test "{test_name}" in {{}} seconds'):
                     for create_table in item['create_tables']:
-                        if self.version_cdc_support():
+                        # Cannot create CDC log for a table keyspace_fill_db_data.order_by_with_in_test,
+                        # because keyspace uses tablets. See issue scylladb/scylladb#16317.
+                        if self.enable_cdc_for_tables:
                             create_table = self._enable_cdc(item, create_table)  # noqa: PLW2901
                         # wait a while before creating index, there is a delay of create table for
                         # waiting the schema agreement
@@ -3172,12 +3177,17 @@ class FillDatabaseData(ClusterTester):
             version_with_support = self.NON_FROZEN_SUPPORT_OS_MIN_VERSION
         return self.parsed_scylla_version >= version_with_support
 
-    def version_cdc_support(self):
-        if self.is_enterprise:
-            version_with_support = self.CDC_SUPPORT_MIN_ENTERPRISE_VERSION
-        else:
-            version_with_support = self.CDC_SUPPORT_MIN_VERSION
-        return self.parsed_scylla_version >= version_with_support
+    @cached_property
+    def enable_cdc_for_tables(self) -> bool:
+        if self.tablets_enabled and SkipPerIssues(issues="https://github.com/scylladb/scylladb/issues/16317", params=self.params):
+            return False
+        return True
+
+    @cached_property
+    def tablets_enabled(self) -> bool:
+        """Check is tablets enabled on cluster"""
+        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+            return is_tablets_feature_enabled(session)
 
     @retrying(n=3, sleep_time=20, allowed_exceptions=ProtocolException)
     def truncate_table(self, session, truncate):  # pylint: disable=no-self-use
