@@ -1,1 +1,1 @@
-scylladb/hydra-loaders:cql-stress-cassandra-stress-20240119
+docker.io/scylladb/hydra-loaders:cql-stress-cassandra-stress-20240606
