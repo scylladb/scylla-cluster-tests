@@ -356,6 +356,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self.upgradesstables_if_command_available(node)
             InfoEvent(message='upgrade_node - ended to "upgradesstables_if_command_available"').publish()
 
+        self.db_cluster.wait_all_nodes_un()
+
     @truncate_entries
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
     def rollback_node(self, node, upgrade_sstables=True):
@@ -456,6 +458,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         if upgrade_sstables:
             self.upgradesstables_if_command_available(node)
+
+        self.db_cluster.wait_all_nodes_un()
 
     @staticmethod
     def upgradesstables_if_command_available(node, queue=None):  # pylint: disable=invalid-name
