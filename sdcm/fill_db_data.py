@@ -33,7 +33,7 @@ from cassandra.protocol import ProtocolException  # pylint: disable=no-name-in-m
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.database_query_utils import fetch_all_rows
-from sdcm.utils.decorators import retrying, optional_cached_property
+from sdcm.utils.decorators import retrying
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
 from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.utils.features import is_tablets_feature_enabled
