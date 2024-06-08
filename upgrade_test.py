@@ -41,6 +41,7 @@ from sdcm.utils.version_utils import (
     get_node_supported_sstable_versions,
     ComparableScyllaVersion,
     is_enterprise,
+    get_node_enabled_sstable_version
 )
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import (
@@ -480,10 +481,16 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         :return:
         """
-        output = []
+        enabled_sstable_format_features = []
         for node in self.db_cluster.nodes:
-            output.extend(get_node_supported_sstable_versions(node.system_log))
-        return max(set(output))
+            enabled_sstable_format_features.extend(get_node_supported_sstable_versions(node.system_log))
+
+        if not enabled_sstable_format_features:
+            for node in self.db_cluster.nodes:
+                with self.db_cluster.cql_connection_patient_exclusive(node) as session:
+                    enabled_sstable_format_features.extend(get_node_enabled_sstable_version(session))
+
+        return max(set(enabled_sstable_format_features))
 
     def wait_for_sstable_upgrade(self, node, queue=None):
         all_tables_upgraded = True

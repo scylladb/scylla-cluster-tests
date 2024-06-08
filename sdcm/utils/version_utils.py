@@ -34,6 +34,7 @@ from sdcm.remote import LOCALRUNNER
 from sdcm.utils.common import ParallelObject, DEFAULT_AWS_REGION
 from sdcm.sct_events.system import ScyllaRepoEvent
 from sdcm.utils.decorators import retrying
+from sdcm.utils.features import get_enabled_features
 
 # Examples of ScyllaDB version strings:
 #   - 666.development-0.20200205.2816404f575
@@ -71,6 +72,7 @@ SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
 ARGUS_VERSION_RE = re.compile(r'((?P<short>[\w.~]+)-(0\.)?(?P<date>[0-9]{8,8})\.(?P<commit>\w+).*)')
 SCYLLA_VERSION_GROUPED_RE = re.compile(r'(?P<version>[\w.~]+)-(?P<build>0|rc\d)?\.?(?P<date>[\d]+)\.(?P<commit_id>\w+)')
 SSTABLE_FORMAT_VERSION_REGEX = re.compile(r'Feature (.*)_SSTABLE_FORMAT is enabled')
+ENABLED_SSTABLE_FORMAT_VERSION_REGEXP = re.compile(r'(.*)_SSTABLE_FORMAT')
 PRIMARY_XML_GZ_REGEX = re.compile(r'="(.*?primary.xml.gz)"')
 
 # Example of output for `systemctl --version' command:
@@ -453,6 +455,15 @@ def get_node_supported_sstable_versions(node_system_log) -> List[str]:
             if match := SSTABLE_FORMAT_VERSION_REGEX.search(line):
                 output.append(match.group(1).lower())
     return output
+
+
+def get_node_enabled_sstable_version(session) -> list[str]:
+    enabled_sstable_format_features = []
+    all_features = get_enabled_features(session)
+    for feature in all_features:
+        if match := ENABLED_SSTABLE_FORMAT_VERSION_REGEXP.search(feature):
+            enabled_sstable_format_features.append(match.group(1).lower())
+    return enabled_sstable_format_features
 
 
 def get_systemd_version(output: str) -> int:
