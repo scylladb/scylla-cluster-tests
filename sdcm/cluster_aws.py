@@ -66,6 +66,8 @@ LOCAL_CMD_RUNNER = LocalCmdRunner()
 EBS_VOLUME = "attached"
 INSTANCE_STORE = "instance_store"
 
+SPOT_TERMINATION_CHECK_DELAY = 0
+
 P = ParamSpec("P")  # pylint: disable=invalid-name
 R = TypeVar("R")  # pylint: disable=invalid-name
 
@@ -556,21 +558,24 @@ class AWSNode(cluster.BaseNode):
             result = self.remoter.run(
                 'curl http://169.254.169.254/latest/meta-data/spot/instance-action', verbose=False)
             status = result.stdout.strip()
+
+            if '404 - Not Found' in status:
+                return SPOT_TERMINATION_CHECK_DELAY
+
+            if status.strip():
+                self.log.warning('Got spot termination notification from AWS %s', status)
+                terminate_action = json.loads(status)
+                terminate_action_timestamp = time.mktime(datetime.strptime(
+                    terminate_action['time'], "%Y-%m-%dT%H:%M:%SZ").timetuple())
+                next_check_delay = terminate_action['time-left'] = terminate_action_timestamp - time.time()
+                SpotTerminationEvent(node=self, message=terminate_action).publish()
+
+                return max(next_check_delay - SPOT_TERMINATION_CHECK_OVERHEAD, 0)
+
         except Exception as details:  # pylint: disable=broad-except
             self.log.warning('Error during getting spot termination notification %s', details)
-            return 0
 
-        if '404 - Not Found' in status:
-            return 0
-
-        self.log.warning('Got spot termination notification from AWS %s', status)
-        terminate_action = json.loads(status)
-        terminate_action_timestamp = time.mktime(datetime.strptime(
-            terminate_action['time'], "%Y-%m-%dT%H:%M:%SZ").timetuple())
-        next_check_delay = terminate_action['time-left'] = terminate_action_timestamp - time.time()
-        SpotTerminationEvent(node=self, message=terminate_action).publish()
-
-        return max(next_check_delay - SPOT_TERMINATION_CHECK_OVERHEAD, 0)
+        return SPOT_TERMINATION_CHECK_DELAY
 
     @property
     def is_data_device_lost_after_reboot(self) -> bool:
