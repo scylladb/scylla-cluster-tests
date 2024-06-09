@@ -2358,7 +2358,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         return self._service_cmd(service_name=service_name, cmd='status', timeout=timeout, ignore_status=ignore_status)
 
     def is_service_exists(self,  service_name: str, timeout: int = 500) -> bool:
-        return self.remoter.run(f"systemctl list-unit-files | grep {service_name}.service",
+        return self.remoter.run(f"{self.systemctl} list-unit-files | grep {service_name}.service",
                                 timeout=timeout, ignore_status=True).return_code == 0
 
     def start_service(self, service_name: str, timeout: int = 500, ignore_status=False):
