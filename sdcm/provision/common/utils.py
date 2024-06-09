@@ -135,8 +135,8 @@ def install_syslogng_service():
         elif apt-get --help 2>/dev/null 1>&2 ; then
             if dpkg-query --show syslog-ng ; then
                 rm /etc/syslog-ng/syslog-ng.conf  # Make sure we have default syslog-ng.conf
-                apt-get purge -y syslog-ng*
-                DPKG_FORCE=confmiss apt-get --reinstall -y install syslog-ng
+                apt-get purge -o DPkg::Lock::Timeout=300 -y syslog-ng*
+                DPKG_FORCE=confmiss apt-get --reinstall -o DPkg::Lock::Timeout=300 -y install syslog-ng
                 SYSLOG_NG_INSTALLED=1
             else
                 cat /etc/apt/sources.list
