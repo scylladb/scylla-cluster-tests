@@ -2032,6 +2032,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 # Reload the env variables by ssh reconnect
                 self.remoter.run('env', verbose=True, change_context=True)
                 assert 'XDG_RUNTIME_DIR' in self.remoter.run('env', verbose=True).stdout
+
+            self.remoter.run('mkdir -p $HOME/.config/systemd/user', verbose=True)
+
             if package_version < packaging.version.parse('3'):
                 install_cmds = dedent("""
                     tar xvfz ./unified_package.tar.gz
