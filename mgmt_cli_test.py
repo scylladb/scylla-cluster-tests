@@ -200,30 +200,31 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
         if restore_schema:
             self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
 
-    def run_verification_read_stress(self):
+    def run_verification_read_stress(self, ks_names=None):
         stress_queue = []
         stress_cmd = self.params.get('stress_read_cmd')
         keyspace_num = self.params.get('keyspace_num')
         InfoEvent(message='Starting read stress for data verification').publish()
         stress_start_time = datetime.now()
-        self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
+        if ks_names:
+            self.assemble_and_run_all_stress_cmd_by_ks_names(stress_queue, stress_cmd, ks_names)
+        else:
+            self.assemble_and_run_all_stress_cmd(stress_queue, stress_cmd, keyspace_num)
         for stress in stress_queue:
             self.verify_stress_thread(cs_thread_pool=stress)
         stress_run_time = datetime.now() - stress_start_time
         InfoEvent(message=f'The read stress run was completed. Total run time: {stress_run_time}').publish()
 
-    def _generate_load(self, keyspace_name_to_replace=None):
+    def _generate_load(self, keyspace_name: str = None):
         self.log.info('Starting c-s write workload')
         stress_cmd = self.params.get('stress_cmd')
-        if keyspace_name_to_replace:
-            stress_cmd = stress_cmd.replace("keyspace1", keyspace_name_to_replace)
-        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd)
+        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, keyspace_name=keyspace_name)
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
         return stress_thread
 
-    def generate_load_and_wait_for_results(self, keyspace_name_to_replace=None):
-        load_thread = self._generate_load(keyspace_name_to_replace=keyspace_name_to_replace)
+    def generate_load_and_wait_for_results(self, keyspace_name: str = None):
+        load_thread = self._generate_load(keyspace_name=keyspace_name)
         load_results = load_thread.get_results()
         self.log.info(f'load={load_results}')
 
