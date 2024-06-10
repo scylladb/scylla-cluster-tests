@@ -2,6 +2,9 @@
 
 set -eo pipefail
 
+# make sure the call to get_username.py doesn't import any local modules
+export PYTHONSAFEPATH=true
+
 CMD=$@
 DOCKER_ENV_DIR=$(readlink -f "$0")
 DOCKER_ENV_DIR=$(dirname "${DOCKER_ENV_DIR}")
