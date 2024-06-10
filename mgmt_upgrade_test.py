@@ -106,7 +106,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                 f"Unknown failure in task {rerunning_backup_task.id}"
 
         with self.subTest("Creating a backup task and stopping it"):
-            self.generate_load_and_wait_for_results(keyspace_name_to_replace="keyspace2")
+            self.generate_load_and_wait_for_results(keyspace_name="keyspace2")
             legacy_args = "--force" if manager_tool.sctool.client_version.startswith("2.1") else None
             pausable_backup_task = mgr_cluster.create_backup_task(
                 cron=create_cron_list_from_timedelta(minutes=1),
