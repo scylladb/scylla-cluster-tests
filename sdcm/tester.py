@@ -80,6 +80,7 @@ from sdcm.utils.common import format_timestamp, wait_ami_available, update_certi
     make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, change_default_password
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
+from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
@@ -779,7 +780,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         :return:
         """
         n_db_nodes = str(self.params.get('n_db_nodes'))
-        return min([int(nodes_num) for nodes_num in n_db_nodes.split() if int(nodes_num) > 0])
+        min_nodes_dc = min([int(nodes_num) for nodes_num in n_db_nodes.split() if int(nodes_num) > 0])
+        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+            # In case tablets are enabled, it's better to set RF smaller than dc-nodes-number, so decommission is allowed.
+            return max([min_nodes_dc - 1, 1]) if is_tablets_feature_enabled(session) else min_nodes_dc
 
     @property
     def test_id(self):
