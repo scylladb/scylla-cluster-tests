@@ -43,6 +43,7 @@ from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_stream_mutation_fragments_errors
 from sdcm.utils.gce_utils import get_gce_storage_client
 from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.tablets.common import TabletsConfiguration
 from sdcm.exceptions import FilesNotCorrupted
 
 
@@ -173,21 +174,24 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
                             keyspace_and_table_list=keyspace_and_table_list)
 
     # pylint: disable=too-many-arguments
-    def verify_backup_success(self, mgr_cluster, backup_task, keyspace_name='keyspace1', tables_names=None,
+    def verify_backup_success(self, mgr_cluster, backup_task, ks_names: list = None, tables_names: list = None,
                               truncate=True, restore_data_with_task=False, timeout=None):
+        if ks_names is None:
+            ks_names = ['keyspace1']
         if tables_names is None:
             tables_names = ['standard1']
-        per_keyspace_tables_dict = {keyspace_name: tables_names}
+        ks_tables_map = {keyspace: tables_names for keyspace in ks_names}
         if truncate:
-            for table_name in tables_names:
-                self.log.info(f'running truncate on {keyspace_name}.{table_name}')
-                self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {keyspace_name}.{table_name}')
+            for ks, tables in ks_tables_map.items():
+                for table_name in tables:
+                    self.log.info(f'running truncate on {ks}.{table_name}')
+                    self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {ks}.{table_name}')
         if restore_data_with_task:
             self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
                                           timeout=timeout, restore_data=True)
         else:
             self.restore_backup_from_backup_task(mgr_cluster=mgr_cluster, backup_task=backup_task,
-                                                 keyspace_and_table_list=per_keyspace_tables_dict)
+                                                 keyspace_and_table_list=ks_tables_map)
 
     def restore_backup_with_task(self, mgr_cluster, snapshot_tag, timeout, restore_schema=False, restore_data=False,
                                  location_list=None):
@@ -342,7 +346,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.log.info("creating the table {} in the keyspace {}".format(table_name, keyspace_name))
         self.create_table(table_name, keyspace_name=keyspace_name)
 
-    def test_manager_sanity(self):
+    def test_manager_sanity(self, prepared_ks: bool = False, ks_names: list = None):
         """
         Test steps:
         1) Run the repair test.
@@ -350,11 +354,12 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         3) test_mgmt_cluster_healthcheck
         4) test_client_encryption
         """
-        self.generate_load_and_wait_for_results()
+        if not prepared_ks:
+            self.generate_load_and_wait_for_results()
         with self.subTest('Basic Backup Test'):
-            self.test_basic_backup()
+            self.test_basic_backup(ks_names=ks_names)
         with self.subTest('Restore Backup Test'):
-            self.test_restore_backup_with_task()
+            self.test_restore_backup_with_task(ks_names=ks_names)
         with self.subTest('Repair Multiple Keyspace Types'):
             self.test_repair_multiple_keyspace_types()
         with self.subTest('Mgmt Cluster CRUD'):
@@ -370,6 +375,26 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         with self.subTest('Client Encryption'):
             # Since this test activates encryption, it has to be the last test in the sanity
             self.test_client_encryption()
+
+    def test_manager_sanity_vnodes_tablets_cluster(self):
+        """
+        Test steps:
+        1) Create tablets keyspace and propagate some data.
+        2) Create vnodes keyspace and propagate some data.
+        3) Run sanity test (test_manager_sanity).
+        """
+        self.log.info('starting test_manager_sanity_vnodes_tablets_cluster')
+
+        ks_config = [("tablets_keyspace", True), ("vnodes_keyspace", False)]
+        ks_names = [i[0] for i in ks_config]
+        for ks_name, tablets_enabled in ks_config:
+            tablets_config = TabletsConfiguration(enabled=tablets_enabled)
+            self.create_keyspace(ks_name, replication_factor=3, tablets_config=tablets_config)
+            self.generate_load_and_wait_for_results(keyspace_name=ks_name)
+
+        self.test_manager_sanity(prepared_ks=True, ks_names=ks_names)
+
+        self.log.info('finishing test_manager_sanity_vnodes_tablets_cluster')
 
     def test_repair_intensity_feature_on_multiple_node(self):
         self._repair_intensity_feature(fault_multiple_nodes=True)
@@ -529,7 +554,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                     # self.populate_data_parallel()
         return table_name
 
-    def test_basic_backup(self):
+    def test_basic_backup(self, ks_names: list = None):
         self.log.info('starting test_basic_backup')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self._ensure_and_get_cluster(manager_tool)
@@ -537,25 +562,27 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
-        self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
-        self.run_verification_read_stress()
+        self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, ks_names=ks_names)
+        self.run_verification_read_stress(ks_names)
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_basic_backup')
 
-    def test_restore_backup_with_task(self):
+    def test_restore_backup_with_task(self, ks_names: list = None):
         self.log.info('starting test_restore_backup_with_task')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self._ensure_and_get_cluster(manager_tool)
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=["keyspace1"])
+        if not ks_names:
+            ks_names = ['keyspace1']
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=ks_names)
         backup_task_status = backup_task.wait_and_get_final_status(timeout=1500)
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         soft_timeout = 36 * 60
         hard_timeout = 50 * 60
         with adaptive_timeout(Operations.MGMT_REPAIR, self.db_cluster.nodes[0], timeout=soft_timeout):
-            self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, restore_data_with_task=True,
-                                       timeout=hard_timeout)
-        self.run_verification_read_stress()
+            self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, ks_names=ks_names,
+                                       restore_data_with_task=True, timeout=hard_timeout)
+        self.run_verification_read_stress(ks_names)
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_restore_backup_with_task')
 
