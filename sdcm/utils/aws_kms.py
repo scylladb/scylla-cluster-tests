@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
-from itertools import cycle
 import logging
 
 import botocore
@@ -92,19 +91,29 @@ class AwsKms:
                 self.create_kms_key(region_name)
 
     def get_next_kms_key(self, kms_key_alias_name, region_name):
-        # Create endless KMS keys iterator
-        if kms_key_alias_name not in self.mapping[region_name]['kms_keys_aliases']:
-            self.mapping[region_name]['kms_keys_aliases'][kms_key_alias_name] = cycle(
-                self.mapping[region_name]['kms_key_ids'])
+        key_alias_mapping = {}
+        for kms_key_id in self.mapping[region_name]["kms_key_ids"]:
+            current_aliases = self.mapping[region_name]["client"].list_aliases(KeyId=kms_key_id, Limit=999)["Aliases"]
+            key_alias_mapping[kms_key_id] = {"alias_names": [], "current_one": False, "alias_names_counter": 0}
+            for current_alias in current_aliases:
+                current_alias_name = current_alias["AliasName"]
+                if kms_key_alias_name == current_alias_name:
+                    key_alias_mapping[kms_key_id]["current_one"] = True
+                    # NOTE: no need to calculate aliases for the currently used KMS key
+                    break
+                key_alias_mapping[kms_key_id]["alias_names"].append(current_alias_name)
+                key_alias_mapping[kms_key_id]["alias_names_counter"] += 1
+        if not key_alias_mapping:
+            raise ValueError("No KMS keys for rotation found")
 
-        kms_key_id_candidate = next(self.mapping[region_name]['kms_keys_aliases'][kms_key_alias_name])
-        # Walk through the aliases of the KMS key candidate and check that our alias is not there
-        for alias in self.mapping[region_name]['client'].list_aliases(
-                KeyId=kms_key_id_candidate, Limit=999)['Aliases']:
-            if kms_key_alias_name == alias['AliasName']:
-                # Current KMS Key candidate is already assigned to the alias, so, return another one
-                return next(self.mapping[region_name]['kms_keys_aliases'][kms_key_alias_name])
-        # Current KMS Key candidate is not assigned to the alias, use it
+        # NOTE: return KMS key that is not currently used one and has fewer aliases.
+        kms_key_id_candidate, kms_key_candidate_aliases_counter = None, 0
+        for kms_key_id, kms_key_data in key_alias_mapping.items():
+            if kms_key_data["current_one"]:
+                continue
+            if not kms_key_id_candidate or kms_key_candidate_aliases_counter > kms_key_data["alias_names_counter"]:
+                kms_key_id_candidate = kms_key_id
+                kms_key_candidate_aliases_counter = kms_key_data["alias_names_counter"]
         return kms_key_id_candidate
 
     def create_alias(self, kms_key_alias_name, tolerate_already_exists=True):
