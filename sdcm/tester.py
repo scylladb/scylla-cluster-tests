@@ -103,6 +103,7 @@ from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
 from sdcm.utils.net import get_my_ip, get_sct_runner_ip
 from sdcm.utils.operations_thread import ThreadParams
 from sdcm.utils.replication_strategy_utils import LocalReplicationStrategy, NetworkTopologyReplicationStrategy
+from sdcm.utils.tablets.common import TabletsConfiguration
 from sdcm.utils.threads_and_processes_alive import gather_live_processes_and_dump_to_file, \
     gather_live_threads_and_dump_to_file
 from sdcm.utils.version_utils import (
@@ -2332,7 +2333,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                             session=session, keyspace_name=keyspace_name, throw_exc=False)
         return does_keyspace_exist
 
-    def create_keyspace(self, keyspace_name, replication_factor):
+    def create_keyspace(self, keyspace_name, replication_factor, tablets_config: Optional[TabletsConfiguration] = None):
         """
         If replication_factor is int, the all DC's will have the same replication factor, if 0, use LocalReplicationStrategy
         If replication_factor is dict, the keys are the DC's names and the values are the replication factor for each DC
@@ -2350,8 +2351,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             else:
                 replication_strategy = NetworkTopologyReplicationStrategy(**replication_factor)
 
-            execution_result = session.execute('CREATE KEYSPACE IF NOT EXISTS %s WITH replication=%s'
-                                               % (keyspace_name, str(replication_strategy)))
+            cmd = 'CREATE KEYSPACE IF NOT EXISTS %s WITH replication=%s' % (keyspace_name, str(replication_strategy))
+            if tablets_config:
+                cmd += ' AND TABLETS = %s' % tablets_config
+            execution_result = session.execute(cmd)
+
         if execution_result:
             self.log.debug("keyspace creation result: {}".format(execution_result.response_future))
         with self.db_cluster.cql_connection_patient(validation_node) as session:
