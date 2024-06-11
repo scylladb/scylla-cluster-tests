@@ -113,7 +113,7 @@ class GCENode(cluster.BaseNode):
         super().init()
 
     def wait_for_cloud_init(self):
-        if self.remoter.sudo('command -v cloud-init', ignore_status=True).ok:
+        if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:
             wait_cloud_init_completes(self.remoter, self)
 
     @cached_property
