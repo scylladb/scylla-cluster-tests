@@ -22,6 +22,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('availability_zone', 'b')}",
                description: 'Availability zone',
                name: 'availability_zone')
+            string(defaultValue: "${pipelineParams.get('k8s_version', '')}",
+                   description: 'K8S version to be used. Suitable for EKS and GKE, but not local K8S (KinD). '
+                   + 'In case of K8S platform upgrade it will be base one, target one will be automatically incremented. Example: "1.28"',
+                   name: 'k8s_version')
             string(defaultValue: "${pipelineParams.get('base_versions', '')}",
                    name: 'base_versions')
             string(defaultValue: "${pipelineParams.get('new_version', '')}",

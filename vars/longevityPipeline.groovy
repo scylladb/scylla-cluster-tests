@@ -116,6 +116,10 @@ def call(Map pipelineParams) {
                         'Example: "--maxfail=1" - it will stop test run after first failure.'),
                    name: 'pytest_addopts')
 
+            string(defaultValue: "${pipelineParams.get('k8s_version', '')}",
+                   description: 'K8S version to be used. Suitable for EKS and GKE, but not local K8S (KinD). '
+                   + 'In case of K8S platform upgrade it will be base one, target one will be automatically incremented. Example: "1.28"',
+                   name: 'k8s_version')
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', 'https://storage.googleapis.com/scylla-operator-charts/latest')}",
                    description: 'Scylla Operator helm repo',
                    name: 'k8s_scylla_operator_helm_repo')

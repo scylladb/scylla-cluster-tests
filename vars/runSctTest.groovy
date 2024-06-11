@@ -61,6 +61,11 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
         export SCT_NEW_VERSION="${params.new_version}"
     fi
 
+    if [[ -n "${params.k8s_version ? params.k8s_version : ''}" ]] ; then
+        export SCT_EKS_CLUSTER_VERSION="${params.k8s_version}"
+        export SCT_GKE_CLUSTER_VERSION="${params.k8s_version}"
+    fi
+
     if [[ -n "${params.k8s_scylla_operator_docker_image ? params.k8s_scylla_operator_docker_image : ''}" ]] ; then
         export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
     fi
