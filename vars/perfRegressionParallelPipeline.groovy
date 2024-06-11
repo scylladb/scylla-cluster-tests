@@ -81,6 +81,10 @@ def call(Map pipelineParams) {
                    description: 'Name of the test to run',
                    name: 'test_name')
 
+            string(defaultValue: "${pipelineParams.get('k8s_version', '')}",
+                   description: 'K8S version to be used. Suitable for EKS and GKE, but not local K8S (KinD). '
+                   + 'In case of K8S platform upgrade it will be base one, target one will be automatically incremented. Example: "1.28"',
+                   name: 'k8s_version')
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', 'https://storage.googleapis.com/scylla-operator-charts/latest')}",
                    description: 'Scylla Operator helm repo',
                    name: 'k8s_scylla_operator_helm_repo')
@@ -288,8 +292,6 @@ def call(Map pipelineParams) {
                                                             export SCT_UPDATE_DB_PACKAGES="${params.update_db_packages}"
                                                         fi
 
-
-
                                                         export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                         export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
                                                         export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
@@ -298,6 +300,10 @@ def call(Map pipelineParams) {
                                                         export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                                         export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
 
+                                                        if [[ -n "${params.k8s_version ? params.k8s_version : ''}" ]] ; then
+                                                            export SCT_EKS_CLUSTER_VERSION="${params.k8s_version}"
+                                                            export SCT_GKE_CLUSTER_VERSION="${params.k8s_version}"
+                                                        fi
                                                         if [[ -n "${params.k8s_scylla_operator_helm_repo ? params.k8s_scylla_operator_helm_repo : ''}" ]] ; then
                                                             export SCT_K8S_SCYLLA_OPERATOR_HELM_REPO=${params.k8s_scylla_operator_helm_repo}
                                                         fi
