@@ -5006,36 +5006,8 @@ class BaseLoaderSet():
             self.log.info("Don't install anything because bare loaders requested")
             return
 
-        if self.params.get('client_encrypt'):
-            node.config_client_encrypt()
-
-        # Install java-8 for workaround hdrhistogram
-        if node.distro.is_rhel_like:
-            node.install_package(package_name='java-1.8.0-openjdk-devel')
-            node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.*/jre/bin/java* /etc/alternatives/java",
-                              verbose=True, ignore_status=True)
-        else:
-            node.install_package(package_name='openjdk-8-jre')
-            node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-*/bin/java* /etc/alternatives/java",
-                              verbose=True, ignore_status=True)
-
-        result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         node.remoter.sudo("bash -cxe \"echo '*\t\thard\tcore\t\tunlimited\n*\t\tsoft\tcore\t\tunlimited' "
                           ">> /etc/security/limits.d/20-coredump.conf\"")
-        if result.exit_status == 0:
-            self.log.debug('Skip loader setup for using a prepared AMI')
-            return
-
-        elif node.distro.is_debian10 or node.distro.is_debian11:
-            node.install_package(package_name='openjdk-11-jre openjdk-11-jre-headless')
-
-        scylla_repo_loader = self.params.get('scylla_repo_loader')
-        if not scylla_repo_loader:
-            scylla_repo_loader = self.params.get('scylla_repo')
-        node.download_scylla_repo(scylla_repo_loader)
-        node.install_package(f'{node.scylla_pkg()}-tools')
-
-        node.wait_cs_installed(verbose=verbose)
 
         # install docker
         docker_install = dedent("""
@@ -5050,6 +5022,40 @@ class BaseLoaderSet():
 
         # Login to Docker Hub.
         docker_hub_login(remoter=node.remoter)
+
+        if not self.params.get("use_prepared_loaders"):
+            self.log.info("Don't install anything because prepared loaders requested")
+            return
+
+        if self.params.get('client_encrypt'):
+            node.config_client_encrypt()
+
+        # Install java-8 for workaround hdrhistogram
+        if node.distro.is_rhel_like:
+            node.install_package(package_name='java-1.8.0-openjdk-devel')
+            node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.*/jre/bin/java* /etc/alternatives/java",
+                              verbose=True, ignore_status=True)
+        else:
+            node.install_package(package_name='openjdk-8-jre')
+            node.remoter.sudo("ln -sf /usr/lib/jvm/java-1.8.0-openjdk-*/bin/java* /etc/alternatives/java",
+                              verbose=True, ignore_status=True)
+
+        result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
+
+        if result.exit_status == 0:
+            self.log.debug('Skip loader setup for using a prepared AMI')
+            return
+
+        elif node.distro.is_debian10 or node.distro.is_debian11:
+            node.install_package(package_name='openjdk-11-jre openjdk-11-jre-headless')
+
+        scylla_repo_loader = self.params.get('scylla_repo_loader')
+        if not scylla_repo_loader:
+            scylla_repo_loader = self.params.get('scylla_repo')
+        node.download_scylla_repo(scylla_repo_loader)
+        node.install_package(f'{node.scylla_pkg()}-tools')
+
+        node.wait_cs_installed(verbose=verbose)
 
     def node_startup(self, node, verbose=False, **kwargs):
         pass
