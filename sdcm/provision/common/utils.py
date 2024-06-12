@@ -192,3 +192,18 @@ def install_syslogng_exporter():
     systemctl enable syslog_ng_exporter.service
     systemctl start syslog_ng_exporter.service
 """)
+
+
+def disable_daily_apt_triggers():
+    return dedent("""\
+    if apt-get --help >/dev/null 2>&1 ; then
+        if [ ! -f /tmp/disable_daily_apt_triggers_done ]; then
+            rm -f /etc/apt/apt.conf.d/*unattended-upgrades /etc/apt/apt.conf.d/*auto-upgrades || true
+            rm -f /etc/apt/apt.conf.d/*periodic /etc/apt/apt.conf.d/*update-notifier || true
+            systemctl stop apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service || true
+            systemctl disable apt-daily.timer apt-daily-upgrade.timer apt-daily.service apt-daily-upgrade.service || true
+            apt-get remove -o DPkg::Lock::Timeout=300 -y unattended-upgrades update-manager || true
+            touch /tmp/disable_daily_apt_triggers_done
+        fi
+    fi
+    """)

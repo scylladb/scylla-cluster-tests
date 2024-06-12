@@ -63,6 +63,7 @@ from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
+from sdcm.provision.common.utils import disable_daily_apt_triggers
 from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder
 from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificateAttrBuilder
 from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
@@ -2947,21 +2948,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
     def disable_daily_triggered_services(self):
         if self.distro.uses_systemd and (self.distro.is_ubuntu or self.distro.is_debian):
-            LOGGER.debug("Disabling 'apt-daily' and 'apt-daily-upgrade' services...")
-            self.remoter.sudo('systemctl disable apt-daily.timer')
-            self.remoter.sudo('systemctl disable apt-daily-upgrade.timer')
-            self.remoter.sudo('systemctl disable apt-daily.service', ignore_status=True)
-            self.remoter.sudo('systemctl disable apt-daily-upgrade.service', ignore_status=True)
-            self.remoter.sudo('systemctl stop apt-daily.timer', ignore_status=True)
-            self.remoter.sudo('systemctl stop apt-daily-upgrade.timer', ignore_status=True)
-            self.remoter.sudo('systemctl stop apt-daily.service', ignore_status=True)
-            self.remoter.sudo('systemctl stop apt-daily-upgrade.service', ignore_status=True)
-            self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*unattended-upgrades', ignore_status=True)
-            self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*auto-upgrades', ignore_status=True)
-            self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*periodic', ignore_status=True)
-            self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*update-notifier', ignore_status=True)
-            self.remoter.sudo('apt-get remove -o DPkg::Lock::Timeout=300 -y unattended-upgrades', ignore_status=True)
-            self.remoter.sudo('apt-get remove -o DPkg::Lock::Timeout=300 -y update-manager', ignore_status=True)
+            self.remoter.sudo(shell_script_cmd(disable_daily_apt_triggers(), quote="'"))
 
     def get_nic_devices(self) -> List:
         """Returns list of ethernet network interfaces"""
@@ -4991,9 +4978,9 @@ class BaseLoaderSet():
         if node.distro.is_rhel_like:
             node.install_epel()
 
+        node.disable_daily_triggered_services()
         # update repo cache and system after system is up
         node.update_repo_cache()
-        node.disable_daily_triggered_services()
 
         if TestConfig().REUSE_CLUSTER:
             self.kill_stress_thread()
@@ -5292,6 +5279,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
     def node_setup(self, node, **kwargs):  # pylint: disable=unused-argument
         self.log.info('TestConfig in BaseMonitorSet')
         node.wait_ssh_up()
+        node.disable_daily_triggered_services()
         # update repo cache and system after system is up
         node.update_repo_cache()
         self.mgmt_auth_token = self.monitor_id  # pylint: disable=attribute-defined-outside-init
@@ -5302,7 +5290,6 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
             return
 
-        node.disable_daily_triggered_services()
         self.install_scylla_monitoring(node)
         self.configure_scylla_monitoring(node)
         try:

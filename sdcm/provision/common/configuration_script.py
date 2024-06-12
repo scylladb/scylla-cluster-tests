@@ -22,6 +22,7 @@ from sdcm.provision.common.utils import (
     restart_syslogng_service,
     configure_ssh_accept_rsa,
     install_syslogng_exporter,
+    disable_daily_apt_triggers,
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
@@ -74,6 +75,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 4. There is race condition between sct and boot script, disable ssh to mitigate it
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
         script = ''
+        script += disable_daily_apt_triggers()
         if self.logs_transport == 'syslog-ng':
             script += install_syslogng_service()
             script += configure_syslogng_target_script(
