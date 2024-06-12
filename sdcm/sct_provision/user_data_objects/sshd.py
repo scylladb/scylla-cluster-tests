@@ -26,6 +26,6 @@ class SshdUserDataObject(SctUserDataObject):
     @property
     def script_to_run(self) -> str:
         script = configure_sshd_script()
-        script = configure_ssh_accept_rsa()
+        script += configure_ssh_accept_rsa()
         script += restart_sshd_service()
         return script
