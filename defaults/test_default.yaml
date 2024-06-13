@@ -247,6 +247,10 @@ teardown_validators:
     timeout: 1200
     keyspace: ''
     table: ''
+  test_error_events:
+    enabled: false
+    failing_events:
+      - 'CoreDumpEvent'
 
 kafka_backend: null
 kafka_connectors: []
