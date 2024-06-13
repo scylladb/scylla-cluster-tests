@@ -249,6 +249,13 @@ teardown_validators:
     timeout: 1200
     keyspace: ''
     table: ''
+  test_error_events:
+    enabled: false
+    failing_events:
+      - event_class: DatabaseLogEvent
+        event_type: RUNTIME_ERROR
+        regex: '.*runtime_error.*'
+      - event_class: CoreDumpEvent
 
 run_scylla_doctor: false
 
