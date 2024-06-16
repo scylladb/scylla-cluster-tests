@@ -1,4 +1,5 @@
 import ast
+import logging
 import re
 
 from contextlib import ContextDecorator
@@ -8,16 +9,27 @@ from sdcm.utils.cql_utils import cql_quote_if_needed
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
 
+LOGGER = logging.getLogger(__name__)
+
 
 class ReplicationStrategy:  # pylint: disable=too-few-public-methods
 
     @classmethod
     def from_string(cls, replication_string):
-        replication_value = re.search(r".*replication[\s]*=[\s]*(\{.*\})", replication_string, flags=re.IGNORECASE)
+        # To solve the problem when another curly braces were added (tablets related).
+        # Example:
+        # CREATE KEYSPACE scylla_bench WITH replication = {'class': 'org.apache.cassandra.locator.SimpleStrategy',
+        # 'replication_factor': '1'} AND durable_writes = true AND tablets = {'enabled': false};
+        LOGGER.debug("Analyze replication string '%s'", replication_string)
+        replication_value = re.search(r".*replication[\s]=[\s](\{.*?\})", replication_string, flags=re.IGNORECASE)
+
         strategy_params = ast.literal_eval(replication_value[1])
         strategy_class = strategy_params.pop("class")
         for class_ in replication_strategies:
-            if strategy_class == class_.class_:
+            # To cover short and long class name, like:
+            #   - SimpleStrategy
+            #   - org.apache.cassandra.locator.SimpleStrategy
+            if strategy_class.endswith(class_.class_):
                 return class_(**strategy_params)
         raise ValueError(f"Couldn't find such replication strategy: {replication_value}")
 
