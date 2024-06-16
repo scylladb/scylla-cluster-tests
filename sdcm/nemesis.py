@@ -2520,24 +2520,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
              (*) The other available values of 'disabled' / 'immediate' are not tested by
              this nemesis since not applicable to a longevity test.
         """
-<<<<<<< HEAD
         if SkipPerIssues("https://github.com/scylladb/scylla-enterprise/issues/4082", self.tester.params):
             raise UnsupportedNemesis('Disabled due to https://github.com/scylladb/scylla-enterprise/issues/4082')
 
         all_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
 
-        if not all_ks_cfs:
-||||||| parent of ff1140673 (improvement(cluster): filter out keyspace by replication factor)
-        all_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
-
-        if not all_ks_cfs:
-=======
         # This nemesis can not be run on table with RF = 1:
         #   ConfigurationException: tombstone_gc option with mode = repair not supported for table with RF one or local replication strategy
         # We do not run tests with local strategy ({'class': 'org.apache.cassandra.locator.LocalStrategy'}), so I do not add this filter
         if not (all_ks_cfs := self.cluster.get_non_system_ks_cf_list(db_node=self.target_node,
                                                                      filter_func=self.cluster.is_ks_rf_one)):
->>>>>>> ff1140673 (improvement(cluster): filter out keyspace by replication factor)
             raise UnsupportedNemesis(
                 'Any table with RF != 1 is not found. disrupt_toggle_table_gc_mode nemesis can\'t run')
 
