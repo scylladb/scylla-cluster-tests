@@ -32,24 +32,10 @@ import ipaddress
 import shlex
 from decimal import Decimal, ROUND_UP
 from importlib import import_module
-<<<<<<< HEAD
-from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Literal
+from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Literal, Callable
 from datetime import datetime, timezone
-||||||| parent of ff1140673 (improvement(cluster): filter out keyspace by replication factor)
-from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr
-from datetime import datetime
-=======
-from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
-from datetime import datetime
->>>>>>> ff1140673 (improvement(cluster): filter out keyspace by replication factor)
 from textwrap import dedent
-<<<<<<< HEAD
-from functools import cached_property, wraps, partial
-||||||| parent of ff1140673 (improvement(cluster): filter out keyspace by replication factor)
-from functools import cached_property, wraps
-=======
-from functools import cached_property, wraps, lru_cache
->>>>>>> ff1140673 (improvement(cluster): filter out keyspace by replication factor)
+from functools import cached_property, wraps, partial, lru_cache
 from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -3256,12 +3242,6 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.coredumps = {}
         super().__init__()
 
-<<<<<<< HEAD
-||||||| parent of ff1140673 (improvement(cluster): filter out keyspace by replication factor)
-    def __str__(self):
-        return f"{self.__class__.__name__}:{self.name}"
-
-=======
     @lru_cache(maxsize=None)
     def get_keyspace_info(self, keyspace_name: str, db_node: BaseNode):  # pylint: disable=no-self-use
         replication_strategy = ReplicationStrategy.get(db_node, keyspace_name)
@@ -3271,7 +3251,6 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def __str__(self):
         return f"{self.__class__.__name__}:{self.name}"
 
->>>>>>> ff1140673 (improvement(cluster): filter out keyspace by replication factor)
     @cached_property
     def test_config(self) -> TestConfig:  # pylint: disable=no-self-use
         return TestConfig()

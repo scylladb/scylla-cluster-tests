@@ -31,7 +31,7 @@ class TestReplicationStrategies:
 
         # test regex match is case insensitive and white spaces insensitive
         strategy = ReplicationStrategy.from_string(
-            "replication  ={'class': 'SimpleStrategy', 'replication_factor' : 4}")
+            "replication = {'class': 'SimpleStrategy', 'replication_factor': 4}")
         assert isinstance(strategy, SimpleReplicationStrategy)
         assert str(strategy) == "{'class': 'SimpleStrategy', 'replication_factor': 4}"
 
@@ -43,9 +43,15 @@ class TestReplicationStrategies:
 
     def test_can_create_network_topology_replication_strategy_from_string_with_replication_factor(self):  # pylint: disable=no-self-use
         strategy = ReplicationStrategy.from_string(
-            "REPLICATION = { 'class' : 'NetworkTopologyStrategy', 'replication_factor' : 2,}")
+            "REPLICATION = { 'class' : 'NetworkTopologyStrategy', 'replication_factor' : 2}")
         assert isinstance(strategy, NetworkTopologyReplicationStrategy)
         assert str(strategy) == "{'class': 'NetworkTopologyStrategy', 'replication_factor': 2}"
+
+    def test_get_replication_startegy_from_string_with_few_curly_braces(self):  # pylint: disable=no-self-use
+        strategy = ReplicationStrategy.from_string(
+            "replication = {'class': 'org.apache.cassandra.locator.SimpleStrategy', 'replication_factor': '1'} "
+            "AND durable_writes = true AND tablets = {'enabled': false}")
+        assert str(strategy) == "{'class': 'SimpleStrategy', 'replication_factor': 1}"
 
     def test_cannot_create_network_topology_replication_strategy_without_replication_factor(self):  # pylint: disable=no-self-use
         with pytest.raises(ValueError):
