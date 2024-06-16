@@ -54,6 +54,7 @@ class DbLogReader(Process):
         '] storage_proxy - Exception when communicating with',
     ]
     # pylint: disable=too-many-arguments
+    BUILD_ID_REGEX = re.compile(r'build-id\s(.*?)\sstarting\s\.\.\.')
 
     def __init__(self,
                  system_log: str,
@@ -75,6 +76,7 @@ class DbLogReader(Process):
         self._last_log_position = 0
         self._remoter = remoter
         self._skipped_end_line = 0
+        self._build_id = None
         super().__init__(name=self.__class__.__name__, daemon=True)
 
     @cached_property
@@ -124,6 +126,10 @@ class DbLogReader(Process):
 
                     if json_log:
                         continue
+
+                    if match := self.BUILD_ID_REGEX.search(line):
+                        self._build_id = match.groups()[0]
+                        LOGGER.debug("Found build-id: %s", self._build_id)
 
                     match = BACKTRACE_RE.search(line)
                     one_line_backtrace = []
@@ -230,11 +236,7 @@ class DbLogReader(Process):
             self._last_error = backtrace['event']
 
     def get_scylla_build_id(self) -> str | None:
-        for scylla_executable in ("/usr/bin/scylla", "/opt/scylladb/libexec/scylla", ):
-            build_id_result = self._remoter.run(f"{scylla_executable} --build-id", ignore_status=True)
-            if build_id_result.ok:
-                return build_id_result.stdout.strip()
-        return None
+        return self._build_id
 
     def get_scylla_debuginfo_file(self):
         """
