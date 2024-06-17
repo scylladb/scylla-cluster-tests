@@ -300,15 +300,18 @@ class EC2NetworkConfiguration:
                 ec2_subnet_ids[region][availability_zone] = self.subnets_per_availability_zone(region=region,
                                                                                                aws_region=aws_region,
                                                                                                availability_zone=availability_zone)
+        LOGGER.debug("All ec2 subnet ids: %s", ec2_subnet_ids)
         return ec2_subnet_ids
 
     @property
     def subnets(self) -> List[list]:
-        ec2_subnet_ids = []
-        for region in self.subnets_per_region.values():
-            for az_subnets_id in region.values():
-                ec2_subnet_ids.append(az_subnets_id)
-        return ec2_subnet_ids
+        # Example:
+        # One region, 2 avalability zones, 2 network interfaces
+        # subnets_per_region = {'eu-central-1': {'a': ['subnet-085db77751694e2a6', 'subnet-03d8900174e00a73d'],
+        #                                        'b': ['subnet-084b1d12f9974e61f', 'subnet-094ed7c7c3bddd441']}}
+        # Will return:
+        #  [[['subnet-085db77751694e2a6', 'subnet-03d8900174e00a73d'], ['subnet-084b1d12f9974e61f', 'subnet-094ed7c7c3bddd441']]]
+        return [list(azs.values()) for azs in self.subnets_per_region.values()]
 
     def subnets_per_availability_zone(self, region: str, aws_region: AwsRegion, availability_zone: str) -> list:
         region_subnets = []

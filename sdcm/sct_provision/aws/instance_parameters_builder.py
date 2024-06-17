@@ -131,8 +131,10 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return self._ec2_network_configuration[0]
 
     def _network_interface_params(self, interface_index: int = 0):
+        LOGGER.debug("ec2_subnet_ids: %s; availability_zone: %s, interface_index: %s",
+                     self._ec2_subnet_ids, self.availability_zone, interface_index)
         return {
-            'SubnetId': self._ec2_subnet_ids[self.region_id][self.availability_zone + interface_index],  # pylint: disable=invalid-sequence-index
+            'SubnetId': self._ec2_subnet_ids[self.region_id][self.availability_zone][interface_index],  # pylint: disable=invalid-sequence-index
             'Groups': self._ec2_security_group_ids[self.region_id],  # pylint: disable=invalid-sequence-index
         }
 
