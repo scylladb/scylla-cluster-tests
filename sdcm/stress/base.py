@@ -52,7 +52,7 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         self.shutdown_timeout = 180  # extra 3 minutes
         self.stop_test_on_failure = stop_test_on_failure
 
-        if "k8s" not in self.params.get("cluster_backend") and self.docker_image_name:
+        if not ("k8s" in self.params.get("cluster_backend") or self.params.get('use_prepared_loaders')) and self.docker_image_name:
             for loader in self.loader_set.nodes:
                 RemoteDocker.pull_image(loader, self.docker_image_name)
 
