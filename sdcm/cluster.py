@@ -5520,8 +5520,10 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             for loader in self.targets["loaders"].nodes:
                 if loader.region not in loader_targets_per_dc:
                     loader_targets_per_dc[loader.region] = {"targets": [], "labels": {"dc": loader.region}}
-                loader_targets_per_dc[loader.region]["targets"].append(
-                    f"{normalize_ipv6_url(getattr(loader, self.DB_NODES_IP_ADDRESS))}:9100")
+                loader_ip_addr = getattr(loader, self.DB_NODES_IP_ADDRESS) or ""
+                if loader_ip_addr:
+                    loader_targets_per_dc[loader.region]["targets"].append(
+                        f"{normalize_ipv6_url(loader_ip_addr)}:9100")
 
             def update_scrape_configs(base_scrape_configs, static_config_list, job_name="node_exporter"):
                 for i, scrape_config in enumerate(base_scrape_configs):
