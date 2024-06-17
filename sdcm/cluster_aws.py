@@ -213,8 +213,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         interfaces_amount = network_interfaces_count(self.params)
         interfaces = []
         for i in range(interfaces_amount):
+            LOGGER.debug("SubnetId: %s, dc_idx: %s, az index: %s, interface index: %s",
+                         self._ec2_subnet_id, dc_idx, az_idx, i)
             interfaces.append({'DeviceIndex': i,
-                               'SubnetId': self._ec2_subnet_id[dc_idx][az_idx + i],
+                               'SubnetId': self._ec2_subnet_id[dc_idx][az_idx][i],
                                'Groups': self._ec2_security_group_ids[dc_idx]})
         self.log.debug("interfaces: '%s' - to create_instances", interfaces)
 
