@@ -101,6 +101,7 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                parse_nodetool_listsnapshots,
                                update_authenticator, ParallelObject,
                                ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table)
+from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.quota import configure_quota_on_node_for_scylla_user_context, is_quota_enabled_on_node, enable_quota_on_node, \
     write_data_to_reach_end_of_quota
 from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
@@ -993,6 +994,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 "Not supported on K8S. "
                 "Run 'disrupt_nodetool_flush_and_reshard_on_kubernetes' instead")
 
+        # If tablets in use, skipping resharding since it is not supported.
+        with self.cluster.cql_connection_patient(self.target_node) as session:
+            if is_tablets_feature_enabled(session=session):
+                if SkipPerIssues('https://github.com/scylladb/scylladb/issues/16739', params=self.tester.params):
+                    raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/16739')
+
         murmur3_partitioner_ignore_msb_bits = 15  # pylint: disable=invalid-name
         self.log.info(f'Restart node with resharding. New murmur3_partitioner_ignore_msb_bits value: '
                       f'{murmur3_partitioner_ignore_msb_bits}')
@@ -1380,6 +1387,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         #       so, pick up only one K8S cluster and only if it is EKS.
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('It is supported only on kubernetes')
+        # If tablets in use, skipping resharding since it is not supported.
+        with self.cluster.cql_connection_patient(self.target_node) as session:
+            if is_tablets_feature_enabled(session=session):
+                if SkipPerIssues('https://github.com/scylladb/scylladb/issues/16739', params=self.tester.params):
+                    raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/16739')
+
         dc_idx = 0
         for node in self.cluster.nodes:
             if hasattr(node.k8s_cluster, 'eks_cluster_version') and node.scylla_shards >= 7:
@@ -1660,9 +1673,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 system_log_follower = SstableLoadUtils.run_refresh(node, test_data=test_data[0])
                 # NOTE: resharding happens only if we have more than 1 core.
                 #       We may have 1 core in a K8S multitenant setup.
-                if shards_num > 1:
-                    SstableLoadUtils.validate_resharding_after_refresh(
-                        node=node, system_log_follower=system_log_follower)
+                # If tablets in use, skipping resharding validation since it doesn't work the same as vnodes
+                with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
+                    if shards_num > 1 and not is_tablets_feature_enabled(session=session):
+                        SstableLoadUtils.validate_resharding_after_refresh(
+                            node=node, system_log_follower=system_log_follower)
 
             # Verify that the special key is loaded by SELECT query
             result = self.target_node.run_cqlsh(query_verify)
