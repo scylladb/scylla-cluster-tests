@@ -5299,10 +5299,37 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             loader_targets_list = ["[%s]:9100" % getattr(node, self.DB_NODES_IP_ADDRESS)
                                    for node in self.targets["loaders"].nodes]
 
+<<<<<<< HEAD
             # remove those jobs if exists, for support of 'reuse_cluster: true'
             def remove_sct_metrics(metric):
                 return metric['job_name'] not in ['stress_metrics', 'sct_metrics']
             templ_yaml["scrape_configs"] = list(filter(remove_sct_metrics, templ_yaml["scrape_configs"]))
+=======
+            loader_targets_per_dc = {}
+            for loader in self.targets["loaders"].nodes:
+                if loader.region not in loader_targets_per_dc:
+                    loader_targets_per_dc[loader.region] = {"targets": [], "labels": {"dc": loader.region}}
+                loader_ip_addr = getattr(loader, self.DB_NODES_IP_ADDRESS) or ""
+                if loader_ip_addr:
+                    loader_targets_per_dc[loader.region]["targets"].append(
+                        f"{normalize_ipv6_url(loader_ip_addr)}:9100")
+
+            def update_scrape_configs(base_scrape_configs, static_config_list, job_name="node_exporter"):
+                for i, scrape_config in enumerate(base_scrape_configs):
+                    # NOTE: monitoring-4.7 expects that node export metrics are part of exactly the "node_export" job
+                    if scrape_config.get("job_name", "unknown") != job_name:
+                        continue
+                    if "static_configs" not in base_scrape_configs[i]:
+                        base_scrape_configs[i]["static_configs"] = []
+                    base_scrape_configs[i]["static_configs"] += static_config_list
+                    break
+                else:
+                    base_scrape_configs.append({
+                        "job_name": "node_exporter",
+                        "honor_labels": True,
+                        "static_configs": static_config_list,
+                    })
+>>>>>>> fa51b3bf (fix(k8s): make monitoring setup not fail when loaders have no IP addrs)
 
             scrape_configs = templ_yaml["scrape_configs"]
             scrape_configs.append(dict(job_name="stress_metrics", honor_labels=True,
