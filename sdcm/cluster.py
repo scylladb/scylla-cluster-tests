@@ -40,6 +40,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from contextlib import ExitStack, contextmanager
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import packaging.version
 
 import yaml
@@ -3343,17 +3344,10 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         if node_list is None:
             node_list = self.nodes
 
-        _queue = queue.Queue()
-        for node in node_list:
-            setup_thread = threading.Thread(target=func, args=(node, _queue), daemon=True)
-            setup_thread.start()
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(func, node) for node in node_list]
+            results = [future.result() for future in as_completed(futures)]
 
-        results = []
-        while len(results) != len(node_list):
-            try:
-                results.append(_queue.get(block=True, timeout=5))
-            except queue.Empty:
-                pass
         return results
 
     def get_backtraces(self):
@@ -4098,7 +4092,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def _update_db_binary(self, new_scylla_bin, node_list, start_service=True):
         self.log.debug('User requested to update DB binary...')
 
-        def update_scylla_bin(node, _queue):
+        def update_scylla_bin(node):
             node.log.info('Updating DB binary')
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
 
@@ -4118,18 +4112,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 chown root:root {binary_path}
                 chmod +x {binary_path}
             """))
-            _queue.put(node)
-            _queue.task_done()
 
-        def stop_scylla(node, _queue):
+        def stop_scylla(node):
             node.stop_scylla(verify_down=True, verify_up=False)
-            _queue.put(node)
-            _queue.task_done()
 
-        def start_scylla(node, _queue):
+        def start_scylla(node):
             node.start_scylla(verify_down=True, verify_up=True)
-            _queue.put(node)
-            _queue.task_done()
 
         start_time = time.time()
 
@@ -4161,7 +4149,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     severity=Severity.CRITICAL
                 ).publish()
 
-        def update_scylla_packages(node, _queue):
+        def update_scylla_packages(node):
             node.log.info('Updating DB packages')
             node.remoter.run('mkdir /tmp/scylla')
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
@@ -4193,18 +4181,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 dpkg_force_install()
                 node.log.info('Installed .deb packages after replacing with new .DEB files')
                 node.log.info(node.scylla_packages_installed)
-            _queue.put(node)
-            _queue.task_done()
 
-        def stop_scylla(node, _queue):
+        def stop_scylla(node):
             node.stop_scylla(verify_down=True, verify_up=False)
-            _queue.put(node)
-            _queue.task_done()
 
-        def start_scylla(node, _queue):
+        def start_scylla(node):
             node.start_scylla(verify_down=True, verify_up=True)
-            _queue.put(node)
-            _queue.task_done()
 
         start_time = time.time()
 
