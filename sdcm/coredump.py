@@ -21,6 +21,7 @@ from datetime import datetime
 from functools import cached_property
 from threading import Thread, Event
 from dataclasses import dataclass
+from pathlib import Path
 
 from sdcm.log import SDCMAdapter
 from sdcm.remote import NETWORK_EXCEPTIONS
@@ -211,7 +212,15 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                               "'%s' 'https://%s'" % (coredump, upload_url))
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
-        download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump.rsplit('/', 1)[-1])
+        download_instructions = f'gsutil cp gs://{upload_url} .'
+
+        coredump = Path(coredump)
+        if coredump.suffix == '.zst':
+            download_instructions += f'\nunzstd {coredump.name}'
+        elif coredump.suffix in ('.gzip', '.gz'):
+            download_instructions += f'\ngunzip {coredump.name}'
+        elif coredump.suffix == '.lz4':
+            download_instructions += f'\nunlz4 {coredump.name}'
         core_info.download_url, core_info.download_instructions = download_url, download_instructions
 
     def upload_coredump(self, core_info: CoreDumpInfo):
@@ -249,7 +258,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             raise RuntimeError("Distro is not supported")
 
     def _pack_coredump(self, coredump: str) -> str:
-        extensions = ['.lz4', '.zip', '.gz', '.gzip']
+        extensions = ['.lz4', '.zip', '.gz', '.gzip', '.zst']
         for extension in extensions:
             if coredump.endswith(extension):
                 return coredump
