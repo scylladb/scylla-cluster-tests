@@ -4164,6 +4164,15 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             _queue.put(node)
             _queue.task_done()
 
+        def get_scylla_version(node, _queue):
+            if not node.scylla_version:
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method='update_db_packages',
+                    message=f"Unable to get ScyllaDB version on {node.name} after DB packages update",
+                    severity=Severity.CRITICAL
+                ).publish()
+
         start_time = time.time()
 
         if len(node_list) == 1:
@@ -4186,6 +4195,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 self.run_func_parallel(func=start_scylla, node_list=self.seed_nodes)  # pylint: disable=no-member
                 # Start all non seed nodes
                 self.run_func_parallel(func=start_scylla, node_list=self.non_seed_nodes)  # pylint: disable=no-member
+
+        # Validate that Scylla is up after that db packages update
+        self.run_func_parallel(func=get_scylla_version, node_list=node_list)  # pylint: disable=no-member
 
         time_elapsed = time.time() - start_time
         self.log.debug('Update DB packages duration -> %s s', int(time_elapsed))
