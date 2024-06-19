@@ -389,9 +389,21 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         instance_dc = 0 if self.params.get("simulated_regions") else dc_idx
         # if simulated_racks, create all instances in the same az
         instance_az = 0 if self.params.get("simulated_racks") else rack
-        instances = self._create_or_find_instances(
-            count=count, ec2_user_data=ec2_user_data, dc_idx=instance_dc, az_idx=instance_az,
-            instance_type=instance_type)
+        instances = []
+        if rack is None:
+            # define how many nodes should be created on each rack, e.g. for 3 nodes and 2 racks it will be [2, 1]
+            base = count // self.racks_count
+            extra = count % self.racks_count
+            rack_distribution = [base + 1 if i < extra else base for i in range(self.racks_count)]
+        else:
+            # otherwise create all nodes on the specified rack
+            rack_distribution = [count if i == rack else 0 for i in range(self.racks_count)]
+        self.log.info('rack distribution: %s', rack_distribution)
+        for rack_idx, rack_count in enumerate(rack_distribution):
+            if rack_count == 0:
+                continue  # when provisioning fewer nodes than racks
+            instances.extend(self._create_or_find_instances(
+                count=rack_count, ec2_user_data=ec2_user_data, dc_idx=instance_dc, az_idx=rack_idx, instance_type=instance_type))
         for node_index, instance in enumerate(instances):
             self._node_index += 1
             # in case rack is not specified, spread nodes to different racks
