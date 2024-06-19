@@ -3976,6 +3976,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             LOGGER.info("Starting nodes in parallel")
         else:
             LOGGER.info("Starting nodes sequentially")
+            self.parallel_node_operations = False  # disable parallel operations regardless of test config
 
         return parallel_startup
 
