@@ -21,7 +21,7 @@ from enum import Enum
 
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR
+from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
 from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
 from sdcm.stress_thread import DockerBasedStressThread
@@ -160,11 +160,12 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                         cmd_runner.send_files(str(ssl_file),
                                               str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
                                               verbose=True)
-                stress_cmd = f'{stress_cmd.strip()} -tls -tls-ca-cert-file {SCYLLA_SSL_CONF_DIR}/ca.pem'
+                stress_cmd = f'{stress_cmd.strip()} -tls -tls-ca-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT}'
 
                 if self.params.get("client_encrypt_mtls"):
-                    stress_cmd = (f'{stress_cmd.strip()} -tls-client-key-file {SCYLLA_SSL_CONF_DIR}/test.key '
-                                  f'-tls-client-cert-file {SCYLLA_SSL_CONF_DIR}/test.crt')
+                    stress_cmd = (
+                        f'{stress_cmd.strip()} -tls-client-key-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY} '
+                        f'-tls-client-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT}')
 
                     # TBD: update after https://github.com/scylladb/scylla-bench/issues/140 is resolved
                     # server_names = ' '.join(f'-tls-server-name {ip}' for ip in ips.split(","))

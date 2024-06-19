@@ -16,6 +16,7 @@ import json
 import time
 import logging
 import datetime
+from pathlib import Path
 from re import findall
 from textwrap import dedent
 from statistics import mean
@@ -24,11 +25,12 @@ from distutils.version import LooseVersion
 
 import requests
 from invoke.exceptions import Failure as InvokeFailure
-from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 
+from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 from sdcm import wait
 from sdcm.mgmt.common import \
     TaskStatus, ScyllaManagerError, HostStatus, HostSsl, HostRestStatus, duration_to_timedelta, DEFAULT_TASK_TIMEOUT
+from sdcm.provision.helpers.certificate import TLSAssets
 from sdcm.utils.distro import Distro
 from sdcm.wait import WaitForTimeoutError
 
@@ -36,9 +38,9 @@ LOGGER = logging.getLogger(__name__)
 
 STATUS_DONE = 'done'
 STATUS_ERROR = 'error'
-SSL_CONF_DIR = '/tmp/ssl_conf'
-SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
-SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
+SSL_CONF_DIR = Path('/tmp/ssl_conf')
+SSL_USER_CERT_FILE = SSL_CONF_DIR / TLSAssets.CLIENT_CERT
+SSL_USER_KEY_FILE = SSL_CONF_DIR / TLSAssets.CLIENT_KEY
 REPAIR_TIMEOUT_SEC = 7200  # 2 hours
 
 

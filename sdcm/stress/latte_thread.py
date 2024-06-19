@@ -19,7 +19,7 @@ import logging
 from pathlib import Path
 
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR
+from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
 from sdcm.sct_events.loaders import LatteStressEvent
 from sdcm.utils.common import (
     FileFollowerThread,
@@ -116,9 +116,9 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                                           str(SCYLLA_SSL_CONF_DIR / ssl_file.name),
                                           verbose=True)
 
-            ssl_config += (f' --ssl --ssl-ca {SCYLLA_SSL_CONF_DIR}/ca.pem '
-                           f'--ssl-cert {SCYLLA_SSL_CONF_DIR}/test.crt '
-                           f'--ssl-key {SCYLLA_SSL_CONF_DIR}/test.key')
+            ssl_config += (f' --ssl --ssl-ca {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT} '
+                           f'--ssl-cert {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT} '
+                           f'--ssl-key {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY}')
         datacenter = ""
         if self.loader_set.test_config.MULTI_REGION:
             # The datacenter name can be received from "nodetool status" output. It's possible for DB nodes only,
