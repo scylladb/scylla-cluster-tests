@@ -70,7 +70,7 @@ from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuil
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.provision.helpers.certificate import (
     install_client_certificate, install_encryption_at_rest_files, create_certificate,
-    export_pem_cert_to_pkcs12_keystore, CA_CERT_FILE, CA_KEY_FILE, JKS_TRUSTSTORE_FILE)
+    export_pem_cert_to_pkcs12_keystore, CA_CERT_FILE, CA_KEY_FILE, JKS_TRUSTSTORE_FILE, TLSAssets)
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd, RetryableNetworkException
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
@@ -2268,8 +2268,11 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.download_scylla_manager_repo(manager_repo_url)
         self.install_package(package_names)
 
-        self.log.debug("Copying TLS files from data_dir to the node")
-        self.remoter.send_files(src="./data_dir/ssl_conf", dst="/tmp/")
+        self.log.debug("Create and send client TLS certificate/key to the node")
+        self.create_node_certificate(self.ssl_conf_dir / TLSAssets.CLIENT_CERT,
+                                     self.ssl_conf_dir / TLSAssets.CLIENT_KEY)
+        self.remoter.send_files(
+            str(self.ssl_conf_dir), dst='/tmp/ssl_conf')
 
         if self.is_docker():
             try:
@@ -3479,9 +3482,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         if ssl_context is None and self.params.get('client_encrypt'):
             if 'db' in node.node_type:
-                cert_name, key_name = "db.crt", "db.key"
+                cert_name, key_name = TLSAssets.DB_CERT, TLSAssets.DB_KEY
             else:
-                cert_name, key_name = "test.crt", "test.key"
+                cert_name, key_name = TLSAssets.CLIENT_CERT, TLSAssets.CLIENT_KEY
             ssl_context = self.create_ssl_context(
                 keyfile=node.ssl_conf_dir / key_name, certfile=node.ssl_conf_dir / cert_name, truststore=CA_CERT_FILE)
         self.log.debug("ssl_context: %s", str(ssl_context))
@@ -4611,9 +4614,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             SnitchConfig(node=node, datacenters=datacenters).apply()
 
         # Create node certificate for internode communication
-        node.create_node_certificate(node.ssl_conf_dir / 'db.crt', node.ssl_conf_dir / 'db.key')
+        node.create_node_certificate(node.ssl_conf_dir / TLSAssets.DB_CERT, node.ssl_conf_dir / TLSAssets.DB_KEY)
         # Create client facing node certificate, for client-to-node communication
-        node.create_node_certificate(node.ssl_conf_dir / 'client-facing.crt', node.ssl_conf_dir / 'client-facing.key')
+        node.create_node_certificate(
+            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY)
         for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
             shutil.copy(src, node.ssl_conf_dir)
         node.config_setup(append_scylla_args=self.get_scylla_args())
@@ -5047,12 +5051,14 @@ class BaseLoaderSet():
             self.log.info("Don't install anything because bare loaders requested")
             return
 
-        node.create_node_certificate(node.ssl_conf_dir / 'test.crt', node.ssl_conf_dir / 'test.key')
+        node.create_node_certificate(node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
+                                     node.ssl_conf_dir / TLSAssets.CLIENT_KEY)
         for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
             shutil.copy(src, node.ssl_conf_dir)
         if self.params.get('client_encrypt'):
-            export_pem_cert_to_pkcs12_keystore(node.ssl_conf_dir / 'test.crt', node.ssl_conf_dir / 'test.key',
-                                               node.ssl_conf_dir / 'keystore.p12')
+            export_pem_cert_to_pkcs12_keystore(
+                node.ssl_conf_dir / TLSAssets.CLIENT_CERT, node.ssl_conf_dir / TLSAssets.CLIENT_KEY,
+                node.ssl_conf_dir / TLSAssets.PKCS12_KEYSTORE)
             if self.params.get('use_prepared_loaders'):
                 node.config_client_encrypt()
 

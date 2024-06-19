@@ -14,6 +14,7 @@ import io
 import ipaddress
 import shutil
 import tarfile
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from textwrap import dedent
@@ -29,21 +30,37 @@ from sdcm.remote import shell_script_cmd
 from sdcm.utils.common import get_data_dir_path
 from sdcm.utils.docker_utils import ContainerManager, DockerException
 
+
+@dataclass(frozen=True)
+class TLSAssets:
+    CA_CERT: str = 'ca.pem'
+    CA_KEY: str = 'ca.key'
+    DB_CERT: str = 'db.crt'
+    DB_KEY: str = 'db.key'
+    DB_CSR: str = 'db.csr'
+    DB_CLIENT_FACING_CERT: str = 'client-facing.crt'
+    DB_CLIENT_FACING_KEY: str = 'client-facing.key'
+    CLIENT_CERT: str = 'test.crt'
+    CLIENT_KEY: str = 'test.key'
+    JKS_TRUSTSTORE: str = 'truststore.jks'
+    PKCS12_KEYSTORE: str = 'keystore.p12'
+
+
 SCYLLA_SSL_CONF_DIR = Path('/etc/scylla/ssl_conf')
-CA_CERT_FILE = Path(get_data_dir_path('ssl_conf', 'ca.pem'))
-CA_KEY_FILE = Path(get_data_dir_path('ssl_conf', 'ca.key'))
+CA_CERT_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.CA_CERT))
+CA_KEY_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.CA_KEY))
 
 # Cluster artifacts
-SERVER_KEY_FILE = Path(get_data_dir_path('ssl_conf', 'db.key'))
-SERVER_CERT_FILE = Path(get_data_dir_path('ssl_conf', 'db.crt'))
-SERVER_CSR_FILE = Path(get_data_dir_path('ssl_conf', 'db.csr'))
-CLIENT_FACING_KEYFILE = Path(get_data_dir_path('ssl_conf', 'client-facing.key'))
-CLIENT_FACING_CERTFILE = Path(get_data_dir_path('ssl_conf', 'client-facing.crt'))
+SERVER_KEY_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.DB_KEY))
+SERVER_CERT_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.DB_CERT))
+SERVER_CSR_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.DB_CSR))
+CLIENT_FACING_KEYFILE = Path(get_data_dir_path('ssl_conf', TLSAssets.DB_CLIENT_FACING_KEY))
+CLIENT_FACING_CERTFILE = Path(get_data_dir_path('ssl_conf', TLSAssets.DB_CLIENT_FACING_CERT))
 
 # Client artifacts
-CLIENT_KEY_FILE = Path(get_data_dir_path('ssl_conf', 'test.key'))
-CLIENT_CERT_FILE = Path(get_data_dir_path('ssl_conf', 'test.crt'))
-JKS_TRUSTSTORE_FILE = Path(get_data_dir_path('ssl_conf', 'truststore.jks'))
+CLIENT_KEY_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.CLIENT_KEY))
+CLIENT_CERT_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.CLIENT_CERT))
+JKS_TRUSTSTORE_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.JKS_TRUSTSTORE))
 
 
 def install_client_certificate(remoter, node_identifier):
@@ -195,15 +212,15 @@ def import_ca_to_jks_truststore(
     # Create tar archive with CA and put it to container
     tar_stream = io.BytesIO()
     with tarfile.open(fileobj=tar_stream, mode='w') as tar:
-        tarinfo = tarfile.TarInfo(name='ca.pem')
+        tarinfo = tarfile.TarInfo(name=TLSAssets.CA_CERT)
         tarinfo.size = len(cert)
         tar.addfile(tarinfo, io.BytesIO(cert.encode('utf-8')))
     tar_stream.seek(0)
     java.put_archive('/tmp', tar_stream)
 
     # Import CA to Java truststore
-    tmp_cert_path = Path('/tmp/ca.pem')
-    tmp_truststore_path = Path('/tmp/truststore.jks')
+    tmp_cert_path = Path('/tmp') / TLSAssets.CA_CERT
+    tmp_truststore_path = Path('/tmp') / TLSAssets.JKS_TRUSTSTORE
     _ = java.exec_run(f'rm {tmp_truststore_path}')  # delete truststore if it exists (needed for local SCT runs)
     exit_code, output = java.exec_run(
         f'keytool -importcert -noprompt -file {tmp_cert_path} -keystore {tmp_truststore_path} '
@@ -289,8 +306,8 @@ def update_certificate(
 
 def c_s_transport_str(client_mtls: bool) -> str:
     """Build transport string for cassandra-stress."""
-    transport_str = f'truststore={SCYLLA_SSL_CONF_DIR}/truststore.jks truststore-password=cassandra'
+    transport_str = f'truststore={SCYLLA_SSL_CONF_DIR}/{TLSAssets.JKS_TRUSTSTORE} truststore-password=cassandra'
     if client_mtls:
         transport_str = (
-            f'{transport_str} keystore={SCYLLA_SSL_CONF_DIR}/keystore.p12 keystore-password=cassandra')
+            f'{transport_str} keystore={SCYLLA_SSL_CONF_DIR}/{TLSAssets.PKCS12_KEYSTORE} keystore-password=cassandra')
     return transport_str

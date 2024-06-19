@@ -71,7 +71,7 @@ from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
-from sdcm.provision.helpers.certificate import update_certificate
+from sdcm.provision.helpers.certificate import update_certificate, TLSAssets
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -4256,8 +4256,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for node in self.cluster.nodes:
                 node_system_logs[node] = node.follow_system_log(
                     patterns=f'messaging_service - Reloaded {{{ssl_files_location}}}')
-                node.remoter.send_files(src='data_dir/ssl_conf/db.crt', dst='/tmp')
-                node.remoter.run(f"sudo cp -f /tmp/db.crt {ssl_files_location}")
+                node.remoter.send_files(src=f'data_dir/ssl_conf/{TLSAssets.DB_CERT}', dst='/tmp')
+                node.remoter.run(f"sudo cp -f /tmp/{TLSAssets.DB_CERT} {ssl_files_location}")
                 new_crt = node.remoter.run(f"cat {ssl_files_location}").stdout
                 if in_place_crt == new_crt:
                     raise Exception('The CRT file was not replaced')
