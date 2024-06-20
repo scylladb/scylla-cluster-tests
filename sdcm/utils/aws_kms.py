@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
+import datetime
 from itertools import cycle
 import logging
 
@@ -30,7 +31,7 @@ class AwsKms:
     def __init__(self, region_names):
         if not region_names:
             raise ValueError("'region_names' parameter cannot be empty")
-        self.region_names = region_names if isinstance(region_names, list) else [region_names]
+        self.region_names = region_names if isinstance(region_names, (list, tuple)) else [region_names]
         self.mapping = {
             region_name: {
                 'client': boto3.client('kms', region_name=region_name),
@@ -71,7 +72,7 @@ class AwsKms:
         if kms_keys.get("NextMarker"):
             yield from self.get_kms_keys(region_name=region_name, next_marker=kms_keys["NextMarker"])
 
-    def find_or_create_suitable_kms_keys(self):
+    def find_or_create_suitable_kms_keys(self, only_find=False):
         for region_name in self.region_names:
             if self.NUM_OF_KMS_KEYS <= len(self.mapping[region_name]['kms_key_ids']):
                 continue
@@ -88,6 +89,8 @@ class AwsKms:
                     self.mapping[region_name]['kms_key_ids'].append(current_kms_key_id)
                 if self.NUM_OF_KMS_KEYS == len(self.mapping[region_name]['kms_key_ids']):
                     break
+            if only_find:
+                continue
             while self.NUM_OF_KMS_KEYS > len(self.mapping[region_name]['kms_key_ids']):
                 self.create_kms_key(region_name)
 
@@ -143,3 +146,46 @@ class AwsKms:
                 LOGGER.debug(exc.response)
                 if not tolerate_errors:
                     raise
+
+    def cleanup_old_aliases(self, time_delta_h: int = 48, tolerate_errors: bool = True, dry_run=False):
+        # NOTE: since the KMS alias creation date depends on the time zone of each specific region
+        #       which may easily differ from the timezone of the caller we assume that deviation may be up to 24h.
+        #       So, if it is needed to make sure that some test must have an alias for 24h then
+        #       it is guaranteed only having margin to be '24h' -> 24 + 24 = 48h.
+        LOGGER.info("KMS: Search for aliases older than '%d' hours", time_delta_h)
+        alias_allowed_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=25)
+        dry_run_prefix = "[dry-run]" if dry_run else ""
+        for region_name in self.region_names:
+            try:
+                if not self.mapping[region_name].get("kms_key_ids"):
+                    self.find_or_create_suitable_kms_keys(only_find=True)
+                kms_keys = self.mapping[region_name].get("kms_key_ids", [])
+                current_client = self.mapping[region_name]['client']
+                for kms_key_id in kms_keys:
+                    LOGGER.info("KMS: %s[region '%s'][key '%s'] read aliases", dry_run_prefix, region_name, kms_key_id)
+                    current_aliases = current_client.list_aliases(KeyId=kms_key_id, Limit=999)["Aliases"]
+                    # {'AliasName': 'alias/qa-kms-key-for-rotation-1',
+                    #  'CreationDate': datetime.datetime(2023, 8, 11, 18, 33, 12, 45000, tzinfo=tzlocal()), ... }
+                    for current_alias in current_aliases:
+                        current_alias_name = current_alias.get("AliasName", "notfound")
+                        current_alias_creation_date = current_alias.get("CreationDate")
+                        if not current_alias_name.startswith("alias/testid-"):
+                            LOGGER.info(
+                                "KMS: %s[region '%s'][key '%s'] ignore the '%s' alias as not matching",
+                                dry_run_prefix, region_name, kms_key_id, current_alias_name)
+                            continue
+                        if current_alias_creation_date < alias_allowed_date:
+                            LOGGER.info(
+                                "KMS: %s[region '%s'][key '%s'] %s old alias -> '%s' (%s)",
+                                dry_run_prefix, region_name, kms_key_id,
+                                ("found" if dry_run else "deleting"),
+                                current_alias_name, current_alias_creation_date)
+                            if not dry_run:
+                                self.delete_alias(current_alias_name, tolerate_errors=tolerate_errors)
+            except botocore.exceptions.ClientError as exc:
+                LOGGER.info(
+                    "KMS: failed to process old aliases in the '%s' region: %s",
+                    region_name, exc.response)
+                if not tolerate_errors:
+                    raise
+        LOGGER.info("KMS: finished cleaning up old aliases")
