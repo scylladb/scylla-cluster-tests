@@ -52,6 +52,7 @@ pipeline {
                    timeout(time: 15, unit: 'MINUTES') {
                         sctScript """
                             ./docker/env/hydra.sh python -m utils.cloud_cleanup.aws.clean_aws ${params.dryRun ? '--dry-run' : ''}
+                            ./docker/env/hydra.sh python -m sct clean-aws-kms-aliases ${params.dryRun ? '--dry-run' : ''}
                         """
                    }
                 }
