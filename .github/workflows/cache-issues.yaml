@@ -1,0 +1,29 @@
+name: Change issues status
+on:
+  schedule:
+    # Daily at 8:20 UTC
+    - cron: '20 8 * * *'
+  pull_request:
+    branches:
+     - master
+  push:
+    branches:
+      - master
+jobs:
+  collect_n_upload:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          mkdir -p issues
+          gh issue list --state all --json number,state,labels --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}} {{end}} {{end}}' --repo scylladb/scylladb > issues/scylladb_scylladb.csv
+          gh issue list --state all --json number,state,labels --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}} {{end}} {{end}}' --repo scylladb/scylla-enterprise > issues/scylladb_scylla-enterprise.csv
+          gh issue list --state all --json number,state,labels --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}} {{end}} {{end}}' --repo scylladb/scylla-cluster-tests > issues/scylladb_scylla-cluster-tests.csv
+        env:
+          GH_TOKEN: ${{ secrets.ISSUE_ASSIGNMENT_TO_PROJECT_TOKEN }}
+      - name: Upload file to bucket
+        uses: koraykoska/s3-upload-github-action@0.1.3
+        env:
+          FILE: ./issues/
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
