@@ -1,0 +1,27 @@
+name: Cache issues status
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+
+jobs:
+  collect_n_upload:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          mkdir -p issues
+          for repo in scylladb scylla-enterprise scylla-manager scylla-operator scylla-cluster-tests scylla-dtest qa-tasks scylla-tools-java ; do
+            gh issue list --state all --json number,state,labels --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}}|{{end}}{{println ""}}{{end}}' --repo scylladb/$repo > issues/scylladb_$repo.csv
+          done
+        env:
+          GH_TOKEN: ${{ secrets.ISSUE_ASSIGNMENT_TO_PROJECT_TOKEN }}
+      - name: Upload folder to bucket
+        uses: a-sync/s3-uploader@2.0.1
+        with:
+          args: --recursive
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: 'us-east-1'
+          S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          S3_KEY: 'issues'
+          FILE: ./issues
