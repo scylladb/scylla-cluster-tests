@@ -190,6 +190,47 @@ def get_table_clustering_order(ks_cf: str, ck_name: str, session) -> str:
     return clustering_order
 
 
+def is_system_keyspace(keyspace: str) -> bool:
+    system_keyspace_prefixes = ("system", "alternator_usertable", "audit")
+    return keyspace.startswith(system_keyspace_prefixes)
+
+
+def get_max_replication_factor(session) -> (int, str):
+    """
+     returns the user keyspace with the highest replication-factor value.
+    """
+    query = "SELECT keyspace_name, replication FROM system_schema.keyspaces"
+    cql_result = session.execute(query)
+
+    max_replication_factor = 0
+    keyspace_with_max_rf = "no-keyspace-found"
+
+    for row in cql_result.current_rows:
+        keyspace_name = row.keyspace_name
+
+        if is_system_keyspace(keyspace_name):
+            continue
+
+        replication = row.replication
+
+        if 'SimpleStrategy' in replication['class']:
+            replication_factor = int(replication['replication_factor'])
+            if replication_factor > max_replication_factor:
+                max_replication_factor = replication_factor
+                keyspace_with_max_rf = keyspace_name
+        elif 'NetworkTopologyStrategy' in replication['class']:
+            for datacenter, factor in replication.items():
+                if datacenter != 'class':
+                    replication_factor = int(factor)
+                    if replication_factor > max_replication_factor:
+                        max_replication_factor = replication_factor
+                        keyspace_with_max_rf = keyspace_name
+        else:
+            LOGGER.warning("Unexpected replication strategy found: %s", replication['class'])
+
+    return max_replication_factor, keyspace_with_max_rf
+
+
 def get_partition_keys(ks_cf: str, session, pk_name: str = 'pk', limit: int = None) -> List[str]:
     """
     Return list of partitions from a requested table

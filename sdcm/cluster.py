@@ -101,6 +101,7 @@ from sdcm.utils.common import (
     get_sct_root_path,
 )
 from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.database_query_utils import is_system_keyspace
 from sdcm.utils.distro import Distro
 from sdcm.utils.features import get_enabled_features
 from sdcm.utils.install import InstallMode
@@ -3667,7 +3668,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             for row in current_rows:
                 table_name = f"{getattr(row, column_names[0])}.{getattr(row, column_names[1])}"
 
-                if filter_out_system and getattr(row, column_names[0]).startswith(("system", "alternator_usertable", "audit")):
+                if filter_out_system and is_system_keyspace(getattr(row, column_names[0])):
                     continue
 
                 if is_column_type and (filter_out_table_with_counter and "counter" in row.type):
@@ -4427,7 +4428,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         """Function returning a list of non-system keyspaces (created by test)"""
         db_node = db_node or self.nodes[0]
         keyspaces = db_node.run_cqlsh("describe keyspaces").stdout.split()
-        return [ks for ks in keyspaces if not ks.startswith("system")]
+        return [ks for ks in keyspaces if not is_system_keyspace(ks)]
 
     def cfstat_reached_threshold(self, key, threshold, keyspaces=None):
         """
