@@ -103,6 +103,7 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                parse_nodetool_listsnapshots,
                                update_authenticator, ParallelObject,
                                ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table)
+from sdcm.utils.database_query_utils import get_max_replication_factor
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.quota import configure_quota_on_node_for_scylla_user_context, is_quota_enabled_on_node, enable_quota_on_node, \
     write_data_to_reach_end_of_quota
@@ -1309,6 +1310,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes():
             self.unset_current_running_nemesis(self.target_node)
             self.set_target_node(allow_only_last_node_in_rack=True)
+        # If any keyspace RF equals to number-of-cluster-nodes, where tablets are in use,
+        # then a decommission is not supported and has to be skipped.
+        with self.cluster.cql_connection_patient(self.target_node) as session:
+            if is_tablets_feature_enabled(session):
+                max_rf, keyspace = get_max_replication_factor(session)
+                if max_rf == len(self.cluster.nodes):
+                    raise UnsupportedNemesis(
+                        f"A decommission is not supported with tablets where a keyspace RF equals number-of-nodes: {keyspace}, {max_rf}")
+
         target_is_seed = self.target_node.is_seed
         self.cluster.decommission(self.target_node)
         new_node = None
