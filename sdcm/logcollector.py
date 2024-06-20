@@ -467,7 +467,6 @@ class GrafanaScreenShot(GrafanaEntity):
     Extends:
         GrafanaEntity
     """
-    DEFAULT_SNAPSHOT_WIDTH = 1920
 
     def get_grafana_screenshot(self, node, local_dst):
         """
@@ -501,7 +500,7 @@ class GrafanaScreenShot(GrafanaEntity):
                                                                         node.name))
                     LOGGER.debug("Get screenshot for url %s, save to %s", grafana_url, screenshot_path)
                     with requests.get(grafana_url, stream=True,
-                                      params=dict(width=self.DEFAULT_SNAPSHOT_WIDTH, height=-1)) as response:
+                                      params=dict(width=dashboard.resolution[0], height=dashboard.resolution[1])) as response:
                         response.raise_for_status()
                         with open(screenshot_path, 'wb') as output_file:
                             for chunk in response.iter_content(chunk_size=8192):
