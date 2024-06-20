@@ -54,6 +54,7 @@ from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.argus import get_argus_client
+from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
@@ -222,6 +223,23 @@ def provision_resources(backend, test_name: str, config: str):
         provision_sct_resources(params=params, test_config=test_config)
     else:
         raise ValueError(f"backend {backend} is not supported")
+
+
+@cli.command("clean-aws-kms-aliases", help="clean AWS KMS old aliases")
+@click.option("-r", "--regions", type=CloudRegion(cloud_provider="aws"), multiple=True,
+              help="List of regions to cover")
+@click.option("--time-delta-h", type=int, required=False,
+              help="Time delta in hours. Used to detect 'old' aliases.")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Only show result of search not deleting aliases")
+def clean_aws_kms_aliases(regions, time_delta_h, dry_run):
+    """Clean AWS KMS old aliases."""
+    add_file_logger()
+    regions = regions or SCTConfiguration.aws_supported_regions
+    aws_kms, kwargs = AwsKms(region_names=regions), {"dry_run": dry_run}
+    if time_delta_h:
+        kwargs["time_delta_h"] = time_delta_h
+    aws_kms.cleanup_old_aliases(**kwargs)
 
 
 @cli.command('clean-resources', help='clean tagged instances in both clouds (AWS/GCE)')
