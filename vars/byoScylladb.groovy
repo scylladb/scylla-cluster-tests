@@ -45,7 +45,7 @@ def call(Map params, boolean build_image){
         //       So, hardcode 'master' SCT version for all cases.
         string(name: 'SCT_REPO', value: 'git@github.com:scylladb/scylla-cluster-tests.git'),
         string(name: 'SCT_BRANCH', value: 'master'),
-        string(name: 'RELENG_REPO', value: "git@github.com:vponomaryov/${params.byo_default_product}-pkg.git"),
+        string(name: 'RELENG_REPO', value: "git@github.com:scylladb/${params.byo_default_product}-pkg.git"),
         string(name: 'RELENG_BRANCH', value: params.byo_default_branch),
         //
         booleanParam(name: 'BUILD_WITH_CMAKE', value: false),
