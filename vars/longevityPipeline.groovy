@@ -150,13 +150,13 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Branch of the custom "scylladb" repo. Leave empty if byo is not needed.',
                    name: 'byo_scylla_branch')
-            string(defaultValue: './byo',
-                   description: 'Used when byo scylladb repo+branch is provided. Default "./byo"',
+            string(defaultValue: '/scylla-5.4/byo/byo_build_tests_dtest',
+                   description: 'Used when byo scylladb repo+branch is provided. Default "/scylla-5.4/byo/byo_build_tests_dtest"',
                    name: 'byo_job_path')
             string(defaultValue: 'scylla',
                    description: '"scylla" or "scylla-enterprise". Default is "scylla".',
                    name: 'byo_default_product')
-            string(defaultValue: 'next',
+            string(defaultValue: 'next-5.4',
                    description: 'Default branch to be used for scylla and other repositories. Default is "next".',
                    name: 'byo_default_branch')
         }
