@@ -23,7 +23,7 @@ def call(Map params, boolean build_image){
     if (params.byo_job_path) {
         jobToTrigger = params.byo_job_path
     } else {
-        jobToTrigger = "./byo"
+        jobToTrigger = "/enterprise-2024.1/byo/byo_build_tests_dtest"
     }
     if (jobToTrigger.startsWith("./")) {
         currentJobDirectoryPath = JOB_NAME.substring(0, JOB_NAME.lastIndexOf('/'))
