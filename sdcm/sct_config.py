@@ -1547,6 +1547,9 @@ class SCTConfiguration(dict):
 
         dict(name="bisect_end_date", env="SCT_BISECT_END_DATE", type=str,
              help="""Scylla build date until which bisecting should run. Format: YYYY-MM-DD"""),
+
+        dict(name="run_scylla_doctor", env="SCT_RUN_SCYLLA_DOCTOR", type=boolean,
+             help="Run scylla-doctor in artifact tests"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
