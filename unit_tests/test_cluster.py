@@ -763,7 +763,6 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
                                 'system_traces.sessions', 'system_traces.sessions_time_idx',
                                 'system.role_attributes', 'system.role_members', 'system.role_permissions',
                                 'system.roles', 'system.service_levels_v2',
-                                'system.tablets',
                                 'system.topology', 'system.topology_requests',
                                 'system.cdc_generations_v3',
                                 '"123_keyspace"."120users"', '"123_keyspace".users'}

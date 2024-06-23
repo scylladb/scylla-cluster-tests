@@ -16,7 +16,8 @@ client_encryption_options:
   keyfile: /etc/scylla/ssl_conf/client-facing.key
   truststore: /etc/scylla/ssl_conf/ca.pem
 
-enable_tablets: false
 EOM
+
+sed -e '/enable_tablets:.*/s/true/false/g' -i /etc/scylla/scylla.yaml
 
 /docker-entrypoint.py $*

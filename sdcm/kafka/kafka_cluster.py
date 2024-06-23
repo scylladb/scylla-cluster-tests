@@ -29,8 +29,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class LocalKafkaCluster(cluster.BaseCluster):
-    def __init__(self, remoter=LOCALRUNNER):
-        super().__init__(cluster_prefix="kafka", add_nodes=False)
+    def __init__(self, params, remoter=LOCALRUNNER):
+        super().__init__(cluster_prefix="kafka", add_nodes=False, params=params)
         self.remoter = remoter
         self.docker_compose_path = (
             Path(get_sct_root_path()) / "kafka-stack-docker-compose"
@@ -94,7 +94,7 @@ class LocalKafkaCluster(cluster.BaseCluster):
             if connector_url.endswith('.zip'):
                 self.remoter.run(
                     f'curl -L -o /tmp/connector.zip {connector_url} && '
-                    f'unzip /tmp/connector.zip -d {self.docker_compose_path / "connectors"} && rm /tmp/connector.zip'
+                    f'unzip -o /tmp/connector.zip -d {self.docker_compose_path / "connectors"} && rm /tmp/connector.zip'
                 )
         if connector_url.startswith("file://"):
             connector_local_path = connector_url.replace("file://", "")
@@ -116,7 +116,6 @@ class LocalKafkaCluster(cluster.BaseCluster):
         connector_config: SctKafkaConfiguration,
     ):
         # TODO: extend the number of tasks
-        # TODO: handle user/password
         # TODO: handle client encryption SSL
 
         connector_data = connector_config.dict(by_alias=True, exclude_none=True)
@@ -124,10 +123,17 @@ class LocalKafkaCluster(cluster.BaseCluster):
             case "io.connect.scylladb.ScyllaDbSinkConnector":
                 scylla_addresses = [node.cql_address for node in db_cluster.nodes]
                 connector_data["config"]["scylladb.contact.points"] = ",".join(scylla_addresses)
+                if credentials := self.get_db_auth():
+                    connector_data["config"]["scylladb.security.enabled"] = True
+                    connector_data["config"]["scylladb.username"] = credentials[0]
+                    connector_data["config"]["scylladb.password"] = credentials[1]
 
             case "com.scylladb.cdc.debezium.connector.ScyllaConnector":
                 scylla_addresses = [f"{node.cql_address}:{node.CQL_PORT}" for node in db_cluster.nodes]
                 connector_data["config"]["scylla.cluster.ip.addresses"] = ",".join(scylla_addresses)
+                if credentials := self.get_db_auth():
+                    connector_data["config"]["scylla.user"] = credentials[0]
+                    connector_data["config"]["scylla.password"] = credentials[1]
 
         self.install_connector(connector_config.source)
 

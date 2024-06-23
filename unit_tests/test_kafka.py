@@ -27,10 +27,10 @@ pytestmark = [
 LOGGER = logging.getLogger(__name__)
 
 
-@pytest.fixture(name="kafka_cluster", scope="session")
-def fixture_kafka_cluster(tmp_path_factory):
+@pytest.fixture(name="kafka_cluster", scope="function")
+def fixture_kafka_cluster(tmp_path_factory, params):
     os.environ["_SCT_TEST_LOGDIR"] = str(tmp_path_factory.mktemp("logs"))
-    kafka = LocalKafkaCluster()
+    kafka = LocalKafkaCluster(params=params)
 
     kafka.start()
 
@@ -68,10 +68,10 @@ def test_01_kafka_cdc_source_connector(request, docker_scylla, kafka_cluster, pa
         db_cluster=docker_scylla.parent_cluster, connector_config=connector_config
     )
 
-    loader_set = LocalLoaderSetDummy()
+    loader_set = LocalLoaderSetDummy(params=params)
 
     cmd = (
-        """cassandra-stress write cl=ONE n=500 -rate threads=10 """
+        """cassandra-stress write cl=ONE n=500 -mode cql3 native -rate threads=10 """
     )
 
     cs_thread = CassandraStressThread(
