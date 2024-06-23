@@ -1559,6 +1559,9 @@ class SCTConfiguration(dict):
 
         dict(name="kafka_connectors", env="SCT_KAFKA_CONNECTORS", type=str_or_list_or_eval,
              help="configuration for setup up kafka connectors"),
+
+        dict(name="run_scylla_doctor", env="SCT_RUN_SCYLLA_DOCTOR", type=boolean,
+             help="Run scylla-doctor in artifact tests"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
