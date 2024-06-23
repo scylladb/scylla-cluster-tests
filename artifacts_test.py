@@ -354,7 +354,10 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
             assert node_info_service.get_node_boot_time_seconds()
 
         with self.subTest("check scylla_doctor results"):
-            self.run_scylla_doctor()
+            if self.params.get("run_scylla_doctor"):
+                self.run_scylla_doctor()
+            else:
+                self.log.info("Running scylla-doctor is disabled")
 
         # We don't install any time sync service in docker, so the test is unnecessary:
         # https://github.com/scylladb/scylla/tree/master/dist/docker/etc/supervisord.conf.d
