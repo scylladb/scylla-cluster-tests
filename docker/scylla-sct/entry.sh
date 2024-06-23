@@ -9,8 +9,8 @@ authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
-
-enable_tablets: false
 EOM
+
+sed -e '/enable_tablets:.*/s/true/false/g' -i /etc/scylla/scylla.yaml
 
 /docker-entrypoint.py $*

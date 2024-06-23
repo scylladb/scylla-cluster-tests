@@ -22,7 +22,7 @@ class ConnectorConfiguration(BaseModel):
     # see https://github.com/scylladb/kafka-connect-scylladb/blob/master/documentation/CONFIG.md
     scylladb_contact_points: Optional[str] = Field(alias="scylladb.contact.points")
     scylladb_keyspace: Optional[str] = Field(alias="scylladb.keyspace")
-    scylladb_user: Optional[str] = Field(alias="scylladb.user")
+    scylladb_username: Optional[str] = Field(alias="scylladb.username")
     scylladb_password: Optional[str] = Field(alias="scylladb.password")
 
     class Config:
