@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 append_scylla_yaml: |
   experimental_features:
     - tablets
     - consistent-topology-changes
+=======
+append_scylla_yaml:
+  enable_tablets: true
+>>>>>>> c36b4408 (fix(tablets): switch tablets-enabled tests folder to disabled)
   tablets_initial_scale_factor: 4
