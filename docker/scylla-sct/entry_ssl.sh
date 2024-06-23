@@ -20,8 +20,13 @@ client_encryption_options:
   keyfile: /etc/scylla/ssl_conf/client-facing.key
   truststore: /etc/scylla/ssl_conf/ca.pem
 
+<<<<<<< HEAD
 enable_tablets: false
 >>>>>>> 22d60115 (fix(integration-tests): enable auth by default)
+=======
+>>>>>>> 90e53244 (fix(kafka_cluster): add support for auth)
 EOM
+
+sed -e '/enable_tablets:.*/s/true/false/g' -i /etc/scylla/scylla.yaml
 
 /docker-entrypoint.py $*

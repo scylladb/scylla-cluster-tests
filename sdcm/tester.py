@@ -1599,6 +1599,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             self.monitors = NoMonitorSet()
 
+<<<<<<< HEAD
+=======
+    def get_cluster_kafka(self):
+        if kafka_backend := self.params.get('kafka_backend'):
+            if kafka_backend == 'localstack':
+                self.kafka_cluster = LocalKafkaCluster(params=self.params)
+                self.kafka_cluster.start()
+            else:
+                raise NotImplementedError(f"{kafka_backend=} not implemented")
+
+>>>>>>> 90e53244 (fix(kafka_cluster): add support for auth)
     @staticmethod
     def _add_and_wait_for_cluster_nodes_in_parallel(clusters):
         def _add_and_wait_for_cluster_nodes(cluster):
