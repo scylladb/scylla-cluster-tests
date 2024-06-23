@@ -79,7 +79,8 @@ class RemoteDocker(BaseNode):
 
     def create_network(self, docker_network):
         try:
-            ret = self.node.remoter.run(f"docker network create {docker_network}").stdout.strip()
+            ret = self.node.remoter.run(
+                f"docker network create {docker_network} --label 'com.docker.compose.network=default'").stdout.strip()
             LOGGER.debug(ret)
         except (UnexpectedExit, Libssh2_UnexpectedExit) as ex:
             if 'already exists' in str(ex):

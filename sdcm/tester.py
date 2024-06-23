@@ -1631,7 +1631,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def get_cluster_kafka(self):
         if kafka_backend := self.params.get('kafka_backend'):
             if kafka_backend == 'localstack':
-                self.kafka_cluster = LocalKafkaCluster()
+                self.kafka_cluster = LocalKafkaCluster(params=self.params)
                 self.kafka_cluster.start()
             else:
                 raise NotImplementedError(f"{kafka_backend=} not implemented")
