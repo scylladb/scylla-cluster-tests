@@ -34,6 +34,7 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_region_definition_builder import FakeDefinitionBuilder
 from unit_tests.lib.fake_remoter import FakeRemoter
+from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
 
 
 @pytest.fixture(scope='module')
@@ -65,11 +66,15 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
     entryfile_path = Path(base_dir) if base_dir else Path(__file__).parent.parent
     entryfile_path = entryfile_path / 'docker' / 'scylla-sct' / ('entry_ssl.sh' if ssl else 'entry.sh')
 
+<<<<<<< HEAD
     alternator_flags = "--alternator-port 8000 --alternator-write-isolation=always"
 <<<<<<< HEAD
     docker_version = "scylladb/scylla-nightly:5.2.0-dev-0.20220820.516089beb0b8"
     cluster = LocalScyllaClusterDummy()
 =======
+=======
+    alternator_flags = f"--alternator-port {ALTERNATOR_PORT} --alternator-write-isolation=always"
+>>>>>>> 409b0b43 (refactor(integration-tests): use api object per test)
     docker_version = docker_scylla_args.get('image', "scylladb/scylla-nightly:6.1.0-dev-0.20240605.2c3f7c996f98")
     cluster = LocalScyllaClusterDummy(params=params)
 >>>>>>> 22d60115 (fix(integration-tests): enable auth by default)
@@ -82,8 +87,13 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
         finally:
             os.chdir(curr_dir)
     ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
+<<<<<<< HEAD
     extra_docker_opts = (f'-p 8000 -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
                          f' -v {ssl_dir}:/etc/scylla/ssl_conf'
+=======
+    extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
+                         f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}'
+>>>>>>> 409b0b43 (refactor(integration-tests): use api object per test)
                          ' --entrypoint /entry.sh')
 
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
@@ -102,8 +112,13 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
 
     def db_alternator_up():
         try:
+<<<<<<< HEAD
             return scylla.is_port_used(port=8000, service_name="scylla-server")
         except Exception as details:  # pylint: disable=broad-except
+=======
+            return scylla.is_port_used(port=ALTERNATOR_PORT, service_name="scylla-server")
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
+>>>>>>> 409b0b43 (refactor(integration-tests): use api object per test)
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
