@@ -2,6 +2,7 @@ name: Cache issues status
 on:
   schedule:
     - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 jobs:
   collect_n_upload:
