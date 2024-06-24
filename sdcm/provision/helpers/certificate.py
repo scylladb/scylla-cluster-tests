@@ -153,7 +153,7 @@ def create_certificate(
 
     alt_names = [x509.DNSName(cname)]
     if ip_addresses:
-        alt_names.extend([x509.IPAddress(ipaddress.IPv4Address(ip)) for ip in ip_addresses])
+        alt_names.extend([x509.IPAddress(ipaddress.ip_address(ip)) for ip in ip_addresses])
     if dns_names:
         alt_names.extend([x509.DNSName(dns) for dns in dns_names])
 
