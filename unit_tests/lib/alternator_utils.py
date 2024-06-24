@@ -11,22 +11,5 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from sdcm.utils import alternator
 
 ALTERNATOR_PORT = 8000
-TEST_PARAMS = dict(
-    dynamodb_primarykey_type="HASH_AND_RANGE",
-    alternator_use_dns_routing=True,
-    alternator_port=ALTERNATOR_PORT,
-    alternator_enforce_authorization=True,
-    alternator_access_key_id='alternator',
-    alternator_secret_access_key='password',
-    authenticator='PasswordAuthenticator',
-    authenticator_user='cassandra',
-    authenticator_password='cassandra',
-    authorizer='CassandraAuthorizer',
-    docker_network='ycsb_net',
-)
-ALTERNATOR = alternator.api.Alternator(
-    sct_params=TEST_PARAMS
-)
