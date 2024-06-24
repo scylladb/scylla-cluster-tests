@@ -18,7 +18,6 @@ import pytest
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from unit_tests.dummy_remote import LocalLoaderSetDummy
-from unit_tests.lib.alternator_utils import TEST_PARAMS
 
 pytestmark = [
     pytest.mark.usefixtures("events"),
@@ -30,8 +29,16 @@ pytestmark = [
 def test_01_kcl_with_ycsb(
     request, docker_scylla, events, params
 ):  # pylint: disable=too-many-locals
-    params.update(TEST_PARAMS)
-    loader_set = LocalLoaderSetDummy()
+    params.update(dict(
+        dynamodb_primarykey_type="HASH_AND_RANGE",
+        alternator_use_dns_routing=True,
+        alternator_port=ALTERNATOR_PORT,
+        alternator_enforce_authorization=True,
+        alternator_access_key_id='alternator',
+        alternator_secret_access_key='password',
+        docker_network='ycsb_net',
+    ))
+    loader_set = LocalLoaderSetDummy(params=params)
     num_of_keys = 1000
     # 1. start kcl thread and ycsb at the same time
     ycsb_cmd = (
