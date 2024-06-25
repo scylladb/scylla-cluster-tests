@@ -1,0 +1,4 @@
+# Define load ops for steps
+perf_max_ops: {"read": 794000, "write": 405000, "mixed": 530000}
+perf_threads: {"read": 1000, "write": 700, "mixed": 900}
+perf_throttle_steps: [25, 50, 75, 95, 100]  # percents from max ops: 25%, 50%, 75%, 90%, max_ops

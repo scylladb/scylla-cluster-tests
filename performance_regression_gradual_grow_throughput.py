@@ -12,31 +12,13 @@ class CSPopulateDistribution(Enum):
     UNIFORM = "uniform"
 
 
-class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest):  # pylint: disable=too-many-instance-attributes
-
+class PerformanceRegressionGradualGrowThroughputTest(PerformanceRegressionTest):  # pylint: disable=too-many-instance-attributes
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # all parameters were taken from scylla-stress-orch repo
         # Planned data size is 3 TB in total: 1tb per node
-        self.NUM_THREADS = 500  # pylint: disable=invalid-name
         self.CLUSTER_SIZE = self.params.get("n_db_nodes")  # pylint: disable=invalid-name
         self.REPLICATION_FACTOR = 3  # pylint: disable=invalid-name
-        # Planned data size is 3 TB in total: 1tb per node
-        self.DATASET_SIZE = 3000 * 1024 * 1024 * 1024  # pylint: disable=invalid-name
-        # expected row size (was calculated by dev team ~313 bytes)
-        self.ROW_SIZE_BYTES = 210 * 1024 * 1024 * 1024 / 720_000_000  # pylint: disable=invalid-name
-        self.ROW_COUNT = int(self.DATASET_SIZE / self.ROW_SIZE_BYTES /  # pylint: disable=invalid-name
-                             self.REPLICATION_FACTOR)
-        # How many standard deviations should span the cluster's memory
-        self.CONFIDENCE = 6  # pylint: disable=invalid-name
-        # instance i3.4xlarge
-        self.INSTANCE_MEMORY_GB = 122  # pylint: disable=invalid-name
-        self.GAUSS_CENTER = self.ROW_COUNT // 2  # pylint: disable=invalid-name
-        self.GAUSS_SIGMA = int(self.INSTANCE_MEMORY_GB * self.CLUSTER_SIZE * 1024 * 1024 *  # pylint: disable=invalid-name
-                               1024 // (self.CONFIDENCE * self.ROW_SIZE_BYTES * self.REPLICATION_FACTOR))
-
-        self.MAX_95TH_LATENCY = 20.0  # pylint: disable=invalid-name
-        self.MAX_99TH_LATENCY = 400.0  # pylint: disable=invalid-name
 
     def test_mixed_gradual_increase_load(self):  # pylint: disable=too-many-locals
         """
@@ -46,7 +28,8 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         2. Run a mixed workload with gradual increase load
         """
         self._base_test_workflow(cs_cmd_tmpl=self.params.get('stress_cmd_m'),
-                                 test_name="Test 'mixed: read:50%,write:50%'")
+                                 test_name="test_mixed_gradual_increase_load (read:50%,write:50%)",
+                                 sub_type="mixed")
 
     def test_write_gradual_increase_load(self):  # pylint: disable=too-many-locals
         """
@@ -56,7 +39,8 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         2. Run a write workload with gradual increase load
         """
         self._base_test_workflow(cs_cmd_tmpl=self.params.get('stress_cmd_w'),
-                                 test_name="Test 'write 100%'")
+                                 test_name="test_write_gradual_increase_load (100% writes)",
+                                 sub_type="write")
 
     def test_read_gradual_increase_load(self):  # pylint: disable=too-many-locals
         """
@@ -66,9 +50,10 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         2. Run a read workload with gradual increase load
         """
         self._base_test_workflow(cs_cmd_tmpl=self.params.get('stress_cmd_r'),
-                                 test_name="Test 'read 100%'")
+                                 test_name="test_read_gradual_increase_load (100% reads)",
+                                 sub_type="read")
 
-    def _base_test_workflow(self, cs_cmd_tmpl, test_name):
+    def _base_test_workflow(self, cs_cmd_tmpl, test_name, sub_type):
         stress_num = 1
         num_loaders = len(self.loaders.nodes)
         self.run_fstrim_on_all_db_nodes()
@@ -80,30 +65,14 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         self.run_fstrim_on_all_db_nodes()
         # self.disable_autocompaction_on_all_nodes()
         self.run_gradual_increase_load(stress_cmd_templ=cs_cmd_tmpl,
-                                       start_ops=self.start_ops,
-                                       throttle_step=self.throttle_step,
-                                       max_ops=self.max_ops,
                                        stress_num=stress_num,
                                        num_loaders=num_loaders,
                                        compaction_strategy=compaction_strategy,
-                                       test_name=test_name)
+                                       test_name=test_name,
+                                       sub_type=sub_type)
 
     def preload_data(self, compaction_strategy=None):
-        prepare_write_tmpl: str = self.params.get("prepare_write_cmd")
-        num_of_loaders: int = self.params.get("n_loaders")
-        row_count_per_loader: int = self.ROW_COUNT // num_of_loaders
-        range_points = [1]
-
-        for i in range(num_of_loaders):
-            range_points.append(range_points[-1] + row_count_per_loader)
-        range_points[-1] = self.ROW_COUNT
-
-        population_commands = []
-        for i in range(len(range_points) - 1):
-            cmd = prepare_write_tmpl.replace(
-                "$ROW_NUMBER", f"{range_points[i + 1] - range_points[i] + 1}").replace(
-                "$SEQUENCE", f"{range_points[i]}..{range_points[i + 1]}")
-            population_commands.append(cmd)
+        population_commands: list = self.params.get("prepare_write_cmd")
 
         self.log.info("Population c-s commands: %s", population_commands)
         # Check if it should be round_robin across loaders
@@ -129,33 +98,54 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
         self.log.info("Dataset has been populated")
 
     # pylint: disable=too-many-arguments,too-many-locals
-    def run_gradual_increase_load(self, stress_cmd_templ,
-                                  start_ops, max_ops, throttle_step,
-                                  stress_num, num_loaders, compaction_strategy, test_name):
-        self.warmup_cache(compaction_strategy)
+    def run_gradual_increase_load(self, stress_cmd_templ, stress_num, num_loaders, compaction_strategy, test_name, sub_type):
+        self.warmup_cache(compaction_strategy, stress_cmd_templ)
+        if not self.exists():
+            self.log.debug("Create test statistics in ES")
+            self.create_test_stats(sub_type=sub_type, doc_id_with_timestamp=True)
         total_summary = []
-        cs_popuplation_distribution = self.get_cs_distribution()
-        base_stress_cmd = stress_cmd_templ[0].replace("$DIST_PARAMS", cs_popuplation_distribution)
+        max_ops = self.params["perf_max_ops"][sub_type]
+        num_threads = self.params["perf_threads"][sub_type]
+        throttle_steps = self.params["perf_throttle_steps"]
 
-        for current_ops in range(start_ops, max_ops + throttle_step, throttle_step):
+        for throttle_step in throttle_steps:
+            current_ops = int(max_ops * throttle_step / 100) if throttle_step < 100 else max_ops
             self.log.info("Run cs command with rate: %s Kops", current_ops)
-            current_throttle = current_ops // (num_loaders * stress_num)
-            stress_cmd = base_stress_cmd.replace("$threads", f"{self.NUM_THREADS}").replace(
-                "$throttle", f"{current_throttle}")
+            current_throttle = f"throttle={int(current_ops // (num_loaders * stress_num))}/s" if current_ops < max_ops else ""
+            results = []
+            for repeat_cycle in range(2):
+                self.log.info("Repeat %d time the step with %s Kops", repeat_cycle, current_ops)
+                stress_queue = []
+                for stress_cmd in stress_cmd_templ:
+                    params = {"round_robin": True, "stats_aggregate_cmds": False}
+                    stress_cmd_to_run = stress_cmd.replace("$threads", f"{num_threads}").replace(
+                        "$throttle", f"{current_throttle}")
+                    params.update({'stress_cmd': stress_cmd_to_run})
+                    # Run all stress commands
+                    self.log.debug('RUNNING stress cmd: %s', stress_cmd_to_run)
+                    stress_queue.append(self.run_stress_thread(**params))
 
-            stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=stress_num,
-                                                  compaction_strategy=compaction_strategy, stats_aggregate_cmds=False)
-            results = self.get_stress_results(queue=stress_queue, store_results=False)
-            self.log.debug("All c-s results: %s", results)
-            summary_result = self._calculate_average_latency(results)
-            summary_result["ops"] = current_ops
+                for stress in stress_queue:
+                    results.extend(self.get_stress_results(queue=stress, store_results=False))
+                    self.log.debug("One c-s command results: %s", results[-1])
+            self.log.debug("All current results: %s", results)
+            summary_result = self._calculate_average_max_latency(results)
+            # TODO: remove next line
+            summary_result["ops_rate"] = summary_result["op rate"] * num_loaders
+            es_extra_stats = {"perf_gradual_stats": {current_ops: {'ops_rate': summary_result["op rate"] * num_loaders,
+                                                                   "latency_95th_percentile": {
+                                                                       "avg": summary_result["latency 95th percentile"],
+                                                                       "max": summary_result["latency 95th percentile max"]},
+                                                                   "latency_99th_percentile": {
+                                                                       "avg": summary_result["latency 99th percentile"],
+                                                                       "max": summary_result["latency 99th percentile max"]},
+                                                                   "throttle_step_perc": throttle_step,
+                                                                   "sub_type": sub_type}
+                                                     }
+                              }
+            self.update_test_details(extra_stats=es_extra_stats, scylla_conf=True)
             self.log.debug("C-S results for ops: %s. \n Results: \n %s", current_ops, summary_result)
             total_summary.append(summary_result)
-            if (summary_result["latency 95th percentile"] > self.MAX_95TH_LATENCY or
-                    summary_result["latency 99th percentile"] > self.MAX_99TH_LATENCY):
-
-                self.log.warning("Latency 95th percentile is large that %d", self.MAX_95TH_LATENCY)
-                break
 
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))
         self.log.debug("---------------------------------")
@@ -182,45 +172,49 @@ class PerformanceRegressionGradualGrowThroughutTest(PerformanceRegressionTest): 
             "job_url": os.environ.get("BUILD_URL"),
             "shard_aware_driver": self.is_shard_awareness_driver,
         }
-
         perf_analyzer = ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(
             es_index=self._test_index,
             es_doc_type=self._es_doc_type,
             email_recipients=self.params.get('email_recipients'))
-        perf_analyzer.check_regression(test_name=test_name, test_results=total_summary, test_details=setup_details)
+        self.log.debug("es_index: %s", self._test_index)
+        self.log.debug("total_summary: %s", total_summary)
+        self.log.debug("setup_details: %s", setup_details)
+        is_gce = bool(self.params.get('cluster_backend') == 'gce')
+        perf_analyzer.check_regression(test_id=self.test_id, test_name=test_name, subtest_baseline=sub_type,
+                                       test_results=total_summary, test_details=setup_details, is_gce=is_gce)
 
-    def get_cs_distribution(self):
-        popuplation_distribution = CSPopulateDistribution(self.params.get("cs_populating_distribution"))
-        if popuplation_distribution == CSPopulateDistribution.GAUSS:
-            return f"GAUSSIAN(1..{self.ROW_COUNT},{self.GAUSS_CENTER},{self.GAUSS_SIGMA})"
-        elif popuplation_distribution == CSPopulateDistribution.UNIFORM:
-            return f"UNIFORM(1..{self.ROW_COUNT})"
-        else:
-            self.log.error("Unsupported cs population distribution")
-            return ""
-
-    @staticmethod
-    def _calculate_average_latency(results):
+    # @staticmethod
+    def _calculate_average_max_latency(self, results):
         status = defaultdict(float).fromkeys(results[0].keys(), 0.0)
+        max_latency = defaultdict(list)
+
         for result in results:
             for key in status:
                 try:
                     status[key] += float(result.get(key, 0.0))
+                    if key in ["latency 95th percentile", "latency 99th percentile"]:
+                        max_latency[f"{key} max"].append(float(result.get(key, 0.0)))
                 except ValueError:
                     continue
 
         for key in status:
             status[key] = round(status[key] / len(results), 2)
 
+        for key, latency in max_latency.items():
+            status[key] = max(latency)
+
         return status
 
-    def warmup_cache(self, compaction_strategy):
-        cmd = f"cassandra-stress read no-warmup cl=QUORUM duration=180m -pop 'dist={self.get_cs_distribution()}' -mode native cql3 -rate 'threads=500 throttle=35000/s'"  # pylint: disable=line-too-long
-        stress_queue = self.run_stress_cassandra_thread(
-            stress_cmd=cmd,
-            stress_num=1,
-            compaction_strategy=compaction_strategy,
-            stats_aggregate_cmds=False,
-            round_robin=True
-        )
-        self.get_stress_results(stress_queue, store_results=False)
+    def warmup_cache(self, compaction_strategy, stress_cmd_templ):
+        stress_queue = []
+        for stress_cmd in stress_cmd_templ:
+            params = {"round_robin": True, "stats_aggregate_cmds": False}
+            stress_cmd_to_run = stress_cmd.replace("$threads", "1000").replace(
+                "$throttle", "").replace("duration=20m", "n=20000000")
+            params.update({'stress_cmd': stress_cmd_to_run})
+            # Run all stress commands
+            self.log.debug('RUNNING warm up stress cmd: %s', stress_cmd_to_run)
+            stress_queue.append(self.run_stress_thread(**params))
+
+        for stress in stress_queue:
+            self.get_stress_results(queue=stress, store_results=False)
