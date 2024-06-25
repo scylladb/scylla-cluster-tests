@@ -43,6 +43,7 @@ from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_s
 from sdcm.utils.gce_utils import get_gce_storage_client
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.tablets.common import TabletsConfiguration
+from sdcm.utils.version_utils import ComparableScyllaVersion, is_enterprise
 from sdcm.exceptions import FilesNotCorrupted
 
 
@@ -284,6 +285,16 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                                    auth_token=self.monitors.mgmt_auth_token)
         return mgr_cluster
+
+    def _is_restore_on_no_space_node_work(self):
+        """Since the load&stream has been improved in Scylla 6.0, the data is not sent to the node
+        with no space available and the restore operation manages to pass successfully
+        """
+        version = self.db_cluster.nodes[0].scylla_version
+        if is_enterprise(version):
+            return ComparableScyllaVersion(version) >= '2024.2'
+        else:
+            return ComparableScyllaVersion(version) >= '6.0'
 
     def test_mgmt_repair_nemesis(self):
         """
@@ -939,14 +950,18 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                                                snapshot_tag=snapshot_tag)
                 final_status = restore_task.wait_and_get_final_status(step=30)
 
-                assert final_status == TaskStatus.ERROR, \
-                    f"The restore task is supposed to fail, since node {target_node} lacks the disk space to download" \
-                    f"the snapshot files"
-                full_progress_string = restore_task.progress_string(parse_table_res=False,
-                                                                    is_verify_errorless_result=True).stdout
-                assert "not enough disk space" in full_progress_string.lower(), \
-                    f"The restore failed as expected when one of the nodes was out of disk space, but with an ill " \
-                    f"fitting error message: {full_progress_string}"
+                if self._is_restore_on_no_space_node_work():
+                    assert final_status == TaskStatus.DONE, \
+                        f"Unexpected restore task status {final_status} instead of DONE"
+                else:
+                    assert final_status == TaskStatus.ERROR, \
+                        f"The restore task is supposed to fail, since node {target_node} lacks the disk space to " \
+                        f"download the snapshot files"
+                    full_progress_string = restore_task.progress_string(parse_table_res=False,
+                                                                        is_verify_errorless_result=True).stdout
+                    assert "not enough disk space" in full_progress_string.lower(), \
+                        f"The restore failed as expected when one of the nodes was out of disk space, but with an " \
+                        f"ill fitting error message: {full_progress_string}"
             finally:
                 clean_enospc_on_node(target_node=target_node, sleep_time=30)
         self.log.info('finishing test_enospc_before_restore')
