@@ -76,7 +76,10 @@ def call(Map pipelineParams) {
 
             // NOTE: Optional parameters for BYO ScyllaDB stage
             string(defaultValue: '',
-                   description: 'Custom "scylladb" repo to use. Leave empty if byo is not needed. If specified then need to define "base_versions" param explicitly.',
+                   description: (
+                       'Custom "scylladb" repo to use. Leave empty if byo is not needed. ' +
+                       'If set then it must be proper GH repo. Example: git@github.com:personal-username/scylla.git\n' +
+                       'and, in case of an "rolling upgrade", need to define "base_versions" param explicitly.'),
                    name: 'byo_scylla_repo')
             string(defaultValue: '',
                    description: 'Branch of the custom "scylladb" repo. Leave empty if byo is not needed.',
