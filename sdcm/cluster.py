@@ -1732,9 +1732,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def config_client_encrypt(self):
         install_client_certificate(self.remoter, self.ip_address)
 
-    def create_node_certificate(self, cert_file, cert_key):
+    def create_node_certificate(self, cert_file, cert_key, csr_file=None):
         create_certificate(
-            cert_file, cert_key, self.name, ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE,
+            cert_file, cert_key, self.name, ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE, server_csr_file=csr_file,
             ip_addresses=[self.ip_address, self.public_ip_address],
             dns_names=[self.public_dns_name, self.private_dns_name])
 
@@ -4652,7 +4652,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             SnitchConfig(node=node, datacenters=datacenters).apply()
 
         # Create node certificate for internode communication
-        node.create_node_certificate(node.ssl_conf_dir / TLSAssets.DB_CERT, node.ssl_conf_dir / TLSAssets.DB_KEY)
+        node.create_node_certificate(cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+                                     cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+                                     csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR)
         # Create client facing node certificate, for client-to-node communication
         node.create_node_certificate(
             node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY)
