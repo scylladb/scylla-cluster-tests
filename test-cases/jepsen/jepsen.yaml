@@ -20,3 +20,8 @@ jepsen_scylla_repo: 'https://github.com/scylladb/jepsen.git'
 jepsen_test_count: 5
 jepsen_test_run_policy: any
 bare_loaders: true
+
+# since jepsen is using very old ssh library (jsch), we can only use RSA keys
+# and our new keys are ECDSA, so we need to revert using the old key we have
+# TODO: raise it with jepsen
+user_credentials_path: '~/.ssh/scylla-test'
