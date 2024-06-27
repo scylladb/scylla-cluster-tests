@@ -916,7 +916,8 @@ class ScyllaManagerTool(ScyllaManagerBase):
         ScyllaManagerBase.__init__(self, id="MANAGER", manager_node=manager_node)
         self._initial_wait(20)
         LOGGER.info("Initiating Scylla-Manager, version: {}".format(self.sctool.version))
-        list_supported_distros = [Distro.ROCKY8, Distro.ROCKY9,
+        list_supported_distros = [Distro.CENTOS7,
+                                  Distro.ROCKY8, Distro.ROCKY9,
                                   Distro.DEBIAN10, Distro.DEBIAN11,
                                   Distro.UBUNTU20, Distro.UBUNTU22]
         self.default_user = "centos"
