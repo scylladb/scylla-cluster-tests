@@ -73,6 +73,7 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.provision.helpers.certificate import update_certificate, TLSAssets
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
+from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
@@ -1263,6 +1264,30 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         new_node.wait_node_fully_start()
         InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
+
+    def _add_and_init_new_cluster_node_parallel(self, count, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=0):
+        self.log.info("Adding %s new nodes to cluster...", count)
+        InfoEvent(message=f'StartEvent - Adding {count} new nodes to cluster').publish()
+        new_nodes = self.cluster.add_nodes(
+            count=count, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)
+        self.monitoring_set.reconfigure_scylla_monitoring()
+
+        try:
+            with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.nodes[0], timeout=timeout):
+                self.cluster.wait_for_init(node_list=new_nodes, timeout=timeout, check_node_health=False)
+            self.cluster.set_seeds()
+            self.cluster.update_seed_provider()
+        except (NodeSetupFailed, NodeSetupTimeout):
+            self.log.warning("TestConfig of the '%s' failed, removing them from list of nodes" % new_nodes)
+            for node in new_nodes:
+                self.cluster.nodes.remove(node)
+            self.log.warning("Nodes will not be terminated. Please terminate manually!!!")
+            raise
+        for new_node in new_nodes:
+            new_node.wait_native_transport()
+        self.cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
+        InfoEvent(message="FinishEvent - New Nodes are up and normal").publish()
+        return new_nodes
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     def _terminate_cluster_node(self, node):
@@ -3989,6 +4014,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def add_new_node(self, rack=0):
         return self._add_and_init_new_cluster_node(rack=rack)
 
+    @latency_calculator_decorator(legend="Adding new nodes parallel")
+    def add_new_nodes_parallel(self, count=1, rack=0):
+        nodes = self._add_and_init_new_cluster_node_parallel(count=count, rack=rack)
+        self._wait_for_tablets_balanced()
+        return nodes
+
     @latency_calculator_decorator(legend="Decommission node: remove node from cluster")
     def decommission_node(self, node):
         self.cluster.decommission(node)
@@ -4014,12 +4045,37 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 InfoEvent(f'FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error '
                           f'{str(exc)}').publish()
 
+    @latency_calculator_decorator(legend="Decommission node: remove node from cluster")
+    def decommission_nodes_parallel(self, add_nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue,
+                                    dc_idx: Optional[int] = None):
+        parallel_obj = ParallelObject(objects=self.cluster.nodes[:add_nodes_number], timeout=7200)
+        try:
+            InfoEvent(f'StartEvent - ShrinkCluster started decommissioning {add_nodes_number} nodes').publish()
+            parallel_obj.run(self.cluster.decommission, ignore_exceptions=False, unpack_objects=True)
+            InfoEvent(f'FinishEvent - ShrinkCluster has done decommissioning {add_nodes_number} nodes').publish()
+        except Exception as exc:  # pylint: disable=broad-except
+            InfoEvent(f'FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error '
+                      f'{str(exc)}').publish()
+
     def disrupt_grow_shrink_cluster(self):
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
         if not self.has_steady_run and sleep_time_between_ops:
             self.steady_state_latency()
             self.has_steady_run = True
         self._grow_cluster(rack=None)
+        self._shrink_cluster(rack=None)
+
+    def disrupt_grow_shrink_cluster_parallel(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+        self._grow_cluster_parallel(rack=None)
+        self.log.info("Doubling the load on the cluster")
+        stress_queue = self.tester.run_stress_thread(
+            stress_cmd=self.tester.stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=30)
+        results = self.tester.get_stress_results(queue=stress_queue, store_results=False)
+        self.log.info(f"Double load results: {results}")
         self._shrink_cluster(rack=None)
 
     # NOTE: version limitation is caused by the following:
@@ -4049,6 +4105,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info("Finish cluster grow")
         time.sleep(self.interval)
 
+    def _grow_cluster_parallel(self, rack=None):
+        if rack is None:
+            rack = 0
+        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
+        self.log.info("Start grow cluster on %s nodes", add_nodes_number)
+        InfoEvent(message=f"Start grow cluster on {add_nodes_number} nodes").publish()
+        self.add_new_nodes_parallel(count=add_nodes_number, rack=rack)
+        self.log.info("Finish cluster grow")
+        time.sleep(300)  # TODO: currently, just in case, to be removed
+
     def _shrink_cluster(self, rack=None):
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         self.log.info("Start shrink cluster by %s nodes", add_nodes_number)
@@ -4074,11 +4140,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # Currently on kubernetes first two nodes of each rack are getting seed status
         # Because of such behavior only way to get them decommission is to enable decommissioning
         # TBD: After https://github.com/scylladb/scylla-operator/issues/292 is fixed remove is_seed parameter
-        self.decommission_nodes(
-            decommission_nodes_number,
-            rack,
-            is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
-            dc_idx=self.target_node.dc_idx)
+        if self.cluster.parallel_startup:
+            self.decommission_nodes_parallel(
+                decommission_nodes_number,
+                rack,
+                is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
+                dc_idx=self.target_node.dc_idx)
+        else:
+            self.decommission_nodes(
+                decommission_nodes_number,
+                rack,
+                is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
+                dc_idx=self.target_node.dc_idx)
         num_of_nodes = len(self.cluster.nodes)
         self.log.info("Cluster shrink finished. Current number of nodes %s", num_of_nodes)
         InfoEvent(message=f'Cluster shrink finished. Current number of nodes {num_of_nodes}').publish()
@@ -5019,6 +5092,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.restart_scylla_server()
             raise
 
+    def _wait_for_tablets_balanced(self):
+        """
+        Waiting for tablets to be balanced using REST API.
+
+        doing it several times as there's a risk of:
+        "currently a small time window after adding nodes and before load balancing starts during which
+        topology may appear as quiesced because the state machine goes through an idle state before it enters load balancing state"
+        """
+        time.sleep(60)  # one minute gap before checking, just to give some time to state machine
+        client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=self.cluster.nodes[0])
+        self.log.info("Waiting for tablets to be balanced")
+        for _ in range(3):
+            client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology", params={}, timeout=3600)
+            time.sleep(5)
+        self.log.info("Tablets are balanced")
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements  # noqa: PLR0915
     """
@@ -5260,6 +5349,15 @@ class GrowShrinkClusterNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_grow_shrink_cluster()
+
+
+class GrowShrinkClusterParallelNemesis(Nemesis):
+    disruptive = True
+    kubernetes = False
+    topology_changes = True
+
+    def disrupt(self):
+        self.disrupt_grow_shrink_cluster_parallel()
 
 
 class AddRemoveRackNemesis(Nemesis):

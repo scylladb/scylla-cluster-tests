@@ -910,7 +910,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.download_db_packages()
         if self.is_encrypt_keys_needed:
             self.download_encrypt_keys()
-        self.prepare_kms_host()
+        # self.prepare_kms_host()
 
         self.init_resources()
 
@@ -1953,6 +1953,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration:
             timeout = self.get_duration(duration)
+            stress_cmd = re.sub(r'\sduration=\d+[mhd]\s', f' duration={duration}m ', stress_cmd)
         elif self._stress_duration and ' duration=' in stress_cmd:
             timeout = self.get_duration(self._stress_duration)
             stress_cmd = re.sub(r'\sduration=\d+[mhd]\s', f' duration={self._stress_duration}m ', stress_cmd)
@@ -1986,6 +1987,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # pylint: disable=too-many-locals
         if duration:
             timeout = self.get_duration(duration)
+            stress_cmd = re.sub(r'\sduration=\d+[mhd]\s', f' duration={duration}m ', stress_cmd)
         elif self._stress_duration and ' duration=' in stress_cmd:
             timeout = self.get_duration(self._stress_duration)
             stress_cmd = re.sub(r'\sduration=\d+[mhd]\s', f' duration={self._stress_duration}m ', stress_cmd)
@@ -2018,6 +2020,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if duration:
             timeout = self.get_duration(duration)
+            stress_cmd = re.sub(r'\sduration=\d+[mhd]\s', f' duration={duration}m ', stress_cmd)
         elif self._stress_duration and '-duration=' in stress_cmd:
             timeout = self.get_duration(self._stress_duration)
             stress_cmd = re.sub(r'\s-duration[=\s]+\d+[mhd]+\s*', f' -duration={self._stress_duration}m ', stress_cmd)

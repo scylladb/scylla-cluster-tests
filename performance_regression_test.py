@@ -325,12 +325,14 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         # allow to correctly save results for future compare
         if sub_type is None:
             sub_type = 'read' if ' read ' in stress_cmd else 'write' if ' write ' in stress_cmd else 'mixed'
+        # TODO: replace self.stress_cmd hack with proper implementation
+        self.stress_cmd = stress_cmd  # pylint: disable=attribute-defined-outside-init
         test_index = f'latency-during-ops-{sub_type}'
         self.create_test_stats(sub_type=sub_type, append_sub_test_to_name=False, test_index=test_index)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
         if nemesis:
             interval = self.params.get('nemesis_interval')
-            time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
+            time.sleep(5 * 60)  # Sleeping one interval (in minutes) before starting the nemesis
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis(interval=interval, cycles_count=1)
             self._stop_load_when_nemesis_threads_end()
