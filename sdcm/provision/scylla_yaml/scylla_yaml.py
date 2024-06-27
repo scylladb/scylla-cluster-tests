@@ -333,6 +333,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
     system_info_encryption: dict = None  # None
     kmip_hosts: dict = None  # None
 
+    enable_tablets: bool = None  # False, but default scylla.yaml for some versions (e.g. 6.0) override it to True
+
     def dict(  # pylint: disable=arguments-differ
         self,
         *,
