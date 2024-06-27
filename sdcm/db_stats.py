@@ -624,6 +624,7 @@ class TestStatsMixin(Stats):
 
         setup_details['db_cluster_node_details'] = {}
         setup_details['sysctl_output'] = []
+        setup_details['append_scylla_yaml'] = str(self.params.get('append_scylla_yaml') or '')
         return setup_details
 
     def get_test_details(self):
