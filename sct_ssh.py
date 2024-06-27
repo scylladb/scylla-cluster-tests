@@ -81,15 +81,28 @@ def aws_find_bastion_for_instance(instance: dict) -> dict:
     return bastions[0]
 
 
-def gce_find_bastion_for_instance() -> compute_v1.Instance:
+def gce_get_user_and_ssh_keys(instance: compute_v1.Instance):
+    res = [item.value for item in instance.metadata.items if item.key == 'ssh-keys'][0]
+    username, ssh_key = res.split(':')
+    ssh_key = ssh_key.split(' ')[0:-1]
+    return username, ssh_key
+
+
+def gce_find_bastion_for_instance(instance: compute_v1.Instance) -> compute_v1.Instance:
     tags = {'bastion': 'true'}
-    bastions = list_instances_gce(tags, running=True)
+    bastions = list_instances_gce(tags, running=True, verbose=False)
+
+    _, instance_key = gce_get_user_and_ssh_keys(instance)
+    bastions = [b for b in bastions if gce_get_user_and_ssh_keys(b)[1] == instance_key]
     assert bastions, "No bastion found"
-    return bastions[0]
+
+    return bastions[-1]
 
 
 def guess_username(instance: dict | compute_v1.Instance) -> str:
     user_name = get_tags(instance).get('UserName')
+    if isinstance(instance, compute_v1.Instance):
+        user_name, _ = gce_get_user_and_ssh_keys(instance)
     if user_name:
         return user_name
 
@@ -118,8 +131,8 @@ def get_proxy_command(instance: dict | compute_v1.Instance,
 def gce_get_proxy_command(instance: compute_v1.Instance, strict_host_checking: bool):
     target_key = f'~/.ssh/{SSH_KEY_GCE_DEFAULT}'
     if "sct-network-only" in instance.tags.items and "sct-allow-public" not in instance.tags.items:
-        target_username = 'scylla-test'
-        bastion = gce_find_bastion_for_instance()
+        target_username = guess_username(instance)
+        bastion = gce_find_bastion_for_instance(instance)
         bastion_username, bastion_ip = guess_username(bastion), list(gce_public_addresses(bastion))[0]
         target_ip = list(gce_private_addresses(instance))[0]
         strict_host_check = ""
@@ -129,7 +142,7 @@ def gce_get_proxy_command(instance: compute_v1.Instance, strict_host_checking: b
     else:
         target_ip = list(gce_public_addresses(instance))[0]
         proxy_command = ''
-        target_username = 'scylla-test'
+        target_username = guess_username(instance)
     return proxy_command, target_ip, target_username, target_key
 
 
@@ -165,9 +178,9 @@ def select_instance(region: str = None, **tags) -> dict | None:
         tags.update({"TestId": test_id})
     if node_name:
         tags.update({'Name': node_name})
-    aws_vms = list_instances_aws(tags, running=True, region_name=region)
+    aws_vms = list_instances_aws(tags, running=True, region_name=region, verbose=False)
 
-    gce_vms = list_instances_gce(tags, running=True)
+    gce_vms = list_instances_gce(tags, running=True, verbose=False)
 
     if len(aws_vms + gce_vms) == 1:
         return (aws_vms + gce_vms)[0]
@@ -217,7 +230,7 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
         aws_vms = list_instances_aws(tags, running=True, region_name=region)
 
     if 'gce' in backends:
-        gce_vms = list_instances_gce(tags, running=True)
+        gce_vms = list_instances_gce(tags, running=True, verbose=False)
 
     if len(aws_vms + gce_vms) == 1:
         return aws_vms + gce_vms
@@ -330,7 +343,7 @@ def tunnel(user, test_id, region, port, node_name):
 
     if connect_vm:
         if isinstance(connect_vm, compute_v1.Instance):
-            bastion = gce_find_bastion_for_instance()
+            bastion = gce_find_bastion_for_instance(connect_vm)
             bastion_username, bastion_ip = guess_username(bastion), list(gce_public_addresses(bastion))[0]
             target_ip = list(gce_private_addresses(connect_vm))[0]
         else:
