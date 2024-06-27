@@ -45,11 +45,11 @@ class JepsenTest(ClusterTester):
                    destination_dir_name="jepsen-scylla",
                    clone_as_root=False)
         for db_node in self.db_cluster.nodes:
-            remoter.run(f"ssh-keyscan -t rsa {db_node.ip_address} >> ~/.ssh/known_hosts")
+            remoter.run(f"ssh-keyscan -t ed25519 {db_node.ip_address} >> ~/.ssh/known_hosts")
 
             # newer jepsen test is using tcpdump, and expect it in /usr/bin
             db_node.install_package("tcpdump")
-            db_node.remoter.sudo("ln -s /usr/bin/tcpdump /usr/sbin/tcpdump", ignore_status=True)
+            db_node.remoter.sudo("ln -s /sbin/tcpdump /usr/bin/tcpdump", ignore_status=True)
 
         remoter.send_files(os.path.expanduser(self.db_cluster.nodes[0].ssh_login_info["key_file"]), DB_SSH_KEY)
 
