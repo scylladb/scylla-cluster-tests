@@ -2208,7 +2208,7 @@ def update_certificates(db_csr='data_dir/ssl_conf/example/db.csr', cadb_pem='dat
                         f'-out {db_crt} -days 365')
         localrunner.run(f'openssl x509 -enddate -noout -in {db_crt}')
         new_crt = localrunner.run(f'cat {db_crt}').stdout
-    except Exception as ex:  # pylint: disable=broad-except
+    except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
         raise Exception('Failed to update certificates by openssl: %s' % ex) from None
     return new_crt
 
