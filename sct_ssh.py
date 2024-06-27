@@ -76,6 +76,7 @@ def aws_find_bastion_for_instance(instance: dict) -> dict:
     region = get_region(instance)
     tags = {'bastion': 'true'}
     bastions = list_instances_aws(tags, running=True, region_name=region)
+    bastions = list(filter(lambda vm: vm['KeyName'] == instance['KeyName'], bastions))
     assert bastions, f"No bastion found for region: {region}"
     return bastions[0]
 
@@ -135,7 +136,6 @@ def gce_get_proxy_command(instance: compute_v1.Instance, strict_host_checking: b
 def aws_get_proxy_command(instance: dict, force_use_public_ip: bool, strict_host_checking: bool = False) -> [str, str, str]:
     aws_region = AwsRegion(get_region(instance))
     target_key = f'~/.ssh/{SSH_KEY_AWS_DEFAULT}'
-
     if aws_region.sct_vpc.vpc_id == instance["VpcId"] and not force_use_public_ip:
         # if we are the current VPC setup, proxy via bastion needed
         bastion = aws_find_bastion_for_instance(instance)
