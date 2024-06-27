@@ -335,6 +335,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
 
     enable_tablets: bool = None  # False, but default scylla.yaml for some versions (e.g. 6.0) override it to True
 
+    enable_tablets: bool = None  # False, but default scylla.yaml for some versions (e.g. 6.0) override it to True
+
     def dict(  # pylint: disable=arguments-differ
         self,
         *,
