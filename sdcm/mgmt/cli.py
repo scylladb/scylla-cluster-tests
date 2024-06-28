@@ -394,7 +394,7 @@ class ManagerTask:
         # * check that progress command works on various task statuses (that was how manager bug #856 found).
         # * print the progress to log in cases needed for failures/performance analysis.
         ###
-        progress = self.progress  # pylint: disable=unused-variable
+        progress = self.progress  # pylint: disable=unused-variable  # noqa: F841
         return self.status in list_status
 
     def wait_for_status(self, list_status, check_task_progress=True, timeout=3600, step=120):

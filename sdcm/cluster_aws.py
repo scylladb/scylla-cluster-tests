@@ -390,14 +390,14 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         # if simulated_racks, create all instances in the same az
         instance_az = 0 if self.params.get("simulated_racks") else rack
         instances = []
-        if rack is None:
+        if instance_az is None:
             # define how many nodes should be created on each rack, e.g. for 3 nodes and 2 racks it will be [2, 1]
             base = count // self.racks_count
             extra = count % self.racks_count
             rack_distribution = [base + 1 if i < extra else base for i in range(self.racks_count)]
         else:
             # otherwise create all nodes on the specified rack
-            rack_distribution = [count if i == rack else 0 for i in range(self.racks_count)]
+            rack_distribution = [count if i == instance_az else 0 for i in range(self.racks_count)]
         self.log.info('rack distribution: %s', rack_distribution)
         for rack_idx, rack_count in enumerate(rack_distribution):
             if rack_count == 0:

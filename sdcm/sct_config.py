@@ -1796,7 +1796,7 @@ class SCTConfiguration(dict):
                         else:
                             azure_image = azure_utils.get_released_scylla_images(
                                 scylla_version=scylla_version, region_name=region)[0]
-                    except Exception as ex:
+                    except Exception as ex:  # noqa: BLE001
                         raise ValueError(
                             f"Azure Image for scylla_version='{scylla_version}' not found in {region}") from ex
                     self.log.debug("Found Azure Image %s for scylla_version='%s' in %s",
