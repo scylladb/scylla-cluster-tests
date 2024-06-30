@@ -26,7 +26,7 @@ from upgrade_test import UpgradeTest
 from sdcm.tester import ClusterTester, teardown_on_exception
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
-from sdcm.sct_events.loaders import CassandraStressEvent
+from sdcm.sct_events.loaders import CassandraStressEvent, CqlStressCassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
 from sdcm.utils.decorators import log_run_info, latency_calculator_decorator
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes
@@ -215,7 +215,10 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         with EventsSeverityChangerFilter(new_severity=Severity.NORMAL,  # killing stress creates Critical error
                                          event_class=CassandraStressEvent,
                                          extra_time_to_expiration=60):
-            self.loaders.kill_stress_thread()
+            with EventsSeverityChangerFilter(new_severity=Severity.NORMAL,  # killing CqlStress creates Critical error
+                                         event_class=CqlStressCassandraStressEvent,
+                                         extra_time_to_expiration=60):
+                self.loaders.kill_stress_thread()
 
     def preload_data(self, compaction_strategy=None):
         # if test require a pre-population of data

@@ -6607,3 +6607,39 @@ class EndOfQuotaNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_end_of_quota_nemesis()
+
+
+class WaitStopWaitStartWaitMonkey(Nemesis):
+    """
+    Main purpose of this nemesis is to test how scylla performance changed durin stop/start operations
+    """
+    disruptive = True
+
+    @latency_calculator_decorator
+    def stop_and_wait(self, sleep_time):
+        InfoEvent(
+            message=f'StartEvent - start a sleep of {sleep_time} to calculate_latency during stop_and_wait').publish()
+        time.sleep(sleep_time)
+        InfoEvent(
+            message=f'FinishEvent - calculate_latency during  stop_and_wait  has been finished').publish()
+
+    @latency_calculator_decorator
+    def start_and_wait(self, sleep_time):
+        InfoEvent(
+            message=f'StartEvent - start a sleep of {sleep_time} to calculate_latency during start_and_wait').publish()
+        time.sleep(sleep_time)
+        InfoEvent(
+            message=f'FinishEvent - calculate_latency during  start_and_wait  has been finished').publish()
+
+    def disrupt(self):
+        self.set_target_node()
+        sleep_time = self.cluster.params.get('nemesis_sequence_sleep_between_ops') * 60
+        if not self.has_steady_run:
+            self.steady_state_latency(sleep_time=sleep_time)
+            self.has_steady_run = True
+
+        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
+        self.stop_and_wait(sleep_time)
+        assert not self.target_node.db_up(), "Scylla self started, but should not"
+        self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+        self.start_and_wait(sleep_time)

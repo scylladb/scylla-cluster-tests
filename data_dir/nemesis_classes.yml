@@ -89,3 +89,4 @@
 - TruncateLargeParititionMonkey
 - TruncateMonkey
 - ValidateHintedHandoffShortDowntime
+- WaitStopWaitStartWaitMonkey
