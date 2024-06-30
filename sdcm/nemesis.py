@@ -1269,7 +1269,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
 
-    def _add_and_init_new_cluster_nodes(self, count, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=None):
+    def _add_and_init_new_cluster_nodes(self, count, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=None) -> list[BaseNode]:
         if rack is None and self._is_it_on_kubernetes():
             rack = 0
         self.log.info("Adding %s new nodes to cluster...", count)
@@ -1312,7 +1312,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if add_node:
             # When adding node after decommission the node is declared as up only after it completed bootstrapping,
             # increasing the timeout for now
-            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)
+            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)[0]
             # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
             # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
             # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
@@ -1530,7 +1530,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info('Decommission %s', node)
         self.cluster.decommission(node, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
 
-        new_node = self.add_new_nodes(count=1, rack=node.rack)
+        new_node = self.add_new_nodes(count=1, rack=node.rack)[0]
         self.unset_current_running_nemesis(new_node)
 
         # NOTE: wait for all other neighbour pods become ready
@@ -3580,7 +3580,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 "Node was not removed properly (Node status:{})".format(removed_node_status)
 
             # add new node
-            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)
+            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)[0]
             # in case the removed node was not last seed.
             if node_to_remove.is_seed and num_of_seed_nodes > 1:
                 new_node.set_seed_flag(True)
@@ -3864,7 +3864,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.error('Unexpected exception raised in checking decommission status: %s', exc)
 
             self.log.info('Decommission might complete before stopping it. Re-add a new node')
-            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)
+            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)[0]
             if new_node.is_seed != target_is_seed:
                 new_node.set_seed_flag(target_is_seed)
                 self.cluster.update_seed_provider()
@@ -4020,7 +4020,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.clear_snapshots()
 
     @latency_calculator_decorator(legend="Adding new nodes")
-    def add_new_nodes(self, count, rack=None):
+    def add_new_nodes(self, count, rack=None) -> list[BaseNode]:
         nodes = self._add_and_init_new_cluster_nodes(count, rack=rack)
         self._wait_for_tablets_balanced(nodes[0])
         return nodes
