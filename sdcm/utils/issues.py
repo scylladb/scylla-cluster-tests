@@ -121,10 +121,15 @@ class SkipPerIssues:
                                                           labels=issue_details['labels']),
                                           completed=True)
         except ClientError as exc:
-            logging.warning("failed to get issue: %s from s3 cache", issue)
+            severity = Severity.ERROR
+            # some repos are not cached so we just warns about, and fallback
+            if issue_parsed.repo_id in ['field-engineering']:
+                severity = Severity.WARNING
+            else:
+                logging.warning("failed to get issue: %s from s3 cache", issue)
             TestFrameworkEvent(source=self.__class__.__name__,
                                message=f"failed to get issue {issue} from s3 cache",
-                               severity=Severity.ERROR,
+                               severity=severity,
                                exception=exc).publish()
         try:
             return self.github.get_repo(f'{issue_parsed.user_id}/{issue_parsed.repo_id}', lazy=True).get_issue(issue_parsed.issue_id)
