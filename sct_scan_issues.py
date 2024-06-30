@@ -15,6 +15,7 @@
 
 import sys
 import ast
+import tempfile
 import logging
 from pathlib import Path
 
@@ -24,7 +25,7 @@ from sdcm.utils.issues import SkipPerIssues
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.common import get_sct_root_path
 from sdcm.utils.sct_cmd_helpers import add_file_logger
-
+from sdcm.sct_events.setup import start_events_device, stop_events_device
 LOGGER = logging.getLogger(__name__)
 
 
@@ -47,6 +48,8 @@ def get_value(node):
 def scan_issue_skips():
     add_file_logger()
     unneeded_skips = False
+    temp_dir = tempfile.mkdtemp()
+    start_events_device(temp_dir)
 
     params = SCTConfiguration()
     for file_path in Path(get_sct_root_path()).glob("**/*.py"):
@@ -69,9 +72,10 @@ def scan_issue_skips():
                         "sct-") and label.name.endswith("-skip"))
 
                     if not (issues_opened or issues_labeled):
-                        click.secho(f"{args[:1]} should be consider to be remove from code", fg="red")
+                        click.secho(f"{args[:1]} is closed, should be consider to be remove from code", fg="red")
                         unneeded_skips = True
 
+    stop_events_device()
     if unneeded_skips:
         return sys.exit(1)
     return 0
