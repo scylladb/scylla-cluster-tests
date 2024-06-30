@@ -2893,6 +2893,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             Validates that hinted handoff mechanism works: there were no drops and errors
             during short stop of one of the nodes in cluster
         """
+<<<<<<< HEAD
+=======
+        # NOTE: enable back when 'https://github.com/scylladb/scylladb/issues/8136' issue is fixed
+        if SkipPerIssues('https://github.com/scylladb/scylladb/issues/8136', params=self.tester.params):
+            raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/8136')
+
+>>>>>>> d61d58ee (fix(nemesis): refer to correct scylladb repo)
         if self.cluster.params.get('hinted_handoff') == 'disabled':
             raise UnsupportedNemesis('For this nemesis to work, `hinted_handoff` needs to be set to `enabled`')
 
@@ -3314,6 +3321,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         Generates random firewall rule to drop/reject packets for inter-node communications, port 7000 and 7001
         """
+<<<<<<< HEAD
+=======
+
+        # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
+        if SkipPerIssues('https://github.com/scylladb/scylladb/issues/6522', self.tester.params):
+            raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/6522')
+
+>>>>>>> d61d58ee (fix(nemesis): refer to correct scylladb repo)
         name = 'RejectInterNodeNetwork'
 
         self._install_iptables()
