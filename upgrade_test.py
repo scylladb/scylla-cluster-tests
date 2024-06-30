@@ -39,6 +39,7 @@ from sdcm.utils.version_utils import (
     get_node_supported_sstable_versions,
     ComparableScyllaVersion,
     is_enterprise,
+    get_node_enabled_sstable_version
 )
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import (
@@ -96,14 +97,14 @@ def backup_conf(node):
         node.remoter.run(
             r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ) '
             r'/etc/systemd/system/{var-lib-scylla,var-lib-systemd-coredump}.mount; '
-            r'do sudo cp -v $conf $conf.autobackup; done')
+            r'do if test -e $conf; then sudo cp -v $conf $conf.autobackup; fi; done')
     else:
         node.remoter.run(
             r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
             r'/var/lib/dpkg/info/scylla-*conf.conffiles '
             r'/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ) '
             r'/etc/systemd/system/{var-lib-scylla,var-lib-systemd-coredump}.mount; '
-            r'do sudo cp -v $conf $conf.backup; done')
+            r'do if test -e $conf; then sudo cp -v $conf $conf.backup; fi; done')
 
 
 def recover_conf(node):
@@ -111,13 +112,13 @@ def recover_conf(node):
         node.remoter.run(
             r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ) '
             r'/etc/systemd/system/{var-lib-scylla,var-lib-systemd-coredump}.mount; '
-            r'do test -e $conf.autobackup && sudo cp -v $conf.autobackup $conf; done')
+            r'do if test -e $conf.backup; then sudo cp -v $conf.backup $conf; fi; done')
     else:
         node.remoter.run(
             r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
             r'/var/lib/dpkg/info/scylla-*conf.conffiles '
             r'/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do '
-            r'test -e $conf.backup && sudo cp -v $conf.backup $conf; done')
+            r'if test -e $conf.backup; then sudo cp -v $conf.backup $conf; fi; done')
 
 
 # pylint: disable=too-many-instance-attributes, too-many-public-methods
@@ -354,6 +355,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self.upgradesstables_if_command_available(node)
             InfoEvent(message='upgrade_node - ended to "upgradesstables_if_command_available"').publish()
 
+        self.db_cluster.wait_all_nodes_un()
+
     @truncate_entries
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
     def rollback_node(self, node, upgrade_sstables=True):
@@ -455,6 +458,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if upgrade_sstables:
             self.upgradesstables_if_command_available(node)
 
+        self.db_cluster.wait_all_nodes_un()
+
     @staticmethod
     def upgradesstables_if_command_available(node, queue=None):  # pylint: disable=invalid-name
         upgradesstables_available = False
@@ -474,10 +479,16 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         :return:
         """
-        output = []
+        enabled_sstable_format_features = []
         for node in self.db_cluster.nodes:
-            output.extend(get_node_supported_sstable_versions(node.system_log))
-        return max(set(output))
+            enabled_sstable_format_features.extend(get_node_supported_sstable_versions(node.system_log))
+
+        if not enabled_sstable_format_features:
+            for node in self.db_cluster.nodes:
+                with self.db_cluster.cql_connection_patient_exclusive(node) as session:
+                    enabled_sstable_format_features.extend(get_node_enabled_sstable_version(session))
+
+        return max(set(enabled_sstable_format_features))
 
     def wait_for_sstable_upgrade(self, node, queue=None):
         all_tables_upgraded = True
@@ -662,13 +673,13 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.metric_has_data(
             metric_query='sct_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
 
-        # start gemini write workload
-        if self.version_cdc_support():
-            InfoEvent(message="Start gemini during upgrade").publish()
-            gemini_thread = self.run_gemini(self.params.get("gemini_cmd"))
-            # Let to write_stress_during_entire_test complete the schema changes
-            self.metric_has_data(
-                metric_query='gemini_cql_requests', n=10)
+        InfoEvent(message="Start gemini during upgrade").publish()
+        gemini_cmd = self.params.get("gemini_cmd")
+        if self.enable_cdc_for_tables:
+            gemini_cmd += " --table-options \"cdc={'enabled': true}\""
+        gemini_thread = self.run_gemini(gemini_cmd)
+        self.metric_has_data(
+            metric_query='gemini_cql_requests', n=10)
 
         with ignore_upgrade_schema_errors():
 
@@ -872,8 +883,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 error_factor, schema_load_error_num)
 
         InfoEvent(message='Step10 - Verify that gemini did not failed during upgrade').publish()
-        if self.version_cdc_support():
-            self.verify_gemini_results(queue=gemini_thread)
+        self.verify_gemini_results(queue=gemini_thread)
 
         InfoEvent(message='all nodes were upgraded, and last workaround is verified.').publish()
 
