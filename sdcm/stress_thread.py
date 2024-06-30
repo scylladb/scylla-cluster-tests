@@ -33,7 +33,6 @@ from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_inter
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
 from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.utils.version_utils import get_docker_image_by_version
 from sdcm.utils.remote_logger import SSHLoggerBase
 
 
@@ -249,13 +248,6 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         pass
-
-    @cached_property
-    def docker_image_name(self):
-        if cassandra_stress_image := super().docker_image_name:
-            return cassandra_stress_image
-        else:
-            return get_docker_image_by_version(self.node_list[0].get_scylla_binary_version())
 
     def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         cleanup_context = contextlib.nullcontext()
