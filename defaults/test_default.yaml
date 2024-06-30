@@ -209,8 +209,13 @@ stress_image:
   ndbench: 'scylladb/hydra-loaders:ndbench-jdk8-20210720'
   ycsb: 'scylladb/hydra-loaders:ycsb-jdk8-20220918'
   nosqlbench: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
+<<<<<<< HEAD
   cassandra-stress: '' # default would be same version as scylla under test
   scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.18'
+=======
+  cassandra-stress: 'docker.io/scylladb/hydra-loaders:cassandra-stress-6.0-20240701'
+  scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.21'
+>>>>>>> f205a48b (fix(c-s): update the docker image we use for c-s)
   gemini: 'scylladb/hydra-loaders:gemini-v1.8.6'
   alternator-dns: 'scylladb/hydra-loaders:alternator-dns-0.1'
   cdc-stresser: 'scylladb/hydra-loaders:cdc-stresser-20210630'
