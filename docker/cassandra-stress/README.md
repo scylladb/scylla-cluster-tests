@@ -2,9 +2,9 @@
 ### Building from DEB files (quicker)
 
 ```
-export DEB_LIST_URL=https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/branch-5.1/deb/unified/2022-08-18T12%3A17%3A46Z/scylladb-5.1/scylla.list
-export CS_DOCKER_IMAGE=scylladb/hydra-loaders:cassandra-stress-$(date +'%Y%m%d')
-docker build . -t ${CS_DOCKER_IMAGE} -f Dockerfile-deb --build-arg DEB_LIST_URL=$DEB_LIST_URL
+export DEB_LIST_URL=https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/branch-6.0/deb/unified/latest/scylladb-6.0/scylla.list
+export CS_DOCKER_IMAGE=scylladb/hydra-loaders:cassandra-stress-6.0-$(date +'%Y%m%d')
+docker build . -t ${CS_DOCKER_IMAGE} -f Dockerfile-deb --build-arg DEB_LIST_URL=$DEB_LIST_URL --build-arg DEB_KEY=87722433EBB454AE
 docker push ${CS_DOCKER_IMAGE}
 ```
 
