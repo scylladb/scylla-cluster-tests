@@ -21,7 +21,7 @@ import random
 import time
 import re
 from functools import wraps, cache
-from typing import List
+from typing import List, Any
 import contextlib
 
 import cassandra
@@ -52,7 +52,10 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused, \
     ignore_abort_requested_errors, decorate_with_context
 from sdcm.utils import loader_utils
+from sdcm.utils.features import TABLETS_FEATURE, CONSISTENT_TOPOLOGY_CHANGES_FEATURE, get_enabled_features
+from sdcm.wait import wait_for
 from sdcm.paths import SCYLLA_YAML_PATH
+from sdcm.rest.raft_upgrade_procedure import RaftUpgradeProcedure
 from test_lib.sla import create_sla_auth
 
 NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
@@ -209,7 +212,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             scylla_yaml_updates.update({"consistent_cluster_management": True})
 
         if self.params.get("enable_tablets_on_upgrade"):
-            scylla_yaml_updates.update({"experimental_features": ["tablets", "consistent-topology-changes"]})
+            scylla_yaml_updates.update({"enable_tablets": True})
+
+        if self.params.get("enable_force_gossip_topology_changes_on_upgrade"):
+            scylla_yaml_updates.update({"force_gossip_topology_changes": True})
 
         if self.params.get('test_sst3'):
             scylla_yaml_updates.update({"enable_sstables_mc_format": True})
@@ -375,15 +381,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # backup the data
         node.run_nodetool("snapshot")
         node.stop_scylla_server(verify_down=False)
-
-        if self.params.get("enable_tablets_on_upgrade"):
-            with node.remote_scylla_yaml() as scylla_yml:
-                current_experimental_features = scylla_yml.experimental_features
-                current_experimental_features.remove("tablets")
-                current_experimental_features.remove("consistent-topology-changes")
-                if len(current_experimental_features) == 0:
-                    current_experimental_features = None
-                scylla_yml.experimental_features = current_experimental_features
 
         if node.distro.is_rhel_like:
             node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
@@ -618,7 +615,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         with node_to_update.remote_scylla_yaml() as scylla_yaml:
             scylla_yaml.update(updates)
 
-    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0915
+    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements,too-many-branches  # noqa: PLR0915
         """
         Upgrade half of nodes in the cluster, and start special read workload
         during the stage. Checksum method is changed to xxhash from Scylla 2.2,
@@ -751,10 +748,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         step = 'Step4 - Verify data during mixed cluster mode '
         InfoEvent(message=step).publish()
         self.fill_and_verify_db_data('after rollback the second node')
+
         InfoEvent(message='Repair the first upgraded Node').publish()
-        self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
-        self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
-                                                      step=step)
+        self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair', timeout=7200, coredump_on_timeout=True)
+        self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade, step=step)
 
         with ignore_upgrade_schema_errors():
 
@@ -769,6 +766,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
                 self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                               step=step)
+        if self.params.get("enable_tablets_on_upgrade") or not self.params.get("enable_force_gossip_topology_changes_on_upgrade"):
+            self.run_raft_topology_upgrade_procedure()
 
         InfoEvent(message='Step6 - Verify stress results after upgrade ').publish()
         InfoEvent(message='Waiting for stress threads to complete after upgrade').publish()
@@ -888,6 +887,34 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         self.verify_gemini_results(queue=gemini_thread)
 
         InfoEvent(message='all nodes were upgraded, and last workaround is verified.').publish()
+
+    def run_raft_topology_upgrade_procedure(self):
+        features = set()
+        if not self.params.get("enable_force_gossip_topology_changes_on_upgrade"):
+            features.update([CONSISTENT_TOPOLOGY_CHANGES_FEATURE])
+        if self.params.get("enable_tablets_on_upgrade"):
+            features.update([TABLETS_FEATURE, CONSISTENT_TOPOLOGY_CHANGES_FEATURE])
+        InfoEvent(message='Step5.1 - run raft topology upgrade procedure')
+
+        def check_features_enabled(feature_list: list[str], node: BaseNode):
+            enabled_features_state = []
+            with self.db_cluster.cql_connection_patient_exclusive(node) as session:
+                enabled_features = get_enabled_features(session)
+                for feature in feature_list:
+                    enabled_features_state.append(feature in enabled_features)
+            return all(enabled_features_state)
+
+        # wait features is enabled on nodes after upgrade
+        for node in self.db_cluster.nodes:
+            wait_for(func=check_features_enabled, timeout=60, step=f"Check feature enabled on node {node.name}",
+                     feature_list=features, node=node)
+        raft_upgrade = RaftUpgradeProcedure(self.db_cluster.nodes[0])
+        result = raft_upgrade.start_upgrade_procedure()
+        InfoEvent(message=f'result {result}')
+        InfoEvent("Wait upgrade procedure done")
+        for node in self.db_cluster.nodes:
+            RaftUpgradeProcedure(node).wait_upgrade_procedure_done()
+        InfoEvent(message="Step5.1 - raft topology upgrade procedure done")
 
     def _start_and_wait_for_node_upgrade(self, node: BaseNode, step: int) -> None:
         InfoEvent(
@@ -1508,3 +1535,7 @@ class UpgradeCustomTest(UpgradeTest):
             assert all(tables_upgraded), "Failed to upgrade the sstable format {}".format(tables_upgraded)
 
         InfoEvent(message='all nodes were upgraded, and last workaround is verified.').publish()
+
+    def get_old_config_value(self, config_name: str) -> Any:
+        with self.db_cluster.nodes[0].remote_scylla_yaml() as scylla_yaml:
+            return getattr(scylla_yaml, config_name, None)

@@ -339,6 +339,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     audit_categories: str = None  # None
     audit_tables: str = None  # None
     audit_keyspaces: str = None  # None
+    force_gossip_topology_changes: bool = None  # False
+    enable_tablets: bool = None  # Default value False, but explicitly set true for new clusters in scylla.yaml
 
     compaction_collection_items_count_warning_threshold: int = None  # None
 
