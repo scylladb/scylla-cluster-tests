@@ -7,7 +7,12 @@ perfRegressionParallelPipeline(
     backend: "aws",
     availability_zone: 'a,b,c',
     test_name: "performance_regression_test.PerformanceRegressionTest",
+<<<<<<< HEAD:jenkins-pipelines/perf-regression-latency-650gb-grow-shrink-tablets.jenkinsfile
     test_config: """["test-cases/performance/perf-regression-latency-650gb-grow-shrink.yaml", "configurations/tablets-initial-32.yaml"]""",
     sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
     test_email_title: "latency during grow-shrink (tablets)"
+=======
+    test_config: """["test-cases/performance/perf-regression-latency-650gb-with-nemesis.yaml", "configurations/tablets_disabled.yaml"]""",
+    sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"]
+>>>>>>> 21b10c72 (feature(perf-tests): disable tablets by default):jenkins-pipelines/performance/scylla-enterprise/scylla-enterprise-perf-regression-latency-650gb-with-nemesis.jenkinsfile
 )
