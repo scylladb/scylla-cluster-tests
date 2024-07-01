@@ -69,7 +69,7 @@ from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificate
 from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.provision.helpers.certificate import (
-    install_client_certificate, install_encryption_at_rest_files, create_certificate,
+    create_ca, install_client_certificate, install_encryption_at_rest_files, create_certificate,
     export_pem_cert_to_pkcs12_keystore, CA_CERT_FILE, CA_KEY_FILE, JKS_TRUSTSTORE_FILE, TLSAssets)
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd, RetryableNetworkException
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
@@ -2283,12 +2283,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.download_scylla_manager_repo(manager_repo_url)
         self.install_package(package_names)
 
-        self.log.debug("Create and send client TLS certificate/key to the node")
-        self.create_node_certificate(cert_file=self.ssl_conf_dir / TLSAssets.CLIENT_CERT,
-                                     cert_key=self.ssl_conf_dir / TLSAssets.CLIENT_KEY)
-        self.remoter.run(f'mkdir -p {mgmt.cli.SSL_CONF_DIR}')
-        self.remoter.send_files(src=str(self.ssl_conf_dir) + '/', dst=str(mgmt.cli.SSL_CONF_DIR))
-
         if self.is_docker():
             try:
                 self.remoter.run("echo no | sudo scyllamgr_setup")
@@ -4085,6 +4079,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.restart_scylla()
 
     def enable_client_encrypt(self):
+        create_ca(self.test_config.tester_obj().localhost)
+        for node in self.nodes:
+            node.create_node_certificate(cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+                                         cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+                                         csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR)
+            # Create client facing node certificate, for client-to-node communication
+            node.create_node_certificate(
+                node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY)
+            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+                shutil.copy(src, node.ssl_conf_dir)
         self.log.debug("Enabling client encryption on nodes")
         with self.patch_params() as params:
             params['client_encrypt'] = True
@@ -4650,15 +4654,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 datacenters = self.datacenter  # pylint: disable=no-member
             SnitchConfig(node=node, datacenters=datacenters).apply()
 
-        # Create node certificate for internode communication
-        node.create_node_certificate(cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
-                                     cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
-                                     csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR)
-        # Create client facing node certificate, for client-to-node communication
-        node.create_node_certificate(
-            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY)
-        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
-            shutil.copy(src, node.ssl_conf_dir)
+        if self.params.get('server_encrypt'):
+            # Create node certificate for internode communication
+            node.create_node_certificate(cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+                                         cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+                                         csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR)
+            # Create client facing node certificate, for client-to-node communication
+            node.create_node_certificate(
+                node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY)
+            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+                shutil.copy(src, node.ssl_conf_dir)
         node.config_setup(append_scylla_args=self.get_scylla_args())
 
         self._scylla_post_install(node, install_scylla, nic_devname)
@@ -5098,14 +5103,15 @@ class BaseLoaderSet():
             self.log.info("Don't install anything because bare loaders requested")
             return
 
-        node.create_node_certificate(node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
-                                     node.ssl_conf_dir / TLSAssets.CLIENT_KEY)
-        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
-            shutil.copy(src, node.ssl_conf_dir)
         if self.params.get('client_encrypt'):
+            node.create_node_certificate(node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
+                                         node.ssl_conf_dir / TLSAssets.CLIENT_KEY)
+            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+                shutil.copy(src, node.ssl_conf_dir)
             export_pem_cert_to_pkcs12_keystore(
                 node.ssl_conf_dir / TLSAssets.CLIENT_CERT, node.ssl_conf_dir / TLSAssets.CLIENT_KEY,
                 node.ssl_conf_dir / TLSAssets.PKCS12_KEYSTORE)
+
             if self.params.get('use_prepared_loaders'):
                 node.config_client_encrypt()
 

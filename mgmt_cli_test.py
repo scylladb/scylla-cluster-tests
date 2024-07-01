@@ -32,6 +32,7 @@ from sdcm import mgmt
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from sdcm.mgmt.cli import ScyllaManagerTool
 from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots
+from sdcm.provision.helpers.certificate import TLSAssets
 from sdcm.remote import shell_script_cmd
 from sdcm.tester import ClusterTester
 from sdcm.cluster import TestConfig
@@ -740,7 +741,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
     def test_client_encryption(self):
         self.log.info('starting test_client_encryption')
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        manager_node = self.monitors.nodes[0]
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
         mgr_cluster = self._ensure_and_get_cluster(manager_tool)
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
@@ -749,6 +751,12 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         healthcheck_task = mgr_cluster.get_healthcheck_task()
 
         self.db_cluster.enable_client_encrypt()
+
+        self.log.info("Create and send client TLS certificate/key to the manager node")
+        manager_node.create_node_certificate(cert_file=manager_node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
+                                             cert_key=manager_node.ssl_conf_dir / TLSAssets.CLIENT_KEY)
+        manager_node.remoter.run(f'mkdir -p {mgmt.cli.SSL_CONF_DIR}')
+        manager_node.remoter.send_files(src=str(manager_node.ssl_conf_dir) + '/', dst=str(mgmt.cli.SSL_CONF_DIR))
 
         # SM caches scylla nodes configuration and the healthcheck svc is independent from the cache updates.
         # Cache is being updated periodically, every 1 minute following the manager config for SCT.
