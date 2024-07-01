@@ -2284,10 +2284,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.install_package(package_names)
 
         self.log.debug("Create and send client TLS certificate/key to the node")
-        self.create_node_certificate(self.ssl_conf_dir / TLSAssets.CLIENT_CERT,
-                                     self.ssl_conf_dir / TLSAssets.CLIENT_KEY)
-        self.remoter.send_files(
-            str(self.ssl_conf_dir), dst='/tmp/ssl_conf')
+        self.create_node_certificate(cert_file=self.ssl_conf_dir / TLSAssets.CLIENT_CERT,
+                                     cert_key=self.ssl_conf_dir / TLSAssets.CLIENT_KEY)
+        self.remoter.run(f'mkdir -p {mgmt.cli.SSL_CONF_DIR}')
+        self.remoter.send_files(src=str(self.ssl_conf_dir) + '/', dst=str(mgmt.cli.SSL_CONF_DIR))
 
         if self.is_docker():
             try:
