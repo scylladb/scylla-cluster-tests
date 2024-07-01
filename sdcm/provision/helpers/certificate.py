@@ -12,10 +12,12 @@
 # Copyright (c) 2021 ScyllaDB
 import io
 import ipaddress
+import logging
 import shutil
 import tarfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import wraps
 from pathlib import Path
 from textwrap import dedent
 from typing import Any
@@ -29,6 +31,9 @@ from cryptography.x509.oid import NameOID
 from sdcm.remote import shell_script_cmd
 from sdcm.utils.common import get_data_dir_path
 from sdcm.utils.docker_utils import ContainerManager, DockerException
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -93,6 +98,18 @@ def install_encryption_at_rest_files(remoter):
     remoter.sudo("md5sum /etc/encrypt_conf/*.pem", ignore_status=True)
 
 
+def cached_ca(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if CA_CERT_FILE.exists() and CA_KEY_FILE.exists():
+            LOGGER.info(
+                "CA %s certificate and %s key already exist. Skipping creation.", CA_CERT_FILE, CA_KEY_FILE)
+            return
+        return func(*args, **kwargs)
+    return wrapper
+
+
+@cached_ca
 def create_ca(cname: str = 'scylladb.com', password: str = 'scylladb', valid_days: int = 365) -> None:
     """Generate and save a key and certificate for CA."""
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
@@ -200,6 +217,17 @@ def create_certificate(
         )
 
 
+def cached_java_truststore(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if JKS_TRUSTSTORE_FILE.exists():
+            LOGGER.info("%s Java truststore already exists. Skipping creation.", JKS_TRUSTSTORE_FILE)
+            return
+        return func(*args, **kwargs)
+    return wrapper
+
+
+@cached_java_truststore
 def import_ca_to_jks_truststore(
         localhost, cert_file: Path = CA_CERT_FILE, jks_file: Path = JKS_TRUSTSTORE_FILE,
         jks_password: str = 'cassandra') -> None:
