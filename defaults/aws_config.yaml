@@ -7,7 +7,7 @@ user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
 instance_type_loader: 'c6i.xlarge'
 instance_type_monitor: 't3.large'
 # manual on creating loader AMI's: see docs/new_loader_ami.md
-ami_id_loader: 'scylla-qa-loader-ami-v20-ubuntu22'
+ami_id_loader: 'scylla-qa-loader-ami-v21-ubuntu22'  # versions: c-s 2024.2.0-rc0, s-b 0.1.21
 # manual on updating monitor images see: docs/monitoring-images.md
 ami_id_monitor: 'scylladb-monitor-4-7-2-2024-05-13t08-38-47z'
 
