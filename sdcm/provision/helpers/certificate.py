@@ -12,6 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 import io
 import ipaddress
+import logging
 import shutil
 import tarfile
 from dataclasses import dataclass
@@ -29,6 +30,9 @@ from cryptography.x509.oid import NameOID
 from sdcm.remote import shell_script_cmd
 from sdcm.utils.common import get_data_dir_path
 from sdcm.utils.docker_utils import ContainerManager, DockerException
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -93,8 +97,17 @@ def install_encryption_at_rest_files(remoter):
     remoter.sudo("md5sum /etc/encrypt_conf/*.pem", ignore_status=True)
 
 
+<<<<<<< HEAD
 def create_ca(cname: str = 'scylladb.com', password: str = 'scylladb', valid_days: int = 365) -> None:
+=======
+def _create_ca(cname: str = 'scylladb.com', valid_days: int = 365) -> None:
+>>>>>>> 927c2429 (fix(create-ca): make creation of CA optional)
     """Generate and save a key and certificate for CA."""
+    if CA_CERT_FILE.exists() and CA_KEY_FILE.exists():
+        LOGGER.info(
+            "CA %s certificate and %s key already exist. Skipping creation.", CA_CERT_FILE, CA_KEY_FILE)
+        return
+
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
     subject = issuer = x509.Name(
         [
@@ -200,10 +213,14 @@ def create_certificate(
         )
 
 
-def import_ca_to_jks_truststore(
+def _import_ca_to_jks_truststore(
         localhost, cert_file: Path = CA_CERT_FILE, jks_file: Path = JKS_TRUSTSTORE_FILE,
         jks_password: str = 'cassandra') -> None:
     """Convert a PEM formatted certificate to a Java truststore."""
+    if jks_file.exists():
+        LOGGER.info("%s Java truststore already exists. Skipping creation.", jks_file)
+        return
+
     with open(cert_file, encoding="utf-8") as file:
         cert = file.read()
 
@@ -311,3 +328,8 @@ def c_s_transport_str(client_mtls: bool) -> str:
         transport_str = (
             f'{transport_str} keystore={SCYLLA_SSL_CONF_DIR}/{TLSAssets.PKCS12_KEYSTORE} keystore-password=cassandra')
     return transport_str
+
+
+def create_ca(localhost):
+    _create_ca()
+    _import_ca_to_jks_truststore(localhost)
