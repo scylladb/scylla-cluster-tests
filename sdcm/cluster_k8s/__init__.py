@@ -3064,10 +3064,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
     def _get_docker_image(self):
         if loader_image := self.params.get('stress_image.cassandra-stress'):
             return loader_image
-        else:
-            docker_image = self.params.get('docker_image')
-            scylla_version = self.params.get('scylla_version')
-            return f"{docker_image}:{scylla_version}"
+        raise ValueError("No 'stress_image.cassandra-stress' option found in the test configuration")
 
     def add_nodes(self,
                   count: int,
