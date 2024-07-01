@@ -24,7 +24,7 @@ from sdcm.cluster import BaseNode
 from sdcm.prometheus import start_metrics_server
 from sdcm.provision import provisioner_factory
 from sdcm.provision.helpers.certificate import (
-    create_ca, create_certificate, import_ca_to_jks_truststore, SCYLLA_SSL_CONF_DIR, CLIENT_FACING_CERTFILE,
+    create_ca, create_certificate, SCYLLA_SSL_CONF_DIR, CLIENT_FACING_CERTFILE,
     CLIENT_FACING_KEYFILE, CA_CERT_FILE, CA_KEY_FILE, CLIENT_CERT_FILE, CLIENT_KEY_FILE)
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
@@ -77,9 +77,8 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
         curr_dir = os.getcwd()
         try:
             os.chdir(Path(__file__).parent.parent)
-            create_ca()
             localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
-            import_ca_to_jks_truststore(localhost)
+            create_ca(localhost)
             create_certificate(CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, cname="scylladb",
                                ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
             create_certificate(CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb",

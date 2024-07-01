@@ -176,9 +176,6 @@ class ClusterTesterForTests(ClusterTester):
         time.sleep(0.5)
         super().stop_event_device()
 
-    def create_ca(self):
-        pass
-
 
 class SubtestAndTeardownFailsTest(ClusterTesterForTests):
     def test(self):
