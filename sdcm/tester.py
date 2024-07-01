@@ -593,7 +593,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def argus_collect_gemini_results(self):
         try:
             # pylint: disable=no-member
-            if not getattr(self, "gemini_results"):
+            if not hasattr(self, "gemini_results"):
                 return
 
             if self.loaders:
