@@ -397,6 +397,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
         self.bisect_ref_value = None
         self.bisect_result_value = None
+        self.stress_cmd = self.params.get('stress_cmd')
 
     def _init_test_duration(self):
         self._stress_duration: int = self.params.get('stress_duration')
@@ -1982,6 +1983,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration:
             timeout = self.get_duration(duration)
+            if ' duration' in stress_cmd:
+                stress_cmd = re.sub(r'\sduration=\d+[mhd]\s', f' duration={duration}m ', stress_cmd)
         elif self._stress_duration and ' duration=' in stress_cmd:
             timeout = self.get_duration(self._stress_duration)
             stress_cmd = re.sub(r'\sduration=\d+[mhd]\s', f' duration={self._stress_duration}m ', stress_cmd)
@@ -2015,6 +2018,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # pylint: disable=too-many-locals
         if duration:
             timeout = self.get_duration(duration)
+            if ' duration' in stress_cmd:
+                stress_cmd = re.sub(r'\sduration=\d+[mhd]\s', f' duration={duration}m ', stress_cmd)
         elif self._stress_duration and ' duration=' in stress_cmd:
             timeout = self.get_duration(self._stress_duration)
             stress_cmd = re.sub(r'\sduration=\d+[mhd]\s', f' duration={self._stress_duration}m ', stress_cmd)
