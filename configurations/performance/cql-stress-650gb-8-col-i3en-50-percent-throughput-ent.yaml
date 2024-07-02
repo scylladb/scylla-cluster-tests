@@ -1,0 +1,11 @@
+prepare_write_cmd: ["cql-stress-cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=400 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..162500000",
+                    "cql-stress-cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=400 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=162500000..325000000",
+                    "cql-stress-cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=400 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=325000000..487500000",
+                    "cql-stress-cassandra-stress write no-warmup cl=ALL n=162500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=400 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=487500000..650000000"]
+
+# values for 3x i3en.2xlarge
+# throttling values are not confirmed - just increased about 10%
+stress_cmd_w: "cql-stress-cassandra-stress write no-warmup cl=QUORUM duration=2850m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=300 fixed=22000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,9750000)' "
+stress_cmd_r: "cql-stress-cassandra-stress read no-warmup  cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=300 fixed=12000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,9750000)' "
+stress_cmd_m: "cql-stress-cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=300 fixed=10000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..650000000,325000000,6500000)' "
+use_hdr_cs_histogram: false  # https://github.com/scylladb/cql-stress/issues/95
