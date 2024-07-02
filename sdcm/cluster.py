@@ -3947,7 +3947,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.test_config = TestConfig()
         self._node_cycle = None
         self.params = kwargs.get('params', {})
-        self.parallel_node_operations = self.params.get("parallel_node_operations") or False
+        force_gossip = (self.params.get('append_scylla_yaml') or {}).get('force_gossip_topology_changes', False)
+        self.parallel_node_operations = False if force_gossip else self.params.get("parallel_node_operations") or False
         super().__init__(*args, **kwargs)
 
     def get_node_ips_param(self, public_ip=True):
