@@ -54,6 +54,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
             return False
 
         test_stats = self._get_perf_simple_query_result(doc)
+        columns = test_stats['stats'].keys()
         test_details = self._get_test_details(doc)
         if not (test_stats and test_details):
             self.log.debug("Could not find test statistics, regression check is skipped")
@@ -109,8 +110,11 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
             table_line['test_version'] = data['results']['perf_simple_query_result']['versions'][
                 'scylla-server']
             stats = data['results']['perf_simple_query_result']['stats']
-            for key, value in stats.items():
+            for key in columns:
+                value = stats.get(key, 'N/A')
                 table_line[key] = value
+                if value == 'N/A':
+                    continue
                 if value > 0 and key != "mad tps":
                     diff = test_stats['stats'][key] / value
                     table_line["is_" + key + "_within_limits"] = False
