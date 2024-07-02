@@ -400,6 +400,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'workdir': None,
                 'write_request_timeout_in_ms': None,
                 'enable_tablets': None,
+                'force_gossip_topology_changes': None,
             }
         )
 
