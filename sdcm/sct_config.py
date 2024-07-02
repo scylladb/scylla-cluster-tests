@@ -1468,6 +1468,9 @@ class SCTConfiguration(dict):
              type=int, k8s_multitenancy_supported=True,
              help="Multiply the list of nemesis to execute by the specified factor"),
 
+        dict(name="nemesis_double_load_during_grow_shrink_duration", env="SCT_NEMESIS_DOUBLE_LOAD_DURING_GROW_SHRINK_DURATION", type=int,
+             help="After growing (and before shrink) in GrowShrinkCluster nemesis it will double the load for provided duration."),
+
         dict(name="raid_level", env="SCT_RAID_LEVEL",
              type=int,
              help="Number of of raid level: 0 - RAID0, 5 - RAID5"),
