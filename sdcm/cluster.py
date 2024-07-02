@@ -34,7 +34,7 @@ from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
 from datetime import datetime
 from textwrap import dedent
-from functools import cached_property, wraps, lru_cache
+from functools import cached_property, wraps, lru_cache, partial
 from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -72,6 +72,7 @@ from sdcm.provision.helpers.certificate import install_client_certificate, insta
     CLIENT_CERTFILE, CLIENT_TRUSTSTORE
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd, RetryableNetworkException
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
+from sdcm.remote.remote_long_running import run_long_running_cmd
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
 from sdcm import wait, mgmt
 from sdcm.sct_config import SCTConfiguration
@@ -2591,9 +2592,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         return f"{self.add_install_prefix('/usr/bin/nodetool')} {options} {sub_cmd} {args}"
 
     # pylint: disable=inconsistent-return-statements
-    def run_nodetool(self, sub_cmd: str, args: str = "", options: str = "", timeout: int = None,
+    def run_nodetool(self, sub_cmd: str, args: str = "", options: str = "", timeout: int = None,  # noqa: PLR0913
                      ignore_status: bool = False, verbose: bool = True, coredump_on_timeout: bool = False,
-                     warning_event_on_exception: Exception = None, error_message: str = "", publish_event: bool = True, retry: int = 1
+                     warning_event_on_exception: Exception = None, error_message: str = "", publish_event: bool = True, retry: int = 1,
+                     long_running: bool = False
                      ) -> Result:
         """
             Wrapper for nodetool command.
@@ -2614,6 +2616,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                                            in the list
         :param error_message: additional error message to exception message
         :param publish_event: publish event or not
+        :param long_running: command would be executed on host, and polled for results
         :return: Remoter result object
         """
         cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
@@ -2623,8 +2626,13 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                            options=options,
                            publish_event=publish_event) as nodetool_event:
             try:
+                if long_running:
+                    runner = partial(run_long_running_cmd, self.remoter)
+                else:
+                    runner = self.remoter.run
                 result = \
-                    self.remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose, retry=retry)
+                    runner(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose, retry=retry)
+
                 self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
 
                 nodetool_event.duration = result.duration
