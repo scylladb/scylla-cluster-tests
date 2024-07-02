@@ -559,14 +559,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             severity=Severity.ERROR,
         )
 
+    def _is_test_error(self, events: dict[str, list[str]]) -> bool:
+        def check_error(event: str):
+            errors = [
+                "SpotTerminationEvent",
+            ]
+            for error in errors:
+                if error.lower() in event.lower():
+                    return True
+            return False
+
+        return any(check_error(e) for e in [*events.get("CRITICAL"), *events.get("ERROR")])
+
     def argus_finalize_test_run(self):
         try:
             stat_map = {
                 "SUCCESS": TestStatus.PASSED,
                 "FAILED": TestStatus.FAILED
             }
-            self.test_config.argus_client().finalize_sct_run()
-            self.argus_update_status(stat_map.get(self.get_test_status(), TestStatus.FAILED))
+
             last_events_limit = 100
             last_events = get_events_grouped_by_category(
                 limit=last_events_limit, _registry=self.events_processes_registry)
@@ -577,6 +588,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     severity=severity, total_events=events_summary.get(severity, 0), messages=messages)
                 events_sorted.append(event_category)
             self.test_config.argus_client().submit_events(events_sorted)
+
+            test_status = stat_map.get(self.get_test_status(), TestStatus.FAILED)
+            if test_status == TestStatus.FAILED and self._is_test_error(last_events):
+                test_status = TestStatus.TEST_ERROR
+            self.argus_update_status(test_status)
+
+            self.test_config.argus_client().finalize_sct_run()
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error committing test events to Argus", exc_info=True)
 
