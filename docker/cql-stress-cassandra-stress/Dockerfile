@@ -1,4 +1,4 @@
-FROM rust:1.78 as builder
+FROM rust:1.78 AS builder
 
 ARG BRANCH
 ARG REPO
@@ -11,6 +11,6 @@ RUN git clone ${REPO} -b ${BRANCH}
 RUN cd cql-stress && cargo build --release --bin cql-stress-cassandra-stress
 
 
-FROM rust:1.73-slim as app
+FROM rust:1.73-slim AS app
 
 COPY --from=builder /cql-stress/target/release/cql-stress-cassandra-stress /usr/local/bin/
