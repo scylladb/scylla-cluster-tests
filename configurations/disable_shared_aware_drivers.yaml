@@ -1,0 +1,4 @@
+# configuration to disable shard aware drivers
+# but without resorting to using very old drivers
+append_scylla_yaml:
+  enable_shard_aware_drivers: false
