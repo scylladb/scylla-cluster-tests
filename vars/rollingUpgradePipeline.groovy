@@ -73,6 +73,26 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
+
+            // NOTE: Optional parameters for BYO ScyllaDB stage
+            string(defaultValue: '',
+                   description: (
+                       'Custom "scylladb" repo to use. Leave empty if byo is not needed. ' +
+                       'If set then it must be proper GH repo. Example: git@github.com:personal-username/scylla.git\n' +
+                       'and, in case of an "rolling upgrade", need to define "base_versions" param explicitly.'),
+                   name: 'byo_scylla_repo')
+            string(defaultValue: '',
+                   description: 'Branch of the custom "scylladb" repo. Leave empty if byo is not needed.',
+                   name: 'byo_scylla_branch')
+            string(defaultValue: '/scylla-6.0/byo/byo_build_tests_dtest',
+                   description: 'Used when byo scylladb repo+branch is provided. Default "/scylla-6.0/byo/byo_build_tests_dtest"',
+                   name: 'byo_job_path')
+            string(defaultValue: 'scylla',
+                   description: '"scylla" or "scylla-enterprise". Default is "scylla".',
+                   name: 'byo_default_product')
+            string(defaultValue: 'next-6.0',
+                   description: 'Default branch to be used for scylla and other repositories. Default is "next".',
+                   name: 'byo_default_branch')
         }
         options {
             timestamps()
@@ -170,6 +190,19 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
+                                        stage('BYO Scylladb [optional]') {
+                                            catchError(stageResult: 'FAILURE') {
+                                                script {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            timeout(time: 240, unit: 'MINUTES') {
+                                                                byoScylladb(params, false)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                         stage("Create SCT Runner for ${base_version}") {
                                             wrap([$class: 'BuildUser']) {
                                                 dir('scylla-cluster-tests') {
@@ -207,7 +240,10 @@ def call(Map pipelineParams) {
 
                                                             export SCT_CONFIG_FILES=${test_config}
                                                             export SCT_SCYLLA_VERSION=${base_version}
-                                                            export SCT_NEW_SCYLLA_REPO=${params.new_scylla_repo}
+
+                                                            if [[ ! -z "${params.new_scylla_repo}" ]]; then
+                                                                export SCT_NEW_SCYLLA_REPO=${params.new_scylla_repo}
+                                                            fi
 
                                                             if [[ ! -z "${params.azure_image_db}" ]]; then
                                                                 export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"

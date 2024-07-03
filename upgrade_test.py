@@ -24,6 +24,8 @@ from functools import wraps, cache
 from typing import List
 import contextlib
 
+import cassandra
+import tenacity
 from argus.client.sct.types import Package
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
@@ -66,7 +68,7 @@ def truncate_entries(func):
             try:
                 self.cql_truncate_simple_tables(session=session, rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
                 InfoEvent(message="Finish truncate simple tables").publish()
-            except Exception as details:  # pylint: disable=broad-except
+            except cassandra.DriverException as details:
                 InfoEvent(message=f"Failed truncate simple tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
                           severity=Severity.ERROR).publish()
             self.validate_truncated_entries_for_table(session=session, system_truncated=True)
@@ -166,7 +168,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                                  msg='Expected that there is no data in the table truncate_ks.{}, but found {} rows'
                                  .format(table_name, count[0][0]))
                 InfoEvent(message=f"Finish read data from {table_name} tables").publish()
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 InfoEvent(message=f"Failed read data from {table_name} tables. Error: {str(details)}. Traceback: {traceback.format_exc()}",
                           severity=Severity.ERROR).publish()
 
@@ -195,7 +197,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
     @decorate_with_context(ignore_abort_requested_errors)
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
-    def _upgrade_node(self, node, upgrade_sstables=True, new_scylla_repo=None, new_version=None):
+    def _upgrade_node(self, node, upgrade_sstables=True, new_scylla_repo=None, new_version=None):  # noqa: PLR0915
         # pylint: disable=too-many-branches,too-many-statements
         new_scylla_repo = new_scylla_repo or self.params.get('new_scylla_repo')
         new_version = new_version or self.params.get('new_version')
@@ -310,7 +312,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 InfoEvent(message='upgrade_node - starting to "daemon-reload"').publish()
                 node.remoter.run('sudo systemctl daemon-reload')
                 InfoEvent(message='upgrade_node - ended to "daemon-reload"').publish()
-            else:
+            else:  # noqa: PLR5501
                 if node.distro.is_rhel_like:
                     InfoEvent(message='upgrade_node - starting to "yum update"').publish()
                     node.remoter.run(r'sudo yum update {}\* -y'.format(scylla_pkg_ver))
@@ -497,7 +499,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 assert list(sstable_versions)[0] == self.expected_sstable_format_version, (
                     "expected to format version to be '{}', found '{}'".format(
                         self.expected_sstable_format_version, list(sstable_versions)[0]))
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.warning(ex)
                 return False
             else:
@@ -507,7 +509,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message="Start waiting for upgardesstables to finish").publish()
             wait.wait_for(func=wait_for_node_to_finish, step=30, timeout=900, throw_exc=True,
                           text="Waiting until upgardesstables is finished")
-        except Exception:  # pylint: disable=broad-except
+        except tenacity.RetryError:
             all_tables_upgraded = False
         finally:
             if queue:
@@ -605,7 +607,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         with node_to_update.remote_scylla_yaml() as scylla_yaml:
             scylla_yaml.update(updates)
 
-    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
+    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0915
         """
         Upgrade half of nodes in the cluster, and start special read workload
         during the stage. Checksum method is changed to xxhash from Scylla 2.2,
@@ -1404,7 +1406,7 @@ class UpgradeCustomTest(UpgradeTest):
             try:
                 self.metric_has_data(
                     metric_query='sct_cassandra_stress_user_gauge{type="ops", keyspace="%s"}' % keyspace_name, n=10)
-            except Exception as err:  # pylint: disable=broad-except
+            except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
                 InfoEvent(
                     f"Get metrix data for keyspace {keyspace_name} failed with error: {err}", severity=Severity.ERROR).publish()
 

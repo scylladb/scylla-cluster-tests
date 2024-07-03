@@ -1,0 +1,16 @@
+[tool.ruff]
+lint.select = ["PL", "YTT", "BLE", "F841"]
+
+lint.ignore = ["E501", "PLR2004"]
+
+target-version = "py310"
+
+force-exclude = true
+line-length = 240
+respect-gitignore = true
+
+
+[tool.ruff.lint.pylint]
+max-args = 12
+max-statements = 100
+max-branches = 24

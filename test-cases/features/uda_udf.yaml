@@ -8,9 +8,9 @@ n_loaders: 1
 n_monitor_nodes: 1
 
 instance_type_db: 'i4i.2xlarge'
-append_scylla_yaml: |
-  experimental_features:
-     - udf
+experimental_features:
+  - udf
+append_scylla_yaml:
   enable_user_defined_functions: true
   user_defined_function_time_limit_ms: 10000
   user_defined_function_allocation_limit_bytes: 1048576

@@ -130,14 +130,14 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                                     )
                 # sleep to gather all latest log messages
                 time.sleep(5)
-            except Exception as details:  # pylint: disable=broad-except
+            except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.error(details)
                 result = getattr(details, "result", NotGeminiErrorResult(details))
 
             if result.exited:
                 gemini_stress_event.add_result(result=result)
                 gemini_stress_event.severity = Severity.ERROR
-            else:
+            else:  # noqa: PLR5501
                 if result.stderr:
                     gemini_stress_event.add_result(result=result)
                     gemini_stress_event.severity = Severity.WARNING
@@ -187,7 +187,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         try:
             results = json.loads(json_str)
 
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Invalid json document {}".format(details))
 
         return results.get('result')

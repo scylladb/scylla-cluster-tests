@@ -13,7 +13,6 @@ from sdcm.utils.version_utils import (
     get_all_versions,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
-    get_docker_image_by_version,
     get_git_tag_from_helm_chart_version,
     get_scylla_urls_from_repository,
     get_specific_tag_of_docker_image,
@@ -217,14 +216,13 @@ class ClassWithVersiondMethods:  # pylint: disable=too-few-public-methods
             node_scylla_version = "2023.1.dev"
         elif scylla_version.startswith('master:') or scylla_version == "":
             node_scylla_version = "4.7.dev"
+        elif ":" in scylla_version:
+            node_scylla_version = scylla_version.split(":")[0]
+            if node_scylla_version.count(".") < 1:
+                node_scylla_version += ".0"
+            node_scylla_version += ".dev"
         else:
-            if ":" in scylla_version:
-                node_scylla_version = scylla_version.split(":")[0]
-                if node_scylla_version.count(".") < 1:
-                    node_scylla_version += ".0"
-                node_scylla_version += ".dev"
-            else:
-                node_scylla_version = scylla_version
+            node_scylla_version = scylla_version
         nodes = [type("Node", (object,), {"scylla_version": node_scylla_version})]
         if nemesis_like_class:
             self.cluster = type("Cluster", (object,), {
@@ -414,50 +412,6 @@ def test_scylla_version_for_argus_regexp(full_version, short, date, commit_id):
     assert parsed_version.group("short") == short
     assert parsed_version.group("date") == date
     assert parsed_version.group("commit") == commit_id
-
-
-@pytest.mark.integration
-@pytest.mark.need_network
-@pytest.mark.parametrize("version, expected", (
-    ("4.6.rc2-20220102.e8a1cfb6f", "scylladb/scylla:4.6.rc2"),
-    ("5.0.1-0.20220719.b177dacd3", "scylladb/scylla:5.0.1"),
-    ("5.1", "scylladb/scylla:5.1"),
-    ("5.1.0~rc1", "scylladb/scylla:5.1.0-rc1"),
-    ("5.0.1", "scylladb/scylla:5.0.1"),
-    ("5.2.0~dev-0.20220824.6ce5e9079c1e", "scylladb/scylla-nightly:5.2.0-dev-0.20220824.6ce5e9079c1e"),
-    ("5.1.0~dev-0.20220726.29c28dcb0c33", "scylladb/scylla-nightly:5.1.0-dev-0.20220726.29c28dcb0c33"),
-    ("2022.2.dev-20220515.no_such_sha", "scylladb/scylla-enterprise:latest"),
-    ("5.2.0~dev-20220515.no_such_sha", "scylladb/scylla:latest"),
-))
-def test_get_docker_image_by_version(version, expected):
-    assert get_docker_image_by_version(scylla_version=version) == expected
-
-
-def test_get_docker_image_by_version_broken_string_version():
-    with pytest.raises(AssertionError):
-        get_docker_image_by_version(scylla_version="broken_version")
-
-
-def test_get_docker_image_by_version_fallback_on_errors():
-    def mock_requests_factory(response_stub):
-        return mock.Mock(**{
-            'json.return_value': response_stub,
-        })
-
-    def raise_request_error(**kwargs):
-        raise requests.HTTPError()
-
-    non_existing_version = '5.2.0~dev-0.20221124.999b7f5d9b77'
-    expected_fallback = 'scylladb/scylla:latest'
-    with unittest.mock.patch("requests.get") as get_mock:
-        get_mock.side_effect = lambda **_: mock_requests_factory({})
-        assert get_docker_image_by_version(scylla_version=non_existing_version) == expected_fallback
-
-        get_mock.side_effect = lambda **_: mock_requests_factory({"results": [{'name': ''}, {}]})
-        assert get_docker_image_by_version(scylla_version=non_existing_version) == expected_fallback
-
-        get_mock.side_effect = raise_request_error
-        assert get_docker_image_by_version(scylla_version=non_existing_version) == expected_fallback
 
 
 @pytest.mark.parametrize("version_string, expected", (

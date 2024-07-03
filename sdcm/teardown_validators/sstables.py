@@ -1,7 +1,9 @@
 import logging
 from functools import partial
 
+from sdcm import wait
 from sdcm.cluster import BaseNode
+from sdcm.exceptions import WaitForTimeoutError
 from sdcm.sct_events import Severity
 from sdcm.sct_events.teardown_validators import ValidatorEvent, ScrubValidationErrorEvent
 from sdcm.teardown_validators.base import TeardownValidator
@@ -31,7 +33,12 @@ class SstablesValidator(TeardownValidator):  # pylint: disable=too-few-public-me
         return s3_link
 
     def _run_nodetool_scrub(self, node: BaseNode, keyspace: str, table: str, timeout=1200):
-        node.wait_db_up(timeout=300)
+        try:
+            node.wait_db_up(timeout=300)
+        except WaitForTimeoutError as ex:
+            # sometimes node can boot very long after last nemesis (e.g. bootstrap new node).
+            LOGGER.error("Error waiting for node %s to be up in sstable validator: %s\nskipping validation", node.name, ex)
+            return
         finish_scrub_follower = node.follow_system_log(patterns=['Finished scrubbing in validate mode'])
         quarantine_lines = node.follow_system_log(patterns=['sstable - Moving sstable'], start_from_beginning=True)
         result = node.run_nodetool(sub_cmd='scrub', args=f"--mode VALIDATE --no-snapshot {keyspace} {table}".strip(),
@@ -40,7 +47,10 @@ class SstablesValidator(TeardownValidator):  # pylint: disable=too-few-public-me
             ValidatorEvent(
                 message=f'Error running nodetool scrub on node {node.name}: {result.stdout}\n{result.stderr}',
                 severity=Severity.ERROR).publish()
-        scrub_finish_lines = list(finish_scrub_follower)
+        # sometimes logs might be delayed, so we need to wait for them
+        scrub_finish_lines = wait.wait_for(func=lambda: list(finish_scrub_follower), step=10,
+                                           text="Waiting for 'Finished scrubbing in validate mode' logs",
+                                           timeout=300, throw_exc=False)
         if not scrub_finish_lines:
             ValidatorEvent(
                 message=f'No scrubbing validation message found in db logs on node: {node.name}', severity=Severity.ERROR).publish()
@@ -62,7 +72,7 @@ class SstablesValidator(TeardownValidator):  # pylint: disable=too-few-public-me
             parallel_obj = ParallelObject(objects=self.cluster.nodes, timeout=timeout)
             parallel_obj.run(run_scrub, ignore_exceptions=False, unpack_objects=True)
             LOGGER.info("Nodetool scrub validation finished")
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Error during nodetool scrub validation: %s", exc)
             ValidatorEvent(
                 message=f'Error during nodetool scrub validation: {exc}', severity=Severity.ERROR).publish()

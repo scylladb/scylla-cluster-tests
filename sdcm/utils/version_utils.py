@@ -20,7 +20,6 @@ from typing import List, Optional, Literal
 from collections import namedtuple, defaultdict
 from urllib.parse import urlparse
 from functools import lru_cache, wraps
-from itertools import count
 
 import yaml
 import boto3
@@ -475,41 +474,6 @@ def get_scylla_docker_repo_from_version(scylla_version: str):
     return 'scylladb/scylla'
 
 
-def get_docker_image_by_version(scylla_version: str):
-    # get shorter version, for getting releases, and check if it's enterprise.
-    short_scylla_version = SCYLLA_VERSION_RE.match(scylla_version)
-    assert short_scylla_version, f"'{scylla_version}' isn't acceptable version string"
-    short_scylla_version = short_scylla_version.group().replace('~', '-')
-
-    # select the repo to use, and the scylla_versio to match
-    docker_repo = 'scylladb/scylla'
-    if is_enterprise(short_scylla_version):
-        docker_repo += '-enterprise'
-
-    default_image = f"{docker_repo}:latest"
-
-    if 'dev' in scylla_version:
-        docker_repo += '-nightly'
-        scylla_version = scylla_version.replace('~', '-')
-    else:
-        scylla_version = short_scylla_version
-
-    for page_number in count(start=1):
-        try:
-            all_tags = requests.get(url=f'https://hub.docker.com/v2/repositories/{docker_repo}/'
-                                        f'tags?page_size=50&page={page_number}').json()
-        except requests.RequestException:
-            break
-        for image in all_tags.get('results', []):
-            image_name = image.get('name')
-            if image_name and scylla_version == image_name:
-                return f"{docker_repo}:{image_name}"
-        if not all_tags.get('next'):
-            break
-    # if image wasn't found, default to the latest releases
-    return default_image
-
-
 def _list_repo_file_etag(s3_client: S3Client, prefix: str) -> Optional[dict]:
     repo_file = s3_client.list_objects_v2(Bucket=SCYLLA_REPO_BUCKET, Prefix=prefix)
     if repo_file["KeyCount"] != 1:
@@ -556,7 +520,7 @@ def resolve_latest_repo_symlink(url: str) -> str:
     continuation_token = "BEGIN"
     while continuation_token:
         for build in s3_objects.get("CommonPrefixes", []):
-            build = build.get("Prefix", "").rstrip("/").rsplit("/", 1)[-1]
+            build = build.get("Prefix", "").rstrip("/").rsplit("/", 1)[-1]  # noqa: PLW2901
             if build == LATEST_SYMLINK_NAME:
                 continue
             timestamp = NO_TIMESTAMP
@@ -704,13 +668,13 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
             self.VERSIONS[(func.__name__, func.__code__.co_filename)] = {}
         for min_v, max_v in self.min_max_version_pairs:
             scylla_type = "enterprise" if any((is_enterprise(v) for v in (min_v, max_v) if v)) else "oss"
-            min_v = min_v or ("3.0.0" if scylla_type == "oss" else "2019.1.rc0")
-            max_v = max_v or ("99.99.99" if scylla_type == "oss" else "2099.99.99")
+            min_v = min_v or ("3.0.0" if scylla_type == "oss" else "2019.1.rc0")  # noqa: PLW2901
+            max_v = max_v or ("99.99.99" if scylla_type == "oss" else "2099.99.99")  # noqa: PLW2901
             if max_v.count(".") == 1:
                 # NOTE: version parse function considers 4.4 as lower than 4.4.1,
                 #       but we expect it to be any of the 4.4.x versions.
                 #       So, update all such short versions with the patch part and make it to be huge.
-                max_v = f"{max_v}.999"
+                max_v = f"{max_v}.999"  # noqa: PLW2901
             self.VERSIONS[(func.__name__, func.__code__.co_filename)].update({(min_v, max_v): func})
 
         @wraps(func)
@@ -747,7 +711,7 @@ def get_relocatable_pkg_url(scylla_version: str) -> str:
             get_pkgs_cmd = f'curl -s -X POST http://backtrace.scylladb.com/index.html -d "build_id={scylla_build_id}&backtrace="'
             res = LOCALRUNNER.run(get_pkgs_cmd)
             relocatable_pkg = re.findall(fr"{scylla_build_id}.+(http:[/\w.:-]*\.tar\.gz)", res.stdout)[0]
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("Couldn't get relocatable_pkg link due to: %s", exc)
     return relocatable_pkg
 
@@ -828,7 +792,7 @@ def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
     for key in repo_map:
         if scylla_version.startswith(key):
             return repo_map[key]
-    else:
+    else:  # noqa: PLW0120
         raise ValueError(f"repo for scylla version {scylla_version} wasn't found")
 
 

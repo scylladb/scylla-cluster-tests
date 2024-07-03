@@ -319,7 +319,7 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
 @sct_option('--test-id', 'test_id', help='test id to filter by')
 @click.option('--verbose', is_flag=True, default=False, help='if enable, will log progress')
 @click.pass_context
-def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
+def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):  # noqa: PLR0912, PLR0915
     # pylint: disable=too-many-locals,too-many-arguments,too-many-branches,too-many-statements
 
     add_file_logger()
@@ -795,7 +795,7 @@ def _run_yaml_test(backend, full_path, env):
         config = SCTConfiguration()
         config.verify_configuration()
         config.check_required_files()
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         output.append(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
         error = True
     return error, output
@@ -815,7 +815,7 @@ def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many
             continue
         try:
             exclude_filters.append(re.compile(flt))
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             raise ValueError(f'Exclude filter "{flt}" compiling failed with: {exc}') from exc
 
     include_filters = []
@@ -824,7 +824,7 @@ def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many
             continue
         try:
             include_filters.append(re.compile(flt))
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             raise ValueError(f'Include filter "{flt}" compiling failed with: {exc}') from exc
 
     original_env = {**os.environ}
@@ -965,7 +965,7 @@ def show_monitor(test_id, date_time, kill, cluster_name):
     containers = {}
     try:
         containers = restore_monitoring_stack(test_id, date_time)
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error(details)
 
     if not containers:
@@ -1268,7 +1268,7 @@ def get_test_results_for_failed_test(test_status, start_time):
 @click.option('--runner-ip', type=str, required=False, help="Sct runner ip for the running test")
 @click.option('--email-recipients', help="Send email to next recipients")
 @click.option('--logdir', help='Directory where to find testrun folder')
-def send_email(test_id=None, test_status=None, start_time=None, started_by=None, runner_ip=None,
+def send_email(test_id=None, test_status=None, start_time=None, started_by=None, runner_ip=None,  # noqa: PLR0912
                email_recipients=None, logdir=None):
     if started_by is None:
         started_by = get_username()
@@ -1348,7 +1348,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
             sys.exit(1)
         try:
             reporter.send_report(test_results)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
             build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
                 "job_url": os.environ.get("BUILD_URL"),
@@ -1473,11 +1473,11 @@ def prepare_regions(cloud_provider, regions):
 
     for region in regions:
         if cloud_provider == "aws":
-            region = AwsRegion(region_name=region)
+            region = AwsRegion(region_name=region)  # noqa: PLW2901
         elif cloud_provider == "azure":
-            region = AzureRegion(region_name=region)
+            region = AzureRegion(region_name=region)  # noqa: PLW2901
         elif cloud_provider == "gce":
-            region = GceRegion(region_name=region)
+            region = GceRegion(region_name=region)  # noqa: PLW2901
         else:
             raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
         region.configure()

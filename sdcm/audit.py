@@ -121,7 +121,7 @@ def get_audit_log_rows(node,  # pylint: disable=too-many-locals
             if '!NOTICE' in line[:120] and 'scylla-audit' in line[:120]:
                 while line[-2] != '"':
                     # read multiline audit log (must end with ")
-                    line += log_file.readline()
+                    line += log_file.readline()  # noqa: PLW2901
                 audit_data = line.split(': "', maxsplit=1)[-1]
                 try:
                     node, cat, consistency, table, keyspace_name, opr, source, username, error = audit_data.split(

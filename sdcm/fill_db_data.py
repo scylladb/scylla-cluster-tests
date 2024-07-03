@@ -3118,7 +3118,7 @@ class FillDatabaseData(ClusterTester):
                 with self._execute_and_log(f'Created tables for test "{test_name}" in {{}} seconds'):
                     for create_table in item['create_tables']:
                         if self.version_cdc_support():
-                            create_table = self._enable_cdc(item, create_table)
+                            create_table = self._enable_cdc(item, create_table)  # noqa: PLW2901
                         # wait a while before creating index, there is a delay of create table for
                         # waiting the schema agreement
                         if 'CREATE INDEX' in create_table.upper():
@@ -3327,7 +3327,7 @@ class FillDatabaseData(ClusterTester):
             try:
                 session.set_keyspace(self.base_ks)
                 self.truncate_tables(session)
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.debug("Found error in truncate tables: '%s'", ex)
 
             # Insert data to the tables according to the "inserts" and flush to disk in several cases (nodetool flush)
@@ -3384,11 +3384,11 @@ class FillDatabaseData(ClusterTester):
             self.log.info('running now session.execute')
             full_query_res = self.rows_to_list(session.execute(statement))
             if not full_query_res:
-                assert f'Query "{statement}" returned no entries'
+                assert f'Query "{statement}" returned no entries'  # noqa: PLW0129
             self.log.info('running now fetch_all_rows')
             full_res = self.rows_to_list(
                 fetch_all_rows(session=session, default_fetch_size=100, statement=statement))
             if not full_res:
-                assert f'Paged query "{statement}" returned no value'
+                assert f'Paged query "{statement}" returned no value'  # noqa: PLW0129
             self.log.info('will now compare results from session.execute and fetch_all_rows')
             self.assertEqual(sorted(full_query_res), sorted(full_res), "Results should be identical")

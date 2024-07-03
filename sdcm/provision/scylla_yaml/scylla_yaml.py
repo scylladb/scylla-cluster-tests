@@ -342,6 +342,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
 
     compaction_collection_items_count_warning_threshold: int = None  # None
 
+    enable_tablets: bool = None  # False, but default scylla.yaml for some versions (e.g. 6.0) override it to True
+
     def dict(  # pylint: disable=arguments-differ
         self,
         *,
@@ -372,7 +374,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
                     if not isinstance(attr_value, dict):
                         raise ValueError("Unexpected data `%s` in attribute `%s`" % (
                             type(attr_value), attr_name))
-                    attr_value = attr_info.type(**attr_value)
+                    attr_value = attr_info.type(**attr_value)  # noqa: PLW2901
             setattr(self, attr_name, attr_value)
 
     def update(self, *objects: Union['ScyllaYaml', dict]):

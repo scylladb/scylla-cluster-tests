@@ -581,7 +581,7 @@ class PerfSimpleQueryReporter(BaseEmailReporter):
     email_template_file = "results_perf_simple_query.html"
 
 
-def build_reporter(name: str,
+def build_reporter(name: str,  # noqa: PLR0911
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
     # pylint: disable=too-many-return-statements,too-many-branches
@@ -699,7 +699,7 @@ def send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir,
                                        template=email_content['template'])
         try:
             reporter.send_email(subject=subject, content=html, files=email_content['attachments'])
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
             build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
                 "job_url": os.environ.get("BUILD_URL"),
@@ -723,7 +723,7 @@ def read_email_data_from_file(filename):
             with open(filename, encoding="utf-8") as file:
                 data = file.read().strip()
                 email_data = json.loads(data or '{}')
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("Error during read email data file %s: %s", filename, details)
     return email_data
 
@@ -741,5 +741,5 @@ def save_email_data_to_file(email_data, filepath):
         if email_data:
             with open(filepath, "w", encoding="utf-8") as json_file:
                 json.dump(email_data, json_file)
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.warning("Error during collecting data for email %s", details)

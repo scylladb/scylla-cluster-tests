@@ -462,33 +462,31 @@ class LongevityDataValidator:
                 message=f"Actual dataset length more then expected ({len(actual_result)} > {len(expected_result)}). "
                         f"Issue #6181"
             ).publish()
+        elif not during_nemesis:
+            assert len(actual_result) == len(expected_result), \
+                'One or more rows are not as expected, suspected LWT wrong update. ' \
+                'Actual dataset length: {}, Expected dataset length: {}'.format(len(actual_result),
+                                                                                len(expected_result))
+
+            assert actual_result == expected_result, \
+                'One or more rows are not as expected, suspected LWT wrong update'
+
+            # Raise info event at the end of the test only.
+            DataValidatorEvent.ImmutableRowsValidator(
+                severity=Severity.NORMAL,
+                message="Validation immutable rows finished successfully"
+            ).publish()
+        elif len(actual_result) < len(expected_result):
+            DataValidatorEvent.ImmutableRowsValidator(
+                severity=Severity.ERROR,
+                error=f"Verify immutable rows. "
+                      f"One or more rows not found as expected, suspected LWT wrong update. "
+                      f"Actual dataset length: {len(actual_result)}, "
+                      f"Expected dataset length: {len(expected_result)}"
+            ).publish()
         else:
-            if not during_nemesis:
-                assert len(actual_result) == len(expected_result), \
-                    'One or more rows are not as expected, suspected LWT wrong update. ' \
-                    'Actual dataset length: {}, Expected dataset length: {}'.format(len(actual_result),
-                                                                                    len(expected_result))
-
-                assert actual_result == expected_result, \
-                    'One or more rows are not as expected, suspected LWT wrong update'
-
-                # Raise info event at the end of the test only.
-                DataValidatorEvent.ImmutableRowsValidator(
-                    severity=Severity.NORMAL,
-                    message="Validation immutable rows finished successfully"
-                ).publish()
-            else:
-                if len(actual_result) < len(expected_result):
-                    DataValidatorEvent.ImmutableRowsValidator(
-                        severity=Severity.ERROR,
-                        error=f"Verify immutable rows. "
-                              f"One or more rows not found as expected, suspected LWT wrong update. "
-                              f"Actual dataset length: {len(actual_result)}, "
-                              f"Expected dataset length: {len(expected_result)}"
-                    ).publish()
-                else:
-                    LOGGER.debug('Verify immutable rows. Actual dataset length: %s, Expected dataset length: %s',
-                                 len(actual_result), len(expected_result))
+            LOGGER.debug('Verify immutable rows. Actual dataset length: %s, Expected dataset length: %s',
+                         len(actual_result), len(expected_result))
 
     def list_of_view_names_for_update_test(self):
         # List of tuples of correlated  view names for validation: before update, after update, expected data
@@ -621,7 +619,7 @@ class LongevityDataValidator:
 
                 try:
                     row_data.update({key: list(session.execute(query % (select_columns, table)))})
-                except Exception as error:  # pylint: disable=broad-except
+                except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
                     LOGGER.error("Query %s failed. Error: %s", query % table, error)
 
             row_data.update({'source_all_columns': list(session.execute(query % (columns_for_validation,

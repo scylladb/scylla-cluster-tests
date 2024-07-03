@@ -207,8 +207,8 @@ stress_image:
   ndbench: 'scylladb/hydra-loaders:ndbench-jdk8-20210720'
   ycsb: 'scylladb/hydra-loaders:ycsb-jdk8-20220918'
   nosqlbench: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
-  cassandra-stress: 'scylladb/scylla:5.4.6' # empty default would be same version as scylla under test
-  scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.20'
+  cassandra-stress: 'docker.io/scylladb/hydra-loaders:cassandra-stress-6.0-20240701'
+  scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.21'
   gemini: 'scylladb/hydra-loaders:gemini-v1.8.6'
   alternator-dns: 'scylladb/hydra-loaders:alternator-dns-0.1'
   cdc-stresser: 'scylladb/hydra-loaders:cdc-stresser-20210630'
@@ -249,3 +249,5 @@ teardown_validators:
     timeout: 1200
     keyspace: ''
     table: ''
+
+run_scylla_doctor: false

@@ -80,7 +80,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     Cluster of Node objects, started on Amazon EC2.
     """
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  services, credentials, cluster_uuid=None,
                  ec2_instance_type='c6i.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
@@ -358,7 +358,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 ec2_user_data.replace('--bootstrap false', '--bootstrap true')
             else:
                 ec2_user_data += ' --bootstrap true '
-        else:
+        else:  # noqa: PLR5501
             if '--bootstrap ' in ec2_user_data:
                 ec2_user_data.replace('--bootstrap true', '--bootstrap false')
             else:
@@ -389,9 +389,21 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         instance_dc = 0 if self.params.get("simulated_regions") else dc_idx
         # if simulated_racks, create all instances in the same az
         instance_az = 0 if self.params.get("simulated_racks") else rack
-        instances = self._create_or_find_instances(
-            count=count, ec2_user_data=ec2_user_data, dc_idx=instance_dc, az_idx=instance_az,
-            instance_type=instance_type)
+        instances = []
+        if instance_az is None:
+            # define how many nodes should be created on each rack, e.g. for 3 nodes and 2 racks it will be [2, 1]
+            base = count // self.racks_count
+            extra = count % self.racks_count
+            rack_distribution = [base + 1 if i < extra else base for i in range(self.racks_count)]
+        else:
+            # otherwise create all nodes on the specified rack
+            rack_distribution = [count if i == instance_az else 0 for i in range(self.racks_count)]
+        self.log.info('rack distribution: %s', rack_distribution)
+        for rack_idx, rack_count in enumerate(rack_distribution):
+            if rack_count == 0:
+                continue  # when provisioning fewer nodes than racks
+            instances.extend(self._create_or_find_instances(
+                count=rack_count, ec2_user_data=ec2_user_data, dc_idx=instance_dc, az_idx=rack_idx, instance_type=instance_type))
         for node_index, instance in enumerate(instances):
             self._node_index += 1
             # in case rack is not specified, spread nodes to different racks
@@ -574,7 +586,7 @@ class AWSNode(cluster.BaseNode):
 
                 return max(next_check_delay - SPOT_TERMINATION_CHECK_OVERHEAD, 0)
 
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning('Error during getting spot termination notification %s', details)
 
         return SPOT_TERMINATION_CHECK_DELAY
@@ -848,7 +860,7 @@ class AWSNode(cluster.BaseNode):
 
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  services, credentials, ec2_instance_type='c6i.xlarge',
                  ec2_ami_username='centos',
                  ec2_block_device_mappings=None,
@@ -978,7 +990,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             conf_dict = yaml.safe_load(yaml_stream)
             try:
                 return conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 raise ValueError('Unexpected cassandra.yaml. Contents:\n%s' % yaml_stream.read()) from exc
 
     # pylint: disable=too-many-arguments
@@ -1055,7 +1067,7 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
 
 class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
 
-    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
+    def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  services, credentials, ec2_instance_type='c6i.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',

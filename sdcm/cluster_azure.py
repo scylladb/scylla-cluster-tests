@@ -125,7 +125,7 @@ class AzureNode(cluster.BaseNode):
                 else:
                     # other EventType's that can be triggered by Azure's maintenance: "Reboot" | "Redeploy" | "Freeze" | "Terminate"
                     self.log.warning(f"Unhandled Azure scheduled event: {event}")
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning('Error during getting Azure scheduled events: %s', details)
             return 0
         return SPOT_TERMINATION_CHECK_DELAY
@@ -174,7 +174,7 @@ class AzureNode(cluster.BaseNode):
 
 
 class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-attributes
-    def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments, too-many-locals
+    def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments, too-many-locals  # noqa: PLR0913
                  provisioners: List[AzureProvisioner], credentials,
                  cluster_uuid=None, instance_type='Standard_L8s_v3', region_names=None,
                  user_name='root', cluster_prefix='cluster',
@@ -230,7 +230,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
                              rack=rack)
             node.init()
             return node
-        except Exception as ex:
+        except Exception as ex:  # noqa: BLE001
             raise CreateAzureNodeError('Failed to create node: %s' % ex) from ex
 
     def _create_instances(self, count, dc_idx=0, instance_type=None) -> List[VmInstance]:

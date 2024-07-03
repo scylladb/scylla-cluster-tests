@@ -72,6 +72,7 @@ from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
+from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
@@ -100,6 +101,7 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                parse_nodetool_listsnapshots,
                                update_authenticator, ParallelObject,
                                ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table)
+from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.quota import configure_quota_on_node_for_scylla_user_context, is_quota_enabled_on_node, enable_quota_on_node, \
     write_data_to_reach_end_of_quota
 from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
@@ -259,10 +261,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if not isinstance(stress_cmds, list):
                 stress_cmds = [stress_cmds]
             for stress_cmd in stress_cmds:
-                stress_cmd = stress_cmd.split()
+                stress_cmd_splitted = stress_cmd.split()
                 # In case background load has writes, we can delete all available partitions,
                 # since they are rewritten. Otherwise, we can only delete some of them.
-                if 'scylla-bench' in stress_cmd and '-mode=write' in stress_cmd:
+                if 'scylla-bench' in stress_cmd_splitted and '-mode=write' in stress_cmd_splitted:
                     self.num_deletions_factor = 1
                     break
 
@@ -476,7 +478,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return isinstance(getattr(self.tester, "db_cluster", None), PodCluster)
 
     # pylint: disable=too-many-arguments,unused-argument
-    def get_list_of_methods_by_flags(  # pylint: disable=too-many-locals
+    def get_list_of_methods_by_flags(  # pylint: disable=too-many-locals  # noqa: PLR0913
             self,
             disruptive: Optional[bool] = None,
             run_with_gemini: Optional[bool] = None,
@@ -589,7 +591,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def __str__(self):
         try:
             return str(self.__class__).split("'")[1]
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             return str(self.__class__)
 
     def _kill_scylla_daemon(self):
@@ -992,6 +994,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 "Not supported on K8S. "
                 "Run 'disrupt_nodetool_flush_and_reshard_on_kubernetes' instead")
 
+        # If tablets in use, skipping resharding since it is not supported.
+        with self.cluster.cql_connection_patient(self.target_node) as session:
+            if is_tablets_feature_enabled(session=session):
+                if SkipPerIssues('https://github.com/scylladb/scylladb/issues/16739', params=self.tester.params):
+                    raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/16739')
+
         murmur3_partitioner_ignore_msb_bits = 15  # pylint: disable=invalid-name
         self.log.info(f'Restart node with resharding. New murmur3_partitioner_ignore_msb_bits value: '
                       f'{murmur3_partitioner_ignore_msb_bits}')
@@ -1017,7 +1025,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         try:
             file_name_template = re.search(r"([^-]+-[^-]+)-", file_name).group(1)
-        except Exception as error:  # pylint: disable=broad-except
+        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.debug('File name "{file_name}" is not as expected for Scylla data files. '
                            'Search files for "{ks_cf_for_destroy}" table'.format(file_name=file_name,
                                                                                  ks_cf_for_destroy=ks_cf_for_destroy))
@@ -1216,8 +1224,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not ContainerManager.is_running(self.tester.localhost, 'ldap'):
             raise LdapNotRunning("LDAP server was supposed to be running, but it is not")
 
-    def _add_and_init_new_cluster_node(self, old_node_ip=None, host_id=None,
-                                       timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=0):
+    def _replace_cluster_node(self, old_node_ip=None, host_id=None,
+                              timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=0):
         """When old_node_ip or host_id are not None then replacement node procedure is initiated"""
         # TODO: make it work on K8S when we have decommissioned (by nodetool) nodes.
         #       Now it will fail because pod which hosts decommissioned Scylla member is reported
@@ -1256,6 +1264,35 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
 
+    def _add_and_init_new_cluster_nodes(self, count, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=None) -> list[BaseNode]:
+        if rack is None and self._is_it_on_kubernetes():
+            rack = 0
+        self.log.info("Adding %s new nodes to cluster...", count)
+        InfoEvent(message=f'StartEvent - Adding {count} new nodes to cluster').publish()
+        new_nodes = self.cluster.add_nodes(
+            count=count, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)
+        self.monitoring_set.reconfigure_scylla_monitoring()
+        for new_node in new_nodes:
+            self.set_current_running_nemesis(node=new_node)
+        try:
+            with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.nodes[0], timeout=timeout):
+                self.cluster.wait_for_init(node_list=new_nodes, timeout=timeout, check_node_health=False)
+            self.cluster.set_seeds()
+            self.cluster.update_seed_provider()
+        except (NodeSetupFailed, NodeSetupTimeout):
+            self.log.warning("TestConfig of the '%s' failed, removing them from list of nodes" % new_nodes)
+            for node in new_nodes:
+                self.cluster.nodes.remove(node)
+            self.log.warning("Nodes will not be terminated. Please terminate manually!!!")
+            raise
+        for new_node in new_nodes:
+            new_node.wait_native_transport()
+        self.cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
+        for new_node in new_nodes:
+            self.unset_current_running_nemesis(node=new_node)
+        InfoEvent(message="FinishEvent - New Nodes are up and normal").publish()
+        return new_nodes
+
     @decorate_with_context(ignore_ycsb_connection_refused)
     def _terminate_cluster_node(self, node):
         self.cluster.terminate_node(node)
@@ -1270,7 +1307,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if add_node:
             # When adding node after decommission the node is declared as up only after it completed bootstrapping,
             # increasing the timeout for now
-            new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
+            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)[0]
             # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
             # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
             # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
@@ -1311,7 +1348,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @latency_calculator_decorator(legend="Replace a node in cluster with new one")
     def replace_node(self, old_node_ip, host_id, rack=0):
-        return self._add_and_init_new_cluster_node(old_node_ip, host_id, rack=rack)
+        return self._replace_cluster_node(old_node_ip, host_id, rack=rack)
 
     def _verify_resharding_on_k8s(self, cpus, dc_idx):
         nodes_data = []
@@ -1367,9 +1404,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             # Check that liveness probe didn't report any errors
             # https://github.com/scylladb/scylla-operator/issues/894
-            liveness_probe_failures = list(liveness_probe_failures)
-            assert not liveness_probe_failures, (
-                f"There are liveness probe failures: {liveness_probe_failures}")
+            liveness_probe_failures_return = list(liveness_probe_failures)
+            assert not liveness_probe_failures_return, (
+                f"There are liveness probe failures: {liveness_probe_failures_return}")
 
         self.log.info("Resharding has successfully ended on whole Scylla cluster.")
 
@@ -1379,6 +1416,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         #       so, pick up only one K8S cluster and only if it is EKS.
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('It is supported only on kubernetes')
+        # If tablets in use, skipping resharding since it is not supported.
+        with self.cluster.cql_connection_patient(self.target_node) as session:
+            if is_tablets_feature_enabled(session=session):
+                if SkipPerIssues('https://github.com/scylladb/scylladb/issues/16739', params=self.tester.params):
+                    raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/16739')
+
         dc_idx = 0
         for node in self.cluster.nodes:
             if hasattr(node.k8s_cluster, 'eks_cluster_version') and node.scylla_shards >= 7:
@@ -1482,7 +1525,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info('Decommission %s', node)
         self.cluster.decommission(node, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
 
-        new_node = self.add_new_node(rack=node.rack)
+        new_node = self.add_new_nodes(count=1, rack=node.rack)[0]
         self.unset_current_running_nemesis(new_node)
 
         # NOTE: wait for all other neighbour pods become ready
@@ -1659,9 +1702,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 system_log_follower = SstableLoadUtils.run_refresh(node, test_data=test_data[0])
                 # NOTE: resharding happens only if we have more than 1 core.
                 #       We may have 1 core in a K8S multitenant setup.
-                if shards_num > 1:
-                    SstableLoadUtils.validate_resharding_after_refresh(
-                        node=node, system_log_follower=system_log_follower)
+                # If tablets in use, skipping resharding validation since it doesn't work the same as vnodes
+                with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
+                    if shards_num > 1 and not is_tablets_feature_enabled(session=session):
+                        SstableLoadUtils.validate_resharding_after_refresh(
+                            node=node, system_log_follower=system_log_follower)
 
             # Verify that the special key is loaded by SELECT query
             result = self.target_node.run_cqlsh(query_verify)
@@ -2113,7 +2158,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with self.cluster.cql_connection_patient(self.target_node, keyspace=ks) as session:
                 session.default_consistency_level = consistency_level
                 session.execute(cmd)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.debug(f"Add/Remove Column Nemesis: CQL query '{cmd}' execution has failed with error '{str(exc)}'")
             return False
         return True
@@ -2222,7 +2267,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 cmd = f"select ck from {ks_cf} where pk={partition_key} order by ck desc limit 1"
                 try:
                     result = session.execute(SimpleStatement(cmd, fetch_size=1), timeout=300)
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     self.log.error(str(exc))
                     continue
 
@@ -2489,11 +2534,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
              (*) The other available values of 'disabled' / 'immediate' are not tested by
              this nemesis since not applicable to a longevity test.
         """
-        all_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
-
-        if not all_ks_cfs:
+        # This nemesis can not be run on table with RF = 1:
+        #   ConfigurationException: tombstone_gc option with mode = repair not supported for table with RF one or local replication strategy
+        # We do not run tests with local strategy ({'class': 'org.apache.cassandra.locator.LocalStrategy'}), so I do not add this filter
+        if not (all_ks_cfs := self.cluster.get_non_system_ks_cf_list(db_node=self.target_node,
+                                                                     filter_func=self.cluster.is_ks_rf_one)):
             raise UnsupportedNemesis(
-                'Non-system keyspace and table are not found. toggle_table_gc_mode nemesis can\'t run')
+                'Any table with RF != 1 is not found. disrupt_toggle_table_gc_mode nemesis can\'t run')
 
         keyspace_table = random.choice(all_ks_cfs)
         keyspace, table = keyspace_table.split('.')
@@ -2733,12 +2780,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     current_size = 3
                 else:
                     current_size += 10
+            elif (current_size // 60) > 10:
+                current_unit = "HOURS"
+                current_size = 11
             else:
-                if (current_size // 60) > 10:
-                    current_unit = "HOURS"
-                    current_size = 11
-                else:
-                    current_size += 35
+                current_size += 35
 
             settings["gc"] = current_size * multiplier * expected_sstable_number // 2
             settings["dttl"] = current_size * multiplier * expected_sstable_number
@@ -3068,9 +3114,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             Validates that hinted handoff mechanism works: there were no drops and errors
             during short stop of one of the nodes in cluster
         """
-        # NOTE: enable back when 'https://github.com/scylladb/scylla/issues/8136' issue is fixed
-        if SkipPerIssues('https://github.com/scylladb/scylla/issues/8136', params=self.tester.params):
-            raise UnsupportedNemesis('https://github.com/scylladb/scylla/issues/8136')
+        # NOTE: enable back when 'https://github.com/scylladb/scylladb/issues/8136' issue is fixed
+        if SkipPerIssues('https://github.com/scylladb/scylladb/issues/8136', params=self.tester.params):
+            raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/8136')
 
         if self.cluster.params.get('hinted_handoff') == 'disabled':
             raise UnsupportedNemesis('For this nemesis to work, `hinted_handoff` needs to be set to `enabled`')
@@ -3223,7 +3269,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             nodetool_cmd = snapshot_option[0]() if len(snapshot_option) == 1 else snapshot_option[0](snapshot_option[1])
             if not nodetool_cmd:
                 raise ValueError("Failed to get nodetool command.")
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             raise ValueError(f"Failed to get nodetool command. Error: {exc}") from exc
 
         self.log.debug(f'Take snapshot with command: {nodetool_cmd}')
@@ -3490,7 +3536,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for node in up_normal_nodes:
                 try:
                     self.repair_nodetool_repair(node=node, publish_event=False)
-                except Exception as details:  # pylint: disable=broad-except
+                except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                     self.log.error(f"failed to execute repair command "
                                    f"on node {node} due to the following error: {str(details)}")
 
@@ -3529,7 +3575,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 "Node was not removed properly (Node status:{})".format(removed_node_status)
 
             # add new node
-            new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
+            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)[0]
             # in case the removed node was not last seed.
             if node_to_remove.is_seed and num_of_seed_nodes > 1:
                 new_node.set_seed_flag(True)
@@ -3552,8 +3598,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
 
         # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
-        if SkipPerIssues('https://github.com/scylladb/scylla/issues/6522', self.tester.params):
-            raise UnsupportedNemesis('https://github.com/scylladb/scylla/issues/6522')
+        if SkipPerIssues('https://github.com/scylladb/scylladb/issues/6522', self.tester.params):
+            raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/6522')
 
         name = 'RejectInterNodeNetwork'
 
@@ -3712,7 +3758,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 cmd_executed[cmd_num] = True
                 if wait_time:
                     time.sleep(wait_time)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 cmd_executed[cmd_num] = False
                 self.log.error(
                     f"{name}: failed to execute start command "
@@ -3722,7 +3768,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for cmd_num, cmd in enumerate(cleanup_commands):
             try:
                 node.remoter.run(cmd)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.debug(f"{name}: failed to execute cleanup command "
                                f"{cmd} on node {node} due to the following error: {str(exc)}")
 
@@ -3809,11 +3855,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             except Group0MembersNotConsistentWithTokenRingMembersException as exc:
                 self.log.error("Cluster state could be not predictable due to ghost members in raft group0: %s", exc)
                 raise
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.error('Unexpected exception raised in checking decommission status: %s', exc)
 
             self.log.info('Decommission might complete before stopping it. Re-add a new node')
-            new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
+            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)[0]
             if new_node.is_seed != target_is_seed:
                 new_node.set_seed_flag(target_is_seed)
                 self.cluster.update_seed_provider()
@@ -3968,17 +4014,36 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.clear_snapshots()
 
-    @latency_calculator_decorator(legend="Adding new node")
-    def add_new_node(self, rack=0):
-        return self._add_and_init_new_cluster_node(rack=rack)
+    @latency_calculator_decorator(legend="Adding new nodes")
+    def add_new_nodes(self, count, rack=None) -> list[BaseNode]:
+        nodes = self._add_and_init_new_cluster_nodes(count, rack=rack)
+        self._wait_for_tablets_balanced(nodes[0])
+        return nodes
 
-    @latency_calculator_decorator(legend="Decommission node: remove node from cluster")
-    def decommission_node(self, node):
-        self.cluster.decommission(node)
+    @latency_calculator_decorator(legend="Decommission nodes: remove nodes from cluster")
+    def decommission_nodes(self, nodes):
 
-    def decommission_nodes(self, add_nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue,
-                           dc_idx: Optional[int] = None):
-        for idx in range(add_nodes_number):
+        def _decommission(node):
+            try:
+                InfoEvent(f'StartEvent - ShrinkCluster started decommissioning a node {node}').publish()
+                self.cluster.decommission(node)
+                InfoEvent(f'FinishEvent - ShrinkCluster has done decommissioning a node {node}').publish()
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                InfoEvent(f'FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error '
+                          f'{str(exc)}').publish()
+                raise
+
+        num_workers = None if (self.cluster.parallel_node_operations and nodes[0].raft.is_enabled) else 1
+        parallel_obj = ParallelObject(objects=nodes, timeout=7200, num_workers=num_workers)
+        InfoEvent(f'StartEvent - ShrinkCluster started decommissioning {len(nodes)} nodes').publish()
+        parallel_obj.run(_decommission, ignore_exceptions=False, unpack_objects=True)
+        self.monitoring_set.reconfigure_scylla_monitoring()
+        InfoEvent(f'FinishEvent - ShrinkCluster has done decommissioning {len(nodes)} nodes').publish()
+
+    def _decommission_nodes(self, nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue,
+                            dc_idx: Optional[int] = None):
+        nodes_to_decommission = []
+        for idx in range(nodes_number):
             if self._is_it_on_kubernetes():
                 if rack is None and self._is_it_on_kubernetes():
                     rack = 0
@@ -3987,15 +4052,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 rack_idx = rack if rack is not None else idx % self.cluster.racks_count
                 # if rack is not specified, round-robin racks
                 self.set_target_node(is_seed=is_seed, dc_idx=dc_idx, rack=rack_idx)
-            self.log.info("Next node will be removed %s", self.target_node)
-
-            try:
-                InfoEvent(f'StartEvent - ShrinkCluster started decommissioning a node {self.target_node}').publish()
-                self.decommission_node(self.target_node)
-                InfoEvent(f'FinishEvent - ShrinkCluster has done decommissioning a node {self.target_node}').publish()
-            except Exception as exc:  # pylint: disable=broad-except
-                InfoEvent(f'FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error '
-                          f'{str(exc)}').publish()
+            nodes_to_decommission.append(self.target_node)
+            self.target_node = None  # otherwise node.running_nemesis will be taken off the node by self.set_target_node
+        try:
+            if self.cluster.parallel_node_operations:
+                self.decommission_nodes(nodes_to_decommission)
+            else:
+                for node in nodes_to_decommission:
+                    self.decommission_nodes([node])
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            InfoEvent(f'FinishEvent - ShrinkCluster failed decommissioning a node {self.target_node} with error '
+                      f'{str(exc)}').publish()
 
     def disrupt_grow_shrink_cluster(self):
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
@@ -4020,21 +4087,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if rack is None and self._is_it_on_kubernetes():
             rack = 0
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
-        self.log.info("Start grow cluster on %s nodes", add_nodes_number)
-        InfoEvent(message=f"Start grow cluster on {add_nodes_number} nodes").publish()
-        for idx in range(add_nodes_number):
-            # if rack is not specified, round-robin racks to spread nodes evenly
-            rack_idx = rack if rack is not None else idx % self.cluster.racks_count
-            InfoEvent(message=f'GrowCluster - Add New node to {rack_idx} rack').publish()
-            added_node = self.add_new_node(rack=rack_idx)
-            self.unset_current_running_nemesis(added_node)
-            InfoEvent(message=f'GrowCluster - Done adding New node {added_node.name}').publish()
+        InfoEvent(message=f"Start grow cluster by {add_nodes_number} nodes").publish()
+        if self.cluster.parallel_node_operations:
+            self.add_new_nodes(count=add_nodes_number, rack=rack)
+        else:
+            for idx in range(add_nodes_number):
+                # if rack is not specified, round-robin racks to spread nodes evenly
+                rack_idx = rack if rack is not None else idx % self.cluster.racks_count
+                self.add_new_nodes(count=1, rack=rack_idx)
         self.log.info("Finish cluster grow")
         time.sleep(self.interval)
 
     def _shrink_cluster(self, rack=None):
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
-        self.log.info("Start shrink cluster by %s nodes", add_nodes_number)
         InfoEvent(message=f'Start shrink cluster by {add_nodes_number} nodes').publish()
         # Check that number of nodes is enough for decommission:
         cur_num_nodes_in_dc = len([n for n in self.cluster.nodes if n.dc_idx == self.target_node.dc_idx])
@@ -4057,7 +4122,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # Currently on kubernetes first two nodes of each rack are getting seed status
         # Because of such behavior only way to get them decommission is to enable decommissioning
         # TBD: After https://github.com/scylladb/scylla-operator/issues/292 is fixed remove is_seed parameter
-        self.decommission_nodes(
+        self._decommission_nodes(
             decommission_nodes_number,
             rack,
             is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
@@ -4250,7 +4315,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with context_manager:
             for node in self.cluster.nodes:
                 node_system_logs[node] = node.follow_system_log(
-                    patterns=f'messaging_service - Reloaded {{{ssl_files_location}}}')
+                    patterns=[f'messaging_service - Reloaded {{"{ssl_files_location}"}}'])
                 node.remoter.send_files(src='data_dir/ssl_conf/db.crt', dst='/tmp')
                 node.remoter.run(f"sudo cp -f /tmp/db.crt {ssl_files_location}")
                 new_crt = node.remoter.run(f"cat {ssl_files_location}").stdout
@@ -4489,11 +4554,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # no need to switch as already is NetworkTopology
                 continue
             self.log.info(f"Switching replication strategy to Network for '{keyspace}' keyspace")
-            if keyspace == "system_auth" and replication_strategy.replication_factor != len(nodes_by_region[region]):
+            if keyspace == "system_auth" and replication_strategy.replication_factors[0] != len(nodes_by_region[region]):
                 self.log.warning(f"system_auth keyspace is not replicated on all nodes "
-                                 f"({replication_strategy.replication_factor}/{len(nodes_by_region[region])}).")
+                                 f"({replication_strategy.replication_factors[0]}/{len(nodes_by_region[region])}).")
             network_replication = NetworkTopologyReplicationStrategy(
-                **{dc_name: replication_strategy.replication_factor})
+                **{dc_name: replication_strategy.replication_factors[0]})  # pylint: disable=protected-access
             network_replication.apply(node, keyspace)
 
     def disrupt_add_remove_dc(self) -> None:
@@ -4531,7 +4596,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     strategy = ReplicationStrategy.get(node, keyspace)
                     assert isinstance(strategy, NetworkTopologyReplicationStrategy), \
                         "Should have been already switched to NetworkStrategy"
-                    strategy.replication_factors.update({new_dc_name: 1})
+                    strategy.replication_factors_per_dc.update({new_dc_name: 1})  # pylint: disable=protected-access
                     replication_strategy_setter(**{keyspace: strategy})
                 InfoEvent(message='execute rebuild on new datacenter').publish()
                 with wait_for_log_lines(node=new_node, start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
@@ -5002,8 +5067,32 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.restart_scylla_server()
             raise
 
+    def _wait_for_tablets_balanced(self, node):
+        """
+        Waiting for tablets to be balanced using REST API.
 
-def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements
+        doing it several times as there's a risk of:
+        "currently a small time window after adding nodes and before load balancing starts during which
+        topology may appear as quiesced because the state machine goes through an idle state before it enters load balancing state"
+        """
+        if not node.raft.is_enabled:
+            self.log.info("Raft is disabled, skipping wait for balance")
+            return
+        with self.cluster.cql_connection_patient(node=node) as session:
+            if not is_tablets_feature_enabled(session):
+                self.log.info("Tablets are disabled, skipping wait for balance")
+                return
+        time.sleep(60)  # one minute gap before checking, just to give some time to the state machine
+        client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=node)
+        self.log.info("Waiting for tablets to be balanced")
+        for _ in range(3):
+            client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology",
+                                    params={}, timeout=3600, retry=3)
+            time.sleep(5)
+        self.log.info("Tablets are balanced")
+
+
+def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements  # noqa: PLR0915
     """
     Log time elapsed for method to run
 
@@ -5057,7 +5146,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     args[0].tester.data_validator.validate_range_not_expected_to_change(session, during_nemesis=True)
                     args[0].tester.data_validator.validate_range_expected_to_change(session, during_nemesis=True)
                     args[0].tester.data_validator.validate_deleted_rows(session, during_nemesis=True)
-        except Exception as err:  # pylint: disable=broad-except
+        except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
             args[0].log.debug(f'Data validator error: {err}')
 
     @wraps(method)
@@ -5127,7 +5216,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                         log_info.update({'subtype': 'skipped', 'skip_reason': skip_reason})
                         nemesis_event.skip(skip_reason=skip_reason)
                     raise
-                except Exception as details:  # pylint: disable=broad-except
+                except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                     nemesis_event.add_error([str(details)])
                     nemesis_event.full_traceback = traceback.format_exc()
                     nemesis_event.severity = Severity.ERROR
@@ -5156,7 +5245,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     except ElasticSearchConnectionTimeout as err:
                         args[0].log.warning(f"Connection timed out when attempting to update elasticsearch statistics:\n"
                                             f"{err}")
-                    except Exception as err:  # pylint: disable=broad-except
+                    except Exception as err:  # pylint: disable=broad-except  # noqa: BLE001
                         args[0].log.warning(f"Unexpected error when attempting to update elasticsearch statistics:\n"
                                             f"{err}")
                     args[0].log.info(f"log_info: {log_info}")
@@ -5555,17 +5644,17 @@ class CategoricalMonkey(Nemesis):
         weights: List[float] = []
         listed_methods: Set[str] = set()
 
-        for name, weight in dist.items():
-            name = str(name)
+        for _name, _weight in dist.items():
+            name = str(_name)
             prefixed_name = prefixed('disrupt_', name)
             if prefixed_name not in all_methods:
                 raise ValueError(f"'{name}' is not a valid disruption. All methods: {all_methods.keys()}")
 
-            if not is_nonnegative_number(weight):
+            if not is_nonnegative_number(_weight):
                 raise ValueError("Each disruption weight must be a non-negative number."
                                  " '{weight}' is not a valid weight.")
 
-            weight = float(weight)
+            weight = float(_weight)
             if weight > 0:
                 population.append(all_methods[prefixed_name])
                 weights.append(weight)

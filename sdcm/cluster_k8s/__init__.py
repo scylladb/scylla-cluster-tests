@@ -249,7 +249,7 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-insta
     def nodes(self):
         try:
             return self.k8s_cluster.k8s_core_v1_api.list_node(label_selector=f'{self.pool_label_name}={self.name}')
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.k8s_cluster.log.debug("Failed to get nodes list: %s", str(details))
             return {}
 
@@ -822,7 +822,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                             continue
                         self.apply_file(
                             os.path.join(crd_basedir, current_file), modifiers=[], envsubst=False)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.debug("Upgrade Scylla Operator CRDs: Exception: %s", exc)
             self.log.info("Upgrade Scylla Operator CRDs: END")
 
@@ -1270,7 +1270,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=namespace)
                 self.start_scylla_cluster_events_thread()
                 return
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 raise RuntimeError(
                     "SCT_REUSE_CLUSTER is set, but target scylla cluster is unhealthy") from exc
 
@@ -1665,7 +1665,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 config_map = self.k8s_core_v1_api.read_namespaced_config_map(
                     name=SCYLLA_CONFIG_NAME, namespace=namespace).data or {}
                 exists = True
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 config_map = {}
                 exists = False
             original_config_map = deepcopy(config_map)
@@ -1905,7 +1905,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def k8s_pod_uid(self) -> str:
         try:
             return str(self._pod.metadata.uid)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             return ''
 
     @property
@@ -2169,7 +2169,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
     def is_seed(self) -> bool:
         try:
             return 'scylla/seed' in self._svc.metadata.labels
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             return False
 
     @is_seed.setter
@@ -2764,11 +2764,11 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         if self.params.get("server_encrypt"):
             raise NotImplementedError("server_encrypt is not supported by k8s-* backends yet")
 
-        append_scylla_yaml = self.params.get("append_scylla_yaml")
+        append_scylla_yaml = self.params.get("append_scylla_yaml") or {}
 
         if append_scylla_yaml:
-            unsupported_options = ("system_key_directory", "system_info_encryption", "kmip_hosts:", )
-            if any(substr in append_scylla_yaml for substr in unsupported_options):
+            unsupported_options = ("system_key_directory", "system_info_encryption", "kmip_hosts", )
+            if any(option in append_scylla_yaml for option in unsupported_options):
                 raise NotImplementedError(
                     f"{unsupported_options} are not supported in append_scylla_yaml by k8s-* backends yet")
 
@@ -2783,7 +2783,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         return sorted(
             [node for node in self.nodes if node.rack == rack and node.dc_idx == dc_idx], key=lambda n: n.name)
 
-    def add_nodes(self,  # pylint: disable=too-many-locals,too-many-branches
+    def add_nodes(self,  # pylint: disable=too-many-locals,too-many-branches  noqa: PLR0913
                   count: int,
                   ec2_user_data: str = "",
                   # NOTE: 'dc_idx=None' means 'create %count% nodes on each K8S cluster'
@@ -2961,7 +2961,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                         cluster_name=self.scylla_cluster_name, namespace=self.namespace)
                     PrometheusDBStats(host=prometheus_ip, port=k8s_cluster.prometheus_port, protocol='https')
                     kmh_event.message = "Kubernetes monitoring health checks have successfully been finished"
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     ClusterHealthValidatorEvent.MonitoringStatus(
                         error=f'Failed to connect to K8S prometheus server (namespace={self.namespace}) at '
                               f'{prometheus_ip}:{k8s_cluster.prometheus_port}, due to the: \n'
@@ -3098,10 +3098,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
     def _get_docker_image(self):
         if loader_image := self.params.get('stress_image.cassandra-stress'):
             return loader_image
-        else:
-            docker_image = self.params.get('docker_image')
-            scylla_version = self.params.get('scylla_version')
-            return f"{docker_image}:{scylla_version}"
+        raise ValueError("No 'stress_image.cassandra-stress' option found in the test configuration")
 
     def add_nodes(self,
                   count: int,

@@ -180,7 +180,7 @@ class ApiCallRateLimiter(threading.Thread):
             try:
                 self._api_test(kluster)
                 passed += 1
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 time.sleep(1 / self.rate_limit)
         return passed < num_requests * 0.8
 
@@ -553,7 +553,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             #   Error: destination directory "%logdir_path%/must-gather" is not empty
             LOCALRUNNER.run(f"mkdir -p {logdir_path}/must-gather && rm -rf {logdir_path}/must-gather/*")
             LOCALRUNNER.run(gather_logs_cmd)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning(
                 "Failed to run scylla-operator's 'must gather' command: %s", exc,
                 extra={'prefix': kluster.region_name})
@@ -563,7 +563,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                 extra={'prefix': kluster.region_name})
         try:
             LOCALRUNNER.run(f"rm {operator_bin_path}")
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning(
                 "Failed to delete the the scylla-operator binary located at '%s': %s",
                 operator_bin_path, exc, extra={'prefix': kluster.region_name})
@@ -625,10 +625,10 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
                     resource_type, namespace)
                 resource_dir = logdir / namespace_scope_dir / namespace / resource_type
                 os.makedirs(resource_dir, exist_ok=True)
-                for res in resources_wide.split("\n"):
-                    if not re.match(f"{namespace} ", res):
+                for _res in resources_wide.split("\n"):
+                    if not re.match(f"{namespace} ", _res):
                         continue
-                    res = res.split()[1]
+                    res = _res.split()[1]
                     logfile = resource_dir / f"{res}.yaml"
                     res_stdout = kubectl(
                         f"get {resource_type}/{res} -o yaml 2>&1 | tee {logfile}",
@@ -784,7 +784,7 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
                 self._check_token_validity_in_temporary_location()
                 self._replace_active_token_by_token_from_temporary_location()
                 LOGGER.debug('Cloud token has been updated and stored at %s', self._kubectl_token_path)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.debug('Failed to update cloud token: %s', exc)
                 wait_time = 5
             else:
@@ -800,7 +800,7 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
         try:
             if os.path.exists(self._temporary_token_path):
                 os.unlink(self._temporary_token_path)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.debug('Failed to cleanup temporary token: %s', exc)
 
     def _check_token_validity_in_temporary_location(self):
@@ -909,7 +909,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
             try:
                 for line in self._read_stream():
                     self._process_line(line)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 if not self._termination_event.wait(0.01):
                     raise
                 self.log.info("Scylla pods IP change tracker thread has been stopped")
@@ -983,7 +983,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
                     break
                 else:
                     break
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning(
                 "Failed to parse following line: %s\nerr: %s", line, exc)
 
@@ -1001,7 +1001,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
             self.log.debug("Calling '%s' callback %s", func.__name__, suffix)
             try:
                 func(*args, **kwargs)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.warning("Callback call failed %s: %s", suffix, str(exc))
 
         data = self.mapper_dict.get(namespace, {})
@@ -1068,7 +1068,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
 
         for callback in callbacks:
             if callable(callback):
-                callback = [callback, [], {}]
+                callback = [callback, [], {}]  # noqa: PLW2901
             if (isinstance(callback, (tuple, list))
                     and len(callback) == 3
                     and callable(callback[0])
@@ -1258,7 +1258,7 @@ class HelmValues:
             last = int(last[1:-1])
         try:
             del parent[last]
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
 
     def as_dict(self):

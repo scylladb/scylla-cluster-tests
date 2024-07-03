@@ -11,7 +11,7 @@ instance_type_loader: 'c7i.large'
 instance_type_monitor: 't3.small'
 
 user_prefix: 'compaction-limit'
-append_scylla_yaml: |
+append_scylla_yaml:
   auto_snapshot: false
 
 use_mgmt: false

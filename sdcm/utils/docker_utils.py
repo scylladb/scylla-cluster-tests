@@ -176,8 +176,8 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         if not name_only_lookup:
             attr_candidate_list.append((attr, ()))
 
-        for attr_candidate, args in attr_candidate_list:
-            attr_candidate = getattr(instance, attr_candidate, None)
+        for _attr_candidate, args in attr_candidate_list:
+            attr_candidate = getattr(instance, _attr_candidate, None)
             if callable(attr_candidate):
                 attr_candidate = attr_candidate(*args)
             if attr_candidate is not None:
@@ -251,7 +251,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
             try:
                 with open(logfile, "ab") as log:
                     log.write(container.logs())
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.error("Unable to write container logs to %s", logfile, exc_info=exc)
             else:
                 LOGGER.debug("Container %s logs written to %s", container, logfile)
@@ -268,7 +268,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         for name in tuple(instance._containers.keys()):
             try:
                 cls.destroy_container(instance, name, ignore_keepalive=ignore_keepalive)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.error("%s: some exception raised during container `%s' destroying", instance, name, exc_info=exc)
 
     @classmethod

@@ -70,7 +70,7 @@ def fixture_harvest_test_results(request, tester: ScyllaOperatorFunctionalCluste
 
 @pytest.fixture(autouse=True, scope='package', name="tester")
 def fixture_tester() -> ScyllaOperatorFunctionalClusterTester:
-    global TESTER  # pylint: disable=global-statement
+    global TESTER  # pylint: disable=global-statement  # noqa: PLW0603
     os.chdir(sct_abs_path())
     tester_inst = ScyllaOperatorFunctionalClusterTester()
     TESTER = tester_inst  # putting tester global, so we can report skipped test (one with mark.skip)
@@ -175,7 +175,7 @@ def _bring_cluster_back_to_original_state(
             db_cluster.restart_scylla()
         db_cluster.wait_for_nodes_up_and_normal(
             nodes=db_cluster.nodes, verification_node=db_cluster.nodes[0])
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         tester.healthy_flag = False
         pytest.fail("Failed to bring cluster nodes back to original state due to :\n" +
                     "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))

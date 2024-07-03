@@ -20,8 +20,8 @@ alternator_port = sys.argv[2]
 
 
 def livenodes_update():
-    global alternator_port
-    global livenodes
+    global alternator_port  # noqa: PLW0602
+    global livenodes  # noqa: PLW0603
     while True:
         # Contact one of the already known nodes by random, to fetch a new
         # list of known nodes.
@@ -34,7 +34,7 @@ def livenodes_update():
             # If we're successful, replace livenodes by the new list
             livenodes = a
             print(livenodes)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             # TODO: contacting this ip was unsuccessful, maybe we should
             # remove it from the list of live nodes.
             pass

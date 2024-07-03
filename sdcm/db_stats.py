@@ -126,7 +126,7 @@ def get_stress_cmd_params(cmd):
                 del cmd_params['rate']
 
         return cmd_params
-    except Exception as ex:
+    except Exception as ex:  # noqa: BLE001
         raise CassandraStressCmdParseError(cmd=cmd, ex=ex) from None
 
 
@@ -349,7 +349,7 @@ class PrometheusDBStats:
         for item in results:
             try:
                 res[item['metric']['group']] = {int(i[1]) for i in item['values']}
-            except Exception as error:  # pylint: disable=broad-except
+            except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
                 # average value may be returned not integer. Ignore it
                 LOGGER.error("Failed to analyze results of query: %s\nResults: %s\nError: %s", query, results, error)
         return res
@@ -607,17 +607,16 @@ class TestStatsMixin(Stats):
         for key, value in test_params:
             if key in exclude_details or (isinstance(key, str) and key.startswith('stress_cmd')):  # pylint: disable=no-else-continue
                 continue
+            elif is_gce and key in \
+                    ['instance_type_loader',  # pylint: disable=no-else-continue
+                     'instance_type_monitor',
+                     'instance_type_db']:
+                # exclude these params from gce run
+                continue
+            elif key == 'n_db_nodes' and isinstance(value, str) and re.search(r'\s', value):  # multidc
+                setup_details['n_db_nodes'] = sum([int(i) for i in value.split()])
             else:
-                if is_gce and key in \
-                        ['instance_type_loader',  # pylint: disable=no-else-continue
-                         'instance_type_monitor',
-                         'instance_type_db']:
-                    # exclude these params from gce run
-                    continue
-                elif key == 'n_db_nodes' and isinstance(value, str) and re.search(r'\s', value):  # multidc
-                    setup_details['n_db_nodes'] = sum([int(i) for i in value.split()])
-                else:
-                    setup_details[key] = value
+                setup_details[key] = value
 
         if self.params.get('cluster_backend') == 'aws':
             setup_details["ami_tags_db_scylla"] = []
@@ -639,6 +638,7 @@ class TestStatsMixin(Stats):
 
         setup_details['db_cluster_node_details'] = {}
         setup_details['sysctl_output'] = []
+        setup_details['append_scylla_yaml'] = str(self.params.get('append_scylla_yaml') or '')
         return setup_details
 
     def get_test_details(self):
@@ -728,7 +728,7 @@ class TestStatsMixin(Stats):
             stat["stdev"] = stddev(ops_filtered)
             self.log.debug("Stats: %s", stat)
             return stat
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Exception when calculating PrometheusDB stats: %s" % ex)
             return {}
 
@@ -774,7 +774,7 @@ class TestStatsMixin(Stats):
             return 0
         try:
             return float(stress_result[stat])
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning("Error in conversion of '%s' for stat '%s': '%s'"
                              "Discarding stat." % (stress_result[stat], stat, details))
         return 0

@@ -120,7 +120,7 @@ def _remote_get_hash(remoter, file_path):
     try:
         result = remoter.run('md5sum {}'.format(file_path), verbose=True)
         return result.stdout.strip().split()[0]
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error(str(details))
         return None
 
@@ -287,7 +287,7 @@ class S3Storage():
             LOGGER.info("Set public read access")
             self.set_public_access(key=s3_obj)
             return s3_url
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.debug("Unable to upload to S3: %s", details)
             return ""
 
@@ -316,7 +316,7 @@ class S3Storage():
             LOGGER.info("Downloaded finished")
             return os.path.join(os.path.abspath(dst_dir), file_name)
 
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("File {} is not downloaded by reason: {}".format(key_name, details))
             return ""
 
@@ -484,7 +484,7 @@ class ParallelObject:
             except FuturesTimeoutError as exception:
                 results.append(ParallelObjectResult(obj=target_obj, exc=exception, result=None))
                 time_out = 0.001  # if there was a timeout on one of the futures there is no need to wait for all
-            except Exception as exception:  # pylint: disable=broad-except
+            except Exception as exception:  # pylint: disable=broad-except  # noqa: BLE001
                 results.append(ParallelObjectResult(obj=target_obj, exc=exception, result=None))
             else:
                 results.append(ParallelObjectResult(obj=target_obj, exc=None, result=result))
@@ -782,13 +782,13 @@ def clean_resources_docker(tags_dict: dict, builder_name: Optional[str] = None, 
     for container in containers:
         try:
             delete_container(container)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Failed to delete container %s on host `%s'", container, container.client.info()["Name"])
 
     for image in images:
         try:
             delete_image(image)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Failed to delete image tag(s) %s on host `%s'", image.tags, image.client.info()["Name"])
 
 
@@ -1042,7 +1042,7 @@ def clean_test_security_groups(tags_dict, regions=None, dry_run=False):
                 try:
                     response = client.delete_security_group(GroupId=group_id)
                     LOGGER.debug("Done. Result: %s\n", response)
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                     LOGGER.debug("Failed with: %s", str(ex))
 
 
@@ -1125,7 +1125,7 @@ def clean_load_balancers_aws(tags_dict, regions=None, dry_run=False):
                 try:
                     response = client.delete_load_balancer(LoadBalancerName=arn.split('/')[1])
                     LOGGER.debug("Done. Result: %s\n", response)
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                     LOGGER.debug("Failed with: %s", str(ex))
 
 
@@ -1202,7 +1202,7 @@ def clean_cloudformation_stacks_aws(tags_dict, regions=None, dry_run=False):
                 try:
                     response = client.delete_stack(StackName=arn.split('/')[1])
                     LOGGER.debug("Done. Result: %s\n", response)
-                except Exception as ex:  # pylint: disable=broad-except
+                except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                     LOGGER.debug("Failed with: %s", str(ex))
 
 
@@ -1276,7 +1276,7 @@ def clean_launch_templates_aws(tags_dict, regions=None, dry_run=False):
                 LOGGER.info(
                     "Successfully deleted '%s' LaunchTemplate. Response: %s\n",
                     (current_lt_name or current_lt_id), response)
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.info("Failed to delete the '%s' LaunchTemplate: %s", deletion_args, str(ex))
 
 
@@ -1406,7 +1406,7 @@ class GkeCleaner(GcloudContainerMixin):
     def list_gke_clusters(self) -> list:
         try:
             output = self.gcloud.run("container clusters list --format json")
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("`gcloud container clusters list --format json' failed to run: %s", exc)
         else:
             try:
@@ -1422,7 +1422,7 @@ class GkeCleaner(GcloudContainerMixin):
         try:
             disks = json.loads(self.gcloud.run(
                 'compute disks list --format="json(name,zone)" --filter="name~^gke-.*-pvc-.* AND -users:*"'))
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("`gcloud compute disks list' failed to run: %s", exc)
         else:
             for disk in disks:
@@ -1481,13 +1481,13 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, regions: list = None,
             for aws_region in regions or all_aws_regions():
                 try:
                     cluster_names = boto3.client('eks', region_name=aws_region).list_clusters()['clusters']
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     LOGGER.error("Failed to get list of EKS clusters in the '%s' region: %s", aws_region, exc)
                     return []
                 for cluster_name in cluster_names:
                     try:
                         eks_clusters.append(EksCluster(cluster_name, aws_region))
-                    except Exception as exc:  # pylint: disable=broad-except
+                    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                         LOGGER.error("Failed to get body of cluster on EKS: %s", exc)
             return eks_clusters
 
@@ -1604,7 +1604,7 @@ def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
             try:
                 res = cluster.destroy()
                 LOGGER.info("%s deleted=%s", cluster.name, res)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.error(exc)
 
     ParallelObject(gke_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
@@ -1623,7 +1623,7 @@ def clean_orphaned_gke_disks(tags_dict: dict, dry_run: bool = False) -> None:
                 gke_cleaner.clean_disks(disk_names=disk_names, zone=zone)
                 LOGGER.info("Deleted following orphaned GKE disks in the '%s' zone (%s project): %s",
                             zone, os.environ.get("SCT_GCE_PROJECT"), disk_names)
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error(exc)
 
 
@@ -1645,7 +1645,7 @@ def clean_clusters_eks(tags_dict: dict, regions: list = None, dry_run: bool = Fa
                 res = cluster.destroy()
                 LOGGER.info("'%s' EKS cluster in the '%s' region has been deleted. Response=%s",
                             cluster.name, cluster.region_name, res)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.error(exc)
 
     ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
@@ -1757,7 +1757,7 @@ def safe_kill(pid, signal):
     try:
         os.kill(pid, signal)
         return True
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
         return False
 
 
@@ -2145,7 +2145,7 @@ def remove_files(path):
             shutil.rmtree(path=path, ignore_errors=True)
         if os.path.isfile(path):
             os.remove(path)
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error("Error during remove archived logs %s", details)
         LOGGER.info("Remove temporary data manually: \"%s\"", path)
 
@@ -2163,7 +2163,7 @@ def create_remote_storage_dir(node, path='') -> Optional[str, None]:
                 'Remote storing folder not created.\n %s', result)
             remote_dir = node_remote_dir
 
-    except Exception as details:  # pylint: disable=broad-except
+    except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.error("Error during creating remote directory %s", details)
         return None
 
@@ -2208,7 +2208,7 @@ def update_certificates(db_csr='data_dir/ssl_conf/example/db.csr', cadb_pem='dat
                         f'-out {db_crt} -days 365')
         localrunner.run(f'openssl x509 -enddate -noout -in {db_crt}')
         new_crt = localrunner.run(f'cat {db_crt}').stdout
-    except Exception as ex:  # pylint: disable=broad-except
+    except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
         raise Exception('Failed to update certificates by openssl: %s' % ex) from None
     return new_crt
 
@@ -2293,15 +2293,14 @@ def download_dir_from_cloud(url):
     LOGGER.info("Downloading [%s] to [%s]", url, tmp_dir)
     if os.path.isdir(tmp_dir) and os.listdir(tmp_dir):
         LOGGER.warning("[{}] already exists, skipping download".format(tmp_dir))
+    elif url.startswith('s3://'):
+        s3_download_dir(parsed.hostname, parsed.path, tmp_dir)
+    elif url.startswith('gs://'):
+        gce_download_dir(parsed.hostname, parsed.path, tmp_dir)
+    elif os.path.isdir(url):
+        tmp_dir = url
     else:
-        if url.startswith('s3://'):
-            s3_download_dir(parsed.hostname, parsed.path, tmp_dir)
-        elif url.startswith('gs://'):
-            gce_download_dir(parsed.hostname, parsed.path, tmp_dir)
-        elif os.path.isdir(url):
-            tmp_dir = url
-        else:
-            raise ValueError("Unsupported url schema or non-existing directory [{}]".format(url))
+        raise ValueError("Unsupported url schema or non-existing directory [{}]".format(url))
     if not tmp_dir.endswith('/'):
         tmp_dir += '/'
     LOGGER.info("Finished downloading [%s]", url)
@@ -2760,7 +2759,7 @@ def reach_enospc_on_node(target_node):
         LOGGER.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
         try:
             target_node.remoter.sudo(occupy_space_cmd, verbose=True)
-        except Exception as details:  # pylint: disable=broad-except
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning(str(details))
         return bool(list(no_space_log_reader))
 
@@ -2957,11 +2956,11 @@ def walk_thru_data(data, path: str, separator: str = '/') -> Any:
         if not name:
             continue
         if name[0] == '[' and name[-1] == ']':
-            name = name[1:-1]
+            name = name[1:-1]  # noqa: PLW2901
         if name.isalnum() and isinstance(current_value, (list, tuple, set)):
             try:
                 current_value = current_value[int(name)]
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 current_value = None
             continue
         current_value = current_value.get(name, None)

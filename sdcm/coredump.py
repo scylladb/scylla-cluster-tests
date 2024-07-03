@@ -21,6 +21,8 @@ from datetime import datetime
 from functools import cached_property
 from threading import Thread, Event
 from dataclasses import dataclass
+from pathlib import Path
+from contextlib import contextmanager
 
 from sdcm.log import SDCMAdapter
 from sdcm.remote import NETWORK_EXCEPTIONS
@@ -114,7 +116,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             try:
                 self.main_cycle_body()
                 exceptions_count = 0
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.log.error("Following error occurred: %s", exc)
                 exceptions_count += 1
                 if exceptions_count == self.max_coredump_thread_exceptions:
@@ -172,7 +174,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                 if result:
                     uploaded.append(core_info)
                     self.publish_event(core_info)
-            except Exception:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                 pass
 
     @abstractmethod
@@ -182,7 +184,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
     def publish_event(self, core_info: CoreDumpInfo):
         try:
             core_info.publish_event()
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error(f"Failed to publish coredump event due to the: {str(exc)}")
 
     def extract_info_from_core_pids(
@@ -211,8 +213,20 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                               "'%s' 'https://%s'" % (coredump, upload_url))
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
-        download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump.rsplit('/', 1)[-1])
+        download_instructions = f'gsutil cp gs://{upload_url} .'
+
+        coredump = Path(coredump)
+        if coredump.suffix == '.zst':
+            download_instructions += f'\nunzstd {coredump.name}'
+        elif coredump.suffix in ('.gzip', '.gz'):
+            download_instructions += f'\ngunzip {coredump.name}'
+        elif coredump.suffix == '.lz4':
+            download_instructions += f'\nunlz4 {coredump.name}'
         core_info.download_url, core_info.download_instructions = download_url, download_instructions
+
+    @contextmanager
+    def hard_link_corefile(self, corefile):  # pylint: disable=unused-argument,no-self-use
+        yield
 
     def upload_coredump(self, core_info: CoreDumpInfo):
         if core_info.download_url:
@@ -223,7 +237,10 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
         try:
             self.log.debug(f'Start uploading file: {core_info.corefile}')
             core_info.download_instructions = 'Coredump upload in progress'
-            self._upload_coredump(core_info)
+            with self.hard_link_corefile(core_info.corefile) as hard_link:
+                if hard_link:
+                    core_info.corefile = str(hard_link)
+                self._upload_coredump(core_info)
             return True
         except Exception as exc:  # pylint: disable=broad-except
             core_info.download_instructions = 'failed to upload core'
@@ -249,7 +266,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             raise RuntimeError("Distro is not supported")
 
     def _pack_coredump(self, coredump: str) -> str:
-        extensions = ['.lz4', '.zip', '.gz', '.gzip']
+        extensions = ['.lz4', '.zip', '.gz', '.gzip', '.zst']
         for extension in extensions:
             if coredump.endswith(extension):
                 return coredump
@@ -261,7 +278,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             coredump += '.gz'
         except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
             raise
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning("Failed to compress coredump '%s': %s", coredump, ex)
         return coredump
 
@@ -295,9 +312,19 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         try:
             systemd_version = get_systemd_version(self.node.remoter.run(
                 "systemctl --version", ignore_status=True).stdout)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning("failed to get systemd version:", exc_info=True)
         return systemd_version
+
+    @contextmanager
+    def hard_link_corefile(self, corefile):
+        hard_links_path = Path(corefile).parent / 'hardlinks'
+        link_path = hard_links_path / Path(corefile).name
+        self.node.remoter.sudo(f'mkdir -p {hard_links_path}', ignore_status=True)
+        self.log.debug(f'doing: ln {corefile} {link_path}')
+        self.node.remoter.sudo(f'ln {corefile} {link_path}', ignore_status=True)
+        yield link_path
+        self.node.remoter.sudo(f'rm -f {link_path}', ignore_status=True)
 
     def get_list_of_cores_json(self) -> Optional[List[CoreDumpInfo]]:
         result = self.node.remoter.run(
@@ -397,7 +424,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         #
         # Coredump could be absent when file was removed
         for line in coredump_info:
-            line = line.strip()
+            line = line.strip()  # noqa: PLW2901
             if line.startswith('Executable:'):
                 executable = line[12:].strip()
             elif line.startswith('Command Line:'):
@@ -407,7 +434,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                 # Storage: /var/lib/systemd/coredump/core.vi.1000.6c4de4c206a0476e88444e5ebaaac482.18554.1578994298000000.lz4 (inaccessible)
                 if "inaccessible" in line:
                     continue
-                line = line.replace('(present)', '')
+                line = line.replace('(present)', '')  # noqa: PLW2901
                 corefile = line[line.find(':') + 1:].strip()
             elif line.startswith('Timestamp:'):
                 timestring = None
@@ -430,7 +457,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                     else:
                         raise ValueError(f'Date has unknown format: {timestring}')
                     event_timestamp = datetime.strptime(timestring, fmt).timestamp()
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                     self.log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {str(exc)}")
         core_info.update(executable=executable, command_line=command_line, corefile=corefile,
                          source_timestamp=event_timestamp, coredump_info="\n".join(coredump_info)+"\n")

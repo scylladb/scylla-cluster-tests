@@ -375,7 +375,7 @@ class SctRunner(ABC):
             try:
                 LOGGER.info("Terminating SCT Image Builder instance `%s'...", builder_instance_id)
                 self._terminate_image_builder_instance(instance=instance)
-            except Exception as ex:  # pylint: disable=broad-except
+            except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
                 LOGGER.warning("Was not able to terminate `%s': %s\nPlease terminate manually!!!",
                                builder_instance_id, ex)
         else:
@@ -1244,7 +1244,7 @@ def update_sct_runner_tags(backend: str = None, test_runner_ip: str = None, test
         runner_to_update = runner_to_update[0]
         runner_to_update.sct_runner_class.set_tags(runner_to_update, tags=tags)
         LOGGER.info("Tags on SCT runner updated with: %s", tags)
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         LOGGER.warning("Could not set SCT runner tags to: %s due to exc:\n%s", tags, exc)
 
 
@@ -1274,7 +1274,6 @@ def _manage_runner_keep_tag_value(utc_now: datetime,
         return sct_runner_info
 
     LOGGER.info("No changes to make to runner tags.")
-    return sct_runner_info
 
 
 def clean_sct_runners(test_status: str,
@@ -1316,9 +1315,9 @@ def clean_sct_runners(test_status: str,
         LOGGER.info("UTC now: %s", utc_now)
 
         if not dry_run and test_runner_ip:
-            sct_runner_info = _manage_runner_keep_tag_value(test_status=test_status, utc_now=utc_now,
-                                                            timeout_flag=timeout_flag, sct_runner_info=sct_runner_info,
-                                                            dry_run=dry_run)
+            _manage_runner_keep_tag_value(test_status=test_status, utc_now=utc_now,
+                                          timeout_flag=timeout_flag, sct_runner_info=sct_runner_info,
+                                          dry_run=dry_run)
 
         if sct_runner_info.keep:
             if "alive" in str(sct_runner_info.keep):
@@ -1344,7 +1343,7 @@ def clean_sct_runners(test_status: str,
             sct_runner_info.terminate()
             runners_terminated += 1
             end_message = f"Number of cleaned runners: {runners_terminated}"
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.warning("Exception raised during termination of %s: %s", sct_runner_info, exc)
             end_message = "No runners have been terminated"
 

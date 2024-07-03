@@ -348,7 +348,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                                                                    key=lambda version: version,
                                                                    reverse=True)}
             return best_results
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Search best results per version failed. Error: %s", exc)
             return {}
 
@@ -403,7 +403,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                     best['average_time_operation_in_sec_diff'] = _calculate_relative_change_magnitude(
                         current_result[nemesis]['average_time_operation_in_sec'],
                         best['average_time_operation_in_sec'])
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Compare results failed: %s", exc)
 
     def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, email_subject_postfix=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-arguments
@@ -1138,9 +1138,9 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     def _mark_best_tests(self, prior_subtests, metrics, tests_info, main_test_id):
         main_tests_by_id = MagicList(tests_info.keys()).group_by('test_id')
-        for _, prior_tests in prior_subtests.items():
+        for _, _prior_tests in prior_subtests.items():
             prior_tests = MagicList(
-                [prior_test for prior_test in prior_tests if prior_test.main_test_id != main_test_id])
+                [prior_test for prior_test in _prior_tests if prior_test.main_test_id != main_test_id])
             if not prior_tests:
                 continue
             for metric_path in metrics:
@@ -1235,7 +1235,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                 for num in sorted(to_delete, reverse=True):
                     prior_tests.pop(num)
 
-    def check_regression_multi_baseline(
+    def check_regression_multi_baseline(  # noqa: PLR0912, PLR0915
             self,
             test_id,
             subtests_info: list = None,
