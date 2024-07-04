@@ -20,3 +20,5 @@ jepsen_scylla_repo: 'https://github.com/scylladb/jepsen.git'
 jepsen_test_count: 5
 jepsen_test_run_policy: any
 bare_loaders: true
+
+user_credentials_path: '~/.ssh/scylla_test_id_ed25519'
