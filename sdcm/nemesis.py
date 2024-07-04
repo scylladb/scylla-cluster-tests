@@ -1263,11 +1263,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 new_node.set_seed_flag(target_is_seed)
                 self.cluster.update_seed_provider()
             try:
-                test_keyspaces = self.cluster.get_test_keyspaces()
-                for node in self.cluster.nodes:
-                    with adaptive_timeout(Operations.CLEANUP, node=node, timeout=HOUR_IN_SEC * 48):
-                        for keyspace in test_keyspaces:
-                            node.run_nodetool(sub_cmd='cleanup', args=keyspace, retry=0)
+                self.nodetool_cleanup_on_all_nodes_parallel()
             finally:
                 self.unset_current_running_nemesis(new_node)
         return new_node
@@ -1904,7 +1900,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
             self.target_node.run_nodetool('rebuild', retry=0)
 
-    def disrupt_nodetool_cleanup(self):
+    def nodetool_cleanup_on_all_nodes_parallel(self):
         # Inner disrupt function for ParallelObject
         def _nodetool_cleanup(node):
             InfoEvent('NodetoolCleanupMonkey %s' % node).publish()
@@ -1914,6 +1910,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         parallel_objects = ParallelObject(self.cluster.nodes, num_workers=min(
             32, len(self.cluster.nodes)), timeout=HOUR_IN_SEC * 48)
         parallel_objects.run(_nodetool_cleanup)
+
+    def disrupt_nodetool_cleanup(self):
+        self.nodetool_cleanup_on_all_nodes_parallel()
 
     def _prepare_test_table(self, ks='keyspace1', table=None):
         ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
@@ -3522,11 +3521,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
             # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
             try:
-                test_keyspaces = self.cluster.get_test_keyspaces()
-                for node in self.cluster.nodes:
-                    with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC * 48):
-                        for keyspace in test_keyspaces:
-                            node.run_nodetool(sub_cmd='cleanup', args=keyspace, retry=0)
+                self.nodetool_cleanup_on_all_nodes_parallel()
             finally:
                 self.unset_current_running_nemesis(new_node)
 
