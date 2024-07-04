@@ -190,7 +190,7 @@ def call(Map pipelineParams) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
                                              "SCT_TEST_ID=${UUID.randomUUID().toString()}",
-                                             "SCT_GCE_PROJECT=${env.SCT_GCE_PROJECT}",]) {
+                                             "SCT_GCE_PROJECT=${env.SCT_GCE_PROJECT ?: ''}",]) {
                                         stage("Checkout for ${sub_test}") {
                                             catchError(stageResult: 'FAILURE') {
                                                 timeout(time: 5, unit: 'MINUTES') {
