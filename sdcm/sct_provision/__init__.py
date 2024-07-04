@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from typing import Literal
 
 from sdcm.sct_provision.azure.azure_region_definition_builder import AzureDefinitionBuilder
 from sdcm.sct_provision.region_definition_builder import RegionDefinitionBuilder
