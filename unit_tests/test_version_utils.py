@@ -2,10 +2,8 @@ from __future__ import absolute_import
 
 import os
 import unittest
-from unittest import mock
 
 import pytest
-import requests
 
 import sdcm
 from sdcm.utils.version_utils import (

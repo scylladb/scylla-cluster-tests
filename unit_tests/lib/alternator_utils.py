@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+
 from sdcm.utils import alternator
 
 ALTERNATOR_PORT = 8000
