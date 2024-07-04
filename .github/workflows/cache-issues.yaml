@@ -8,10 +8,15 @@ jobs:
   collect_n_upload:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/dump_issues.py
+          sparse-checkout-cone-mode: false
       - run: |
           mkdir -p issues
           for repo in scylladb scylla-enterprise scylla-manager scylla-operator scylla-cluster-tests scylla-dtest qa-tasks scylla-tools-java ; do
-            gh issue list --state all --json number,state,labels --limit 30000 --template '{{range .}}{{.number}},{{.state}},{{range .labels}}{{.name}}|{{end}}{{println ""}}{{end}}' --repo scylladb/$repo > issues/scylladb_$repo.csv
+            .github/dump_issues.py --repository scylladb/$repo
           done
         env:
           GH_TOKEN: ${{ secrets.ISSUE_ASSIGNMENT_TO_PROJECT_TOKEN }}
