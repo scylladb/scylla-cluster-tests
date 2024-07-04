@@ -50,7 +50,7 @@ class JepsenTest(ClusterTester):
 
             # newer jepsen test is using tcpdump, and expect it in /usr/bin
             db_node.install_package("tcpdump")
-            db_node.remoter.sudo("ln -s /sbin/tcpdump /usr/bin/tcpdump", ignore_status=True)
+            db_node.remoter.sudo("ln -s /usr/bin/tcpdump /usr/sbin/tcpdump", ignore_status=True)
 
         remoter.send_files(os.path.expanduser(self.db_cluster.nodes[0].ssh_login_info["key_file"]), DB_SSH_KEY)
 
