@@ -342,12 +342,9 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
 
     compaction_collection_items_count_warning_threshold: int = None  # None
 
-<<<<<<< HEAD
-=======
     enable_tablets: bool = None  # False, but default scylla.yaml for some versions (e.g. 6.0) override it to True
     force_gossip_topology_changes: bool = None  # False
 
->>>>>>> 7f3748e2 (fix(parallel-operations): disable when force gossip)
     def dict(  # pylint: disable=arguments-differ
         self,
         *,

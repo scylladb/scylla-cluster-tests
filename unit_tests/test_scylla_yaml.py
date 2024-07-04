@@ -398,13 +398,9 @@ class ScyllaYamlTest(unittest.TestCase):
                 'virtual_dirty_soft_limit': None,
                 'volatile_system_keyspace_for_testing': None,
                 'workdir': None,
-<<<<<<< HEAD
-                'write_request_timeout_in_ms': None
-=======
                 'write_request_timeout_in_ms': None,
                 'enable_tablets': None,
                 'force_gossip_topology_changes': None,
->>>>>>> 7f3748e2 (fix(parallel-operations): disable when force gossip)
             }
         )
 
