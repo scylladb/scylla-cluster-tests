@@ -1,5 +1,0 @@
-ami_id_monitor: 'resolve:ssm:/aws/service/debian/release/10/latest/amd64'  # Debian Buster latest image
-ami_monitor_user: 'admin'
-monitor_branch: 'branch-4.7'  # Pass it as debian image is not the formal monitor image
-
-manager_scylla_backend_version: '2023'  # Notice: Uses 2023.1, while other (newer deb) use 2024, since we support both
