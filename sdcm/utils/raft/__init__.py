@@ -4,12 +4,10 @@ import random
 
 from enum import Enum
 from typing import Protocol, NamedTuple, Mapping, Iterable
-from collections import namedtuple
 
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events import Severity
-from sdcm.utils.version_utils import ComparableScyllaVersion
 from sdcm.utils.features import is_consistent_topology_changes_feature_enabled, is_consistent_cluster_management_feature_enabled
 
 
