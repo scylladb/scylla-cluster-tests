@@ -16,3 +16,6 @@ from .auxiliaries import ServerEncryptionOptions, ClientEncryptionOptions, SeedP
 from .certificate_builder import ScyllaYamlCertificateAttrBuilder
 from .cluster_builder import ScyllaYamlClusterAttrBuilder
 from .node_builder import ScyllaYamlNodeAttrBuilder
+
+__all__ = ["ScyllaYaml", "ServerEncryptionOptions", "ClientEncryptionOptions", "SeedProvider", "RequestSchedulerOptions",
+           "ScyllaYamlCertificateAttrBuilder", "ScyllaYamlClusterAttrBuilder", "ScyllaYamlNodeAttrBuilder"]
