@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 import pytest
 
-import sdcm.utils.cloud_monitor  # pylint: disable=unused-import # import only to avoid cyclic dependency
 from sdcm.nemesis import Nemesis, CategoricalMonkey, SisyphusMonkey, ToggleGcModeMonkey
 from sdcm.cluster import BaseScyllaCluster
 from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
