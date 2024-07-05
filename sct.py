@@ -1318,47 +1318,38 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
             email_results_file = "email_data.json" if os.path.exists("email_data.json") else None
         if not email_results_file:
             LOGGER.error("Results file not found")
-            sys.exit(1)
-        test_results = read_email_data_from_file(email_results_file)
+        else:
+            test_results = read_email_data_from_file(email_results_file)
     else:
         LOGGER.warning("Failed to find test directory for %s", test_id)
+    if not test_results:
+        if not test_status:
+            test_status = 'ABORTED'
+        test_results = get_test_results_for_failed_test(test_status, start_time)
+        if started_by:
+            test_results["username"] = started_by
+        if test_id:
+            test_results.update({
+                "test_id": test_id,
+                "nodes": get_running_instances_for_email_report(test_id, runner_ip),
+                "log_links": list_logs_by_test_id(test_id)
+            })
+        reporter = build_reporter('TestAborted', email_recipients, testrun_dir)
+        if reporter:
+            reporter.send_report(test_results)
+        else:
+            LOGGER.error('failed to get a reporter')
+            sys.exit(1)
+        return
     job_name = os.environ.get('JOB_NAME', '')
     if (('latency' in job_name or 'throughput' in job_name or 'perf' in job_name) and 'sla' not in job_name):
         logs = list_logs_by_test_id(test_results.get('test_id', test_id))
-        if not test_results:
-            LOGGER.error("Test Results file not found")
-            test_results = get_test_results_for_failed_test(test_status, start_time)
-            if started_by:
-                test_results["username"] = started_by
-            if logs:
-                test_results['logs_links'] = logs
-            reporter = build_reporter('TestAborted', email_recipients, testrun_dir)
-            if reporter:
-                reporter.send_report(test_results)
-            else:
-                LOGGER.error('failed to get a reporter')
-            sys.exit(1)
-        else:
-            reporter = BaseResultsAnalyzer(es_index=test_id, es_doc_type='test_stats',
-                                           email_recipients=email_recipients)
-            send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time)
+        reporter = BaseResultsAnalyzer(es_index=test_id, es_doc_type='test_stats',
+                                       email_recipients=email_recipients)
+        send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time)
     else:
-        if test_results:
-            reporter = test_results.get("reporter", "")
-            test_results['nodes'] = get_running_instances_for_email_report(test_id, runner_ip)
-        else:
-            LOGGER.warning("Failed to read test results for %s", test_id)
-            reporter = "TestAborted"
-            if not test_status:
-                test_status = 'ABORTED'
-            test_results = get_test_results_for_failed_test(test_status, start_time)
-            if started_by:
-                test_results["username"] = started_by
-            if test_id:
-                test_results.update({
-                    "test_id": test_id,
-                    "nodes": get_running_instances_for_email_report(test_id, runner_ip)
-                })
+        reporter = test_results.get("reporter", "")
+        test_results['nodes'] = get_running_instances_for_email_report(test_id, runner_ip)
         test_results['logs_links'] = list_logs_by_test_id(test_results.get('test_id', test_id))
         if 'longevity' in job_name:
             pt_report_urls = list_parallel_timelines_report_urls(test_id=test_results.get('test_id', test_id))
