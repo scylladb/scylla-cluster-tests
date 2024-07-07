@@ -3,6 +3,9 @@ on:
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
+  # TODO: Add for test, remove before merge
+  push:
+  pull_request:
 
 jobs:
   collect_n_upload:
