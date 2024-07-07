@@ -928,15 +928,17 @@ def update_conf_docs():
 @cli.command("perf-regression-report", help="Generate and send performance regression report")
 @click.option("-i", "--es-id", required=True, type=str, help="Id of the run in Elastic Search")
 @click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
-def perf_regression_report(es_id, emails):
+@click.option("--es-index", default="performancestatsv2", help="Elastic Search index")
+@click.option("--extra-jobs-to-compare", default=None, type=str, multiple=True, help="Extra jobs to compare")
+def perf_regression_report(es_id, emails, es_index, extra_jobs_to_compare):
     add_file_logger()
     emails = emails.split(',')
     if not emails:
         LOGGER.warning("No email recipients. Email will not be sent")
         sys.exit(1)
-    results_analyzer = PerformanceResultsAnalyzer(es_index="performanceregressiontest", es_doc_type="test_stats",
+    results_analyzer = PerformanceResultsAnalyzer(es_index=es_index, es_doc_type="test_stats",
                                                   email_recipients=emails, logger=LOGGER)
-    results_analyzer.check_regression(es_id)
+    results_analyzer.check_regression(es_id, extra_jobs_to_compare=extra_jobs_to_compare)
 
     logdir = Path(get_test_config().logdir())
     email_results_file = logdir / "email_data.json"

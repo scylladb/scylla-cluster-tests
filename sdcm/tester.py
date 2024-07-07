@@ -3216,7 +3216,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             results_analyzer.check_regression(self._test_id, is_gce,
                                               email_subject_postfix=self.params.get('email_subject_postfix'),
                                               use_wide_query=True,
-                                              node_benchmarks=benchmarks_results)
+                                              node_benchmarks=benchmarks_results,
+                                              extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
@@ -3233,7 +3234,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             results_analyzer.check_regression_with_subtest_baseline(self._test_id,
                                                                     base_test_id=self.test_config.test_id(),
                                                                     subtest_baseline=subtest_baseline,
-                                                                    is_gce=is_gce)
+                                                                    is_gce=is_gce,
+                                                                    extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
