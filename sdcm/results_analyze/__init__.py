@@ -665,15 +665,19 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return val1 if val2 == 0 or val1 < val2 else val2  # latency
 
     @staticmethod
-    def _query_filter(test_doc, is_gce,  use_wide_query=False, lastyear=False):
+    def _query_filter(test_doc, is_gce,  use_wide_query=False, lastyear=False, extra_jobs_to_compare=None):
         if test_doc['_source']['test_details'].get('scylla-bench'):
-            return PerformanceFilterScyllaBench(test_doc, is_gce, use_wide_query, lastyear)()
+            return PerformanceFilterScyllaBench(test_doc, is_gce, use_wide_query, lastyear,
+                                                extra_jobs_to_compare=extra_jobs_to_compare)()
         elif test_doc['_source']['test_details'].get('ycsb'):
-            return PerformanceFilterYCSB(test_doc, is_gce, use_wide_query, lastyear)()
+            return PerformanceFilterYCSB(test_doc, is_gce, use_wide_query, lastyear,
+                                         extra_jobs_to_compare=extra_jobs_to_compare)()
         elif "cdc" in test_doc['_source']['test_details'].get('sub_type', ''):
-            return CDCQueryFilterCS(test_doc, is_gce, use_wide_query, lastyear)()
+            return CDCQueryFilterCS(test_doc, is_gce, use_wide_query, lastyear,
+                                    extra_jobs_to_compare=extra_jobs_to_compare)()
         else:
-            return PerformanceFilterCS(test_doc, is_gce, use_wide_query, lastyear)()
+            return PerformanceFilterCS(test_doc, is_gce, use_wide_query, lastyear,
+                                       extra_jobs_to_compare=extra_jobs_to_compare)()
 
     def cmp(self, src, dst, version_dst, best_test_id):
         """
@@ -711,7 +715,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
     # pylint: disable=too-many-arguments
     def check_regression(self, test_id, is_gce=False, email_subject_postfix=None,
                          use_wide_query=False, lastyear=False,
-                         node_benchmarks=None):
+                         node_benchmarks=None, extra_jobs_to_compare=None):
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -734,7 +738,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return False
 
         # filter tests
-        query = self._query_filter(doc, is_gce, use_wide_query, lastyear)
+        query = self._query_filter(doc, is_gce, use_wide_query, lastyear, extra_jobs_to_compare=extra_jobs_to_compare)
         if not query:
             return False
         self.log.debug("Query to ES: %s", query)
@@ -890,7 +894,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         return True
 
-    def check_regression_with_subtest_baseline(self, test_id, base_test_id, subtest_baseline, is_gce=False):
+    def check_regression_with_subtest_baseline(self, test_id, base_test_id, subtest_baseline, is_gce=False, extra_jobs_to_compare=None):
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -914,7 +918,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return False
 
         # filter tests
-        query = self._query_filter(doc, is_gce, use_wide_query=True)
+        query = self._query_filter(doc, is_gce, use_wide_query=True, extra_jobs_to_compare=extra_jobs_to_compare)
         self.log.debug(query)
         if not query:
             return False

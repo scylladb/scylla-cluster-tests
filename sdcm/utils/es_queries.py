@@ -13,13 +13,14 @@ class QueryFilter:
     SETUP_PARAMS = ['n_db_nodes', 'n_loaders', 'n_monitor_nodes']
     SETUP_INSTANCE_PARAMS = ['instance_type_db', 'instance_type_loader', 'instance_type_monitor', 'append_scylla_args']
 
-    def __init__(self, test_doc, is_gce=False, use_wide_query=False, lastyear=False):
+    def __init__(self, test_doc, is_gce=False, use_wide_query=False, lastyear=False, extra_jobs_to_compare=None):
         self.test_doc = test_doc
         self.test_name = test_doc["_source"]["test_details"]["test_name"]
         self.is_gce = is_gce
         self.date_re = '/.*/'
         self.use_wide_query = use_wide_query
         self.lastyear = lastyear
+        self.extra_jobs_to_compare = extra_jobs_to_compare or []
 
     def setup_instance_parameters(self):
         return ['gce_' + param for param in self.SETUP_INSTANCE_PARAMS] if self.is_gce else self.SETUP_INSTANCE_PARAMS
@@ -79,17 +80,6 @@ class QueryFilter:
 
 
 class PerformanceQueryFilter(QueryFilter):
-    ALLOWED_PERFORMANCE_JOBS = [
-        {
-            "job_folder": "Perf-Regression",
-            "job_prefix": ["scylla-release-perf-regression"]
-        },
-        {
-            "job_folder": "scylla-master",
-            "job_prefix": ["scylla-master-perf-regression"]
-        },
-
-    ]
 
     def filter_test_details(self):
         test_details = self.build_filter_job_name()
@@ -102,54 +92,21 @@ class PerformanceQueryFilter(QueryFilter):
     def build_filter_job_name(self):
         """Prepare filter to search by job name
 
-        Select performance tests if job name is located in folder
-        MAIN_JOB_FOLDERS, of job name starts from MAIN_JOB_FOLDER item( this
-        is mostly doing for collecting previous tests)
+        Select performance tests if job name if it's matching the current test,
+        or comparing also with sct configuration `perf_extra_jobs_to_compare` if it's provided
 
         For other job filter documents only with exact same job name
         :returns: [description]
         :rtype: {[type]}
         """
-        job_name = self.test_doc['_source']['test_details']['job_name'].split("/")
+        full_job_name = self.test_doc['_source']['test_details']['job_name']
 
-        def get_query_filter_by_job_folder(job_item):
-            filter_query = ""
-            if job_name[0] and job_name[0] in job_item['job_folder']:
-                base_job_name = job_name[1]
-                if self.use_wide_query:
-                    filter_query = rf'test_details.job_name.keyword: {job_name[0]}\/{base_job_name}'
-                else:
-                    filter_query = rf'(test_details.job_name.keyword: {job_name[0]}\/{base_job_name} OR \
-                                       test_details.job_name.keyword: {base_job_name}) '
-            return filter_query
-
-        def get_query_filter_by_job_prefix(job_item):
-            filter_query = ""
-            for job_prefix in job_item['job_prefix']:
-                if not job_name[0].startswith(job_prefix):
-                    continue
-                base_job_name = job_name[0]
-                if self.use_wide_query:
-                    filter_query = rf'test_details.job_name.keyword: {job_item["job_folder"]}\/{base_job_name}'
-                else:
-                    filter_query = rf'(test_details.job_name.keyword: {job_item["job_folder"]}\/{base_job_name} OR \
-                                       test_details.job_name.keyword: {base_job_name}) '
-                break
-            return filter_query
-
-        job_filter_query = ""
-        for job_item in self.ALLOWED_PERFORMANCE_JOBS:
-            job_filter_query = get_query_filter_by_job_folder(job_item)
-            if not job_filter_query:
-                job_filter_query = get_query_filter_by_job_prefix(job_item)
-            if job_filter_query:
-                break
-
-        if not job_filter_query:
-            full_job_name = self.test_doc['_source']['test_details']['job_name']
-            if '/' in full_job_name:
-                full_job_name = f'"{full_job_name}"'
-            job_filter_query = r'test_details.job_name.keyword: {} '.format(full_job_name)
+        if {*self.extra_jobs_to_compare} != {full_job_name}:
+            extra_jobs_filter = " ".join(
+                [f' OR test_details.job_name.keyword: "{job}"' for job in self.extra_jobs_to_compare])
+            job_filter_query = f'(test_details.job_name.keyword: "{full_job_name}" {extra_jobs_filter})'
+        else:
+            job_filter_query = r'test_details.job_name.keyword: "{}" '.format(full_job_name)
 
         return job_filter_query
 
@@ -200,7 +157,7 @@ class QueryFilterCS(QueryFilter):
                     param_val = self.test_doc['_source']['test_details'][cassandra_stress][param]
                     if param in ['profile', 'ops']:
                         param_val = "\"{}\"".format(param_val)
-                    test_details += ' AND test_details.{}.{}: {}'.format(cassandra_stress, param, param_val)
+                    test_details += ' AND test_details.{}.{}: "{}"'.format(cassandra_stress, param, param_val)
         return test_details
 
 

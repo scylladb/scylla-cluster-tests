@@ -106,6 +106,10 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
+            string(defaultValue: "${pipelineParams.get('perf_extra_jobs_to_compare', '')}",
+                   description: 'jobs to compare performance results with, for example if running in staging, '
+                                + 'we still can compare with official jobs',
+                   name: 'perf_extra_jobs_to_compare')
         }
         options {
             timestamps()
@@ -327,6 +331,9 @@ def call(Map pipelineParams) {
                                                         fi
                                                         if [[ -n "${params.test_email_title ? params.test_email_title : ''}" ]] ; then
                                                             export SCT_EMAIL_SUBJECT_POSTFIX="${params.test_email_title}"
+                                                        fi
+                                                        if [[ -n "${params.perf_extra_jobs_to_compare ? params.perf_extra_jobs_to_compare : ''}" ]] ; then
+                                                            export SCT_PERF_EXTRA_JOBS_TO_COMPARE="${params.perf_extra_jobs_to_compare}"
                                                         fi
 
                                                         echo "start test ......."
