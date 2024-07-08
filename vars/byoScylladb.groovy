@@ -1,4 +1,5 @@
 #!groovy
+import groovy.json.JsonSlurper
 
 def call(Map params, boolean build_image){
     if (! (params.byo_scylla_repo && params.byo_scylla_branch) ) {
@@ -30,6 +31,12 @@ def call(Map params, boolean build_image){
         jobToTrigger = currentJobDirectoryPath + '/' + jobToTrigger[2..-1].trim()
     }
 
+    try {
+        copyAmiToRegions = new JsonSlurper().parseText(params.region)
+        copyAmiToRegions = copyAmiToRegions.join(",").replace(" ", "")
+    } catch(Exception) {
+        copyAmiToRegions = params.region
+    }
     byoParameterList = [
         string(name: 'DEFAULT_PRODUCT', value: params.byo_default_product),
         string(name: 'DEFAULT_BRANCH', value: params.byo_default_branch),
@@ -49,8 +56,7 @@ def call(Map params, boolean build_image){
         string(name: 'RELENG_BRANCH', value: params.byo_default_branch),
         //
         booleanParam(name: 'BUILD_WITH_CMAKE', value: false),
-        // NOTE: 'BUILD_MODE' must be empty string for '5.4'/'2024.1' and older branches
-        string(name: 'BUILD_MODE', value: 'ALL'),
+        string(name: 'BUILD_MODE', value: 'release'),
         booleanParam(name: 'CODE_COVERAGE', value: false),
         booleanParam(name: 'TEST_DEBUG_INFO', value: false),
         // SPECIAL_CONFIGURE_PY_PARAMS = '' // TODO: add it's support?
@@ -66,7 +72,7 @@ def call(Map params, boolean build_image){
         booleanParam(name: 'CREATE_UNIFIED_DEB', value:  true),
         booleanParam(name: 'CREATE_DOCKER', value: false),
         booleanParam(name: 'CREATE_AMI', value: (params.backend == 'aws' && build_image)),
-        string(name: 'COPY_AMI_TO_REGIONS', value: params.region),
+        string(name: 'COPY_AMI_TO_REGIONS', value: copyAmiToRegions),
         booleanParam(name: 'CREATE_GCE', value: (params.backend == 'gce' && build_image)),
         booleanParam(name: 'CREATE_AZURE', value: (params.backend == 'azure' && build_image)),
         //
