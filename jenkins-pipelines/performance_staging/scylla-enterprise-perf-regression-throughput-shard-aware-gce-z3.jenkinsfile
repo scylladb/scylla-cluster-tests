@@ -11,4 +11,5 @@ perfRegressionParallelPipeline(
     sub_tests: ["test_write", "test_read", "test_mixed"],
     test_email_title: "throughput - shard-aware - z3",
     gce_project: 'gcp-local-ssd-latency',
+    perf_extra_jobs_to_compare: "scylla-enterprise/perf-regression/scylla-enterprise-pref-regression-throughput-shard-aware-gce-z3",
 )
