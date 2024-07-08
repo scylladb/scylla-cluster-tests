@@ -151,7 +151,7 @@ pipeline {
         stage("integration tests") {
             when {
                 expression {
-                    return pullRequestContainsLabels("test-integration") && currentBuild.result == null
+                    return pullRequestContainsLabels("test-integration")
                 }
             }
             options {
@@ -191,7 +191,7 @@ pipeline {
         stage("provision test") {
             when {
                 expression {
-                    return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker,test-provision-k8s-local-kind-aws,test-provision-k8s-eks,test-provision-azure") && currentBuild.result == null
+                    return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker,test-provision-k8s-local-kind-aws,test-provision-k8s-eks,test-provision-azure")
                 }
             }
             steps {
