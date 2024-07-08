@@ -17,7 +17,7 @@ def call() {
         parameters {
             string(defaultValue: "",
                description: 'folder name or path in jenkins jobs structure',
-               name: 'branch')
+               name: 'jenkins_path')
             string(defaultValue: "master",
                description: 'sct branch',
                name: 'sct_branch')
@@ -36,9 +36,10 @@ def call() {
         triggers {
             parameterizedCron (
                 '''
-                    H 01 * * 0 %branch="scylla-master/releng-testing"
-                    H 01 * * 0 %branch="scylla-enterprise" ; is_enterprise=true
-                    H 01 * * 0 %branch="scylla-master"
+                    H 01 * * 0 %jenkins_path="scylla-master/releng-testing"
+                    H 01 * * 0 %jenkins_path="scylla-enterprise" ; is_enterprise=true
+                    H 01 * * 0 %jenkins_path="scylla-master"
+                    H 01 * * 0 %sct_branch="branch-perf-v15"
                 '''
             )
         }
@@ -50,7 +51,9 @@ def call() {
                     }
                     dir('scylla-cluster-tests') {
                         timeout(time: 5, unit: 'MINUTES') {
-                            checkout scm
+                            git(url: params.sct_repo,
+                                credentialsId:'b8a774da-0e46-4c91-9f74-09caebaea261',
+                                branch: params.sct_branch)
                         }
                     }
                 }
@@ -67,31 +70,30 @@ def call() {
                                                 set -xe
                                                 env
 
-                                                echo "start create test jobs for branch ${params.branch} ......."
-                                                ./docker/env/hydra.sh create-test-release-jobs ${params.branch} --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
+                                                echo "start create test jobs for branch ${params.jenkins_path} ......."
+                                                ./docker/env/hydra.sh create-test-release-jobs ${params.jenkins_path} --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
                                                 echo "all jobs have been created"
 
                                                 if ${params.is_enterprise}; then
-                                                    echo "start create test jobs for branch ${params.branch} ......."
-                                                    ./docker/env/hydra.sh create-test-release-jobs-enterprise ${params.branch} --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
+                                                    echo "start create test jobs for branch ${params.jenkins_path} ......."
+                                                    ./docker/env/hydra.sh create-test-release-jobs-enterprise ${params.jenkins_path} --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
                                                     echo "all jobs have been created"
                                                 fi
-                                                if [[ "${params.branch}" == "scylla-master" ]] ; then
+                                                if [[ "${params.jenkins_path}" == "scylla-master" ]] ; then
                                                     echo "start create operator test jobs for operator-master ......."
                                                         ./docker/env/hydra.sh create-operator-test-release-jobs operator-master --triggers --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
                                                     echo "all jobs have been created"
                                                 fi
-                                                if [[ "${params.branch}" == "scylla-master" ]] ; then
+                                                if [[ "${params.jenkins_path}" == "scylla-master" ]] ; then
                                                     echo "start create qa tools jobs  ......."
                                                         ./docker/env/hydra.sh create-qa-tools-jobs --triggers --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
                                                     echo "all jobs have been created"
                                                 fi
 
-                                                # disable auto creating the perf jobs until we'll be running from master
-                                                #if [[ "${params.branch}" == "scylla-master" ]] ; then
-                                                #    echo "start create qa tools jobs  ......."
-                                                #        ./docker/env/hydra.sh create-performance-jobs --triggers --sct_branch branch-perf-v14 --sct_repo ${params.sct_repo}
-                                                #    echo "all jobs have been created"
+                                                if [[ "${params.sct_branch}" == "branch-perf-v15" ]] ; then
+                                                    echo "start create perf for ${params.sct_branch}  ......."
+                                                        ./docker/env/hydra.sh create-performance-jobs --triggers --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
+                                                    echo "all jobs have been created"
                                                 #fi
 
                                                 """

@@ -9,5 +9,5 @@ perfRegressionParallelPipeline(
     test_config: """["test-cases/performance/perf-regression-latency-650gb-with-nemesis.yaml"]""",
     sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
     test_email_title: "latency during operations / tablets"
-    perf_extra_jobs_to_compare: "scylla-master/perf-regression/scylla-master-perf-regression-throughput-non-shard-aware-i4i-tablets",
+    perf_extra_jobs_to_compare: "scylla-master/perf-regression/scylla-master-perf-regression-latency-650gb-with-nemesis-tablets",
 )
