@@ -2534,6 +2534,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
              (*) The other available values of 'disabled' / 'immediate' are not tested by
              this nemesis since not applicable to a longevity test.
         """
+        if SkipPerIssues("https://github.com/scylladb/scylla-enterprise/issues/4082", self.tester.params):
+            raise UnsupportedNemesis('Disabled due to https://github.com/scylladb/scylla-enterprise/issues/4082')
+
         # This nemesis can not be run on table with RF = 1:
         #   ConfigurationException: tombstone_gc option with mode = repair not supported for table with RF one or local replication strategy
         # We do not run tests with local strategy ({'class': 'org.apache.cassandra.locator.LocalStrategy'}), so I do not add this filter
@@ -2560,6 +2563,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
             Alters a non-system table compaction strategy from ICS to any-other and vise versa.
         """
+        if SkipPerIssues("https://github.com/scylladb/scylla-enterprise/issues/4082", self.tester.params):
+            raise UnsupportedNemesis('Disabled due to https://github.com/scylladb/scylla-enterprise/issues/4082')
+
         all_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
 
         if not all_ks_cfs:
