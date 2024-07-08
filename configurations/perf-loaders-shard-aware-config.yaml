@@ -1,3 +1,2 @@
 # manual on creating loader AMI's: see docs/new_loader_ami.md
 use_prepared_loaders: true
-ami_id_loader: 'scylla-qa-loader-ami-v19'

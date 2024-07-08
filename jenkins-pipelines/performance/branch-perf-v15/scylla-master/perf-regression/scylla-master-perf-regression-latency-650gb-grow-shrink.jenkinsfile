@@ -8,5 +8,6 @@ perfRegressionParallelPipeline(
     availability_zone: 'a,b,c',
     test_name: "performance_regression_test.PerformanceRegressionTest",
     test_config: """["test-cases/performance/perf-regression-latency-650gb-grow-shrink.yaml", "configurations/tablets_disabled.yaml"]""",
-    sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"]
+    sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
+    perf_extra_jobs_to_compare: """["scylla-master/scylla-master-perf-latency-650gb-grow-shrink","scylla-master/perf-regression/scylla-master-perf-regression-latency-650gb-grow-shrink"]""",
 )

@@ -10,6 +10,5 @@ perfRegressionParallelPipeline(
     test_config: '''["test-cases/performance/perf-regression.100threads.30M-keys-i4i.yaml","configurations/perf-loaders-non-shard-aware-config.yaml", "configurations/disable_speculative_retry.yaml", "configurations/tablets_disabled.yaml"]''',
     sub_tests: ["test_write", "test_read", "test_mixed"],
     test_email_title: "throughput - non-shard-aware",
-
-    timeout: [time: 350, unit: "MINUTES"]
+    perf_extra_jobs_to_compare: """["scylla-master/scylla-master-perf-regression-throughput-non-shard-aware-i4i-test","scylla-master/perf-regression/scylla-master-perf-regression-throughput-non-shard-aware-i4i"]""",
 )
