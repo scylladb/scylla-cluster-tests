@@ -241,6 +241,18 @@ def call(Map pipelineParams) {
                         }
                     }
                 }
+                post{
+                    failure {
+                        script{
+                            sh "exit 1"
+                        }
+                    }
+                    unstable {
+                        script{
+                            sh "exit 1"
+                        }
+                    }
+                }
             }
             stage('Create SCT Runner') {
                 steps {
