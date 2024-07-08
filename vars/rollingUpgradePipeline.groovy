@@ -147,6 +147,38 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('BYO Scylladb [optional]') {
+                agent {
+                    label {
+                        label builder.label
+                    }
+                }
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 240, unit: 'MINUTES') {
+                                        byoScylladb(params, false)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                post{
+                    failure {
+                        script{
+                            sh "exit 1"
+                        }
+                    }
+                    unstable {
+                        script{
+                            sh "exit 1"
+                        }
+                    }
+                }
+            }
             stage('Run SCT stages') {
                 steps {
                     script {
@@ -181,19 +213,6 @@ def call(Map pipelineParams) {
                                                         dir('scylla-cluster-tests') {
                                                             timeout(time: 5, unit: 'MINUTES') {
                                                                 createArgusTestRun(params)
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        stage('BYO Scylladb [optional]') {
-                                            catchError(stageResult: 'FAILURE') {
-                                                script {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            timeout(time: 240, unit: 'MINUTES') {
-                                                                byoScylladb(params, false)
                                                             }
                                                         }
                                                     }
