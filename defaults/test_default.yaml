@@ -251,3 +251,5 @@ teardown_validators:
     table: ''
 
 run_scylla_doctor: false
+
+enterprise_disable_kms: false
