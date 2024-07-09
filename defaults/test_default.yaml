@@ -255,3 +255,5 @@ kafka_backend: null
 kafka_connectors: []
 
 run_scylla_doctor: false
+
+enterprise_disable_kms: false
