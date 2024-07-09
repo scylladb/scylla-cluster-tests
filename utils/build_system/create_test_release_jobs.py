@@ -75,6 +75,10 @@ class JenkinsPipelines:
             new_path = str(Path(self.base_job_dir) / name)
 
             if self.jenkins.job_exists(new_path):
+                if name in ['scylla-master', 'scylla-enterprise']:
+                    # we skip those folder, since they aren't created by SCT,
+                    # and we don't want to risk overriding anything configured in them
+                    return
                 LOGGER.info("reconfig folder [%s]", new_path)
                 self.reconfig_job(new_path, dir_xml_data)
             else:
@@ -93,7 +97,7 @@ class JenkinsPipelines:
                    **context}
         base_name = base_name % context
 
-        if group_name:
+        if group_name and self.base_job_dir:
             group_name = "/" + str(group_name)
 
         xml_data = xml_temple.read_text(encoding='utf-8') % context
@@ -117,7 +121,7 @@ class JenkinsPipelines:
                                        sct_repo=self.sct_repo,
                                        sct_branch_name=self.sct_branch_name,
                                        sct_jenkinsfile=sct_jenkinsfile)
-        if group_name:
+        if group_name and self.base_job_dir:
             group_name = "/" + str(group_name)
         _job_name = f'{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}'
         try:
