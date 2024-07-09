@@ -31,13 +31,13 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
 
     def _get_perf_simple_query_result(self, test_doc):
         if not keys_exists(test_doc, "_source", "results", "perf_simple_query_result"):
-            self.log.error('Cannot find the field: perf_simple_query_result for test id: {}!'.format(test_doc['_id']))
+            self.log.error('Cannot find the field: perf_simple_query_result for test id: %s!', test_doc['_id'])
             return None
         return test_doc['_source']['results']['perf_simple_query_result']
 
     def _get_test_details(self, test_doc):
         if not keys_exists(test_doc, "_source", "test_details"):
-            self.log.error('Cannot find the field: test_details for test id: {}!'.format(test_doc['_id']))
+            self.log.error('Cannot find the field: test_details for test id: %s!', test_doc['_id'])
             return None
         return test_doc["_source"]["test_details"]
 
@@ -50,7 +50,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
     def check_regression(self, test_id, mad_deviation_limit=0.02, regression_limit=0.05, is_gce=False):  # pylint: disable=too-many-locals,too-many-statements
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error('Cannot find test by id: {}!'.format(test_id))
+            self.log.error('Cannot find test by id: %s!', test_id)
             return False
 
         test_stats = self._get_perf_simple_query_result(doc)

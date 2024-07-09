@@ -642,14 +642,14 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             # And so on...
             cpuset_file_lines = self.remoter.run("cat /etc/scylla.d/cpuset.conf").stdout
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-            self.log.error(f"Failed to get CPUSET. Error: {exc}")
+            self.log.error("Failed to get CPUSET. Error: %s", exc)
             return ''
 
         for cpuset_file_line in cpuset_file_lines.split("\n"):
             if not cpuset_file_line.startswith("CPUSET="):
                 continue
             scylla_cpu_set = re.findall(r'(\d+)-(\d+)|(\d+)', cpuset_file_line)
-            self.log.debug(f"CPUSET on node {self.name}: {cpuset_file_line}")
+            self.log.debug("CPUSET on node %s: %s", self.name, cpuset_file_line)
             break
         else:
             self.log.debug("Didn't find the 'CPUSET' configuration.")
@@ -680,11 +680,11 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         try:
             grep_result = self.remoter.sudo(f'grep "^SCYLLA_ARGS=" {self.scylla_server_sysconfig_path}')
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-            self.log.error(f"Failed to get SCYLLA_ARGS. Error: {exc}")
+            self.log.error("Failed to get SCYLLA_ARGS. Error: %s", exc)
             return ''
 
         scylla_smp = re.search(r'--smp\s(\d+)', grep_result.stdout)
-        self.log.debug(f"SMP on node {self.name}: {scylla_smp.groups() if scylla_smp else scylla_smp}")
+        self.log.debug("SMP on node %s: %s", self.name, scylla_smp.groups() if scylla_smp else scylla_smp)
 
         return scylla_smp.group(1) if scylla_smp else ''
 
@@ -700,7 +700,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if self.cpuset and scylla_shards > self.cpuset:
             scylla_shards = self.cpuset
 
-        self.log.info(f"Random shards: {scylla_shards}")
+        self.log.info("Random shards: %s", scylla_shards)
         return scylla_shards
 
     @property
@@ -2141,7 +2141,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if build_id := self.get_scylla_build_id():
             scylla_version += f" with build-id {build_id}"
             self.log.info("Found ScyllaDB version with details: %s", scylla_version)
-        self.log.debug(f"self.scylla_version_detailed={scylla_version}")
+        self.log.debug("self.scylla_version_detailed=%s", scylla_version)
         return scylla_version
 
     @optional_cached_property
@@ -2192,7 +2192,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 self._kernel_version = "unknown"
             else:
                 self._kernel_version = res.stdout.strip()
-            self.log.info("Found kernel version: {}".format(self._kernel_version))
+            self.log.info("Found kernel version: %s", self._kernel_version)
         return self._kernel_version
 
     def increase_jmx_heap_memory(self, jmx_memory):
@@ -2566,16 +2566,16 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         resharding_finished = list(search_reshard_finish)
 
         if resharding_started:
-            self.log.debug(f'Resharding has been started successfully '
-                           f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits})')
+            self.log.debug('Resharding has been started successfully (murmur3_partitioner_ignore_msb_bits=%s)',
+                           murmur3_partitioner_ignore_msb_bits)
         else:
-            raise Exception(f'Resharding has not been started '
-                            f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits}) '
-                            'Check the log for the details')
+            raise Exception('Resharding has not been started '
+                            '(murmur3_partitioner_ignore_msb_bits=%s) '
+                            'Check the log for the details', murmur3_partitioner_ignore_msb_bits)
 
         if resharding_finished:
-            self.log.debug(f'Resharding has been finished successfully '
-                           f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits})')
+            self.log.debug('Resharding has been finished successfully '
+                           '(murmur3_partitioner_ignore_msb_bits=%s)', murmur3_partitioner_ignore_msb_bits)
         else:
             raise Exception(f'Resharding has not been finished within {start_scylla_timeout}'
                             f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits}) '
@@ -2914,13 +2914,13 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 f'sudo curl --request GET http://localhost:10000/v2/config/{config_param_name}')
             if "No such config entry" in request_out.stdout:
                 self.log.error(
-                    f'Failed to retreive value of {config_param_name} parameter. Error: {request_out.stdout}')
+                    'Failed to retreive value of %s parameter. Error: %s', config_param_name, request_out.stdout)
                 return None
             if verbose:
-                self.log.debug(f'{config_param_name} parameter value: {request_out.stdout}')
+                self.log.debug('%s parameter value: %s', config_param_name, request_out.stdout)
             return request_out.stdout
         except Exception as e:  # pylint: disable=broad-except  # noqa: BLE001
-            self.log.error(f'Failed to retreive value of {config_param_name} parameter. Error: {e}')
+            self.log.error('Failed to retreive value of %s parameter. Error: %s', config_param_name, e)
             return None
 
     def install_epel(self):
@@ -2959,7 +2959,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         result = self.remoter.sudo("sysctl -a", ignore_status=True)
 
         if not result.ok:
-            self.log.error(f"sysctl command failed: {result}")
+            self.log.error("sysctl command failed: %s", result)
             return sysctl_properties
 
         for line in result.stdout.strip().split("\n"):
@@ -2967,7 +2967,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 name, value = line.strip().split("=", 1)
                 sysctl_properties.update({name.strip(): value.strip()})
             except ValueError:
-                self.log.error(f"Could not parse sysctl line: {line}")
+                self.log.error("Could not parse sysctl line: %s", line)
 
         return sysctl_properties
 
@@ -3089,7 +3089,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     @retrying(n=360, sleep_time=10, allowed_exceptions=NodeNotReady, message="Waiting for native_transport")
     def wait_native_transport(self):
         path = '/storage_service/native_transport'
-        self.log.debug(f"Checking if node is fully started, using API call to {path}")
+        self.log.debug("Checking if node is fully started, using API call to %s", path)
         native_transport_query = build_node_api_command(path_url=path)
         res = self.remoter.run(native_transport_query)
         if res.return_code != 0:
@@ -3194,7 +3194,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             # get_node_ips_param should be defined in child
             self._node_public_ips = self.params.get(self.get_node_ips_param(public_ip=True)) or []
             self._node_private_ips = self.params.get(self.get_node_ips_param(public_ip=False)) or []
-            self.log.debug('Node public IPs: {}, private IPs: {}'.format(self._node_public_ips, self._node_private_ips))
+            self.log.debug('Node public IPs: %s, private IPs: %s', self._node_public_ips, self._node_private_ips)
 
         # NOTE: following is needed in case of K8S where we init multiple DB clusters first
         #       and only then we add nodes to it calling code in parallel.
@@ -3665,7 +3665,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 for i, table_name in enumerate(result.copy()):
                     has_data = False
                     try:
-                        self.log.debug(f"{i}: {table_name}")
+                        self.log.debug("%s: %s", i, table_name)
                         res = db_node.run_nodetool(sub_cmd='cfstats', args=table_name, timeout=300,
                                                    warning_event_on_exception=(
                                                        Failure, UnexpectedExit, Libssh2_UnexpectedExit,),
@@ -3673,7 +3673,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                         cf_stats = db_node._parse_cfstats(res.stdout)  # pylint: disable=protected-access
                         has_data = bool(cf_stats['Number of partitions (estimate)'])
                     except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-                        self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
+                        self.log.warning('Failed to get rows from %s table. Error: %s', table_name, exc)
 
                     if not has_data:
                         result.discard(table_name)
@@ -3703,7 +3703,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             return result and bool(len(result.one())), None
 
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-            self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
+            self.log.warning('Failed to get rows from %s table. Error: %s', table_name, exc)
             return False, exc
 
     def get_all_tables_with_cdc(self, db_node: BaseNode) -> List[str]:
@@ -4559,7 +4559,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                                 self.log.warning("Failed to get cf_stats for the '%s' table", ks_cf)
                         SstableUtils(db_node=target_node, ks_cf=chosen_ks_cf).check_that_sstables_are_encrypted()
                 except SstablesNotFound as exc:
-                    self.log.warning(f"Couldn't check the fact of encryption (KMS) for sstables: {exc}")
+                    self.log.warning("Couldn't check the fact of encryption (KMS) for sstables: %s", exc)
                 except IndexError:
                     AwsKmsEvent(
                         message="Failed to get any table for the KMS key rotation thread",
@@ -5004,11 +5004,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if not self.params.get('use_mgmt'):
             raise ScyllaManagerError('Scylla-manager configuration is not defined!')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.scylla_manager_node, scylla_cluster=self)
-        LOGGER.debug("sctool version is : {}".format(manager_tool.sctool.version))
+        LOGGER.debug("sctool version is : %s", manager_tool.sctool.version)
         cluster_name = self.scylla_manager_cluster_name  # pylint: disable=no-member
         mgr_cluster = manager_tool.get_cluster(cluster_name)
         if not mgr_cluster and create_cluster_if_not_exists:
-            self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
+            self.log.debug("Could not find cluster : %s on Manager. Adding it to Manager", cluster_name)
             return self.create_cluster_manager(cluster_name, manager_tool=manager_tool)
         return mgr_cluster
 

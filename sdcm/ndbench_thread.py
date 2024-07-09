@@ -107,7 +107,7 @@ class NdBenchStatsPublisher(FileFollowerThread):
                             self.set_metric(operation, name, float(value))
 
                 except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-                    LOGGER.warning("Failed to send metric. Failed with exception {exc}".format(exc=exc))
+                    LOGGER.warning("Failed to send metric. Failed with exception %s", exc)
 
 
 class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes

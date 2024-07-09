@@ -135,7 +135,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0, instance_type=None):  # pylint: disable=too-many-arguments
         ami_id = self._ec2_ami_id[dc_idx]
-        self.log.debug(f"Creating {count} on-demand instances using AMI id '{ami_id}'... ")
+        self.log.debug("Creating %s on-demand instances using AMI id '%s'... ", count, ami_id)
         params = dict(ImageId=ami_id,
                       UserData=ec2_user_data,
                       MinCount=count,
@@ -226,7 +226,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if interfaces_amount == 1:
             interfaces[0].update({'AssociatePublicIpAddress': True})
 
-        self.log.info(f"Create {self.instance_provision} instance(s)")
+        self.log.info("Create %s instance(s)", self.instance_provision)
         if self.instance_provision == 'mixed':
             instances = self._create_mixed_instances(count, interfaces, ec2_user_data, dc_idx,
                                                      instance_type=instance_type)
@@ -254,11 +254,11 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if self.params.get('instance_provision_fallback_on_demand'):
             instances_provision_fallbacks.append(INSTANCE_PROVISION_ON_DEMAND)
 
-        self.log.debug(f"Instances provision fallbacks : {instances_provision_fallbacks}")
+        self.log.debug("Instances provision fallbacks : %s", instances_provision_fallbacks)
 
         for instances_provision_type in instances_provision_fallbacks:
             try:
-                self.log.info(f"Create {instances_provision_type} instance(s)")
+                self.log.info("Create %s instance(s)", instances_provision_type)
                 if instances_provision_type == INSTANCE_PROVISION_ON_DEMAND:
                     instances = self._create_on_demand_instances(
                         count, interfaces, ec2_user_data, dc_idx, instance_type=instance_type)
@@ -280,7 +280,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 ec2_client.SPOT_CAPACITY_NOT_AVAILABLE_ERROR in cl_ex or \
                 ec2_client.SPOT_PRICE_TOO_LOW in cl_ex or \
                 ec2_client.SPOT_STATUS_UNEXPECTED_ERROR in cl_ex:
-            self.log.error(f"Cannot create {instance_provision} instance(s): {cl_ex}")
+            self.log.error("Cannot create %s instance(s): %s", instance_provision, cl_ex)
             return True
         return False
 
@@ -498,7 +498,7 @@ class AWSNode(cluster.BaseNode):
         return interfaces
 
     def init(self):
-        LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
+        LOGGER.debug("Waiting until instance %s starts running...", self._instance)
         self._instance_wait_safe(self._instance.wait_until_running)
 
         if not self.test_config.REUSE_CLUSTER:
@@ -695,7 +695,7 @@ class AWSNode(cluster.BaseNode):
                 f"sudo sh -c  \"echo 'sudo ip route add {ipv6_cidr} dev eth0' >> /etc/sysconfig/network-scripts/init.ipv6-global\"")
 
             res = self.remoter.run(f"grep '{ipv6_cidr}' /etc/sysconfig/network-scripts/init.ipv6-global")
-            LOGGER.debug('init.ipv6-global was {}updated'.format('' if res.stdout.strip else 'NOT '))
+            LOGGER.debug('init.ipv6-global was %s updated', '' if res.stdout.strip else 'NOT ')
 
     def restart(self):
         # We differentiate between "Restart" and "Reboot".

@@ -191,7 +191,7 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
         if truncate:
             for ks, tables in ks_tables_map.items():
                 for table_name in tables:
-                    self.log.info(f'running truncate on {ks}.{table_name}')
+                    self.log.info('running truncate on %s.%s', ks, table_name)
                     self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {ks}.{table_name}')
         if restore_data_with_task:
             self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
@@ -240,7 +240,7 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
     def generate_load_and_wait_for_results(self, keyspace_name: str = None):
         load_thread = self._generate_load(keyspace_name=keyspace_name)
         load_results = load_thread.get_results()
-        self.log.info(f'load={load_results}')
+        self.log.info('load=%s', load_results)
 
     def _parse_stress_cmd(self, stress_cmd, params):
         # Due to an issue with scylla & cassandra-stress - we need to create the counter table manually

@@ -124,7 +124,7 @@ class AzureNode(cluster.BaseNode):
                     SpotTerminationEvent(node=self, message=message).publish()
                 else:
                     # other EventType's that can be triggered by Azure's maintenance: "Reboot" | "Redeploy" | "Freeze" | "Terminate"
-                    self.log.warning(f"Unhandled Azure scheduled event: {event}")
+                    self.log.warning("Unhandled Azure scheduled event: %s", event)
         except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning('Error during getting Azure scheduled events: %s', details)
             return 0

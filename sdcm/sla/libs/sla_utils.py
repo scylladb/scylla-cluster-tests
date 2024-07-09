@@ -179,7 +179,7 @@ class SlaUtils:
             # Example of scheduler_runtime_per_sla:
             #   {'10.0.2.177': {'sl:default': [410.5785714285715, 400.36428571428576],
             #   'sl:sl500_596ca81a': [177.11428571428573, 182.02857142857144]}
-            LOGGER.debug('SERVICE LEVEL GROUP - RUNTIMES: {}'.format(scheduler_runtime_per_sla))
+            LOGGER.debug('SERVICE LEVEL GROUP - RUNTIMES: %s', scheduler_runtime_per_sla)
             if not scheduler_runtime_per_sla:
                 # Set this message as WARNING because I found that prometheus return empty answer despite the data
                 # exists (I run this request manually and got data). Prometheus request doesn't fail, it succeeded but
@@ -203,7 +203,7 @@ class SlaUtils:
                 if role_sl_attribute['sl_group_runtime'] == 0.0:
                     sl_group_runtime_zero = True
 
-            LOGGER.debug('RUN TIME PER ROLE: {}'.format(roles_full_info))
+            LOGGER.debug('RUN TIME PER ROLE: %s', roles_full_info)
 
             # We know and validate expected_ratio in the feature test. In the longevity we can not perform such kind
             # of validation because WP load runs in parallel with disruptive and non-disruptive nemeses, so we can not

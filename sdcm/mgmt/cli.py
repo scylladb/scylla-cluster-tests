@@ -438,7 +438,7 @@ class ManagerTask:
         else:
             list_final_status = [
                 TaskStatus.ERROR, TaskStatus.ERROR_FINAL, TaskStatus.STOPPED, TaskStatus.DONE, TaskStatus.ABORTED]
-        LOGGER.debug("Waiting for task: {} getting to a final status ({})..".format(self.id, str(list_final_status)))
+        LOGGER.debug("Waiting for task: %s getting to a final status (%s)..", self.id, str(list_final_status))
         res = self.wait_for_status(list_status=list_final_status, timeout=timeout, step=step)
         if not res:
             raise ScyllaManagerError("Unexpected result on waiting for task {} status".format(self.id))
@@ -527,7 +527,7 @@ class ManagerCluster(ScyllaManagerBase):
             return self.sctool.get_table_value(
                 parsed_table=cluster_list, column_name=column_to_search, identifier=cluster_name)
         except ScyllaManagerError as ex:
-            LOGGER.warning("Cluster name not found in Scylla-Manager: {}".format(ex))
+            LOGGER.warning("Cluster name not found in Scylla-Manager: %s", ex)
             return None
 
     def set_cluster_id(self, value: str):
@@ -552,7 +552,7 @@ class ManagerCluster(ScyllaManagerBase):
 
         res = self.sctool.run(cmd=cmd, parse_table_res=False)
         task_id = res.stdout.strip()
-        LOGGER.debug("Created task id is: {}".format(task_id))
+        LOGGER.debug("Created task id is: %s", task_id)
         return RestoreTask(task_id=task_id, cluster_id=self.id, manager_node=self.manager_node)
 
     def create_backup_task(self, dc_list=None,  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches  # noqa: PLR0913
@@ -601,7 +601,7 @@ class ManagerCluster(ScyllaManagerBase):
         res = self.sctool.run(cmd=cmd, parse_table_res=False)
 
         task_id = res.stdout.strip()
-        LOGGER.debug("Created task id is: {}".format(task_id))
+        LOGGER.debug("Created task id is: %s", task_id)
         return BackupTask(task_id=task_id, cluster_id=self.id, manager_node=self.manager_node)
 
     def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments
@@ -647,11 +647,11 @@ class ManagerCluster(ScyllaManagerBase):
 
         # expected result output is to have a format of: "repair/2a4125d6-5d5a-45b9-9d8d-dec038b3732d"
         if 'repair' not in res.stdout:
-            LOGGER.error("Encountered an error on '{}' command response".format(cmd))
+            LOGGER.error("Encountered an error on '%s' command response", cmd)
             raise ScyllaManagerError(res.stderr)
 
         task_id = res.stdout.split('\n')[0]
-        LOGGER.debug("Created task id is: {}".format(task_id))
+        LOGGER.debug("Created task id is: %s", task_id)
 
         return RepairTask(task_id=task_id, cluster_id=self.id,
                           manager_node=self.manager_node)  # return the manager's object with new repair-task-id
@@ -731,7 +731,7 @@ class ManagerCluster(ScyllaManagerBase):
             cmd = "stop --delete {} -c {}".format(task_id, self.id)
         else:
             cmd = "-c {} task delete {}".format(self.id, task_id)
-        LOGGER.debug("Task Delete command to execute is: {}".format(cmd))
+        LOGGER.debug("Task Delete command to execute is: %s", cmd)
         self.sctool.run(cmd=cmd, parse_table_res=False)
         LOGGER.debug("Deleted the task '{}' successfully!". format(task_id))
 
@@ -830,7 +830,7 @@ class ManagerCluster(ScyllaManagerBase):
         dict_hosts_health = {}
         for dc_name, hosts_table in dict_status_tables.items():
             if len(hosts_table) < 2:
-                LOGGER.debug("Cluster: {} - {} has no hosts health report".format(self.id, dc_name))
+                LOGGER.debug("Cluster: %s - %s has no hosts health report", self.id, dc_name)
             else:
                 list_titles_row = hosts_table[0]
                 host_col_idx = list_titles_row.index("Address")
@@ -857,7 +857,7 @@ class ManagerCluster(ScyllaManagerBase):
                                                                rest_status=HostRestStatus.from_str(rest_status),
                                                                rest_rtt=rest_rtt, ssl=HostSsl.from_str(ssl),
                                                                rest_http_status_code=rest_http_status_code)
-            LOGGER.debug("Cluster {} Hosts Health is:".format(self.id))
+            LOGGER.debug("Cluster %s Hosts Health is:", self.id)
             for ip, health in dict_hosts_health.items():
                 LOGGER.debug("{}: {},{},{},{},{}".format(ip, health.status, health.rtt,
                                                          health.rest_status, health.rest_rtt, health.ssl))
@@ -907,7 +907,7 @@ def verify_errorless_result(cmd, res):
         raise ScyllaManagerError("Encountered an error on '{}' command response {}\ncommand exit code:{}\nstderr:{}".format(
             cmd, res, res.exited, res.stderr))
     if res.stderr:
-        LOGGER.error("Encountered an error on '{}' stderr: {}".format(cmd, str(res.stderr)))  # TODO: just for checking
+        LOGGER.error("Encountered an error on '%s' stderr: %s", cmd, str(res.stderr))  # TODO: just for checking
 
 
 class ScyllaManagerTool(ScyllaManagerBase):
@@ -920,7 +920,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
     def __init__(self, manager_node):
         ScyllaManagerBase.__init__(self, id="MANAGER", manager_node=manager_node)
         self._initial_wait(20)
-        LOGGER.info("Initiating Scylla-Manager, version: {}".format(self.sctool.version))
+        LOGGER.info("Initiating Scylla-Manager, version: %s", self.sctool.version)
         list_supported_distros = [Distro.CENTOS7,
                                   Distro.ROCKY8, Distro.ROCKY9,
                                   Distro.DEBIAN10, Distro.DEBIAN11,
@@ -1042,7 +1042,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
             manager_from_version, scylla_mgmt_upgrade_to_repo))
         self.manager_node.upgrade_mgmt(scylla_mgmt_address=scylla_mgmt_upgrade_to_repo)
         new_manager_version = self.sctool.version
-        LOGGER.debug('The Manager version after upgrade is: {}'.format(new_manager_version))
+        LOGGER.debug('The Manager version after upgrade is: %s', new_manager_version)
         return new_manager_version
 
     def rollback_upgrade(self, scylla_mgmt_address):
@@ -1106,7 +1106,7 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
         res = self.manager_node.remoter.run('sudo apt-get update', ignore_status=True)
         res = self.manager_node.remoter.run('apt-cache  show scylla-manager-client | grep Version:')
         rollback_to_version = res.stdout.split()[1]
-        LOGGER.debug("Rolling back manager version from: {} to: {}".format(manager_from_version, rollback_to_version))
+        LOGGER.debug("Rolling back manager version from: %s to: %s", manager_from_version, rollback_to_version)
         # self.manager_node.install_mgmt(scylla_mgmt_address=scylla_mgmt_address)
         downgrade_to_pre_upgrade_repo = dedent("""
 
@@ -1266,7 +1266,7 @@ class SCTool:
             elif identifier in row:
                 ret_val = row[column_name_index]
                 break
-        LOGGER.debug("{} {} value is:{}".format(identifier, column_name, ret_val))
+        LOGGER.debug("%s %s value is:%s", identifier, column_name, ret_val)
         return ret_val
 
     @staticmethod

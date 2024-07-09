@@ -101,19 +101,19 @@ class Alternator:
             schema = schema.value
         schema = schemas.ALTERNATOR_SCHEMAS[schema]
         dynamodb_api = self.get_dynamodb_api(node=node)
-        LOGGER.debug("Creating a new table '{}' using node '{}'".format(table_name, node.name))
+        LOGGER.debug("Creating a new table '%s' using node '%s'", table_name, node.name)
         table = dynamodb_api.resource.create_table(
             TableName=table_name, BillingMode="PAY_PER_REQUEST", **schema, **kwargs)
         if wait_until_table_exists:
             waiter = dynamodb_api.client.get_waiter('table_exists')
             waiter.wait(TableName=table_name, WaiterConfig=dict(Delay=1, MaxAttempts=100))
 
-        LOGGER.info("The table '{}' successfully created..".format(table_name))
+        LOGGER.info("The table '%s' successfully created..", table_name)
         response = dynamodb_api.client.describe_table(TableName=table_name)
 
         if isolation:
             self.set_write_isolation(node=node, isolation=isolation, table_name=table_name)
-        LOGGER.debug("Table's schema and configuration are: {}".format(response))
+        LOGGER.debug("Table's schema and configuration are: %s", response)
         return table
 
     def update_table_ttl(self, node, table_name, enabled: bool = True):
@@ -134,15 +134,15 @@ class Alternator:
             parallel_params, result, still_running_while = {}, [], True
             if is_parallel_scan:
                 parallel_params = {"TotalSegments": threads_num, "Segment": part_scan_idx}
-                LOGGER.debug("Starting parallel scan part '{}' on table '{}'".format(part_scan_idx + 1, table_name))
+                LOGGER.debug("Starting parallel scan part '%s' on table '%s'", part_scan_idx + 1, table_name)
             else:
-                LOGGER.debug("Starting full scan on table '{}'".format(table_name))
+                LOGGER.debug("Starting full scan on table '%s'", table_name)
             while still_running_while:
                 response = table.scan(**parallel_params, **kwargs)
                 result.extend(response["Items"])
                 still_running_while = 'LastEvaluatedKey' in response
 
-            LOGGER.debug("Founding the following items:\n{}".format(pformat(result)))
+            LOGGER.debug("Founding the following items:\n%s", pformat(result))
             return result
 
         if is_parallel_scan:
@@ -194,6 +194,6 @@ class Alternator:
         if wait_until_table_removed:
             waiter = dynamodb_api.client.get_waiter('table_not_exists')
             waiter.wait(TableName=table_name)
-            LOGGER.info("The '{}' table successfully removed".format(table_name))
+            LOGGER.info("The '%s' table successfully removed", table_name)
         else:
-            LOGGER.info("Send request to removed '{}' table".format(table_name))
+            LOGGER.info("Send request to removed '%s' table", table_name)

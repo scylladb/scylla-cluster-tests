@@ -2359,7 +2359,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             execution_result = session.execute(cmd)
 
         if execution_result:
-            self.log.debug("keyspace creation result: {}".format(execution_result.response_future))
+            self.log.debug("keyspace creation result: %s", execution_result.response_future)
         with self.db_cluster.cql_connection_patient(validation_node) as session:
             does_keyspace_exist = self.wait_validate_keyspace_existence(session, keyspace_name)
         return does_keyspace_exist
@@ -2413,7 +2413,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             query = '%s AND scylla_encryption_options=%s' % (query, scylla_encryption_options)
         if compact_storage:
             query += ' AND COMPACT STORAGE'
-        self.log.debug('CQL query to execute: {}'.format(query))
+        self.log.debug('CQL query to execute: %s', query)
         with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
             session.execute(query)
         time.sleep(0.2)
@@ -2423,7 +2423,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             timeout = f" USING TIMEOUT {truncate_timeout_sec}s" if truncate_timeout_sec else ""
             session.execute('TRUNCATE TABLE {0}.{1}{2}'.format(ks_name, table_name, timeout))
         except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
-            self.log.debug('Failed to truncate base table {0}.{1}. Error: {2}'.format(ks_name, table_name, str(ex)))
+            self.log.debug('Failed to truncate base table %s.%s. Error: %s', ks_name, table_name, str(ex))
 
     def create_materialized_view(self, ks_name, base_table_name, mv_name, mv_partition_key, mv_clustering_key, session,  # noqa: PLR0913
                                  # pylint: disable=too-many-arguments
@@ -2470,17 +2470,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if compact_storage:
             query += ' AND COMPACT STORAGE'
 
-        self.log.debug('MV create statement: {}'.format(query))
+        self.log.debug('MV create statement: %s', query)
         session.execute(query, timeout=600)
 
     def _wait_for_view(self, scylla_cluster, session, key_space, view):
-        self.log.debug("Waiting for view {}.{} to finish building...".format(key_space, view))
+        self.log.debug("Waiting for view %s.%s to finish building...", key_space, view)
 
         def _view_build_finished(live_nodes_amount):
             result = self.rows_to_list(session.execute("SELECT status FROM system_distributed.view_build_status WHERE "
                                                        "keyspace_name='{0}' "
                                                        "AND view_name='{1}'".format(key_space, view)))
-            self.log.debug('View build status result: {}'.format(result))
+            self.log.debug('View build status result: %s', result)
             return len([status for status in result if status[0] == 'SUCCESS']) >= live_nodes_amount
 
         attempts = 20
@@ -2505,7 +2505,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             result = self.rows_to_list(session.execute("SELECT last_token FROM system.views_builds_in_progress "
                                                        "WHERE keyspace_name='{0}' AND view_name='{1}'".format(key_space,
                                                                                                               view)))
-            self.log.debug('View build in progress: {}'.format(result))
+            self.log.debug('View build in progress: %s', result)
             return result != []
 
         self.log.debug("Ensure view building started.")
@@ -2553,7 +2553,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         result = True
         create_statement = "SELECT * FROM system_schema.views where view_name = '%s' " \
                            "and keyspace_name = '%s'" % (src_view, src_keyspace)
-        self.log.debug('Start create table with statement: {}'.format(create_statement))
+        self.log.debug('Start create table with statement: %s', create_statement)
         if not self.create_table_as(node, src_keyspace, src_view, dest_keyspace,
                                     dest_table, create_statement, columns_list):
             return False
@@ -2617,7 +2617,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                             name=dest_table,
                             columns=', '.join(['%s %s' % (c[0], c[1]) for c in columns]),
                             pk=', '.join(primary_keys))
-                self.log.debug('Create new table with cql: {}'.format(create_cql))
+                self.log.debug('Create new table with cql: %s', create_cql)
                 session.execute(create_cql)
                 return True
             return False
@@ -2646,7 +2646,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 return False
 
             # TODO: Temporary function. Will be removed
-            self.log.debug('Rows in the {} MV before saving: {}'.format(src_table, len(source_table_rows)))
+            self.log.debug('Rows in the %s MV before saving: %s', src_table, len(source_table_rows))
 
             insert_statement = session.prepare(
                 'insert into {keyspace}.{name} ({columns}) '
@@ -2922,7 +2922,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.argus_finalize_test_run()
         self.argus_heartbeat_stop_signal.set()
 
-        self.log.info('Test ID: {}'.format(self.test_config.test_id()))
+        self.log.info('Test ID: %s', self.test_config.test_id())
         self._check_alive_routines_and_report_them()
         self._check_if_db_log_time_consistency_looks_good()
         self.remove_python_exit_hooks()
@@ -3422,10 +3422,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 ).publish_or_dump(default_logger=self.log)
 
     def stop_all_nodes_except_for(self, node):
-        self.log.debug("Stopping all nodes except for: {}".format(node.name))
+        self.log.debug("Stopping all nodes except for: %s", node.name)
 
         for c_node in [n for n in self.db_cluster.nodes if n != node]:
-            self.log.debug("Stopping node: {}".format(c_node.name))
+            self.log.debug("Stopping node: %s", c_node.name)
             c_node.stop_scylla_server()
 
     def start_all_nodes(self):
@@ -3433,7 +3433,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug("Starting all nodes")
         # restarting all nodes twice in order to pervent no-seed node issues
         for c_node in self.db_cluster.nodes * 2:
-            self.log.debug("Starting node: {} ({})".format(c_node.name, c_node.public_ip_address))
+            self.log.debug("Starting node: %s (%s)", c_node.name, c_node.public_ip_address)
             c_node.start_scylla_server(verify_up=False)
             time.sleep(10)
         self.log.debug("Wait DB is up after all nodes were started")
@@ -3441,16 +3441,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             c_node.wait_db_up()
 
     def start_all_nodes_except_for(self, node):
-        self.log.debug("Starting all nodes except for: {}".format(node.name))
+        self.log.debug("Starting all nodes except for: %s", node.name)
         node_list = [n for n in self.db_cluster.nodes if n != node]
 
         # Start down seed nodes first, if exists
         for c_node in [n for n in node_list if n.is_seed]:
-            self.log.debug("Starting seed node: {}".format(c_node.name))
+            self.log.debug("Starting seed node: %s", c_node.name)
             c_node.start_scylla_server()
 
         for c_node in [n for n in node_list if not n.is_seed]:
-            self.log.debug("Starting non-seed node: {}".format(c_node.name))
+            self.log.debug("Starting non-seed node: %s", c_node.name)
             c_node.start_scylla_server()
 
         node.wait_db_up()
@@ -3486,12 +3486,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         assert fs_size_res[0], "Could not resolve capacity query result."
         kb_size = 2 ** 10
         mb_size = kb_size * 1024
-        self.log.debug("fs_size_res: {}".format(fs_size_res))
-        self.log.debug("used_capacity_query: {}".format(used_capacity_query))
+        self.log.debug("fs_size_res: %s", fs_size_res)
+        self.log.debug("used_capacity_query: %s", used_capacity_query)
 
         used_cap_res = self.prometheus_db.query(
             query=used_capacity_query, start=int(time.time()) - 5, end=int(time.time()))
-        self.log.debug("used_cap_res: {}".format(used_cap_res))
+        self.log.debug("used_cap_res: %s", used_cap_res)
 
         assert used_cap_res, "No results from Prometheus"
         used_size_mb = float(used_cap_res[0]["values"][0][1]) / float(mb_size)

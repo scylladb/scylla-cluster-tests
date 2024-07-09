@@ -65,7 +65,7 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         if self.round_robin:
             self.stress_num = 1
             loaders = [self.loader_set.get_loader()]
-            LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
+            LOGGER.debug("Round-Robin through loaders, Selected loader is %s ", loaders)
         else:
             loaders = self.loader_set.nodes
         self.loaders = loaders

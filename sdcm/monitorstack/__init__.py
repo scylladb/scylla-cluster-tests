@@ -54,7 +54,7 @@ def restore_monitoring_stack(test_id, date_time=None):  # pylint: disable=too-ma
 
     LOGGER.info('Restoring monitoring stack from archive %s', arch['file_path'])
     monitoring_stack_base_dir = tempfile.mkdtemp()
-    LOGGER.info('Download file {} to directory {}'.format(arch['link'], monitoring_stack_base_dir))
+    LOGGER.info('Download file %s to directory %s', arch['link'], monitoring_stack_base_dir)
     downloaded_monitoring_archive = S3Storage().download_file(arch['link'],
                                                               dst_dir=monitoring_stack_base_dir)
     monitoring_data_arch = extract_monitoring_data_archive(downloaded_monitoring_archive,
@@ -503,7 +503,7 @@ def verify_grafana_is_available(grafana_docker_port=GRAFANA_DOCKER_PORT):
                                                             port=grafana_docker_port,
                                                             title=dashboard.title)
             grafana_statuses.append(result)
-            LOGGER.info("Dashboard {} is available".format(dashboard.title))
+            LOGGER.info("Dashboard %s is available", dashboard.title)
         except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Dashboard %s is not available. Error: %s", dashboard.title, details)
             grafana_statuses.append(False)

@@ -347,7 +347,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         # pylint: disable=too-many-locals
 
         def set_tags_as_labels(_instance: compute_v1.Instance):
-            self.log.debug(f"Expected tags are {self.tags}")
+            self.log.debug("Expected tags are %s", self.tags)
             # https://cloud.google.com/resource-manager/docs/tags/tags-creating-and-managing#adding_tag_values
             regex_key = re.compile(r'[^a-z0-9-_]')
 
@@ -355,7 +355,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 return regex_key.sub('_', value.lower())[:60]
 
             normalized_tags = {to_short_name(k): to_short_name(v) for k, v in self.tags.items()}
-            self.log.debug(f"normalized tags are {normalized_tags}")
+            self.log.debug("normalized tags are %s", normalized_tags)
 
             gce_set_labels(instances_client=self._gce_service,
                            instance=_instance,
@@ -411,7 +411,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         try:
             set_tags_as_labels(instance)
         except google.api_core.exceptions.InvalidArgument as exc:
-            self.log.warning(f"Unable to set tags as labels due to {exc}")
+            self.log.warning("Unable to set tags as labels due to %s", exc)
 
         return instance
 

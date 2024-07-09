@@ -384,7 +384,7 @@ class PrometheusDBStats:
     def create_snapshot(self):
         url = "http://{}:{}/api/v1/admin/tsdb/snapshot".format(normalize_ipv6_url(self.host), self.port)
         result = self.request(url, True)
-        LOGGER.debug('Request result: {}'.format(result))
+        LOGGER.debug('Request result: %s', result)
         return result
 
     @staticmethod
@@ -682,7 +682,7 @@ class TestStatsMixin(Stats):
             self._stats['results'][stat] = {}
         if specific_tested_stats:
             self._stats['results'].update(specific_tested_stats)
-            self.log.info("Creating specific tested stats of: {}".format(specific_tested_stats))
+            self.log.info("Creating specific tested stats of: %s", specific_tested_stats)
         self.create()
 
     def update_stress_cmd_details(self, cmd, prefix='', stresser="cassandra-stress", aggregate=True):

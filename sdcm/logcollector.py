@@ -561,7 +561,7 @@ class LogCollector:
             os.makedirs(local_dir, exist_ok=True)
         except OSError as details:
             if not os.path.exists(local_dir):
-                LOGGER.error("Folder is not created. {}".format(details))
+                LOGGER.error("Folder is not created. %s", details)
                 raise
         return local_dir
 

@@ -127,7 +127,7 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
 
                 partitions[i] = pk_rows_num_result
                 stats_file.write('{i}:{rows}, '.format(i=i, rows=partitions[i]))
-        LOGGER.info('File with partitions row data: {}'.format(partitions_stats_file))
+        LOGGER.info('File with partitions row data: %s', partitions_stats_file)
         if save_into_file_name == self.PARTITIONS_ROWS_BEFORE:
             self.partitions_rows_collected = True
         return partitions

@@ -163,7 +163,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             try:
                 core_info.process_retry += 1
                 if self.upload_retry_limit < core_info.process_retry:
-                    self.log.error(f"Maximum retry uploading is reached for core {str(core_info)}")
+                    self.log.error("Maximum retry uploading is reached for core %s", str(core_info))
                     in_progress.remove(core_info)
                     completed.append(core_info)
                     continue
@@ -185,7 +185,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
         try:
             core_info.publish_event()
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-            self.log.error(f"Failed to publish coredump event due to the: {str(exc)}")
+            self.log.error("Failed to publish coredump event due to the: %s", str(exc))
 
     def extract_info_from_core_pids(
             self, new_cores: Optional[List[CoreDumpInfo]], exclude_cores: List[CoreDumpInfo]) -> List[CoreDumpInfo]:
@@ -232,10 +232,10 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
         if core_info.download_url:
             return False
         if not core_info.corefile:
-            self.log.error(f"{str(core_info)} has inaccessible corefile, can't upload it")
+            self.log.error("%s has inaccessible corefile, can't upload it", str(core_info))
             return False
         try:
-            self.log.debug(f'Start uploading file: {core_info.corefile}')
+            self.log.debug('Start uploading file: %s', core_info.corefile)
             core_info.download_instructions = 'Coredump upload in progress'
             with self.hard_link_corefile(core_info.corefile) as hard_link:
                 if hard_link:
@@ -244,7 +244,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
             return True
         except Exception as exc:  # pylint: disable=broad-except
             core_info.download_instructions = 'failed to upload core'
-            self.log.error(f"Following error occurred during uploading coredump {core_info.corefile}: {str(exc)}")
+            self.log.error("Following error occurred during uploading coredump %s: %s", core_info.corefile, str(exc))
             raise
 
     @cached_property
@@ -321,7 +321,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         hard_links_path = Path(corefile).parent / 'hardlinks'
         link_path = hard_links_path / Path(corefile).name
         self.node.remoter.sudo(f'mkdir -p {hard_links_path}', ignore_status=True)
-        self.log.debug(f'doing: ln {corefile} {link_path}')
+        self.log.debug('doing: ln %s %s', corefile, link_path)
         self.node.remoter.sudo(f'ln {corefile} {link_path}', ignore_status=True)
         yield link_path
         self.node.remoter.sudo(f'rm -f {link_path}', ignore_status=True)
@@ -458,7 +458,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                         raise ValueError(f'Date has unknown format: {timestring}')
                     event_timestamp = datetime.strptime(timestring, fmt).timestamp()
                 except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-                    self.log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {str(exc)}")
+                    self.log.error("Failed to convert date '%s' (%s), due to error: %s", line, timestring, str(exc))
         core_info.update(executable=executable, command_line=command_line, corefile=corefile,
                          source_timestamp=event_timestamp, coredump_info="\n".join(coredump_info)+"\n")
 
@@ -532,7 +532,7 @@ class CoredumpExportFileThread(CoredumpThreadBase):
         output = []
         for directory in self.coredumps_directories:
             for corefile in self.node.remoter.sudo(f'ls {directory}', verbose=False, ignore_status=True).stdout.split():
-                self.log.debug(f'Found core file at {corefile}')
+                self.log.debug('Found core file at %s', corefile)
                 core_data = self._extract_core_info_from_file_name(os.path.basename(corefile))
                 output.append(
                     CoreDumpInfo(

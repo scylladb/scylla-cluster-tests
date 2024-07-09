@@ -112,7 +112,7 @@ class LoaderUtilsMixin:
                     stress_params.update({'keyspace_name': keyspace_name})
 
             # Run all stress commands
-            self.log.debug('stress cmd: {}'.format(stress_cmd))
+            self.log.debug('stress cmd: %s', stress_cmd)
             if stress_cmd.startswith('scylla-bench'):
                 stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd,
                                                            stats_aggregate_cmds=False,
@@ -182,7 +182,7 @@ class LoaderUtilsMixin:
                     params = {'stress_cmd': stress_cmd, 'profile': cs_profile, 'round_robin': round_robin}
                     stress_params = dict(params)
 
-                    self.log.debug('stress cmd: {}'.format(stress_cmd))
+                    self.log.debug('stress cmd: %s', stress_cmd)
                     stress_queue.append(self.run_stress_thread(**stress_params))
 
         return stress_queue

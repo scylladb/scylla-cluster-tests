@@ -339,9 +339,9 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
 
                 if not subdirs:
                     dataset_name = os.path.basename(fullpath)
-                    self.log.info('Dataset name: {}'.format(dataset_name))
+                    self.log.info('Dataset name: %s', dataset_name)
                     dirname = os.path.basename(os.path.dirname(fullpath))
-                    self.log.info("Test set: {}".format(dirname))
+                    self.log.info("Test set: %s", dirname)
                     for filename in files:
                         if filename.startswith('.'):
                             continue
@@ -381,7 +381,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             self.log.info("Nothing to exclude")
             return
 
-        self.log.info('Exclude testrun {} from results'.format(testrun_id))
+        self.log.info('Exclude testrun %s from results', testrun_id)
         filter_path = (
             "hits.hits._id",  # '2018-04-02_18:36:47_large-partition-skips_[64-32.1)'
             "hits.hits._source.hostname",  # 'godzilla.cloudius-systems.com'
@@ -414,7 +414,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             self.log.info("Nothing to exclude")
             return
 
-        self.log.info('Exclude test id {} from results'.format(test_id))
+        self.log.info('Exclude test id %s from results', test_id)
         doc = self._es.get_doc(index=self._es_index, doc_id=test_id)
         if doc:
             self._es.update_doc(index=self._es_index,
@@ -455,7 +455,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             "hits.hits._source.hostname",
             "hits.hits._source.versions.scylla-server.run_date_time"
         )
-        self.log.info('Exclude tests before date {}'.format(date))
+        self.log.info('Exclude tests before date %s', date)
         results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
                                   q="hostname:'%s' AND versions.scylla-server.version:%s*" %
                                   (self.hostname, self.db_version[:3]))
@@ -488,14 +488,14 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             "hits.hits._source.test_run_date"
         )
 
-        self.log.info('Exclude tests by commit id #{}'.format(commit_id))
+        self.log.info('Exclude tests by commit id #%s', commit_id)
 
         results = self._es.search(index=self._es_index, filter_path=filter_path, size=self._limit,  # pylint: disable=unexpected-keyword-arg
                                   q="hostname:'{}' \
                                   AND versions.scylla-server.version:{}*\
                                   AND versions.scylla-server.commit_id:'{}'".format(self.hostname, self.db_version[:3], commit_id))
         if not results:
-            self.log.info('There is no testrun results for commit id #{}'.format(commit_id))
+            self.log.info('There is no testrun results for commit id #%s', commit_id)
             return
 
         for doc in results['hits']['hits']:

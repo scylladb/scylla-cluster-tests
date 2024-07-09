@@ -512,7 +512,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 r'self\.(?P<method_name>disrupt_[A-Za-z_]+?)\(.*\)', inspect.getsource(subclass), flags=re.MULTILINE)
             if method_name:
                 disrupt_methods_list.append(method_name.group('method_name'))
-        self.log.debug("Gathered subclass methods: {}".format(disrupt_methods_list))
+        self.log.debug("Gathered subclass methods: %s", disrupt_methods_list)
         return disrupt_methods_list
 
     def get_list_of_subclasses_by_property_name(self, list_of_properties_to_include):
@@ -545,7 +545,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     all_methods_with_properties.append(per_method_properties)
                     all_methods_with_properties = sorted(all_methods_with_properties, key=lambda d: list(d.keys()))
         nemesis_classes.sort()
-        self.log.debug("list of matching disrupions: {}".format(disrupt_methods_names_list))
+        self.log.debug("list of matching disrupions: %s", disrupt_methods_names_list)
         for _ in disrupt_methods_names_list:
             disrupt_methods_objects_list = [attr[1] for attr in inspect.getmembers(self) if
                                             attr[0] in disrupt_methods_names_list and callable(attr[1])]
@@ -968,7 +968,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_rolling_config_change_internode_compression(self):
         def get_internode_compression_new_value_randomly(current_compression):
-            self.log.debug(f"Current compression is {current_compression}")
+            self.log.debug("Current compression is %s", current_compression)
             values = ['dc', 'all', None]
             values_to_toggle = list(filter(lambda value: value != current_compression, values))
             return random.choice(values_to_toggle)
@@ -982,10 +982,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             current = scylla_yaml.internode_compression
         new_value = get_internode_compression_new_value_randomly(current)
         for node in self.cluster.nodes:
-            self.log.debug(f"Changing {node} inter node compression to {new_value}")
+            self.log.debug("Changing %s inter node compression to %s", node, new_value)
             with node.remote_scylla_yaml() as scylla_yaml:
                 scylla_yaml.internode_compression = new_value
-            self.log.info(f"Restarting node {node}")
+            self.log.info("Restarting node %s", node)
             node.restart_scylla_server()
 
     @decorate_with_context(ignore_ycsb_connection_refused)
@@ -1002,8 +1002,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/16739')
 
         murmur3_partitioner_ignore_msb_bits = 15  # pylint: disable=invalid-name
-        self.log.info(f'Restart node with resharding. New murmur3_partitioner_ignore_msb_bits value: '
-                      f'{murmur3_partitioner_ignore_msb_bits}')
+        self.log.info('Restart node with resharding. New murmur3_partitioner_ignore_msb_bits value: %s',
+                      murmur3_partitioner_ignore_msb_bits)
         self.target_node.restart_node_with_resharding(
             murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
         self.target_node.wait_node_fully_start()
@@ -1030,11 +1030,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.debug('File name "{file_name}" is not as expected for Scylla data files. '
                            'Search files for "{ks_cf_for_destroy}" table'.format(file_name=file_name,
                                                                                  ks_cf_for_destroy=ks_cf_for_destroy))
-            self.log.debug('Error: {}'.format(error))
+            self.log.debug('Error: %s', error)
             return ""
 
         file_for_destroy = one_file.replace(file_name, file_name_template + '-*')
-        self.log.debug('Selected files for destroy: {}'.format(file_for_destroy))
+        self.log.debug('Selected files for destroy: %s', file_for_destroy)
         return file_for_destroy
 
     @retrying(n=10, allowed_exceptions=(NoKeyspaceFound, NoFilesFoundToDestroy))
@@ -1059,7 +1059,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if not (file_for_destroy := self.replace_full_file_name_to_prefix(one_file, ks_cf_for_destroy)):
                 continue
 
-            self.log.debug('Selected files for destroy: {}'.format(file_for_destroy))
+            self.log.debug('Selected files for destroy: %s', file_for_destroy)
             if file_for_destroy:
                 if return_one_file:
                     break
@@ -1123,7 +1123,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         'Files were not removed. The nemesis can\'t be run. Error: {}'.format(result))
                 all_files_to_destroy.remove(file_for_destroy)
                 sstables_amount_to_destroy -= 1
-                self.log.debug('Files {} were destroyed'.format(file_for_destroy))
+                self.log.debug('Files %s were destroyed', file_for_destroy)
 
         finally:
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
@@ -1938,18 +1938,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             nemesis_seed = self.cluster.params.get('nemesis_seed')
         else:
             nemesis_seed = random.randint(0, 1000)
-            self.log.info(f'nemesis_seed generated for this test is {nemesis_seed}')
-        self.log.debug(f'nemesis_seed to be used is {nemesis_seed}')
+            self.log.info('nemesis_seed generated for this test is %s', nemesis_seed)
+        self.log.debug('nemesis_seed to be used is %s', nemesis_seed)
 
-        self.log.debug(f"nemesis stack BEFORE SHUFFLE is {self._disruption_list_names}")
+        self.log.debug("nemesis stack BEFORE SHUFFLE is %s", self._disruption_list_names)
         random.Random(nemesis_seed).shuffle(self.disruptions_list)
-        self.log.info(f"List of Nemesis to execute: {self._disruption_list_names}")
+        self.log.info("List of Nemesis to execute: %s", self._disruption_list_names)
 
     def call_next_nemesis(self):
         assert self.disruptions_list, "no nemesis were selected"
         if not self.disruptions_cycle:
             self.disruptions_cycle = itertools.cycle(self.disruptions_list)
-        self.log.debug(f'Selecting the next nemesis out of stack {self._disruption_list_names[10:]}')
+        self.log.debug('Selecting the next nemesis out of stack %s', self._disruption_list_names[10:])
         self.execute_disrupt_method(disrupt_method=next(self.disruptions_cycle))
 
     @latency_calculator_decorator(legend="Run repair process with nodetool repair")
@@ -2159,7 +2159,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 session.default_consistency_level = consistency_level
                 session.execute(cmd)
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-            self.log.debug(f"Add/Remove Column Nemesis: CQL query '{cmd}' execution has failed with error '{str(exc)}'")
+            self.log.debug("Add/Remove Column Nemesis: CQL query '%s' execution has failed with error '%s'", cmd, str(exc))
             return False
         return True
 
@@ -2250,7 +2250,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 range(partitions_attrs.partition_end_range + 1, partitions_attrs.max_partitions_in_test_table))
         else:
             available_partitions_for_deletion = list(range(partitions_attrs.max_partitions_in_test_table))
-        self.log.debug(f"Partitions amount for delete : {partitions_amount}")
+        self.log.debug("Partitions amount for delete : %s", partitions_amount)
 
         partitions_for_delete = defaultdict(list)
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
@@ -2284,7 +2284,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 if None in partitions_for_delete[partition_key]:
                     partitions_for_delete.pop(partition_key)
 
-        self.log.debug(f'Partitions for delete: {partitions_for_delete}')
+        self.log.debug('Partitions for delete: %s', partitions_for_delete)
         return partitions_for_delete
 
     def get_random_timestamp_from_partition(self, ks_cf, pkey, partition_percentage=0.25) -> tuple[int, int]:
@@ -2317,7 +2317,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def run_deletions(self, queries, ks_cf):
         for cmd in queries:
-            self.log.debug(f'delete query: {cmd}')
+            self.log.debug('delete query: %s', cmd)
             with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
                 session.execute(SimpleStatement(cmd, consistency_level=ConsistencyLevel.QUORUM), timeout=3600)
 
@@ -2590,7 +2590,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             node=self.target_node, ks=keyspace, cf=table) else 'ALTER MATERIALIZED VIEW '
         cmd = alter_command_prefix + \
             " {keyspace_table} WITH compaction = {new_compaction_strategy_as_dict};".format(**locals())
-        self.log.debug("Toggle table ICS query to execute: {}".format(cmd))
+        self.log.debug("Toggle table ICS query to execute: %s", cmd)
         try:
             self.target_node.run_cqlsh(cmd)
         except (UnexpectedExit, Libssh2UnexpectedExit) as unexpected_exit:
@@ -3051,7 +3051,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise ScyllaManagerError(
                 f'Task: {mgr_task.id} final status is: {str(task_final_status)}.\nTask progress string: '
                 f'{progress_full_string}')
-        self.log.info('Task: {} is done.'.format(mgr_task.id))
+        self.log.info('Task: %s is done.', mgr_task.id)
 
     def disrupt_abort_repair(self):
         """
@@ -3208,7 +3208,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return 'snapshot'
 
         def _ks_snapshot(one_ks):
-            self.log.info(f"Take {'one keyspace' if one_ks else 'few keyspaces'} snapshot")
+            self.log.info("Take %s snapshot", 'one keyspace' if one_ks else 'few keyspaces')
             # Prefer to take snapshot of test keyspace. Try to find it
             ks_cf = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
             if not ks_cf:
@@ -3278,7 +3278,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             raise ValueError(f"Failed to get nodetool command. Error: {exc}") from exc
 
-        self.log.debug(f'Take snapshot with command: {nodetool_cmd}')
+        self.log.debug('Take snapshot with command: %s', nodetool_cmd)
         result = self.target_node.run_nodetool(nodetool_cmd)
         self.log.debug(result)
         if "snapshot name" not in result.stdout:
@@ -3543,8 +3543,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 try:
                     self.repair_nodetool_repair(node=node, publish_event=False)
                 except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
-                    self.log.error(f"failed to execute repair command "
-                                   f"on node {node} due to the following error: {str(details)}")
+                    self.log.error(
+                        "failed to execute repair command on node %s due to the following error: %s", node, str(details))
 
             # WORKAROUND: adding here the continuation of the nemesis to avoid the late filter messages above failing
             # the entire nemesis.
@@ -3555,7 +3555,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # we will remove the terminated node from
             # dead_nodes_list, so the health validator terminate the job
             if exit_status != 0:
-                self.log.error(f"nodetool removenode command exited with status {exit_status}")
+                self.log.error("nodetool removenode command exited with status %s", exit_status)
                 # check difference between group0 and token ring,
                 garbage_host_ids = verification_node.raft.get_diff_group0_token_ring_members()
                 self.log.debug("Difference between token ring and group0 is %s", garbage_host_ids)
@@ -3566,13 +3566,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     # group0 and token ring are consistent. Removenode failed by meanigfull reason.
                     # remove node from dead_nodes list to raise critical issue by HealthValidator
                     self.log.debug(
-                        f"Remove failed node {node_to_remove} from dead node list {self.cluster.dead_nodes_list}")
+                        "Remove failed node %s from dead node list %s", node_to_remove, self.cluster.dead_nodes_list)
                     node = next((n for n in self.cluster.dead_nodes_list if n.ip_address ==
                                 node_to_remove.ip_address), None)
                     if node:
                         self.cluster.dead_nodes_list.remove(node)
                     else:
-                        self.log.debug(f"Node {node.name} with ip {node.ip_address} was not found in dead_nodes_list")
+                        self.log.debug("Node %s with ip %s was not found in dead_nodes_list",
+                                       node.name, node.ip_address)
 
             # verify node is removed by nodetool status
             removed_node_status = self.cluster.get_node_status_dictionary(
@@ -3756,23 +3757,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for cmd_num, cmd in enumerate(start_commands):
             try:
                 node.remoter.run(cmd)
-                self.log.debug(f"{name}: executed: {cmd}")
+                self.log.debug("%s: executed: %s", name, cmd)
                 cmd_executed[cmd_num] = True
                 if wait_time:
                     time.sleep(wait_time)
             except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 cmd_executed[cmd_num] = False
-                self.log.error(
-                    f"{name}: failed to execute start command "
-                    f"{cmd} on node {node} due to the following error: {str(exc)}")
+                self.log.error("%s: failed to execute start command %s on node %s due to the following error: %s",
+                               name, cmd, node, str(exc))
         if not cmd_executed:
             return
         for cmd_num, cmd in enumerate(cleanup_commands):
             try:
                 node.remoter.run(cmd)
             except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-                self.log.debug(f"{name}: failed to execute cleanup command "
-                               f"{cmd} on node {node} due to the following error: {str(exc)}")
+                self.log.debug("%s: failed to execute cleanup command %s on node %s due to the following error: %s",
+                               name, cmd, node, str(exc))
 
     @decorate_with_context([
         ignore_ycsb_connection_refused,
@@ -4002,7 +4002,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         res = self.target_node.remoter.run('sudo find {}-Data.db'.format(data_file_pattern))
         for sstable_file in res.stdout.split():
             self.target_node.remoter.run('sudo dd if=/dev/urandom of={} count=1024'.format(sstable_file))
-            self.log.debug('File {} was corrupted by dd'.format(sstable_file))
+            self.log.debug('File %s was corrupted by dd', sstable_file)
 
     def disrupt_corrupt_then_scrub(self):
         """
@@ -4419,28 +4419,28 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         """
         ks_tables_with_cdc = self.cluster.get_all_tables_with_cdc(self.target_node)
-        self.log.debug(f"Found next tables with enabled cdc feature: {ks_tables_with_cdc}")
+        self.log.debug("Found next tables with enabled cdc feature: %s", ks_tables_with_cdc)
 
         if not ks_tables_with_cdc:
             raise UnsupportedNemesis("CDC is not enabled on any table. Skipping")
 
         ks, table = random.choice(ks_tables_with_cdc).split(".")
 
-        self.log.debug(f"Get table {ks}.{table} cdc extension state")
+        self.log.debug("Get table %s.%s cdc extension state", ks, table)
         with self.cluster.cql_connection_patient(node=self.target_node) as session:
             cdc_settings = cdc.options.get_table_cdc_properties(session, ks, table)
-        self.log.debug(f"table {ks}.{table} cdc extension state: {cdc_settings}")
+        self.log.debug("table %s.%s cdc extension state: %s", ks, table, cdc_settings)
 
         self.log.debug("Choose random cdc property to toggle")
         cdc_property = random.choice(cdc.options.get_cdc_settings_names())
-        self.log.debug(f"Next cdc property will be changed {cdc_property}")
+        self.log.debug("Next cdc property will be changed %s", cdc_property)
 
         cdc_settings[cdc_property] = cdc.options.toggle_cdc_property(cdc_property, cdc_settings[cdc_property])
-        self.log.debug(f"New table cdc extension state: {cdc_settings}")
+        self.log.debug("New table cdc extension state: %s", cdc_settings)
 
-        self.log.info(f"Apply new cdc settigs for table {ks}.{table}: {cdc_settings}")
+        self.log.info("Apply new cdc settigs for table %s.%s: %s", ks, table, cdc_settings)
         self._alter_table_with_cdc_properties(ks, table, cdc_settings)
-        self.log.debug(f"Verify new cdc settings on table {ks}.{table}")
+        self.log.debug("Verify new cdc settings on table %s.%s", ks, table)
         self._verify_cdc_feature_status(ks, table, cdc_settings)
         InfoEvent(f"{ks}.{table} have new cdc settings {cdc_settings}").publish()
 
@@ -4486,7 +4486,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         :type ttl: Optional[int], optional
         """
         cmd = f"ALTER TABLE {keyspace}.{table} WITH cdc = {cdc_settings};"
-        self.log.debug(f"Alter command: {cmd}")
+        self.log.debug("Alter command: %s", cmd)
         with self.cluster.cql_connection_patient(self.target_node) as session:
             session.execute(cmd)
         # wait applying cdc configuration
@@ -4555,10 +4555,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if not isinstance(replication_strategy, SimpleReplicationStrategy):
                 # no need to switch as already is NetworkTopology
                 continue
-            self.log.info(f"Switching replication strategy to Network for '{keyspace}' keyspace")
+            self.log.info("Switching replication strategy to Network for '%s' keyspace", keyspace)
             if keyspace == "system_auth" and replication_strategy.replication_factors[0] != len(nodes_by_region[region]):
-                self.log.warning(f"system_auth keyspace is not replicated on all nodes "
-                                 f"({replication_strategy.replication_factors[0]}/{len(nodes_by_region[region])}).")
+                self.log.warning("system_auth keyspace is not replicated on all nodes (%s/%s).",
+                                 replication_strategy.replication_factors[0], len(nodes_by_region[region]))
             network_replication = NetworkTopologyReplicationStrategy(
                 **{dc_name: replication_strategy.replication_factors[0]})  # pylint: disable=protected-access
             network_replication.apply(node, keyspace)

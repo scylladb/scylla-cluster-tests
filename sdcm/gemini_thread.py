@@ -173,7 +173,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                 stats['results'].append(res)
                 for err_type in ['write_errors', 'read_errors', 'errors']:
                     if res.get(err_type, None):
-                        LOGGER.error("Gemini {} errors: {}".format(err_type, res[err_type]))
+                        LOGGER.error("Gemini %s errors: %s", err_type, res[err_type])
                         stats['status'] = 'FAILED'
                         stats['errors'][err_type] = res[err_type]
         if not stats.get('status'):
@@ -188,7 +188,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             results = json.loads(json_str)
 
         except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
-            LOGGER.error("Invalid json document {}".format(details))
+            LOGGER.error("Invalid json document %s", details)
 
         return results.get('result')
 

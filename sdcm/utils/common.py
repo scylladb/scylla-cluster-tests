@@ -279,11 +279,11 @@ class S3Storage():
         s3_url = self.generate_url(file_path, dest_dir)
         s3_obj = "{}/{}".format(dest_dir, os.path.basename(file_path))
         try:
-            LOGGER.info("Uploading '{file_path}' to {s3_url}".format(file_path=file_path, s3_url=s3_url))
+            LOGGER.info("Uploading '%s' to %", file_path, s3_url)
             self._bucket.upload_file(Filename=file_path,
                                      Key=s3_obj,
                                      Config=self.transfer_config)
-            LOGGER.info("Uploaded to {0}".format(s3_url))
+            LOGGER.info("Uploaded to %s", s3_url)
             LOGGER.info("Set public read access")
             self.set_public_access(key=s3_obj)
             return s3_url
@@ -309,7 +309,7 @@ class S3Storage():
         key_name = link.replace("https://{0.bucket_name}.s3.amazonaws.com/".format(self), "")
         file_name = os.path.basename(key_name)
         try:
-            LOGGER.info("Downloading {0} from {1}".format(key_name, self.bucket_name))
+            LOGGER.info("Downloading %s from %s", key_name, self.bucket_name)
             self._bucket.download_file(Key=key_name,
                                        Filename=os.path.join(dst_dir, file_name),
                                        Config=self.transfer_config)
@@ -317,7 +317,7 @@ class S3Storage():
             return os.path.join(os.path.abspath(dst_dir), file_name)
 
         except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
-            LOGGER.warning("File {} is not downloaded by reason: {}".format(key_name, details))
+            LOGGER.warning("File %s is not downloaded by reason: %s", key_name, details)
             return ""
 
 
@@ -457,7 +457,7 @@ class ParallelObject:
                                                                                            fun_args=fun_args,
                                                                                            fun_kwargs=fun_kwargs))
                 return_val = fun(*args, **kwargs)
-                LOGGER.debug("[{thread_name}] Done.".format(thread_name=thread_name))
+                LOGGER.debug("[%s] Done.", thread_name)
                 return return_val
 
             return inner
@@ -465,7 +465,7 @@ class ParallelObject:
         results = []
 
         if not self.disable_logging:
-            LOGGER.debug("Executing in parallel: '{}' on {}".format(func.__name__, self.objects))
+            LOGGER.debug("Executing in parallel: '%s' on %s", func.__name__, self.objects)
             func = func_wrap(func)
 
         futures = []
@@ -855,7 +855,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
         total_items = sum([len(value) for _, value in instances.items()])
 
     if verbose:
-        LOGGER.info("Found total of {} instances.".format(total_items))
+        LOGGER.info("Found total of %s instances.", total_items)
 
     return instances
 
@@ -890,7 +890,7 @@ def clean_instances_aws(tags_dict: dict, regions=None, dry_run=False):
             if node_type and node_type == "sct-runner":
                 LOGGER.info("Skipping Sct Runner instance '%s'", instance_id)
                 continue
-            LOGGER.info("Going to delete '{instance_id}' [name={name}] ".format(instance_id=instance_id, name=name))
+            LOGGER.info("Going to delete '%s' [name=%s] ", instance_id, name)
             if not dry_run:
                 response = client.terminate_instances(InstanceIds=[instance_id])
                 terminate_resource_in_argus(client=argus_client, resource_name=name)
@@ -2287,7 +2287,7 @@ def download_dir_from_cloud(url):
     parsed = urlparse(url)
     LOGGER.info("Downloading [%s] to [%s]", url, tmp_dir)
     if os.path.isdir(tmp_dir) and os.listdir(tmp_dir):
-        LOGGER.warning("[{}] already exists, skipping download".format(tmp_dir))
+        LOGGER.warning("[%s] already exists, skipping download", tmp_dir)
     elif url.startswith('s3://'):
         s3_download_dir(parsed.hostname, parsed.path, tmp_dir)
     elif url.startswith('gs://'):
@@ -2509,8 +2509,8 @@ def search_test_id_in_latest(logdir):
     result = LocalCmdRunner().run('cat {0}/latest/test_id'.format(logdir), ignore_status=True)
     if not result.exited and result.stdout:
         test_id = result.stdout.strip()
-        LOGGER.info("Found latest test_id: {}".format(test_id))
-        LOGGER.info("Collect logs for test-run with test-id: {}".format(test_id))
+        LOGGER.info("Found latest test_id: %s", test_id)
+        LOGGER.info("Collect logs for test-run with test-id: %s", test_id)
     else:
         LOGGER.error('test_id not found. Exit code: %s; Error details %s', result.exited, result.stderr)
     return test_id
@@ -2751,7 +2751,7 @@ def reach_enospc_on_node(target_node):
         free_space_size = int(result.stdout.split()[3])
         occupy_space_size = int(free_space_size * 90 / 100)
         occupy_space_cmd = f'fallocate -l {occupy_space_size}K /var/lib/scylla/occupy_90percent.{time.time()}'
-        LOGGER.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
+        LOGGER.debug('Cost 90%% free space on /var/lib/scylla/ by %s', occupy_space_cmd)
         try:
             target_node.remoter.sudo(occupy_space_cmd, verbose=True)
         except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
@@ -2767,7 +2767,7 @@ def reach_enospc_on_node(target_node):
 
 
 def clean_enospc_on_node(target_node, sleep_time):
-    LOGGER.debug('Sleep {} seconds before releasing space to scylla'.format(sleep_time))
+    LOGGER.debug('Sleep %s seconds before releasing space to scylla', sleep_time)
     time.sleep(sleep_time)
 
     LOGGER.debug('Delete occupy_90percent file to release space to scylla-server')
@@ -3196,7 +3196,7 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
         total_items = sum([len(value) for _, value in placement_groups.items()])
 
     if verbose:
-        LOGGER.info("Found total of {} instances.".format(total_items))
+        LOGGER.info("Found total of %s instances.", total_items)
 
     return placement_groups
 
@@ -3222,7 +3222,7 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
         client: EC2Client = boto3.client('ec2', region_name=region)
         for instance in instance_list:
             name = instance.get("GroupName")
-            LOGGER.info("Going to delete placement group '{name} ".format(name=name))
+            LOGGER.info("Going to delete placement group '%sname ", name=name)
             if not dry_run:
                 try:
                     response = client.delete_placement_group(GroupName=name)
