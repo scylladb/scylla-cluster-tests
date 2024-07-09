@@ -838,6 +838,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if (self.params.is_enterprise and ComparableScyllaVersion(self.params.scylla_version) >= '2023.1.3'
             and self.params.get('cluster_backend') == 'aws'
             and not self.params.get('scylla_encryption_options')
+            and not self.params.get('enterprise_disable_kms')
             and self.params.get("db_type") != "mixed_scylla"  # oracle probably doesn't support KMS
             ):
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"  # pylint: disable=line-too-long
