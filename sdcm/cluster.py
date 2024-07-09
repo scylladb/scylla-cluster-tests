@@ -95,7 +95,7 @@ from sdcm.utils.common import (
     generate_random_string,
     prepare_and_start_saslauthd_service,
     raise_exception_in_thread,
-    get_sct_root_path,
+    get_sct_root_path, wait_port_down,
 )
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
@@ -1413,10 +1413,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.remoter.run('sudo systemctl restart node-exporter.service')
 
     def wait_db_down(self, verbose=True, timeout=3600, check_interval=60):
-        text = None
         if verbose:
-            text = '%s: Waiting for DB services to be down' % self.name
-        wait.wait_for(func=lambda: not self.db_up(), step=check_interval, text=text, timeout=timeout, throw_exc=True)
+            LOGGER.debug('%s: Waiting for DB services to be down' % self.name)
+        wait_port_down(self.cql_address, self.CQL_PORT, timeout=timeout, check_interval=check_interval)
 
     def wait_cs_installed(self, verbose=True):
         text = None
