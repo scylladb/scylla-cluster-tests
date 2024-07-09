@@ -243,6 +243,8 @@ def call(Map pipelineParams) {
                                                 wrap([$class: 'BuildUser']) {
                                                     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                                     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+                                                    def perf_extra_jobs_to_compare = groovy.json.JsonOutput.toJson(params.perf_extra_jobs_to_compare)
+
                                                     timeout(time: testRunTimeout, unit: 'MINUTES') { dir('scylla-cluster-tests') {
 
                                                         sh """#!/bin/bash
@@ -332,8 +334,8 @@ def call(Map pipelineParams) {
                                                         if [[ -n "${params.test_email_title ? params.test_email_title : ''}" ]] ; then
                                                             export SCT_EMAIL_SUBJECT_POSTFIX="${params.test_email_title}"
                                                         fi
-                                                        if [[ -n "${params.perf_extra_jobs_to_compare ? params.perf_extra_jobs_to_compare : ''}" ]] ; then
-                                                            export SCT_PERF_EXTRA_JOBS_TO_COMPARE="${params.perf_extra_jobs_to_compare}"
+                                                        if [[ -n "${perf_extra_jobs_to_compare}" ]] ; then
+                                                            export SCT_PERF_EXTRA_JOBS_TO_COMPARE="${perf_extra_jobs_to_compare}"
                                                         fi
 
                                                         echo "start test ......."
