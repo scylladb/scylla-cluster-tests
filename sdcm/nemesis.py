@@ -4035,7 +4035,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 raise
 
         num_workers = None if (self.cluster.parallel_node_operations and nodes[0].raft.is_enabled) else 1
-        parallel_obj = ParallelObject(objects=nodes, timeout=7200, num_workers=num_workers)
+        parallel_obj = ParallelObject(objects=nodes, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION, num_workers=num_workers)
         InfoEvent(f'StartEvent - ShrinkCluster started decommissioning {len(nodes)} nodes').publish()
         parallel_obj.run(_decommission, ignore_exceptions=False, unpack_objects=True)
         self.monitoring_set.reconfigure_scylla_monitoring()
