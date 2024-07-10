@@ -316,6 +316,19 @@ def ignore_take_snapshot_failing():
         yield
 
 
+@contextmanager
+def ignore_raft_transport_failing():
+    # Example of scenario when we should ignore this error: https://github.com/scylladb/scylladb/issues/15713#issuecomment-2217376031
+    with ExitStack() as stack:
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft::transport_error \(.*rpc::closed_error \(connection is closed\)",
+            extra_time_to_expiration=30
+        ))
+        yield
+
+
 def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
     """
     helper to decorate a function to run with a list of callables that return context managers
