@@ -856,12 +856,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         )
 
     def prepare_kms_host(self) -> None:
-        if (self.params.is_enterprise and ComparableScyllaVersion(self.params.scylla_version) >= '2023.1.3'
-            and self.params.get('cluster_backend') == 'aws'
-            and not self.params.get('scylla_encryption_options')
-            and not self.params.get('enterprise_disable_kms')
-            and self.params.get("db_type") != "mixed_scylla"  # oracle probably doesn't support KMS
-            ):
+        version_supports_kms = (self.params.is_enterprise and
+                                ComparableScyllaVersion(self.params.scylla_version) >= '2023.1.3')
+        backend_support_kms = self.params.get('cluster_backend') in ('aws',)
+        kms_configured_in_sct = self.params.get('scylla_encryption_options')
+        test_uses_oracle = self.params.get("db_type") == "mixed_scylla"
+        should_enable_kms = (version_supports_kms and
+                             backend_support_kms and
+                             not kms_configured_in_sct and
+                             not test_uses_oracle and
+                             not self.params.get('enterprise_disable_kms'))
+
+        if should_enable_kms:
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"  # pylint: disable=line-too-long
         if not (scylla_encryption_options := self.params.get("scylla_encryption_options") or ''):
             return None
