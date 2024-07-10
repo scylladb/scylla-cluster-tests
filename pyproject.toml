@@ -1,5 +1,5 @@
 [tool.ruff]
-lint.select = ["PL", "YTT", "BLE", "F841", "F401"]
+lint.select = ["PL", "PLR0916", "YTT", "BLE", "F841", "F401"]
 
 lint.ignore = ["E501", "PLR2004"]
 
@@ -9,6 +9,8 @@ force-exclude = true
 line-length = 240
 respect-gitignore = true
 
+lint.preview = true
+lint.explicit-preview-rules = true
 
 [tool.ruff.lint.pylint]
 max-args = 12
