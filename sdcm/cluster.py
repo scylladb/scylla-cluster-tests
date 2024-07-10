@@ -3605,10 +3605,12 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             return
         if "db-cluster" not in self.name:
             return
-
-        self.node_benchmark_manager.add_nodes(self.nodes)
-        self.node_benchmark_manager.install_benchmark_tools()
-        self.node_benchmark_manager.run_benchmarks()
+        try:
+            self.node_benchmark_manager.add_nodes(self.nodes)
+            self.node_benchmark_manager.install_benchmark_tools()
+            self.node_benchmark_manager.run_benchmarks()
+        except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
+            self.log.error("Failed to run node benchmarks: %s", ex)
 
     def get_node_benchmarks_results(self):
         if not self.params.get("run_db_node_benchmarks") or not self.nodes:
