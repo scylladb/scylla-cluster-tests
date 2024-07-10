@@ -501,7 +501,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if self.enable_auto_bootstrap is not None:
             scylla_yml.auto_bootstrap = self.enable_auto_bootstrap
         if self.replacement_node_ip:
-            scylla_yml.replace_address_first_boot = self.replacement_node_ip
+            self.log.error("Stop using deprecated replace_address_first_boot option")
         if self.replacement_host_id:
             scylla_yml.replace_node_first_boot = self.replacement_host_id
         if append_scylla_yaml := self.parent_cluster.params.get('append_scylla_yaml') or {}:
@@ -4803,11 +4803,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def clean_replacement_node_options(node):
         # NOTE: If this is a replacement node then we need to set back the configuration
         #       for case when scylla-server process gets restarted.
-        if node.replacement_node_ip:
-            node.replacement_node_ip = None
-            node.remoter.run(
-                f'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" '
-                f'{node.add_install_prefix(SCYLLA_YAML_PATH)}')
         if node.replacement_host_id:
             node.replacement_host_id = None
             node.remoter.run(

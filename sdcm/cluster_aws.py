@@ -734,8 +734,7 @@ class AWSNode(cluster.BaseNode):
                     replace_option_name = "replace_node_first_boot"
                     replace_option_value = self.host_id
                 else:
-                    replace_option_name = "replace_address_first_boot"
-                    replace_option_value = self.ip_address
+                    self.log.error("Stop using deprecated replace_address_first_boot option")
                 self.remoter.sudo(shell_script_cmd(f"""\
                     sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
                     sed -e '/auto_bootstrap:.*/s/false/true/g' -i /etc/scylla/scylla.yaml
@@ -778,7 +777,6 @@ class AWSNode(cluster.BaseNode):
 
                 self.remoter.sudo(shell_script_cmd("""\
                     sed -e '/auto_bootstrap:.*/s/true/false/g' -i /etc/scylla/scylla.yaml
-                    sed -e 's/^replace_address_first_boot:/# replace_address_first_boot:/g' -i /etc/scylla/scylla.yaml
                     sed -e 's/^replace_node_first_boot:/# replace_node_first_boot:/g' -i /etc/scylla/scylla.yaml
                 """))
 

@@ -332,8 +332,6 @@ class ScyllaYamlTest(unittest.TestCase):
                 'redis_write_consistency_level': None,
                 'reduce_cache_capacity_to': None,
                 'reduce_cache_sizes_at': None,
-                'replace_address': None,
-                'replace_address_first_boot': None,
                 'replace_node': None,
                 'replace_node_first_boot': None,
                 'replace_token': None,
