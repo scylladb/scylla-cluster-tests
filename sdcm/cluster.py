@@ -1473,6 +1473,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 # ignore microseconds because log lines don't have them
                 on_datetime = on_datetime.replace(microsecond=0)
             left, right = 0, log_file.seek(0, 2)
+            log_size = right
             while left <= right:
                 mid = (left + right) // 2
                 log_file.seek(mid)
@@ -1495,6 +1496,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                     left = mid + 1
                 elif log_time >= on_datetime:
                     right = mid - 1
+            self.log.debug("Asked to open log at %s, the closest log line is %s. log size: %s, line: <%s>...",
+                           on_datetime, log_time, log_size, line[100])
             yield log_file
 
     def start_decode_on_monitor_node_thread(self):
