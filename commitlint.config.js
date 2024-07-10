@@ -5,7 +5,7 @@ module.exports = {
         // Subject
         'subject-empty': [2, 'never'],
         'subject-full-stop': [2, 'never', '.'],
-        'subject-max-length': [2, 'always', 100],
+        'subject-max-length': [2, 'always', 120],
         'subject-min-length': [2, 'always', 10],
         // Type
         'type-enum': [2,'always',['ci','docs','feature','fix','improvement','perf','refactor','revert','style','test', 'unit-test', 'build']],
@@ -15,7 +15,7 @@ module.exports = {
         'scope-min-length': [2, 'always', 3],
         // Body
         'body-min-length': [2, 'always', 30],
-        'body-max-line-length': [2, 'always', 100],
+        'body-max-line-length': [2, 'always', 120],
         'body-leading-blank': [2, 'always'],
     },
     parserPreset: {
