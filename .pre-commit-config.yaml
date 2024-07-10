@@ -41,7 +41,7 @@ repos:
 
     -   id: ruff
         name: ruff
-        entry: ruff check --fix
+        entry: ruff check --fix --preview
         language: system
         types: [python]
 
