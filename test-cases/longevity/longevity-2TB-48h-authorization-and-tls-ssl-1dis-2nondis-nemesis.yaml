@@ -45,3 +45,9 @@ authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra
 authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
+
+teardown_validators:
+  test_error_events:
+    enabled: true
+    failing_events:
+      - event_class: CoreDumpEvent
