@@ -7,7 +7,7 @@ perfRegressionParallelPipeline(
     backend: "aws",
     region: "us-east-1",
     test_name: "performance_regression_test.PerformanceRegressionTest",
-    test_config: '''["test-cases/performance/perf-regression.100threads.30M-keys-i4i-enterprise.yaml", "configurations/disable_shared_aware_drivers.yaml", "configurations/disable_speculative_retry.yaml"]''',
+    test_config: '''["test-cases/performance/perf-regression.100threads.30M-keys-i4i-enterprise.yaml", "configurations/disable_shared_aware_drivers.yaml", "configurations/disable_speculative_retry.yaml", "configurations/disable_kms.yaml"]''',
     sub_tests: ["test_write", "test_read", "test_mixed"],
     test_email_title: "throughput - non-shard-aware / tablets",
     perf_extra_jobs_to_compare: "scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-throughput-non-shard-aware-i4i-tablets",
