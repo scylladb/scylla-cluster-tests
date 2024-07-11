@@ -10,6 +10,6 @@ rollingUpgradePipeline(
     linux_distro: 'ubuntu-focal',
 
     test_name: 'upgrade_test.UpgradeTest.test_generic_cluster_upgrade',
-    test_config: 'test-cases/upgrades/multi-dc-rolling-upgrade.yaml',
+    test_config: '''["test-cases/upgrades/multi-dc-rolling-upgrade.yaml", "configurations/advanced-rpc-compression.yaml"]''',
     internode_compression: 'all'
 )
