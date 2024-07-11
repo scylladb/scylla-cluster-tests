@@ -715,7 +715,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
     # pylint: disable=too-many-arguments
     def check_regression(self, test_id, is_gce=False, email_subject_postfix=None,
                          use_wide_query=False, lastyear=False,
-                         node_benchmarks=None, extra_jobs_to_compare=None):
+                         node_benchmarks=None, extra_jobs_to_compare=None) -> None:
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -729,18 +729,18 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         # get test res
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error('Cannot find test by id: {}!'.format(test_id))
-            return False
+            raise ValueError(f'Cannot find test by id: {test_id}')
         self.log.debug(PP.pformat(doc))
 
         test_stats = self._test_stats(doc)
         if not test_stats:
-            return False
+            raise ValueError(f'Cannot find test by id: {doc.get("_id", "unknown test")}')
 
         # filter tests
         query = self._query_filter(doc, is_gce, use_wide_query, lastyear, extra_jobs_to_compare=extra_jobs_to_compare)
         if not query:
-            return False
+            raise ValueError(f'Cannot find query for {doc.get("_id", "unknown test")}')
+
         self.log.debug("Query to ES: %s", query)
         filter_path = ['hits.hits._id',
                        'hits.hits._source.results.stats_average',
@@ -751,8 +751,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                                          size=self._limit, request_timeout=30)
 
         if not tests_filtered:
-            self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
-            return False
+            raise ValueError(f'Cannot find tests with the same parameters as {test_id}')
+
         # get the best res for all versions of this job
         group_by_version = {}
         # Example:
@@ -830,8 +830,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                                   latest_version_test["version"])
             res_list.append({"best": cmp_res, "last": latest_res})
         if not res_list:
-            self.log.info('No test results to compare with')
-            return False
+            raise ValueError('No test results to compare with')
+
         # send results by email
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
@@ -892,9 +892,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                       'template': self._email_template_fp}
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
-        return True
-
-    def check_regression_with_subtest_baseline(self, test_id, base_test_id, subtest_baseline, is_gce=False, extra_jobs_to_compare=None):
+    def check_regression_with_subtest_baseline(self, test_id, base_test_id, subtest_baseline, is_gce=False, extra_jobs_to_compare=None) -> None:
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -909,19 +907,19 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         doc = self.get_test_by_id(test_id)
         if not doc:
-            self.log.error('Cannot find test by id: {}!'.format(test_id))
-            return False
+            raise ValueError(f'Cannot find test by id: {test_id}')
+
         self.log.debug(PP.pformat(doc))
 
         test_stats = self._test_stats(doc)
         if not test_stats:
-            return False
+            raise ValueError(f'Cannot find test stats for: {doc.get("_id", "unknown test")}')
 
         # filter tests
         query = self._query_filter(doc, is_gce, use_wide_query=True, extra_jobs_to_compare=extra_jobs_to_compare)
         self.log.debug(query)
         if not query:
-            return False
+            raise ValueError(f'Cannot find query for {doc.get("_id", "unknown test")}')
         self.log.debug("Query to ES: %s", query)
         filter_path = ['hits.hits._id',
                        'hits.hits._source.results.stats_average',
@@ -938,8 +936,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         )
 
         if not tests_filtered:
-            self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
-            return False
+            raise ValueError(f'Cannot find tests with the same parameters as {test_id}')
+
         # get the best res for all versions of this job
         group_by_version_sub_type = SortedDict()
         # Example:
@@ -1041,8 +1039,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             current_res_list.append(cmp_res)
 
         if not current_res_list:
-            self.log.info('No test results to compare with')
-            return False
+            raise ValueError('No test results to compare with')
+
         current_prometheus_stats = SortedDict()
         for sub_type, tests in current_tests.items():
             current_prometheus_stats[sub_type] = {stat: tests["results"].get(stat, {})
@@ -1105,8 +1103,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                       'attachments': (),
                       'template': template}
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
-
-        return True
 
     def get_test_instance_by_id(self, test_id):
         rp_main_test = TestResultClass.get_by_test_id(test_id, self._es_index)
@@ -1245,7 +1241,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             subtests_info: list = None,
             metrics: list = None,
             subject: str = None,
-    ):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    ) -> None:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """
         Build regression report for subtests.
         test_id: Main test id
@@ -1281,8 +1277,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         rp_main_test = self.get_test_instance_by_id(test_id)
 
         if not rp_main_test:
-            self.log.error('Cannot find test with id: {}!'.format(test_id))
-            return False
+            raise ValueError(f'Cannot find test with id: {test_id}!')
 
         if subject is None:
             subject = 'Performance Regression Compare Results - {test.test_name} - ' \
@@ -1304,8 +1299,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         ])
 
         if not prior_main_tests:
-            self.log.error('Cannot find prior runs for test with id: {}!'.format(test_id))
-            return False
+            raise ValueError(f'Cannot find prior runs for test with id: {test_id}')
 
         # Get all subtests of the current main test and sort them by subtest name
         rp_subtests_of_current_test = MagicList([
@@ -1314,8 +1308,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         ]).sort_by('subtest_name')
 
         if not rp_subtests_of_current_test:
-            self.log.error('Cannot find subtests for test id: {}!'.format(test_id))
-            return False
+            raise ValueError(f'Cannot find subtests for test id: {test_id}')
 
         if not subtests_info:
             subtests_info = [
@@ -1473,8 +1466,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                       'template': template}
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
-        return True
-
 
 class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(BaseResultsAnalyzer):
     """
@@ -1485,7 +1476,7 @@ class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(BaseResultsAnalyzer
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_incremental_throughput_increase.html", logger=logger, events=events)
 
-    def check_regression(self, test_name, test_results, test_details):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_name, test_results, test_details) -> None:  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         results = dict(
             test_id=test_details.get("test_id", ""),
             stats=test_results,
@@ -1498,8 +1489,6 @@ class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(BaseResultsAnalyzer
                       'template': self._email_template_fp}
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
-        return True
-
 
 class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
     """
@@ -1510,7 +1499,7 @@ class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          email_template_fp="results_search_best_throughput_config.html", logger=logger, events=events)
 
-    def check_regression(self, test_name, setup_details, test_results):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_name, setup_details, test_results) -> None:  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         subject = f"Performance Regression Best throughput with configuation - {test_name} - {setup_details['start_time']}"
         results = {
             "test_id": setup_details.get("test_id", ""),
@@ -1522,5 +1511,3 @@ class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
 
                       'template': self._email_template_fp}
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
-
-        return True
