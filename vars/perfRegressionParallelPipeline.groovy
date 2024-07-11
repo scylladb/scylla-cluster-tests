@@ -110,6 +110,26 @@ def call(Map pipelineParams) {
                    description: 'jobs to compare performance results with, for example if running in staging, '
                                 + 'we still can compare with official jobs',
                    name: 'perf_extra_jobs_to_compare')
+
+            // NOTE: Optional parameters for BYO ScyllaDB stage
+            string(defaultValue: '',
+                   description: (
+                       'Custom "scylladb" repo to use. Leave empty if byo is not needed. ' +
+                       'If set then it must be proper GH repo. Example: git@github.com:personal-username/scylla.git\n' +
+                       'and, in case of an "rolling upgrade", need to define "base_versions" param explicitly.'),
+                   name: 'byo_scylla_repo')
+            string(defaultValue: '',
+                   description: 'Branch of the custom "scylladb" repo. Leave empty if byo is not needed.',
+                   name: 'byo_scylla_branch')
+            string(defaultValue: '/scylla-master/byo/byo_build_tests_dtest',
+                   description: 'Used when byo scylladb repo+branch is provided. Default "/scylla-master/byo/byo_build_tests_dtest"',
+                   name: 'byo_job_path')
+            string(defaultValue: 'scylla',
+                   description: '"scylla" or "scylla-enterprise". Default is "scylla".',
+                   name: 'byo_default_product')
+            string(defaultValue: 'next',
+                   description: 'Default branch to be used for scylla and other repositories. Default is "next".',
+                   name: 'byo_default_branch')
         }
         options {
             timestamps()
@@ -166,6 +186,38 @@ def call(Map pipelineParams) {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+            stage('BYO Scylladb [optional]') {
+                agent {
+                    label {
+                        label builder.label
+                    }
+                }
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 240, unit: 'MINUTES') {
+                                        byoScylladb(params, true)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                post{
+                    failure {
+                        script{
+                            sh "exit 1"
+                        }
+                    }
+                    unstable {
+                        script{
+                            sh "exit 1"
                         }
                     }
                 }
@@ -273,7 +325,10 @@ def call(Map pipelineParams) {
                                                         if [[ "${params.stop_on_hw_perf_failure}" == "true" ]] ; then
                                                             export SCT_STOP_ON_HW_PERF_FAILURE="true"
                                                         fi
-                                                        if [[ ! -z "${params.scylla_ami_id}" ]] ; then
+
+                                                        if [[ ! -z "${params.byo_scylla_branch}" ]] ; then
+                                                            echo "Skipping 'scylla_ami_id', 'scylla_version' and 'scylla_repo' checks because BYO ScyllaDB was enabled"
+                                                        elif [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                                             export SCT_AMI_ID_DB_SCYLLA=${params.scylla_ami_id}
                                                         elif [[ ! -z "${supportedVersions}" ]]; then
                                                             export SCT_SCYLLA_VERSION=${supportedVersions}
