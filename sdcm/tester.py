@@ -3198,9 +3198,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.debug('collected latency values are: %s', latency_results)
             self.update({"latency_during_ops": latency_results})
             self.update_test_details()
-            results_analyzer.check_regression(test_id=self._test_id, data=latency_results,
-                                              node_benchmarks=benchmarks_results,
-                                              email_subject_postfix=self.params.get('email_subject_postfix'))
+            try:
+                results_analyzer.check_regression(test_id=self._test_id, data=latency_results,
+                                                  node_benchmarks=benchmarks_results,
+                                                  email_subject_postfix=self.params.get('email_subject_postfix'))
+            except Exception as exc:  # noqa: BLE001
+                TestFrameworkEvent(
+                    message='Failed to check regression',
+                    source=self.__class__.__name__,
+                    source_method='check_regression',
+                    exception=exc
+                ).publish_or_dump()
 
     def check_regression(self):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,
@@ -3218,8 +3226,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                               use_wide_query=True,
                                               node_benchmarks=benchmarks_results,
                                               extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
-        except Exception as ex:  # pylint: disable=broad-except
-            self.log.exception('Failed to check regression: %s', ex)
+        except Exception as exc:  # noqa: BLE001
+            TestFrameworkEvent(
+                message='Failed to check regression',
+                source=self.__class__.__name__,
+                source_method='check_regression',
+                exception=exc
+            ).publish_or_dump()
 
     def check_regression_with_baseline(self, subtest_baseline):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,
@@ -3236,8 +3249,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                                     subtest_baseline=subtest_baseline,
                                                                     is_gce=is_gce,
                                                                     extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
-        except Exception as ex:  # pylint: disable=broad-except
-            self.log.exception('Failed to check regression: %s', ex)
+        except Exception as exc:  # noqa: BLE001
+            TestFrameworkEvent(
+                message='Failed to check regression',
+                source=self.__class__.__name__,
+                source_method='check_regression',
+                exception=exc
+            ).publish_or_dump()
 
     def check_regression_multi_baseline(self, subtests_info=None,  # pylint: disable=inconsistent-return-statements
                                         metrics=None, email_subject=None):
@@ -3260,9 +3278,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 metrics=metrics,
                 subtests_info=subtests_info,
                 subject=email_subject)
-        except Exception as ex:  # pylint: disable=broad-except
-            self.log.exception('Failed to check regression: %s', ex)
-            return False
+        except Exception as exc:  # noqa: BLE001
+            TestFrameworkEvent(
+                message='Failed to check regression',
+                source=self.__class__.__name__,
+                source_method='check_regression',
+                exception=exc
+            ).publish_or_dump()
 
     def check_specified_stats_regression(self, stats):
         perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index,
@@ -3272,8 +3294,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                               _registry=self.events_processes_registry))
         try:
             perf_analyzer.check_regression(self._test_id, stats)
-        except Exception as ex:  # pylint: disable=broad-except
-            self.log.exception('Failed to check regression: %s', ex)
+        except Exception as exc:  # noqa: BLE001
+            TestFrameworkEvent(
+                message='Failed to check regression',
+                source=self.__class__.__name__,
+                source_method='check_regression',
+                exception=exc
+            ).publish_or_dump()
 
     @property
     def is_compaction_running(self):
