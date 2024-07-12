@@ -63,8 +63,7 @@ from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
-from sdcm.provision.helpers.certificate import (
-    create_ca, import_ca_to_jks_truststore, update_certificate, cleanup_ssl_config)
+from sdcm.provision.helpers.certificate import create_ca, update_certificate, cleanup_ssl_config
 from sdcm.reporting.tooling_reporter import PythonDriverReporter
 from sdcm.scan_operation_thread import ScanOperationThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
@@ -903,7 +902,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.connections = []
         make_threads_be_daemonic_by_default()
 
-        self.create_ca()
+        if (not self.params.get("cluster_backend").startswith("k8s") and
+                any([self.params.get('client_encrypt'), self.params.get('server_encrypt')])):
+            create_ca(self.localhost)
 
         # download rpms for update_db_packages
         if self.params.get('update_db_packages'):
@@ -3710,8 +3711,3 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             workload=CSWorkloadTypes(stress_operation),
             path=self.loaders.logdir, start_time=start_time, end_time=end_time,
             interval=time_interval, tag_type=tag_type)
-
-    def create_ca(self):
-        """Create Certificate Authority and Java truststore"""
-        create_ca()
-        import_ca_to_jks_truststore(self.localhost)
