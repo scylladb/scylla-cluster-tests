@@ -10,6 +10,8 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+from __future__ import annotations
+
 import io
 import ipaddress
 import logging
@@ -19,7 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from textwrap import dedent
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -30,6 +32,9 @@ from cryptography.x509.oid import NameOID
 from sdcm.remote import shell_script_cmd
 from sdcm.utils.common import get_data_dir_path
 from sdcm.utils.docker_utils import ContainerManager, DockerException
+
+if TYPE_CHECKING:
+    from sdcm.cluster import BaseNode
 
 
 LOGGER = logging.getLogger(__name__)
@@ -50,6 +55,8 @@ class TLSAssets:
     PKCS12_KEYSTORE: str = 'keystore.p12'
 
 
+CA_DEFAULT_PASSWORD = 'scylladb'
+
 SCYLLA_SSL_CONF_DIR = Path('/etc/scylla/ssl_conf')
 CA_CERT_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.CA_CERT))
 CA_KEY_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.CA_KEY))
@@ -57,7 +64,6 @@ CA_KEY_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.CA_KEY))
 # Cluster artifacts
 SERVER_KEY_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.DB_KEY))
 SERVER_CERT_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.DB_CERT))
-SERVER_CSR_FILE = Path(get_data_dir_path('ssl_conf', TLSAssets.DB_CSR))
 CLIENT_FACING_KEYFILE = Path(get_data_dir_path('ssl_conf', TLSAssets.DB_CLIENT_FACING_KEY))
 CLIENT_FACING_CERTFILE = Path(get_data_dir_path('ssl_conf', TLSAssets.DB_CLIENT_FACING_CERT))
 
@@ -97,11 +103,7 @@ def install_encryption_at_rest_files(remoter):
     remoter.sudo("md5sum /etc/encrypt_conf/*.pem", ignore_status=True)
 
 
-<<<<<<< HEAD
-def create_ca(cname: str = 'scylladb.com', password: str = 'scylladb', valid_days: int = 365) -> None:
-=======
 def _create_ca(cname: str = 'scylladb.com', valid_days: int = 365) -> None:
->>>>>>> 927c2429 (fix(create-ca): make creation of CA optional)
     """Generate and save a key and certificate for CA."""
     if CA_CERT_FILE.exists() and CA_KEY_FILE.exists():
         LOGGER.info(
@@ -138,7 +140,7 @@ def _create_ca(cname: str = 'scylladb.com', valid_days: int = 365) -> None:
             private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.BestAvailableEncryption(password.encode())
+                encryption_algorithm=serialization.BestAvailableEncryption(CA_DEFAULT_PASSWORD.encode())
             )
         )
 
@@ -146,7 +148,7 @@ def _create_ca(cname: str = 'scylladb.com', valid_days: int = 365) -> None:
 # pylint: disable=too-many-arguments,too-many-locals
 def create_certificate(
         cert_file: Path, key_file: Path, cname: str, ca_cert_file: Path = None, ca_key_file: Path = None,
-        password: str = 'scylladb', ip_addresses: list = None, dns_names: list = None, valid_days: int = 365) -> None:
+        server_csr_file: Path = None, ip_addresses: list = None, dns_names: list = None, valid_days: int = 365) -> None:
     """
     Generate/save CSR, certificate and key.
 
@@ -175,17 +177,18 @@ def create_certificate(
             ca_cert = x509.load_pem_x509_certificate(file.read())
             issuer = ca_cert.subject
         with open(ca_key_file, 'rb') as file:
-            sign_key = serialization.load_pem_private_key(file.read(), password=password.encode())
+            sign_key = serialization.load_pem_private_key(file.read(), password=CA_DEFAULT_PASSWORD.encode())
 
-    # Create and save CSR for the cert
-    server_csr = (
-        x509.CertificateSigningRequestBuilder()
-        .subject_name(subject)
-        .add_extension(x509.SubjectAlternativeName(alt_names), critical=False)
-        .sign(private_key, hashes.SHA256())
-    )
-    with open(SERVER_CSR_FILE, 'wb') as csr_file:
-        csr_file.write(server_csr.public_bytes(serialization.Encoding.PEM))
+    if server_csr_file:
+        # Create and save CSR for the cert
+        server_csr = (
+            x509.CertificateSigningRequestBuilder()
+            .subject_name(subject)
+            .add_extension(x509.SubjectAlternativeName(alt_names), critical=False)
+            .sign(private_key, hashes.SHA256())
+        )
+        with open(server_csr_file, 'wb') as csr_file:
+            csr_file.write(server_csr.public_bytes(serialization.Encoding.PEM))
 
     # Building the certificate
     cert = (
@@ -287,9 +290,12 @@ def cleanup_ssl_config():
             item.unlink()
 
 
-def update_certificate(
-        db_csr_file: Path = SERVER_CSR_FILE, db_crt_file: Path = SERVER_CERT_FILE,
-        ca_file: Path = CA_CERT_FILE, ca_key_file: Path = CA_KEY_FILE, password: str = 'scylladb') -> None:
+def update_certificate(node: BaseNode) -> None:
+    db_csr_file = node.ssl_conf_dir / TLSAssets.DB_CSR
+    db_crt_file = node.ssl_conf_dir / TLSAssets.DB_CERT
+    ca_file: Path = CA_CERT_FILE
+    ca_key_file: Path = CA_KEY_FILE
+
     """Update server certificate."""
     # Load CSR, CA certificate and key
     with open(db_csr_file, 'rb') as file:
@@ -297,7 +303,7 @@ def update_certificate(
     with open(ca_file, 'rb') as file:
         ca_cert = x509.load_pem_x509_certificate(file.read())
     with open(ca_key_file, 'rb') as file:
-        ca_key = serialization.load_pem_private_key(file.read(), password=password.encode())
+        ca_key = serialization.load_pem_private_key(file.read(), password=CA_DEFAULT_PASSWORD.encode())
 
     san_extension = csr.extensions.get_extension_for_oid(x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value
 

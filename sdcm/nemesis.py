@@ -4303,7 +4303,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.get_scylla_config_param("server_encryption_options"))["certificate"]
         in_place_crt = self.target_node.remoter.run(f"cat {ssl_files_location}",
                                                     ignore_status=True).stdout
-        update_certificate()
         node_system_logs = {}
 
         if SkipPerIssues('https://github.com/scylladb/scylladb/issues/7909', params=self.tester.params):
@@ -4318,7 +4317,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for node in self.cluster.nodes:
                 node_system_logs[node] = node.follow_system_log(
                     patterns=[f'messaging_service - Reloaded {{"{ssl_files_location}"}}'])
-                node.remoter.send_files(src=f'data_dir/ssl_conf/{TLSAssets.DB_CERT}', dst='/tmp')
+                update_certificate(node)
+                node.remoter.send_files(src=str(node.ssl_conf_dir / TLSAssets.DB_CERT), dst='/tmp')
                 node.remoter.run(f"sudo cp -f /tmp/{TLSAssets.DB_CERT} {ssl_files_location}")
                 new_crt = node.remoter.run(f"cat {ssl_files_location}").stdout
                 if in_place_crt == new_crt:

@@ -2883,8 +2883,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             InfoEvent(message="TEST_END").publish()
         self.log.info("Post test validators are starting...")
         for validator_class in teardown_validators_list:
-            for db_cluster in self.db_clusters_multitenant:
-                validator_class(self.params, db_cluster).validate()
+            validator_class(self.params, self).validate()
         self.log.info('TearDown is starting...')
         self.stop_timeout_thread()
         self.stop_event_analyzer()
