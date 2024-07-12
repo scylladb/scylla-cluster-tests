@@ -2277,15 +2277,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.download_scylla_manager_repo(manager_repo_url)
         self.install_package(package_names)
 
-<<<<<<< HEAD
-        self.log.debug("Create and send client TLS certificate/key to the node")
-        self.create_node_certificate(cert_file=self.ssl_conf_dir / TLSAssets.CLIENT_CERT,
-                                     cert_key=self.ssl_conf_dir / TLSAssets.CLIENT_KEY)
-        self.remoter.run(f'mkdir -p {mgmt.cli.SSL_CONF_DIR}')
-        self.remoter.send_files(src=str(self.ssl_conf_dir) + '/', dst=str(mgmt.cli.SSL_CONF_DIR))
-
-=======
->>>>>>> 927c2429 (fix(create-ca): make creation of CA optional)
         if self.is_docker():
             try:
                 self.remoter.run("echo no | sudo scyllamgr_setup")
@@ -4664,17 +4655,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 datacenters = self.datacenter  # pylint: disable=no-member
             SnitchConfig(node=node, datacenters=datacenters).apply()
 
-<<<<<<< HEAD
-        # Create node certificate for internode communication
-        node.create_node_certificate(cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
-                                     cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
-                                     csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR)
-        # Create client facing node certificate, for client-to-node communication
-        node.create_node_certificate(
-            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY)
-        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
-            shutil.copy(src, node.ssl_conf_dir)
-=======
         if self.params.get('server_encrypt'):
             # Create node certificate for internode communication
             node.create_node_certificate(cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
@@ -4685,7 +4665,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY)
             for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
                 shutil.copy(src, node.ssl_conf_dir)
->>>>>>> 927c2429 (fix(create-ca): make creation of CA optional)
         node.config_setup(append_scylla_args=self.get_scylla_args())
 
         self._scylla_post_install(node, install_scylla, nic_devname)
