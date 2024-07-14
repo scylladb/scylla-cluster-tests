@@ -47,7 +47,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
         keys.sort(reverse=True)
         return [results[key] for key in keys]
 
-    def check_regression(self, test_id, mad_deviation_limit=0.02, regression_limit=0.05, is_gce=False):  # pylint: disable=too-many-locals,too-many-statements
+    def check_regression(self, test_id, mad_deviation_limit=0.02, regression_limit=0.05, is_gce=False):  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0914
         doc = self.get_test_by_id(test_id)
         if not doc:
             self.log.error('Cannot find test by id: {}!'.format(test_id))

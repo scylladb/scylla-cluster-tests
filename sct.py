@@ -341,7 +341,7 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
 @sct_option('--test-id', 'test_id', help='test id to filter by')
 @click.option('--verbose', is_flag=True, default=False, help='if enable, will log progress')
 @click.pass_context
-def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):  # noqa: PLR0912, PLR0915
+def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):  # noqa: PLR0912, PLR0914, PLR0915
     # pylint: disable=too-many-locals,too-many-arguments,too-many-branches,too-many-statements
 
     add_file_logger()

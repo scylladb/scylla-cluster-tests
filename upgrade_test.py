@@ -618,7 +618,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         with node_to_update.remote_scylla_yaml() as scylla_yaml:
             scylla_yaml.update(updates)
 
-    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0915
+    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0914, PLR0915
         """
         Upgrade half of nodes in the cluster, and start special read workload
         during the stage. Checksum method is changed to xxhash from Scylla 2.2,
