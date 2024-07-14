@@ -95,7 +95,7 @@ def test_single_operator_image_tag_is_everywhere(db_cluster):
 
 
 @pytest.mark.required_operator("v1.11.0")
-def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylint: disable=too-many-locals,too-many-statements,too-many-branches
+def test_deploy_quasi_multidc_db_cluster(db_cluster: ScyllaPodCluster):  # pylint: disable=too-many-locals,too-many-statements,too-many-branches  # noqa: PLR0914
     """
     Deploy 2 'ScyllaCluster' K8S objects in 2 different namespaces in the single K8S cluster
     and combine them into a single DB cluster.

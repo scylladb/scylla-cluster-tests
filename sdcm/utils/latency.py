@@ -21,7 +21,7 @@ def avg(values):
 
 
 # pylint: disable=too-many-arguments,too-many-locals,too-many-nested-blocks,too-many-branches
-def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
+def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):  # noqa: PLR0914
     res = {}
     prometheus = PrometheusDBStats(host=monitor_node.external_address)
     duration = int(end - start)

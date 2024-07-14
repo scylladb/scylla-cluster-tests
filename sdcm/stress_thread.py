@@ -248,7 +248,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
     def _run_stress(self, loader, loader_idx, cpu_idx):
         pass
 
-    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements  # noqa: PLR0914
         cleanup_context = contextlib.nullcontext()
         os.makedirs(loader.logdir, exist_ok=True)
 

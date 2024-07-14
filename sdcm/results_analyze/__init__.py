@@ -406,7 +406,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.error("Compare results failed: %s", exc)
 
-    def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, email_subject_postfix=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-arguments
+    def check_regression(self, test_id, data, is_gce=False, node_benchmarks=None, email_subject_postfix=None):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements, too-many-arguments  # noqa: PLR0914
         doc = self.get_test_by_id(test_id)
         full_test_name = doc["_source"]["test_details"]["test_name"]
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.LongevityTest.test_custom_time
@@ -510,7 +510,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
             return None
         return test_doc['_source']['results']
 
-    def check_regression(self, test_id, stats):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_id, stats):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements  # noqa: PLR0914
         """
         Get test results by id, filter similar results and calculate DB values for each version,
         then compare with max-allowed in the tested version (and report all the found versions).
@@ -709,7 +709,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return cmp_res
 
     # pylint: disable=too-many-arguments
-    def check_regression(self, test_id, is_gce=False, email_subject_postfix=None,
+    def check_regression(self, test_id, is_gce=False, email_subject_postfix=None,  # noqa: PLR0914
                          use_wide_query=False, lastyear=False,
                          node_benchmarks=None):
         """
@@ -890,7 +890,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
         return True
 
-    def check_regression_with_subtest_baseline(self, test_id, base_test_id, subtest_baseline, is_gce=False):
+    def check_regression_with_subtest_baseline(self, test_id, base_test_id, subtest_baseline, is_gce=False):  # noqa: PLR0914
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -1235,7 +1235,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                 for num in sorted(to_delete, reverse=True):
                     prior_tests.pop(num)
 
-    def check_regression_multi_baseline(  # noqa: PLR0912, PLR0915
+    def check_regression_multi_baseline(  # noqa: PLR0912, PLR0914, PLR0915
             self,
             test_id,
             subtests_info: list = None,
