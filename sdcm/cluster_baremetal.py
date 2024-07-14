@@ -159,7 +159,7 @@ class LoaderSetPhysical(cluster.BaseLoaderSet, PhysicalMachineCluster):  # pylin
         cluster.BaseLoaderSet.__init__(self, kwargs["params"])
         PhysicalMachineCluster.__init__(self, **kwargs)
 
-    @ classmethod
+    @classmethod
     def _get_node_ips_param(cls, ip_type='public'):
         return cluster.BaseLoaderSet.get_node_ips_param(ip_type)
 
