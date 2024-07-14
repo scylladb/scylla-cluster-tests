@@ -47,7 +47,7 @@ class MaximumPerformanceSearchTest(PerformanceRegressionTest):
 
         self.run_search_best_performance(**stress_params)
 
-    def run_search_best_performance(self, stress_cmd_tmpl: str,  # pylint: disable=too-many-arguments,too-many-locals,too-many-statements
+    def run_search_best_performance(self, stress_cmd_tmpl: str,  # pylint: disable=too-many-arguments,too-many-locals,too-many-statements  # noqa: PLR0914
                                     stress_num: int,
                                     stress_num_step: int,
                                     stress_step_duration: str,
