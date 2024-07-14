@@ -5563,7 +5563,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         if node.distro.is_ubuntu:
             node.remoter.run(f'sed -i "s/python3/python3.6/g" {self.monitor_install_path}/*.py')
 
-    def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # pylint: disable=too-many-locals,too-many-branches
+    def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # pylint: disable=too-many-locals,too-many-branches  # noqa: PLR0914
         cloud_prom_bearer_token = self.params.get('cloud_prom_bearer_token')
 
         if sct_metrics and not self.params.get("reuse_cluster"):
