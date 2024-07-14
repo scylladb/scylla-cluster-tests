@@ -44,7 +44,7 @@ availability_zone=b</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>perf-regression/scylla-master-perf-regression-latency-shard-aware-1TB,perf-regression/scylla-master-perf-regression-throughput-non-shard-aware-i4i</projects>
+          <projects>perf-regression/scylla-master-perf-regression-latency-shard-aware-1TB,perf-regression/scylla-master-perf-regression-throughput-shard-aware-i4i</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
