@@ -14,8 +14,6 @@
 import os
 import logging
 from pathlib import Path
-from xml.etree import ElementTree as etree
-from copy import deepcopy
 
 import jenkins
 
@@ -26,29 +24,6 @@ from sdcm.keystore import KeyStore
 DIR_TEMPLATE = Path(__file__).parent.joinpath("folder-template.xml").read_text(encoding="utf-8")
 JOB_TEMPLATE = Path(__file__).parent.joinpath("template.xml").read_text(encoding="utf-8")
 LOGGER = logging.getLogger(__name__)
-
-
-def tree_merge(element_a: etree.Element, element_b: etree.Element):
-    """
-    merge two xml trees A and B, so that each recursively found leaf element of B is added to A.
-    If the element already exists in A, it is replaced with B's version.
-    Tree structure is created in A as required to reflect the position of the leaf element in B.
-
-    Given <top><first><a/><b/></first></top> and  <top><first><c/></first></top>, a merge results in
-    <top><first><a/><b/><c/></first></top> (order not guaranteed)
-    """
-
-    def inner(a_parent: etree.Element, b_parent: etree.Element):
-        for b_child in b_parent:
-            a_child = a_parent.findall('./' + b_child.tag)
-            if not a_child:
-                a_parent.append(b_child)
-            elif b_child.items():
-                inner(a_child[0], b_child)
-
-    res = deepcopy(element_a)
-    inner(res, element_b)
-    return res
 
 
 class JenkinsPipelines:
@@ -64,9 +39,6 @@ class JenkinsPipelines:
         self.sct_repo = sct_repo
 
     def reconfig_job(self, new_path, dir_xml_data):
-        current_config = self.jenkins.get_job_config(new_path)
-        dir_xml_data = etree.tostring(tree_merge(etree.fromstring(current_config),
-                                      etree.fromstring(dir_xml_data))).decode()
         self.jenkins.reconfig_job(new_path, dir_xml_data)
 
     def create_directory(self, name: Path | str, display_name: str):
@@ -75,7 +47,7 @@ class JenkinsPipelines:
             new_path = str(Path(self.base_job_dir) / name)
 
             if self.jenkins.job_exists(new_path):
-                if name in ['scylla-master', 'scylla-enterprise']:
+                if str(name) in ['scylla-master', 'scylla-enterprise']:
                     # we skip those folder, since they aren't created by SCT,
                     # and we don't want to risk overriding anything configured in them
                     return

@@ -10,5 +10,5 @@ perfRegressionParallelPipeline(
     test_config: '''["test-cases/performance/perf-regression-latency-1TB.yaml", "configurations/perf-loaders-shard-aware-config.yaml", "configurations/tablets_disabled.yaml", "configurations/disable_kms.yaml"]''',
     sub_tests: ["test_latency"],
     test_email_title: "shard-aware",
-    perf_extra_jobs_to_compare: "Perf-Regression/scylla-release-perf-regression-latency-shard-aware-1TB",
+    perf_extra_jobs_to_compare: "Perf-Regression/scylla-release-perf-regression-latency-shard-aware-1TB-test",
 )

@@ -45,7 +45,7 @@ provision_type=on_demand</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../scylla-enterprise/scylla-enterprise-perf-simple-query-weekly-microbenchmark-test,../scylla-enterprise/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64-test</projects>
+          <projects>../simple_query_weekly_microbenchmark_enterprise,../simple_query_weekly_microbenchmark_enterprise_x86_64</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
@@ -59,7 +59,7 @@ provision_type=on_demand</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-upgrade</projects>
+          <projects>../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-during-rolling-upgrade</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
