@@ -1,5 +1,5 @@
 [tool.ruff]
-lint.select = ["PL", "PLR0916", "YTT", "BLE", "F841", "F401"]
+lint.select = ["PL", "PLR0916", "PLR0913","PLR0914", "YTT", "BLE", "F841", "F401"]
 
 lint.ignore = ["E501", "PLR2004"]
 
@@ -16,3 +16,4 @@ lint.explicit-preview-rules = true
 max-args = 12
 max-statements = 100
 max-branches = 24
+max-locals = 15

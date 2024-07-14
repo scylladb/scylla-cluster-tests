@@ -27,7 +27,7 @@ def get_parser():
     return parser.parse_args()
 
 
-def main():  # pylint: disable=too-many-locals
+def main():  # pylint: disable=too-many-locals  # noqa: PLR0914
     args = get_parser()
     github = Github(github_token)
     repo = github.get_repo(args.repository, lazy=False)

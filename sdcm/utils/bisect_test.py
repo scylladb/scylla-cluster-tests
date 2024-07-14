@@ -57,7 +57,7 @@ def bisect_test(test_func):  # pylint: disable=too-many-statements
     """
 
     @wraps(test_func)
-    def wrapper(*args, **kwargs):  # pylint: disable=too-many-locals, too-many-statements
+    def wrapper(*args, **kwargs):  # pylint: disable=too-many-locals, too-many-statements  # noqa: PLR0914
         tester_obj = args[0]
         start_date = tester_obj.params.get('bisect_start_date')
         test_func(*args, **kwargs)

@@ -801,7 +801,7 @@ class ManagerCluster(ScyllaManagerBase):
         return HealthcheckTask(task_id=healthcheck_id, cluster_id=self.id,
                                manager_node=self.manager_node)  # return the manager's health-check-task object with the found id
 
-    def get_hosts_health(self):
+    def get_hosts_health(self):  # noqa: PLR0914
         """
         Gets the Manager's Cluster Nodes status
         """

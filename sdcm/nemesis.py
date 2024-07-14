@@ -4148,7 +4148,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     @scylla_versions(("2023.1.1-dev", None))
-    def _enable_disable_table_encryption(self, enable_kms_key_rotation, additional_scylla_encryption_options=None):
+    def _enable_disable_table_encryption(self, enable_kms_key_rotation, additional_scylla_encryption_options=None):  # noqa: PLR0914
         if self.cluster.params.get("cluster_backend") != "aws":
             raise UnsupportedNemesis("This nemesis is supported only on the AWS cluster backend")
 
