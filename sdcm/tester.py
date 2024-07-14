@@ -1144,7 +1144,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug("Nemesis threads %s", nemesis_threads)
         return nemesis_threads
 
-    def get_cluster_gce(self, loader_info, db_info, monitor_info):  # noqa: PLR0912
+    def get_cluster_gce(self, loader_info, db_info, monitor_info):  # noqa: PLR0912, PLR0914
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
         if loader_info['n_nodes'] is None:
             n_loader_nodes = self.params.get('n_loaders')
