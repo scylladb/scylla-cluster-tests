@@ -17,6 +17,8 @@ import json
 import random
 import logging
 import time
+import uuid
+from functools import cached_property
 from typing import Any, List, Literal
 
 from google.oauth2 import service_account
@@ -235,6 +237,71 @@ class GcloudContainerMixin:
     @property
     def gcloud(self) -> GcloudContextManager:
         return GcloudContextManager(self, 'gcloud')
+
+
+class GkeClusterForCleaner:
+    def __init__(self, cluster_info: dict, cleaner: "GkeCleaner"):
+        self.cluster_info = cluster_info
+        self.cleaner = cleaner
+
+    @cached_property
+    def metadata(self) -> dict:
+        metadata = self.cluster_info["nodeConfig"]["metadata"].items()
+        return {"items": [{"key": key, "value": value} for key, value in metadata], }
+
+    @cached_property
+    def name(self) -> str:
+        return self.cluster_info["name"]
+
+    @cached_property
+    def zone(self) -> str:
+        return self.cluster_info["zone"]
+
+    def destroy(self):
+        return self.cleaner.gcloud.run(f"container clusters delete {self.name} --zone {self.zone} --quiet")
+
+
+class GkeCleaner(GcloudContainerMixin):
+    _containers = {}
+    tags = {}
+
+    def __init__(self):
+        self.name = f"gke-cleaner-{uuid.uuid4()!s:.8}"
+
+    def list_gke_clusters(self) -> list:
+        try:
+            output = self.gcloud.run("container clusters list --format json")
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            LOGGER.error("`gcloud container clusters list --format json' failed to run: %s", exc)
+        else:
+            try:
+                return [GkeClusterForCleaner(info, GkeCleaner()) for info in json.loads(output)]
+            except json.JSONDecodeError as exc:
+                LOGGER.error(
+                    "Unable to parse output of `gcloud container clusters list --format json': %s",
+                    exc)
+        return []
+
+    def list_orphaned_gke_disks(self) -> dict:
+        disks_per_zone = {}
+        try:
+            disks = json.loads(self.gcloud.run(
+                'compute disks list --format="json(name,zone)" --filter="name~^gke-.*-pvc-.* AND -users:*"'))
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            LOGGER.error("`gcloud compute disks list' failed to run: %s", exc)
+        else:
+            for disk in disks:
+                zone = disk["zone"].split("/")[-1]
+                if zone not in disks_per_zone:
+                    disks_per_zone[zone] = []
+                disks_per_zone[zone].append(disk["name"])
+        return disks_per_zone
+
+    def clean_disks(self, disk_names: list[str], zone: str) -> None:
+        self.gcloud.run(f"compute disks delete {' '.join(disk_names)} --zone {zone}")
+
+    def __del__(self):
+        ContainerManager.destroy_all_containers(self)
 
 
 class GceLoggingClient:  # pylint: disable=too-few-public-methods

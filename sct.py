@@ -62,8 +62,6 @@ from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
 from sdcm.utils.common import (
     aws_tags_to_dict,
     create_pretty_table,
-    clean_cloud_resources,
-    clean_resources_according_post_behavior,
     format_timestamp,
     get_ami_images,
     get_ami_images_versioned,
@@ -86,6 +84,10 @@ from sdcm.utils.common import (
     list_parallel_timelines_report_urls,
     search_test_id_in_latest,
     get_latest_scylla_release,
+)
+from sdcm.utils.resources_cleanup import (
+    clean_cloud_resources,
+    clean_resources_according_post_behavior,
 )
 from sdcm.utils.nemesis import NemesisJobGenerator
 from sdcm.utils.net import get_sct_runner_ip
