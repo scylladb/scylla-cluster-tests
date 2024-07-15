@@ -7,8 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'gemini_test.GeminiTest.test_load_random_with_nemesis',
-    test_config: '''["test-cases/gemini/gemini-3h-with-nondisruptive-nemesis.yaml", "configurations/tablets_enabled.yaml"]''',
-
-    timeout: [time: 530, unit: 'MINUTES'],
+    test_config: '''["test-cases/gemini/gemini-8h-large-num-columns.yaml", "configurations/tablets_enabled.yaml"]''',
+    timeout: [time: 540, unit: 'MINUTES'],
     email_recipients: 'qa@scylladb.com'
 )
