@@ -14,7 +14,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 # We support to migrate from specific OSS version to enterprise
-supported_src_oss = {'2021.1': '4.3', '2022.1': '5.0', '2022.2': '5.1', '2023.1': '5.2', '2024.1': '5.4'}
+supported_src_oss = {'2021.1': '4.3', '2022.1': '5.0',
+                     '2022.2': '5.1', '2023.1': '5.2', '2024.1': '5.4', '2024.2': '6.0'}
 # If new support distro shared repo with others, we need to assign the start support versions. eg: centos8
 start_support_versions = {'centos-8': {'scylla': '4.1', 'enterprise': '2021.1'},
                           'centos-9': {'scylla': '5.4', 'enterprise': '2024.1'}}
@@ -99,10 +100,8 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
                 # The dest version is a released enterprise version
                 idx = ent_release_list.index(version)
                 oss_base_version.append(supported_src_oss.get(version))
-                if idx == 0:
-                    # The dest version is a minor release of latest enterprise release
-                    ent_base_version.append(version)
-                else:
+                ent_base_version.append(version)
+                if idx != 0:
                     lts_version = re.compile(r'\d{4}\.1')  # lts = long term support
                     sts_version = re.compile(r'\d{4}\.2')  # sts = short term support
 
@@ -125,10 +124,8 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
             if version in supported_versions:
                 # The dest version is a released opensource version
                 idx = oss_release_list.index(version)
-                if idx == 0:
-                    # The dest version is a minor release of latest enterprise release
-                    oss_base_version.append(version)
-                else:
+                oss_base_version.append(version)
+                if idx != 0:
                     # Choose the last two releases as upgrade base
                     oss_base_version += oss_release_list[idx-1:][:2]
             elif version == 'master':
@@ -149,10 +146,11 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
         oss_base_version = self.filter_rc_only_version(oss_base_version)
         ent_base_version = self.filter_rc_only_version(ent_base_version)
         LOGGER.info("Supported scylla base versions for: oss=%s enterprise=%s", oss_base_version, ent_base_version)
-        return oss_base_version + ent_base_version
+        return list(set(oss_base_version + ent_base_version))
 
     def filter_rc_only_version(self, base_version_list: list) -> list:
         LOGGER.info("Filtering rc versions from base version list...")
+        base_version_list = sorted(list(set(base_version_list)))
         if base_version_list and self.scylla_version not in ('enterprise', 'master'):
             filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if 'rc' not in v]
             if not filter_rc:
