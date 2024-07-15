@@ -7,5 +7,5 @@ longevityPipeline(
     backend: 'gce',
     region: 'us-east1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-gce-custom-d1-workload1-hybrid-raid.yaml',
+    test_config: '''["test-cases/longevity/longevity-gce-custom-d1-workload1-hybrid-raid.yaml", "configurations/tablets_enabled.yaml"]'''
 )
