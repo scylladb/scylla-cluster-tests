@@ -7,6 +7,6 @@ longevityPipeline(
     backend: 'azure',
     azure_region_name: 'eastus',
     test_name: 'longevity_large_partition_test.LargePartitionLongevityTest.test_large_partition_longevity',
-    test_config: 'test-cases/longevity/longevity-large-partition-8h.yaml'
+    test_config: '''["test-cases/longevity/longevity-large-partition-8h.yaml", "configurations/tablets_enabled.yaml"]'''
 
 )

@@ -8,6 +8,6 @@ longevityPipeline(
     region: 'eu-west-1',
     availability_zone: 'c',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-100gb-4h.yaml", "configurations/network_config/scylla_addresses_on_different_interfaces.yaml"]''',
+    test_config: '''["test-cases/longevity/longevity-100gb-4h.yaml", "configurations/network_config/scylla_addresses_on_different_interfaces.yaml", "configurations/tablets_enabled.yaml"]'''
     instance_provision_fallback_on_demand: true
 )

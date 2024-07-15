@@ -8,5 +8,5 @@ longevityPipeline(
     region: 'us-east1',
     availability_zone: 'a,b,c',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-topology-changes-24h.yaml"]''',
+    test_config: '''["test-cases/longevity/longevity-topology-changes-24h.yaml", "configurations/tablets_enabled.yaml"]'''
 )
