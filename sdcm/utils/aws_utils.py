@@ -212,6 +212,23 @@ class EksClusterCleanupMixin:
                 self.short_cluster_name, exc)
 
 
+class EksClusterForCleaner(EksClusterCleanupMixin):
+    def __init__(self, name: str, region: str):
+        self.short_cluster_name = name
+        self.name = name
+        self.region_name = region
+        self.body = self.eks_client.describe_cluster(name=name)['cluster']
+
+    @cached_property
+    def metadata(self) -> dict:
+        metadata = self.body['tags'].items()
+        return {"items": [{"key": key, "value": value} for key, value in metadata], }
+
+    @cached_property
+    def create_time(self):
+        return self.body['createdAt']
+
+
 def init_monitoring_info_from_params(monitor_info: dict, params: dict, regions: List):
     if monitor_info['n_nodes'] is None:
         monitor_info['n_nodes'] = params.get('n_monitor_nodes')
