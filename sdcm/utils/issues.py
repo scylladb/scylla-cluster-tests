@@ -45,9 +45,12 @@ class CachedGitHubIssues:
 
     @lru_cache()
     def get_repo_data(self, owner, repo):
-        scsv = self.storage.get_file_contents(f'issues/{owner}_{repo}.csv')
+        issues_csv = self.storage.get_file_contents(f'issues/{owner}_{repo}.csv')
+        pull_requests_csv = self.storage.get_file_contents(f'issues/pull-requests/{owner}_{repo}.csv')
+        scsv = issues_csv.strip() + pull_requests_csv.strip()
+
         issues = {issue['id']: issue for issue in csv.DictReader(
-            scsv.decode().splitlines(), fieldnames=("id", "state", "labels"))}
+            scsv.decode().splitlines(), fieldnames=("id", "state", "labels", "title"))}
         issues = {issue['id']: issue | dict(
             labels=[dict(name=label) for label in issue['labels'].strip().rstrip('|').split('|')]) for issue in issues.values()}
         return issues
@@ -153,7 +156,7 @@ class SkipPerIssues:
             return None
 
     def issues_opened(self) -> bool:
-        return any(issue.state != 'closed' for issue in self.issues)
+        return any(issue.state not in ('closed', 'merged') for issue in self.issues)
 
     def issues_labeled(self) -> bool:
         if self.params.scylla_version:

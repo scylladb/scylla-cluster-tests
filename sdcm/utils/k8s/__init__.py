@@ -13,7 +13,6 @@
 
 # pylint: disable=too-many-arguments,too-many-lines
 import abc
-import getpass
 import json
 import os
 import time
@@ -43,7 +42,7 @@ from sdcm import sct_abs_path
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.common import walk_thru_data
 from sdcm.utils.decorators import timeout as timeout_decor, retrying
-from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
+from sdcm.utils.docker_utils import ContainerManager, Container
 from sdcm.wait import wait_for
 
 

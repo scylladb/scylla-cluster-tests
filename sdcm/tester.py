@@ -63,8 +63,7 @@ from sdcm.kafka.kafka_cluster import LocalKafkaCluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
-from sdcm.provision.helpers.certificate import (
-    create_ca, import_ca_to_jks_truststore, update_certificate, cleanup_ssl_config)
+from sdcm.provision.helpers.certificate import create_ca, update_certificate, cleanup_ssl_config
 from sdcm.reporting.tooling_reporter import PythonDriverReporter
 from sdcm.scan_operation_thread import ScanOperationThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
@@ -559,14 +558,34 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             severity=Severity.ERROR,
         )
 
+    def _is_test_error(self, events: dict[str, list[str]]) -> bool:
+        """
+            Test whether or not the result of the test can be considered as a TEST_ERROR
+            status for Argus. TEST_ERROR status is used for times when the SCT failure is caused by
+            either infrastructure or problems within SCT itself.
+
+        """
+        def check_error(event: str):
+            errors = [
+                re.compile(r"SpotTerminationEvent", re.IGNORECASE),
+                re.compile(r"source=[\w]+.SetUp\(\).+exception=403 FORBIDDEN QUOTA_EXCEEDED",
+                           re.IGNORECASE | re.DOTALL),
+                re.compile(r"source=[\w]+.SetUp\(\).+InsufficientInstanceCapacity", re.IGNORECASE | re.DOTALL),
+            ]
+            for error in errors:
+                if error.search(event):
+                    return True
+            return False
+
+        return any(check_error(e) for e in [*events.get("CRITICAL"), *events.get("ERROR")])
+
     def argus_finalize_test_run(self):
         try:
             stat_map = {
                 "SUCCESS": TestStatus.PASSED,
                 "FAILED": TestStatus.FAILED
             }
-            self.test_config.argus_client().finalize_sct_run()
-            self.argus_update_status(stat_map.get(self.get_test_status(), TestStatus.FAILED))
+
             last_events_limit = 100
             last_events = get_events_grouped_by_category(
                 limit=last_events_limit, _registry=self.events_processes_registry)
@@ -577,6 +596,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     severity=severity, total_events=events_summary.get(severity, 0), messages=messages)
                 events_sorted.append(event_category)
             self.test_config.argus_client().submit_events(events_sorted)
+
+            test_status = stat_map.get(self.get_test_status(), TestStatus.FAILED)
+            if test_status == TestStatus.FAILED and self._is_test_error(last_events):
+                test_status = TestStatus.TEST_ERROR
+            self.argus_update_status(test_status)
+
+            self.test_config.argus_client().finalize_sct_run()
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error committing test events to Argus", exc_info=True)
 
@@ -839,6 +865,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if (self.params.is_enterprise and ComparableScyllaVersion(self.params.scylla_version) >= '2023.1.3'
             and self.params.get('cluster_backend') == 'aws'
             and not self.params.get('scylla_encryption_options')
+            and not self.params.get('enterprise_disable_kms')
             and self.params.get("db_type") != "mixed_scylla"  # oracle probably doesn't support KMS
             ):
             self.params['scylla_encryption_options'] = "{ 'cipher_algorithm' : 'AES/ECB/PKCS5Padding', 'secret_key_strength' : 128, 'key_provider': 'KmsKeyProviderFactory', 'kms_host': 'auto'}"  # pylint: disable=line-too-long
@@ -903,7 +930,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.connections = []
         make_threads_be_daemonic_by_default()
 
-        self.create_ca()
+        if (not self.params.get("cluster_backend").startswith("k8s") and
+                any([self.params.get('client_encrypt'), self.params.get('server_encrypt')])):
+            create_ca(self.localhost)
 
         # download rpms for update_db_packages
         if self.params.get('update_db_packages'):
@@ -2884,8 +2913,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             InfoEvent(message="TEST_END").publish()
         self.log.info("Post test validators are starting...")
         for validator_class in teardown_validators_list:
-            for db_cluster in self.db_clusters_multitenant:
-                validator_class(self.params, db_cluster).validate()
+            validator_class(self.params, self).validate()
         self.log.info('TearDown is starting...')
         self.stop_timeout_thread()
         self.stop_event_analyzer()
@@ -3742,8 +3770,3 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             workload=CSWorkloadTypes(stress_operation),
             path=self.loaders.logdir, start_time=start_time, end_time=end_time,
             interval=time_interval, tag_type=tag_type)
-
-    def create_ca(self):
-        """Create Certificate Authority and Java truststore"""
-        create_ca()
-        import_ca_to_jks_truststore(self.localhost)

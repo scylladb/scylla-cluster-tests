@@ -16,7 +16,8 @@ LOGGER = logging.getLogger(__name__)
 class SstablesValidator(TeardownValidator):  # pylint: disable=too-few-public-methods
     validator_name = 'scrub'
 
-    def _upload_corrupted_files(self, node: BaseNode, quarantine_log_lines):
+    @staticmethod
+    def _upload_corrupted_files(node: BaseNode, quarantine_log_lines):
         # get quarantine dir from lines:
         # INFO  2024-04-02 12:40:24,787 [shard 0:stre] sstable - Moving sstable /var/lib/scylla/data/system_schema/columns-24101c25a2ae3af787c1b40ee1aca33f/me-3gey_0z3c_2h5vl2ogebmg26ku9t-big-Data.db to "/var/lib/scylla/data/system_schema/columns-24101c25a2ae3af787c1b40ee1aca33f/quarantine"  # pylint: disable=line-too-long
         # print(log_lines)
@@ -28,7 +29,7 @@ class SstablesValidator(TeardownValidator):  # pylint: disable=too-few-public-me
             return "<No quarantine directories found>"
         s3_link = upload_remote_files_directly_to_s3(
             node.ssh_login_info, list(quarantine_dirs), s3_bucket=S3Storage.bucket_name,
-            s3_key=f"{self.cluster.uuid}/{node.name}-corrupted-sstables.tar.gz",
+            s3_key=f"{node.parent_cluster.uuid}/{node.name}-corrupted-sstables.tar.gz",
             max_size_gb=100, public_read_acl=True)
         return s3_link
 
@@ -62,17 +63,18 @@ class SstablesValidator(TeardownValidator):  # pylint: disable=too-few-public-me
             ScrubValidationErrorEvent(node.name, s3_link).publish()
 
     def validate(self):
-        keyspace = self.configuration.get("keyspace")
-        table = self.configuration.get("table")
-        timeout = self.configuration.get("timeout", 1200)
-        run_scrub = partial(self._run_nodetool_scrub, keyspace=keyspace, table=table, timeout=timeout)
-        run_scrub.__name__ = run_scrub.func.__name__
-        try:
-            LOGGER.info("Running nodetool scrub on all nodes in validation mode")
-            parallel_obj = ParallelObject(objects=self.cluster.nodes, timeout=timeout)
-            parallel_obj.run(run_scrub, ignore_exceptions=False, unpack_objects=True)
-            LOGGER.info("Nodetool scrub validation finished")
-        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
-            LOGGER.error("Error during nodetool scrub validation: %s", exc)
-            ValidatorEvent(
-                message=f'Error during nodetool scrub validation: {exc}', severity=Severity.ERROR).publish()
+        for cluster in self.tester.db_clusters_multitenant:
+            keyspace = self.configuration.get("keyspace")
+            table = self.configuration.get("table")
+            timeout = self.configuration.get("timeout", 1200)
+            run_scrub = partial(self._run_nodetool_scrub, keyspace=keyspace, table=table, timeout=timeout)
+            run_scrub.__name__ = run_scrub.func.__name__
+            try:
+                LOGGER.info("Running nodetool scrub on all nodes in validation mode")
+                parallel_obj = ParallelObject(objects=cluster.nodes, timeout=timeout)
+                parallel_obj.run(run_scrub, ignore_exceptions=False, unpack_objects=True)
+                LOGGER.info("Nodetool scrub validation finished")
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                LOGGER.error("Error during nodetool scrub validation: %s", exc)
+                ValidatorEvent(
+                    message=f'Error during nodetool scrub validation: {exc}', severity=Severity.ERROR).publish()

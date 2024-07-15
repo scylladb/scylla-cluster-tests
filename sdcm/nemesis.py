@@ -1316,11 +1316,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 new_node.set_seed_flag(target_is_seed)
                 self.cluster.update_seed_provider()
             try:
-                test_keyspaces = self.cluster.get_test_keyspaces()
-                for node in self.cluster.nodes:
-                    with adaptive_timeout(Operations.CLEANUP, node=node, timeout=HOUR_IN_SEC * 48):
-                        for keyspace in test_keyspaces:
-                            node.run_nodetool(sub_cmd='cleanup', args=keyspace, retry=0)
+                self.nodetool_cleanup_on_all_nodes_parallel()
             finally:
                 self.unset_current_running_nemesis(new_node)
         return new_node
@@ -1964,18 +1960,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def repair_nodetool_rebuild(self):
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
-            self.target_node.run_nodetool('rebuild', retry=0)
+            self.target_node.run_nodetool('rebuild', long_running=True, retry=0)
 
-    def disrupt_nodetool_cleanup(self):
+    def nodetool_cleanup_on_all_nodes_parallel(self):
         # Inner disrupt function for ParallelObject
         def _nodetool_cleanup(node):
             InfoEvent('NodetoolCleanupMonkey %s' % node).publish()
             with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC * 48):
-                node.run_nodetool(sub_cmd="cleanup", retry=0)
+                node.run_nodetool(sub_cmd="cleanup", long_running=True, retry=0)
 
         parallel_objects = ParallelObject(self.cluster.nodes, num_workers=min(
             32, len(self.cluster.nodes)), timeout=HOUR_IN_SEC * 48)
         parallel_objects.run(_nodetool_cleanup)
+
+    def disrupt_nodetool_cleanup(self):
+        self.nodetool_cleanup_on_all_nodes_parallel()
 
     def _prepare_test_table(self, ks='keyspace1', table=None):
         ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
@@ -2535,6 +2534,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
              (*) The other available values of 'disabled' / 'immediate' are not tested by
              this nemesis since not applicable to a longevity test.
         """
+        if SkipPerIssues("https://github.com/scylladb/scylla-enterprise/issues/4082", self.tester.params):
+            raise UnsupportedNemesis('Disabled due to https://github.com/scylladb/scylla-enterprise/issues/4082')
+
         # This nemesis can not be run on table with RF = 1:
         #   ConfigurationException: tombstone_gc option with mode = repair not supported for table with RF one or local replication strategy
         # We do not run tests with local strategy ({'class': 'org.apache.cassandra.locator.LocalStrategy'}), so I do not add this filter
@@ -2561,6 +2563,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
             Alters a non-system table compaction strategy from ICS to any-other and vise versa.
         """
+        if SkipPerIssues("https://github.com/scylladb/scylla-enterprise/issues/4082", self.tester.params):
+            raise UnsupportedNemesis('Disabled due to https://github.com/scylladb/scylla-enterprise/issues/4082')
+
         all_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
 
         if not all_ks_cfs:
@@ -3061,7 +3066,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                               warning_event_on_exception=(UnexpectedExit, Libssh2UnexpectedExit),
                                               error_message="Repair failed as expected. ",
                                               publish_event=False,
-                                              retry=0)
+                                              long_running=True, retry=0)
             except (UnexpectedExit, Libssh2UnexpectedExit):
                 self.log.info('Repair failed as expected')
             except Exception:
@@ -3585,11 +3590,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
             # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
             try:
-                test_keyspaces = self.cluster.get_test_keyspaces()
-                for node in self.cluster.nodes:
-                    with adaptive_timeout(Operations.CLEANUP, node, timeout=HOUR_IN_SEC * 48):
-                        for keyspace in test_keyspaces:
-                            node.run_nodetool(sub_cmd='cleanup', args=keyspace, retry=0)
+                self.nodetool_cleanup_on_all_nodes_parallel()
             finally:
                 self.unset_current_running_nemesis(new_node)
 
@@ -3879,7 +3880,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                           sub_cmd="decommission",
                           timeout=nodetool_decommission_timeout,
                           warning_event_on_exception=(Exception,),
-                          retry=0)
+                          long_running=True, retry=0)
 
         watcher = partial(
             self._call_disrupt_func_after_expression_logged,
@@ -3897,10 +3898,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 ParallelObject(objects=[trigger, watcher], timeout=full_operations_timeout).call_objects()
             if new_node := decommission_post_action():
                 new_node.wait_node_fully_start()
-                new_node.run_nodetool("rebuild", retry=0)
+                new_node.run_nodetool("rebuild", long_running=True, retry=0)
             else:
                 self.target_node.wait_node_fully_start()
-                self.target_node.run_nodetool(sub_cmd="rebuild", retry=0)
+                self.target_node.run_nodetool(sub_cmd="rebuild", long_running=True, retry=0)
 
     def start_and_interrupt_repair_streaming(self):
         """
@@ -3911,7 +3912,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         self._destroy_data_and_restart_scylla()
         trigger = partial(
-            self.target_node.run_nodetool, sub_cmd="repair", warning_event_on_exception=(Exception,), retry=0, timeout=600,
+            self.target_node.run_nodetool, sub_cmd="repair", warning_event_on_exception=(Exception,), long_running=True, retry=0, timeout=600,
         )
         log_follower = self.target_node.follow_system_log(patterns=["Repair 1 out of"])
         timeout = 1200
@@ -3929,7 +3930,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_node_fully_start()
 
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
-            self.target_node.run_nodetool("rebuild", retry=0)
+            self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
 
     def start_and_interrupt_rebuild_streaming(self):
         """
@@ -3945,7 +3946,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             timeout += 1200  # Azure reboot can take up to 20min to initiate
 
         trigger = partial(
-            self.target_node.run_nodetool, sub_cmd="rebuild", warning_event_on_exception=(Exception,), retry=0, timeout=timeout//2
+            self.target_node.run_nodetool, sub_cmd="rebuild", warning_event_on_exception=(Exception,), long_running=True, retry=0, timeout=timeout//2
         )
         log_follower = self.target_node.follow_system_log(patterns=["rebuild from dc:"])
 
@@ -3960,7 +3961,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         ParallelObject(objects=[trigger, watcher], timeout=timeout + 60).call_objects()
         self.target_node.wait_node_fully_start(timeout=300)
         with adaptive_timeout(Operations.REBUILD, self.target_node, timeout=HOUR_IN_SEC * 48):
-            self.target_node.run_nodetool("rebuild", retry=0)
+            self.target_node.run_nodetool("rebuild", long_running=True, retry=0)
 
     def disrupt_decommission_streaming_err(self):
         """
@@ -4603,7 +4604,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 with wait_for_log_lines(node=new_node, start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
                                         end_line_patterns=["rebuild.*finished with keyspaces=", "Rebuild succeeded"],
                                         start_timeout=60, end_timeout=600):
-                    new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", retry=0)
+                    new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", long_running=True, retry=0)
                 InfoEvent(message='Running full cluster repair on each node').publish()
                 for cluster_node in self.cluster.nodes:
                     cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)

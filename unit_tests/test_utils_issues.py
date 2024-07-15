@@ -71,3 +71,10 @@ def test_opened_issue_tag_not_matching_version_tag(params):
 
     assert not SkipPerIssues(
         ["scylladb/qa-tasks#1615"], params)
+
+
+def test_closed_pull_request(params):
+    params.scylla_version = '2019.1.3'
+
+    assert not SkipPerIssues(
+        ["scylladb/scylla-cluster-tests#7832"], params)

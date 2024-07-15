@@ -34,7 +34,7 @@ from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
 from datetime import datetime
 from textwrap import dedent
-from functools import cached_property, wraps, lru_cache
+from functools import cached_property, wraps, lru_cache, partial
 from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -69,10 +69,11 @@ from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificate
 from sdcm.provision.scylla_yaml.cluster_builder import ScyllaYamlClusterAttrBuilder
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.provision.helpers.certificate import (
-    install_client_certificate, install_encryption_at_rest_files, create_certificate,
+    create_ca, install_client_certificate, install_encryption_at_rest_files, create_certificate,
     export_pem_cert_to_pkcs12_keystore, CA_CERT_FILE, CA_KEY_FILE, JKS_TRUSTSTORE_FILE, TLSAssets)
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd, RetryableNetworkException
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
+from sdcm.remote.remote_long_running import run_long_running_cmd
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
 from sdcm import wait, mgmt
 from sdcm.sct_config import SCTConfiguration
@@ -95,7 +96,7 @@ from sdcm.utils.common import (
     generate_random_string,
     prepare_and_start_saslauthd_service,
     raise_exception_in_thread,
-    get_sct_root_path,
+    get_sct_root_path, wait_port_down,
 )
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
@@ -1413,10 +1414,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.remoter.run('sudo systemctl restart node-exporter.service')
 
     def wait_db_down(self, verbose=True, timeout=3600, check_interval=60):
-        text = None
         if verbose:
-            text = '%s: Waiting for DB services to be down' % self.name
-        wait.wait_for(func=lambda: not self.db_up(), step=check_interval, text=text, timeout=timeout, throw_exc=True)
+            LOGGER.debug('%s: Waiting for DB services to be down' % self.name)
+        wait_port_down(self.cql_address, self.CQL_PORT, timeout=timeout, check_interval=check_interval)
 
     def wait_cs_installed(self, verbose=True):
         text = None
@@ -1468,6 +1468,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 # ignore microseconds because log lines don't have them
                 on_datetime = on_datetime.replace(microsecond=0)
             left, right = 0, log_file.seek(0, 2)
+            log_size = right
             while left <= right:
                 mid = (left + right) // 2
                 log_file.seek(mid)
@@ -1490,6 +1491,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                     left = mid + 1
                 elif log_time >= on_datetime:
                     right = mid - 1
+            self.log.debug("Asked to open log at %s, the closest log line is %s. log size: %s, line: <%s>...",
+                           on_datetime, log_time, log_size, line[100])
             yield log_file
 
     def start_decode_on_monitor_node_thread(self):
@@ -2283,12 +2286,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.download_scylla_manager_repo(manager_repo_url)
         self.install_package(package_names)
 
-        self.log.debug("Create and send client TLS certificate/key to the node")
-        self.create_node_certificate(cert_file=self.ssl_conf_dir / TLSAssets.CLIENT_CERT,
-                                     cert_key=self.ssl_conf_dir / TLSAssets.CLIENT_KEY)
-        self.remoter.run(f'mkdir -p {mgmt.cli.SSL_CONF_DIR}')
-        self.remoter.send_files(src=str(self.ssl_conf_dir) + '/', dst=str(mgmt.cli.SSL_CONF_DIR))
-
         if self.is_docker():
             try:
                 self.remoter.run("echo no | sudo scyllamgr_setup")
@@ -2595,9 +2592,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         return f"{self.add_install_prefix('/usr/bin/nodetool')} {options} {sub_cmd} {args}"
 
     # pylint: disable=inconsistent-return-statements
-    def run_nodetool(self, sub_cmd: str, args: str = "", options: str = "", timeout: int = None,
+    def run_nodetool(self, sub_cmd: str, args: str = "", options: str = "", timeout: int = None,  # noqa: PLR0913
                      ignore_status: bool = False, verbose: bool = True, coredump_on_timeout: bool = False,
-                     warning_event_on_exception: Exception = None, error_message: str = "", publish_event: bool = True, retry: int = 1
+                     warning_event_on_exception: Exception = None, error_message: str = "", publish_event: bool = True, retry: int = 1,
+                     long_running: bool = False
                      ) -> Result:
         """
             Wrapper for nodetool command.
@@ -2618,6 +2616,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                                            in the list
         :param error_message: additional error message to exception message
         :param publish_event: publish event or not
+        :param long_running: command would be executed on host, and polled for results
         :return: Remoter result object
         """
         cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
@@ -2627,8 +2626,13 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                            options=options,
                            publish_event=publish_event) as nodetool_event:
             try:
+                if long_running:
+                    runner = partial(run_long_running_cmd, self.remoter)
+                else:
+                    runner = self.remoter.run
                 result = \
-                    self.remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose, retry=retry)
+                    runner(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose, retry=retry)
+
                 self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
 
                 nodetool_event.duration = result.duration
@@ -4087,6 +4091,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.restart_scylla()
 
     def enable_client_encrypt(self):
+        create_ca(self.test_config.tester_obj().localhost)
+        for node in self.nodes:
+            node.create_node_certificate(cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+                                         cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+                                         csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR)
+            # Create client facing node certificate, for client-to-node communication
+            node.create_node_certificate(
+                node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY)
+            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+                shutil.copy(src, node.ssl_conf_dir)
         self.log.debug("Enabling client encryption on nodes")
         with self.patch_params() as params:
             params['client_encrypt'] = True
@@ -4652,15 +4666,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 datacenters = self.datacenter  # pylint: disable=no-member
             SnitchConfig(node=node, datacenters=datacenters).apply()
 
-        # Create node certificate for internode communication
-        node.create_node_certificate(cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
-                                     cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
-                                     csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR)
-        # Create client facing node certificate, for client-to-node communication
-        node.create_node_certificate(
-            node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY)
-        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
-            shutil.copy(src, node.ssl_conf_dir)
+        if self.params.get('server_encrypt'):
+            # Create node certificate for internode communication
+            node.create_node_certificate(cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
+                                         cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
+                                         csr_file=node.ssl_conf_dir / TLSAssets.DB_CSR)
+            # Create client facing node certificate, for client-to-node communication
+            node.create_node_certificate(
+                node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_CERT, node.ssl_conf_dir / TLSAssets.DB_CLIENT_FACING_KEY)
+            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+                shutil.copy(src, node.ssl_conf_dir)
         node.config_setup(append_scylla_args=self.get_scylla_args())
 
         self._scylla_post_install(node, install_scylla, nic_devname)
@@ -4983,7 +4998,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def decommission(self, node: BaseNode, timeout: int | float = None):
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
-            node.run_nodetool("decommission", timeout=timeout, retry=0)
+            node.run_nodetool("decommission", timeout=timeout, long_running=True, retry=0)
         self.verify_decommission(node)
 
     @property
@@ -5100,14 +5115,15 @@ class BaseLoaderSet():
             self.log.info("Don't install anything because bare loaders requested")
             return
 
-        node.create_node_certificate(node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
-                                     node.ssl_conf_dir / TLSAssets.CLIENT_KEY)
-        for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
-            shutil.copy(src, node.ssl_conf_dir)
         if self.params.get('client_encrypt'):
+            node.create_node_certificate(node.ssl_conf_dir / TLSAssets.CLIENT_CERT,
+                                         node.ssl_conf_dir / TLSAssets.CLIENT_KEY)
+            for src in (CA_CERT_FILE, JKS_TRUSTSTORE_FILE):
+                shutil.copy(src, node.ssl_conf_dir)
             export_pem_cert_to_pkcs12_keystore(
                 node.ssl_conf_dir / TLSAssets.CLIENT_CERT, node.ssl_conf_dir / TLSAssets.CLIENT_KEY,
                 node.ssl_conf_dir / TLSAssets.PKCS12_KEYSTORE)
+
             if self.params.get('use_prepared_loaders'):
                 node.config_client_encrypt()
 

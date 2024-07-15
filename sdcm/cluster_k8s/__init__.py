@@ -26,7 +26,6 @@ import tempfile
 import time
 import base64
 import random
-import socket
 import logging
 import traceback
 import contextlib
@@ -49,9 +48,9 @@ import invoke
 from invoke.exceptions import CommandTimedOut
 
 from sdcm import sct_abs_path, cluster
-from sdcm.cluster import DeadNode, ClusterNodesNotReady
+from sdcm.cluster import ClusterNodesNotReady
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
-from sdcm.sct_config import SCTConfiguration, init_and_verify_sct_config
+from sdcm.sct_config import init_and_verify_sct_config
 from sdcm.test_config import TestConfig
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import LOCALRUNNER, NETWORK_EXCEPTIONS
@@ -62,11 +61,8 @@ from sdcm.remote.kubernetes_cmd_runner import (
 from sdcm.coredump import CoredumpExportFileThread
 from sdcm.log import SDCMAdapter
 from sdcm.mgmt import AnyManagerCluster
-from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.utils import properties
 import sdcm.utils.sstable.load_inventory as datasets
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.ci_tools import get_test_name
