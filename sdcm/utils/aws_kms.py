@@ -162,7 +162,7 @@ class AwsKms:
         #       So, if it is needed to make sure that some test must have an alias for 24h then
         #       it is guaranteed only having margin to be '24h' -> 24 + 24 = 48h.
         LOGGER.info("KMS: Search for aliases older than '%d' hours", time_delta_h)
-        alias_allowed_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=25)
+        alias_allowed_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=time_delta_h)
         dry_run_prefix = "[dry-run]" if dry_run else ""
         for region_name in self.region_names:  # pylint: disable=too-many-nested-blocks
             try:
