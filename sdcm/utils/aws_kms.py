@@ -17,6 +17,8 @@ import logging
 import botocore
 import boto3
 
+from sdcm.utils.common import list_instances_aws
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -184,6 +186,24 @@ class AwsKms:
                                 dry_run_prefix, region_name, kms_key_id, current_alias_name)
                             continue
                         if current_alias_creation_date < alias_allowed_date:
+                            tags_dict = {
+                                "TestId": current_alias_name.split('alias/testid-')[-1],
+                            }
+                            aws_instances = list_instances_aws(
+                                tags_dict=tags_dict, region_name=region_name, group_as_region=False)
+                            alias_is_unused = True
+                            for aws_instance in aws_instances:
+                                aws_instance_tags = {item["Key"]: item["Value"] for item in aws_instance.get("Tags")}
+                                if "db-node" in aws_instance_tags.get("Name", "N/A"):
+                                    alias_is_unused = False
+                                    break
+                            if not alias_is_unused:
+                                LOGGER.info(
+                                    "KMS: %s[region '%s'][key '%s'] Found old alias -> '%s' (%s)."
+                                    " Skip it because related DB nodes still exist.",
+                                    dry_run_prefix, region_name, kms_key_id,
+                                    current_alias_name, current_alias_creation_date)
+                                continue
                             LOGGER.info(
                                 "KMS: %s[region '%s'][key '%s'] %s old alias -> '%s' (%s)",
                                 dry_run_prefix, region_name, kms_key_id,
