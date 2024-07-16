@@ -138,12 +138,12 @@ def calculate_latency(latency_results):
 def analyze_hdr_percentiles(result_stats: dict[str, Any]) -> dict[str, Any]:
     top_limit_perc_values = {
         "replace_node": {
-            "percentile_90": 15,
-            "percentile_99": 20
+            "percentile_90": 5,
+            "percentile_99": 10
         },
         "default": {
-            "percentile_90": 10,
-            "percentile_99": 15
+            "percentile_90": 5,
+            "percentile_99": 10
         }
     }
     for operation, stats_data in result_stats.items():
