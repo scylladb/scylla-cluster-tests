@@ -628,7 +628,7 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):  # pylint: dis
         clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_placement_groups_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
-        if cluster_backend == 'aws':
+        if cluster_backend == 'aws' and not dry_run:
             clean_aws_kms_alias(tags_dict, aws_regions or all_aws_regions())
     if cluster_backend in ('gce', 'k8s-gke', ''):
         for project in gce_projects:
@@ -1044,7 +1044,11 @@ def clean_test_security_groups(tags_dict, regions=None, dry_run=False):
 def clean_aws_kms_alias(tags_dict, region_names):
     # NOTE: try to delete KMS key alias which could be created by the AWS-KMS nemesis
     test_id = tags_dict.get("TestId", "TestIdNotFound")
-    AwsKms(region_names=region_names).delete_alias(f"alias/testid-{test_id}", tolerate_errors=True)
+    if any(('db' in node_type for node_type in tags_dict.get("NodeType", []))):
+        AwsKms(region_names=region_names).delete_alias(
+            f"alias/testid-{test_id}", tolerate_errors=True)
+    else:
+        LOGGER.info("Skip AWS KMS alias deletion because DB nodes deletion was not scheduled")
 
 
 def list_load_balancers_aws(tags_dict=None, regions=None, group_as_region=False, verbose=False):
