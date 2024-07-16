@@ -64,11 +64,6 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
         for image in gallery_image_versions:
             if image.location != region_name or image.name.startswith('debug-'):
                 continue
-            try:
-                int(image.tags.get("build_id"))
-            except (ValueError, TypeError):
-                # skip images with invalid build_id (e.g. created manually)
-                continue
             image.tags["scylla_version"] = image.tags.get('scylla_version', image.tags.get('ScyllaVersion'))
             # Filter by tags
             for tag_name, expected_value in tags_to_search.items():
@@ -85,7 +80,6 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
                     unparsable_scylla_versions.append(f"{image.name}: {image.tags.get('scylla_version')}")
     if unparsable_scylla_versions:
         LOGGER.warning("Couldn't parse scylla version from images: %s", str(unparsable_scylla_versions))
-    output.sort(key=lambda img: int(img.tags.get('build_id', "0")))
     output.sort(key=lambda img: int(SCYLLA_VERSION_GROUPED_RE.match(
         img.tags.get('scylla_version')).group("date")))
 
