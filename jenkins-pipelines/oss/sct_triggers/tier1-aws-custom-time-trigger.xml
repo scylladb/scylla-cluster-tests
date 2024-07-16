@@ -14,6 +14,18 @@
           <trim>false</trim>
         </hudson.model.StringParameterDefinition>
         <hudson.model.StringParameterDefinition>
+          <name>region</name>
+          <description>Supported: us-east-1 | eu-west-1 | eu-west-2 | eu-north-1 | eu-central-1 | us-west-2 | random (randomly select region)</description>
+          <defaultValue>us-east-1</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>availability_zone</name>
+          <description>Availability zone</description>
+          <defaultValue>c</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
           <name>stress_duration</name>
           <description>Duration in minutes for stress commands(gemini, c-s, s-b)</description>
           <defaultValue>720</defaultValue>
@@ -38,6 +50,8 @@
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>scylla_version=$scylla_version
 scylla_ami_id=$scylla_ami_id
+availability_zone=$availability_zone
+region=$region
 provision_type=on_demand
 post_behavior_db_nodes=destroy
 post_behavior_monitor_nodes=destroy
@@ -65,6 +79,23 @@ post_behavior_monitor_nodes=destroy</properties>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
         </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+              <properties>scylla_version=$scylla_version
+provision_type=on_demand
+post_behavior_db_nodes=destroy
+post_behavior_monitor_nodes=destroy
+stress_duration=$stress_duration</properties>
+              <textParamValueOnNewLine>false</textParamValueOnNewLine>
+            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+          </configs>
+          <projects>../longevity/longevity-multidc-schema-topology-changes-12h-test</projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+
       </configs>
     </hudson.plugins.parameterizedtrigger.BuildTrigger>
   </publishers>
