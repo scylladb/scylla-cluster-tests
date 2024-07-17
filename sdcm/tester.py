@@ -88,6 +88,7 @@ from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
     LdapConfigurationError, LdapServerType
 from sdcm.utils.log import configure_logging, handle_exception
+from sdcm.utils.issues import SkipPerIssues
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer, \
     LatencyDuringOperationsPerformanceAnalyzer
@@ -906,6 +907,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             'key_provider': 'KmsKeyProviderFactory',
             'kms_host': kms_host,
         }
+
+        if SkipPerIssues("scylladb/scylla-enterprise#4246", self.params):
+            # until https://github.com/scylladb/scylla-enterprise/issues/4246 would be solved
+            # we should disable the enterprise file streaming feature
+            append_scylla_yaml['enable_file_stream'] = False
+
         self.log.warning("`user_info_encryption` and `system_info_encryption` are configured to use KMS by default")
         self.params["append_scylla_yaml"] = append_scylla_yaml
         return None
