@@ -1793,17 +1793,6 @@ def wait_for_port(host, port):
     socket.create_connection((host, port)).close()
 
 
-def wait_port_down(host, port, timeout=60, check_interval=1) -> None:
-    start_time = time.time()
-    while time.time() - start_time < timeout:
-        try:
-            socket.create_connection((host, port)).close()
-            time.sleep(check_interval)
-        except OSError:
-            return
-    raise TimeoutError(f"Port {port} on {host} is still up after {timeout} seconds")
-
-
 def can_connect_to(ip: str, port: int, timeout: int = 1) -> bool:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
