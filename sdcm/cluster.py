@@ -17,6 +17,7 @@ import queue
 import logging
 import os
 import shutil
+import socket
 import ssl
 import sys
 import random
@@ -1207,37 +1208,13 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
 
     def is_port_used(self, port: int, service_name: str) -> bool:
-        # Check that "ss" is present and install if absent
-        ss_version_result = self.remoter.run("ss --version || echo ss_not_found", retry=5)
-        if "ss_not_found" in ss_version_result.stdout:
-            self.log.debug(
-                f"Failed to get 'ss' binary version\n"
-                f"stdout: {ss_version_result.stdout}\n"
-                f"stderr: {ss_version_result.stderr}")
-            if self.distro.is_rhel_like:
-                self.remoter.sudo("yum install -y iproute", ignore_status=True)
-            elif self.distro.is_sles:
-                self.remoter.sudo("zypper install -y iproute", ignore_status=True)
-            else:
-                self.remoter.sudo("apt-get install -y iproute2", ignore_status=True)
-
+        """Wait for the port to be used for the specified timeout. Returns True if used and False otherwise."""
         try:
-            # Path to `ss' is /usr/sbin/ss for RHEL-like distros and /bin/ss for Debian-based.  Unfortunately,
-            # /usr/sbin is not always in $PATH, so need to set it explicitly.
-            #
-            # Output of `ss -ln' command in case of used port:
-            #   $ ss -ln '( sport = :8000 )'
-            #   Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
-            #   tcp   LISTEN     0      5                      *:8000                               *:*
-            #
-            # And if there are no processes listening on the port:
-            #   $ ss -ln '( sport = :8001 )'
-            #   Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
-            #
-            # Can't avoid the header by using `-H' option because of ss' core on Ubuntu 18.04.
-            cmd = f"PATH=/bin:/usr/sbin ss -ln '( sport = :{port} )'"
-            return len(self.remoter.run(cmd, verbose=False).stdout.splitlines()) > 1
-        except Exception as details:  # pylint: disable=broad-except
+            socket.create_connection((self.cql_address, port)).close()
+            return True
+        except OSError:
+            return False
+        except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
             return False
 
