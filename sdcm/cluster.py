@@ -19,6 +19,7 @@ import queue
 import logging
 import os
 import shutil
+import socket
 import ssl
 import sys
 import random
@@ -1214,16 +1215,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def is_port_used(self, port: int, service_name: str) -> bool:
         """Wait for the port to be used for the specified timeout. Returns True if used and False otherwise."""
         try:
-            cmd = f"grep -m1 :{port:04X} /proc/net/tcp /proc/net/tcp6"
-            result = self.remoter.run(cmd, verbose=False, ignore_status=True)
-            if result.ok:
-                return True
-            if result.return_code == 1:
-                # this is the case output is empty
-                return False
-            else:
-                self.log.error("Error checking for '%s' on port %s: rc: %s", service_name, port, result)
-                return False
+            socket.create_connection((self.cql_address, port)).close()
+            return True
+        except OSError:
+            return False
         except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
             return False
