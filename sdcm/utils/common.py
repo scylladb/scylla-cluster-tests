@@ -72,6 +72,7 @@ from sdcm.utils.aws_utils import (
     EksClusterForCleaner,
     get_scylla_images_ec2_resource,
     get_ssm_ami,
+    get_by_owner_ami,
 )
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
@@ -1448,6 +1449,13 @@ def convert_name_to_ami_if_needed(ami_id_param: str, region_names: list[str],) -
         ami_list: list[str] = []
         for region_name in region_names:
             ami_list.append(get_ssm_ami(ssm_name, region_name=region_name))
+        return " ".join(ami_list)
+
+    if len(param_values) == 1 and param_values[0].startswith("resolve:owner:"):
+        owner_details = param_values[0].replace("resolve:owner:", "")
+        ami_list: list[str] = []
+        for region_name in region_names:
+            ami_list.append(get_by_owner_ami(owner_details, region_name=region_name))
         return " ".join(ami_list)
 
     if len(param_values) == 1 and not param_values[0].startswith("ami-"):
