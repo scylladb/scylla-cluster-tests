@@ -69,7 +69,13 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CpuNotHighEnoughEvent, SoftTimeoutEvent
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_kms import AwsKms
-from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType, get_scylla_images_ec2_resource, get_ssm_ami
+from sdcm.utils.aws_utils import (
+    AwsArchType,
+    EksClusterCleanupMixin,
+    get_scylla_images_ec2_resource,
+    get_ssm_ami,
+    get_by_owner_ami,
+)
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
@@ -1896,6 +1902,13 @@ def convert_name_to_ami_if_needed(ami_id_param: str, region_names: list[str],) -
         ami_list: list[str] = []
         for region_name in region_names:
             ami_list.append(get_ssm_ami(ssm_name, region_name=region_name))
+        return " ".join(ami_list)
+
+    if len(param_values) == 1 and param_values[0].startswith("resolve:owner:"):
+        owner_details = param_values[0].replace("resolve:owner:", "")
+        ami_list: list[str] = []
+        for region_name in region_names:
+            ami_list.append(get_by_owner_ami(owner_details, region_name=region_name))
         return " ".join(ami_list)
 
     if len(param_values) == 1 and not param_values[0].startswith("ami-"):
