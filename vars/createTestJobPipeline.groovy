@@ -94,7 +94,7 @@ def call() {
                                                     echo "start create perf for ${params.sct_branch}  ......."
                                                         ./docker/env/hydra.sh create-performance-jobs --triggers --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
                                                     echo "all jobs have been created"
-                                                #fi
+                                                fi
 
                                                 """
                                         }
