@@ -965,6 +965,16 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         assert conf["ami_id_db_scylla"].startswith('ami-')
 
+    @pytest.mark.integration
+    def test_33_resolve_aws_by_owner(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'resolve:owner:131827586825/x86_64/OL8.*'
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        assert conf["ami_id_db_scylla"].startswith('ami-')
+
 
 if __name__ == "__main__":
     unittest.main()
