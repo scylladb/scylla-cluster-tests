@@ -39,3 +39,4 @@ use_capacity_reservation: true
 email_subject_postfix: 'latency during operations'
 stress_image:
   cassandra-stress: 'scylladb/cassandra-stress:3.17.3'
+hinted_handoff: 'enabled'
