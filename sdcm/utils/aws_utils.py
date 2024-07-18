@@ -15,7 +15,7 @@ import socket
 import time
 import logging
 from functools import cached_property
-from typing import List, Dict
+from typing import List, Dict, get_args
 
 import boto3
 from botocore.exceptions import ClientError
@@ -496,3 +496,31 @@ def is_using_aws_mock() -> bool:
         return True
     except socket.gaierror:
         return False
+
+
+def get_by_owner_ami(parameter: str, region_name) -> str:
+    """
+    get AMIs by owner/architecture/name filter
+
+    for case, we have only  the owner id, and it's not publish
+    in marketplace, hence we can't use the ssm parameter store.
+
+    example:
+    - '131827586825/x86_64/OL8.*' - it's oracle linux 8, and we want the latest one
+
+    """
+    ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
+
+    owner, arch, name_filter = parameter.split('/')
+    assert arch in get_args(AwsArchType)
+
+    images = ec2_resource.images.filter(
+        Owners=[owner],
+        Filters=[
+            {'Name': 'name', 'Values': [name_filter]},
+            {'Name': 'architecture', 'Values': [arch]},
+        ],
+    )
+    images = sorted(images, key=lambda x: x.creation_date, reverse=True)
+    LOGGER.debug(f'found image "{images[0].name}" - {images[0].id}')
+    return images[0].id
