@@ -1856,6 +1856,7 @@ cli.add_command(sct_ssh.copy_cmd)
 cli.add_command(sct_ssh.attach_test_sg_cmd)
 cli.add_command(sct_ssh.ssh_cmd)
 cli.add_command(sct_ssh.gcp_allow_public)
+cli.add_command(sct_ssh.update_scylla_packages)
 cli.add_command(sct_scan_issues.scan_issue_skips)
 
 if __name__ == '__main__':
