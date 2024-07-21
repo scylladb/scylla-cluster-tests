@@ -10,11 +10,15 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
+import logging
 import os
 import pty
 import shlex
 import socket
 import subprocess
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import singledispatch
 
 import click
@@ -22,6 +26,8 @@ import questionary
 from questionary import Choice
 from google.cloud import compute_v1
 
+from sdcm import wait
+from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
 from sdcm.utils.common import (
     list_instances_aws,
     get_free_port,
@@ -29,7 +35,9 @@ from sdcm.utils.common import (
     gce_meta_to_dict,
     SSH_KEY_AWS_DEFAULT,
     SSH_KEY_GCE_DEFAULT,
+    download_dir_from_cloud
 )
+from sdcm.utils.distro import Distro
 from sdcm.utils.gce_utils import (
     gce_public_addresses,
     gce_private_addresses,
@@ -38,6 +46,8 @@ from sdcm.utils.gce_utils import (
 )
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.decorators import retrying
+
+LOGGER = logging.getLogger(__name__)
 
 
 def get_region(instance: dict) -> str:
@@ -216,6 +226,7 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
     user = tags.get('user')
     test_id = tags.get('test_id')
     node_name = tags.get('node_name')
+    node_type = tags.get('node_type')
     tags = {}
     if user:
         tags.update({"RunByUser": user})
@@ -223,6 +234,8 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
         tags.update({"TestId": test_id})
     if node_name:
         tags.update({'Name': node_name})
+    if node_type:
+        tags.update({'NodeType': node_type})
 
     backends = backends or ['aws', 'gce']
     aws_vms = []
@@ -452,3 +465,94 @@ def gcp_allow_public(user, test_id):
                      project=info['project_id'],
                      zone=i.zone.split('/')[-1])
         click.echo(click.style(f"set netwrok tag 'sct-allow-public' to {get_name(i)}", fg='green'))
+
+
+@click.command("update-scylla-packages", help="Update ScyllaDB cluster packages ...")
+@click.option("--test-id", type=str, help='Find cluster by test-id', required=True)
+@click.option(
+    "-p", "--packages-location", type=str,
+    help='Location where new packages are placed. Can be local directory, s3:// or gs:// urls')
+@click.option('--backend', type=str, help='Backend to search nodes in. Defaults to aws', default="aws")
+@click.option(
+    '-r', '--region', type=str,
+    help="Cloud region to search nodes in. Defaults to eu-west-1", default="eu-west-1")
+def update_scylla_packages(test_id: str, backend: str, region: str, packages_location: str) -> None:
+    """Update scylla DB packages on selected nodes."""
+    if not (packages_location := packages_location or os.getenv('SCT_UPDATE_DB_PACKAGES')):
+        LOGGER.error("No location is provided where new packages are placed")
+        sys.exit(1)
+    if packages_location.startswith('s3') or packages_location.startswith('gs'):
+        packages_location = download_dir_from_cloud(packages_location)
+    if not packages_location.endswith('/'):
+        packages_location += '/'
+
+    instances = select_instance_group(region=region, backends=[backend], test_id=test_id, node_type='scylla-db')
+    if not instances:
+        LOGGER.error("No scylla DB nodes were selected. Exiting")
+        sys.exit(1)
+    for instance in instances:
+        tags = get_tags(instance)
+        instance.update({
+            'Name': tags['Name'],
+            'User': tags['RunByUser']
+        })
+
+    RemoteCmdRunnerBase.set_default_ssh_transport('libssh2')
+    nodes = []
+    for instance in instances:
+        remoter = RemoteCmdRunnerBase.create_remoter(
+            hostname=instance['PublicIpAddress'],
+            user=guess_username(instance),
+            key_file=f"~/.ssh/{instance['KeyName']}")
+        nodes.append(remoter)
+
+    def run_func_parallel(func, node_list):
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(func, node) for node in node_list]
+            results = [future.result() for future in as_completed(futures)]
+
+        return results
+
+    def is_scylla_active(node: RemoteCmdRunnerBase):
+        return node.run('systemctl is-active scylla-server.service', ignore_status=True).stdout.strip() == 'active'
+
+    def stop_scylla(node: RemoteCmdRunnerBase):
+        node.sudo('systemctl stop scylla-server.service')
+        wait.wait_for(func=lambda: not is_scylla_active(node), step=10, timeout=180)
+
+    def start_scylla(node: RemoteCmdRunnerBase):
+        node.sudo('systemctl start scylla-server.service')
+        wait.wait_for(func=lambda: is_scylla_active(node), step=10, timeout=180)
+
+    def update_packages(node: RemoteCmdRunnerBase):
+        node.run('mkdir -p /tmp/scylla')
+        node.send_files(packages_location, '/tmp/scylla')
+        node.run('tar -xvf /tmp/scylla/*.tar.gz -C /tmp/scylla/', ignore_status=True)
+
+        def check_package_extension(node, extension):
+            fit_extension = node.run(f'ls /tmp/scylla/*.{extension}', ignore_status=True)
+            if not fit_extension.ok:
+                LOGGER.error("There is no suitable packages for this distro on the node" % node.hostname)
+                sys.exit(1)
+
+        distro = Distro.from_os_release(node.run("cat /etc/os-release", ignore_status=True, retry=5).stdout)
+        if distro.is_rhel_like:
+            check_package_extension(node, 'rpm')
+            node.run('yum list installed | grep scylla')
+            node.sudo('rpm -URvh --replacefiles /tmp/scylla/*.rpm')
+            node.run('yum list installed | grep scylla')
+        elif distro.is_ubuntu:
+            check_package_extension(node, 'deb')
+            node.sudo(shell_script_cmd("yes Y | dpkg --force-depends -i /tmp/scylla/scylla*"))
+            node.run("dpkg-query --show 'scylla*'")
+
+    start_time = time.time()
+    LOGGER.info("Stop scylla service on the nodes")
+    run_func_parallel(stop_scylla, nodes)
+    LOGGER.info("Update DB packages on the nodes")
+    run_func_parallel(update_packages, nodes)
+    LOGGER.info("Start scylla service on the nodes")
+    run_func_parallel(start_scylla, nodes)
+
+    duration = time.time() - start_time
+    LOGGER.info('DB packages update duration -> %s s', int(duration))
