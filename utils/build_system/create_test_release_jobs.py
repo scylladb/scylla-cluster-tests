@@ -14,6 +14,7 @@
 import os
 import logging
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 import jenkins
 
@@ -40,6 +41,16 @@ class JenkinsPipelines:
 
     def reconfig_job(self, new_path, dir_xml_data):
         self.jenkins.reconfig_job(new_path, dir_xml_data)
+
+    def update_pipeline(self, new_path, xml_data):
+        old_xml_data = self.jenkins.get_job_config(new_path)
+        old_configuration = ET.fromstring(old_xml_data)
+        new_configuration = ET.fromstring(xml_data)
+        for actions in old_configuration.findall('./actions'):
+            new_configuration.append(actions)
+        for properties in old_configuration.findall('./properties'):
+            new_configuration.append(properties)
+        self.jenkins.reconfig_job(new_path, ET.tostring(new_configuration).decode('utf-8'))
 
     def create_directory(self, name: Path | str, display_name: str):
         try:
@@ -100,7 +111,7 @@ class JenkinsPipelines:
             if self.jenkins.job_exists(_job_name):
                 LOGGER.info("%s is used to reconfig job", _job_name)
 
-                self.reconfig_job(_job_name, xml_data)
+                self.update_pipeline(_job_name, xml_data)
             else:
                 LOGGER.info("%s is used to create job", _job_name)
                 self.jenkins.create_job(_job_name, xml_data)
