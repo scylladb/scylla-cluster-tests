@@ -63,6 +63,25 @@ pull_request_rules:
           - branch-6.0
         assignees:
           - "{{ author }}"
+  - name: Automate backport pull request 6.1
+    conditions:
+      - base=master # Ensure this rule only applies to PRs merged into the master branch
+      - label=backport/6.1 # The PR must have this label to trigger the backport
+    actions:
+      backport:
+        title: "[Backport 6.1] {{ title }}"
+        body: |
+          {{ body }}
+
+          {% for c in commits %}
+          (cherry picked from commit {{ c.sha }})
+          {% endfor %}
+
+          Parent PR: #{{number}}
+        branches:
+          - branch-6.1
+        assignees:
+          - "{{ author }}"
   - name: Automate backport pull request 2023.1
     conditions:
       - base=master # Ensure this rule only applies to PRs merged into the master branch
