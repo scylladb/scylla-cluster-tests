@@ -38,7 +38,10 @@ class ToolReporterBase():
         if not self.argus_client:
             LOGGER.warning("%s: Skipping reporting to argus, client not initialized.", self)
             return
-        report_package_to_argus(self.argus_client, self.TOOL_NAME, self.version, self.additional_data)
+        try:
+            report_package_to_argus(self.argus_client, self.TOOL_NAME, self.version, self.additional_data)
+        except Exception: # pylint: disable=broad-except
+            LOGGER.warning("Failed reporting tool version to Argus", exc_info=True)
 
     def _collect_version_info(self) -> None:
         raise NotImplementedError()
