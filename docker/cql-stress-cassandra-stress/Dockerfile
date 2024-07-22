@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-FROM rust:1.73 as builder
-=======
 FROM rust:1.78 AS builder
->>>>>>> 018da0b8 (docs(cql-stress): update instruction on building from fork/branch)
 
 ARG BRANCH
 ARG REPO
