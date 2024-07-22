@@ -40,7 +40,7 @@ class ToolReporterBase():
             return
         try:
             report_package_to_argus(self.argus_client, self.TOOL_NAME, self.version, self.additional_data)
-        except Exception: # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except # noqa: BLE001
             LOGGER.warning("Failed reporting tool version to Argus", exc_info=True)
 
     def _collect_version_info(self) -> None:
