@@ -1,5 +1,1 @@
-<<<<<<< HEAD
-scylladb/hydra-loaders:cql-stress-cassandra-stress-20240119
-=======
 scylladb/hydra-loaders:cql-stress-cassandra-stress-20240718
->>>>>>> e518ae5e (fix(cql-stress): update cql-stress to latest version)
