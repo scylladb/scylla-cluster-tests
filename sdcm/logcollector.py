@@ -1584,11 +1584,16 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                   storage_dir=self.storage_dir,
                                                   params=self.params)
             LOGGER.info("Start collect logs for cluster %s", log_collector.cluster_log_type)
-            if result := log_collector.collect_logs(local_search_path=local_dir_with_logs):
-                results[log_collector.cluster_log_type] = result
-                LOGGER.info("collected data for %s\n%s\n", log_collector.cluster_log_type, result)
-            else:
-                LOGGER.warning("There are no logs collected for %s", log_collector.cluster_log_type)
+            try:
+                if result := log_collector.collect_logs(local_search_path=local_dir_with_logs):
+                    results[log_collector.cluster_log_type] = result
+                    LOGGER.info("collected data for %s\n%s\n", log_collector.cluster_log_type, result)
+                else:
+                    LOGGER.warning("There are no logs collected for %s", log_collector.cluster_log_type)
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                LOGGER.warning(
+                    "%s is not able to collect logs. Moving to the next log collector",
+                    log_collector.__class__.__name__, exc_info=True)
         return results
 
     def create_base_storage_dir(self, test_dir=None):
