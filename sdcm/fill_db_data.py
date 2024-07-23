@@ -435,6 +435,7 @@ class FillDatabaseData(ClusterTester):
             ],
             'min_version': '1.7',
             'max_version': '',
+            'skip_condition': 'not self.is_counter_supported',
             'skip': ''},
         {
             'name': 'indexed_with_eq_test: Check that you can query for an indexed column even with a key EQ clause',
@@ -3180,6 +3181,12 @@ class FillDatabaseData(ClusterTester):
     @cached_property
     def enable_cdc_for_tables(self) -> bool:
         if self.tablets_enabled and SkipPerIssues(issues="https://github.com/scylladb/scylladb/issues/16317", params=self.params):
+            return False
+        return True
+
+    @cached_property
+    def is_counter_supported(self) -> bool:
+        if self.tablets_enabled and SkipPerIssues(issues="scylladb/scylladb#18180", params=self.params):
             return False
         return True
 
