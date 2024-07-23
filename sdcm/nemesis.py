@@ -1265,13 +1265,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
 
-    def _add_and_init_new_cluster_nodes(self, count, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=None) -> list[BaseNode]:
+    def _add_and_init_new_cluster_nodes(self, count, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=None, instance_type: str = None) -> list[BaseNode]:
         if rack is None and self._is_it_on_kubernetes():
             rack = 0
         self.log.info("Adding %s new nodes to cluster...", count)
         InfoEvent(message=f'StartEvent - Adding {count} new nodes to cluster').publish()
         new_nodes = self.cluster.add_nodes(
-            count=count, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)
+            count=count, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack,
+            instance_type=instance_type)
         self.monitoring_set.reconfigure_scylla_monitoring()
         for new_node in new_nodes:
             self.set_current_running_nemesis(node=new_node)
@@ -4017,8 +4018,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.clear_snapshots()
 
     @latency_calculator_decorator(legend="Adding new nodes")
-    def add_new_nodes(self, count, rack=None) -> list[BaseNode]:
-        nodes = self._add_and_init_new_cluster_nodes(count, rack=rack)
+    def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
+        nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
         self._wait_for_tablets_balanced(nodes[0])
         return nodes
 
@@ -4043,19 +4044,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(f'FinishEvent - ShrinkCluster has done decommissioning {len(nodes)} nodes').publish()
 
     def _decommission_nodes(self, nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue,
-                            dc_idx: Optional[int] = None):
+                            dc_idx: Optional[int] = None, exact_nodes: list[BaseNode] | None = None):
         nodes_to_decommission = []
-        for idx in range(nodes_number):
-            if self._is_it_on_kubernetes():
-                if rack is None and self._is_it_on_kubernetes():
-                    rack = 0
-                self.set_target_node(rack=rack, is_seed=is_seed, allow_only_last_node_in_rack=True)
-            else:
-                rack_idx = rack if rack is not None else idx % self.cluster.racks_count
-                # if rack is not specified, round-robin racks
-                self.set_target_node(is_seed=is_seed, dc_idx=dc_idx, rack=rack_idx)
-            nodes_to_decommission.append(self.target_node)
-            self.target_node = None  # otherwise node.running_nemesis will be taken off the node by self.set_target_node
+        if exact_nodes:
+            nodes_to_decommission = exact_nodes
+            for node in exact_nodes:
+                self.set_current_running_nemesis(node=node)
+        else:
+            for idx in range(nodes_number):
+                if self._is_it_on_kubernetes():
+                    if rack is None and self._is_it_on_kubernetes():
+                        rack = 0
+                    self.set_target_node(rack=rack, is_seed=is_seed, allow_only_last_node_in_rack=True)
+                else:
+                    rack_idx = rack if rack is not None else idx % self.cluster.racks_count
+                    # if rack is not specified, round-robin racks
+                    self.set_target_node(is_seed=is_seed, dc_idx=dc_idx, rack=rack_idx)
+                nodes_to_decommission.append(self.target_node)
+                self.target_node = None  # otherwise node.running_nemesis will be taken off the node by self.set_target_node
         try:
             if self.cluster.parallel_node_operations:
                 self.decommission_nodes(nodes_to_decommission)
@@ -4080,10 +4086,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.has_steady_run and sleep_time_between_ops:
             self.steady_state_latency()
             self.has_steady_run = True
-        self._grow_cluster(rack=None)
+        new_nodes = self._grow_cluster(rack=None)
+
+        # pass on the exact nodes only if we have specific types for them
+        new_nodes = new_nodes if self.tester.params.get('nemesis_grow_shrink_instance_type') else None
         if duration := self.tester.params.get('nemesis_double_load_during_grow_shrink_duration'):
             self._double_cluster_load(duration)
-        self._shrink_cluster(rack=None)
+        self._shrink_cluster(rack=None, new_nodes=new_nodes)
 
     # NOTE: version limitation is caused by the following:
     #       - https://github.com/scylladb/scylla-enterprise/issues/3211
@@ -4101,17 +4110,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             rack = 0
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         InfoEvent(message=f"Start grow cluster by {add_nodes_number} nodes").publish()
+        new_nodes = []
         if self.cluster.parallel_node_operations:
-            self.add_new_nodes(count=add_nodes_number, rack=rack)
+            new_nodes = self.add_new_nodes(count=add_nodes_number, rack=rack,
+                                           instance_type=self.tester.params.get('nemesis_grow_shrink_instance_type'))
         else:
             for idx in range(add_nodes_number):
                 # if rack is not specified, round-robin racks to spread nodes evenly
                 rack_idx = rack if rack is not None else idx % self.cluster.racks_count
-                self.add_new_nodes(count=1, rack=rack_idx)
+                new_nodes += self.add_new_nodes(count=1, rack=rack_idx,
+                                                instance_type=self.tester.params.get('nemesis_grow_shrink_instance_type'))
         self.log.info("Finish cluster grow")
         time.sleep(self.interval)
+        return new_nodes
 
-    def _shrink_cluster(self, rack=None):
+    def _shrink_cluster(self, rack=None, new_nodes: list[BaseNode] | None = None):
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         InfoEvent(message=f'Start shrink cluster by {add_nodes_number} nodes').publish()
         # Check that number of nodes is enough for decommission:
@@ -4139,7 +4152,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             decommission_nodes_number,
             rack,
             is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
-            dc_idx=self.target_node.dc_idx)
+            dc_idx=self.target_node.dc_idx,
+            exact_nodes=new_nodes,
+        )
         num_of_nodes = len(self.cluster.nodes)
         self.log.info("Cluster shrink finished. Current number of nodes %s", num_of_nodes)
         InfoEvent(message=f'Cluster shrink finished. Current number of nodes {num_of_nodes}').publish()

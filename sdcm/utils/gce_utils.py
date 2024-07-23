@@ -95,6 +95,12 @@ def get_gce_compute_disks_client() -> tuple[compute_v1.DisksClient, dict]:
     return compute_v1.DisksClient(credentials=credentials), info
 
 
+def get_gce_compute_machine_types_client() -> tuple[compute_v1.MachineTypesClient, dict]:
+    info = KeyStore().get_gcp_credentials()
+    credentials = service_account.Credentials.from_service_account_info(info)
+    return compute_v1.MachineTypesClient(credentials=credentials), info
+
+
 def gce_public_addresses(instance: compute_v1.Instance) -> list[str]:
     addresses = []
 
@@ -647,3 +653,18 @@ def gce_set_tags(instances_client: compute_v1.InstancesClient,
     operation = instances_client.set_tags(request=request)
 
     return wait_for_extended_operation(operation, f"setting tags on {instance.name}")
+
+
+def gce_check_if_machine_type_supported(
+        machine_types_client: compute_v1.MachineTypesClient,
+        machine_type: str,
+        project: str,
+        zone: str):
+    """
+    Check if the given machine type is supported in the given zone.
+    """
+    request = compute_v1.GetMachineTypeRequest()
+    request.project = project
+    request.zone = zone
+    request.machine_type = machine_type
+    return machine_types_client.get(request=request)

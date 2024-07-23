@@ -35,7 +35,7 @@ from sdcm import sct_abs_path
 import sdcm.provision.azure.utils as azure_utils
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.utils import alternator
-from sdcm.utils.aws_utils import get_arch_from_instance_type
+from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
 from sdcm.utils.common import (
     ami_built_by_scylla,
     get_ami_tags,
@@ -58,7 +58,15 @@ from sdcm.utils.version_utils import (
     is_enterprise,
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
-from sdcm.utils.gce_utils import get_gce_image_tags
+from sdcm.utils.gce_utils import (
+    SUPPORTED_REGIONS as GCE_SUPPORTED_REGIONS,
+    get_gce_image_tags,
+    get_gce_compute_machine_types_client,
+    gce_check_if_machine_type_supported,
+)
+from sdcm.utils.azure_utils import (
+    azure_check_instance_type_available,
+)
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.test_config import TestConfig
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
@@ -597,6 +605,11 @@ class SCTConfiguration(dict):
              env="SCT_NEMESIS_ADD_NODE_CNT",
              type=int, k8s_multitenancy_supported=True,
              help="""Add/remove nodes during GrowShrinkCluster nemesis"""),
+
+        dict(name="nemesis_grow_shrink_instance_type",
+             env="SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE",
+             type=_str, k8s_multitenancy_supported=True,
+             help="""Instance type to use for adding/removing nodes during GrowShrinkCluster nemesis"""),
 
         dict(name="cluster_target_size", env="SCT_CLUSTER_TARGET_SIZE", type=int,
              help="""Used for scale test: max size of the cluster"""),
@@ -2238,6 +2251,7 @@ class SCTConfiguration(dict):
         self._verify_scylla_bench_mode_and_workload_parameters()
 
         self._validate_placement_group_required_values()
+        self._instance_type_validation()
 
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get('docker_image')
@@ -2347,6 +2361,32 @@ class SCTConfiguration(dict):
         opts = [o for o in self.config_options if o['name'] in required_params]
         for _opt in opts:
             assert _opt['name'] in self, "{} missing from config for {}".format(_opt['name'], backend)
+
+    def _instance_type_validation(self):
+        if instance_type := self.get('nemesis_grow_shrink_instance_type'):
+            backend = self.get('cluster_backend')
+            match backend:
+                case 'aws':
+                    for region in self.region_names:
+                        assert aws_check_instance_type_supported(
+                            instance_type, region), f"Instance type[{instance_type}] not supported in region [{region}]"
+                case 'gce':
+                    machine_types_client, info = get_gce_compute_machine_types_client()
+                    for datacenter in self.gce_datacenters:
+                        for zone in GCE_SUPPORTED_REGIONS.get(datacenter):
+                            _zone = f"{datacenter}-{zone}"
+                            assert gce_check_if_machine_type_supported(
+                                machine_types_client, instance_type, project=info['project_id'],
+                                zone=_zone), f"Instance type[{instance_type}] not supported in zone [{_zone}]"
+                case 'azure':
+                    if azure_region_names := self.get('azure_region_name'):
+                        if not isinstance(azure_region_names, list):
+                            azure_region_names = [self.get('azure_region_name')]
+                        for region in self.get('azure_region_name'):
+                            assert azure_check_instance_type_available(
+                                instance_type, region), f"Instance type [{instance_type}] not supported in region [{region}]"
+                case _:
+                    raise ValueError(f"Unsupported backend [{backend}] for using nemesis_grow_shrink_instance_type")
 
     def _check_version_supplied(self, backend: str):
         options_must_exist = []

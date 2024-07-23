@@ -522,3 +522,17 @@ def get_by_owner_ami(parameter: str, region_name) -> str:
     images = sorted(images, key=lambda x: x.creation_date, reverse=True)
     LOGGER.debug(f'found image "{images[0].name}" - {images[0].id}')
     return images[0].id
+
+
+def aws_check_instance_type_supported(instance_type: str, region_name: str) -> bool:
+    """
+    check if the instance type is supported in the region
+    """
+    client: EC2Client = boto3.client('ec2', region_name=region_name)
+    try:
+        client.describe_instance_types(InstanceTypes=[instance_type])
+    except ClientError as exc:
+        if exc.response['Error']['Code'] == 'InvalidInstanceType':
+            return False
+        raise
+    return True
