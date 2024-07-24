@@ -31,7 +31,12 @@ CQLSHRC_FILE = get_data_dir_path('ssl_conf', 'client', 'cqlshrc')
 def update_cqlshrc(cqlshrc_file: str = CQLSHRC_FILE, client_encrypt: bool = False) -> None:
     config = configparser.ConfigParser()
     config.read(cqlshrc_file)
-    config['ssl']['validate'] = 'true' if client_encrypt else 'false'
+    config['ssl'] = {
+        'validate': 'true' if client_encrypt else 'false',
+        'certfile': f'{SCYLLA_SSL_CONF_DIR / CA_CERT_FILE.name}',
+        'userkey': f'{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_KEYFILE.name}',
+        'usercert': f'{SCYLLA_SSL_CONF_DIR / CLIENT_FACING_CERTFILE.name}'
+    }
     with open(cqlshrc_file, 'w', encoding='utf-8') as file:
         config.write(file)
 
