@@ -33,9 +33,8 @@ class NemesisElasticSearchPublisher:
 
     def create_es_connection(self):
         ks = KeyStore()
-        es_conf = ks.get_elasticsearch_credentials()
-        self.es = Elasticsearch(hosts=[es_conf["es_url"]], verify_certs=False,  # pylint: disable=invalid-name
-                                http_auth=(es_conf["es_user"], es_conf["es_password"]))
+        es_conf = ks.get_elasticsearch_token()
+        self.es = Elasticsearch(**es_conf)
 
     @cached_property
     def stats(self):
