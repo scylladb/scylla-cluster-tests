@@ -15,10 +15,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 @click.argument('index_name', type=str)
 def fix_es_mapping(index_name):
     ks = KeyStore()
-    es_conf = ks.get_elasticsearch_credentials()
+    es_conf = ks.get_elasticsearch_token()
 
-    mapping_url = "{es_url}/{index_name}/_mapping".format(index_name=index_name, **es_conf)
-    res = requests.get(mapping_url, auth=(es_conf["es_user"], es_conf["es_password"]))
+    mapping_url = "{es_url}/{index_name}/_mapping".format(index_name=index_name, es_url=es_conf["es_url"])
+    res = requests.get(mapping_url, headers={'Authorization': f'ApiKey {es_conf["api_key"]}'})
+    res.raise_for_status()
     output = res.json()[index_name]
 
     output['mappings']['test_stats']['dynamic'] = False
@@ -29,7 +30,7 @@ def fix_es_mapping(index_name):
     output['mappings']['test_stats']['properties']['system_details'] = {"dynamic": False, "properties": {}}
 
     res = requests.put(mapping_url + "/test_stats",
-                       json=output['mappings'], auth=(es_conf["es_user"], es_conf["es_password"]))
+                       json=output['mappings'], headers={'Authorization': f'ApiKey {es_conf["api_key"]}'})
     print(res.text)
     res.raise_for_status()
 
