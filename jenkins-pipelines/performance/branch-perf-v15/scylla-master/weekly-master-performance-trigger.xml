@@ -29,7 +29,7 @@ availability_zone=b</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>perf-regression/scylla-master-perf-regression-latency-650gb-with-nemesis,perf-regression/scylla-master-perf-regression-latency-650gb-grow-shrink</projects>
+          <projects>perf-regression/scylla-master-perf-regression-latency-650gb-with-nemesis</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
