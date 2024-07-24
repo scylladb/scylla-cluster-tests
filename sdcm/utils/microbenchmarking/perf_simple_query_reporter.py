@@ -47,7 +47,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
         keys.sort(reverse=True)
         return [results[key] for key in keys]
 
-    def check_regression(self, test_id, mad_deviation_limit=0.02, regression_limit=0.05, is_gce=False):  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0914
+    def check_regression(self, test_id, mad_deviation_limit=0.02, regression_limit=0.05, is_gce=False, extra_jobs_to_compare=None):  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0914
         doc = self.get_test_by_id(test_id)
         if not doc:
             self.log.error('Cannot find test by id: {}!'.format(test_id))
@@ -78,7 +78,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
             size=self._limit,
             filter_path=filter_path,
         )
-
+        extra_jobs_to_compare = extra_jobs_to_compare or []
         sorted_results = {}
         for tag_row in tests_filtered['hits']['hits']:
             if keys_exists(tag_row, "_source", "versions", "scylla-server", 'date') and \
@@ -86,7 +86,7 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
                     keys_exists(tag_row, "_source", "setup_details", "instance_type_db", ):
                 if tag_row["_source"]["setup_details"]["instance_type_db"] == doc["_source"]["setup_details"]["instance_type_db"] and \
                         tag_row["_id"] != doc["_id"] and \
-                        tag_row["_source"]["test_details"]["job_name"] == doc["_source"]["test_details"]["job_name"]:
+                        tag_row["_source"]["test_details"]["job_name"] in (doc["_source"]["test_details"]["job_name"], *extra_jobs_to_compare):
                     sorted_results[int(str(tag_row["_source"]["versions"]["scylla-server"]["date"]) +
                                        str(tag_row["_source"]["test_details"]["start_time"]))] = tag_row["_source"]
 

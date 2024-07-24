@@ -35,4 +35,5 @@ class PerfSimpleQueryTest(ClusterTester):
             if self.create_stats:
                 is_gce = self.params.get('cluster_backend') == 'gce'
                 PerfSimpleQueryAnalyzer(self._test_index, self._es_doc_type).check_regression(
-                    self._test_id, is_gce=is_gce)
+                    self._test_id, is_gce=is_gce,
+                    extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
