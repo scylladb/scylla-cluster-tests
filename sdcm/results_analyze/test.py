@@ -520,7 +520,7 @@ class TestResultClass(ClassBase):
     def gen_kibana_dashboard_url(
             dashboard_path="app/kibana#/dashboard/03414b70-0e89-11e9-a976-2fe0f5890cd0?_g=()"
     ):
-        return "%s/%s" % (ES()._conf.get('kibana_url'), dashboard_path)  # pylint: disable=protected-access
+        return "%s/%s" % (ES().conf.get('kibana_url'), dashboard_path)  # pylint: disable=protected-access
 
     def get_subtests(self):
         return self.get_by_params(es_index=self.es_index, main_test_id=self.test_id, subtest_name='*')
