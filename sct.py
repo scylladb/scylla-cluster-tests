@@ -1344,13 +1344,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
             sys.exit(1)
         return
     job_name = os.environ.get('JOB_NAME', '')
-    if (('latency' in job_name or 'throughput' in job_name or 'perf' in job_name) and 'sla' not in job_name):
-        logs = list_logs_by_test_id(test_results.get('test_id', test_id))
-        reporter = BaseResultsAnalyzer(es_index=test_id, es_doc_type='test_stats',
-                                       email_recipients=email_recipients)
-        send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time)
-    else:
-        reporter = test_results.get("reporter", "")
+    if reporter := test_results.get("reporter", ""):
         test_results['nodes'] = get_running_instances_for_email_report(test_id, runner_ip)
         test_results['logs_links'] = list_logs_by_test_id(test_results.get('test_id', test_id))
         if 'longevity' in job_name:
@@ -1369,6 +1363,16 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
                 "job_url": os.environ.get("BUILD_URL"),
                 "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
             })
+    elif any(['email_body' in value for value in test_results.values()]):
+        # figure out it's a perf tests with multiple emails in single file
+        # based on the structure of file
+        logs = list_logs_by_test_id(test_results.get('test_id', test_id))
+        reporter = BaseResultsAnalyzer(es_index=test_id, es_doc_type='test_stats',
+                                       email_recipients=email_recipients)
+        send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time)
+    else:
+        LOGGER.warning("failed to figure out what what to send out")
+        sys.exit(1)
 
 
 @cli.command('create-operator-test-release-jobs',
