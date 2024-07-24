@@ -43,8 +43,8 @@ class KeyStore:  # pylint: disable=too-many-public-methods
     def get_email_credentials(self):
         return self.get_json("email_config.json")
 
-    def get_elasticsearch_credentials(self):
-        return self.get_json("es.json")
+    def get_elasticsearch_token(self):
+        return self.get_json("es_token.json")
 
     def get_gcp_credentials(self):
         project = os.environ.get('SCT_GCE_PROJECT') or 'gcp-sct-project-1'

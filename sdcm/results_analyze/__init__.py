@@ -47,7 +47,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
     def __init__(self, es_index, es_doc_type, email_recipients=(), email_template_fp="", query_limit=1000, logger=None,
                  events=None):
         self._es = ES()
-        self._conf = self._es._conf  # pylint: disable=protected-access
+        self._conf = self._es.conf  # pylint: disable=protected-access
         self._es_index = es_index
         self._es_doc_type = es_doc_type
         self._limit = query_limit
