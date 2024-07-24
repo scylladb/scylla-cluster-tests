@@ -373,6 +373,7 @@ good-names=i,
            cf,
            fd,
            pytestmark,
+           es,
 
 # Include a hint for the correct naming format with invalid-name.
 include-naming-hint=no
