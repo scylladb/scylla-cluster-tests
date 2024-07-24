@@ -68,12 +68,8 @@ def update_value(index_name, test_id, new_job_name):
     configure_logging()
 
     ks = KeyStore()
-    es_conf = ks.get_elasticsearch_credentials()
-    elastic_search = Elasticsearch(
-        hosts=[es_conf["es_url"]],
-        verify_certs=True,
-        http_auth=(es_conf["es_user"], es_conf["es_password"]),
-    )
+    es_conf = ks.get_elasticsearch_token()
+    elastic_search = Elasticsearch(**es_conf)
 
     res = scan(
         elastic_search,
