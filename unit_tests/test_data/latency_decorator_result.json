@@ -1,0 +1,243 @@
+{
+  "c-s P99": 4.51,
+  "c-s P99_stdev": 1.07,
+  "c-s P99_points_above_threshold": 0,
+  "c-s P99 max": 7.9,
+  "c-s P95": 3.08,
+  "c-s P95_stdev": 0.68,
+  "c-s P95_points_above_threshold": 0,
+  "c-s P95 max": 5.4,
+  "Scylla P99_read - node-5": 4.26,
+  "Scylla P99_read - node-3": 4.14,
+  "Scylla P99_read - node-4": 4.09,
+  "Scylla P99_read - node-2": 4.08,
+  "Scylla P99_read - node-1": 4.06,
+  "Scylla P99_read - node-6": 3.64,
+  "Scylla P99_write - node-5": 1.51,
+  "Scylla P99_write - node-3": 1.61,
+  "Scylla P99_write - node-4": 1.58,
+  "Scylla P99_write - node-2": 1.62,
+  "Scylla P99_write - node-1": 1.59,
+  "Scylla P99_write - node-6": 1.3,
+  "screenshots": [
+    "https://cloudius-jenkins-test.s3.amazonaws.com/a9b9a308-6ff8-4cc8-b33d-c439f75c9949/20240721_125838/grafana-screenshot-overview-20240721_125838-perf-latency-grow-shrink-ubuntu-monitor-node-a9b9a308-1.png",
+    "https://cloudius-jenkins-test.s3.amazonaws.com/a9b9a308-6ff8-4cc8-b33d-c439f75c9949/20240721_125838/grafana-screenshot-scylla-master-perf-regression-latency-650gb-grow-shrink-scylla-per-server-metrics-nemesis-20240721_125845-perf-latency-grow-shrink-ubuntu-monitor-node-a9b9a308-1.png"
+  ],
+  "duration": "0:44:14",
+  "duration_in_sec": 2654,
+  "hdr": [
+    {
+      "WRITE": {
+        "start_time": 1721564063,
+        "end_time": 1721564673000.0,
+        "stddev": 870410.1097346079,
+        "percentile_50": 1.08,
+        "percentile_90": 1.93,
+        "percentile_95": 2.2,
+        "percentile_99": 3.27,
+        "percentile_99_9": 6.48,
+        "percentile_99_99": 31.88,
+        "percentile_99_999": 39.68,
+        "color": {
+          "percentile_90": "",
+          "percentile_99": ""
+        }
+      },
+      "READ": {
+        "start_time": 1721564063,
+        "end_time": 1721564673000.0,
+        "stddev": 1259959.7500139747,
+        "percentile_50": 1.57,
+        "percentile_90": 3.2,
+        "percentile_95": 3.98,
+        "percentile_99": 5.61,
+        "percentile_99_9": 9.57,
+        "percentile_99_99": 33.01,
+        "percentile_99_999": 42.47,
+        "color": {
+          "percentile_90": "",
+          "percentile_99": ""
+        }
+      }
+    },
+    {
+      "WRITE": {
+        "start_time": 1721564663,
+        "end_time": 1721565273000.0,
+        "stddev": 1018285.257810046,
+        "percentile_50": 1.06,
+        "percentile_90": 2.07,
+        "percentile_95": 2.4,
+        "percentile_99": 4.89,
+        "percentile_99_9": 8.96,
+        "percentile_99_99": 31.57,
+        "percentile_99_999": 37.58,
+        "color": {
+          "percentile_90": "",
+          "percentile_99": ""
+        }
+      },
+      "READ": {
+        "start_time": 1721564663,
+        "end_time": 1721565273000.0,
+        "stddev": 1331990.3370796728,
+        "percentile_50": 1.56,
+        "percentile_90": 3.28,
+        "percentile_95": 4.15,
+        "percentile_99": 6.44,
+        "percentile_99_9": 10.13,
+        "percentile_99_99": 32.59,
+        "percentile_99_999": 38.08,
+        "color": {
+          "percentile_90": "",
+          "percentile_99": ""
+        }
+      }
+    },
+    {
+      "WRITE": {
+        "start_time": 1721565263,
+        "end_time": 1721565873000.0,
+        "stddev": 1005471.1070067695,
+        "percentile_50": 0.88,
+        "percentile_90": 2.27,
+        "percentile_95": 2.53,
+        "percentile_99": 3.7,
+        "percentile_99_9": 8.33,
+        "percentile_99_99": 32.01,
+        "percentile_99_999": 36.41,
+        "color": {
+          "percentile_90": "",
+          "percentile_99": ""
+        }
+      },
+      "READ": {
+        "start_time": 1721565263,
+        "end_time": 1721565873000.0,
+        "stddev": 1167538.0721419156,
+        "percentile_50": 1.4,
+        "percentile_90": 2.86,
+        "percentile_95": 3.32,
+        "percentile_99": 5.14,
+        "percentile_99_9": 8.99,
+        "percentile_99_99": 32.75,
+        "percentile_99_999": 36.67,
+        "color": {
+          "percentile_90": "",
+          "percentile_99": ""
+        }
+      }
+    },
+    {
+      "WRITE": {
+        "start_time": 1721565863,
+        "end_time": 1721566473000.0,
+        "stddev": 946255.8533353838,
+        "percentile_50": 0.82,
+        "percentile_90": 2.22,
+        "percentile_95": 2.39,
+        "percentile_99": 3.24,
+        "percentile_99_9": 6.42,
+        "percentile_99_99": 32.29,
+        "percentile_99_999": 36.41,
+        "color": {
+          "percentile_90": "",
+          "percentile_99": ""
+        }
+      },
+      "READ": {
+        "start_time": 1721565863,
+        "end_time": 1721566473000.0,
+        "stddev": 1057341.4444458701,
+        "percentile_50": 1.01,
+        "percentile_90": 2.51,
+        "percentile_95": 2.99,
+        "percentile_99": 4.17,
+        "percentile_99_9": 7.44,
+        "percentile_99_99": 32.88,
+        "percentile_99_999": 37.09,
+        "color": {
+          "percentile_90": "",
+          "percentile_99": ""
+        }
+      }
+    },
+    {
+      "WRITE": {
+        "start_time": 1721566463,
+        "end_time": 1721566723000.0,
+        "stddev": 804159.345750282,
+        "percentile_50": 0.72,
+        "percentile_90": 1.22,
+        "percentile_95": 2.07,
+        "percentile_99": 2.72,
+        "percentile_99_9": 6.08,
+        "percentile_99_99": 32.28,
+        "percentile_99_999": 38.04,
+        "color": {
+          "percentile_90": "",
+          "percentile_99": ""
+        }
+      },
+      "READ": {
+        "start_time": 1721566463,
+        "end_time": 1721566723000.0,
+        "stddev": 868136.4068630673,
+        "percentile_50": 0.83,
+        "percentile_90": 1.75,
+        "percentile_95": 2.2,
+        "percentile_99": 3.3,
+        "percentile_99_9": 6.5,
+        "percentile_99_99": 32.78,
+        "percentile_99_999": 39.09,
+        "color": {
+          "percentile_90": "",
+          "percentile_99": ""
+        }
+      }
+    }
+  ],
+  "hdr_summary": {
+    "WRITE": {
+      "start_time": 1721564063.4528425,
+      "end_time": 1721566723000.0,
+      "stddev": 954797.9976915072,
+      "percentile_50": 0.89,
+      "percentile_90": 2.15,
+      "percentile_95": 2.36,
+      "percentile_99": 3.62,
+      "percentile_99_9": 8.44,
+      "percentile_99_99": 31.98,
+      "percentile_99_999": 37.16,
+      "color": {
+        "percentile_90": "",
+        "percentile_99": ""
+      }
+    },
+    "READ": {
+      "start_time": 1721564063.4528425,
+      "end_time": 1721566723000.0,
+      "stddev": 1205563.31676526,
+      "percentile_50": 1.35,
+      "percentile_90": 2.86,
+      "percentile_95": 3.53,
+      "percentile_99": 5.36,
+      "percentile_99_9": 9.4,
+      "percentile_99_99": 32.78,
+      "percentile_99_999": 37.95,
+      "color": {
+        "percentile_90": "",
+        "percentile_99": ""
+      }
+    }
+  },
+  "reactor_stalls_stats": {
+    "DatabaseLogEvent.REACTOR_STALLED": {
+      "event": "DatabaseLogEvent.REACTOR_STALLED",
+      "counter": 18,
+      "ms": {
+        "10": 18
+      }
+    }
+  }
+}

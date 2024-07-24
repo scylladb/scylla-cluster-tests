@@ -20,6 +20,8 @@ import os
 
 from functools import wraps, partial, cached_property
 from typing import Optional, Callable
+
+from sdcm.argus_results import send_result_to_argus
 from sdcm.sct_events.database import DatabaseLogEvent
 
 from sdcm.sct_events.event_counter import EventCounterContextManager
@@ -223,8 +225,24 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             if "steady" in func.__name__.lower():
                 if 'Steady State' not in latency_results:
                     latency_results['Steady State'] = result
+                    send_result_to_argus(
+                        argus_client=args[0].tester.test_config.argus_client(),
+                        workload=workload,
+                        name="Steady State",
+                        description="Latencies without any operation running",
+                        cycle=0,
+                        result=result
+                    )
             else:
                 latency_results[func.__name__]['cycles'].append(result)
+                send_result_to_argus(
+                    argus_client=args[0].tester.test_config.argus_client(),
+                    workload=workload,
+                    name=f"{func.__name__}",
+                    description=legend or "",
+                    cycle=len(latency_results[func.__name__]['cycles']),
+                    result=result
+                )
 
             with open(latency_results_file_path, 'w', encoding="utf-8") as file:
                 json.dump(latency_results, file)
