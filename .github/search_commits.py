@@ -51,7 +51,7 @@ def main():  # pylint: disable=too-many-locals  # noqa: PLR0914
                 pr_number = int(match[0])
                 if pr_number in processed_prs:
                     continue
-                ref = re.search(r'-(\d+\.\d+)', args.ref)
+                ref = re.search(r'-(\d+\.\d+|perf-v(\d+))', args.ref)
                 label_to_add = f'backport/{ref.group(1)}-done'
                 label_to_remove = f'backport/{ref.group(1)}'
                 remove_label_url = f'https://api.github.com/repos/{args.repository}/issues/{pr_number}/labels/{label_to_remove}'
