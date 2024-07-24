@@ -59,7 +59,7 @@ availability_zone=b</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>simple_query_weekly_microbenchmark,simple_query_weekly_microbenchmark_x86</projects>
+          <projects>perf-regression/scylla-master-perf-simple-query-weekly-microbenchmark_arm64,perf-regression/scylla-master-perf-simple-query-weekly-microbenchmark_x86_64</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
@@ -67,7 +67,7 @@ availability_zone=b</properties>
         <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
-              <properties>scylla_version=5.2
+              <properties>scylla_version=6.0
 new_scylla_repo=http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list
 provision_type=on_demand
 availability_zone=b</properties>
