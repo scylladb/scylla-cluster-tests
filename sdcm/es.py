@@ -1,4 +1,5 @@
 import logging
+from functools import cached_property
 
 import elasticsearch
 
@@ -13,13 +14,11 @@ class ES(elasticsearch.Elasticsearch):
     """
 
     def __init__(self):
-        self._conf = self.get_conf()
-        super().__init__(hosts=[self._conf["es_url"]], verify_certs=False,
-                         http_auth=(self._conf["es_user"], self._conf["es_password"]))
+        super().__init__(**self.conf)
 
-    def get_conf(self):
-        self.key_store = KeyStore()
-        return self.key_store.get_elasticsearch_credentials()
+    @cached_property
+    def conf(self):
+        return KeyStore().get_elasticsearch_token()
 
     def _create_index(self, index):
         self.indices.create(index=index, ignore=400)  # pylint: disable=unexpected-keyword-arg

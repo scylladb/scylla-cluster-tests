@@ -55,9 +55,8 @@ def migrate(old_index_name, dry_run, new_index, days):  # pylint: disable=too-ma
     }
     )
     ks = KeyStore()
-    es_conf = ks.get_elasticsearch_credentials()
-    elastic_search = Elasticsearch(hosts=[es_conf["es_url"]], verify_certs=True,
-                                   http_auth=(es_conf["es_user"], es_conf["es_password"]))
+    es_conf = ks.get_elasticsearch_token()
+    elastic_search = Elasticsearch(**es_conf)
 
     if not elastic_search.indices.exists(index=new_index):
         elastic_search.indices.create(index=new_index)
