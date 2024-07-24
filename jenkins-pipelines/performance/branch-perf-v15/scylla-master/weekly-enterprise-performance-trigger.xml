@@ -45,7 +45,7 @@ provision_type=on_demand</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../simple_query_weekly_microbenchmark_enterprise,../simple_query_weekly_microbenchmark_enterprise_x86_64</projects>
+          <projects>../scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_arm64,..../scylla-enterprise/perf-regression/scylla-enterprise-perf-simple-query-weekly-microbenchmark_x86_64</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
@@ -53,7 +53,7 @@ provision_type=on_demand</properties>
         <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
-              <properties>scylla_version=2023.1
+              <properties>scylla_version=2024.1
 new_scylla_repo=https://downloads.scylladb.com/unstable/scylla-enterprise/enterprise/deb/unified/latest/scylladb-enterprise/scylla.list
 provision_type=on_demand</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
