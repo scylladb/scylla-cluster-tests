@@ -1276,7 +1276,6 @@ def get_test_results_for_failed_test(test_status, start_time):
         "start_time": start_time,
         "end_time": format_timestamp(time.time()),
         "grafana_screenshots": "",
-        "grafana_snapshots": "",
         "nodes": "",
         "test_id": "",
         "username": ""

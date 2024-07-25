@@ -464,27 +464,19 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
-        grafana_dataset = {}
 
         email_data = self._get_common_email_data()
-
-        try:
-            grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
-                self.start_time) if self.monitors else {}
-        except Exception as error:  # pylint: disable=broad-except
-            self.log.exception("Error in gathering Grafana screenshots and snapshots. Error:\n%s",
-                               error, exc_info=error)
 
         benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
         # If cluster was not created, not need to collect nemesis stats - they do not exist
         nemeses_stats = self.get_nemesises_stats() if self.db_cluster else {}
 
-        email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
-                           "grafana_snapshots": grafana_dataset.get("snapshots", []),
-                           "node_benchmarks": benchmarks_results,
-                           "nemesis_details": nemeses_stats,
-                           "nemesis_name": self.params.get("nemesis_class_name"),
-                           "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-", })
+        email_data.update({
+            "node_benchmarks": benchmarks_results,
+            "nemesis_details": nemeses_stats,
+            "nemesis_name": self.params.get("nemesis_class_name"),
+            "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
+        })
         return email_data
 
     def create_templated_user_stress_params(self, idx, cs_profile):  # pylint: disable=invalid-name
