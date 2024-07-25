@@ -3599,21 +3599,29 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         try:
             email_data = self.get_email_data()
             self._argus_add_relocatable_pkg(email_data)
-            self.argus_collect_screenshots(email_data)
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Error while saving email data. Error: %s\nTraceback: %s", exc, traceback.format_exc())
+
+        grafana_screenshots = []
+        try:
+            grafana_screenshots = self.monitors.get_grafana_screenshots_from_all_monitors(
+                self.start_time) if self.monitors else {}
+            self.argus_collect_screenshots(grafana_screenshots)
+        except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+            self.log.exception("Error while collecting screenshots:", exc_info=exc)
 
         json_file_path = os.path.join(self.logdir, "email_data.json")
 
         if email_data:
+            email_data['grafana_screenshots'] = grafana_screenshots
             email_data["reporter"] = self.email_reporter.__class__.__name__
             self.log.debug('Save email data to file %s', json_file_path)
             self.log.debug('Email data: %s', email_data)
             save_email_data_to_file(email_data, json_file_path)
 
-    def argus_collect_screenshots(self, email_data: dict) -> None:
-        screenshot_links = email_data.get("grafana_screenshots", [])
-        self.test_config.argus_client().submit_screenshots(screenshot_links)
+    def argus_collect_screenshots(self, grafana_screenshots: list) -> None:
+        if grafana_screenshots:
+            self.test_config.argus_client().submit_screenshots(grafana_screenshots)
 
     def _argus_add_relocatable_pkg(self, email_data):
         """Adds Package with url to relocatable package in Argus.

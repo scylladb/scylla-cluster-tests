@@ -5874,7 +5874,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         """)
         node.remoter.run("bash -ce '%s'" % kill_script)
 
-    def get_grafana_screenshot_and_snapshot(self, test_start_time: Optional[int] = None) -> dict[str, list[str]]:
+    def get_grafana_screenshots_from_all_monitors(self, test_start_time: Optional[float] = None) -> list[str]:
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
@@ -5886,7 +5886,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         for node in self.nodes:
             screenshot_links.extend(self.get_grafana_screenshots(node, test_start_time))
 
-        return {'screenshots': screenshot_links}
+        return screenshot_links
 
     def get_grafana_screenshots(self, node: BaseNode, test_start_time: float) -> list[str]:
         screenshot_links = []
@@ -5967,8 +5967,8 @@ class NoMonitorSet():
     def collect_logs(self, storage_dir):
         pass
 
-    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):  # pylint: disable=unused-argument,no-self-use,invalid-name
-        return {}
+    def get_grafana_screenshots_from_all_monitors(self, test_start_time=None):  # pylint: disable=unused-argument,no-self-use,invalid-name
+        return []
 
 
 class LocalNode(BaseNode):
