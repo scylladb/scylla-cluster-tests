@@ -54,25 +54,15 @@ class ScaleUpTest(ClusterTester):
     def get_email_data(self):
         self.log.info("Prepare data for email")
         email_data = {}
-        grafana_dataset = {}
 
         try:
             email_data = self._get_common_email_data()
         except Exception as error:  # pylint: disable=broad-except
             self.log.exception("Error in gathering common email data: Error:\n%s", error, exc_info=error)
 
-        try:
-            grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
-                self.start_time) if self.monitors else {}
-        except Exception as error:  # pylint: disable=broad-except
-            self.log.exception("Error in gathering Grafana screenshots and snapshots. Error:\n%s",
-                               error, exc_info=error)
-
-        email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
-                           "grafana_snapshots": grafana_dataset.get("snapshots", []),
-                           "ingest_time": self.ingest_time,
-                           "rebuild_duration": self.rebuild_duration,
-                           "subject": f"Scale up test results - {email_data['scylla_instance_type']}",
-                           }
-                          )
+        email_data.update({
+            "ingest_time": self.ingest_time,
+            "rebuild_duration": self.rebuild_duration,
+            "subject": f"Scale up test results - {email_data['scylla_instance_type']}",
+        })
         return email_data

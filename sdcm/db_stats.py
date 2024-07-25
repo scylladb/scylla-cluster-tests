@@ -649,7 +649,6 @@ class TestStatsMixin(Stats):
         test_details['start_host'] = platform.node()
         test_details['test_duration'] = self.params.get(key='test_duration')
         test_details['start_time'] = int(time.time())
-        test_details['grafana_snapshots'] = []
         test_details['grafana_screenshots'] = []
         test_details['grafana_annotations'] = []
         test_details['prometheus_data'] = ""
@@ -841,9 +840,8 @@ class TestStatsMixin(Stats):
             if self.params.get("store_perf_results"):
                 update_data["results"] = self.get_prometheus_stats(alternator=alternator,
                                                                    scrap_metrics_step=scrap_metrics_step)
-            grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_details["start_time"])
-            test_details.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
-                                 "grafana_snapshots": grafana_dataset.get("snapshots", []),
+            grafana_screenshots = self.monitors.get_grafana_screenshots_from_all_monitors(test_details["start_time"])
+            test_details.update({"grafana_screenshots": grafana_screenshots,
                                  "grafana_annotations": self.monitors.upload_annotations_to_s3(),
                                  "prometheus_data": self.monitors.download_monitor_data(), })
 

@@ -879,7 +879,6 @@ class SlaPerUserTest(LongevityTest):
 
     def get_email_data(self):
         self.log.info("Prepare data for email for SLA test")
-        grafana_dataset = {}
         email_data = {}
 
         try:
@@ -887,18 +886,11 @@ class SlaPerUserTest(LongevityTest):
         except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Error in gathering common email data: Error:\n%s", error)
 
-        try:
-            grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
-                self.start_time) if self.monitors else {}
-        except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
-            self.log.error("Error in gathering Grafana screenshots and snapshots. Error:\n%s", error)
-
-        email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
-                           "grafana_snapshots": grafana_dataset.get("snapshots", []),
-                           "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
-                           "region": self.params.get("region_name") or "-",
-                           "workload_comparison": self._comparison_results if self._comparison_results else {}
-                           })
+        email_data.update({
+            "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
+            "region": self.params.get("region_name") or "-",
+            "workload_comparison": self._comparison_results if self._comparison_results else {}
+        })
 
         return email_data
 
@@ -942,13 +934,8 @@ class SlaPerUserTest(LongevityTest):
 
         self.assertTrue(latency_99_for_mixed_workload, msg='Not received cassandra-stress for mixed workload')
 
-        grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_start_time=test_start_time)
-
-        grafana_screenshots = grafana_dataset.get('screenshots', [])
-        grafana_snapshots = grafana_dataset.get('snapshots', [])
-
+        grafana_screenshots = self.monitors.get_grafana_screenshots_from_all_monitors(test_start_time=test_start_time)
         self.log.debug('GRAFANA SCREENSHOTS: {}'.format(grafana_screenshots))
-        self.log.debug('GRAFANA SNAPSHOTS: {}'.format(grafana_snapshots))
 
         # Compare latency of two runs
         self.log.debug('Test results:\n---------------------\n')

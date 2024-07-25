@@ -361,7 +361,6 @@ class MgmtEmailReporter(BaseEmailReporter):
 class LongevityEmailReporter(BaseEmailReporter):
     _fields = (
         "grafana_screenshots",
-        "grafana_snapshots",
         "nemesis_details",
         "nemesis_name",
         "scylla_ami_id",
@@ -469,7 +468,6 @@ class GeminiEmailReporter(LongevityEmailReporter):
         "scylla_ami_id",
         "status",
         "grafana_screenshots",
-        "grafana_snapshots",
     )
     email_template_file = "results_gemini.html"
 
@@ -486,7 +484,6 @@ class FunctionalEmailReporter(LongevityEmailReporter):
 class ScaleUpEmailReporter(LongevityEmailReporter):
     _fields = (
         "grafana_screenshots",
-        "grafana_snapshots",
         "ingest_time",
         "rebuild_duration",
     )
@@ -496,7 +493,6 @@ class ScaleUpEmailReporter(LongevityEmailReporter):
 class UpgradeEmailReporter(BaseEmailReporter):
     _fields = (
         "grafana_screenshots",
-        "grafana_snapshots",
         "new_scylla_repo",
         "new_version",
         "scylla_ami_id",
@@ -520,7 +516,6 @@ class TestAbortedEmailReporter(LongevityEmailReporter):
 class CDCReplicationReporter(LongevityEmailReporter):
     _fields = (
         "grafana_screenshots",
-        "grafana_snapshots",
         "nemesis_details",
         "nemesis_name",
         "scylla_ami_id",
@@ -536,7 +531,6 @@ class CDCReplicationReporter(LongevityEmailReporter):
 class JepsenEmailReporter(BaseEmailReporter):
     _fields = (
         "grafana_screenshots",
-        "grafana_snapshots",
         "jepsen_report",
         "jepsen_scylla_repo",
         "jepsen_test_cmd",
@@ -552,7 +546,6 @@ class JepsenEmailReporter(BaseEmailReporter):
 class SlaPerUserEmailReporter(LongevityEmailReporter):
     _fields = (
         "grafana_screenshots",
-        "grafana_snapshots",
         "scylla_ami_id",
         "parallel_timelines_report",
         "workload_comparison"

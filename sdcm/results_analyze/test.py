@@ -366,7 +366,6 @@ class TestResultClass(ClassBase):
         'subtest_name': '_source.test_details.sub_type',
         'test_id': '_id',
         'software': '_source.versions',
-        'grafana_snapshots': '_source.test_details.grafana_snapshots',
         'grafana_screenshots': '_source.test_details.grafana_screenshots',
         'es_index': '_index',
         'main_test_id': '_source.test_details.test_id',
@@ -399,7 +398,6 @@ class TestResultClass(ClassBase):
     metrics: ScyllaTestMetrics = None
     subtest_name: str = None
     software: SoftwareVersions = None
-    grafana_snapshots: list = []
     grafana_screenshots: list = []
     test_name: str = None
     es_index: str = None
