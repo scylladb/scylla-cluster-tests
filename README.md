@@ -10,6 +10,11 @@ These tests automatically create:
 
 ## Quickstart
 
+#### Option 1 - Config AWS using OKTA (preferred option)
+
+https://www.notion.so/AWS-864b26157112426f8e74bab61001425d
+
+#### Option 2 - Config AWS using AWS credentials
 ```bash
 # install aws cli
 sudo apt install awscli # Debian/Ubuntu
