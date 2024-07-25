@@ -13,6 +13,7 @@
 import os
 import pty
 import shlex
+import socket
 import subprocess
 from functools import singledispatch
 
@@ -36,6 +37,7 @@ from sdcm.utils.gce_utils import (
     gce_set_tags,
 )
 from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.decorators import retrying
 
 
 def get_region(instance: dict) -> str:
@@ -336,17 +338,21 @@ def ssh_run_cmd(node_name: str, command: str, user: str = None,
 @click.option("-t", "--test-id", default=None, help="test id to search for")
 @click.option("-r", "--region", default=None, help="region to use, default search across all regions")
 @click.option("-p", "--port", default=3000, help="remote port to tunnel")
+@click.option("--wait-for-port/--no-wait-for-port", default=True, help="wait for port to be opened")
 @click.argument("node_name", required=False)
-def tunnel(user, test_id, region, port, node_name):
+def tunnel(user, test_id, region, port, wait_for_port, node_name):
     assert user or test_id or node_name
     connect_vm = select_instance(region=region, test_id=test_id, user=user, node_name=node_name)
 
     if connect_vm:
         if isinstance(connect_vm, compute_v1.Instance):
+            target_key = f'~/.ssh/{SSH_KEY_GCE_DEFAULT}'
+
             bastion = gce_find_bastion_for_instance(connect_vm)
             bastion_username, bastion_ip = guess_username(bastion), list(gce_public_addresses(bastion))[0]
             target_ip = list(gce_private_addresses(connect_vm))[0]
         else:
+            target_key = f'~/.ssh/{SSH_KEY_AWS_DEFAULT}'
             aws_region = AwsRegion(get_region(connect_vm))
 
             bastion = aws_find_bastion_for_instance(connect_vm)
@@ -357,16 +363,29 @@ def tunnel(user, test_id, region, port, node_name):
                 target_ip = connect_vm["PublicIpAddress"]
         click.echo(click.style(f"tunnel into: {get_name(connect_vm)}", fg='green'))
         local_port = get_free_port()
-        cmd = f'ssh -i ~/.ssh/scylla-qa-ec2 -N -L {local_port}:{target_ip}:{port} -o "UserKnownHostsFile=/dev/null" ' \
+        cmd = f'ssh -i {target_key} -N -L {local_port}:{target_ip}:{port} -o "UserKnownHostsFile=/dev/null" ' \
               f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 {bastion_username}@{bastion_ip}'
         click.echo(cmd)
+        process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        if wait_for_port:
+            @retrying(n=120, sleep_time=10, allowed_exceptions=(OSError,))
+            def wait_for_port(host, port):
+                click.echo(click.style('.', fg='bright_yellow'), nl=False)
+                socket.create_connection((host, port), timeout=1).close()
+
+            click.echo(click.style('checking connectivity .', fg='bright_yellow'), nl=False)
+            wait_for_port('127.0.0.1', int(local_port))
+            click.echo('')
+
         if port == 3000:
             click.echo(click.style(f"connect to: http://127.0.0.1:{local_port}", fg='yellow'))
         if port == 22:
             target_username = guess_username(connect_vm)
             click.echo(click.style(
-                f"connect to:\nssh -i ~/.ssh/scylla-qa-ec2 -p {local_port} {target_username}@127.0.0.1", fg='yellow'))
-        subprocess.check_output(cmd, shell=True)
+                f"connect to:\nssh -i {target_key} -p {local_port} {target_username}@127.0.0.1", fg='yellow'))
+
+        process.wait()
 
 
 @click.command("cp", help="copy files")
