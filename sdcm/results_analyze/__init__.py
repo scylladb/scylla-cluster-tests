@@ -74,16 +74,6 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         return self._es.get(index=self._es_index, doc_type=self._es_doc_type, id=test_id)
 
     @staticmethod
-    def _get_grafana_snapshot(test_doc):
-        grafana_snapshots = test_doc['_source']['test_details'].get('grafana_snapshots')
-        if grafana_snapshots and isinstance(grafana_snapshots, list):
-            return grafana_snapshots
-        elif grafana_snapshots and isinstance(grafana_snapshots, str):
-            return [grafana_snapshots]
-        else:
-            return []
-
-    @staticmethod
     def _get_grafana_screenshot(test_doc):
         grafana_screenshots = test_doc['_source']['test_details'].get('grafana_screenshot')
         if not grafana_screenshots:
@@ -469,7 +459,6 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             test_version=test_version,
             build_id=build_id,
             setup_details=self._get_setup_details(doc, is_gce),
-            grafana_snapshots=self._get_grafana_snapshot(doc),
             grafana_screenshots=self._get_grafana_screenshot(doc),
             job_url=doc['_source']['test_details'].get('job_url', ""),
             node_benchmarks=node_benchmarks,
@@ -854,7 +843,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             "prometheus_stats": {stat: doc["_source"]["results"].get(stat, {})
                                  for stat in TestStatsMixin.PROMETHEUS_STATS},
             "prometheus_stats_units": TestStatsMixin.PROMETHEUS_STATS_UNITS,
-            "grafana_snapshots": self._get_grafana_snapshot(doc),
             "grafana_screenshots": self._get_grafana_screenshot(doc),
             "cs_raw_cmd": cassandra_stress.get('raw_cmd', "") if cassandra_stress else "",
             "ycsb_raw_cmd": ycsb.get('raw_cmd', "") if ycsb else "",
@@ -994,7 +982,6 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                 current_tests[sub_type]['best_test_id'] = {
                     k: f"#{version_info['commit_id']}, {version_info['date']}" for k in self.PARAMS}
                 current_tests[sub_type]['results'] = row['_source']['results']
-                grafana_snapshots[sub_type] = self._get_grafana_snapshot(row)
                 grafana_screenshots[sub_type] = self._get_grafana_screenshot(row)
 
                 self.log.info('Added current test results %s. Check next', row['_id'])

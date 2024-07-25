@@ -253,7 +253,7 @@
 {%- endblock -%}
 
 {%- block links -%}
-    {%- if current_main_test.gen_kibana_dashboard_url() or current_main_test.kibana_url or current_main_test.job_url or current_main_test.grafana_screenshots or current_main_test.grafana_snapshots -%}
+    {%- if current_main_test.gen_kibana_dashboard_url() or current_main_test.kibana_url or current_main_test.job_url or current_main_test.grafana_screenshots -%}
     <h3>Links:</h3>
     <ul>
         <li><a href={{ current_main_test.gen_kibana_dashboard_url() }}>Kibana</a></li>
@@ -262,16 +262,8 @@
             {%- if current_main_test.grafana_screenshots[0] -%}
                 <li><a href={{ current_main_test.grafana_screenshots[0] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
             {%- endif -%}
-            {%- if current_main_test.grafana_snapshots[1] -%}
+            {%- if current_main_test.grafana_screenshots[1] -%}
                 <li><a href={{ current_main_test.grafana_screenshots[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
-            {%- endif -%}
-        {%- endif -%}
-        {%- if current_main_test.grafana_snapshots -%}
-            {%- if current_main_test.grafana_snapshots[0] -%}
-                <li><a href={{ current_main_test.grafana_snapshots[0] }}>Shared "Per server metrics nemesis" Grafana Snapshot</a></li>
-            {%- endif -%}
-            {%- if current_main_test.grafana_snapshots[1] -%}
-                <li><a href={{ current_main_test.grafana_snapshots[1] }}>Shared "Overview metrics" Grafana Snapshot</a></li>
             {%- endif -%}
         {%- endif -%}
     {%- endif -%}
