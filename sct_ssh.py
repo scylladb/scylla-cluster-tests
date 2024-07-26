@@ -304,7 +304,7 @@ def ssh(user, test_id, region, force_use_public_ip, node_name):
         pty.spawn(shlex.split(cmd))
 
 
-@click.command("ssh-cmd")
+@click.command("ssh-cmd", context_settings={"ignore_unknown_options": True})
 @click.option("-u", "--user", default=None,
               help="User to search for (RunByUser tag)")
 @click.option("-t", "--test-id", default=None, help="test id to search for")
@@ -312,8 +312,9 @@ def ssh(user, test_id, region, force_use_public_ip, node_name):
 @click.option("-P", "--force-use-public-ip", is_flag=True, show_default=True, default=False,
               help="Force usage of public address")
 @click.argument("node_name", required=False)
-@click.argument("command", required=True)
+@click.argument("command", required=True, nargs=-1)
 def ssh_cmd(user, test_id, region, force_use_public_ip, node_name, command):
+    command = ' '.join(command)
     output = ssh_run_cmd(node_name, command, user, test_id, region, force_use_public_ip)
     if output.stderr:
         click.echo(click.style(output.stderr, fg='red'))
