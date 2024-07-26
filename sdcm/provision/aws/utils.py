@@ -252,9 +252,10 @@ def network_config_ipv6_workaround_script():
         if grep -qi "ubuntu" /etc/os-release; then
             echo "On Ubuntu we don't need this workaround, so done"
         else
+            TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 600")
             BASE_EC2_NETWORK_URL=http://169.254.169.254/latest/meta-data/network/interfaces/macs/
-            MAC=`curl -s ${BASE_EC2_NETWORK_URL}`
-            IPv6_CIDR=`curl -s ${BASE_EC2_NETWORK_URL}${MAC}/subnet-ipv6-cidr-blocks`
+            MAC=`curl -s -H "X-aws-ec2-metadata-token: ${TOKEN}" ${BASE_EC2_NETWORK_URL}`
+            IPv6_CIDR=`curl -s -H "X-aws-ec2-metadata-token: ${TOKEN}" ${BASE_EC2_NETWORK_URL}${MAC}/subnet-ipv6-cidr-blocks`
 
             NETWORK_DEVICE=`ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)'`
 
@@ -318,19 +319,19 @@ def configure_eth1_script():
             netplan --debug apply
 
         else
-
+            TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 600")
             BASE_EC2_NETWORK_URL=http://169.254.169.254/latest/meta-data/network/interfaces/macs/
-            NUMBER_OF_ENI=`curl -s ${BASE_EC2_NETWORK_URL} | wc -w`
-            for mac in `curl -s ${BASE_EC2_NETWORK_URL}`
+            NUMBER_OF_ENI=`curl -s -H "X-aws-ec2-metadata-token: ${TOKEN}" ${BASE_EC2_NETWORK_URL} | wc -w`
+            for mac in `curl -s -H "X-aws-ec2-metadata-token: ${TOKEN}" ${BASE_EC2_NETWORK_URL}`
             do
-                DEVICE_NUMBER=`curl -s ${BASE_EC2_NETWORK_URL}${mac}/device-number`
+                DEVICE_NUMBER=`curl -s -H "X-aws-ec2-metadata-token: ${TOKEN}" ${BASE_EC2_NETWORK_URL}${mac}/device-number`
                 if [[ "$DEVICE_NUMBER" == "1" ]]; then
                    ETH1_MAC=${mac}
                 fi
             done
             if [[ ! "${DEVICE_NUMBER}x" == "x" ]]; then
-               ETH1_IP_ADDRESS=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/local-ipv4s`
-               ETH1_CIDR_BLOCK=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/subnet-ipv4-cidr-block`
+               ETH1_IP_ADDRESS=`curl -s -H "X-aws-ec2-metadata-token: ${TOKEN}" ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/local-ipv4s`
+               ETH1_CIDR_BLOCK=`curl -s -H "X-aws-ec2-metadata-token: ${TOKEN}" ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/subnet-ipv4-cidr-block`
             fi
             bash -c "echo 'GATEWAYDEV=eth0' >> /etc/sysconfig/network"
             echo "
