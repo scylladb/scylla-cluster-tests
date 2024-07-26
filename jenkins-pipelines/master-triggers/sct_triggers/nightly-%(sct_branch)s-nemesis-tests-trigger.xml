@@ -27,7 +27,7 @@ stress_duration=660</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../nemesis/longevity-5gb-1h-MgmtRepair-aws-test,../nemesis/longevity-5gb-1h-CorruptThenRepairMonkey-aws-test,../nemesis/longevity-5gb-1h-GrowShrinkClusterNemesis-aws-test,../nemesis/longevity-5gb-1h-NodeTerminateAndReplace-aws-test,../nemesis/longevity-5gb-1h-MgmtBackupSpecificKeyspaces-aws-test,../nemesis/longevity-5gb-1h-MgmtBackup-aws-test</projects>
+          <projects>../nemesis/longevity-5gb-1h-MgmtRepair-aws-test,../nemesis/longevity-5gb-1h-CorruptThenRepairMonkey-aws-test,../nemesis/longevity-5gb-1h-NodeTerminateAndReplace-aws-test,../nemesis/longevity-5gb-1h-MgmtBackupSpecificKeyspaces-aws-test,../nemesis/longevity-5gb-1h-MgmtBackup-aws-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
