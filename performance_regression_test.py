@@ -324,8 +324,6 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         # create new document in ES with doc_id = test_id
         # allow to correctly save results for future compare
         self.stress_cmd = stress_cmd
-        if sub_type is None:
-            sub_type = 'read' if ' read ' in stress_cmd else 'write' if ' write ' in stress_cmd else 'mixed'
         test_index = f'latency-during-ops-{sub_type}'
         self.create_test_stats(sub_type=sub_type, append_sub_test_to_name=False, test_index=test_index)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
@@ -615,21 +613,21 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.preload_data()
         self.wait_no_compactions_running(n=160)
         self.run_fstrim_on_all_db_nodes()
-        self.run_workload(stress_cmd=self.params.get('stress_cmd_r'), nemesis=True)
+        self.run_workload(stress_cmd=self.params.get('stress_cmd_r'), nemesis=True, sub_type='read')
 
     def test_latency_write_with_nemesis(self):
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
         self.wait_no_compactions_running(n=160)
         self.run_fstrim_on_all_db_nodes()
-        self.run_workload(stress_cmd=self.params.get('stress_cmd_w'), nemesis=True)
+        self.run_workload(stress_cmd=self.params.get('stress_cmd_w'), nemesis=True, sub_type='write')
 
     def test_latency_mixed_with_nemesis(self):
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
         self.wait_no_compactions_running(n=160)
         self.run_fstrim_on_all_db_nodes()
-        self.run_workload(stress_cmd=self.params.get('stress_cmd_m'), nemesis=True)
+        self.run_workload(stress_cmd=self.params.get('stress_cmd_m'), nemesis=True, sub_type='mixed')
 
     # MV Tests
     def test_mv_write(self):
