@@ -3,7 +3,7 @@
   <description>Triggers Master Tests on Nightly basis at 23:45 PM
 </description>
   <scm class="hudson.scm.NullSCM"/>
-  <disabled>false</disabled>
+  <disabled>true</disabled>
   <triggers>
     <hudson.triggers.TimerTrigger>
       <spec>00 2 * * *</spec>
