@@ -76,7 +76,7 @@ def fixture_cql_driver(docker_scylla):
 def create_table(docker_scylla, cql_driver, alternator_api, params):
 
     with cql_driver.connect() as session:
-        session.execute("CREATE ROLE %s WITH PASSWORD = %s",
+        session.execute("CREATE ROLE %s WITH PASSWORD = %s AND login = true AND superuser = true",
                         (params.get('alternator_access_key_id'),
                          params.get('alternator_secret_access_key')))
 
