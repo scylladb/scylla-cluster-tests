@@ -1111,7 +1111,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info("Going to create alternator tables")
             if self.params.get('alternator_enforce_authorization'):
                 with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-                    session.execute("CREATE ROLE %s WITH PASSWORD = %s",
+                    session.execute("CREATE ROLE %s WITH PASSWORD = %s AND login = true AND superuser = true",
                                     (self.params.get('alternator_access_key_id'),
                                      self.params.get('alternator_secret_access_key')))
 
