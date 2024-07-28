@@ -228,4 +228,4 @@ class CDCQueryFilterCS(QueryFilterCS, CDCQueryFilter):
 class LatencyWithNemesisQueryFilter(QueryFilterCS, PerformanceQueryFilter):
 
     def filter_by_dashboard_query(self):
-        return "latency_during_ops: *"
+        return ""
