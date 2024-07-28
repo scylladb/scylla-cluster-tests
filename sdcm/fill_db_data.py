@@ -23,7 +23,6 @@ import time
 import re
 
 from collections import OrderedDict
-from functools import cached_property
 from uuid import UUID
 
 from cassandra import InvalidRequest
@@ -3106,7 +3105,7 @@ class FillDatabaseData(ClusterTester):
         for test_num, item in enumerate(self.all_verification_items):
             test_name = item.get('name', 'Test #' + str(test_num))
             # Check if current cluster version supports non-frozed UDT
-            if 'skip_condition' in item and 'non_frozen_udt' in item['skip_condition'] \
+            if 'skip_condition' in item \
                     and not eval(item['skip_condition']):
                 item['skip'] = 'skip'
                 self.all_verification_items[test_num]['skip'] = 'skip'
@@ -3178,19 +3177,19 @@ class FillDatabaseData(ClusterTester):
             version_with_support = self.NON_FROZEN_SUPPORT_OS_MIN_VERSION
         return self.parsed_scylla_version >= version_with_support
 
-    @cached_property
+    @property
     def enable_cdc_for_tables(self) -> bool:
         if self.tablets_enabled and SkipPerIssues(issues="https://github.com/scylladb/scylladb/issues/16317", params=self.params):
             return False
         return True
 
-    @cached_property
+    @property
     def is_counter_supported(self) -> bool:
         if self.tablets_enabled and SkipPerIssues(issues="scylladb/scylladb#18180", params=self.params):
             return False
         return True
 
-    @cached_property
+    @property
     def tablets_enabled(self) -> bool:
         """Check is tablets enabled on cluster"""
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
