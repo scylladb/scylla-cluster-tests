@@ -301,11 +301,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     InfoEvent(message='upgrade_node - ended to remove and install scylla on RHEL').publish()
                 else:
                     InfoEvent(message='upgrade_node - starting to remove and install scylla on debian').publish()
-                    node.remoter.run(r'sudo apt-get remove scylla\* -y')
-                    # fixme: add publick key
-                    node.remoter.run(
-                        r'sudo apt-get install {} -y '
-                        r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg_ver))
+                    node.remoter.sudo(r'apt-get remove scylla\* -y')
+                    node.remoter.sudo(
+                        f'DEBIAN_FRONTEND=noninteractive apt-get install {scylla_pkg_ver} -y'
+                        f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+                    )
                     InfoEvent(message='upgrade_node - ended to remove and install scylla on debian').publish()
                 InfoEvent(message='upgrade_node - starting to "recover_conf"').publish()
                 recover_conf(node)
@@ -320,10 +320,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     InfoEvent(message='upgrade_node - ended to "yum update"').publish()
                 else:
                     InfoEvent(message='upgrade_node - starting to "apt-get update"').publish()
-                    node.remoter.run('sudo apt-get update')
-                    node.remoter.run(
-                        r'sudo apt-get dist-upgrade {} -y '
-                        r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg))
+                    node.remoter.sudo('apt-get update')
+                    node.remoter.sudo(
+                        f'DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade {scylla_pkg} -y'
+                        f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+                    )
                     InfoEvent(message='upgrade_node - ended to "apt-get update"').publish()
         InfoEvent(message='upgrade_node - starting to "check_reload_systemd_config"').publish()
         check_reload_systemd_config(node)
@@ -403,10 +404,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 node.remoter.run(r'sudo yum remove scylla\* -y')
                 node.remoter.run(r'sudo yum install %s -y' % node.scylla_pkg())
             else:
-                node.remoter.run(r'sudo apt-get remove scylla\* -y')
-                node.remoter.run(
-                    r'sudo apt-get install %s\* -y '
-                    r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" ' % node.scylla_pkg())
+                node.remoter.sudo(r'apt-get remove scylla\* -y')
+                node.remoter.sudo(
+                    rf'DEBIAN_FRONTEND=noninteractive apt-get install {node.scylla_pkg()}\* -y'
+                    rf' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+                )
             recover_conf(node)
             node.remoter.run('sudo systemctl daemon-reload')
 
