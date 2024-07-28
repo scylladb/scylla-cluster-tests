@@ -74,6 +74,8 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                                                              f"WHERE uuid = %s", args=(self.node.uuid,))
         self.log.debug("Last row in %s for uuid '%s': %s", self.CHECK_VERSION_TABLE, self.node.uuid, row)
 
+        assert row, f"No rows found in {self.CHECK_VERSION_TABLE} for uuid '{self.node.uuid}'"
+
         public_ip_address = self.node.host_public_ip_address if backend == 'docker' else self.node.public_ip_address
         self.log.debug("public_ip_address = %s", public_ip_address)
 
