@@ -17,7 +17,7 @@ ADD ./apt-preferences /etc/apt/preferences
 #
 RUN apt-get -qy update && \
     apt-get -qy install \
-        curl dos2unix  git iputils-ping libjna-java temurin-21-jdk wget
+        curl git iputils-ping libjna-java temurin-21-jdk wget
 
 RUN wget https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein && \
     mv lein /usr/bin && \
@@ -26,7 +26,6 @@ RUN wget https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein
 
 ADD ./bashrc /root/.bashrc
 ADD ./init.sh /init.sh
-RUN dos2unix /init.sh /root/.bashrc \
-    && chmod +x /init.sh
+RUN chmod +x /init.sh
 
 CMD ["/init.sh"]
