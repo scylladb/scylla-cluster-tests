@@ -1231,7 +1231,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def jmx_up(self):
         if not self.is_service_exists(service_name='scylla-jmx'):
             return True
-        return self.is_port_used(port=7199, service_name="scylla-jmx")
+        return self.remoter.run(f"{self.systemctl} is-active scylla-jmx.service && "
+                                f"{self.systemctl} status scylla-jmx.service | grep 'JMX is enabled to receive remote connections on port'",
+                                timeout=10, ignore_status=True).return_code == 0
 
     def cs_installed(self, cassandra_stress_bin=None):
         if cassandra_stress_bin is None:
