@@ -294,7 +294,7 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
         self.assertEqual("3.3.rc1", self.node.scylla_version_detailed)
 
     def test_no_scylla_binary_other(self):
-        self.node.distro = Distro.DEBIAN10
+        self.node.distro = Distro.DEBIAN11
         self.node.remoter = VersionDummyRemote(self, (
             ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
             ("dpkg-query --show --showformat '${Version}' scylla", (0, "3.3~rc1-0.20200209.0d0c1d43188-1", "")),
@@ -353,7 +353,7 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
         self.assertEqual("x.y.z with build-id xxx", self.node.scylla_version_detailed)
 
     def test_get_scylla_version_from_second_attempt(self):
-        self.node.distro = Distro.DEBIAN10
+        self.node.distro = Distro.DEBIAN11
         self.node.remoter = VersionDummyRemote(self, (
             ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
             ("dpkg-query --show --showformat '${Version}' scylla",

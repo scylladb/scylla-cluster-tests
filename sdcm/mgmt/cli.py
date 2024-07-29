@@ -29,7 +29,6 @@ from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 from sdcm import wait
 from sdcm.mgmt.common import \
     TaskStatus, ScyllaManagerError, HostStatus, HostSsl, HostRestStatus, duration_to_timedelta, DEFAULT_TASK_TIMEOUT
-from sdcm.utils.distro import Distro
 from sdcm.wait import WaitForTimeoutError
 
 LOGGER = logging.getLogger(__name__)
@@ -910,11 +909,8 @@ class ScyllaManagerTool(ScyllaManagerBase):
         ScyllaManagerBase.__init__(self, id="MANAGER", manager_node=manager_node)
         self._initial_wait(20)
         LOGGER.info("Initiating Scylla-Manager, version: {}".format(self.sctool.version))
-        list_supported_distros = [Distro.CENTOS7,
-                                  Distro.DEBIAN10, Distro.DEBIAN11,
-                                  Distro.UBUNTU20, Distro.UBUNTU22]
         self.default_user = "centos"
-        if manager_node.distro not in list_supported_distros:
+        if not (manager_node.distro.is_debian_like or manager_node.distro.is_rhel_like):
             raise ScyllaManagerError(
                 "Non-Manager-supported Distro found on Monitoring Node: {}".format(manager_node.distro))
 
