@@ -19,12 +19,12 @@ from sdcm.utils.distro import Distro, DistroError
 
 
 DISTROS_OS_RELEASE = {
-    "Debian 10": """\
-PRETTY_NAME="Debian GNU/Linux 10 (buster)"
+    "Debian 12": """\
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
 NAME="Debian GNU/Linux"
-VERSION_ID="10"
-VERSION="10 (buster)"
-VERSION_CODENAME=buster
+VERSION_ID="12"
+VERSION="12 (bookworm)"
+VERSION_CODENAME=bookworm
 ID=debian
 HOME_URL="https://www.debian.org/"
 SUPPORT_URL="https://www.debian.org/support"
@@ -263,16 +263,16 @@ class TestDistro(unittest.TestCase):  # pylint: disable=too-many-public-methods
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Unknown"])
         self.assertTrue(distro.is_unknown)
 
-    def test_debian10(self):
-        self.assertTrue(Distro.DEBIAN10.is_debian10)
-        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 10"])
-        self.assertTrue(distro.is_debian10)
-        self.assertTrue(distro.is_debian)
-
     def test_debian11(self):
         self.assertTrue(Distro.DEBIAN11.is_debian11)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 11"])
         self.assertTrue(distro.is_debian11)
+        self.assertTrue(distro.is_debian)
+
+    def test_debian12(self):
+        self.assertTrue(Distro.DEBIAN12.is_debian12)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 12"])
+        self.assertTrue(distro.is_debian12)
         self.assertTrue(distro.is_debian)
 
     def test_centos7(self):
@@ -351,8 +351,8 @@ class TestDistro(unittest.TestCase):  # pylint: disable=too-many-public-methods
         self.assertRaises(DistroError, Distro.from_os_release, DISTROS_OS_RELEASE["Garbage"])
 
     def test_debian_like(self):
-        self.assertTrue(Distro.DEBIAN10.is_debian10)
-        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 10"])
+        self.assertTrue(Distro.DEBIAN11.is_debian11)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 11"])
         invalid_distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2"])
         self.assertTrue(distro.is_debian_like)
         self.assertFalse(invalid_distro.is_debian_like)

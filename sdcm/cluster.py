@@ -1975,8 +1975,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.remoter.sudo('zypper install -y {}{}'.format(self.scylla_pkg(), version))
         else:
             self.install_package(package_name="software-properties-common")
-            if self.distro.is_debian:
+            if self.distro.is_debian11:
                 self.install_package(package_name="apt-transport-https gnupg1-curl dirmngr openjdk-11-jre")
+            elif self.distro.is_debian12:
+                self.install_package(package_name="apt-transport-https gnupg1-curl dirmngr openjdk-17-jre")
             self.install_package(self.scylla_pkg(), package_version=scylla_version)
 
     def offline_install_scylla(self, unified_package, nonroot):
@@ -1989,7 +1991,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if not nonroot:
             self.install_package(package_name='xfsprogs mdadm')
 
-        if not any((self.distro.is_rocky9, self.distro.is_ubuntu24, self.distro.is_oel9)):
+        if not any((self.distro.is_rocky9, self.distro.is_ubuntu24, self.distro.is_amazon2, self.distro.is_centos9, self.distro.is_debian12)):
             # centos/rocky9/ubuntu24.04/amazon2023/debian12 and above don't have python2 anymore
             self.install_package(package_name='python2')
         # Offline install does't provide openjdk-11, it has to be installed in advance
@@ -2000,11 +2002,18 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.install_package(package_name='java-11-openjdk-headless tar')
         elif self.distro.is_sles:
             raise Exception("Offline install on SLES isn't supported")
-        elif self.distro.is_debian:
+        elif self.distro.is_debian11:
             # FIXME: need to re-test and remove the following line once issue will be fixed:
             # refs to https://github.com/scylladb/scylladb/issues/15878
             self.install_package(package_name='openjdk-11-jre')
             self.install_package(package_name='openjdk-11-jre-headless')
+        elif self.distro.is_debian12:
+            self.remoter.sudo(
+                'bash -c "curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg"')
+            self.remoter.sudo(
+                'bash -c "echo deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb bookworm main > /etc/apt/sources.list.d/adoptium.list"')
+            self.remoter.sudo('apt update')
+            self.install_package(package_name='temurin-11-jre')
         else:
             self.install_package(package_name='openjdk-11-jre-headless')
             self.remoter.run('sudo update-java-alternatives --jre-headless '
@@ -5041,8 +5050,29 @@ class BaseLoaderSet():
                           ">> /etc/security/limits.d/20-coredump.conf\"")
         if result.exit_status == 0:
             self.log.debug('Skip loader setup for using a prepared AMI')
-        else:
-            node.remoter.run('sudo usermod -aG docker $USER', change_context=True)
+            return
+
+        elif node.distro.is_debian11:
+            node.install_package(package_name='openjdk-11-jre openjdk-11-jre-headless')
+
+        scylla_repo_loader = self.params.get('scylla_repo_loader')
+        if not scylla_repo_loader:
+            scylla_repo_loader = self.params.get('scylla_repo')
+        node.download_scylla_repo(scylla_repo_loader)
+        node.install_package(f'{node.scylla_pkg()}-tools')
+
+        node.wait_cs_installed(verbose=verbose)
+
+        # install docker
+        docker_install = dedent("""
+            curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
+            sh get-docker.sh
+            systemctl enable docker
+            systemctl start docker
+        """)
+        node.remoter.run('sudo bash -cxe "%s"' % docker_install)
+
+        node.remoter.run('sudo usermod -aG docker $USER', change_context=True)
 
         # Login to Docker Hub.
         docker_hub_login(remoter=node.remoter)
