@@ -14,7 +14,6 @@ SCT_DIR=$(dirname "${DOCKER_ENV_DIR}")
 SCT_DIR=$(dirname "${SCT_DIR}")
 VERSION=v$(cat "${DOCKER_ENV_DIR}/version")
 HOST_NAME=SCT-CONTAINER
-RUN_BY_USER=$(python3 "${SCT_DIR}/sdcm/utils/get_username.py")
 USER_ID=$(id -u "${USER}"):$(id -g "${USER}")
 HOME_DIR=${HOME}
 
@@ -245,8 +244,6 @@ function run_in_docker () {
     $([[ -n "$HYDRA_DRY_RUN" ]] && echo echo) \
     $tool ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
         -h ${HOST_NAME} \
-        -l "TestId=${SCT_TEST_ID}" \
-        -l "RunByUser=${RUN_BY_USER}" \
         -v "${SCT_DIR}:${SCT_DIR}" \
         -v /tmp:/tmp \
         -v /var/tmp:/var/tmp \
