@@ -467,8 +467,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         return self.vm_region
 
     @property
-    def host_id(self):
-        return self.parent_cluster.get_nodetool_info(self, publish_event=False).get('ID')
+    def host_id(self) -> str | None:
+        return self.parent_cluster.get_nodetool_info(self, ignore_status=True, publish_event=False).get("ID")
 
     @property
     def db_node_instance_type(self) -> Optional[str]:
