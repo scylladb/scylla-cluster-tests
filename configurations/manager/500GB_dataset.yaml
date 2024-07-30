@@ -1,14 +1,14 @@
-test_duration: 720
+test_duration: 1440
 
-prepare_write_cmd: ["cassandra-stress write cl=ALL n=134220000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..134220000",
-                    "cassandra-stress write cl=ALL n=134220000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=134220001..268440000",
-                    "cassandra-stress write cl=ALL n=134220000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=268440001..402660000",
-                    "cassandra-stress write cl=ALL n=134220000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=402660001..536880000"]
+prepare_write_cmd: ["cassandra-stress write cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..131072000",
+                    "cassandra-stress write cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=131072001..262144000",
+                    "cassandra-stress write cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=262144001..393216000",
+                    "cassandra-stress write cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=393216001..524288000"]
 
-stress_read_cmd: ["cassandra-stress read cl=ONE n=134220000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..134220000",
-                  "cassandra-stress read cl=ONE n=134220000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=134220001..268440000",
-                  "cassandra-stress read cl=ONE n=134220000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=268440001..402660000",
-                  "cassandra-stress read cl=ONE n=134220000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=402660001..536880000"]
+stress_read_cmd: ["cassandra-stress read cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..131072000",
+                  "cassandra-stress read cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=131072001..262144000",
+                  "cassandra-stress read cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=262144001..393216000",
+                  "cassandra-stress read cl=ONE n=131072000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native  -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=393216001..524288000"]
 
 instance_type_db: 'i4i.2xlarge'
 instance_type_loader: 'c6i.xlarge'
