@@ -179,9 +179,9 @@ class RestoreParameters(BaseModel):
 
 
 class AgentBackupParameters(BaseModel):
-    checkers: Optional[int]
-    transfers: Optional[int]
-    low_level_retries: Optional[int]
+    checkers: Optional[int] = 100
+    transfers: Optional[int] = 2
+    low_level_retries: Optional[int] = 20
 
     class Config:
         extra = Extra.forbid
