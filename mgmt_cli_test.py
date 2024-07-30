@@ -242,22 +242,22 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
         load_results = load_thread.get_results()
         self.log.info(f'load={load_results}')
 
-    def _parse_stress_cmd(self, stress_cmd, params):
-        # Due to an issue with scylla & cassandra-stress - we need to create the counter table manually
-        if 'counter_' in stress_cmd:
-            self._create_counter_table()
-
-        if 'compression' in stress_cmd:
-            if 'keyspace_name' not in params:
-                compression_prefix = re.search('compression=(.*)Compressor', stress_cmd).group(1)
-                keyspace_name = "keyspace_{}".format(compression_prefix.lower())
-                params.update({'keyspace_name': keyspace_name})
-
-        return params
-
-    @staticmethod
-    def _get_keyspace_name(ks_number, keyspace_pref='keyspace'):
-        return '{}{}'.format(keyspace_pref, ks_number)
+    def get_keyspace_name(self, ks_prefix: str = 'keyspace', ks_number: int = 1) -> list:
+        """Get keyspace name based on the following logic:
+            - if keyspaces number > 1, numeric indexes are used in the ks name;
+            - if keyspaces number == 1, ks name depends on whether compression is applied to keyspace. If applied,
+            the compression postfix will be used in the name, otherwise numeric index (keyspace1)
+        """
+        if ks_number > 1:
+            return ['{}{}'.format(ks_prefix, i) for i in range(1, ks_number + 1)]
+        else:
+            stress_cmd = self.params.get('stress_read_cmd')
+            if 'compression' in stress_cmd:
+                compression_postfix = re.search('compression=(.*)Compressor', stress_cmd).group(1)
+                keyspace_name = '{}_{}'.format(ks_prefix, compression_postfix.lower())
+            else:
+                keyspace_name = '{}{}'.format(ks_prefix, ks_number)
+            return [keyspace_name]
 
     def generate_background_read_load(self):
         self.log.info('Starting c-s read')
@@ -505,9 +505,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         InfoEvent(message=f'The backup task has ended successfully. Backup run time: {backup_task.duration}').publish()
         self.manager_test_metrics.backup_time = backup_task.duration
 
-        keyspace_num = self.params.get('keyspace_num') or 1
-        for i in range(1, keyspace_num + 1):
-            self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE keyspace{i}.standard1')
+        ks_number = self.params.get('keyspace_num') or 1
+        ks_names = self.get_keyspace_name(ks_number=ks_number)
+        for ks_name in ks_names:
+            self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {ks_name}.standard1')
 
         if restore_params := self.params.get('mgmt_restore_params'):
             batch_size = restore_params.batch_size
