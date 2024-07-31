@@ -1119,13 +1119,28 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     (self.params.get('alternator_access_key_id'),
                                      self.params.get('alternator_secret_access_key')))
 
-            schema = self.params.get("dynamodb_primarykey_type")
-            self.alternator.create_table(node=node, schema=schema)
-            self.alternator.create_table(node=node, schema=schema, isolation=alternator.enums.WriteIsolation.FORBID_RMW,
-                                         table_name=NO_LWT_TABLE_NAME)
+            with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+                # is tablets feature enabled in Scylla configuration.
+                tablets_enabled = is_tablets_feature_enabled(session)
             prepare_cmd = self.params.get('prepare_write_cmd')
             stress_cmd = self.params.get('stress_cmd')
-            if any('dynamodb.ttlKey' in str(cmd) for cmd in [prepare_cmd, stress_cmd]):
+            is_ttl_in_workload = any('dynamodb.ttlKey' in str(cmd) for cmd in [prepare_cmd, stress_cmd])
+
+            # Enable tablets with Alternator TTL requires (#16567).
+            tablets_support_ttl = not SkipPerIssues(issues="scylladb/scylladb#16567", params=self.params)
+
+            # Enable tablets for Alternator with LWT requires issue: "[Epic] tablets: support LWT #18068"
+            tablets_support_lwt = not SkipPerIssues(issues="scylladb/scylladb#18068", params=self.params)
+
+            tablets_supported_alternator_workload = not is_ttl_in_workload or tablets_support_ttl
+            schema = self.params.get("dynamodb_primarykey_type")
+            self.alternator.create_table(node=node, schema=schema,
+                                         tablets_enabled=tablets_enabled and tablets_support_lwt and tablets_supported_alternator_workload)
+            self.alternator.create_table(node=node, schema=schema, isolation=alternator.enums.WriteIsolation.FORBID_RMW,
+                                         table_name=NO_LWT_TABLE_NAME,
+                                         tablets_enabled=tablets_enabled and tablets_supported_alternator_workload)
+
+            if is_ttl_in_workload:
                 self.alternator.update_table_ttl(node=node, table_name=alternator.consts.TABLE_NAME)
                 self.alternator.update_table_ttl(node=node, table_name=alternator.consts.NO_LWT_TABLE_NAME)
 
