@@ -3,10 +3,12 @@ import logging
 import datetime
 import yaml
 from typing import Optional
+from pathlib import Path
 
 from pydantic import BaseModel, Extra
 
 from sdcm.utils.distro import Distro
+from sdcm.utils.common import get_sct_root_path
 
 
 DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
@@ -19,31 +21,13 @@ def get_persistent_snapshots():  # Snapshot sizes (dict keys) are in GB
     return persistent_manager_snapshots_dict
 
 
-def get_distro_name(distro_object):
-    known_distro_dict = {
-        Distro.AMAZON2: "centos8",
-        Distro.AMAZON2023: "centos8",
-        Distro.CENTOS7: "centos7",
-        Distro.CENTOS8: "centos8",
-        Distro.CENTOS9: "centos8",
-        Distro.DEBIAN10: "debian10",
-        Distro.DEBIAN11: "debian11",
-        Distro.UBUNTU20: "ubuntu20",
-        Distro.UBUNTU22: "ubuntu22",
-        Distro.UBUNTU24: "ubuntu24",
-        Distro.OEL7: "centos7",
-        Distro.OEL8: "centos8",
-        Distro.ROCKY8: "centos8",
-        Distro.ROCKY9: "centos8",
-        Distro.FEDORA34: "centos8",
-        Distro.FEDORA35: "centos8",
-        Distro.FEDORA36: "centos8",
-        Distro.MINT20: "mint20",
-        Distro.MINT21: "mint21",
-    }
-    distro_name = known_distro_dict.get(distro_object, None)
-    assert distro_name, f"Unfamiliar distribution: {distro_object}"
-    return distro_name
+def get_distro_name(distro_object: Distro) -> str:
+    if distro_object.is_debian_like:
+        return "debian"
+    if distro_object.is_rhel_like:
+        return "rhel"
+
+    raise ValueError(f"Unsupported distribution for installing manager: {distro_object}")
 
 
 def duration_to_timedelta(duration_string):
@@ -69,7 +53,7 @@ def create_cron_list_from_timedelta(minutes=0, hours=0):
 
 
 def get_manager_repo_from_defaults(manager_version_name, distro):
-    with open("defaults/manager_versions.yaml", encoding="utf-8") as mgmt_config:
+    with (Path(get_sct_root_path()) / "defaults/manager_versions.yaml").open(encoding="utf-8") as mgmt_config:
         manager_repos_by_version_dict = yaml.safe_load(mgmt_config)["manager_repos_by_version"]
 
     version_specific_repos = manager_repos_by_version_dict.get(manager_version_name, None)
@@ -84,7 +68,7 @@ def get_manager_repo_from_defaults(manager_version_name, distro):
 
 
 def get_manager_scylla_backend(scylla_backend_version_name, distro):
-    with open("defaults/manager_versions.yaml", encoding="utf-8") as mgmt_config:
+    with (Path(get_sct_root_path()) / "defaults/manager_versions.yaml").open(encoding="utf-8") as mgmt_config:
         scylla_backend_repos_by_version_dict = yaml.safe_load(mgmt_config)["scylla_backend_repo_by_version"]
 
     version_specific_repos = scylla_backend_repos_by_version_dict.get(scylla_backend_version_name, None)
