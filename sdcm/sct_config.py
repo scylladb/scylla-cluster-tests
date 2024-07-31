@@ -192,6 +192,9 @@ class SCTConfiguration(dict):
         dict(name="cluster_backend", env="SCT_CLUSTER_BACKEND", type=str,
              help="backend that will be used, aws/gce/docker"),
 
+        dict(name="test_method", env="SCT_TEST_METHOD", type=str,
+             help="class.method used to run the test. Filled automatically with run-test sct command."),
+
         dict(name="test_duration", env="SCT_TEST_DURATION", type=int,
              help="""
                   Test duration (min). Parameter used to keep instances produced by tests
