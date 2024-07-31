@@ -23,6 +23,7 @@ pytestmark = [
 
 def test_01_cassandra_stress(request, docker_scylla, params):
     params['cs_debug'] = True
+    params['use_hdr_cs_histogram'] = True
 
     loader_set = LocalLoaderSetDummy()
 
