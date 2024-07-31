@@ -96,11 +96,17 @@ class Alternator:
 
     def create_table(self, node,  # pylint: disable=too-many-arguments
                      schema=enums.YCSBSchemaTypes.HASH_AND_RANGE, isolation=None, table_name=consts.TABLE_NAME,
-                     wait_until_table_exists=True, **kwargs) -> Table:
+                     wait_until_table_exists=True, tablets_enabled: bool = False, **kwargs) -> Table:
         if isinstance(schema, enums.YCSBSchemaTypes):
             schema = schema.value
         schema = schemas.ALTERNATOR_SCHEMAS[schema]
         dynamodb_api = self.get_dynamodb_api(node=node)
+        # Tablets feature is currently supported by Alternator, but disabled by default (since LWT is not supported).
+        # It should be explicitly requested by the specified tag.
+        # TODO: the 'tablets_enabled' parameter might become un-needed once Alternator tablets default is switched to be enabled.
+        # This might be dependant on tablets LWT support issue (scylladb/scylladb#18068)
+        if tablets_enabled:
+            kwargs['Tags'] = [{'Key': 'experimental:initial_tablets', 'Value': '0'}]
         LOGGER.debug("Creating a new table '{}' using node '{}'".format(table_name, node.name))
         table = dynamodb_api.resource.create_table(
             TableName=table_name, BillingMode="PAY_PER_REQUEST", **schema, **kwargs)
