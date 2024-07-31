@@ -1156,6 +1156,7 @@ def run_test(argv, backend, config, logdir):
     if logdir:
         os.environ['_SCT_LOGDIR'] = logdir
 
+    os.environ['SCT_TEST_METHOD'] = argv
     logfile = os.path.join(get_test_config().logdir(), 'output.log')
     sys.stdout = OutputLogger(logfile, sys.stdout)
     sys.stderr = OutputLogger(logfile, sys.stderr)
