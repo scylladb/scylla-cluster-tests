@@ -140,7 +140,9 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
             node_cmd = self.stress_cmd
 
         docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
+                                                extra_docker_opts='--network=host '
+                                                                  '--security-opt seccomp=unconfined '
+                                                                  f'--label shell_marker={self.shell_marker}')
 
         node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}'
 
