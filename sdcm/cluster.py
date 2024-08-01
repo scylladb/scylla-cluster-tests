@@ -33,7 +33,7 @@ import json
 import ipaddress
 from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from textwrap import dedent
 from functools import cached_property, wraps, lru_cache, partial
 from collections import defaultdict
@@ -1476,7 +1476,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                     continue
                 while True:
                     try:
-                        log_time = datetime.fromisoformat(line.split(' ')[0]).replace(tzinfo=None)
+                        log_time = datetime.fromisoformat(line.split(' ')[0]).replace(tzinfo=timezone.utc)
                     except ValueError:
                         # in case it gets to split line fragment
                         line = log_file.readline()
