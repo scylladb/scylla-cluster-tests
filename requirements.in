@@ -23,8 +23,12 @@ tenacity==8.0.1
 https://github.com/fruch/repodataParser/archive/py3.zip ; python_version > '3'
 pytest==7.2.0
 pytest-random-order==1.0.4
+<<<<<<< HEAD
 tcconfig==0.26.0
 selenium==3.141.0
+=======
+tcconfig==0.29.1
+>>>>>>> 1e2ab0ec9 (fix(nemesis): fix network block nemesis)
 mysql-connector-python==8.0.26
 docker==4.4.4  # can't use >=5 because of tcconfig==0.26.0
 python-jenkins==1.7.0
