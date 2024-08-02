@@ -52,7 +52,6 @@ def provision_instances_with_fallback(provisioner: Provisioner, definitions: Lis
         remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
         wait_cloud_init_completes(remoter=remoter, instance=v_m)
         # todo: wait for scylla-machine-image service to complete if instance is scylla-db?
-        # todo: download cloud-init logs
     return provisioned_instances
 
 
