@@ -1341,6 +1341,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
         reporter = build_reporter('TestAborted', email_recipients, testrun_dir)
         if reporter:
             reporter.send_report(test_results)
+            sys.exit(1)
         else:
             LOGGER.error('failed to get a reporter')
             sys.exit(1)
