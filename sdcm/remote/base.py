@@ -194,7 +194,7 @@ class CommandRunner(metaclass=ABCMeta):
     def _make_ssh_command(user: str = "root",  # pylint: disable=too-many-arguments
                           port: int = 22, opts: str = '', hosts_file: str = '/dev/null',
                           key_file: str = None, connect_timeout: float = 300, alive_interval: float = 300,
-                          extra_ssh_options: str = '') -> str:
+                          extra_ssh_options: str = '', proxy_cmd: str = None) -> str:
         assert isinstance(connect_timeout, int)
         ssh_full_path = subprocess.check_output(['which', 'ssh']).decode().strip()
         base_command = ssh_full_path
@@ -202,12 +202,12 @@ class CommandRunner(metaclass=ABCMeta):
         base_command += (" -a -x %s -o StrictHostKeyChecking=no "
                          "-o UserKnownHostsFile=%s -o BatchMode=yes "
                          "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
-                         "-l %s -p %d")
+                         "-l %s -p %d %s")
         if key_file is not None:
             base_command += ' -i %s' % os.path.expanduser(key_file)
         assert connect_timeout > 0  # can't disable the timeout
         return base_command % (opts, hosts_file, connect_timeout,
-                               alive_interval, user, port)
+                               alive_interval, user, port, proxy_cmd)
 
 
 class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods

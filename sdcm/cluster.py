@@ -4170,7 +4170,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         def update_scylla_packages(node):
             node.log.info('Updating DB packages')
-            node.remoter.run('mkdir /tmp/scylla')
+            node.remoter.run('mkdir -p /tmp/scylla')
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
 
             self._wait_for_preinstalled_scylla(node)
@@ -4202,10 +4202,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.log.info(node.scylla_packages_installed)
 
         def stop_scylla(node):
-            node.stop_scylla(verify_down=True, verify_up=False)
+            node.remoter.sudo('systemctl stop scylla-server.service')
+            wait.wait_for(func=lambda: not is_scylla_active(node), step=10, timeout=300)
 
         def start_scylla(node):
-            node.start_scylla(verify_down=True, verify_up=True)
+            node.remoter.sudo('systemctl start scylla-server.service')
+            wait.wait_for(func=lambda: is_scylla_active(node), step=10, timeout=500)
+
+        def is_scylla_active(node):
+            return node.remoter.run(
+                'systemctl is-active scylla-server.service', ignore_status=True).stdout.strip() == 'active'
 
         start_time = time.time()
 
@@ -4231,7 +4237,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 self.run_func_parallel(func=start_scylla, node_list=self.non_seed_nodes)  # pylint: disable=no-member
 
         time_elapsed = time.time() - start_time
-        self.log.debug('Update DB packages duration -> %s s', int(time_elapsed))
+        self.log.info('Update DB packages duration -> %s s', int(time_elapsed))
 
     def update_seed_provider(self):
         for node in self.nodes:
