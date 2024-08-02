@@ -742,6 +742,10 @@ class ScyllaLogCollector(LogCollector):
                                command='for i in /var/tmp/scylla/*.log;do echo [$i]; cat $i;done'),
                     CommandLog(name='scylla_doctor.vitals.json',
                                command='cat *.vitals.json'),
+                    CommandLog(name='cloud-init-output.log',
+                               command='cat /var/log/cloud-init-output.log'),
+                    CommandLog(name='cloud-init.log',
+                               command='cat /var/log/cloud-init.log'),
                     ]
     cluster_log_type = "db-cluster"
     cluster_dir_prefix = "db-cluster"
