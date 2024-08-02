@@ -147,6 +147,12 @@ def call(Map pipelineParams) {
                                    For example, {'batch_size': 2, 'parallel': 1}""",
                    name: 'mgmt_restore_params')
 
+            string(defaultValue: "${pipelineParams.get('mgmt_reuse_backup_snapshot_name', '')}",
+                   description: """Name of backup snapshot to use in Manager restore benchmark test, for example, 500gb_2t_ics.
+                                   The name provides the info about dataset size (500gb), number of tables (2) and compaction (ICS).
+                                   All snapshots are defined in the 'https://github.com/scylladb/scylla-cluster-tests/blob/master/defaults/manager_restore_benchmark_snapshots.yaml'""",
+                   name: 'mgmt_reuse_backup_snapshot_name')
+
             string(defaultValue: "${pipelineParams.get('mgmt_agent_backup_config', '')}",
                    description: """Backup general configuration for the agent (scylla-manager-agent.yaml):
                                    checkers, transfers, low_level_retries.
@@ -168,7 +174,8 @@ def call(Map pipelineParams) {
                      'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
                      'Example:\n' +
                      '\tSCT_STRESS_IMAGE.cassandra-stress=scylladb/cassandra-stress:3.13.0\n' +
-                     '\tSCT_N_DB_NODES=6'
+                     '\tSCT_N_DB_NODES=6\n' +
+                     '\tSCT_MGMT_SKIP_POST_RESTORE_STRESS_READ=true\n'
                      ),
                  name: 'extra_environment_variables')
         }
@@ -352,6 +359,10 @@ def call(Map pipelineParams) {
 
                                         if [[ ! -z "${params.mgmt_restore_params}" ]] ; then
                                             export SCT_MGMT_RESTORE_PARAMS="${params.mgmt_restore_params}"
+                                        fi
+
+                                        if [[ ! -z "${params.mgmt_reuse_backup_snapshot_name}" ]] ; then
+                                            export SCT_MGMT_REUSE_BACKUP_SNAPSHOT_NAME="${params.mgmt_reuse_backup_snapshot_name}"
                                         fi
 
                                         if [[ ! -z "${params.mgmt_agent_backup_config}" ]] ; then
