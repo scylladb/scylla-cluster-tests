@@ -17,17 +17,16 @@ import shlex
 import socket
 import subprocess
 import sys
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from functools import singledispatch
+from functools import singledispatch, cached_property
 
 import click
 import questionary
 from questionary import Choice
 from google.cloud import compute_v1
 
-from sdcm import wait
-from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
+from sdcm.cluster import BaseScyllaCluster, BaseCluster, BaseNode
+from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.common import (
     list_instances_aws,
     get_free_port,
@@ -37,7 +36,6 @@ from sdcm.utils.common import (
     SSH_KEY_GCE_DEFAULT,
     download_dir_from_cloud
 )
-from sdcm.utils.distro import Distro
 from sdcm.utils.gce_utils import (
     gce_public_addresses,
     gce_private_addresses,
@@ -82,6 +80,21 @@ def _(instance: dict):
 @get_name.register(compute_v1.Instance)
 def _(instance: compute_v1.Instance):
     return instance.name
+
+
+@singledispatch
+def get_target_ip(instance):
+    raise NotImplementedError()
+
+
+@get_target_ip.register(dict)
+def _(instance: dict):
+    return instance['PrivateIpAddress']
+
+
+@get_target_ip.register(compute_v1.Instance)
+def _(instance: compute_v1.Instance):
+    return list(gce_private_addresses(instance))[0]
 
 
 def aws_find_bastion_for_instance(instance: dict) -> dict:
@@ -138,6 +151,18 @@ def get_proxy_command(instance: dict | compute_v1.Instance,
         return aws_get_proxy_command(instance=instance,
                                      force_use_public_ip=force_use_public_ip,
                                      strict_host_checking=strict_host_checking)
+
+
+def get_proxy_connect_info(instance: dict | compute_v1.Instance) -> tuple:
+    if isinstance(instance, compute_v1.Instance):
+        key = f'~/.ssh/{SSH_KEY_GCE_DEFAULT}'
+        bastion = gce_find_bastion_for_instance(instance)
+        username, ip = guess_username(bastion), list(gce_public_addresses(bastion))[0]
+    else:
+        key = f'~/.ssh/{SSH_KEY_AWS_DEFAULT}'
+        bastion = aws_find_bastion_for_instance(instance)
+        username, ip = guess_username(bastion), bastion["PublicIpAddress"]
+    return ip, username, key
 
 
 def gce_get_proxy_command(instance: compute_v1.Instance, strict_host_checking: bool):
@@ -311,11 +336,11 @@ def ssh(user, test_id, region, force_use_public_ip, node_name):
 @click.option("-r", "--region", default=None, help="region to use, default search across all regions")
 @click.option("-P", "--force-use-public-ip", is_flag=True, show_default=True, default=False,
               help="Force usage of public address")
-@click.argument("node_name", required=False)
+@click.option("-n", "--node", default=None, help="Node name to execute command on")
 @click.argument("command", required=True, nargs=-1)
-def ssh_cmd(user, test_id, region, force_use_public_ip, node_name, command):
+def ssh_cmd(user, test_id, region, force_use_public_ip, node, command):
     command = ' '.join(command)
-    output = ssh_run_cmd(node_name, command, user, test_id, region, force_use_public_ip)
+    output = ssh_run_cmd(node, command, user, test_id, region, force_use_public_ip)
     if output.stderr:
         click.echo(click.style(output.stderr, fg='red'))
     if output.stdout:
@@ -474,11 +499,12 @@ def gcp_allow_public(user, test_id):
     "-p", "--packages-location", type=str,
     help='Location where new packages are placed. Can be local directory, s3:// or gs:// urls')
 @click.option('--backend', type=str, help='Backend to search nodes in. Defaults to aws', default="aws")
-@click.option(
-    '-r', '--region', type=str,
-    help="Cloud region to search nodes in. Defaults to eu-west-1", default="eu-west-1")
+@click.option('-r', '--region', type=str, help="Cloud region to search nodes in", default=None)
 def update_scylla_packages(test_id: str, backend: str, region: str, packages_location: str) -> None:
     """Update scylla DB packages on selected nodes."""
+    if backend in ['azure']:
+        LOGGER.error(f"Backend '{backend}' is not supported")
+        sys.exit(1)
     if not (packages_location := packages_location or os.getenv('SCT_UPDATE_DB_PACKAGES')):
         LOGGER.error("No location is provided where new packages are placed")
         sys.exit(1)
@@ -491,69 +517,45 @@ def update_scylla_packages(test_id: str, backend: str, region: str, packages_loc
     if not instances:
         LOGGER.error("No scylla DB nodes were selected. Exiting")
         sys.exit(1)
-    for instance in instances:
-        tags = get_tags(instance)
-        instance.update({
-            'Name': tags['Name'],
-            'User': tags['RunByUser']
-        })
 
-    RemoteCmdRunnerBase.set_default_ssh_transport('libssh2')
-    nodes = []
-    for instance in instances:
-        remoter = RemoteCmdRunnerBase.create_remoter(
-            hostname=instance['PublicIpAddress'],
-            user=guess_username(instance),
-            key_file=f"~/.ssh/{instance['KeyName']}")
-        nodes.append(remoter)
+    cluster = ScyllaDBCluster(test_id, backend=backend)
+    cluster.init_nodes(instances)
+    cluster.params['update_db_packages'] = packages_location
+    cluster.update_db_packages(cluster.nodes)
 
-    def run_func_parallel(func, node_list):
-        with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(func, node) for node in node_list]
-            results = [future.result() for future in as_completed(futures)]
 
-        return results
+class ScyllaDBCluster(BaseScyllaCluster, BaseCluster):
+    """
+    Simple composition of cluster classes to get access to update_db_packages
+    API of cluster objects
+    """
+    nodes: list[BaseNode]
 
-    def is_scylla_active(node: RemoteCmdRunnerBase):
-        return node.run('systemctl is-active scylla-server.service', ignore_status=True).stdout.strip() == 'active'
+    # pylint: disable=super-init-not-called
+    def __init__(self, test_id, *args, **kwargs):
+        self.uuid = test_id
+        self.nodes = []
+        self.params = kwargs.get('params') or SCTConfiguration()
+        self.backend = kwargs.get('params', 'aws')
+        self.log = logging.getLogger(self.__class__.__name__)
+        logging.getLogger("paramiko").setLevel(logging.WARNING)
 
-    def stop_scylla(node: RemoteCmdRunnerBase):
-        node.sudo('systemctl stop scylla-server.service')
-        wait.wait_for(func=lambda: not is_scylla_active(node), step=10, timeout=180)
+    @cached_property
+    def key_name(self):
+        key = SSH_KEY_AWS_DEFAULT if self.backend == 'aws' else SSH_KEY_GCE_DEFAULT
+        return f'~/.ssh/{key}'
 
-    def start_scylla(node: RemoteCmdRunnerBase):
-        node.sudo('systemctl start scylla-server.service')
-        wait.wait_for(func=lambda: is_scylla_active(node), step=10, timeout=180)
-
-    def update_packages(node: RemoteCmdRunnerBase):
-        node.run('mkdir -p /tmp/scylla')
-        node.send_files(packages_location, '/tmp/scylla')
-        node.run('tar -xvf /tmp/scylla/*.tar.gz -C /tmp/scylla/', ignore_status=True)
-
-        def check_package_extension(node, extension):
-            fit_extension = node.run(f'ls /tmp/scylla/*.{extension}', ignore_status=True)
-            if not fit_extension.ok:
-                LOGGER.error("There is no suitable packages for this distro on the node" % node.hostname)
-                sys.exit(1)
-
-        distro = Distro.from_os_release(node.run("cat /etc/os-release", ignore_status=True, retry=5).stdout)
-        if distro.is_rhel_like:
-            check_package_extension(node, 'rpm')
-            node.run('yum list installed | grep scylla')
-            node.sudo('rpm -URvh --replacefiles /tmp/scylla/*.rpm')
-            node.run('yum list installed | grep scylla')
-        elif distro.is_ubuntu:
-            check_package_extension(node, 'deb')
-            node.sudo(shell_script_cmd("yes Y | dpkg --force-depends -i /tmp/scylla/scylla*"))
-            node.run("dpkg-query --show 'scylla*'")
-
-    start_time = time.time()
-    LOGGER.info("Stop scylla service on the nodes")
-    run_func_parallel(stop_scylla, nodes)
-    LOGGER.info("Update DB packages on the nodes")
-    run_func_parallel(update_packages, nodes)
-    LOGGER.info("Start scylla service on the nodes")
-    run_func_parallel(start_scylla, nodes)
-
-    duration = time.time() - start_time
-    LOGGER.info('DB packages update duration -> %s s', int(duration))
+    def init_nodes(self, instances):
+        proxy_host, proxy_user, proxy_key = get_proxy_connect_info(instances[0])
+        for instance in instances:
+            login_info = {
+                'hostname': get_target_ip(instance),
+                'user': guess_username(instance),
+                'key_file': self.key_name
+            }
+            node = BaseNode(name=get_name(instance), parent_cluster=self, ssh_login_info=login_info)
+            node.set_seed_flag(True)
+            RemoteCmdRunnerBase.set_default_ssh_transport('fabric')
+            node.remoter = RemoteCmdRunnerBase.create_remoter(
+                **node.ssh_login_info, proxy_host=proxy_host, proxy_user=proxy_user, proxy_key=proxy_key)
+            self.nodes.append(node)

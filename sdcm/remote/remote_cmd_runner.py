@@ -114,6 +114,19 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
         return True
 
     def _create_connection(self) -> Connection:
+        gateway_connection = None
+        if self.proxy_host:
+            gateway_connection = Connection(
+                host=self.proxy_host,
+                user=self.proxy_user,
+                port=self.proxy_port,
+                config=self.ssh_config,
+                connect_timeout=self.connect_timeout,
+                connect_kwargs={
+                    "key_filename": os.path.expanduser(self.proxy_key) if self.proxy_key else None
+                }
+            )
+
         return Connection(
             host=self.hostname,
             user=self.user,
@@ -123,4 +136,5 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             connect_kwargs={
                 "key_filename": os.path.expanduser(self.key_file),
             } if self.key_file else None,
+            gateway=gateway_connection
         )

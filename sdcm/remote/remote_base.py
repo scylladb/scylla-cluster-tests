@@ -36,6 +36,11 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
     key_file: str = ""
     extra_ssh_options: str = ""
     auth_sleep_time = 30
+    proxy_host: str = None
+    proxy_port: int = 22
+    proxy_user: str = None
+    proxy_password: str = None
+    proxy_key: str = None
     _use_rsync = None
     known_hosts_file = None
     default_remoter_class: Type['RemoteCmdRunnerBase'] = None
@@ -46,9 +51,11 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
     connection_thread_map = threading.local()
     default_run_retry = 3
 
-    def __init__(self, hostname: str, user: str = 'root',  # pylint: disable=too-many-arguments
+    def __init__(self, hostname: str, user: str = 'root',  # pylint: disable=too-many-arguments  # noqa: PLR0913
                  password: str = None, port: int = None, connect_timeout: int = None, key_file: str = None,
-                 extra_ssh_options: str = None, auth_sleep_time: float = None):
+                 extra_ssh_options: str = None, auth_sleep_time: float = None,
+                 proxy_host: str = None, proxy_port: int = 22, proxy_user: str = None, proxy_password: str = None,
+                 proxy_key: str = None):
         if port is not None:
             self.port = port
         if connect_timeout is not None:
@@ -59,6 +66,18 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             self.extra_ssh_options = extra_ssh_options
         if auth_sleep_time is not None:
             self.auth_sleep_time = auth_sleep_time
+        # if proxy host attributes are set, the SSH connection to target node will be proxied through an
+        # intermediate node, allowing to execute commands on a node which is not directly accessible from test runner
+        if proxy_host is not None:
+            self.proxy_host = proxy_host
+        if proxy_port is not None:
+            self.proxy_port = proxy_port
+        if proxy_user is not None:
+            self.proxy_user = proxy_user
+        if proxy_password is not None:
+            self.proxy_password = proxy_password
+        if proxy_key is not None:
+            self.proxy_key = proxy_key
         fd, self.known_hosts_file = tempfile.mkstemp()
         os.close(fd)
         self._context_generation = 0
@@ -386,15 +405,20 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         Given a list of source paths and a destination path, produces the
         appropriate scp command for encoding it. Remote paths must be
         pre-encoded.
+        If remoter proxy_host attribute is set, the produced scp command will
+        include ProxyCommand option.
         """
         key_option = ''
         if self.key_file:
             key_option = '-i %s' % os.path.expanduser(self.key_file)
         command = ("scp -r -o StrictHostKeyChecking=no -o BatchMode=yes "
                    "-o ConnectTimeout=%d -o ServerAliveInterval=%d "
-                   "-o UserKnownHostsFile=%s -P %d %s %s '%s'")
+                   "-o UserKnownHostsFile=%s -P %d %s %s %s '%s'")
+        proxy_cmd = ''
+        if self.proxy_host:
+            proxy_cmd = self._make_proxy_cmd()
         return command % (connect_timeout, alive_interval,
-                          self.known_hosts_file, self.port, key_option, " ".join(src), dst)
+                          self.known_hosts_file, self.port, key_option, proxy_cmd, " ".join(src), dst)
 
     def _make_rsync_compatible_globs(self, pth: str, is_local: bool) -> List[str]:
         """
@@ -497,10 +521,15 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         Given a list of source paths and a destination path, produces the
         appropriate rsync command for copying them. Remote paths must be
         pre-encoded.
+        If remoter proxy_host attribute is set, ssh remote shell for
+        the produced rsync command will include ProxyCommand option.
         """
-        ssh_cmd = self._make_ssh_command(user=self.user, port=self.port, hosts_file=self.known_hosts_file,
-                                         key_file=self.key_file,
-                                         extra_ssh_options=self.extra_ssh_options.replace('-tt', '-t'))
+        proxy_cmd = ''
+        if self.proxy_host:
+            proxy_cmd = self._make_proxy_cmd()
+        ssh_cmd = self._make_ssh_command(
+            user=self.user, port=self.port, hosts_file=self.known_hosts_file, key_file=self.key_file,
+            extra_ssh_options=self.extra_ssh_options.replace('-tt', '-t'),  proxy_cmd=proxy_cmd)
 
         if delete_dst:
             delete_flag = "--delete"
@@ -513,6 +542,16 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         command = "rsync %s %s --timeout=%s --rsh='%s' -az %s %s"
         return command % (symlink_flag, delete_flag, timeout, ssh_cmd,
                           " ".join(src), dst)
+
+    def _make_proxy_cmd(self):
+        """Creates an SSH ProxyCommand string suitable for use with SSH or SCP commands"""
+        key = ''
+        if self.proxy_key:
+            key = os.path.expanduser(self.proxy_key)
+        proxy_command = (
+            f'-o ProxyCommand="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {key} -W %h:%p '
+            f'{self.proxy_user}@{self.proxy_host}"')
+        return proxy_command
 
     def _run_execute(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
                      ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
