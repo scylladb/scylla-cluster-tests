@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 
 import boto3
+import yaml
 
 from invoke import exceptions
 
@@ -53,6 +54,28 @@ from sdcm.exceptions import FilesNotCorrupted
 class ManagerTestMetrics:
     backup_time = "N/A"
     restore_time = "N/A"
+
+
+@dataclass
+class SnapshotData:
+    """Describes the backup snapshot:
+
+    - bucket: S3 bucket name
+    - tag: snapshot tag, for example 'sm_20240816185129UTC'
+    - exp_timeout: expected timeout for the restore operation
+    - keyspaces: list of keyspaces presented in backup
+    - cs_read_cmd_template: cassandra-stress read command template
+    - prohibit_verification_read: if True, the verification read will be prohibited. Most likely, such a backup was
+      created via c-s user profile.
+    - number_of_rows: number of data rows written in the DB
+    """
+    bucket: str
+    tag: str
+    exp_timeout: int
+    keyspaces: list[str]
+    cs_read_cmd_template: str
+    prohibit_verification_read: bool
+    number_of_rows: int
 
 
 class BackupFunctionsMixIn(LoaderUtilsMixin):
@@ -494,35 +517,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             }
         )
         return email_data
-
-    def test_backup_and_restore_only_data(self):
-        self.run_prepare_write_cmd()
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self._ensure_and_get_cluster(manager_tool)
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
-        backup_task_status = backup_task.wait_and_get_final_status(timeout=110000)
-        assert backup_task_status == TaskStatus.DONE, \
-            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
-        InfoEvent(message=f'The backup task has ended successfully. Backup run time: {backup_task.duration}').publish()
-        self.manager_test_metrics.backup_time = backup_task.duration
-
-        ks_number = self.params.get('keyspace_num') or 1
-        ks_names = self.get_keyspace_name(ks_number=ks_number)
-        for ks_name in ks_names:
-            self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {ks_name}.standard1')
-
-        if restore_params := self.params.get('mgmt_restore_params'):
-            batch_size = restore_params.batch_size
-            parallel = restore_params.parallel
-        else:
-            batch_size, parallel = None, None
-
-        task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
-                                             timeout=110000, restore_data=True, batch_size=batch_size,
-                                             parallel=parallel)
-        self.manager_test_metrics.restore_time = task.duration
-
-        self.run_verification_read_stress()
 
     def test_restore_multiple_backup_snapshots(self):  # pylint: disable=too-many-locals  # noqa: PLR0914
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
@@ -1282,3 +1276,135 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             assert host_health.rest_status == HostRestStatus.UP, "Host REST status is not 'UP'"
 
         self.log.info('finishing test_manager_installed_and_functional')
+
+    # ----- RESTORE -----
+
+    @staticmethod
+    def get_snapshot_data(snapshot_name: str) -> SnapshotData:
+        snapshots_config = "defaults/manager_restore_benchmark_snapshots.yaml"
+        with open(snapshots_config, encoding="utf-8") as snapshots_yaml:
+            all_snapshots_dict = yaml.safe_load(snapshots_yaml)
+
+        try:
+            snapshot_dict = all_snapshots_dict["sizes"][snapshot_name]
+        except KeyError:
+            raise ValueError(f"Snapshot data for size '{snapshot_name}'GB was not found in the {snapshots_config} file")
+
+        snapshot_data = SnapshotData(
+            bucket=all_snapshots_dict["bucket"],
+            tag=snapshot_dict["tag"],
+            exp_timeout=snapshot_dict["exp_timeout"],
+            keyspaces=list(snapshot_dict["schema"].keys()),
+            cs_read_cmd_template=all_snapshots_dict["cs_read_cmd_template"],
+            prohibit_verification_read=snapshot_dict["prohibit_verification_read"],
+            number_of_rows=snapshot_dict["number_of_rows"],
+        )
+        return snapshot_data
+
+    def prepare_and_run_stress_read(self, command_template, keyspace_name, number_of_rows):
+        stress_queue = []
+        number_of_loaders = self.params.get("n_loaders")
+        rows_per_loader = int(number_of_rows / number_of_loaders)
+        for loader_index in range(number_of_loaders):
+            stress_command = command_template.format(num_of_rows=rows_per_loader,
+                                                     keyspace_name=keyspace_name,
+                                                     sequence_start=rows_per_loader * loader_index + 1,
+                                                     sequence_end=rows_per_loader * (loader_index + 1),)
+            read_thread = self.run_stress_thread(stress_cmd=stress_command, round_robin=True,
+                                                 stop_test_on_failure=False)
+            stress_queue.append(read_thread)
+        return stress_queue
+
+    def get_restore_custom_parameters(self):
+        if restore_params := self.params.get('mgmt_restore_params'):
+            batch_size = restore_params.batch_size
+            parallel = restore_params.parallel
+        else:
+            batch_size, parallel = None, None
+        return batch_size, parallel
+
+    def test_backup_and_restore_only_data(self):
+        """The test is extensively used for restore benchmarking purposes and consists of the following steps:
+        1. Populate the cluster with data (currently operates with datasets of 500GB, 1TB, 2TB, 5TB);
+        2. Run the backup task and wait for its completion;
+        3. Truncate the tables in the cluster;
+        4. Run the restore task (custom batch_size and parallel params can be set in the pipeline)
+           and wait for its completion;
+        5. Run the verification read stress to ensure the data is restored correctly.
+        """
+        self.run_prepare_write_cmd()
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = self._ensure_and_get_cluster(manager_tool)
+
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=110000)
+        assert backup_task_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        InfoEvent(message=f'The backup task has ended successfully. Backup run time: {backup_task.duration}').publish()
+        self.manager_test_metrics.backup_time = backup_task.duration
+
+        ks_number = self.params.get('keyspace_num') or 1
+        ks_names = self.get_keyspace_name(ks_number=ks_number)
+        for ks_name in ks_names:
+            self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {ks_name}.standard1')
+
+        batch_size, parallel = self.get_restore_custom_parameters()
+        task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
+                                             timeout=110000, restore_data=True, batch_size=batch_size,
+                                             parallel=parallel)
+        self.manager_test_metrics.restore_time = task.duration
+
+        self.run_verification_read_stress()
+
+    def test_restore_from_precreated_backup(self, snapshot_name: str):
+        """The test restores the schema and data from a pre-created backup and runs the verification read stress.
+        1. Define the backup to restore from
+        2. Run restore schema to empty cluster
+        3. Run restore data
+        4. Run verification read stress
+
+        Args:
+            snapshot_name (str): The name of the snapshot to restore from.
+                                 All snapshots are defined in the 'defaults/manager_restore_benchmark_snapshots.yaml'
+        """
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = self._ensure_and_get_cluster(manager_tool)
+
+        snapshot_data = self.get_snapshot_data(snapshot_name)
+
+        self.log.info("Restoring the schema")
+        location = [f"s3:{snapshot_data.bucket}"]
+        self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag, timeout=600,
+                                      restore_schema=True, location_list=location)
+        for ks_name in snapshot_data.keyspaces:
+            self.set_ks_strategy_to_network_and_rf_according_to_cluster(keyspace=ks_name, repair_after_alter=False)
+
+        self.log.info("Restoring the data")
+        batch_size, parallel = self.get_restore_custom_parameters()
+        task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag,
+                                             timeout=snapshot_data.exp_timeout, restore_data=True,
+                                             location_list=location, batch_size=batch_size, parallel=parallel)
+        self.manager_test_metrics.restore_time = task.duration
+
+        if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
+            self.log.info("Running verification read stress")
+            stress_queue = self.prepare_and_run_stress_read(command_template=snapshot_data.cs_read_cmd_template,
+                                                            keyspace_name=snapshot_data.keyspaces[0],
+                                                            number_of_rows=snapshot_data.number_of_rows)
+            for stress in stress_queue:
+                assert self.verify_stress_thread(cs_thread_pool=stress), "Data verification stress command"
+        else:
+            self.log.info(f"Skipping verification read stress because of the test or snapshot configuration")
+
+    def test_restore_benchmark(self):
+        """Benchmark restore operation.
+
+        The test suggests two flows - populate the cluster with data, create the backup, and then restore it or
+        restore from a pre-created backup.
+        """
+        if reuse_snapshot_name := self.params.get('mgmt_reuse_backup_snapshot_name'):
+            self.log.info("Executing test_restore_from_precreated_backup...")
+            self.test_restore_from_precreated_backup(reuse_snapshot_name)
+        else:
+            self.log.info("Executing test_backup_and_restore_only_data...")
+            self.test_backup_and_restore_only_data()
