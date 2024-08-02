@@ -364,3 +364,5 @@
 | **<a href="#user-content-bisect_end_date" name="bisect_end_date">bisect_end_date</a>**  | Scylla build date until which bisecting should run. Format: YYYY-MM-DD | N/A | SCT_BISECT_END_DATE
 | **<a href="#user-content-mgmt_restore_params" name="mgmt_restore_params">mgmt_restore_params</a>**  | Manager restore operation specific parameters: batch_size, parallel | N/A | SCT_MGMT_RESTORE_PARAMS
 | **<a href="#user-content-mgmt_agent_backup_config" name="mgmt_agent_backup_config">mgmt_agent_backup_config</a>**  | Manager agent backup general configuration: checkers, transfers, low_level_retries | N/A | SCT_MGMT_AGENT_BACKUP_CONFIG
+| **<a href="#user-content-mgmt_reuse_backup_snapshot_name" name="mgmt_reuse_backup_snapshot_name">mgmt_reuse_backup_snapshot_name</a>**  | Name of backup snapshot to use in Manager restore benchmark test | N/A | SCT_MGMT_REUSE_BACKUP_SNAPSHOT_NAME
+| **<a href="#user-content-mgmt_skip_post_restore_stress_read" name="mgmt_skip_post_restore_stress_read">mgmt_skip_post_restore_stress_read</a>**  | Skip post-restore c-s verification read in the Manager restore benchmark tests | N/A | SCT_MGMT_SKIP_POST_RESTORE_STRESS_READ
