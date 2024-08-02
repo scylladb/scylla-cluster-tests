@@ -1,6 +1,13 @@
+test_duration: 720
+
 round_robin: true
 
-instance_type_db: 'i4i.2xlarge'
+# 1GB dataset
+prepare_write_cmd: ["cassandra-stress write cl=ONE n=1048576 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=50 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1048576"]
+stress_read_cmd: ["cassandra-stress read cl=ONE n=1048576 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=50 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..1048576"]
+
+instance_type_db: 'i4i.xlarge'
+instance_type_loader: 'c6i.xlarge'
 
 region_name: us-east-1
 n_db_nodes: 3
@@ -11,5 +18,4 @@ post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
 post_behavior_monitor_nodes: "destroy"
 
-user_prefix: manager-restore
-space_node_threshold: 6442
+user_prefix: 'manager-restore-benchmark'
