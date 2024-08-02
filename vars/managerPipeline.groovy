@@ -150,6 +150,12 @@ def call(Map pipelineParams) {
                                    For example, {'batch_size': 2, 'parallel': 1}""",
                    name: 'mgmt_restore_params')
 
+            string(defaultValue: "${pipelineParams.get('mgmt_reuse_backup_size', '')}",
+                   description: """The size of the backup in GB to reuse in restore benchmark test.
+                                   Leave empty to NOT reuse the pre-created backup.
+                                   Supported values are 1, 500, 1000, 2000 and 5000""",
+                   name: 'mgmt_reuse_backup_size')
+
             string(defaultValue: "${pipelineParams.get('mgmt_agent_backup_config', '')}",
                    description: """Backup general configuration for the agent (scylla-manager-agent.yaml):
                                    checkers, transfers, low_level_retries.
@@ -351,6 +357,10 @@ def call(Map pipelineParams) {
 
                                         if [[ ! -z "${params.mgmt_restore_params}" ]] ; then
                                             export SCT_MGMT_RESTORE_PARAMS="${params.mgmt_restore_params}"
+                                        fi
+
+                                        if [[ ! -z "${params.mgmt_reuse_backup_size}" ]] ; then
+                                            export SCT_MGMT_REUSE_BACKUP_SIZE="${params.mgmt_reuse_backup_size}"
                                         fi
 
                                         if [[ ! -z "${params.mgmt_agent_backup_config}" ]] ; then

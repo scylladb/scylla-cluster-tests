@@ -1127,6 +1127,10 @@ class SCTConfiguration(dict):
              help="Manager agent backup general configuration: checkers, transfers, low_level_retries. "
                   "For example, {'checkers': 100, 'transfers': 2, 'low_level_retries': 20}"),
 
+        dict(name="mgmt_reuse_backup_size", env="SCT_MGMT_REUSE_BACKUP_SIZE", type=int,
+             help="Size of the backup (in GB) to reuse in the Manager restore test. "
+                  "The following sizes are supported: 1, 500, 1000, 2000, 5000"),
+
         # PerformanceRegressionTest
 
         dict(name="stress_cmd_w", env="SCT_STRESS_CMD_W",
@@ -2024,6 +2028,11 @@ class SCTConfiguration(dict):
         # 21 Validate Manager agent backup general parameters
         if backup_params := self.get("mgmt_agent_backup_config"):
             self["mgmt_agent_backup_config"] = AgentBackupParameters(**backup_params)
+
+        # 22 Validate backup size for Manager restore operation is valid
+        backup_size = self.get('mgmt_reuse_backup_size')
+        if backup_size and backup_size not in {1, 500, 1000, 2000, 5000}:
+            raise ValueError(f"There is no pre-created backup for size {backup_size}GB. Please, choose another one")
 
     def log_config(self):
         self.log.info(self.dump_config())

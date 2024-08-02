@@ -1,0 +1,52 @@
+bucket: "manager-backup-tests-permanent-snapshots-us-east-1"
+cs_read_cmd_template: "cassandra-stress read cl=ONE n={num_of_rows} -schema 'keyspace={keyspace_name} replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native -rate threads=50 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq={sequence_start}..{sequence_end}"
+sizes:  # size of backed up dataset in GB
+  1:
+    tag: "sm_20240812100424UTC"
+    number_of_rows: 1073760
+    exp_timeout: 1200  # 20 minutes (timeout for restore data operation)
+    ks_name: "keyspace1"
+    scylla_version: "2024.2.0-rc0"
+    number_of_nodes: 3
+    compaction_strategy: "IncrementalCompactionStrategy"
+#    enabled_tablets: false
+  500:
+    tag: "sm_20240813112034UTC"
+    number_of_rows: 524288000
+    exp_timeout: 14400  # 4 hours
+    ks_name: "keyspace1"
+    scylla_version: "2024.2.0-rc0"
+    number_of_nodes: 3
+    compaction_strategy: "IncrementalCompactionStrategy"
+  500_2tables:
+    tag: "sm_20240819203428UTC"
+    number_of_rows: 524288000
+    exp_timeout: 14400  # 4 hours
+    ks_name: ["keyspace1", "keyspace2"]
+    scylla_version: "2024.2.0-rc0"
+    number_of_nodes: 3
+    compaction_strategy: "IncrementalCompactionStrategy"
+  1000:
+    tag: "sm_20240814180009UTC"
+    number_of_rows: 1073741824
+    exp_timeout: 28800  # 8 hours
+    ks_name: "keyspace1"
+    scylla_version: "2024.2.0-rc0"
+    number_of_nodes: 3
+    compaction_strategy: "IncrementalCompactionStrategy"
+  2000:
+    tag: "sm_20240816185129UTC"
+    number_of_rows: 2147483648
+    exp_timeout: 57600  # 16 hours
+    ks_name: "keyspace1"
+    scylla_version: "2024.2.0-rc0"
+    number_of_nodes: 3
+    compaction_strategy: "IncrementalCompactionStrategy"
+#    enabled_tablets: false
+#    - tag: "sm_20240813114617UTC"
+#      number_of_rows: 524288000
+#      exp_timeout: 18000  # 5 hours
+#      ks_name: "keyspace1"
+#      scylla_version: "2024.2.0-rc0"
+#      number_of_nodes: 3
+#      enabled_tablets: true

@@ -364,3 +364,4 @@
 | **<a href="#user-content-bisect_end_date" name="bisect_end_date">bisect_end_date</a>**  | Scylla build date until which bisecting should run. Format: YYYY-MM-DD | N/A | SCT_BISECT_END_DATE
 | **<a href="#user-content-mgmt_restore_params" name="mgmt_restore_params">mgmt_restore_params</a>**  | Manager restore operation specific parameters: batch_size, parallel | N/A | SCT_MGMT_RESTORE_PARAMS
 | **<a href="#user-content-mgmt_agent_backup_config" name="mgmt_agent_backup_config">mgmt_agent_backup_config</a>**  | Manager agent backup general configuration: checkers, transfers, low_level_retries | N/A | SCT_MGMT_AGENT_BACKUP_CONFIG
+| **<a href="#user-content-mgmt_reuse_backup_size" name="mgmt_reuse_backup_size">mgmt_reuse_backup_size</a>**  | The size of pre-created backup in GB to reuse in Manager restore benchmarking test | N/A | SCT_MGMT_REUSE_BACKUP_SIZE
