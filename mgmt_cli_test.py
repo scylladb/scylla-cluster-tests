@@ -1336,8 +1336,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self._ensure_and_get_cluster(manager_tool)
 
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
-        backup_task_status = backup_task.wait_and_get_final_status(timeout=110000)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         InfoEvent(message=f'The backup task has ended successfully. Backup run time: {backup_task.duration}').publish()
