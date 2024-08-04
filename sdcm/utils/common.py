@@ -45,7 +45,7 @@ from unittest.mock import MagicMock, Mock
 from textwrap import dedent
 from contextlib import closing, contextmanager
 from functools import wraps, cached_property, lru_cache, singledispatch
-from collections import defaultdict, namedtuple
+from collections import defaultdict, namedtuple, OrderedDict
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from concurrent.futures.thread import _python_exit
@@ -1900,19 +1900,23 @@ def convert_name_to_ami_if_needed(ami_id_param: str, region_names: list[str],) -
         return " ".join(ami_list)
 
     if len(param_values) == 1 and not param_values[0].startswith("ami-"):
-        ami_list: list[str] = []
+        ami_mapping: dict[str, str] = OrderedDict()
         for region_name in region_names:
             ec2_resource = boto3.resource('ec2', region_name=region_name)
-            for tag_name in ("tag:Name", "name"):
-                if images := sorted(
-                        ec2_resource.images.filter(Filters=[{'Name': tag_name, 'Values': [param_values[0]]}]),
-                        key=lambda x: x.creation_date, reverse=True):
-                    ami_list.append(images[0].image_id)
-                    break
-            else:
-                raise ValueError(
-                    f"Can't convert name '{ami_id_param}' to AMI_id, no image found in region {region_name}")
-        return " ".join(ami_list)
+            for client, _ in zip((ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)),
+                                 SCYLLA_AMI_OWNER_ID_LIST):
+                for tag_name in ("tag:Name", "name"):
+                    if images := sorted(
+                            client.images.filter(Filters=[{'Name': tag_name, 'Values': [param_values[0]]}]),
+                            key=lambda x: x.creation_date, reverse=True):
+                        ami_mapping[region_name] = images[0].image_id
+                        break
+                else:
+                    continue
+        if not len(ami_mapping) == len(region_names):
+            raise ValueError(
+                f"Can't convert name '{ami_id_param}' to AMI_id, no image found in regions {region_names}")
+        return " ".join(ami_mapping.values())
     return ami_id_param
 
 
