@@ -39,7 +39,7 @@ def call() {
                     H 01 * * 0 %jenkins_path="scylla-master/releng-testing"
                     H 01 * * 0 %jenkins_path="scylla-enterprise" ; is_enterprise=true
                     H 01 * * 0 %jenkins_path="scylla-master"
-                    H 01 * * 0 %sct_branch="branch-perf-v15"
+                    H 01 * * 0 %sct_branch=branch-perf-v15
                 '''
             )
         }
@@ -69,11 +69,11 @@ def call() {
                                             sh """#!/bin/bash
                                                 set -xe
                                                 env
-
-                                                echo "start create test jobs for branch ${params.jenkins_path} ......."
-                                                ./docker/env/hydra.sh create-test-release-jobs ${params.jenkins_path} --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
-                                                echo "all jobs have been created"
-
+                                                if [[ -n "${params.jenkins_path}" ]]; then
+                                                    echo "start create test jobs for branch ${params.jenkins_path} ......."
+                                                    ./docker/env/hydra.sh create-test-release-jobs ${params.jenkins_path} --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
+                                                    echo "all jobs have been created"
+                                                fi
                                                 if ${params.is_enterprise}; then
                                                     echo "start create test jobs for branch ${params.jenkins_path} ......."
                                                     ./docker/env/hydra.sh create-test-release-jobs-enterprise ${params.jenkins_path} --sct_branch ${params.sct_branch} --sct_repo ${params.sct_repo}
