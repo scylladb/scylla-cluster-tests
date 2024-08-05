@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -e
+
+java -jar /nosqlbench/nb5.jar "$@"

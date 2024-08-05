@@ -208,7 +208,7 @@ enable_argus: true
 stress_image:
   ndbench: 'scylladb/hydra-loaders:ndbench-jdk8-20210720'
   ycsb: 'scylladb/hydra-loaders:ycsb-jdk8-20220918'
-  nosqlbench: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
+  nosqlbench: 'codelieutenant/nosqlbench:latest'
   cassandra-stress: 'docker.io/scylladb/hydra-loaders:cassandra-stress-6.0-20240701'
   scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.22'
   gemini: 'scylladb/hydra-loaders:gemini-v1.8.6'
