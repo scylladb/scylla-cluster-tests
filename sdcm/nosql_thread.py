@@ -67,13 +67,15 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
             target_address = self.node_list[0].parent_cluster.get_node().cql_address
         else:
             target_address = self.node_list[0].cql_address
+
+        dc = self.node_list[0].datacenter
+
         with self._per_loader_count_lock:
             threads_on_loader = self._per_loader_count.get(loader_idx, 0)
             threads_on_loader += 1
             self._per_loader_count[threads_on_loader] = threads_on_loader
-        stress_cmd = self.stress_cmd.replace('nosqlbench', '') + f" hosts={target_address}"
-        stress_cmd += ' table=nosqlbench_table_' + str(loader_idx + 1) + '_' + str(threads_on_loader)
-        return stress_cmd
+
+        return f"{self.stress_cmd} localdc={dc} hosts={target_address} table=nosqlbench_table_{loader_idx + 1}_threads_on_loader"
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         stress_cmd = self.build_stress_cmd(loader_idx=loader_idx)
@@ -106,10 +108,10 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                                    ignore_status=True)
 
                 return loader.remoter.run(cmd=f'docker run '
-                                              '--name=nb '
-                                              '--network=nosql '
-                                              f'{self.docker_image_name} '
-                                              f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
+                                          '--name=nb '
+                                          '--network=nosql '
+                                          f'{self.docker_image_name} '
+                                          f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
                                           timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=stress_event, exc=exc)
