@@ -32,6 +32,8 @@ def get_supported_features(session: Session) -> list[str]:
         result = result["supported_features"].split(",")
     elif isinstance(result, tuple):
         result = result[0].split(",")
+    elif result is None:
+        result = []
     else:
         raise NotImplementedError(f"unsupported row_factory={session.row_factory}")
     LOGGER.debug("Supported features %s", result)
@@ -49,6 +51,8 @@ def get_enabled_features(session: Session) -> list[str]:
         result = result["value"].split(",")
     elif isinstance(result, tuple):
         result = result[0].split(",")
+    elif result is None:
+        result = []
     else:
         raise NotImplementedError(f"unsupported row_factory={session.row_factory}")
     LOGGER.debug("Enabled features %s", result)
