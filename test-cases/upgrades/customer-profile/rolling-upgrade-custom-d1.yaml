@@ -25,7 +25,7 @@ use_preinstalled_scylla: false
 scylla_d_overrides_files: [
   'scylla-qa-internal/custom_d1/workload1/scylla.d/n2-highmem-8/cpuset.conf',
   'scylla-qa-internal/custom_d1/workload1/scylla.d/memory.conf',
-  'scylla-qa-internal/custom_d1/workload1/scylla.d/io.conf',
+  'scylla-qa-internal/custom_d1/workload1/scylla.d/2021.1/io.conf',
 ]
 
 user_prefix: 'rolling-upgrade-custom-d1'
