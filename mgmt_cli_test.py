@@ -76,8 +76,12 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
     def locations(self) -> list[str]:
         backend = self.params.get("backup_bucket_backend")
 
+        buckets = self.params.get("backup_bucket_location")
+        if not isinstance(buckets, list):
+            buckets = buckets.split()
+
         # FIXME: Make it works with multiple locations or file a bug for scylla-manager.
-        return [f"{backend}:{location}" for location in self.params.get("backup_bucket_location").split()[:1]]
+        return [f"{backend}:{location}" for location in buckets[:1]]
 
     def _run_cmd_with_retry(self, executor, cmd, retries=10):
         for _ in range(retries):

@@ -54,6 +54,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('backup_bucket_backend', '')}",
                description: 's3|gcs|azure or empty',
                name: 'backup_bucket_backend')
+            string(defaultValue: "${pipelineParams.get('backup_bucket_location', '')}",
+               description: """Backup bucket name, if empty - the default 'manager-backup-tests-us-east-1' bucket is used.
+                               'manager-backup-tests-permanent-snapshots-us-east-1' bucket can be used to store backups permanently.""",
+               name: 'backup_bucket_location')
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
                name: 'backend')
@@ -299,6 +303,10 @@ def call(Map pipelineParams) {
 
                                         if [[ -n "${params.backup_bucket_backend}" ]] ; then
                                             export SCT_BACKUP_BUCKET_BACKEND="${params.backup_bucket_backend}"
+                                        fi
+
+                                        if [[ -n "${params.backup_bucket_location}" ]] ; then
+                                            export SCT_BACKUP_BUCKET_LOCATION="${params.backup_bucket_location}"
                                         fi
 
                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
