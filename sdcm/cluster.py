@@ -119,6 +119,7 @@ from sdcm.utils.version_utils import (
 )
 from sdcm.utils.net import get_my_ip
 from sdcm.utils.node import build_node_api_command
+from sdcm.wait import wait_for_log_lines
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent, add_severity_limit_rules, max_severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
@@ -2524,28 +2525,15 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         with self.remote_scylla_yaml() as scylla_yml:
             scylla_yml.murmur3_partitioner_ignore_msb_bits = murmur3_partitioner_ignore_msb_bits
 
-        search_reshard_start = self.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_START])
-        search_reshard_finish = self.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_FINISH])
-        start_scylla_timeout = 7200
-        self.start_scylla(timeout=start_scylla_timeout)
-        resharding_started = list(search_reshard_start)
-        resharding_finished = list(search_reshard_finish)
+        resharding_details = f"Resharding: (murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits})"
 
-        if resharding_started:
-            self.log.debug(f'Resharding has been started successfully '
-                           f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits})')
-        else:
-            raise Exception(f'Resharding has not been started '
-                            f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits}) '
-                            'Check the log for the details')
-
-        if resharding_finished:
-            self.log.debug(f'Resharding has been finished successfully '
-                           f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits})')
-        else:
-            raise Exception(f'Resharding has not been finished within {start_scylla_timeout}'
-                            f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits}) '
-                            'Check the log for the details')
+        with wait_for_log_lines(node=self,
+                                start_line_patterns=[DB_LOG_PATTERN_RESHARDING_START],
+                                end_line_patterns=[DB_LOG_PATTERN_RESHARDING_FINISH],
+                                start_timeout=600, end_timeout=900,
+                                error_msg_ctx=resharding_details):
+            start_scylla_timeout = 7200
+            self.start_scylla(timeout=start_scylla_timeout)
 
     def _gen_nodetool_cmd(self, sub_cmd, args, options):
         credentials = self.parent_cluster.get_db_auth()
