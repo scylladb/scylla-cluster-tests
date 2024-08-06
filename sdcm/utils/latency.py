@@ -13,6 +13,7 @@
 import statistics
 from typing import Any
 
+from sdcm.argus_results import LATENCY_ERROR_THRESHOLDS
 from sdcm.db_stats import PrometheusDBStats
 
 
@@ -136,27 +137,17 @@ def calculate_latency(latency_results):
 
 
 def analyze_hdr_percentiles(result_stats: dict[str, Any]) -> dict[str, Any]:
-    top_limit_perc_values = {
-        "replace_node": {
-            "percentile_90": 15,
-            "percentile_99": 20
-        },
-        "default": {
-            "percentile_90": 10,
-            "percentile_99": 15
-        }
-    }
     for operation, stats_data in result_stats.items():
-        top_limit_operation = operation if operation in top_limit_perc_values else "default"
+        top_limit_operation = operation if operation in LATENCY_ERROR_THRESHOLDS else "default"
         stats = stats_data.get("cycles") or [stats_data]
         for cycle in stats:
             for workload, results in cycle["hdr_summary"].items():
                 cycle["hdr_summary"][workload]["color"] = {}
-                if results["percentile_90"] > top_limit_perc_values[top_limit_operation]["percentile_90"]:
+                if results["percentile_90"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_90"]:
                     cycle["hdr_summary"][workload]["color"].update({"percentile_90": "red"})
                 else:
                     cycle["hdr_summary"][workload]["color"].update({"percentile_90": ""})
-                if results["percentile_99"] > top_limit_perc_values[top_limit_operation]["percentile_99"]:
+                if results["percentile_99"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_99"]:
                     cycle["hdr_summary"][workload]["color"].update({"percentile_99": "red"})
                 else:
                     cycle["hdr_summary"][workload]["color"].update({"percentile_99": ""})
@@ -164,11 +155,11 @@ def analyze_hdr_percentiles(result_stats: dict[str, Any]) -> dict[str, Any]:
             for interval in cycle["hdr"]:
                 for workload, results in interval.items():
                     interval[workload]["color"] = {}
-                    if results["percentile_90"] > top_limit_perc_values[top_limit_operation]["percentile_90"]:
+                    if results["percentile_90"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_90"]:
                         interval[workload]["color"].update({"percentile_90": "red"})
                     else:
                         interval[workload]["color"].update({"percentile_90": ""})
-                    if results["percentile_99"] > top_limit_perc_values[top_limit_operation]["percentile_99"]:
+                    if results["percentile_99"] > LATENCY_ERROR_THRESHOLDS[top_limit_operation]["percentile_99"]:
                         interval[workload]["color"].update({"percentile_99": "red"})
                     else:
                         interval[workload]["color"].update({"percentile_99": ""})
