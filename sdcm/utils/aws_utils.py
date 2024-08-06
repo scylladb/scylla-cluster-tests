@@ -223,7 +223,7 @@ def init_monitoring_info_from_params(monitor_info: dict, params: dict, regions: 
         if monitor_info['disk_size']:
             monitor_info['device_mappings'] = [{
                 "DeviceName": ec2_ami_get_root_device_name(image_id=params.get('ami_id_monitor').split()[0],
-                                                           region=regions[0]),
+                                                           region_name=regions[0]),
                 "Ebs": {
                     "VolumeSize": monitor_info['disk_size'],
                     "VolumeType": "gp3"
@@ -251,7 +251,7 @@ def init_db_info_from_params(db_info: dict, params: dict, regions: List, root_de
         if db_info['disk_size']:
             root_device = root_device if root_device else ec2_ami_get_root_device_name(
                 image_id=params.get('ami_id_db_scylla').split()[0],
-                region=regions[0])
+                region_name=regions[0])
             db_info['device_mappings'] = [{
                 "DeviceName": root_device,
                 "Ebs": {
@@ -413,15 +413,17 @@ def ec2_instance_wait_public_ip(instance):
     LOGGER.debug("[%s] Got public ip: %s", instance, instance.public_ip_address)
 
 
-def ec2_ami_get_root_device_name(image_id, region):
-    ec2 = boto3.resource('ec2', region)
-    image = ec2.Image(image_id)
-    try:
-        if image.root_device_name:
-            return image.root_device_name
-    except (TypeError, ClientError) as exc:
-        raise AssertionError(f"Image '{image_id}' details not found in '{region}'") from exc
-    return None
+def ec2_ami_get_root_device_name(image_id, region_name):
+    ec2_resource = boto3.resource('ec2', region_name)
+
+    for client in (ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)):
+        try:
+            image = client.Image(image_id)
+            if image.root_device_name:
+                return image.root_device_name
+        except (TypeError, AttributeError, ClientError):
+            pass
+    raise AssertionError(f"Image '{image_id}' details not found in '{region_name}'")
 
 
 @functools.cache
