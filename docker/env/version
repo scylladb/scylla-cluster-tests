@@ -1,5 +1,1 @@
-<<<<<<< HEAD
-1.70-introduce-ruff
-=======
 1.72-switch-to-uv-3
->>>>>>> d7a9c413 (feature(python-uv): replacement for pip and pip-compile)
