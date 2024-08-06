@@ -48,7 +48,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
-           string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
+            string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
                    description: 'Azure location',
                    name: 'azure_region_name')
             string(defaultValue: '',
@@ -84,6 +84,14 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
                    name: 'requested_by_user')
+            text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
+                    description: (
+                        'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
+                        'Example:\n' +
+                        '\tSCT_STRESS_IMAGE.cassandra-stress=scylladb/cassandra-stress:3.12.1\n' +
+                        '\tSCT_USE_MGMT=false'
+                        ),
+                    name: 'extra_environment_variables')
         }
         options {
             timestamps()
@@ -120,6 +128,9 @@ def call(Map pipelineParams) {
 
                                         def test_config = groovy.json.JsonOutput.toJson(params.test_config)
                                         stage("Checkout (${instance_type})") {
+                                            script {
+                                                loadEnvFromString(params.extra_environment_variables)
+                                            }
                                             dir('scylla-cluster-tests') {
                                                 timeout(time: 10, unit: 'MINUTES') {
                                                     checkout scm
