@@ -21,7 +21,7 @@ from functools import cached_property
 import re
 import time
 from textwrap import dedent
-from datetime import datetime
+from datetime import datetime, timedelta
 from dataclasses import dataclass
 
 import boto3
@@ -41,6 +41,7 @@ from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_stream_mutation_fragments_errors
+from sdcm.utils.compaction_ops import CompactionOps
 from sdcm.utils.gce_utils import get_gce_storage_client
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.tablets.common import TabletsConfiguration
@@ -600,6 +601,53 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.run_verification_read_stress(ks_names)
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_basic_backup')
+
+    def test_no_delta_backup_at_disabled_compaction(self):
+        """The purpose of test is to check that delta backup (no changes to DB between backups) takes time -> 0.
+
+        Important test precondition is to disable compaction on all nodes in the cluster.
+        Otherwise, new set of SSTables is created what ends up in the situation that almost no deduplication is applied.
+
+        For more details https://github.com/scylladb/scylla-manager/issues/3936#issuecomment-2277611709
+        """
+        self.log.info('starting test_consecutive_backups')
+
+        self.log.info('Run write stress')
+        self.run_prepare_write_cmd()
+
+        self.log.info('Disable compaction for every node in the cluster')
+        compaction_ops = CompactionOps(cluster=self.db_cluster)
+        for node in self.db_cluster.nodes:
+            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
+
+        self.log.info('Prepare Manager')
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = self._ensure_and_get_cluster(manager_tool, force_add=True)
+
+        self.log.info('Run backup #1')
+        backup_task_1 = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task_1_status = backup_task_1.wait_and_get_final_status(timeout=3600)
+        assert backup_task_1_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_1_status} instead of {TaskStatus.DONE}"
+        self.log.info(f'Backup task #1 duration - {backup_task_1.duration}')
+
+        self.log.info('Run backup #2')
+        backup_task_2 = mgr_cluster.create_backup_task(location_list=self.locations)
+        backup_task_2_status = backup_task_2.wait_and_get_final_status(timeout=60)
+        assert backup_task_2_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_2_status} instead of {TaskStatus.DONE}"
+        self.log.info(f'Backup task #2 duration - {backup_task_2.duration}')
+
+        assert backup_task_2.duration < timedelta(seconds=15), "No-delta backup took more than 15 seconds"
+
+        self.log.info('Verify restore from backup #2')
+        self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task_2,
+                                   restore_data_with_task=True, timeout=3600)
+
+        self.log.info('Run verification read stress')
+        self.run_verification_read_stress()
+
+        self.log.info('finishing test_consecutive_backups')
 
     def test_restore_backup_with_task(self, ks_names: list = None):
         self.log.info('starting test_restore_backup_with_task')

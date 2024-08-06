@@ -1,0 +1,14 @@
+test_duration: 200
+
+prepare_write_cmd: "cassandra-stress write cl=ONE n=10485760 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..10485760"
+stress_read_cmd: "cassandra-stress read cl=ONE n=10485760 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=LeveledCompactionStrategy)' -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..10485760"
+
+instance_type_db: 'i4i.xlarge'
+instance_type_loader: 'c6i.xlarge'
+
+region_name: 'us-east-1'
+n_db_nodes: 3
+n_monitor_nodes: 1
+n_loaders: 1
+
+user_prefix: manager-backup
