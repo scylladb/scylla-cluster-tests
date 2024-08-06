@@ -134,7 +134,7 @@ from sdcm.utils.tablets.common import wait_for_tablets_balanced
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
-from sdcm.utils.raft.common import NodeBootstrapAbortManager
+from sdcm.utils.raft.common import NodeBootstrapAbortManager, get_topology_coordinator_node
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.wait import wait_for, wait_for_log_lines
 from sdcm.exceptions import (
@@ -345,6 +345,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         data['node'] = self.target_node
         severity = Severity.NORMAL if status else Severity.ERROR
         DisruptionEvent(nemesis_name=disrupt, severity=severity, **data).publish()
+
+    def switch_target_node(self, node: BaseNode):
+        with NEMESIS_TARGET_SELECTION_LOCK:
+            self.target_node.running_nemesis = None
+            self.target_node = None
+            node.running_nemesis = self.current_disruption
+            self.target_node = node
 
     def set_current_running_nemesis(self, node):
         with NEMESIS_TARGET_SELECTION_LOCK:
@@ -5123,6 +5130,55 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.restart_scylla_server()
             raise
 
+<<<<<<< HEAD
+=======
+    @target_all_nodes
+    def disrupt_grow_shrink_zero_nodes(self):
+        """"Add/remove znodes to same dc where target node. The target node could be any node"""
+        if not self.cluster.params.get('use_zero_nodes'):
+            raise UnsupportedNemesis("The zero tokens support is not enabled")
+
+        duration_with_znode = 300
+        new_znode = self._add_and_init_new_cluster_nodes(count=1, is_zero_node=True)[0]
+        self.log.debug("Run with zero-token node %s for %ds", new_znode.name, duration_with_znode)
+        time.sleep(duration_with_znode)
+        znode = random.choice([node for node in self.cluster.zero_nodes if node.dc_idx == self.target_node.dc_idx])
+        self.decommission_nodes(nodes=[znode])
+
+    @target_all_nodes
+    def disrupt_serial_restart_elected_topology_coordinator(self):
+        """ Serial restart of elected topology coordinator node,
+        should trigger new coordinator node election
+        """
+        if not self.target_node.raft.is_consistent_topology_changes_enabled:
+            raise UnsupportedNemesis("Consistent topology changes feature is disabled")
+
+        self.use_nemesis_seed()
+        num_of_restarts = random.randint(1, len(self.cluster.nodes))
+        self.log.debug("Number of serial restart of topology coordinator: %s", num_of_restarts)
+        election_wait_timeout = random.choice([1, 5, 10, 15])
+        self.log.debug("Wait new topology coordinator election timeout: %s", election_wait_timeout)
+        for num_of_restart in range(num_of_restarts):
+            with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="search coordinator") as verification_node:
+                coordinator_node = get_topology_coordinator_node(verification_node)
+            if coordinator_node != self.target_node and coordinator_node.running_nemesis:
+                raise UnsupportedNemesis(
+                    f"Coordinator node is busy with {coordinator_node.running_nemesis}, Coordinator node was restarted: {num_of_restart}")
+            elif coordinator_node != self.target_node:
+                self.switch_target_node(coordinator_node)
+            self.log.debug("Coordinator node: %s, %s", coordinator_node, coordinator_node.name)
+            self.target_node.stop_scylla()
+            self.log.debug("Wait random timeout %s to new coordinator will be elected", election_wait_timeout)
+            time.sleep(election_wait_timeout)
+            with self.run_nemesis(node_list=self.cluster.nodes,
+                                  nemesis_label="search coordinator") as verification_node:
+                new_coordinator_node = get_topology_coordinator_node(verification_node)
+            self.log.debug("New coordinator node: %s, %s", new_coordinator_node, new_coordinator_node.name)
+            self.target_node.start_scylla()
+            assert self.target_node != new_coordinator_node, \
+                f"New coordinator node was not elected while old one {coordinator_node.name} was stopped"
+
+>>>>>>> 5aaf574f8 (feature(raft): Rolling restart raft topology coordinator node)
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements  # noqa: PLR0915
     """
@@ -6636,3 +6692,40 @@ class EndOfQuotaNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_end_of_quota_nemesis()
+<<<<<<< HEAD
+=======
+
+
+class GrowShrinkZeroTokenNode(Nemesis):
+
+    disruptive = True
+    schema_changes = False
+    free_tier_set = False
+    zero_node_changes = True
+
+    def disrupt(self):
+        self.disrupt_grow_shrink_zero_nodes()
+
+
+class ZeroTokenSetMonkey(SisyphusMonkey):
+    """Nemesis set for testing Scylla with configured zero nodes
+
+    Disruptions that can be caused by random failures and user actions with
+    zero node configured
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(SisyphusMonkey, self).__init__(*args, **kwargs)  # pylint: disable=bad-super-call
+        self.use_all_nodes_as_target = True
+        self.build_list_of_disruptions_to_execute(nemesis_selector=['zero_node_changes'])
+        self.shuffle_list_of_disruptions()
+
+
+class SerialRestartOfElectedTopologyCoordinatorNemesis(Nemesis):
+
+    disruptive = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.disrupt_serial_restart_elected_topology_coordinator()
+>>>>>>> 5aaf574f8 (feature(raft): Rolling restart raft topology coordinator node)

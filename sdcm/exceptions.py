@@ -83,3 +83,7 @@ class SstablesNotFound(Exception):
 
 class CapacityReservationError(Exception):
     pass
+
+
+class RaftTopologyCoordinatorNotFound(Exception):
+    """Raise exception if no host id for raft topology was not found in group0 history"""
