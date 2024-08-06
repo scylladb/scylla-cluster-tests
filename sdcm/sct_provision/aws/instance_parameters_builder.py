@@ -97,7 +97,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
 
     @cached_property
     def _root_device_name(self):
-        return ec2_ami_get_root_device_name(image_id=self.ImageId, region=self._region_name)
+        return ec2_ami_get_root_device_name(image_id=self.ImageId, region_name=self._region_name)
 
     @property
     def _root_device_size(self):
