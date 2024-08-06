@@ -28,6 +28,7 @@ from sdcm.sct_events.events_processes import \
     EVENTS_COUNTER_ID, EventsProcessesRegistry, BaseEventsProcess, \
     start_events_process, get_events_process, verbose_suppress
 
+STALL_INTERVALS = [10, 20, 30, 50, 100, 200, 1000, 2000]
 
 LOGGER = logging.getLogger(__name__)
 REACTOR_MS_REGEX = re.compile(r'Reactor stalled for\s(\d+)\sms')
@@ -66,7 +67,7 @@ class EventStatHandler:  # pylint: disable=too-few-public-methods
 
 
 class ReactorStallEventStatHandler(EventStatHandler):  # pylint: disable=too-few-public-methods
-    intervals = [10, 20, 30, 50, 100, 200, 1000, 2000]
+    intervals = STALL_INTERVALS
 
     def _get_interval(self, stall_ms: int):
         if not stall_ms:
@@ -180,4 +181,4 @@ class EventCounterContextManager:
 
 
 __all__ = ("EventsCounter",
-           "start_events_counter", "get_events_counter", )
+           "start_events_counter", "get_events_counter", "STALL_INTERVALS")
