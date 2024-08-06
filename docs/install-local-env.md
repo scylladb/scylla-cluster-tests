@@ -7,7 +7,6 @@ To run SCT tests locally run following::
 
 ```bash
 sudo ./install-prereqs.sh
-./get-qa-ssh-keys.sh
 
 # install python3.10 via pyenv
 curl https://pyenv.run | bash
@@ -15,12 +14,15 @@ exec $SHELL
 # go to: https://github.com/pyenv/pyenv/wiki/Common-build-problems#prerequisites
 # and follow the instructions for your distribution, to install the prerequisites
 # for compiling python from source
-pyenv install 3.10.0
+PYTHON_VERSION=`./docker/env/hydra.sh  python --version | cut -d' ' -f2 | tail -n1 |  tr -d '\r\n'`
+pyenv install ${PYTHON_VERSION}
 
 # create a virtualenv for SCT
-pyenv virtualenv 3.10.0 sct310
-pyenv activate sct310
-pip install -r requirements.in
+pyenv virtualenv ${PYTHON_VERSION} sct-${PYTHON_VERSION}
+pyenv activate sct-${PYTHON_VERSION}
+
+pip install uv==0.2.24
+uv pip install -r requirements.in
 ```
 
 ### SCT test profiling

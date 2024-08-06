@@ -137,19 +137,6 @@ def calculate_latency(latency_results):
 
 
 def analyze_hdr_percentiles(result_stats: dict[str, Any]) -> dict[str, Any]:
-<<<<<<< HEAD
-    top_limit_perc_values = {
-        "replace_node": {
-            "percentile_90": 15,
-            "percentile_99": 20
-        },
-        "default": {
-            "percentile_90": 10,
-            "percentile_99": 15
-        }
-    }
-=======
->>>>>>> fb368a4d (feature(argus): sent latency decorator results to argus)
     for operation, stats_data in result_stats.items():
         top_limit_operation = operation if operation in LATENCY_ERROR_THRESHOLDS else "default"
         stats = stats_data.get("cycles") or [stats_data]
