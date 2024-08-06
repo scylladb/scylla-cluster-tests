@@ -14,6 +14,7 @@ from sdcm.utils.features import is_consistent_topology_changes_feature_enabled, 
 from sdcm.utils.health_checker import HealthEventsGenerator
 from sdcm.wait import wait_for
 
+
 LOGGER = logging.getLogger(__name__)
 RAFT_DEFAULT_SCYLLA_VERSION = "5.5.0-dev"
 
@@ -443,4 +444,4 @@ def get_node_status_from_system_by(verification_node: "BaseNode", *, ip_address:
 __all__ = ["get_raft_mode",
            "get_node_status_from_system_by",
            "Group0MembersNotConsistentWithTokenRingMembersException",
-           ]
+           "TopologyOperations"]

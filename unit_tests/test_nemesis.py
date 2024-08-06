@@ -232,7 +232,8 @@ class TestSisyphusMonkeyNemesisFilter:
             "disrupt_terminate_and_replace_node",
             "disrupt_decommission_streaming_err",
             "disrupt_remove_node_then_add_node",
-            "disrupt_bootstrap_streaming_error"]
+            "disrupt_bootstrap_streaming_error",
+            "disrupt_serial_restart_elected_topology_coordinator"]
 
     @pytest.fixture(autouse=True)
     def expected_schema_changes_methods(self):
