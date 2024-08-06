@@ -154,7 +154,14 @@ def call(Map pipelineParams) {
                    description: 'jobs to compare performance results with, for example if running in staging, '
                                 + 'we still can compare with official jobs',
                    name: 'perf_extra_jobs_to_compare')
-
+            text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
+                    description: (
+                        'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
+                        'Example:\n' +
+                        '\tSCT_STRESS_IMAGE.cassandra-stress=scylladb/cassandra-stress:3.12.1\n' +
+                        '\tSCT_USE_MGMT=false'
+                        ),
+                    name: 'extra_environment_variables')
             // NOTE: Optional parameters for BYO ScyllaDB stage
             string(defaultValue: '',
                    description: (
@@ -200,6 +207,7 @@ def call(Map pipelineParams) {
                 steps {
                     script {
                         completed_stages = [:]
+                        loadEnvFromString(params.extra_environment_variables)
                     }
                     dir('scylla-cluster-tests') {
                         timeout(time: 5, unit: 'MINUTES') {
