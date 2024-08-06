@@ -124,6 +124,7 @@ def call(Map pipelineParams) {
                         timeout(time: 10, unit: 'MINUTES') {
                             script {
                                 wrap([$class: 'BuildUser']) {
+                                    loadEnvFromString(params.extra_environment_variables)
                                     dir('scylla-cluster-tests') {
                                         checkout scm
                                         checkoutQaInternal(params)
@@ -196,6 +197,7 @@ def call(Map pipelineParams) {
                                             catchError(stageResult: 'FAILURE') {
                                                 timeout(time: 5, unit: 'MINUTES') {
                                                     script {
+                                                        loadEnvFromString(params.extra_environment_variables)
                                                         wrap([$class: 'BuildUser']) {
                                                             dir('scylla-cluster-tests') {
                                                                 checkout scm
