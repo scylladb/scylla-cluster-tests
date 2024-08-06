@@ -549,7 +549,7 @@ class AwsSctRunner(SctRunner):
                         [{"Key": "Name", "Value": instance_name}],
             }],
             BlockDeviceMappings=[{
-                "DeviceName": ec2_ami_get_root_device_name(image_id=base_image, region=aws_region.region_name),
+                "DeviceName": ec2_ami_get_root_device_name(image_id=base_image, region_name=aws_region.region_name),
                 "Ebs": {
                     "VolumeSize": root_disk_size_gb or self.instance_root_disk_size(test_duration),
                     "VolumeType": "gp3"
