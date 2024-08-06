@@ -326,6 +326,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                         f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
                     )
                     InfoEvent(message='upgrade_node - ended to "apt-get update"').publish()
+
+        InfoEvent(message='upgrade_node - fix /etc/scylla.d/io.conf arguments compatibility').publish()
+        node.remoter.sudo(
+            f"sed -i 's/--num-io-queues/--num-io-groups/' {node.add_install_prefix('/etc/scylla.d/io.conf')}")
+
         InfoEvent(message='upgrade_node - starting to "check_reload_systemd_config"').publish()
         check_reload_systemd_config(node)
         InfoEvent(message='upgrade_node - ended to "check_reload_systemd_config"').publish()
