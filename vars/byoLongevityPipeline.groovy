@@ -106,6 +106,14 @@ def call() {
             string(defaultValue: "qa@scylladb.com",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+            text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
+                 description: (
+                     'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
+                     'Example:\n' +
+                     '\tSCT_STRESS_IMAGE.cassandra-stress=scylladb/cassandra-stress:3.12.1\n' +
+                     '\tSCT_USE_MGMT=false'
+                     ),
+                 name: 'extra_environment_variables')
         }
         options {
             timestamps()
@@ -116,6 +124,9 @@ def call() {
         stages {
             stage('Checkout') {
                steps {
+                  script {
+                      loadEnvFromString(params.extra_environment_variables)
+                  }
                   dir('scylla-cluster-tests') {
                       git(url: params.sct_repo,
                             credentialsId:'b8a774da-0e46-4c91-9f74-09caebaea261',
