@@ -1379,7 +1379,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             if loader_info['disk_size']:
                 loader_info['device_mappings'] = [{
                     "DeviceName": ec2_ami_get_root_device_name(image_id=self.params.get('ami_id_loader').split()[0],
-                                                               region=regions[0]),
+                                                               region_name=regions[0]),
                     "Ebs": {
                         "VolumeSize": loader_info['disk_size'],
                         "VolumeType": "gp3"
