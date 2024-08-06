@@ -207,6 +207,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         scylla_yaml_updates = {}
         if not self.params.get('disable_raft'):
             scylla_yaml_updates.update({"consistent_cluster_management": True})
+            scylla_yaml_updates.update({"force_schema_commit_log": True})
 
         if self.params.get("enable_tablets_on_upgrade"):
             scylla_yaml_updates.update({"experimental_features": ["tablets", "consistent-topology-changes"]})
