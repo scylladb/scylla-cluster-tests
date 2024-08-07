@@ -373,7 +373,7 @@ class MonitoringStack(BaseMonitoringEntity):
 
         archive_name = os.path.join(monitor_base_dir,
                                     f"monitoring_data_stack_{monitor_branch}_{monitor_version}.tar.gz")
-        if not node.remoter.run(f"tar czvf '{archive_name}' -C '{monitor_base_dir}' '{monitor_install_dir_name}'",
+        if not node.remoter.run(f"tar czvf '{archive_name}' --exclude='gpx_scylladb_*' -C '{monitor_base_dir}' '{monitor_install_dir_name}'",
                                 ignore_status=True).ok:
             return ""
         if not check_archive(node.remoter, archive_name):
