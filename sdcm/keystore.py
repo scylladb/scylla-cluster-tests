@@ -72,7 +72,10 @@ class KeyStore:  # pylint: disable=too-many-public-methods
         return self.get_ssh_key_pair(name="scylla-qa-ec2")
 
     def get_gce_ssh_key_pair(self):
-        return self.get_ssh_key_pair(name="scylla-test")
+        return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
+
+    def get_azure_ssh_key_pair(self):
+        return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
 
     def get_qa_ssh_keys(self):
         return [
