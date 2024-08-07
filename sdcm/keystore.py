@@ -84,8 +84,7 @@ class KeyStore:  # pylint: disable=too-many-public-methods
         return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
 
     def get_azure_ssh_key_pair(self):
-        # TODO: still needed to use old key, until we can create new runners with updated key
-        return self.get_ssh_key_pair(name="scylla-test")
+        return self.get_ssh_key_pair(name="scylla_test_id_ed25519")
 
     def get_qa_ssh_keys(self):
         return [
