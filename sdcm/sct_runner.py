@@ -138,7 +138,7 @@ class SctRunnerInfo:  # pylint: disable=too-many-instance-attributes
 
 class SctRunner(ABC):
     """Provision and configure the SCT runner."""
-    VERSION = "1.7"  # Version of the Image
+    VERSION = "1.8"  # Version of the Image
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     LOGIN_USER = "ubuntu"
@@ -221,6 +221,7 @@ class SctRunner(ABC):
              # Disable apt-key warnings and set non-interactive frontend.
             export APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1
             export DEBIAN_FRONTEND=noninteractive
+            export PIP_BREAK_SYSTEM_PACKAGES=true
 
             apt-get -qq clean
             apt-get -qq update
@@ -240,7 +241,7 @@ class SctRunner(ABC):
             install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
             # Configure Jenkins user.
-            apt-get -qq install --no-install-recommends openjdk-11-jre-headless  # https://www.jenkins.io/doc/administration/requirements/java/
+            apt-get -qq install --no-install-recommends openjdk-21-jre-headless  # https://www.jenkins.io/doc/administration/requirements/java/
             adduser --disabled-password --gecos "" jenkins || true
             usermod -aG docker jenkins
             mkdir -p /home/jenkins/.ssh
@@ -452,7 +453,7 @@ class SctRunner(ABC):
 class AwsSctRunner(SctRunner):
     """Provision and configure the SCT Runner on AWS."""
     CLOUD_PROVIDER = "aws"
-    BASE_IMAGE = "ami-07c2ae35d31367b3e"  # Canonical, Ubuntu, 22.04 LTS, amd64 jammy image build on 2022-12-01
+    BASE_IMAGE = "ami-02f921fd5f09a1812"  # Canonical, Ubuntu, 24.04 LTS, amd64 numbat image build on 2024-08-06
     SOURCE_IMAGE_REGION = "eu-west-2"  # where the source Runner image will be created and copied to other regions
     IMAGE_BUILDER_INSTANCE_TYPE = "t3.small"
     REGULAR_TEST_INSTANCE_TYPE = "m7i-flex.large"  # 2 vcpus, 8G
@@ -774,7 +775,7 @@ class GceSctRunner(SctRunner):  # pylint: disable=too-many-instance-attributes
     """Provision and configure the SCT runner on GCE."""
 
     CLOUD_PROVIDER = "gce"
-    BASE_IMAGE = "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"
+    BASE_IMAGE = "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64"
     SOURCE_IMAGE_REGION = "us-east1"  # where the source Runner image will be created and copied to other regions
     IMAGE_BUILDER_INSTANCE_TYPE = "e2-standard-2"
     REGULAR_TEST_INSTANCE_TYPE = "e2-standard-2"  # 2 vcpus, 8G
@@ -991,8 +992,8 @@ class AzureSctRunner(SctRunner):
     GALLERY_IMAGE_VERSION = f"{SctRunner.VERSION}.0"  # Azure requires to have it in `X.Y.Z' format
     BASE_IMAGE = {
         "publisher": "canonical",
-        "offer": "0001-com-ubuntu-server-jammy",
-        "sku": "22_04-lts-gen2",
+        "offer": "ubuntu-24_04-lts",
+        "sku": "server",
         "version": "latest",
     }
     SOURCE_IMAGE_REGION = AzureRegion.SCT_GALLERY_REGION
