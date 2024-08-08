@@ -104,10 +104,20 @@ class DataValidatorEvent(InformationalEvent, abstract=True):
         return super().msgfmt
 
 
+class PartitionRowsValidationEvent(InformationalEvent):
+    def __init__(self, message: str, severity: Severity = Severity.NORMAL):
+        super().__init__(severity)
+        self.message = message
+
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": message={0.message}"
+
+
 DataValidatorEvent.add_subevent_type("DataValidator")
 DataValidatorEvent.add_subevent_type("ImmutableRowsValidator")
 DataValidatorEvent.add_subevent_type("UpdatedRowsValidator")
 DataValidatorEvent.add_subevent_type("DeletedRowsValidator")
 
 
-__all__ = ("ClusterHealthValidatorEvent", "DataValidatorEvent", )
+__all__ = ("ClusterHealthValidatorEvent", "DataValidatorEvent", "PartitionRowsValidationEvent")

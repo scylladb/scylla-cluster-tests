@@ -23,6 +23,7 @@ from typing import List
 from cassandra import ConsistencyLevel
 
 from sdcm.sct_events import Severity
+from sdcm.sct_events.health import PartitionRowsValidationEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import PageFetcher
 from sdcm.utils.decorators import retrying
@@ -150,15 +151,24 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
             LOGGER.debug('Validate partitions info')
             partitions_dict_after = self.collect_partitions_info(ignore_limit_rows_number=ignore_limit_rows_number)
             if partitions_dict_after is not None:
-                if not ignore_limit_rows_number and self.limit_rows_number:
-                    missing_rows = {key: val for key, val in partitions_dict_after.items() if
-                                    val < self.limit_rows_number}
-                    assert not missing_rows, f"Found missing rows for partitions: {missing_rows}"
-                else:
-                    self.tester.assertEqual(self.partitions_dict_before,
-                                            partitions_dict_after,
-                                            msg='Row amount in partitions is not same before and after running of nemesis: '
-                                                f' {partitions_dict_after}')
+                try:
+                    if not ignore_limit_rows_number and self.limit_rows_number:
+                        missing_rows = {key: val for key, val in partitions_dict_after.items() if
+                                        val < self.limit_rows_number}
+                        assert not missing_rows, f"Found missing rows for partitions: {missing_rows}"
+                    else:
+                        self.tester.assertEqual(self.partitions_dict_before,
+                                                partitions_dict_after,
+                                                msg='Row amount in partitions is not same before and after running of nemesis: '
+                                                    f' {partitions_dict_after}')
+                except AssertionError as error:
+                    PartitionRowsValidationEvent(
+                        message=str(error),
+                        severity=Severity.CRITICAL).publish()
+
+                PartitionRowsValidationEvent(
+                    message="Partition rows number is validated.",
+                    severity=Severity.NORMAL).publish()
 
 
 def get_table_clustering_order(ks_cf: str, ck_name: str, session) -> str:
