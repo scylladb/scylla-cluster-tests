@@ -295,7 +295,7 @@ def call(Map pipelineParams) {
 
                                                         rm -fv ./latest
 
-                                                        if [[ -n "${params.requested_by_user}" ]] ; then
+                                                        if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
                                                             export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
                                                         fi
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
