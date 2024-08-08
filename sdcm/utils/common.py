@@ -1893,6 +1893,15 @@ def convert_name_to_ami_if_needed(ami_id_param: str, region_names: list[str],) -
 
     if len(param_values) == 1 and param_values[0].startswith("resolve:ssm:"):
         ssm_name = param_values[0].replace("resolve:ssm:", "")
+<<<<<<< HEAD
+=======
+        ami_list: list[str] = []
+        for region_name in region_names:
+            ami_list.append(get_ssm_ami(ssm_name, region_name=region_name))
+        return " ".join(ami_list)
+
+    if len(param_values) == 1 and not param_values[0].startswith("ami-"):
+>>>>>>> 9284e91b (feature(aws): support ami as ssm links)
         ami_list: list[str] = []
         for region_name in region_names:
             ami_list.append(get_ssm_ami(ssm_name, region_name=region_name))
