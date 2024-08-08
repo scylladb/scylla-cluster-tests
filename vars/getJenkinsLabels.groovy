@@ -18,18 +18,18 @@ def call(String backend, String region=null, String datacenter=null, String loca
     def gcp_project = params.gce_project?.trim() ?: 'gcp-sct-project-1'
     gcp_project = gcp_project == 'gcp' ? 'gcp-skilled-adapter-452' : gcp_project
 
-    def jenkins_labels = ['aws-eu-west-1': 'aws-sct-builders-eu-west-1-v2-asg',
-                          'aws-eu-west-2': 'aws-sct-builders-eu-west-2-v2-asg',
-                          'aws-eu-north-1': 'aws-sct-builders-eu-north-1-v2-asg',
-                          'aws-eu-central-1': 'aws-sct-builders-eu-central-1-v2-asg',
-                          'aws-us-east-1' : 'aws-sct-builders-us-east-1-v2-asg',
-                          'aws-us-west-2' : 'aws-sct-builders-us-west-2-v2-asg',
+    def jenkins_labels = ['aws-eu-west-1': 'aws-sct-builders-eu-west-1-v3-asg',
+                          'aws-eu-west-2': 'aws-sct-builders-eu-west-2-v3-asg',
+                          'aws-eu-north-1': 'aws-sct-builders-eu-north-1-v3-asg',
+                          'aws-eu-central-1': 'aws-sct-builders-eu-central-1-v3-asg',
+                          'aws-us-east-1' : 'aws-sct-builders-us-east-1-v3-asg',
+                          'aws-us-west-2' : 'aws-sct-builders-us-west-2-v3-asg',
                           'gce-us-east1': "${gcp_project}-builders-us-east1-template",
                           'gce-us-west1': "${gcp_project}-builders-us-west1-template",
                           'gce-us-central1': "${gcp_project}-builders-us-central1-template",
                           'gce': "${gcp_project}-builders-us-east1-template",
-                          'aws': 'aws-sct-builders-eu-west-1-v2-asg',
-                          'azure-eastus': 'aws-sct-builders-us-east-1-v2-asg']
+                          'aws': 'aws-sct-builders-eu-west-1-v3-asg',
+                          'azure-eastus': 'aws-sct-builders-us-east-1-v3-asg']
 
     def cloud_provider = getCloudProviderFromBackend(backend)
 
