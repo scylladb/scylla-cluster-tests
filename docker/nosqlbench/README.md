@@ -72,19 +72,18 @@ To run the NoSQLBench jar file, use the following command:
 java -jar bin/nb5.jar <arguments>
 ```
 
+Example
+
+```sh
+java -jar bin/nb5.jar cql_tabular rampup-cycles=1M main-cycles=100M write_cl=5 read_cl=5 rf=1 partsize=5000 driver=cqld4 -v --progress console:5m
+```
+
 Replace \<arguments> with any NoSQLBench command-line arguments.
 
 ## How It Works
 
 The Docker image is configured to use NoSQLBench and the ScyllaDB Java driver v4. The change-to-scylladb-driver.sh script is used during the image build process to replace the Apache Cassandra driver with the ScyllaDB driver. This setup ensures that all NoSQLBench operations are performed using the ScyllaDB driver, providing accurate benchmarking results.
 Building the Docker Image
-
-To build the Docker image, use the build.sh script. The script accepts the following arguments:
-
-* **-v**: NoSQLBench version from GitHub (required)
-* **-d**: ScyllaDB driver version (required)
-* **-g**: GitHub repository URL of NoSQLBench (optional, default is the official repository)
-* **-t**: Tag name for the Docker image (optional, default is scylladb/hydra-loaders:nosqlbench-\<NoSQLBench version>)
 
 ## Dockerbuild
 
@@ -96,17 +95,20 @@ Before you begin, ensure you have the following installed on your local machine:
 ### Example
 
 ```sh
-./build.sh -v "5.12.2-release" -d "4.18.0.1" -t "scylladb/hydra-loaders:nosqlbench-5.12.2"
+docker build \
+    -t "scylladb/hydra-loaders:nosqlbench-\<version>" \
+    --build-arg "SCYLLADB_JAVA_DRIVER=4.18.0.1" \
+    --target production \
+    --compress
 ```
-
-Running the above command will generate a Docker image tagged scylladb/hydra-loaders:nosqlbench-5.12.2, using NoSQLBench version 5.21.2 and ScyllaDB Java driver version 4.18.0.1
 
 ## Running NoSQLBench from the Docker Image
 
 To run NoSQLBench using the built Docker image, use the following command:
 
 ```sh
-docker run -it scylladb/hydra-loaders:nosqlbench-<NoSQLBench version> nosqlbench <additional-arguments>
+docker run -it \
+    scylladb/hydra-loaders:nosqlbench-<version> nosqlbench <additional-arguments>
 ```
 
 Replace \<NoSQLBench version> with the version specified during the image build and \<additional-arguments> with any NoSQLBench command-line arguments.
