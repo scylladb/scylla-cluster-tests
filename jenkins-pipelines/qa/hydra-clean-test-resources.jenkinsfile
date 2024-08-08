@@ -1,0 +1,52 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+pipeline {
+    agent {
+        label {
+            label "aws-sct-builders-eu-west-1-v3-CI"
+        }
+    }
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+    }
+    parameters {
+        string(defaultValue: '',
+               description: 'ID of a SCT test to clean resources',
+               name: 'test_id')
+        string(defaultValue: 'aws',
+               description: 'resources backend',
+               name: 'backend')
+    }
+    options {
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                dir('scylla-cluster-tests') {
+                    checkout scm
+                }
+            }
+        }
+        stage('Clean Test Resources') {
+            steps {
+                catchError(stageResult: 'FAILURE') {
+                    timeout(time: 15, unit: 'MINUTES') {
+                        sctScript """
+                            export SCT_REGION_NAME=
+                            export SCT_GCE_DATACENTER=
+                            export SCT_AZURE_REGION_NAME=
+                            ./docker/env/hydra.sh clean-resources --backend ${params.backend} --test-id ${params.test_id}
+                        """
+                   }
+                }
+            }
+        }
+
+    }
+}
