@@ -881,7 +881,6 @@ class TestStatsMixin(Stats):
                     setup_details["sysctl_output"].append(
                         {key: value for key, value in result.items()
                          if not any(tag in key for tag in sysctl_excludes)})
-
         self.update(update_data)
 
     def get_doc_data(self, key) -> Optional[dict]:
