@@ -60,7 +60,7 @@ EC2FleetCloud ec2FleetCloud = new EC2FleetCloud(
   config.labels,  // labels
   "/tmp/jenkins/", // fs root
   new SSHConnector(22,
-                   "user-jenkins_scylla-qa-ec2.pem", "", "", "", "", null, 0, 0,
+                   "user-jenkins_scylla_test_id_ed25519.pem", "", "", "", "", null, 0, 0,
                    new NonVerifyingKeyVerificationStrategy()),
   false, // privateIpUsed
   true, // alwaysReconnect
@@ -96,6 +96,8 @@ jenkins.save()
 
 class AwsBuilder:
     NUM_CPUS = 2
+    NUM_EXECUTORS = 4
+    VERSION = 'v3'
 
     def __init__(self, region: AwsRegion, number=1):
         self.region = region
@@ -108,11 +110,11 @@ class AwsBuilder:
     @cached_property
     def name(self):
         # example: aws-eu-central-1-qa-builder-v2-1
-        return f"aws-{self.region.region_name}-qa-builder-v2-{self.number}"
+        return f"aws-{self.region.region_name}-qa-builder-{self.VERSION}-{self.number}"
 
     @cached_property
     def jenkins_labels(self):
-        return f"aws-sct-builders-{self.region.region_name}-v2-asg"
+        return f"aws-sct-builders-{self.region.region_name}-{self.VERSION}-asg"
 
     @cached_property
     def instance(self) -> EC2ServiceResource.Instance:
@@ -146,72 +148,59 @@ class AwsBuilder:
             region_az=self.region.availability_zones[0],
         )
 
-    def add_to_jenkins(self):
-        LOGGER.info("Adding builder to jenkins:")
-        ssh_params = {
-            'port': '22',
-            'username': 'jenkins',
-            'credentialsId': 'user-jenkins_scylla-qa-ec2.pem',
-            'host': self.elastic_ip.public_ip,
-            "sshHostKeyVerificationStrategy": {
-                "$class": "hudson.plugins.sshslaves.verifiers.NonVerifyingKeyVerificationStrategy",
-                "stapler-class": "hudson.plugins.sshslaves.verifiers.NonVerifyingKeyVerificationStrategy"
-            },
-        }
-        try:
-            self.jenkins.create_node(
-                self.name,
-                numExecutors=15,
-                nodeDescription='QA Builder',
-                remoteFS='/home/jenkins/slave',
-                labels=self.jenkins_labels,
-                launcher=jenkins.LAUNCHER_SSH,
-                launcher_params=ssh_params)
-            LOGGER.info("%s added to jenkins successfully", self.name)
-        except jenkins.JenkinsException as ex:
-            if 'already exists' not in str(ex):
-                raise
-            LOGGER.info("%s was already added to jenkins", self.name)
-
     @property
-    def elastic_ip(self) -> EC2ServiceResource.VpcAddress:
-        name = self.name
-        addresses = self.region.client.describe_addresses(Filters=[{"Name": "tag:Name",
-                                                                    "Values": [self.name]}])
-        LOGGER.debug("Found Address: %s", addresses)
-        existing_addresses = addresses.get("Addresses", [])
-        if len(existing_addresses) == 0:
-            return None
-        assert len(existing_addresses) == 1, \
-            f"More than 1 VpcAddress with {name} found " \
-            f"in {self.region.region_name}: {existing_addresses}!"
-        return self.region.resource.VpcAddress(existing_addresses[0]["AllocationId"])  # pylint: disable=no-member
+    def launch_template_name(self):
+        return f"aws-sct-builders-{self.VERSION}"
 
-    def create_elastic_ip(self):
-        LOGGER.info("Creating elastic address...")
-        if eip := self.elastic_ip:
-            LOGGER.warning("elastic ip '%s' already exists! Id: '%s'.",
-                           self.name, eip.allocation_id)
-        else:
-            self.region.client.allocate_address(Domain='vpc', TagSpecifications=[{
-                'ResourceType': 'elastic-ip',
-                'Tags': [
-                    {'Key': 'Name', 'Value': self.name},
-                    {'Key': 'NodeType', 'Value': 'builder'},
-                    {'Key': 'RunByUser', 'Value': 'QA'}
-                ]
-            }])
+    def get_root_ebs_info_from_ami(self, ami_id: str) -> str:
+        res = self.region.resource.Image(ami_id)
+        return res.block_device_mappings[0].get('Ebs', {})
 
-    def associate_elastic_ip(self):
-        LOGGER.info("associate addresss '%s' with '%s'", self.elastic_ip.public_ip, self.name)
-        self.region.client.associate_address(AllocationId=self.elastic_ip.allocation_id,
-                                             InstanceId=self.instance.instance_id)
+    def get_launch_template_data(self, runner: AwsSctRunner) -> dict:
+        return dict(
+            LaunchTemplateData={
+                'BlockDeviceMappings': [
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": self.get_root_ebs_info_from_ami(runner.image.id) | {
+                            "Iops": 3000,
+                            "VolumeType": "gp3",
+                            "Throughput": 125
+                        }
+                    }
+                ],
+                'ImageId': runner.image.id,
+                'KeyName': self.region.SCT_KEY_PAIR_NAME,
+                'SecurityGroupIds': [self.region.sct_ssh_security_group.id],
+            }
+        )
 
-    def configure_one_builder(self):
-        self.region.create_sct_ssh_security_group()
-        self.create_elastic_ip()
-        self.associate_elastic_ip()
-        self.add_to_jenkins()
+    def update_launch_template_if_needed(self, runner):
+        click.secho(f"{self.region.region_name}: checking if template needs update")
+
+        launch_template_data = self.get_launch_template_data(runner)
+
+        res = self.region.client.describe_launch_template_versions(
+            LaunchTemplateName=self.launch_template_name,
+        )
+        default_version = [ver for ver in res['LaunchTemplateVersions'] if ver.get('DefaultVersion')][0]
+        curr_launch_template_data = default_version.get('LaunchTemplateData')
+
+        if launch_template_data.get('LaunchTemplateData') != curr_launch_template_data:
+            try:
+                click.secho(f"{self.region.region_name}: updating template")
+                res = self.region.client.create_launch_template_version(
+                    LaunchTemplateName=self.launch_template_name,
+                    SourceVersion=str(default_version.get('VersionNumber')),
+                    **launch_template_data
+                )
+                version_number = res.get('LaunchTemplateVersion', {}).get('VersionNumber')
+                self.region.client.modify_launch_template(LaunchTemplateName="aws-sct-builders",
+                                                          DefaultVersion=str(version_number))
+            except botocore.exceptions.ClientError as error:
+                LOGGER.debug(error.response)
+                if not error.response['Error']['Code'] == 'InvalidLaunchTemplateName.AlreadyExistsException':
+                    raise
 
     def create_launch_template(self):
         click.secho(f"{self.region.region_name}: create_launch_template")
@@ -340,8 +329,8 @@ class AwsCiBuilder(AwsBuilder):
     @cached_property
     def name(self):
         # example: aws-eu-central-1-qa-builder-v2-1
-        return f"aws-{self.region.region_name}-qa-builder-v2-{self.number}-CI"
+        return f"aws-{self.region.region_name}-qa-builder-{self.VERSION}-{self.number}-CI"
 
     @cached_property
     def jenkins_labels(self):
-        return f"aws-sct-builders-{self.region.region_name}-v2-CI"
+        return f"aws-sct-builders-{self.region.region_name}-{self.VERSION}-CI"
