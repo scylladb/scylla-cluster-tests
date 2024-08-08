@@ -137,3 +137,10 @@ ScyllaSysconfigSetupEvent: NORMAL
 TestStepEvent: ERROR
 CpuNotHighEnoughEvent: ERROR
 HWPerforanceEvent: CRITICAL
+<<<<<<< HEAD
+=======
+CommitLogCheckErrorEvent: ERROR
+ValidatorEvent: ERROR
+ScrubValidationErrorEvent: ERROR
+PartitionRowsValidationEvent: CRITICAL
+>>>>>>> b6391f90d (fix(validate_rows_per_partitions): use a new validation event)
