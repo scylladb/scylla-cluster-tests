@@ -73,6 +73,9 @@ pipeline {
         string(defaultValue: "5.2.11",
                description: 'the scylla version to use for the provision tests',
                name: 'scylla_version')
+        string(defaultValue: '',
+               description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
+               name: 'requested_by_user')
     }
     environment {
         AWS_ACCESS_KEY_ID         = credentials('qa-aws-secret-key-id')
