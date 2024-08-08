@@ -58,7 +58,7 @@ EC2FleetCloud ec2FleetCloud = new EC2FleetCloud(
   config.labels,  // labels
   "/tmp/jenkins/", // fs root
   new SSHConnector(22,
-                   "user-jenkins_scylla-qa-ec2.pem", "", "", "", "", null, 0, 0,
+                   "user-jenkins_scylla_test_id_ed25519.pem", "", "", "", "", null, 0, 0,
                    new NonVerifyingKeyVerificationStrategy()),
   false, // privateIpUsed
   true, // alwaysReconnect
@@ -96,6 +96,7 @@ jenkins.save()
 class AwsBuilder:
     NUM_CPUS = 2
     NUM_EXECUTORS = 4
+    VERSION = 'v3'
 
     def __init__(self, region: AwsRegion, params=None, number=1):
         self.region = region
@@ -107,15 +108,15 @@ class AwsBuilder:
     @cached_property
     def name(self):
         # example: aws-eu-central-1-qa-builder-v2-1
-        return f"aws-{self.region.region_name}-qa-builder-v2-{self.number}"
+        return f"aws-{self.region.region_name}-qa-builder-{self.VERSION}-{self.number}"
 
     @cached_property
     def jenkins_labels(self):
-        return f"aws-sct-builders-{self.region.region_name}-v2-asg"
+        return f"aws-sct-builders-{self.region.region_name}-{self.VERSION}-asg"
 
     @property
     def launch_template_name(self):
-        return "aws-sct-builders"
+        return f"aws-sct-builders-{self.VERSION}"
 
     def get_root_ebs_info_from_ami(self, ami_id: str) -> str:
         res = self.region.resource.Image(ami_id)
@@ -146,7 +147,7 @@ class AwsBuilder:
         launch_template_data = self.get_launch_template_data(runner)
 
         res = self.region.client.describe_launch_template_versions(
-            LaunchTemplateName="aws-sct-builders",
+            LaunchTemplateName=self.launch_template_name,
         )
         default_version = [ver for ver in res['LaunchTemplateVersions'] if ver.get('DefaultVersion')][0]
         curr_launch_template_data = default_version.get('LaunchTemplateData')
@@ -294,8 +295,8 @@ class AwsCiBuilder(AwsBuilder):
     @cached_property
     def name(self):
         # example: aws-eu-central-1-qa-builder-v2-1
-        return f"aws-{self.region.region_name}-qa-builder-v2-{self.number}-CI"
+        return f"aws-{self.region.region_name}-qa-builder-{self.VERSION}-{self.number}-CI"
 
     @cached_property
     def jenkins_labels(self):
-        return f"aws-sct-builders-{self.region.region_name}-v2-CI"
+        return f"aws-sct-builders-{self.region.region_name}-{self.VERSION}-CI"
