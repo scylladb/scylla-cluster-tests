@@ -65,7 +65,7 @@ instanceConfiguration.setTemplate("https://www.googleapis.com/compute/v1/project
 instanceConfiguration.setRetentionTimeMinutesStr("6")
 instanceConfiguration.setLaunchTimeoutSecondsStr("300")
 instanceConfiguration.setRunAsUser("jenkins")
-instanceConfiguration.setSshConfiguration(SshConfiguration.builder().customPrivateKeyCredentialsId("6e17c350-0a47-4a59-b0b9-7e64f1c35a65").build())
+instanceConfiguration.setSshConfiguration(SshConfiguration.builder().customPrivateKeyCredentialsId("user-jenkins_scylla_test_id_ed25519.pem").build())
 
 gcpCloud.addConfiguration(instanceConfiguration)
 
@@ -88,10 +88,10 @@ class GceBuilder:
 
     It creates a launch template based on sct-runner image, and adds configuration needed in Jenkins to use it
     """
+    VERSION = 'v2'
 
-    def __init__(self, region: GceRegion, number=1):
+    def __init__(self, region: GceRegion):
         self.region = region
-        self.number = number
         self.jenkins_info = KeyStore().get_json("jenkins.json")
         self.runner = GceSctRunner(region_name=self.region.region_name,
                                    availability_zone="a")
@@ -102,11 +102,11 @@ class GceBuilder:
     @cached_property
     def name(self):
         # example: gce-sct-project-1-us-east1-qa-builder
-        return f"gce-{self.region.project}-{self.region.region_name}-qa-builder"
+        return f"gce-{self.region.project}-{self.region.region_name}-qa-builder-{self.VERSION}"
 
     @cached_property
     def jenkins_labels(self):
-        return f"gcp-{self.region.project}-builders-{self.region.region_name}-template"
+        return f"gcp-{self.region.project}-builders-{self.region.region_name}-template-{self.VERSION}"
 
     def _add_cloud_configuration_to_jenkins(self):
         click.echo(f"{self.region.project}: {self.region.region_name}: add_cloud_configuration_to_jenkins")
