@@ -142,3 +142,4 @@ HWPerforanceEvent: CRITICAL
 CommitLogCheckErrorEvent: ERROR
 ValidatorEvent: ERROR
 ScrubValidationErrorEvent: ERROR
+PartitionRowsValidationEvent: CRITICAL
