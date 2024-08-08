@@ -1,8 +1,8 @@
 test_duration: 300
 
 stress_cmd: [
-    "nosqlbench cql-tabular2 rampup-cycles=1M main-cycles=100M write_ratio=5 read_ratio=5 async=300 --progress console:5s rf=3 partsize=5000 driver=cql-scylla -v"
-  ]
+    "nosqlbench cql_tabular rampup-cycles=1M main-cycles=100M write_cl=5 read_cl=5 rf=1 partsize=5000 driver=cqld4 -v --progress console:5m",
+]
 
 n_db_nodes: 6
 n_loaders: 2
