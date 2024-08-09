@@ -285,7 +285,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                                                         extra_docker_opts=f'{cpu_options} '
                                                                           '--network=host '
                                                                           f'--label shell_marker={self.shell_marker}'
-                                                                          f' --entrypoint /bin/bash'
+                                                                          f' --entrypoint /bin/sh'
                                                                           f' -v $HOME/{remote_hdr_file_name}:/{remote_hdr_file_name}')
 
         stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx, loader)
