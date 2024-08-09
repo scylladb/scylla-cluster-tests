@@ -4452,8 +4452,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         ks_tables_with_cdc = self.cluster.get_all_tables_with_cdc(self.target_node)
         if not ks_tables_with_cdc:
             self.log.warning("CDC is not enabled on any table. Skipping")
-            UnsupportedNemesis("CDC is not enabled on any table. Skipping")
-            return
+            raise UnsupportedNemesis("CDC is not enabled on any table. Skipping")
 
         ks, table = random.choice(ks_tables_with_cdc).split(".")
         self._run_cdc_stressor_tool(ks, table)
