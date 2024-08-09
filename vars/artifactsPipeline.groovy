@@ -149,7 +149,7 @@ def call(Map pipelineParams) {
                                                     # clean the old sct_runner_ip file
                                                     rm -fv ./sct_runner_ip
 
-                                                    if [[ -n "${params.requested_by_user}" ]] ; then
+                                                    if [[ -n "${params.requested_by_user ? params.requested_by_user : ''}" ]] ; then
                                                         export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
                                                     fi
                                                     export SCT_COLLECT_LOGS=false
