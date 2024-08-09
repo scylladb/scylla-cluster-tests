@@ -234,6 +234,20 @@ stress_cmd:
     --function custom -P row_count=5100100
     -P print_applied_func_names=2 -P codes="\"T4F2\""
     scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
+  # 27) T14F8  -> deletion scenario 1 - by 1
+  - >-
+    latte run --tag latte --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 10 --connections 3 --concurrency 90 --rate 500
+    --function custom -P row_count=1000000 -P offset=150100100 -P print_applied_func_names=2
+    -P codes="\"T14F8\""
+    scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
+  # 28) T14F9  -> deletion scenario 2 - by many
+  - >-
+    latte run --tag latte --duration 720m --request-timeout 30 --retry-interval '2s,10s'
+    --sampling 5s --threads 10 --connections 3 --concurrency 90 --rate 1000
+    --function custom -P row_count=1000000 -P offset=150100100 -P print_applied_func_names=2
+    -P codes="\"T14F9\""
+    scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
 round_robin: true
 
 gce_instance_type_db: 'n2-highmem-32'
