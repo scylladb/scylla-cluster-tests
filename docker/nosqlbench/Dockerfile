@@ -16,7 +16,7 @@ COPY ./change-to-scylladb-driver.sh .
 
 
 RUN chmod +x change-to-scylladb-driver.sh \
-    && ./change-to-scylladb-driver.sh ${SCYLLADB_JAVA_DRIVER} \
+    && ./change-to-scylladb-driver.sh ${SCYLLADB_JAVA_DRIVER} || exit 1 \
     && mvn \
     -P!build-nb5-appimage \
     -P!build-nbr-appimage \
