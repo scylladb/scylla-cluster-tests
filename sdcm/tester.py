@@ -321,6 +321,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             # Test id is set by Hydra or generated if running without Hydra
             self.test_config.set_test_id(self.params.get('test_id') or uuid4())
+        self.events_processes_registry = kwargs.get('_registry')
         self.test_config.set_test_name(self.id())
         self.test_config.set_tester_obj(self)
         self._init_logging()
