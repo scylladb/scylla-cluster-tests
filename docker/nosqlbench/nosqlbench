@@ -2,4 +2,4 @@
 
 set -e
 
-java -jar /nosqlbench/nb5.jar "$@"
+java --enable-preview -jar /nosqlbench/nb5.jar "$@"
