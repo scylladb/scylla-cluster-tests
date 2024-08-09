@@ -29,9 +29,13 @@ SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 
 
 class KeyStore:  # pylint: disable=too-many-public-methods
-    def __init__(self):
-        self.s3: S3ServiceResource = boto3.resource("s3")
-        self.s3_client: S3Client = boto3.client("s3")
+    @property
+    def s3(self) -> S3ServiceResource:
+        return boto3.resource("s3")
+
+    @property
+    def s3_client(self) -> S3Client:
+        return boto3.client("s3")
 
     def get_file_contents(self, file_name):
         obj = self.s3.Object(KEYSTORE_S3_BUCKET, file_name)
