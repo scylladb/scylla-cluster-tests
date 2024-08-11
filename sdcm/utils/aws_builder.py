@@ -21,8 +21,9 @@ import botocore
 import requests
 
 from sdcm.utils.aws_region import AwsRegion
-from sdcm.sct_runner import AwsSctRunner
+from sdcm.sct_runner import AwsSctRunner, AwsFipsSctRunner
 from sdcm.keystore import KeyStore
+from sdcm.utils.common import wait_ami_available
 
 LOGGER = logging.getLogger(__name__)
 
@@ -123,6 +124,7 @@ class AwsBuilder:
         return res.block_device_mappings[0].get('Ebs', {})
 
     def get_launch_template_data(self, runner: AwsSctRunner) -> dict:
+        wait_ami_available(self.region.client, runner.image.id)
         return dict(
             LaunchTemplateData={
                 'BlockDeviceMappings': [
@@ -168,9 +170,13 @@ class AwsBuilder:
                 if not error.response['Error']['Code'] == 'InvalidLaunchTemplateName.AlreadyExistsException':
                     raise
 
+    @property
+    def sct_runner(self):
+        return AwsSctRunner(region_name=self.region.region_name, availability_zone='a', params=None)
+
     def create_launch_template(self):
         click.secho(f"{self.region.region_name}: create_launch_template")
-        runner = AwsSctRunner(region_name=self.region.region_name, availability_zone='a', params=None)
+        runner = self.sct_runner
         if not runner.image:
             runner.create_image()
         try:
@@ -300,3 +306,22 @@ class AwsCiBuilder(AwsBuilder):
     @cached_property
     def jenkins_labels(self):
         return f"aws-sct-builders-{self.region.region_name}-{self.VERSION}-CI"
+
+
+class AwsFipsCiBuilder(AwsBuilder):
+    NUM_CPUS = 2
+    NUM_EXECUTORS = 1
+    VERSION = 'v3-fibs'
+
+    @cached_property
+    def name(self):
+        # example: aws-eu-central-1-qa-builder-v2-1
+        return f"aws-{self.region.region_name}-qa-builder-{self.VERSION}-{self.number}-CI-FIPS"
+
+    @cached_property
+    def jenkins_labels(self):
+        return f"aws-sct-builders-{self.region.region_name}-{self.VERSION}-CI-FIPS"
+
+    @property
+    def sct_runner(self):
+        return AwsFipsSctRunner(region_name=self.region.region_name, availability_zone='a', params=None)
