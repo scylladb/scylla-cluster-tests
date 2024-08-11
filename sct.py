@@ -1583,8 +1583,8 @@ def create_runner_instance(cloud_provider, region, availability_zone, instance_t
 
     LOGGER.info("Verifying SSH connectivity...")
     runner_public_ip = sct_runner.get_instance_public_ip(instance=instance)
-    remoter = sct_runner.get_remoter(host=runner_public_ip, connect_timeout=120)
-    if remoter.run("true", timeout=100, verbose=False, ignore_status=True).ok:
+    remoter = sct_runner.get_remoter(host=runner_public_ip, connect_timeout=240)
+    if remoter.run("true", timeout=200, verbose=False, ignore_status=True).ok:
         LOGGER.info("Successfully connected the SCT Runner. Public IP: %s", runner_public_ip)
         with sct_runner_ip_path.open(mode="w", encoding="utf-8") as sct_runner_ip_file:
             sct_runner_ip_file.write(runner_public_ip)
