@@ -49,7 +49,7 @@ from sdcm.utils.common import (
     gce_meta_to_dict,
     list_instances_aws,
     list_instances_gce,
-    str_to_bool,
+    str_to_bool, convert_name_to_ami_if_needed,
 )
 from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name, tags_as_ec2_tags, EC2NetworkConfiguration
 from sdcm.utils.aws_region import AwsRegion
@@ -548,6 +548,9 @@ class AwsSctRunner(SctRunner):
                 interfaces[-1]["AssociatePublicIpAddress"] = not address_pool
 
         LOGGER.info("Creating instance...")
+        base_image = convert_name_to_ami_if_needed(
+            ami_id_param=base_image, region_names=tuple([aws_region.region_name]))
+
         result = aws_region.resource.create_instances(
             ImageId=base_image,
             InstanceType=instance_type,
@@ -1349,3 +1352,8 @@ def clean_sct_runners(test_status: str,
             end_message = "No runners have been terminated"
 
     LOGGER.info(end_message)
+
+
+class AwsFipsSctRunner(AwsSctRunner):
+    VERSION = f"{SctRunner.VERSION}-fips"
+    BASE_IMAGE = 'resolve:ssm:/aws/service/marketplace/prod-k6fgbnayirmrc/latest'
