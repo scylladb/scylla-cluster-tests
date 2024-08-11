@@ -29,11 +29,13 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'gce-us-central1': "${gcp_project}-builders-us-central1-template",
                           'gce': "${gcp_project}-builders-us-east1-template",
                           'aws': 'aws-sct-builders-eu-west-1-v2-asg',
-                          'azure-eastus': 'aws-sct-builders-us-east-1-v2-asg']
+                          'azure-eastus': 'aws-sct-builders-us-east-1-v2-asg',
+                          'aws-fips': 'aws-sct-builders-us-east-1-v3-fibs-CI-FIPS',
+                          ]
 
     def cloud_provider = getCloudProviderFromBackend(backend)
 
-    if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter) || (cloud_provider == 'azure' && location)) {
+    if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter) || (cloud_provider == 'azure' && location) || (cloud_provider == 'aws-fibs' && region)) {
         def supported_regions = []
 
         if (cloud_provider == 'aws') {
@@ -62,6 +64,8 @@ def call(String backend, String region=null, String datacenter=null, String loca
         } else {
             throw new Exception("=================== ${cloud_provider} region ${region} not supported ! ===================")
         }
+    } else if (region == 'fips') {
+        return [ "label": jenkins_labels['aws-fips'], "region": '' ]
     } else {
         return [ "label": jenkins_labels[cloud_provider], "region": region ]
     }
