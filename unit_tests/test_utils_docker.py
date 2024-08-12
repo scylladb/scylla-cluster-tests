@@ -577,3 +577,44 @@ class TestContainerManager(unittest.TestCase):
         with self.subTest("Ignore keep-alive tag"):
             ContainerManager.destroy_all_containers(self.node, ignore_keepalive=True)
             self.assertRaises(NotFound, ContainerManager.get_container, self.node, "c1")
+
+    def test_destroy_unregistered_containers(self):
+        tags = {'TestId': 'test123', 'Name': 'nodeA'}
+
+        r_c1, r_c2, nr_c = [DummyContainer() for _ in range(3)]
+        r_c1.get_attrs = lambda: {"Config": {"Labels": {}}}
+        r_c2.get_attrs = nr_c.get_attrs = lambda: {"Config": {"Labels": tags}}
+
+        node = DummyNode()
+        node.tags, node.name = tags, tags['Name']
+        node._containers["r_c1"] = r_c1  # register not-labeled container for the node
+        node._containers["r_c2"] = r_c2  # register labeled container for the node
+
+        def stub_list(*args, **kwargs):
+            filters = kwargs.get('filters', {})
+            filter_dict = {}
+            for label in filters['label']:
+                key, val = label.split('=')
+                filter_dict[key] = val
+
+            filtered_containers = []
+            for container in (r_c1, r_c2, nr_c):
+                container_labels = container.attrs['Config']['Labels']
+                if all(container_labels.get(key) == val for key, val in filter_dict.items()):
+                    filtered_containers.append(container)
+
+            return filtered_containers
+
+        r_c1.remove, r_c2.remove, nr_c.remove = Mock(), Mock(), Mock()
+        # temporarily patch dummy default_docker_client.containers.list to be able to filter containers by labels
+        with patch.object(ContainerManager.default_docker_client.containers, 'list', new=stub_list):
+            ContainerManager.destroy_unregistered_containers(node)
+
+        with self.subTest("Not-registered labeled container destroyed"):
+            nr_c.remove.assert_called_once()
+
+        with self.subTest("Registered labeled container not destroyed"):
+            r_c2.remove.assert_not_called()
+
+        with self.subTest("Registered not labeled container not destroyed"):
+            r_c2.remove.assert_not_called()
