@@ -369,6 +369,25 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         LOGGER.debug("%s: container `%s' unregistered", instance, name)
 
     @classmethod
+    def destroy_unregistered_containers(
+            cls, instance: INodeWithContainerManager, docker_client: DockerClient = None) -> None:
+        """Destroy, if any, containers that were created for the instance during previous test run(s)"""
+        docker_client = docker_client or cls.default_docker_client
+        filters = {
+            "label": [
+                f"TestId={instance.tags['TestId']}",
+                f"Name={instance.name}",
+            ]
+        }
+        containers = docker_client.containers.list(all=True, filters=filters)
+        for container in containers:
+            if container not in instance._containers.values():
+                container.remove(v=True, force=True)
+                LOGGER.debug(
+                    "Container '%s' labeled with '%s' node is not registered for this node. It is likely a "
+                    "leftover container from previous test run and was destroyed.", container.name, instance.name)
+
+    @classmethod
     def build_with_progress_prints(cls, docker_client, image_tag, **kwargs):
         """
         build image while printing the progress to log

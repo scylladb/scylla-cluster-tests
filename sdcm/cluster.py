@@ -376,6 +376,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.set_hostname()
             self.configure_remote_logging()
         self.start_task_threads()
+        if self.test_config.REUSE_CLUSTER:
+            ContainerManager.destroy_unregistered_containers(self)
         self._init_port_mapping()
 
         self.set_keep_alive()
