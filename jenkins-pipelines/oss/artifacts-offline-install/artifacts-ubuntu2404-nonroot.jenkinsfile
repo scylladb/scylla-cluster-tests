@@ -4,7 +4,7 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 artifactsPipeline(
-    test_config: 'test-cases/artifacts/ubuntu2204.yaml',
+    test_config: 'test-cases/artifacts/ubuntu2404.yaml',
     backend: 'gce',
     nonroot_offline_install: true,
     provision_type: 'spot',
