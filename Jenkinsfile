@@ -195,7 +195,16 @@ pipeline {
         stage("provision test") {
             when {
                 expression {
-                    return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker,test-provision-k8s-local-kind-aws,test-provision-k8s-eks,test-provision-azure")
+                    def labels = [
+                        "test-provision",
+                        "test-provision-docker",
+                        "test-provision-aws", "test-provision-aws-reuse",
+                        "test-provision-gce", "test-provision-gce-reuse",
+                        "test-provision-azure", "test-provision-azure-reuse",
+                        "test-provision-k8s-local-kind-aws", "test-provision-k8s-local-kind-aws-reuse",
+                        "test-provision-k8s-eks", "test-provision-k8s-eks-reuse"
+                    ].join(",")
+                    return pullRequestContainsLabels(labels)
                 }
             }
             steps {
@@ -203,7 +212,7 @@ pipeline {
                     def sctParallelTests = [:]
                     target_backends.each {
                         def backend = it
-                        if (pullRequestContainsLabels("test-provision,test-provision-${backend}")) {
+                        if (pullRequestContainsLabels("test-provision,test-provision-${backend},test-provision-${backend}-reuse")) {
                             sctParallelTests["provision test on ${backend}"] = {
                                 def curr_params = createRunConfiguration(backend)
                                 def working_dir = "${backend}/scylla-cluster-tests"
@@ -235,6 +244,7 @@ pipeline {
                                                 env.BUILD_USER_ID=env.CHANGE_AUTHOR
                                                 timeout(time: 300, unit: 'MINUTES') {
                                                     dir(working_dir) {
+                                                        echo "Run provision test"
                                                         runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
                                                         result = 'SUCCESS'
                                                         pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
@@ -257,17 +267,6 @@ pipeline {
                                         } catch(Exception err) {
                                             echo "${err}"
                                         }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                timeout(time: 30, unit: 'MINUTES') {
-                                                    dir(working_dir) {
-                                                        runCleanupResource(curr_params, builder.region)
-                                                    }
-                                                }
-                                            }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                        }
                                         if (!(backend in ['k8s-local-kind-aws', 'k8s-eks'])) {
                                             try {
                                                 wrap([$class: 'BuildUser']) {
@@ -281,6 +280,38 @@ pipeline {
                                                 echo "${err}"
                                                 currentBuild.result = 'FAILURE'
                                             }
+                                        }
+                                        if (pullRequestContainsLabels("test-provision-${backend}-reuse")) {
+                                            try {
+                                                withEnv(["SCT_REUSE_CLUSTER=${env.SCT_TEST_ID}"]) {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        env.BUILD_USER_ID=env.CHANGE_AUTHOR
+                                                        timeout(time: 300, unit: 'MINUTES') {
+                                                            dir(working_dir) {
+                                                                echo "Reuse the cluster and re-run provision test"
+                                                                runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
+                                                                result = 'SUCCESS'
+                                                                pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } catch(Exception err) {
+                                                echo "${err}"
+                                                result = 'FAILURE'
+                                                pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed during cluster reuse test')
+                                            }
+                                        }
+                                        try {
+                                            wrap([$class: 'BuildUser']) {
+                                                timeout(time: 30, unit: 'MINUTES') {
+                                                    dir(working_dir) {
+                                                        runCleanupResource(curr_params, builder.region)
+                                                    }
+                                                }
+                                            }
+                                        } catch(Exception err) {
+                                            echo "${err}"
                                         }
                                         if (result == 'FAILURE'){
                                             currentBuild.result = 'FAILURE'
