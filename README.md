@@ -72,6 +72,7 @@ hydra --execute-on-runner <runner-ip|`cat sct_runner_ip> "run-test longevity_tes
 #### Run test locally with GCE backend:
 ```bash
 export SCT_SCYLLA_VERSION=5.2.1
+export SCT_IP_SSH_CONNECTIONS="public"
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend gce --config test-cases/PR-provision-test.yaml
 ```
 
@@ -98,12 +99,21 @@ hydra bash
 
 #### List resources being used by user:
 ```bash
+# NOTE: Only use `whoami` if your local use is the same as your okta/email username
 hydra list-resources --user `whoami`
+```
+
+#### Clear resources:
+```bash
+hydra clean-resources --user `whoami`
+# by default, it only cleans aws resources
+# to clean other backends, specify manually
+hydra clean-resources --user `whoami` -b gce
 ```
 
 #### Clear resources being used by the last test run:
 ```bash
-SCT_CLUSTER_BACKEND= hydra list-resources --test-id `cat ~/sct-results/latest/test_id`
+SCT_CLUSTER_BACKEND= hydra clean-resources --test-id `cat ~/sct-results/latest/test_id`
 ```
 
 ## [Install local development environment](docs/install-local-env.md)

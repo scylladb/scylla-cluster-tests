@@ -33,7 +33,7 @@ if yum --help; then
   yum install -y gettext
 
 elif apt --help; then
-  apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev libffi-dev
+  apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev libffi-dev uuid-runtime
 
 else
   echo "Unsupported distro"
@@ -43,14 +43,15 @@ fi
 # Install kubectl needed for k8s-* backends
 
 curl -o /tmp/kubectl -L "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+install -o root -g root -m 0755 /tmp/kubectl /usr/local/bin/kubectl
 
 # Install docker
-
-curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
-sh get-docker.sh
-groupadd docker || true
-usermod -aG docker $USER || true
+if ! docker --version ; then
+    curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
+    sh get-docker.sh
+    groupadd docker || true
+    usermod -aG docker $USER || true
+fi
 
 
 # Make sdcm available in python path
@@ -61,9 +62,7 @@ else
     pre-commit install
     pre-commit install --hook-type commit-msg
 
-    ln -s `pwd`/sdcm $(python -c "import site; print site.getsitepackages()[0]")/sdcm
     echo "========================================================="
     echo "Please run 'aws configure' to configure AWS CLI and then"
-    echo "run 'get-qa-ssh-keys.sh' to retrieve AWS QA private keys"
     echo "========================================================="
 fi
