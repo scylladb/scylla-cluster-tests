@@ -86,8 +86,8 @@ workload_to_table = {
 
 def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str, cycle: int, result: dict):
     result_table = workload_to_table[workload]()
-    result_table.name = f"{name} - {workload} - latencies"
-    result_table.description = f"{description} - {workload} workload"
+    result_table.name = f"{workload} - {name} - latencies"
+    result_table.description = f"{workload} workload - {description}"
     operation_error_thresholds = LATENCY_ERROR_THRESHOLDS.get(name, LATENCY_ERROR_THRESHOLDS["default"])
     for operation in ["write", "read"]:
         summary = result["hdr_summary"]
@@ -106,7 +106,7 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         event_name = event.split(".")[-1]
         stall_stats = result["reactor_stalls_stats"][event]
         result_table = ReactorStallStatsResult()
-        result_table.name = f"{name} - {workload} - stalls count - {event_name}"
+        result_table.name = f"{workload} - {name} - stalls - {event_name}"
         result_table.description = f"{event_name} event counts"
         result_table.add_result(column=f"total", row=f"Cycle #{cycle}",
                                 value=stall_stats["counter"], status=Status.PASS)
