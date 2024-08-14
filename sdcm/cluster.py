@@ -181,11 +181,6 @@ MAX_TIME_WAIT_FOR_DECOMMISSION: int = HOUR_IN_SEC * 6
 LOGGER = logging.getLogger(__name__)
 
 
-def remove_if_exists(file_path):
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
-
 class NodeError(Exception):
 
     def __init__(self, msg=None):
@@ -5809,6 +5804,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         self.add_sct_dashboards_to_grafana(node)
         self.save_sct_dashboards_config(node)
         self.save_monitoring_version(node)
+        Path(self.sct_dashboard_json_file).unlink(missing_ok=True)
 
     def save_monitoring_version(self, node):
         node.remoter.run(
