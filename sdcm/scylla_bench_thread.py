@@ -15,6 +15,7 @@ import os
 import re
 import uuid
 import time
+import builtins
 import logging
 import contextlib
 from enum import Enum
@@ -77,30 +78,40 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
     DOCKER_IMAGE_PARAM_NAME = "stress_image.scylla-bench"
     _SB_STATS_MAPPING = {
         # Mapping for scylla-bench statistic and configuration keys to db stats keys
-        'Mode': 'Mode',
-        'Workload': 'Workload',
-        'Timeout': 'Timeout',
-        'Consistency level': 'Consistency level',
-        'Partition count': 'Partition count',
-        'Clustering rows': 'Clustering rows',
-        'Page size': 'Page size',
-        'Concurrency': 'Concurrency',
-        'Connections': 'Connections',
-        'Maximum rate': 'Maximum rate',
-        'Client compression': 'Client compression',
-        'Clustering row size': 'Clustering row size',
-        'Rows per request': 'Rows per request',
-        'Total rows': 'Total rows',
-        'max': 'latency max',
-        '99.9th': 'latency 99.9th percentile',
-        '99th': 'latency 99th percentile',
-        '95th': 'latency 95th percentile',
-        '90th': '90th',
-        'median': 'latency median',
-        'Operations/s': 'op rate',
-        'Rows/s': 'row rate',
-        'Total ops': 'Total partitions',
-        'Time (avg)': 'Total operation time',
+        'Mode': (str, 'Mode'),
+        'Workload': (str, 'Workload'),
+        'Timeout': (int, 'Timeout'),
+        'Consistency level': (str, 'Consistency level'),
+        'Partition count': (int, 'Partition count'),
+        'Clustering rows': (int, 'Clustering rows'),
+        'Page size': (int, 'Page size'),
+        'Concurrency': (int, 'Concurrency'),
+        'Connections': (int, 'Connections'),
+        'Maximum rate': (int, 'Maximum rate'),
+        'Client compression': (bool, 'Client compression'),
+        'Clustering row size': (int, 'Clustering row size'),
+        'Rows per request': (int, 'Rows per request'),
+        'Total rows': (int, 'Total rows'),
+        'max': (int, 'latency max'),
+        '99.9th': (int, 'latency 99.9th percentile'),
+        '99th': (int, 'latency 99th percentile'),
+        '95th': (int, 'latency 95th percentile'),
+        '90th': (int, '90th'),
+        'median': (int, 'latency median'),
+        'Operations/s': (int, 'op rate'),
+        'Rows/s': (int, 'row rate'),
+        'Total ops': (int, 'Total partitions'),
+        'Time (avg)': (int, 'Total operation time'),
+        'Max error number at row': (int, 'Max error number at row'),
+        'Max error number': (str, 'Max error number'),
+        'Retries': (str, 'Retries'),
+        'number': (int, 'Retries number'),
+        'min interval': (int, 'Retries min interval'),
+        'max interval': (int, 'Retries max interval'),
+        'handler': (str, 'Retries handler'),
+        'Hdr memory consumption': (int, 'Hdr memory consumption bytes'),
+        'raw latency': (str, 'raw latency'),
+        'mean': (int, 'latency mean'),
     }
 
     # pylint: disable=too-many-arguments
@@ -256,11 +267,20 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 continue
             key = split[0].strip()
             value = ' '.join(split[1].split())
-            if target_key := cls._SB_STATS_MAPPING.get(key):
-                if value.isdecimal():
-                    value = int(value)
-                else:
-                    value = convert_metric_to_ms(value)
+            if value_opts := cls._SB_STATS_MAPPING.get(key):
+                value_type, target_key = value_opts
+                match value_type:
+                    case builtins.int:
+                        if value.isdecimal():
+                            value = int(value)
+                        else:
+                            value = convert_metric_to_ms(value)
+                    case builtins.bool:
+                        value = value.lower() == 'true'
+                    case builtins.str:
+                        pass
+                    case _:
+                        LOGGER.debug('unknown value type found: `%s`', value_type)
                 results[target_key] = value
             else:
                 LOGGER.debug('unknown result key found: `%s` with value `%s`', key, value)
