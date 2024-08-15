@@ -3,10 +3,15 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
+// Runs LongevityTest for topology changes with streaming instead of RBNO
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
+<<<<<<<< HEAD:jenkins-pipelines/oss/longevity/longevity-mv-si-4days.jenkinsfile
     test_config: '''["test-cases/longevity/longevity-mv-si-4days.yaml", "configurations/disable_rbno.yaml"]'''
 
+========
+    test_config: '''["test-cases/longevity/longevity-cdc-100gb-8h-multi-dc-topology-changes.yaml", "configurations/disable_rbno.yaml"]''',
+>>>>>>>> 3f309826 (test(tier2): Use streaming for longevity-cdc-8h-multi-dc-topology-changes.jenkinsfile):jenkins-pipelines/oss/longevity/longevity-cdc-8h-multi-dc-topology-changes.jenkinsfile
 )
