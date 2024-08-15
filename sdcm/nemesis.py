@@ -356,7 +356,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def set_target_node(self, dc_idx: Optional[int] = None, rack: Optional[int] = None,
                         is_seed: Union[bool, DefaultValue, None] = DefaultValue,
-                        allow_only_last_node_in_rack: bool = False):
+                        allow_only_last_node_in_rack: bool = False, current_disruption=None):
         """Set a Scylla node as target node.
 
         if is_seed is None - it will ignore seed status of the nodes
@@ -377,9 +377,33 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             self.target_node = random.choice(nodes)
 
+<<<<<<< HEAD
         self.set_current_running_nemesis(node=self.target_node)
         self.log.info('Current Target: %s with running nemesis: %s',
                       self.target_node, self.target_node.running_nemesis)
+=======
+        with NEMESIS_TARGET_SELECTION_LOCK:
+            nodes = self._get_target_nodes(is_seed=is_seed, dc_idx=dc_idx, rack=rack)
+            if not nodes:
+                dc_str = '' if dc_idx is None else f'dc {dc_idx} '
+                rack_str = '' if rack is None else f'rack {rack} '
+                raise UnsupportedNemesis(
+                    f"Can't allocate node from {dc_str}{rack_str}to run nemesis on")
+            if allow_only_last_node_in_rack:
+                self.target_node = nodes[-1]
+            else:
+                self.target_node = random.choice(nodes)
+
+            if current_disruption:
+                self.target_node.running_nemesis = current_disruption
+                self.set_current_disruption(current_disruption)
+            elif self.current_disruption:
+                self.target_node.running_nemesis = self.current_disruption
+            else:
+                raise ValueError("current_disruption is not set")
+            self.log.info('Current Target: %s with running nemesis: %s',
+                          self.target_node, self.target_node.running_nemesis)
+>>>>>>> a12ee91c6 (fix(nemesis): make sure `set_target_node` always set `current_disruption`)
 
     @raise_event_on_failure
     def run(self, interval=None, cycles_count: int = -1):
@@ -636,7 +660,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return None, None
 
     def _prepare_start_stop_compaction(self) -> StartStopCompactionArgs:
-        self.set_target_node()
         ks, cf = self._get_random_non_system_ks_cf()
 
         if not ks or not cf:
@@ -1249,6 +1272,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _nodetool_decommission(self, add_node=True):
         if self._is_it_on_kubernetes():
+            self.unset_current_running_nemesis(self.target_node)
             self.set_target_node(allow_only_last_node_in_rack=True)
         target_is_seed = self.target_node.is_seed
         self.cluster.decommission(self.target_node)
@@ -5041,7 +5065,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
             args[0].log.debug(f'Data validator error: {err}')
 
     @wraps(method)
-    def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements
+    def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements  # noqa: PLR0914
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-branches
         method_name = method.__name__
@@ -5056,8 +5080,14 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     # NOTE: exclusive nemesis will wait before the end of all other ones
                     time.sleep(10)
 
+<<<<<<< HEAD
             args[0].set_target_node()
             args[0].current_disruption = "".join(p.capitalize() for p in method_name.replace("disrupt_", "").split("_"))
+=======
+            current_disruption = "".join(p.capitalize() for p in method_name.replace("disrupt_", "").split("_"))
+            args[0].set_target_node(current_disruption=current_disruption)
+
+>>>>>>> a12ee91c6 (fix(nemesis): make sure `set_target_node` always set `current_disruption`)
             args[0].cluster.check_cluster_health()
             num_nodes_before = len(args[0].cluster.nodes)
             start_time = time.time()
@@ -5068,8 +5098,12 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
             result = None
             status = True
             # pylint: disable=protected-access
+<<<<<<< HEAD
             args[0]._set_current_disruption(f"{args[0].current_disruption} {args[0].target_node}")
             args[0].set_current_running_nemesis(node=args[0].target_node)
+=======
+
+>>>>>>> a12ee91c6 (fix(nemesis): make sure `set_target_node` always set `current_disruption`)
             log_info = {
                 'operation': args[0].current_disruption,
                 'start': int(start_time),
