@@ -381,7 +381,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def set_target_node(self, dc_idx: Optional[int] = None, rack: Optional[int] = None,
                         is_seed: Union[bool, DefaultValue, None] = DefaultValue,
-                        allow_only_last_node_in_rack: bool = False):
+                        allow_only_last_node_in_rack: bool = False, current_disruption=None):
         """Set a Scylla node as target node.
 
         if is_seed is None - it will ignore seed status of the nodes
@@ -405,7 +405,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             else:
                 self.target_node = random.choice(nodes)
 
-            self.target_node.running_nemesis = self.current_disruption
+            if current_disruption:
+                self.target_node.running_nemesis = current_disruption
+                self.set_current_disruption(current_disruption)
+            elif self.current_disruption:
+                self.target_node.running_nemesis = self.current_disruption
+            else:
+                raise ValueError("current_disruption is not set")
             self.log.info('Current Target: %s with running nemesis: %s',
                           self.target_node, self.target_node.running_nemesis)
 
@@ -664,7 +670,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return None, None
 
     def _prepare_start_stop_compaction(self) -> StartStopCompactionArgs:
-        self.set_target_node()
         ks, cf = self._get_random_non_system_ks_cf()
 
         if not ks or not cf:
@@ -1303,6 +1308,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _nodetool_decommission(self, add_node=True):
         if self._is_it_on_kubernetes():
+            self.unset_current_running_nemesis(self.target_node)
             self.set_target_node(allow_only_last_node_in_rack=True)
         target_is_seed = self.target_node.is_seed
         self.cluster.decommission(self.target_node)
@@ -5178,7 +5184,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
             args[0].log.debug(f'Data validator error: {err}')
 
     @wraps(method)
-    def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements
+    def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements  # noqa: PLR0914
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-branches
         method_name = method.__name__
@@ -5193,9 +5199,8 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     # NOTE: exclusive nemesis will wait before the end of all other ones
                     time.sleep(10)
 
-            args[0].current_disruption = "".join(p.capitalize() for p in method_name.replace("disrupt_", "").split("_"))
-            args[0].set_current_disruption(f"{args[0].current_disruption}")
-            args[0].set_target_node()
+            current_disruption = "".join(p.capitalize() for p in method_name.replace("disrupt_", "").split("_"))
+            args[0].set_target_node(current_disruption=current_disruption)
 
             args[0].cluster.check_cluster_health()
             num_nodes_before = len(args[0].cluster.nodes)
@@ -5208,7 +5213,6 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
             status = True
             # pylint: disable=protected-access
 
-            args[0].set_current_running_nemesis(node=args[0].target_node)
             log_info = {
                 'operation': args[0].current_disruption,
                 'start': int(start_time),
