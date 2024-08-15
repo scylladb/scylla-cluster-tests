@@ -304,7 +304,7 @@ def ignore_raft_topology_cmd_failing():
         stack.enter_context(EventsSeverityChangerFilter(
             new_severity=Severity.WARNING,
             event_class=DatabaseLogEvent,
-            regex=r".*raft_topology - raft_topology_cmd failed with: seastar::abort_requested_exception \(abort requested\)",
+            regex=r".*raft_topology - raft_topology_cmd.* failed with: seastar::abort_requested_exception \(abort requested\)",
             extra_time_to_expiration=30
         ))
         stack.enter_context(EventsSeverityChangerFilter(
