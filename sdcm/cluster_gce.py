@@ -404,8 +404,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         )
         instance = self._create_node_with_retries(name=name,
                                                   dc_idx=dc_idx,
-                                                  create_node_params=create_node_params,
-                                                  spot=spot)
+                                                  create_node_params=create_node_params)
 
         self.log.debug('Created %s instance %s', 'spot' if spot else 'on-demand', instance)
         try:
@@ -423,23 +422,20 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def _create_node_with_retries(self,
                                   name: str,
                                   dc_idx: int,
-                                  create_node_params: dict[str, Any],
-                                  spot: bool = False) -> compute_v1.Instance:
+                                  create_node_params: dict[str, Any]) -> compute_v1.Instance:
         try:
             return create_instance(**create_node_params)
         except google.api_core.exceptions.GoogleAPIError as gbe:
-            if not spot:
-                raise
-
-            #  attempt to destroy if node did not start due to preemption
-            if "Instance failed to start due to preemption" in str(gbe):
+            #  attempt to destroy if node did not start due to preemption or quota exceeded
+            if "Instance failed to start due to preemption" in str(gbe) or "Quota exceeded" in str(gbe):
                 try:
                     self._destroy_instance(name=name, dc_idx=dc_idx)
                 except google.api_core.exceptions.NotFound:
                     LOGGER.warning("Attempted to destroy node: {name: %s, idx:%s}, but could not find it. "
                                    "Possibly the node was destroyed already.", name, dc_idx)
 
-            create_node_params['spot'] = spot = False
+            # on any case of failure, fall back to on-demand instance
+            create_node_params['spot'] = False
 
             raise gbe
 
