@@ -26,7 +26,7 @@ stress_duration=360</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../tier2/longevity-200gb-48h-network-monkey-test,../tier2/longevity-cdc-8h-multi-dc-topology-changes-test,../tier2/longevity-counters-multidc-test,../tier2/longevity-double-cluster-with-schema-changes-test,../tier2/longevity-large-collections-12h-test,../tier2/longevity-large-partition-2days-reversed-queries-test,../tier2/longevity-lwt-24h-gce-test,../tier2/longevity-multi-keyspaces-60h-test,../tier2/longevity-mv-synchronous-updates-12h-test,../tier2/scale-5000-tables-test</projects>
+          <projects>../tier2/longevity-200gb-48h-network-monkey-test,../tier2/longevity-cdc-8h-multi-dc-topology-changes-streaming-test,../tier2/longevity-counters-multidc-test,../tier2/longevity-double-cluster-with-schema-changes-test,../tier2/longevity-large-collections-12h-test,../tier2/longevity-large-partition-2days-reversed-queries-test,../tier2/longevity-lwt-24h-gce-test,../tier2/longevity-multi-keyspaces-60h-test,../tier2/longevity-mv-synchronous-updates-12h-test,../tier2/scale-5000-tables-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
