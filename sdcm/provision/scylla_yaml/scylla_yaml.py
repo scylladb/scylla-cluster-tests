@@ -351,6 +351,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     enable_tablets: bool = None  # False, but default scylla.yaml for some versions (e.g. 6.0) override it to True
     force_gossip_topology_changes: bool = None  # False
 
+    reader_concurrency_semaphore_cpu_concurrency: int = None
+
     def dict(  # pylint: disable=arguments-differ
         self,
         *,
