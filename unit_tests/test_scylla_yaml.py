@@ -397,7 +397,8 @@ class ScyllaYamlTest(unittest.TestCase):
                 'virtual_dirty_soft_limit': None,
                 'volatile_system_keyspace_for_testing': None,
                 'workdir': None,
-                'write_request_timeout_in_ms': None
+                'write_request_timeout_in_ms': None,
+                'reader_concurrency_semaphore_cpu_concurrency': None,
             }
         )
 
