@@ -434,7 +434,7 @@ class FillDatabaseData(ClusterTester):
             ],
             'min_version': '1.7',
             'max_version': '',
-            'skip_condition': 'not self.is_counter_supported',
+            'skip_condition': 'self.is_counter_supported',
             'skip': ''},
         {
             'name': 'indexed_with_eq_test: Check that you can query for an indexed column even with a key EQ clause',
