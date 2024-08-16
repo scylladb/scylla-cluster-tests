@@ -342,6 +342,8 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
 
     compaction_collection_items_count_warning_threshold: int = None  # None
 
+    reader_concurrency_semaphore_cpu_concurrency: int = None
+
     def dict(  # pylint: disable=arguments-differ
         self,
         *,
