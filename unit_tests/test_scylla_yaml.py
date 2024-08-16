@@ -401,6 +401,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'write_request_timeout_in_ms': None,
                 'enable_tablets': None,
                 'force_gossip_topology_changes': None,
+                'reader_concurrency_semaphore_cpu_concurrency': None,
             }
         )
 
