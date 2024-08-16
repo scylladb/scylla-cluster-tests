@@ -140,3 +140,6 @@ scylla_d_overrides_files: [
   'scylla-qa-internal/custom_d1/workload1/scylla.d/io.conf',
   'scylla-qa-internal/custom_d1/workload1/scylla.d/io_properties.yaml',
 ]
+
+append_scylla_yaml:
+  reader_concurrency_semaphore_cpu_concurrency: 10
