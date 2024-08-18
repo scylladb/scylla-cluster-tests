@@ -105,7 +105,6 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                parse_nodetool_listsnapshots,
                                update_authenticator, ParallelObject,
                                ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table)
-from sdcm.utils.database_query_utils import get_max_replication_factor
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.quota import configure_quota_on_node_for_scylla_user_context, is_quota_enabled_on_node, enable_quota_on_node, \
     write_data_to_reach_end_of_quota
@@ -1313,17 +1312,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes():
             self.unset_current_running_nemesis(self.target_node)
             self.set_target_node(allow_only_last_node_in_rack=True)
-        # If any keyspace RF equals to number-of-cluster-nodes, where tablets are in use,
-        # then a decommission is not supported and has to be skipped.
-        with self.cluster.cql_connection_patient(self.target_node) as session:
-            if is_tablets_feature_enabled(session):
-                max_rf, keyspace = get_max_replication_factor(session)
-                if max_rf == len(self.cluster.nodes):
-                    raise UnsupportedNemesis(
-                        f"A decommission is not supported with tablets where a keyspace RF equals number-of-nodes: {keyspace}, {max_rf}")
 
         target_is_seed = self.target_node.is_seed
-        self.cluster.decommission(self.target_node)
+        dc_topology_rf_change = self.cluster.decommission(self.target_node)
         new_node = None
         if add_node:
             # When adding node after decommission the node is declared as up only after it completed bootstrapping,
@@ -1335,6 +1326,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if new_node.is_seed != target_is_seed:
                 new_node.set_seed_flag(target_is_seed)
                 self.cluster.update_seed_provider()
+            if dc_topology_rf_change:
+                dc_topology_rf_change.revert_to_original_keyspaces_rf()
             try:
                 self.nodetool_cleanup_on_all_nodes_parallel()
             finally:
@@ -1540,9 +1533,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         getattr(node, disruption_method)()
 
         self.log.info('Decommission %s', node)
-        self.cluster.decommission(node, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
+        dc_topology_rf_change = self.cluster.decommission(node, timeout=MAX_TIME_WAIT_FOR_DECOMMISSION)
 
         new_node = self.add_new_nodes(count=1, rack=node.rack)[0]
+        if dc_topology_rf_change:
+            dc_topology_rf_change.revert_to_original_keyspaces_rf()
         self.unset_current_running_nemesis(new_node)
 
         # NOTE: wait for all other neighbour pods become ready
