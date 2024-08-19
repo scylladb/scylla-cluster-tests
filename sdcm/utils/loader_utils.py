@@ -240,6 +240,8 @@ class LoaderUtilsMixin:
                 self.log.debug("Using round_robin for multiple Keyspaces...")
                 for i in range(1, keyspace_num + 1):
                     keyspace_name = self._get_keyspace_name(i)
+                    if i == 2:
+                        prepare_write_cmd = self.params.get('prepare_write_cmd_1')
                     self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
                                                                    'keyspace_name': keyspace_name,
                                                                    'round_robin': True})

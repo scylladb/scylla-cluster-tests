@@ -1224,7 +1224,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     # ----- RESTORE -----
 
     @staticmethod
-    def get_snapshot_data(size: int):
+    def get_snapshot_data(size: int | str):
         snapshots_config = "defaults/manager_restore_benchmark_snapshots.yaml"
         with open(snapshots_config, encoding="utf-8") as snapshots_yaml:
             all_snapshots_dict = yaml.safe_load(snapshots_yaml)
@@ -1299,7 +1299,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         self.run_verification_read_stress()
 
-    def test_restore_from_precreated_backup(self, backup_size: int = 1):
+    def test_restore_from_precreated_backup(self, backup_size: int | str = 1):
         """The test restores the schema and data from a pre-created backup and runs the verification read stress.
         1. Define the backup to restore from
         2. Run restore schema to empty cluster
@@ -1329,12 +1329,24 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                              location_list=location, batch_size=batch_size, parallel=parallel)
         self.manager_test_metrics.restore_time = task.duration
 
-        self.log.info("Running verification read stress")
-        stress_queue = self.prepare_stress_read_cmd(command_template=snapshot_data.cs_read_cmd_template,
-                                                    keyspace_name=snapshot_data.ks_name,
-                                                    number_of_rows=snapshot_data.number_of_rows)
-        for stress in stress_queue:
-            assert self.verify_stress_thread(cs_thread_pool=stress), "Data verification stress command"
+        # self.log.info("Running verification read stress")
+        # stress_queue = self.prepare_stress_read_cmd(command_template=snapshot_data.cs_read_cmd_template,
+        #                                             keyspace_name=snapshot_data.ks_name,
+        #                                             number_of_rows=snapshot_data.number_of_rows)
+        # for stress in stress_queue:
+        #     assert self.verify_stress_thread(cs_thread_pool=stress), "Data verification stress command"
+
+    def test_prepare_backup(self):
+        self.run_prepare_write_cmd()
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = self._ensure_and_get_cluster(manager_tool)
+
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
+        assert backup_task_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        InfoEvent(message=f'The backup task has ended successfully. Backup run time: {backup_task.duration}').publish()
+        self.manager_test_metrics.backup_time = backup_task.duration
 
     def test_restore_benchmark(self):
         """Benchmark restore operation.

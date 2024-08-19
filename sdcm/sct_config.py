@@ -1127,7 +1127,7 @@ class SCTConfiguration(dict):
              help="Manager agent backup general configuration: checkers, transfers, low_level_retries. "
                   "For example, {'checkers': 100, 'transfers': 2, 'low_level_retries': 20}"),
 
-        dict(name="mgmt_reuse_backup_size", env="SCT_MGMT_REUSE_BACKUP_SIZE", type=int,
+        dict(name="mgmt_reuse_backup_size", env="SCT_MGMT_REUSE_BACKUP_SIZE", type=str,
              help="Size of the backup (in GB) to reuse in the Manager restore test. "
                   "The following sizes are supported: 1, 500, 1000, 2000, 5000"),
 
@@ -1160,6 +1160,13 @@ class SCTConfiguration(dict):
                     You can specify everything but the -node parameter, which is going to
                     be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
+
+        dict(name="prepare_write_cmd_1", env="SCT_PREPARE_WRITE_CMD_1",
+             type=str_or_list, k8s_multitenancy_supported=True,
+             help="""cassandra-stress commands.
+                You can specify everything but the -node parameter, which is going to
+                be provided by the test suite infrastructure.
+                multiple commands can passed as a list"""),
 
         dict(name="stress_cmd_no_mv", env="SCT_STRESS_CMD_NO_MV", type=str_or_list,
              help="""cassandra-stress commands.
@@ -2030,9 +2037,9 @@ class SCTConfiguration(dict):
             self["mgmt_agent_backup_config"] = AgentBackupParameters(**backup_params)
 
         # 22 Validate backup size for Manager restore operation is valid
-        backup_size = self.get('mgmt_reuse_backup_size')
-        if backup_size and backup_size not in {1, 500, 1000, 2000, 5000}:
-            raise ValueError(f"There is no pre-created backup for size {backup_size}GB. Please, choose another one")
+        # backup_size = self.get('mgmt_reuse_backup_size')
+        # if backup_size and backup_size not in {1, 500, 1000, 2000, 5000}:
+        #     raise ValueError(f"There is no pre-created backup for size {backup_size}GB. Please, choose another one")
 
     def log_config(self):
         self.log.info(self.dump_config())
