@@ -224,7 +224,7 @@ class LoaderUtilsMixin:
     def run_prepare_write_cmd(self):
         # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
         # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
+        prepare_write_cmd = self.params.get('prepare_write_cmd_1')
         prepare_cs_user_profiles = self.params.get('prepare_cs_user_profiles')
         keyspace_num = self.params.get('keyspace_num')
         write_queue = []
@@ -240,8 +240,7 @@ class LoaderUtilsMixin:
                 self.log.debug("Using round_robin for multiple Keyspaces...")
                 for i in range(1, keyspace_num + 1):
                     keyspace_name = self._get_keyspace_name(i)
-                    if i == 2:
-                        prepare_write_cmd = self.params.get('prepare_write_cmd_1')
+                    prepare_write_cmd = self.params.get(f'prepare_write_cmd_{i}')
                     self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
                                                                    'keyspace_name': keyspace_name,
                                                                    'round_robin': True})

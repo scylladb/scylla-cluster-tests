@@ -1348,6 +1348,43 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         InfoEvent(message=f'The backup task has ended successfully. Backup run time: {backup_task.duration}').publish()
         self.manager_test_metrics.backup_time = backup_task.duration
 
+    def test_prepare_backup_twcs(self):
+        for ks_name in ["keyspace1", "keyspace2", "keyspace3"]:
+            with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+                session.execute(
+                    f"CREATE KEYSPACE {ks_name} WITH replication = {{'class':'NetworkTopologyStrategy','replication_factor':'3'}}")
+                session.execute(f"""
+                    CREATE TABLE {ks_name}.standard1 (
+                        key blob PRIMARY KEY,
+                        "C0" blob
+                    ) WITH bloom_filter_fp_chance = 0.01
+                        AND caching = {{'keys': 'ALL', 'rows_per_partition': 'ALL'}}
+                        AND comment = ''
+                        AND compaction = {{'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': '3', 'compaction_window_unit': 'MINUTES', 'tombstone_compaction_interval': '3600', 'tombstone_threshold': '0.2'}}
+                        AND compression = {{'sstable_compression': 'org.apache.cassandra.io.compress.LZ4Compressor'}}
+                        AND crc_check_chance = 1.0
+                        AND dclocal_read_repair_chance = 0.0
+                        AND default_time_to_live = 3600
+                        AND gc_grace_seconds = 20
+                        AND max_index_interval = 2048
+                        AND memtable_flush_period_in_ms = 0
+                        AND min_index_interval = 128
+                        AND read_repair_chance = 0.0
+                        AND speculative_retry = '99.0PERCENTILE';
+                """)
+
+        self.run_prepare_write_cmd()
+
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = self._ensure_and_get_cluster(manager_tool)
+
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
+        assert backup_task_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+        InfoEvent(message=f'The backup task has ended successfully. Backup run time: {backup_task.duration}').publish()
+        self.manager_test_metrics.backup_time = backup_task.duration
+
     def test_restore_benchmark(self):
         """Benchmark restore operation.
 

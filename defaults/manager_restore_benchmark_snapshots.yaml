@@ -34,7 +34,7 @@ sizes:  # size of backed up dataset in GB
     scylla_version: "2024.2.0-rc0"
     number_of_nodes: 3
     compaction_strategy: "IncrementalCompactionStrategy"
-  2000:
+  2tb_1t_ics:
     tag: "sm_20240816185129UTC"
     number_of_rows: 2147483648
     exp_timeout: 57600  # 16 hours

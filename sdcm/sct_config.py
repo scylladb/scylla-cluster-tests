@@ -1168,6 +1168,20 @@ class SCTConfiguration(dict):
                 be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
+        dict(name="prepare_write_cmd_2", env="SCT_PREPARE_WRITE_CMD_2",
+             type=str_or_list, k8s_multitenancy_supported=True,
+             help="""cassandra-stress commands.
+            You can specify everything but the -node parameter, which is going to
+            be provided by the test suite infrastructure.
+            multiple commands can passed as a list"""),
+
+        dict(name="prepare_write_cmd_3", env="SCT_PREPARE_WRITE_CMD_3",
+             type=str_or_list, k8s_multitenancy_supported=True,
+             help="""cassandra-stress commands.
+            You can specify everything but the -node parameter, which is going to
+            be provided by the test suite infrastructure.
+            multiple commands can passed as a list"""),
+
         dict(name="stress_cmd_no_mv", env="SCT_STRESS_CMD_NO_MV", type=str_or_list,
              help="""cassandra-stress commands.
                 You can specify everything but the -node parameter, which is going to
