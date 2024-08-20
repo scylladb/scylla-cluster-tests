@@ -16,19 +16,10 @@ from textwrap import dedent
 
 # pylint: disable=anomalous-backslash-in-string
 
-def configure_syslogng_target_script(host: str, port: int, throttle_per_second: int, hostname: str = "") -> str:
+def configure_syslogng_target_script(hostname: str = "") -> str:
     return dedent("""
         source_name=`cat /etc/syslog-ng/syslog-ng.conf | tr -d "\\n" | tr -d "\\r" | sed -r "s/\\}};/\\}};\\n/g; \
         s/source /\\nsource /g" | grep -P "^source.*system\\(\\)" | cut -d" " -f2`
-        disk_buffer_option=""
-        if syslog-ng -V | grep disk; then
-            disk_buffer_option="disk-buffer(
-                    mem-buf-size(1048576)
-                    disk-buf-size(104857600)
-                    reliable(yes)
-                    dir(\\\"/var/log\\\")
-                )"
-        fi
 
         if grep -P "keep-timestamp\\([^)]+\\)" /etc/syslog-ng/syslog-ng.conf; then
             sed -i -r "s/keep-timestamp([ ]*yes[ ]*)/keep-timestamp(no)/g" /etc/syslog-ng/syslog-ng.conf
@@ -36,20 +27,7 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
             sed -i -r "s/([ \t]*options[ \t]*\\\\{{)/\\\\1\\n  keep-timestamp(no);\\n/g" /etc/syslog-ng/syslog-ng.conf
         fi
 
-        if ! grep "destination remote_sct" /etc/syslog-ng/syslog-ng.conf; then
-            cat <<EOF >>/etc/syslog-ng/syslog-ng.conf
-        destination remote_sct {{
-            syslog(
-                "{host}"
-                transport("tcp")
-                port({port})
-                throttle({throttle_per_second})
-                $disk_buffer_option
-            );
-        }};
-
-        EOF
-        fi
+        write_syslog_ng_destination
 
         if ! grep -P "log {{.*destination\\\\(remote_sct\\\\)" /etc/syslog-ng/syslog-ng.conf; then
             echo "log {{ source($source_name); destination(remote_sct); }};" >> /etc/syslog-ng/syslog-ng.conf
@@ -63,7 +41,7 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
                 sed -i -r "s/destination\\(remote_sct\\);[ \\t]*\\}};/destination\\(remote_sct\\); rewrite\\(r_host\\); \\}};/" /etc/syslog-ng/syslog-ng.conf
             fi
         fi
-        """.format(host=host, port=port, hostname=hostname, throttle_per_second=throttle_per_second))
+        """.format(hostname=hostname))
 
 
 def configure_hosts_set_hostname_script(hostname: str) -> str:
@@ -195,3 +173,31 @@ def disable_daily_apt_triggers():
         fi
     fi
     """)
+
+
+def configure_syslogng_destination_conf(host: str, port: int, throttle_per_second: int) -> str:
+    return dedent("""
+        write_syslog_ng_destination() {{
+            disk_buffer_option=""
+            if syslog-ng -V | grep -q disk; then
+                disk_buffer_option="disk-buffer(
+                    mem-buf-size(1048576)
+                    disk-buf-size(104857600)
+                    reliable(yes)
+                    dir(\\\"/var/log\\\")
+                )"
+            fi
+
+        cat <<EOF >/etc/syslog-ng/conf.d/remote_sct.conf
+        destination remote_sct {{
+            syslog(
+                "{host}"
+                transport("tcp")
+                port({port})
+                throttle({throttle_per_second})
+                $disk_buffer_option
+            );
+        }};
+        EOF
+        }}
+        """).format(host=host, port=port, throttle_per_second=throttle_per_second)

@@ -12,6 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 import abc
+from textwrap import dedent
 
 from sdcm.provision.common.builders import AttrBuilder
 from sdcm.provision.common.utils import (
@@ -22,6 +23,7 @@ from sdcm.provision.common.utils import (
     restart_syslogng_service,
     install_syslogng_exporter,
     disable_daily_apt_triggers,
+    configure_syslogng_destination_conf
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
@@ -47,8 +49,18 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
 
     @staticmethod
     def _skip_if_already_run() -> str:
-        """syslog-ng requires restart to retrigger sending logs in case it was configured before sct-runner"""
-        return f'if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ]; then sudo systemctl restart syslog-ng; exit 0; fi\n'
+        """
+        If a node was configured before sct-runner, skip syslog-ng installation. Just ensure
+        that logging destination is updated in the configuration and the service is
+        restarted, to retrigger sending logs.
+        """
+        return dedent(f"""
+        if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ]; then
+            write_syslog_ng_destination
+            sudo systemctl restart syslog-ng
+            exit 0
+        fi
+        """)
 
     @staticmethod
     def _mark_script_as_done() -> str:
@@ -58,7 +70,6 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         script = '#!/bin/bash\n'
         script += 'set -x\n'
         script += self._wait_before_running_script()
-        script += self._skip_if_already_run()
         return script
 
     def _end_script(self) -> str:
@@ -74,15 +85,16 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 4. There is race condition between sct and boot script, disable ssh to mitigate it
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
         script = ''
+
+        script += configure_syslogng_destination_conf(
+            host=self.syslog_host_port[0],
+            port=self.syslog_host_port[1],
+            throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND)
+        script += self._skip_if_already_run()
         script += disable_daily_apt_triggers()
         if self.logs_transport == 'syslog-ng':
             script += install_syslogng_service()
-            script += configure_syslogng_target_script(
-                host=self.syslog_host_port[0],
-                port=self.syslog_host_port[1],
-                throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND,
-                hostname=self.hostname,
-            )
+            script += configure_syslogng_target_script(hostname=self.hostname)
             script += restart_syslogng_service()
             script += install_syslogng_exporter()
 
