@@ -73,7 +73,6 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.provision.helpers.certificate import update_certificate, TLSAssets
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
-from sdcm.rest.remote_curl_client import RemoteCurlClient
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
@@ -128,6 +127,7 @@ from sdcm.utils.replication_strategy_utils import temporary_replication_strategy
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.sstable.sstable_utils import SstableUtils
+from sdcm.utils.tablets.common import wait_for_tablets_balanced
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
@@ -1326,7 +1326,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 new_node.set_seed_flag(target_is_seed)
                 self.cluster.update_seed_provider()
             if dc_topology_rf_change:
-                dc_topology_rf_change.revert_to_original_keyspaces_rf()
+                dc_topology_rf_change.revert_to_original_keyspaces_rf(node_to_wait_for_balance=new_node)
             try:
                 self.nodetool_cleanup_on_all_nodes_parallel()
             finally:
@@ -1536,7 +1536,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         new_node = self.add_new_nodes(count=1, rack=node.rack)[0]
         if dc_topology_rf_change:
-            dc_topology_rf_change.revert_to_original_keyspaces_rf()
+            dc_topology_rf_change.revert_to_original_keyspaces_rf(node_to_wait_for_balance=new_node)
         self.unset_current_running_nemesis(new_node)
 
         # NOTE: wait for all other neighbour pods become ready
@@ -4033,7 +4033,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @latency_calculator_decorator(legend="Adding new nodes")
     def add_new_nodes(self, count, rack=None, instance_type: str = None) -> list[BaseNode]:
         nodes = self._add_and_init_new_cluster_nodes(count, rack=rack, instance_type=instance_type)
-        self._wait_for_tablets_balanced(nodes[0])
+        wait_for_tablets_balanced(nodes[0])
         return nodes
 
     @latency_calculator_decorator(legend="Decommission nodes: remove nodes from cluster")
@@ -5107,30 +5107,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.warning("'%s' node will be restarted to make the CQL work again", self.target_node)
             self.target_node.restart_scylla_server()
             raise
-
-    def _wait_for_tablets_balanced(self, node):
-        """
-        Waiting for tablets to be balanced using REST API.
-
-        doing it several times as there's a risk of:
-        "currently a small time window after adding nodes and before load balancing starts during which
-        topology may appear as quiesced because the state machine goes through an idle state before it enters load balancing state"
-        """
-        if not node.raft.is_enabled:
-            self.log.info("Raft is disabled, skipping wait for balance")
-            return
-        with self.cluster.cql_connection_patient(node=node) as session:
-            if not is_tablets_feature_enabled(session):
-                self.log.info("Tablets are disabled, skipping wait for balance")
-                return
-        time.sleep(60)  # one minute gap before checking, just to give some time to the state machine
-        client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=node)
-        self.log.info("Waiting for tablets to be balanced")
-        for _ in range(3):
-            client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology",
-                                    params={}, timeout=3600, retry=3)
-            time.sleep(5)
-        self.log.info("Tablets are balanced")
 
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements  # noqa: PLR0915
