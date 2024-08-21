@@ -162,7 +162,7 @@ from sdcm.exceptions import (
     NodeNotReady,
     SstablesNotFound,
 )
-from sdcm.utils.replication_strategy_utils import ReplicationStrategy, DataCenterTopologyRfChange
+from sdcm.utils.replication_strategy_utils import ReplicationStrategy, DataCenterTopologyRfControl
 
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
@@ -4997,10 +4997,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.terminate_node(node)  # pylint: disable=no-member
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
-    def decommission(self, node: BaseNode, timeout: int | float = None) -> DataCenterTopologyRfChange | None:
+    def decommission(self, node: BaseNode, timeout: int | float = None) -> DataCenterTopologyRfControl | None:
         with node.parent_cluster.cql_connection_patient(node) as session:
             if tablets_enabled := is_tablets_feature_enabled(session):
-                dc_topology_rf_change = DataCenterTopologyRfChange(target_node=node)
+                dc_topology_rf_change = DataCenterTopologyRfControl(target_node=node)
                 dc_topology_rf_change.decrease_keyspaces_rf()
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
             node.run_nodetool("decommission", timeout=timeout, long_running=True, retry=0)
