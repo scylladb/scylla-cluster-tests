@@ -463,24 +463,23 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         found = [node for node in instances_by_zone if node.name == name]
         return found[0] if found else None
 
-    def _get_instances(self, dc_idx):
+    def _get_instances(self, dc_idx: int) -> list[compute_v1.Instance]:
         test_id = self.test_config.test_id()
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
-        instances_by_nodetype = list_instances_gce(tags_dict={'TestId': test_id, 'NodeType': self.node_type})
-        instances_by_zone = self._get_instances_by_prefix(dc_idx)
-        instances = []
-        ip_addresses = gce_public_addresses if self._node_public_ips else gce_private_addresses
-        for node_zone in instances_by_zone:
-            # Filter nodes by zone and by ip addresses
-            if not ip_addresses(node_zone):
-                continue
-            for node_nodetype in instances_by_nodetype:
-                if node_zone.id == node_nodetype.id:
-                    instances.append(node_zone)
 
-        def sort_by_index(node):
-            metadata = gce_meta_to_dict(node.metadata)
+        instances_by_tags = list_instances_gce(tags_dict={'TestId': test_id, 'NodeType': self.node_type})
+        region = self._gce_zone_names[dc_idx][:-2]
+        ip_addresses = gce_public_addresses if self._node_public_ips else gce_private_addresses
+
+        # Filter instances by ip addresses and region
+        instances = [
+            instance for instance in instances_by_tags
+            if ip_addresses(instance) and region in instance.zone
+        ]
+
+        def sort_by_index(instance):
+            metadata = gce_meta_to_dict(instance.metadata)
             return metadata.get('NodeIndex', 0)
 
         instances = sorted(instances, key=sort_by_index)
@@ -570,6 +569,9 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
     @staticmethod
     def _wait_for_preinstalled_scylla(node):
         node.wait_for_machine_image_configured()
+
+    def _reuse_cluster_setup(self, node: GCENode) -> None:
+        node.run_startup_script()
 
 
 class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
