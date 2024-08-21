@@ -1518,6 +1518,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 if obj is None:
                     break
                 event = obj["event"]
+                self.log.debug("Event origin severity: %s", event.severity)
                 if not scylla_debug_file:
                     scylla_debug_file = self.copy_scylla_debug_info(obj["node"], obj["debug_file"])
                 output = self.decode_raw_backtrace(scylla_debug_file, " ".join(event.raw_backtrace.split('\n')))
@@ -1525,6 +1526,18 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                 the_map = FindIssuePerBacktrace()
                 if issue_url := the_map.find_issue(backtrace_type=event.type, decoded_backtrace=event.backtrace):
                     event.known_issue = issue_url
+                    skip_per_issue = SkipPerIssues(issue_url, self.parent_cluster.params)
+                    # If found issue is closed
+                    if not skip_per_issue.issues_opened():
+                        if skip_per_issue.issues_labeled():
+                            # If found issue has skip label, this issue was fixed but won't be backported to the tested branch.
+                            # So this reactor stall is expected and shouldn't fail the test
+                            # if this event severity is Error or Critical - decrease to warning.
+                            event.severity = Severity.WARNING if event.severity.value > Severity.WARNING.value else event.severity
+                        else:
+                            # If found issue has no skip label - increase severity to Error (if not).
+                            # A reason: the issue was fixed, and it is not expected to get this reactor stall
+                            event.severity = Severity.ERROR if event.severity.value < Severity.ERROR.value else event.severity
                     self.log.debug("Found issue for %s event: %s", event.event_id, event.known_issue)
             except queue.Empty:
                 pass
