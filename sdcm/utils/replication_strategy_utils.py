@@ -7,6 +7,8 @@ from typing import Callable, Dict, TYPE_CHECKING
 
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import is_system_keyspace, LOGGER
+from sdcm.utils.tablets.common import wait_for_tablets_balanced
+
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
 
@@ -123,13 +125,23 @@ class temporary_replication_strategy_setter(ContextDecorator):  # pylint: disabl
             strategy.apply(self.node, keyspace)
 
 
-class DataCenterTopologyRfChange:
+class DataCenterTopologyRfControl:
     """
-        If any keyspace RF equals to number-of-cluster-nodes, where tablets are in use,
-        then a decommission is not supported.
-        In this case, the user has to decrease the replication-factor of any such keyspace first.
-        Later on, after adding a new node, such a keyspace can be reconfigured back to its original
-        replication-factor value.
+    This class manages and controls the replication factor (RF) of keyspaces in a ScyllaDB data center, when nodes are removed or re-added to the cluster.
+
+    **Purpose**:
+    - In scenarios where a keyspace has an RF equal to the total number of nodes in a data center, decommissioning a node is not supported where tablets are used.
+    - This class provides functionality to temporarily decrease the RF of such keyspaces before a node decommissioning operation and revert them back to their original RF after a new node is added.
+
+    **Usage**:
+    1. **`decrease_keyspaces_rf`**: Identifies keyspaces with RF equal to the total number of nodes in the data center and decreases their RF by 1. This is necessary so decommissioning a node is allowed (with tablets).
+    2. **`revert_to_original_keyspaces_rf`**: Reverts the RF of the keyspaces back to their original values after a new node is added to the data center.
+
+    Attributes:
+    - `target_node`: The node to decommission.
+    - `datacenter`: The data center to which the target node belongs.
+    - `decreased_rf_keyspaces`: A list of keyspaces whose RF has been decreased.
+    - `original_nodes_number`: The original number of nodes in the data center (before decommission).
     """
 
     def __init__(self, target_node: 'BaseNode') -> None:
@@ -168,8 +180,12 @@ class DataCenterTopologyRfChange:
                 continue  # Skip keyspace using SimpleStrategy
 
             if 'NetworkTopologyStrategy' in replication['class']:
-                rf = int(replication.get(self.datacenter))
-                if rf == self.original_nodes_number:
+                rf = replication.get(self.datacenter)
+                if rf is None:
+                    LOGGER.warning(
+                        f"Datacenter {self.datacenter} not found in replication strategy for keyspace {keyspace_name}.")
+                    continue
+                if int(rf) == self.original_nodes_number:
                     matching_keyspaces.append(keyspace_name)
             else:
                 LOGGER.warning("Unexpected replication strategy found: %s", replication['class'])
@@ -188,14 +204,24 @@ class DataCenterTopologyRfChange:
             LOGGER.error(f"{message} Failed with: {error}")
             raise error
 
-    def revert_to_original_keyspaces_rf(self):
-        LOGGER.debug(f"Reverting keyspaces replication factor to original value of {self.datacenter}..")
-        with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
-            for keyspace in self.decreased_rf_keyspaces:
-                self._alter_keyspace_rf(keyspace=keyspace, replication_factor=self.original_nodes_number,
-                                        session=session)
+    def revert_to_original_keyspaces_rf(self, node_to_wait_for_balance: 'BaseNode' = None):
+        if self.decreased_rf_keyspaces:
+            LOGGER.debug(f"Reverting keyspaces replication factor to original value of {self.datacenter}..")
+            with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
+                for keyspace in self.decreased_rf_keyspaces:
+                    self._alter_keyspace_rf(keyspace=keyspace, replication_factor=self.original_nodes_number,
+                                            session=session)
+        if node_to_wait_for_balance:
+            wait_for_tablets_balanced(node_to_wait_for_balance)
 
     def decrease_keyspaces_rf(self):
+        """
+            If any keyspace RF equals to number-of-cluster-nodes, where tablets are in use,
+            then a decommission is not supported.
+            In this case, the user has to decrease the replication-factor of any such keyspace first.
+            Later on, after adding a new node, such a keyspace can be reconfigured back to its original
+            replication-factor value.
+        """
         node = self.target_node
         with self.cluster.cql_connection_patient(node) as session:
             # Ensure that nodes_num is 2 or greater
