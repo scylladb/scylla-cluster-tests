@@ -1,0 +1,12 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+// NOTE: multiple real regions must be in alphabetical order for the 'customd_d2/workflow1' case
+longevityPipeline(
+    backend: 'aws',
+    region: '''["eu-north-1", "eu-west-1", "us-east-1"]''',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: 'test-cases/longevity/longevity-aws-custom-d2-workload1-3dcs.yaml',
+)
