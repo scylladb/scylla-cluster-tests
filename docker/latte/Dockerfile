@@ -1,4 +1,4 @@
-FROM rust:1.77-buster AS builder
+FROM rust:1.79-buster AS builder
 RUN cargo install --git https://github.com/scylladb/latte --branch main
 
 FROM debian:buster-slim
