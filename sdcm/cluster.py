@@ -598,7 +598,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def cpu_cores(self) -> Optional[int]:
         try:
             result = self.remoter.run("nproc", ignore_status=True)
-            return int(result.stdout)
+            # NOTE: there may be additional print outs before expected integer in the stdout.
+            #       One of such examples - K8S setups.
+            return int(([s for s in result.stdout.splitlines() if s.isdigit()] or [result.stdout])[0])
         except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.error("Failed to get number of cores due to the %s", details)
         return None
