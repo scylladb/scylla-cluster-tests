@@ -248,8 +248,11 @@ ScyllaBenchLogEvent.add_subevent_type("ConsistencyError", severity=Severity.ERRO
 ScyllaBenchLogEvent.add_subevent_type("DataValidationError", severity=Severity.CRITICAL,
                                       regex=r"doesn't match |failed to validate data|failed to verify checksum|corrupt checksum or data|"
                                             r"data corruption")
-ScyllaBenchLogEvent.add_subevent_type("ParseDistributionError", severity=Severity.CRITICAL,
-                                      regex=r"missing parameter|unexpected parameter|unsupported|invalid")
+ScyllaBenchLogEvent.add_subevent_type(
+    "ParseDistributionError",
+    severity=Severity.CRITICAL,
+    regex=r"missing parameter|unexpected parameter|unsupported"
+          r"|invalid input value|distribution is invalid|distribution has invalid format")
 
 
 SCYLLA_BENCH_ERROR_EVENTS = (
