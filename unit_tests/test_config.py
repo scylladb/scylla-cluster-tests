@@ -666,7 +666,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                           'ycsb': 'scylladb/something_else',
                           'kcl': 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC',
                           'harry': 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816',
-                          'latte': 'scylladb/hydra-loaders:latte-rust1_73-20231025'})
+                          'latte': 'scylladb/hydra-loaders:latte-0.26.3-scylladb'})
 
         self.assertEqual(conf.get('stress_image.gemini'), 'scylladb/hydra-loaders:gemini-v1.8.6')
         self.assertEqual(conf.get('stress_image.non-exist'), None)
