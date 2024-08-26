@@ -130,6 +130,10 @@ def call(Map params, String region){
         export SCT_MANAGER_VERSION="${params.manager_version}"
     fi
 
+    if [[ -n "${params.n_db_nodes ? params.n_db_nodes : ''}" ]] ; then
+        export SCT_N_DB_NODES=${params.n_db_nodes}
+    fi
+
     if [[ -n "${params.pytest_addopts ? params.pytest_addopts : ''}" ]] ; then
         export PYTEST_ADDOPTS="${params.pytest_addopts}"
     fi
