@@ -60,9 +60,6 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
                description: 'Supported: us-east-1 | eu-west-1 | eu-west-2 | eu-north-1 | eu-central-1 | us-west-2 | random (randomly select region)',
                name: 'region')
-            string(defaultValue: "${pipelineParams.get('n_db_nodes', '')}",
-               description: 'Number of db nodes. If case of multiDC cluster, use a space-separated string, for example "2 1"',
-               name: 'n_db_nodes')
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
@@ -171,7 +168,7 @@ def call(Map pipelineParams) {
                      'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
                      'Example:\n' +
                      '\tSCT_STRESS_IMAGE.cassandra-stress=scylladb/cassandra-stress:3.12.1\n' +
-                     '\tSCT_USE_MGMT=false'
+                     '\tSCT_N_DB_NODES=6'
                      ),
                  name: 'extra_environment_variables')
         }
@@ -289,11 +286,6 @@ def call(Map pipelineParams) {
                                         export SCT_CLUSTER_BACKEND="${params.backend}"
                                         export SCT_REGION_NAME=${region}
                                         export SCT_GCE_DATACENTER=${datacenter}
-
-                                        if [[ ! -z "${params.n_db_nodes}" ]] ; then
-                                            export SCT_N_DB_NODES=${params.n_db_nodes}
-                                        fi
-
                                         if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
                                             export SCT_AZURE_REGION_NAME=${params.azure_region_name}
                                         fi
