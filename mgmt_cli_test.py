@@ -30,8 +30,9 @@ import yaml
 from invoke import exceptions
 
 from sdcm import mgmt
+from sdcm.argus_results import send_manager_benchmark_results_to_argus
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
-from sdcm.mgmt.cli import ScyllaManagerTool
+from sdcm.mgmt.cli import ScyllaManagerTool, RestoreTask
 from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots
 from sdcm.remote import shell_script_cmd
 from sdcm.tester import ClusterTester
@@ -1351,6 +1352,22 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         extra_params = self.params.get('mgmt_restore_extra_params')
         return extra_params if extra_params else None
 
+    def _send_restore_results_to_argus(self, task: RestoreTask, manager_version_timestamp: int,
+                                       dataset_label: str = None):
+        total_restore_time = int(task.duration.total_seconds())
+        repair_time = int(task.post_restore_repair_duration.total_seconds())
+        results = {
+            "restore time": (total_restore_time - repair_time),
+            "repair time": repair_time,
+            "total": total_restore_time,
+        }
+        send_manager_benchmark_results_to_argus(
+            argus_client=self.test_config.argus_client(),
+            result=results,
+            sut_timestamp=manager_version_timestamp,
+            row_name=dataset_label,
+        )
+
     def test_backup_and_restore_only_data(self):
         """The test is extensively used for restore benchmarking purposes and consists of the following steps:
         1. Populate the cluster with data (currently operates with datasets of 500GB, 1TB, 2TB, 5TB);
@@ -1380,6 +1397,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
                                              timeout=110000, restore_data=True, extra_params=extra_params)
         self.manager_test_metrics.restore_time = task.duration
+
+        manager_version_timestamp = manager_tool.sctool.client_version_timestamp
+        self._send_restore_results_to_argus(task, manager_version_timestamp)
 
         self.run_verification_read_stress()
 
@@ -1425,6 +1445,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                                  timeout=snapshot_data.exp_timeout, restore_data=True,
                                                  location_list=location, extra_params=extra_params)
             restore_time = task.duration
+            manager_version_timestamp = manager_tool.sctool.client_version_timestamp
+            self._send_restore_results_to_argus(task, manager_version_timestamp, dataset_label=snapshot_name)
+
         self.manager_test_metrics.restore_time = restore_time
 
         if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):

@@ -504,6 +504,27 @@ class RestoreTask(ManagerTask):
     def __init__(self, task_id, cluster_id, manager_node):
         ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
 
+    @property
+    def post_restore_repair_duration(self) -> datetime.timedelta:
+        """Restore task consists of two parts and includes two duration marks:
+        - overall restore duration
+        - post restore repair duration
+
+        If we are interested in the post restore repair duration, we need to extract the post-restore repair progress
+        table and sum all per table durations (last column).
+        """
+        res = self.progress_string()
+
+        if ['Post-restore repair progress'] not in res:
+            return duration_to_timedelta(duration_string="0")
+
+        # Extract the post-restore repair progress table
+        res = res[res.index(['Keyspace', 'Table', 'Progress', 'Duration']) + 1:]
+        # Overall repair duration is the sum of all the durations (last column) in the table
+        per_table_duration_timedelta = [duration_to_timedelta(table[-1]) for table in res]
+        duration_timedelta = sum(per_table_duration_timedelta, datetime.timedelta(0))
+        return duration_timedelta
+
 
 class ManagerCluster(ScyllaManagerBase):
 
@@ -1299,6 +1320,17 @@ class SCTool:
     @property
     def parsed_client_version(self):
         return LooseVersion(self.client_version)
+
+    @property
+    def client_version_timestamp(self) -> int:
+        """Gets the timestamp of the client version
+
+        Example, for client version `3.3.3-0.20240912.924034e0d` the timestamp is `1726099200` (2024-09-12 00:00:00)
+        """
+        date_str = self.client_version.split('.')[-2]
+        date_obj = datetime.datetime.strptime(date_str, "%Y%m%d")
+        timestamp = int(date_obj.timestamp())
+        return timestamp
 
     @property
     def is_v3_cli(self):
