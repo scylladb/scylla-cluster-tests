@@ -47,7 +47,8 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
         keys.sort(reverse=True)
         return [results[key] for key in keys]
 
-    def check_regression(self, test_id, mad_deviation_limit=0.02, regression_limit=0.05, is_gce=False, extra_jobs_to_compare=None):  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0914
+    def check_regression(self, test_id, mad_deviation_limit=0.02, regression_limit=0.05, is_gce=False, extra_jobs_to_compare=None  # pylint: disable=too-many-locals,too-many-statements  # noqa: PLR0914
+                         ) -> dict:
         doc = self.get_test_by_id(test_id)
         if not doc:
             self.log.error('Cannot find test by id: {}!'.format(test_id))
@@ -150,3 +151,4 @@ class PerfSimpleQueryAnalyzer(BaseResultsAnalyzer):
         file_path = os.path.join(TestConfig.logdir(), 'email_data.json')
         with open(file_path, 'w', encoding="utf-8") as file:
             json.dump(for_render, file)
+        return for_render
