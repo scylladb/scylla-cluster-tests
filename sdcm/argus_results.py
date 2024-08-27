@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2024 ScyllaDB
+import json
 
 from argus.client import ArgusClient
 from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status
@@ -114,3 +115,28 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
             result_table.add_result(column=f"{interval}ms", row=f"Cycle #{cycle}",
                                     value=value, status=Status.PASS)
         argus_client.submit_results(result_table)
+
+
+def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: dict, previous_results: list = None):
+    stats = result["stats"]
+    workload = result["test_properties"]["type"]
+    parameters = result["parameters"]
+
+    class PerfSimpleQueryResult(GenericResultTable):
+        class Meta:
+            name = f"{workload} - Perf Simple Query"
+            description = json.dumps(parameters)
+            Columns = [ColumnMetadata(name=param, unit="", type=ResultType.FLOAT) for param in stats.keys()]
+
+    def _get_status_based_on_previous_results(metric: str):
+        if previous_results is None:
+            return Status.PASS
+        if all((result.get(f"is_{metric}_within_limits", True) for result in previous_results)):
+            return Status.PASS
+        else:
+            return Status.ERROR
+
+    result_table = PerfSimpleQueryResult()
+    for key, value in stats.items():
+        result_table.add_result(column=key, row="#1", value=value, status=_get_status_based_on_previous_results(key))
+    argus_client.submit_results(result_table)
