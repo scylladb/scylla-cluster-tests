@@ -9,6 +9,7 @@ import sys
 import boto3
 import pytz
 
+from utils.cloud_cleanup import update_argus_resource_status
 
 DRY_RUN = False
 VERBOSE = False
@@ -51,17 +52,17 @@ def keep_alive_instance_duration(instance, duration):
 
 
 def keep_alive_tag_val(instance):
-    if instance.tags is not None:
-        for tag in instance.tags:
-            if tag['Key'].lower() == 'keep':
-                return tag['Value']
-    return ""
+    return get_tag_value(instance, 'keep')
 
 
 def keep_alive_action_tag_val(instance):
+    return get_tag_value(instance, 'keep_action')
+
+
+def get_tag_value(instance, key):
     if instance.tags is not None:
         for tag in instance.tags:
-            if tag['Key'].lower() == 'keep_action':
+            if tag['Key'].lower() == key.lower():
                 return tag['Value']
     return ""
 
@@ -92,6 +93,8 @@ def keep_alive_instance_launch_time(instance):
 
 def stop_instance(instance):
     try:
+        test_id = get_tag_value(instance, 'TestId')
+        name = get_tag_value(instance, 'Name')
         if not DRY_RUN:
             instance.create_tags(Tags=[
                 {
@@ -100,6 +103,7 @@ def stop_instance(instance):
                 }
             ])
             instance.stop()
+            update_argus_resource_status(test_id, name, 'terminate')
     except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         eprint("stop instance %s error: %s" % (instance.id, str(exc)))
 
@@ -119,6 +123,8 @@ def remove_protection(instance):
 
 def terminate_instance(instance):
     try:
+        test_id = get_tag_value(instance, 'TestId')
+        name = get_tag_value(instance, 'Name')
         if not DRY_RUN:
             instance.create_tags(Tags=[
                 {
@@ -127,6 +133,7 @@ def terminate_instance(instance):
                 }
             ])
             instance.terminate()
+            update_argus_resource_status(test_id, name, 'terminate')
     except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
         eprint("terminate instance %s error: %s" % (instance.id, str(exc)))
 

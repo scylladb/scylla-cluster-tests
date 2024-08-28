@@ -21,6 +21,7 @@ from typing import Callable
 
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.log import setup_stdout_logger
+from utils.cloud_cleanup import update_argus_resource_status
 
 LOGGER = setup_stdout_logger()
 azure_service = AzureService()
@@ -95,7 +96,7 @@ def should_keep(creation_time, keep_hours):
         return True
 
 
-def delete_virtual_machine(resource_group_name, vm_name, dry_run=False):
+def delete_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False):
     if dry_run:
         LOGGER.info("[DRY RUN] Would delete VM: %s in resource group: %s", vm_name, resource_group_name)
     else:
@@ -105,18 +106,22 @@ def delete_virtual_machine(resource_group_name, vm_name, dry_run=False):
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.info(
                 "Failed to delete VM: %s in resource group: %s with exception: %s", vm_name, resource_group_name, exc)
+            return
+        update_argus_resource_status(test_id=test_id, resource_name=vm_name, action="terminate")
 
 
-def stop_virtual_machine(resource_group_name, vm_name, dry_run=False):
+def stop_virtual_machine(resource_group_name, vm_name, test_id, dry_run=False):
     if dry_run:
         LOGGER.info("[DRY RUN] Would stop VM: %s in resource group: %s", vm_name, resource_group_name)
     else:
         LOGGER.info("Stopping VM: %s in resource group: %s", vm_name, resource_group_name)
         try:
-            compute_client.virtual_machines.begin_deallocate(resource_group_name, vm_name)
+            compute_client.virtual_machines.begin_deallocate(resource_group_name, vm_name, test_id)
         except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
             LOGGER.info("Failed to stop VM: %s in resource group: %s with exception: %s",
                         vm_name, resource_group_name, exc)
+            return
+        update_argus_resource_status(test_id=test_id, resource_name=vm_name, action="stop")
 
 
 def delete_resource_group(resource_group_name, dry_run=False):
@@ -143,20 +148,23 @@ def clean_azure_instances(dry_run=False):
         clean_group = True
         vms_to_process = []
         for v_m in compute_client.virtual_machines.list(resource_group.name):
+            test_id = v_m.tags.get('TestId', "").lower() if v_m.tags else ""
             if should_keep(creation_time=get_vm_creation_time(v_m, resource_group.name), keep_hours=get_keep_hours(v_m)):
                 LOGGER.info("Keeping VM: %s in resource group: %s", v_m.name, resource_group.name)
                 clean_group = False  # skip cleaning group if there's at least one VM to keep
             elif get_keep_action(v_m) == "terminate":
-                vms_to_process.append((delete_virtual_machine, v_m.name))
+                vms_to_process.append((delete_virtual_machine, v_m.name, test_id))
             else:
-                vms_to_process.append((stop_virtual_machine, v_m.name))
+                vms_to_process.append((stop_virtual_machine, v_m.name, test_id))
                 clean_group = False  # skip cleaning group if there's at least one VM to stop
 
         if clean_group:
             delete_resource_group(resource_group.name, dry_run=dry_run)
+            for _, vm_name, test_id in vms_to_process:
+                update_argus_resource_status(test_id=test_id, resource_name=vm_name, action="terminate")
         else:
-            for action, vm_name in vms_to_process:
-                action(resource_group.name, vm_name, dry_run=dry_run)
+            for action, vm_name, test_id in vms_to_process:
+                action(resource_group.name, vm_name, test_id, dry_run=dry_run)
 
 
 if __name__ == "__main__":
