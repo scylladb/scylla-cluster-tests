@@ -109,6 +109,7 @@ from sdcm.utils.compaction_ops import CompactionOps, StartStopCompactionArgs
 from sdcm.utils.context_managers import nodetool_context
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
 from sdcm.utils.decorators import timeout as timeout_decor
+from sdcm.utils.decorators import skip_on_capacity_issues
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
@@ -1238,7 +1239,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         #       as 'NotReady' and will fail the pod waiter function.
         self.log.info("Adding new node to cluster...")
         InfoEvent(message='StartEvent - Adding new node to cluster').publish()
-        new_node = self.cluster.add_nodes(
+        new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
             count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
@@ -1275,7 +1276,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             rack = 0
         self.log.info("Adding %s new nodes to cluster...", count)
         InfoEvent(message=f'StartEvent - Adding {count} new nodes to cluster').publish()
-        new_nodes = self.cluster.add_nodes(
+        new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(
             count=count, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)
         self.monitoring_set.reconfigure_scylla_monitoring()
         for new_node in new_nodes:
@@ -4518,7 +4519,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}"
 
     def _add_new_node_in_new_dc(self) -> BaseNode:
-        new_node = self.cluster.add_nodes(1, dc_idx=0, enable_auto_bootstrap=True)[0]  # add node
+        new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
+            1, dc_idx=0, enable_auto_bootstrap=True)[0]  # add node
         with new_node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
@@ -5030,7 +5032,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         If node was not added anyway, clean it from cluster
         and return the cluster to initial state(by num of nodes)
         """
-        new_node: BaseNode = self.cluster.add_nodes(
+        new_node: BaseNode = skip_on_capacity_issues(self.cluster.add_nodes)(
             count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=self.target_node.rack)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
