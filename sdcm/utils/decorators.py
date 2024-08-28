@@ -17,15 +17,15 @@ import logging
 import datetime
 import json
 import os
-
 from functools import wraps, partial, cached_property
 from typing import Optional, Callable
 
+from botocore.exceptions import ClientError
+
 from sdcm.argus_results import send_result_to_argus
 from sdcm.sct_events.database import DatabaseLogEvent
-
 from sdcm.sct_events.event_counter import EventCounterContextManager
-
+from sdcm.exceptions import UnsupportedNemesis
 
 LOGGER = logging.getLogger(__name__)
 
@@ -285,3 +285,18 @@ def static_init(cls):
     if hasattr(cls, "static_init"):
         cls.static_init()
     return cls
+
+
+def skip_on_capacity_issues(func: callable) -> callable:
+    """
+    Decorator to skip nemesis that fail due to capacity issues
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ClientError as ex:
+            if "InsufficientInstanceCapacity" in str(ex):
+                raise UnsupportedNemesis("Capacity Issue") from ex
+            raise
+    return wrapper
