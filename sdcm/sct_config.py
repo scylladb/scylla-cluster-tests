@@ -70,7 +70,7 @@ from sdcm.utils.azure_utils import (
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.test_config import TestConfig
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
-from sdcm.mgmt.common import RestoreParameters, AgentBackupParameters
+from sdcm.mgmt.common import AgentBackupParameters
 
 
 def _str(value: str) -> str:
@@ -1122,9 +1122,9 @@ class SCTConfiguration(dict):
         dict(name="scylla_mgmt_upgrade_to_repo", env="SCT_SCYLLA_MGMT_UPGRADE_TO_REPO", type=str,
              help="Url to the repo of scylla manager version to upgrade to for management tests"),
 
-        dict(name="mgmt_restore_params", env="SCT_MGMT_RESTORE_PARAMS", type=dict_or_str_or_pydantic,
-             help="Manager restore operation specific parameters: batch_size, parallel. "
-                  "For example, {'batch_size': 100, 'parallel': 10}"),
+        dict(name="mgmt_restore_extra_params", env="SCT_MGMT_RESTORE_EXTRA_PARAMS", type=str,
+             help="Manager restore operation extra parameters: batch-size, parallel, etc."
+                  "For example, `--batch-size 2 --parallel 1`. Provided string appends the restore cmd"),
 
         dict(name="mgmt_agent_backup_config", env="SCT_MGMT_AGENT_BACKUP_CONFIG", type=dict_or_str_or_pydantic,
              help="Manager agent backup general configuration: checkers, transfers, low_level_retries. "
@@ -2033,11 +2033,7 @@ class SCTConfiguration(dict):
             self['kafka_connectors'] = [SctKafkaConfiguration(**connector)
                                         for connector in kafka_connectors]
 
-        # 20 Validate Manager restore parameters
-        if restore_params := self.get("mgmt_restore_params"):
-            self["mgmt_restore_params"] = RestoreParameters(**restore_params)
-
-        # 21 Validate Manager agent backup general parameters
+        # 20 Validate Manager agent backup general parameters
         if backup_params := self.get("mgmt_agent_backup_config"):
             self["mgmt_agent_backup_config"] = AgentBackupParameters(**backup_params)
 
@@ -2597,8 +2593,6 @@ class SCTConfiguration(dict):
         if kafka_connectors := self.get('kafka_connectors'):
             out['kafka_connectors'] = [connector.dict(by_alias=True, exclude_none=True)
                                        for connector in kafka_connectors]
-        if mgmt_restore_params := self.get("mgmt_restore_params"):
-            out["mgmt_restore_params"] = mgmt_restore_params.dict(by_alias=True, exclude_none=True)
         if mgmt_agent_backup_config := self.get("mgmt_agent_backup_config"):
             out["mgmt_agent_backup_config"] = mgmt_agent_backup_config.dict(by_alias=True, exclude_none=True)
         return out

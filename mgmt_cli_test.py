@@ -229,11 +229,11 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
                                                  keyspace_and_table_list=ks_tables_map)
 
     def restore_backup_with_task(self, mgr_cluster, snapshot_tag, timeout, restore_schema=False, restore_data=False,
-                                 location_list=None, batch_size=None, parallel=None):
+                                 location_list=None, extra_params=None):
         location_list = location_list if location_list else self.locations
         restore_task = mgr_cluster.create_restore_task(restore_schema=restore_schema, restore_data=restore_data,
                                                        location_list=location_list, snapshot_tag=snapshot_tag,
-                                                       batch_size=batch_size, parallel=parallel)
+                                                       extra_params=extra_params)
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
         assert restore_task.status == TaskStatus.DONE, f"Restoration of {snapshot_tag} has failed!"
         InfoEvent(message=f'The restore task has ended successfully. '
@@ -501,9 +501,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         email_data = self._get_common_email_data()
 
-        restore_parameters = self.params.get("mgmt_restore_params")
-        if restore_parameters:
-            restore_parameters = restore_parameters.dict()
+        restore_parameters = self.params.get("mgmt_restore_extra_params")
 
         agent_backup_config = self.params.get("mgmt_agent_backup_config")
         if agent_backup_config:
@@ -1319,13 +1317,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             stress_queue.append(read_thread)
         return stress_queue
 
-    def get_restore_custom_parameters(self):
-        if restore_params := self.params.get('mgmt_restore_params'):
-            batch_size = restore_params.batch_size
-            parallel = restore_params.parallel
-        else:
-            batch_size, parallel = None, None
-        return batch_size, parallel
+    def get_restore_extra_parameters(self) -> str:
+        extra_params = self.params.get('mgmt_restore_extra_params')
+        return extra_params if extra_params else None
 
     def test_backup_and_restore_only_data(self):
         """The test is extensively used for restore benchmarking purposes and consists of the following steps:
@@ -1352,10 +1346,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         for ks_name in ks_names:
             self.db_cluster.nodes[0].run_cqlsh(f'TRUNCATE {ks_name}.standard1')
 
-        batch_size, parallel = self.get_restore_custom_parameters()
+        extra_params = self.get_restore_extra_parameters()
         task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=backup_task.get_snapshot_tag(),
-                                             timeout=110000, restore_data=True, batch_size=batch_size,
-                                             parallel=parallel)
+                                             timeout=110000, restore_data=True, extra_params=extra_params)
         self.manager_test_metrics.restore_time = task.duration
 
         self.run_verification_read_stress()
@@ -1384,10 +1377,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.set_ks_strategy_to_network_and_rf_according_to_cluster(keyspace=ks_name, repair_after_alter=False)
 
         self.log.info("Restoring the data")
-        batch_size, parallel = self.get_restore_custom_parameters()
+        extra_params = self.get_restore_extra_parameters()
         task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag,
                                              timeout=snapshot_data.exp_timeout, restore_data=True,
-                                             location_list=location, batch_size=batch_size, parallel=parallel)
+                                             location_list=location, extra_params=extra_params)
         self.manager_test_metrics.restore_time = task.duration
 
         if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
