@@ -57,7 +57,7 @@ class FakeDbCluster:  # pylint: disable=too-few-public-methods
 class FakeMultitenantTestBase:  # pylint: disable=too-few-public-methods
     def __init__(self):
         self.test_config = TestConfig()
-        self.test_config.test_id = lambda: "fake-test-id"
+        self.test_config.set_test_id_only("fake-test-id")
         self.params = sct_config.SCTConfiguration()
         self.params.verify_configuration()
         self.db_clusters_multitenant = [FakeDbCluster(1), FakeDbCluster(2)]
