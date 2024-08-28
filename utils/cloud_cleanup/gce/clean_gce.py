@@ -7,6 +7,7 @@ from pytz import utc
 from sdcm.utils.context_managers import environment
 from sdcm.utils.gce_utils import get_gce_compute_instances_client, SUPPORTED_PROJECTS
 from sdcm.utils.log import setup_stdout_logger
+from utils.cloud_cleanup import update_argus_resource_status
 
 DEFAULT_KEEP_HOURS = 14
 LOGGER = setup_stdout_logger()
@@ -57,6 +58,7 @@ def clean_gce_instances(instances_client, project_id, dry_run):
                                                       zone=instance.zone.split('/')[-1])
                         res.done()
                         LOGGER.info("%s terminated", instance.name)
+                        update_argus_resource_status(instance_metadata.get('TestId', ''), instance.name, 'terminate')
                     except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                         LOGGER.error("error while terminating instance %s: %s", instance.name, exc)
                 else:
@@ -72,6 +74,7 @@ def clean_gce_instances(instances_client, project_id, dry_run):
                                                     zone=instance.zone.split('/')[-1])
                         res.done()
                         LOGGER.info("%s stopped", instance.name)
+                        update_argus_resource_status(instance_metadata.get('TestId', ''), instance.name, 'stop')
                     except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                         LOGGER.error("error while stopping instance %s: %s", instance.name, exc)
                 else:
