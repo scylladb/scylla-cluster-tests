@@ -170,14 +170,6 @@ class TaskStatus:  # pylint: disable=too-few-public-methods
         return set(getattr(cls, name) for name in dir(cls) if name.isupper())
 
 
-class RestoreParameters(BaseModel):
-    batch_size: Optional[int]
-    parallel: Optional[int]
-
-    class Config:
-        extra = Extra.forbid
-
-
 class AgentBackupParameters(BaseModel):
     checkers: Optional[int] = 100
     transfers: Optional[int] = 2
