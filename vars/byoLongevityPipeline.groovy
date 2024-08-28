@@ -106,6 +106,17 @@ def call() {
             string(defaultValue: "qa@scylladb.com",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+<<<<<<< HEAD
+=======
+            text(defaultValue: "",
+                 description: (
+                     'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
+                     'Example:\n' +
+                     '\tSCT_STRESS_IMAGE.cassandra-stress=scylladb/cassandra-stress:3.13.0\n' +
+                     '\tSCT_USE_MGMT=false'
+                     ),
+                 name: 'extra_environment_variables')
+>>>>>>> 7e7e44e57 (fix(byoLongevityPipeline): fix defaultValue of extra_environment_variables)
         }
         options {
             timestamps()
