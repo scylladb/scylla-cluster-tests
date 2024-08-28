@@ -146,11 +146,6 @@ def call(Map pipelineParams) {
                    description: 'Name of the test to run',
                    name: 'test_name')
 
-            string(defaultValue: "${pipelineParams.get('mgmt_restore_params', '')}",
-                   description: """The dict with restore operation specific parameters: batch_size, parallel.
-                                   For example, {'batch_size': 2, 'parallel': 1}""",
-                   name: 'mgmt_restore_params')
-
             string(defaultValue: "${pipelineParams.get('mgmt_reuse_backup_snapshot_name', '')}",
                    description: """Name of backup snapshot to use in Manager restore benchmark test, for example, 500gb_2t_ics.
                                    The name provides the info about dataset size (500gb), number of tables (2) and compaction (ICS).
@@ -177,8 +172,8 @@ def call(Map pipelineParams) {
                  description: (
                      'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
                      'Example:\n' +
-                     '\tSCT_STRESS_IMAGE.cassandra-stress=scylladb/cassandra-stress:3.13.0\n' +
-                     '\tSCT_N_DB_NODES=6\n' +
+                     '\tSCT_MGMT_RESTORE_EXTRA_PARAMS=--batch-size 50 --parallel 0\n' +
+                     '\tSCT_N_DB_NODES=6' +
                      '\tSCT_MGMT_SKIP_POST_RESTORE_STRESS_READ=true\n'
                      ),
                  name: 'extra_environment_variables')
@@ -363,10 +358,6 @@ def call(Map pipelineParams) {
 
                                         if [[ ! -z "${params.scylla_mgmt_pkg}" ]] ; then
                                             export SCT_SCYLLA_MGMT_PKG="${params.scylla_mgmt_pkg}"
-                                        fi
-
-                                        if [[ ! -z "${params.mgmt_restore_params}" ]] ; then
-                                            export SCT_MGMT_RESTORE_PARAMS="${params.mgmt_restore_params}"
                                         fi
 
                                         if [[ ! -z "${params.mgmt_reuse_backup_snapshot_name}" ]] ; then
