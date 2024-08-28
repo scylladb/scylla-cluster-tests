@@ -36,6 +36,7 @@ import sdcm.provision.azure.utils as azure_utils
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type, aws_check_instance_type_supported
+from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.common import (
     ami_built_by_scylla,
     get_ami_tags,
@@ -1206,6 +1207,14 @@ class SCTConfiguration(dict):
             be provided by the test suite infrastructure.
             multiple commands can passed as a list"""),
 
+        dict(name="perf_max_ops", env="SCT_PERF_MAX_OPS_READ", type=dict,
+             help="Maximum ops for gradual performance test per sub-test. Example: {'read': 1000, 'write': 2000, 'mixed': 3000}"),
+        dict(name="perf_threads", env="SCT_PERF_THREADS", type=dict,
+             help="Threads amount of c-s load for gradual performance test per sub-test. "
+                  "Example: {'read': 100, 'write': 200, 'mixed': 300}"),
+        dict(name="perf_gradual_throttle_steps", env="SCT_PERF_GRADUAL_THROTTLE_STEPS", type=dict,
+             help="Used for gradual performance test. Define throttle for load step in ops. Example: {'read': ['100000', '150000'], 'mixed': ['300']}"),
+
         # RefreshTest
         dict(name="skip_download", env="SCT_SKIP_DOWNLOAD", type=boolean,
              help=""),
@@ -1689,6 +1698,8 @@ class SCTConfiguration(dict):
                     'mgmt_docker_image', 'eks_service_ipv4_cidr', 'eks_vpc_cni_version', 'eks_role_arn',
                     'eks_cluster_version', 'eks_nodegroup_role_arn'],
     }
+
+    test_required_params = {"perf-regression-gradual": ["perf_max_ops", "perf_gradual_throttle_steps", "perf_threads"]}
 
     defaults_config_files = {
         "aws": [sct_abs_path('defaults/aws_config.yaml')],
@@ -2268,6 +2279,7 @@ class SCTConfiguration(dict):
 
         self._validate_placement_group_required_values()
         self._instance_type_validation()
+        self._check_test_required_params()
 
     def _replace_docker_image_latest_tag(self):
         docker_repo = self.get('docker_image')
@@ -2311,6 +2323,15 @@ class SCTConfiguration(dict):
         for opt in self.config_options:
             if opt['name'] in self:
                 self._validate_value(opt)
+
+    def _check_test_required_params(self):
+        test_name = get_test_name()
+        if not (test_key := [test for test in self.test_required_params.keys() if test in test_name]):
+            return
+
+        for param in self.test_required_params[test_key[0]]:
+            val = self.get(param)
+            assert val, f"Parameters {self.test_required_params[test_key[0]]} are mandatory parameter for the '{test_name}' test"
 
     def _check_multi_region_params(self, backend):
         region_param_names = {"aws": "region_name", "gce": "gce_datacenter"}

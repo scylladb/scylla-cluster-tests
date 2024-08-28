@@ -1,0 +1,5 @@
+# Define load ops for steps
+perf_max_ops: {"read": 794000, "write": 405000, "mixed": 530000}
+perf_threads: {"read": 620, "write": 400, "mixed": 1900}
+perf_gradual_throttle_steps: {"read": ['150000', '300000', '450000', '600000', '700000', 'unthrotteled'], "mixed": ['50000', '150000', '300000', '450000', 'unthrotteled'], "write": ['unthrotteled']}  # where every value is in ops
+#perf_gradual_throttle_steps: {"read": ['150000', '300000', '450000', '600000', '700000', 'unthrotteled'], "mixed": ['50000', '150000', '300000', '450000', 'unthrotteled'], "write": ['200000', '300000', '400000', 'unthrotteled']}  # where every value is in ops

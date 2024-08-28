@@ -21,14 +21,19 @@
         </ul>
     </div>
     <div>
+        <h3>Latency 95th percintile</h3>
         <table id="results_table">
             <th> Operation per seconds (KOps) </th>
-            <th> Latency 95th percintile (ms) </th>
+            <th> AVG (ms) </th>
+            <th> MAX (ms) </th>
             {% if "latency 95th percentile read" in stats[0] %}
-                <th> Latency 95th percintile read (ms) </th>
+                <th> READ AVG (ms) </th>
+            {% endif %}
+            {% if "latency 95th percentile read max" in stats[0] %}
+                <th> READ MAX (ms) </th>
             {% endif %}
             {% if "latency 95th percentile write" in stats[0] %}
-                <th> Latency 95th percintile write (ms) </th>
+                <th> WRITE (ms) </th>
             {% endif %}
 
             {% for round_stat in stats %}
@@ -37,6 +42,10 @@
                 <td>{{ round_stat['latency 95th percentile'] }}</td>
                 {% if "latency 95th percentile read" in round_stat %}
                     <td>{{ round_stat['latency 95th percentile read'] }}</td>
+                {% endif %}
+                <td>{{ round_stat['latency 95th percentile max'] }}</td>
+                {% if "latency 95th percentile read max" in round_stat %}
+                    <td>{{ round_stat['latency 95th percentile read max'] }}</td>
                 {% endif %}
                 {% if "latency 95th percentile write" in round_stat %}
                     <td>{{ round_stat['latency 95th percentile write'] }}</td>
@@ -47,6 +56,87 @@
         </table>
 
     </div>
+    <div>
+        <h3>Latency 99th percintile</h3>
+        <table id="results_table">
+            <th> Operation per seconds (KOps) </th>
+            <th> AVG (ms) </th>
+            <th> MAX (ms) </th>
+            {% if "latency 99th percentile read" in stats[0] %}
+                <th> READ AVG (ms) </th>
+            {% endif %}
+            {% if "latency 99th percentile read max" in stats[0] %}
+                <th> READ MAX (ms) </th>
+            {% endif %}
+
+            {% for round_stat in stats %}
+            <tr>
+                <td>{{ round_stat['ops'] }}</td>
+                <td>{{ round_stat['latency 99th percentile'] }}</td>
+                {% if "latency 99th percentile read" in round_stat %}
+                    <td>{{ round_stat['latency 99th percentile read'] }}</td>
+                {% endif %}
+                <td>{{ round_stat['latency 99th percentile max'] }}</td>
+                {% if "latency 95th percentile read max" in round_stat %}
+                    <td>{{ round_stat['latency 99th percentile read max'] }}</td>
+                {% endif %}
+
+            </tr>
+            {% endfor %}
+        </table>
+
+    </div>
+<!--    <div>-->
+<!--        <table id="results_table">-->
+<!--            <th> Operation per seconds (KOps) </th>-->
+<!--            <th> Latency 95th percintile avg (ms) </th>-->
+<!--            <th> Latency 95th percintile max (ms) </th>-->
+<!--            <th> Latency 99th percintile avg (ms) </th>-->
+<!--            <th> Latency 99th percintile max (ms) </th>-->
+<!--            {% if "latency 95th percentile read" in stats[0] %}-->
+<!--                <th> Latency 95th percintile read avg (ms) </th>-->
+<!--            {% endif %}-->
+<!--            {% if "latency 95th percentile read max" in stats[0] %}-->
+<!--                <th> Latency 95th percintile read max (ms) </th>-->
+<!--            {% endif %}-->
+<!--            {% if "latency 99th percentile read" in stats[0] %}-->
+<!--                <th> Latency 99th percintile read avg (ms) </th>-->
+<!--            {% endif %}-->
+<!--            {% if "latency 99th percentile read max" in stats[0] %}-->
+<!--                <th> Latency 99th percintile read max (ms) </th>-->
+<!--            {% endif %}-->
+<!--            {% if "latency 95th percentile write" in stats[0] %}-->
+<!--                <th> Latency 95th percintile write (ms) </th>-->
+<!--            {% endif %}-->
+
+<!--            {% for round_stat in stats %}-->
+<!--            <tr>-->
+<!--                <td>{{ round_stat['ops'] }}</td>-->
+<!--                <td>{{ round_stat['latency 95th percentile'] }}</td>-->
+<!--                {% if "latency 95th percentile read" in round_stat %}-->
+<!--                    <td>{{ round_stat['latency 95th percentile read'] }}</td>-->
+<!--                {% endif %}-->
+<!--                <td>{{ round_stat['latency 95th percentile max'] }}</td>-->
+<!--                {% if "latency 95th percentile read max" in round_stat %}-->
+<!--                    <td>{{ round_stat['latency 95th percentile read max'] }}</td>-->
+<!--                {% endif %}-->
+<!--                <td>{{ round_stat['latency 99th percentile'] }}</td>-->
+<!--                {% if "latency 99th percentile read" in round_stat %}-->
+<!--                    <td>{{ round_stat['latency 99th percentile read'] }}</td>-->
+<!--                {% endif %}-->
+<!--                <td>{{ round_stat['latency 99th percentile max'] }}</td>-->
+<!--                {% if "latency 95th percentile read max" in round_stat %}-->
+<!--                    <td>{{ round_stat['latency 99th percentile read max'] }}</td>-->
+<!--                {% endif %}-->
+<!--                {% if "latency 95th percentile write" in round_stat %}-->
+<!--                    <td>{{ round_stat['latency 95th percentile write'] }}</td>-->
+<!--                {% endif %}-->
+
+<!--            </tr>-->
+<!--            {% endfor %}-->
+<!--        </table>-->
+
+<!--    </div>-->
     <div>
         {% if screenshots %}
             <h3>Grafana Screenshots:</h3>

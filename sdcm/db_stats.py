@@ -531,6 +531,8 @@ class TestStatsMixin(Stats):
     PROMETHEUS_STATS = ('throughput', 'latency_read_99', 'latency_write_99')
     PROMETHEUS_STATS_UNITS = {'throughput': "op/s", 'latency_read_99': "us", 'latency_write_99': "us"}
     STRESS_STATS = ('op rate', 'latency mean', 'latency 99th percentile')
+    GRADUAL_STRESS_STATS = ('ops_rate', 'latency_99th_percentile')
+    # GRADUAL_STRESS_STATS = ('ops_rate', 'latency_95th_percentile', 'latency_99th_percentile', 'ops_rate_expected')
     STRESS_STATS_TOTAL = ('op rate', 'Total errors')
 
     def _create_test_id(self, doc_id_with_timestamp=False):
@@ -881,7 +883,6 @@ class TestStatsMixin(Stats):
                     setup_details["sysctl_output"].append(
                         {key: value for key, value in result.items()
                          if not any(tag in key for tag in sysctl_excludes)})
-
         self.update(update_data)
 
     def get_doc_data(self, key) -> Optional[dict]:

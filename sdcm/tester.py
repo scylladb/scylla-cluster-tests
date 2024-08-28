@@ -84,7 +84,7 @@ from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.get_username import get_username
-from sdcm.utils.decorators import log_run_info, retrying
+from sdcm.utils.decorators import log_run_info, retrying, measure_time
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
     LdapConfigurationError, LdapServerType
@@ -3368,6 +3368,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             assert self.is_compaction_running, "Waiting for compaction to start"
         _is_compaction_running()
 
+    @measure_time
     def wait_no_compactions_running(self, n=80, sleep_time=60):  # pylint: disable=invalid-name
         # Wait until there are no running compactions
         @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
