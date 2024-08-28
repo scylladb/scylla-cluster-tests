@@ -106,7 +106,7 @@ def call() {
             string(defaultValue: "qa@scylladb.com",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
-            text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
+            text(defaultValue: "",
                  description: (
                      'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
                      'Example:\n' +
