@@ -343,7 +343,7 @@ class OperatorManagerCluster(ManagerCluster):
             func=self.get_operator_backup_task_status,
             text=f"Waiting until operator backup task '{so_backup_task.name}' get it's status",
             step=2,
-            timeout=300,
+            timeout=600,
             task_name=so_backup_task.name,
             throw_exc=True)
         for mgr_task in self.backup_task_list:
