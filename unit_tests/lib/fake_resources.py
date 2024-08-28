@@ -25,7 +25,9 @@ def prepare_fake_region(test_id: str, region: str, n_db_nodes: int = 3, n_loader
               "fake_image_monitor": "test:image:monitor:2", "fake_instance_type_monitor": "test-inst-type", "ami_monitor_user": "centos",
               "root_disk_size_monitor": 15,
               "fake_region_name": ["eastus"], "cluster_backend": "fake"}
-    builder = region_definition_builder.get_builder(params=params, test_config=TestConfig())
+    test_config = TestConfig()
+    test_config.set_test_id_only(test_id)
+    builder = region_definition_builder.get_builder(params=params, test_config=test_config)
     region_definition = builder.build_region_definition(region, "a", n_db_nodes, n_loaders, n_monitor_nodes)
     provisioner = provisioner_factory.create_provisioner(backend=region_definition.backend,
                                                          test_id=region_definition.test_id,
