@@ -211,7 +211,7 @@ stress_image:
   ndbench: 'scylladb/hydra-loaders:ndbench-jdk8-20210720'
   ycsb: 'scylladb/hydra-loaders:ycsb-jdk8-20220918'
   nosqlbench: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
-  cassandra-stress: 'scylladb/cassandra-stress:3.12.2'
+  cassandra-stress: 'scylladb/cassandra-stress:3.13.0'
   scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.21'
   gemini: 'scylladb/hydra-loaders:gemini-v1.8.6'
   alternator-dns: 'scylladb/hydra-loaders:alternator-dns-0.1'
