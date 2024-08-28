@@ -167,7 +167,7 @@ def call(Map pipelineParams) {
                  description: (
                      'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
                      'Example:\n' +
-                     '\tSCT_STRESS_IMAGE.cassandra-stress=scylladb/cassandra-stress:3.12.1\n' +
+                     '\tSCT_STRESS_IMAGE.cassandra-stress=scylladb/cassandra-stress:3.13.0\n' +
                      '\tSCT_N_DB_NODES=6'
                      ),
                  name: 'extra_environment_variables')
