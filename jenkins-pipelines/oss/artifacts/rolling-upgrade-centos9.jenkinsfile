@@ -9,7 +9,6 @@ rollingUpgradePipeline(
     linux_distro: 'centos-9',
     gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-9',
 
-    test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
-    test_config: '''["test-cases/upgrades/rolling-upgrade.yaml", "configurations/gce/n2-highmem-16.yaml", "configurations/gce/new_ssh_key.yaml"]''',
-    internode_compression: 'all'
+    test_name: 'upgrade_test.UpgradeTest.test_generic_cluster_upgrade',
+    test_config: '''["test-cases/upgrades/generic-rolling-upgrade.yaml", "configurations/rolling-upgrade-artifacts.yaml", "configurations/gce/n2-highmem-16.yaml"]''',
 )
