@@ -5407,14 +5407,15 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             """)
         elif node.distro.is_ubuntu:
             node.install_package(
-                package_name="software-properties-common python3 python3-dev python-setuptools unzip wget python3-pip")
-            prereqs_script = dedent("""
+                package_name="software-properties-common python3 python3-dev python3-setuptools unzip wget python3-pip")
+            pip_break_system_packages = "--break-system-packages" if node.distro.is_ubuntu24 else ""
+            prereqs_script = dedent(f"""
                 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
                 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
                 sudo apt-get update
-                sudo apt-get install -y docker docker.io
-                python3 -m pip install pyyaml
-                python3 -m pip install -I -U psutil
+                sudo apt-get install -y docker.io
+                python3 -m pip install pyyaml {pip_break_system_packages}
+                python3 -m pip install -I -U psutil {pip_break_system_packages}
                 systemctl start docker
             """)
         elif node.distro.is_debian:
