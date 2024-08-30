@@ -19,6 +19,7 @@ from typing import Dict, List
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.network.models import PublicIPAddress
 
+from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.utils.azure_utils import AzureService
 
 LOGGER = logging.getLogger(__name__)
@@ -42,13 +43,19 @@ class IpAddressProvider:
         except ResourceNotFoundError:
             pass
 
-    def get_or_create(self, names: List[str] = "default", version: str = "IPV4") -> List[PublicIPAddress]:
+    def get_or_create(self, instance_definitions: List[InstanceDefinition], version: str = "IPV4") -> List[PublicIPAddress]:
         addresses = []
         pollers = []
-        for name in names:
-            ip_name = self._get_ip_name(name, version)
+        for definition in instance_definitions:
+            ip_name = self._get_ip_name(definition.name, version)
             if ip_name in self._cache:
                 addresses.append(self._cache[ip_name])
+                continue
+            if not definition.use_public_ip:
+                address = PublicIPAddress(ip_address=None)
+                address.name = ip_name
+                self._cache[ip_name] = address
+                addresses.append(address)
                 continue
             LOGGER.info("Creating public_ip %s in resource group %s...",  ip_name, self._resource_group_name)
             poller = self._azure_service.network.public_ip_addresses.begin_create_or_update(
@@ -75,13 +82,23 @@ class IpAddressProvider:
             addresses.append(address)
         return addresses
 
-    def get(self, name: str = "default", version: str = "IPV4"):
+    def get(self, name: str = "default", version: str = "IPV4") -> PublicIPAddress:
         ip_name = self._get_ip_name(name, version)
-        return self._cache[ip_name]
+        try:
+            return self._cache[ip_name]
+        except KeyError:
+            # case when we reuse cluster (or use provision step) when there is no ip address created
+            address = PublicIPAddress(ip_address=None)
+            address.name = ip_name
+            return address
 
     def delete(self, ip_address: PublicIPAddress):
         # just remove from cache as it should be deleted along with network interface
-        del self._cache[ip_address.name]
+        try:
+            del self._cache[ip_address.name]
+        except KeyError:
+            # case when no public IP address was created
+            pass
 
     def clear_cache(self):
         self._cache = {}

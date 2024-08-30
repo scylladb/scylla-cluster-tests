@@ -46,7 +46,7 @@ def provision_instances_with_fallback(provisioner: Provisioner, definitions: Lis
 
     provisioned_instances = provisioner.get_or_create_instances(definitions=definitions)
     for v_m in provisioned_instances:
-        ssh_login_info = {'hostname': v_m.public_ip_address,
+        ssh_login_info = {'hostname': v_m.public_ip_address if v_m.public_ip_address else v_m.private_ip_address,
                           'user': v_m.user_name,
                           'key_file': f"~/.ssh/{v_m.ssh_key_name}"}
         remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)

@@ -48,6 +48,7 @@ class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
     data_disks: List[DataDisk] | None = None
     user_data: List[UserDataObject] | None = field(
         default_factory=list, repr=False)  # None when no cloud-init use at all
+    use_public_ip: bool = False
 
 
 class ProvisionError(Exception):
@@ -74,7 +75,7 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
     region: str
     user_name: str
     ssh_key_name: str
-    public_ip_address: str
+    public_ip_address: str | None
     private_ip_address: str
     tags: Dict[str, str]
     pricing_model: PricingModel
