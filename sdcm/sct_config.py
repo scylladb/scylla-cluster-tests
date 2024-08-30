@@ -1878,10 +1878,16 @@ class SCTConfiguration(dict):
         # 9) append username or ami_id_db_scylla_desc to the user_prefix
         version_tag = self.get('ami_id_db_scylla_desc') or getpass.getuser()
         user_prefix = self.get('user_prefix') or getpass.getuser()
+        prefix_max_len = 35
         if version_tag != user_prefix:
-            self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
-        else:
-            self['user_prefix'] = user_prefix[:35]
+            user_prefix = "{}-{}".format(user_prefix, version_tag)
+        if self.get('cluster_backend') == 'azure':
+            # for Azure need to shorten it more due longer region names
+            prefix_max_len -= 2
+        if (self.get("simulated_regions") or 0) > 1:
+            # another shortening for simulated regions due added simulated dc suffix
+            prefix_max_len -= 3
+        self['user_prefix'] = user_prefix[:prefix_max_len]
 
         # 11) validate that supported instance_provision selected
         if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet', 'spot_low_price']:
