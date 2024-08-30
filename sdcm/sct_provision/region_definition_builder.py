@@ -17,6 +17,7 @@ from typing import List, Dict, Type
 from pathlib import Path
 
 from sdcm.keystore import KeyStore, SSHKey
+from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.types import NodeTypeType
@@ -81,6 +82,7 @@ class DefinitionBuilder(abc.ABC):
                               "NodeIndex": str(index)}
         user_data = self._get_user_data_objects(node_type=node_type, instance_name=name)
         mapper = self.SCT_PARAM_MAPPER[node_type]
+        use_public_ip = ssh_connection_ip_type(self.params) == "public" or node_type == "monitor"
         return InstanceDefinition(name=name,
                                   image_id=self.params.get(mapper.image_id),
                                   type=instance_type or self.params.get(mapper.type),
@@ -88,7 +90,8 @@ class DefinitionBuilder(abc.ABC):
                                   root_disk_size=self.params.get(mapper.root_disk_size),
                                   tags=tags,
                                   ssh_key=self._get_ssh_key(),
-                                  user_data=user_data
+                                  user_data=user_data,
+                                  use_public_ip=use_public_ip,
                                   )
 
     def build_region_definition(self, region: str, availability_zone: str, n_db_nodes: int,  # pylint: disable=too-many-arguments

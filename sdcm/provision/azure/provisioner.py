@@ -134,9 +134,9 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         sec_group_id = self._network_sec_group_provider.get_or_create(security_rules=ScyllaOpenPorts).id
         vnet_name = self._vnet_provider.get_or_create().name
         subnet_id = self._subnet_provider.get_or_create(vnet_name, sec_group_id).id
-        ip_addresses = self._ip_provider.get_or_create(names=[d.name for d in definitions_to_provision], version="IPV4")
-        nics = self._nic_provider.get_or_create(subnet_id, ip_addresses_ids=[address.id for address in ip_addresses], names=[
-                                                definition.name for definition in definitions_to_provision])
+        ip_addresses = self._ip_provider.get_or_create(instance_definitions=definitions_to_provision, version="IPV4")
+        nics = self._nic_provider.get_or_create(subnet_id, ip_addresses_ids=[address.id for address in ip_addresses],
+                                                names=[definition.name for definition in definitions_to_provision])
         v_ms = self._vm_provider.get_or_create(definitions=definitions_to_provision, nics_ids=[
                                                nic.id for nic in nics], pricing_model=pricing_model)
         for definition, v_m in zip(definitions, v_ms):

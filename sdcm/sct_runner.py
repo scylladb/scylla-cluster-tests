@@ -1087,7 +1087,9 @@ class AzureSctRunner(SctRunner):
                                            tags=tags | {"launch_time": get_current_datetime_formatted()},
                                            root_disk_size=root_disk_size_gb or self.instance_root_disk_size(
                                                test_duration=test_duration),
-                                           user_data=None)
+                                           user_data=None,
+                                           use_public_ip=True,
+                                           )
             self.instance = provisioner.get_or_create_instance(definition=vm_params,
                                                                pricing_model=PricingModel.ON_DEMAND)
             return self.instance
