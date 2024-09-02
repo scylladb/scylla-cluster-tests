@@ -86,10 +86,11 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
         script = ''
 
-        script += configure_syslogng_destination_conf(
-            host=self.syslog_host_port[0],
-            port=self.syslog_host_port[1],
-            throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND)
+        if self.logs_transport == 'syslog-ng':
+            script += configure_syslogng_destination_conf(
+                host=self.syslog_host_port[0],
+                port=self.syslog_host_port[1],
+                throttle_per_second=SYSLOGNG_LOG_THROTTLE_PER_SECOND)
         script += self._skip_if_already_run()
         script += disable_daily_apt_triggers()
         if self.logs_transport == 'syslog-ng':
