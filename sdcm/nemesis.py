@@ -86,6 +86,8 @@ from sdcm.sct_events.group_common_events import (
     decorate_with_context,
     ignore_reactor_stall_errors,
     ignore_disk_quota_exceeded_errors,
+    decorate_with_context_if_issues_open,
+    ignore_take_snapshot_failing,
 )
 from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
@@ -2951,6 +2953,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.warning("Deleted the following backup tasks before the nemesis starts: %s",
                              ", ".join(deleted_tasks))
 
+    @decorate_with_context_if_issues_open(
+        ignore_take_snapshot_failing,
+        issue_refs=['https://github.com/scylladb/scylla-manager/issues/3389'])
     def _mgmt_backup(self, backup_specific_tables):
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
