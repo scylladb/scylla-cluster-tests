@@ -15,11 +15,13 @@ from contextlib import contextmanager, ExitStack, ContextDecorator
 from functools import wraps
 from typing import ContextManager, Callable, Sequence
 
+from sdcm.cluster import TestConfig
 from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
+from sdcm.utils.issues import SkipPerIssues
 
 
 @contextmanager
@@ -347,6 +349,22 @@ def ignore_raft_transport_failing():
         yield
 
 
+@contextmanager
+def ignore_take_snapshot_failing():
+    with ExitStack() as stack:
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*api - take_snapshot failed: std::filesystem::__cxx11::filesystem_error.*No such file or directory",
+            extra_time_to_expiration=60))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*api - take_snapshot failed: std::runtime_error \(Keyspace.*snapshot.*already exists",
+            extra_time_to_expiration=60))
+        yield
+
+
 def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
     """
     helper to decorate a function to run with a list of callables that return context managers
@@ -373,3 +391,20 @@ def decorate_with_context(context_list: list[Callable | ContextManager] | Callab
                 return func(*args, **kwargs)
         return inner_func
     return inner_decorator
+
+
+def decorate_with_context_if_issues_open(
+        contexts:  list[Callable | ContextManager] | Callable | ContextManager, issue_refs: list[str]):
+    """
+    Helper to decorate a function, to apply the provided contexts only if referenced GitHub issues are opened.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if SkipPerIssues(issue_refs, TestConfig().tester_obj().params):
+                decorated_func = decorate_with_context(contexts)(func)
+                return decorated_func(*args, **kwargs)
+            else:
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
