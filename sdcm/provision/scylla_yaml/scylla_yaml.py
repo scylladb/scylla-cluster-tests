@@ -260,6 +260,9 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     replace_node_first_boot: str = None  # ""
     override_decommission: bool = None  # False
     enable_repair_based_node_ops: bool = None  # True
+    # NOTE: example for disabling RBNO for 'bootstrap' and 'decommission' operations:
+    #       allowed_repair_based_node_ops: "replace,removenode,rebuild"
+    allowed_repair_based_node_ops: str = None
     ring_delay_ms: int = None  # 30 * 1000
     shadow_round_ms: int = None  # 300 * 1000
     fd_max_interval_ms: int = None  # 2 * 1000
