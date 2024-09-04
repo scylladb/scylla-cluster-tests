@@ -40,6 +40,7 @@ from sdcm.nemesis import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.utils.loader_utils import LoaderUtilsMixin
+from sdcm.utils.time_utils import ExecutionTimer
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.group_common_events import ignore_no_space_errors, ignore_stream_mutation_fragments_errors
 from sdcm.utils.compaction_ops import CompactionOps
@@ -67,14 +68,17 @@ class SnapshotData:
     - prohibit_verification_read: if True, the verification read will be prohibited. Most likely, such a backup was
       created via c-s user profile.
     - number_of_rows: number of data rows written in the DB
+    - node_ids: list of node ids where backup was created
     """
     bucket: str
     tag: str
     exp_timeout: int
     keyspaces: list[str]
+    ks_tables_map: dict[str, list[str]]
     cs_read_cmd_template: str
     prohibit_verification_read: bool
     number_of_rows: int
+    node_ids: list[str]
 
 
 class BackupFunctionsMixIn(LoaderUtilsMixin):
@@ -173,7 +177,20 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
             return base_id.replace('-', '')
         return base_id
 
-    def restore_backup(self, mgr_cluster, snapshot_tag, keyspace_and_table_list):  # pylint: disable=too-many-locals
+    def restore_backup_without_manager(self, mgr_cluster, snapshot_tag, ks_tables_list, location=None,
+                                       precreated_backup=False):
+        """Restore backup without Scylla Manager but using the `nodetool refresh` operation
+        (https://opensource.docs.scylladb.com/stable/operating-scylla/nodetool-commands/refresh.html).
+
+        The method downloads backup files from the backup bucket (aws s3 cp ...) and then loads them (nodetool refresh)
+        into the cluster node by node and table by table.
+
+        Two flows are supported:
+          - restore to a new cluster from pre-created backup.
+          - restore from backup created at the same cluster.
+        The difference between these two flows is in the way the node_id is retrieved - if the backup was created with
+        the cluster under test use node_ids of cluster under test, otherwise, get node_id from `sctool backup files...`
+        """
         backup_bucket_backend = self.params.get("backup_bucket_backend")
         if backup_bucket_backend == "s3":
             install_dependencies = self.install_awscli_dependencies
@@ -187,25 +204,39 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
         else:
             raise ValueError(f'{backup_bucket_backend=} is not supported')
 
-        per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(snapshot_tag)
-        for node in self.db_cluster.nodes:
+        browse_all_clusters = True if precreated_backup else False
+        per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(snapshot_tag, location, browse_all_clusters)
+        # One path is for schema, it should be filtrated as this method is supposed to be run on restored schema cluster
+        backed_up_node_ids = [i for i in per_node_backup_file_paths if 'schema' not in i]
+
+        nodetool_refresh_extra_flags = self.params.get('mgmt_nodetool_refresh_flags') or ""
+        for index, node in enumerate(self.db_cluster.nodes):
             install_dependencies(node=node)
             node_data_path = Path("/var/lib/scylla/data")
-            node_id = node.host_id
-            for keyspace, tables in keyspace_and_table_list.items():
+            # If the backup was not created with the cluster under test (precreated backup), get node_id from
+            # sctool backup files output, otherwise, use node_ids of cluster under test
+            backed_up_node_id = backed_up_node_ids[index] if precreated_backup else node.host_id
+            for keyspace, tables in ks_tables_list.items():
                 keyspace_path = node_data_path / keyspace
                 for table in tables:
                     table_id = self.get_table_id(node=node, table_name=table, keyspace_name=keyspace)
                     table_upload_path = keyspace_path / f"{table}-{table_id}" / "upload"
-                    for file_path in per_node_backup_file_paths[node_id][keyspace][table]:
-                        download(node=node, source=file_path, destination=table_upload_path)
+
+                    with ExecutionTimer() as timer:
+                        for file_path in per_node_backup_file_paths[backed_up_node_id][keyspace][table]:
+                            download(node=node, source=file_path, destination=table_upload_path)
+                    self.log.info(f"[Node {index}][{keyspace}.{table}] Download took {timer.duration}")
+
                     node.remoter.sudo(f"chown scylla:scylla -Rf {table_upload_path}")
-                    node.run_nodetool(f"refresh -- {keyspace} {table}")
+
+                    with ExecutionTimer() as timer:
+                        node.run_nodetool(f"refresh {keyspace} {table} {nodetool_refresh_extra_flags}")
+                    self.log.info(f"[Node {index}][{keyspace}.{table}] Nodetool refresh took {timer.duration}")
 
     def restore_backup_from_backup_task(self, mgr_cluster, backup_task, keyspace_and_table_list):
         snapshot_tag = backup_task.get_snapshot_tag()
-        self.restore_backup(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
-                            keyspace_and_table_list=keyspace_and_table_list)
+        self.restore_backup_without_manager(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_tag,
+                                            ks_tables_list=keyspace_and_table_list)
 
     # pylint: disable=too-many-arguments
     def verify_backup_success(self, mgr_cluster, backup_task, ks_names: list = None, tables_names: list = None,
@@ -1284,14 +1315,21 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         except KeyError:
             raise ValueError(f"Snapshot data for size '{snapshot_name}'GB was not found in the {snapshots_config} file")
 
+        ks_tables_map = {}
+        for ks, ts in snapshot_dict["schema"].items():
+            t_names = [list(t.keys())[0] for t in ts]
+            ks_tables_map[ks] = t_names
+
         snapshot_data = SnapshotData(
             bucket=all_snapshots_dict["bucket"],
             tag=snapshot_dict["tag"],
             exp_timeout=snapshot_dict["exp_timeout"],
             keyspaces=list(snapshot_dict["schema"].keys()),
+            ks_tables_map=ks_tables_map,
             cs_read_cmd_template=all_snapshots_dict["cs_read_cmd_template"],
             prohibit_verification_read=snapshot_dict["prohibit_verification_read"],
             number_of_rows=snapshot_dict["number_of_rows"],
+            node_ids=snapshot_dict.get("node_ids"),
         )
         return snapshot_data
 
@@ -1345,7 +1383,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         self.run_verification_read_stress()
 
-    def test_restore_from_precreated_backup(self, snapshot_name: str):
+    def test_restore_from_precreated_backup(self, snapshot_name: str, restore_outside_manager: bool = False):
         """The test restores the schema and data from a pre-created backup and runs the verification read stress.
         1. Define the backup to restore from
         2. Run restore schema to empty cluster
@@ -1353,8 +1391,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         4. Run verification read stress
 
         Args:
-            snapshot_name (str): The name of the snapshot to restore from.
-                                 All snapshots are defined in the 'defaults/manager_restore_benchmark_snapshots.yaml'
+            snapshot_name: The name of the snapshot to restore from.
+                           All snapshots are defined in the 'defaults/manager_restore_benchmark_snapshots.yaml'
+            restore_outside_manager: set True to restore outside of Manager via nodetool refresh
         """
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self._ensure_and_get_cluster(manager_tool)
@@ -1368,12 +1407,25 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         for ks_name in snapshot_data.keyspaces:
             self.set_ks_strategy_to_network_and_rf_according_to_cluster(keyspace=ks_name, repair_after_alter=False)
 
-        self.log.info("Restoring the data")
-        extra_params = self.get_restore_extra_parameters()
-        task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag,
-                                             timeout=snapshot_data.exp_timeout, restore_data=True,
-                                             location_list=location, extra_params=extra_params)
-        self.manager_test_metrics.restore_time = task.duration
+        if restore_outside_manager:
+            self.log.info("Restoring the data outside the Manager")
+            with ExecutionTimer() as timer:
+                self.restore_backup_without_manager(
+                    mgr_cluster=mgr_cluster,
+                    snapshot_tag=snapshot_data.tag,
+                    ks_tables_list=snapshot_data.ks_tables_map,
+                    location=location[0],
+                    precreated_backup=True,
+                )
+            restore_time = timer.duration
+        else:
+            self.log.info("Restoring the data with Manager task")
+            extra_params = self.get_restore_extra_parameters()
+            task = self.restore_backup_with_task(mgr_cluster=mgr_cluster, snapshot_tag=snapshot_data.tag,
+                                                 timeout=snapshot_data.exp_timeout, restore_data=True,
+                                                 location_list=location, extra_params=extra_params)
+            restore_time = task.duration
+        self.manager_test_metrics.restore_time = restore_time
 
         if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
             self.log.info("Running verification read stress")
@@ -1397,3 +1449,18 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         else:
             self.log.info("Executing test_backup_and_restore_only_data...")
             self.test_backup_and_restore_only_data()
+
+    def test_restore_data_without_manager(self):
+        """The test restores the schema and data from a pre-created backup.
+        The distinctive feature is that data restore is performed outside the Manager via nodetool refresh.
+        Nodetool refresh cmd can be run with extra flags: --load-and-stream and --primary-replica-only.
+        These extra flags can be set in `mgmt_nodetool_refresh_flags` variable.
+
+        The motivation of having such a test is to check L&S efficiency when doing the restore of the full cluster in
+        comparison with the same test but with restore executed via Manager.
+        """
+        snapshot_name = self.params.get('mgmt_reuse_backup_snapshot_name')
+        assert snapshot_name, ("The test requires a pre-created snapshot to restore from. "
+                               "Please provide the 'mgmt_reuse_backup_snapshot_name' parameter.")
+
+        self.test_restore_from_precreated_backup(snapshot_name, restore_outside_manager=True)
