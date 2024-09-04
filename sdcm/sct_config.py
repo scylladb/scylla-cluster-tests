@@ -1137,6 +1137,10 @@ class SCTConfiguration(dict):
         dict(name="mgmt_skip_post_restore_stress_read", env="SCT_MGMT_SKIP_POST_RESTORE_STRESS_READ", type=boolean,
              help="Skip post-restore c-s verification read in the Manager restore benchmark tests"),
 
+        dict(name="mgmt_nodetool_refresh_flags",
+             env="SCT_MGMT_NODETOOL_REFRESH_FLAGS", type=str,
+             help="Nodetool refresh extra options like --load-and-stream or --primary-replica-only"),
+
         # PerformanceRegressionTest
 
         dict(name="stress_cmd_w", env="SCT_STRESS_CMD_W",

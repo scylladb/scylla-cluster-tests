@@ -664,8 +664,10 @@ class ManagerCluster(ScyllaManagerBase):
         if not res:
             raise ScyllaManagerError("Unknown failure for sctool {} command".format(cmd))
 
-    def get_backup_files_dict(self, snapshot_tag):
-        command = f" -c {self.id} backup files --snapshot-tag {snapshot_tag}"
+    def get_backup_files_dict(self, snapshot_tag, location=None, all_clusters=None):
+        location_flag = f" --location {location}" if location else ""
+        all_clusters_flag = "--all-clusters" if all_clusters else ""
+        command = f" -c {self.id} backup files --snapshot-tag {snapshot_tag} {location_flag} {all_clusters_flag}"
         # The sctool backup files command prints the s3 paths of all of the files that are required to restore the
         # cluster from the backup
         snapshot_files = self.sctool.run(command)

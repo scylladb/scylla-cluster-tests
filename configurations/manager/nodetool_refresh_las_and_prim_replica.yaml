@@ -1,0 +1,3 @@
+# Use only with test-cases/manager/manager-restore-outside.yaml
+
+mgmt_nodetool_refresh_flags: "--load-and-stream --primary-replica-only"
