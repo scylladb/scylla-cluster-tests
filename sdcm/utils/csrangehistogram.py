@@ -1,3 +1,4 @@
+import copy
 import glob
 import os.path
 import sys
@@ -82,6 +83,10 @@ def make_cs_range_histogram_summary_from_log_line(
 class _CSHistogramThroughputTags(Enum):
     WRITE = "WRITE-st"
     READ = "READ-st"
+
+
+TAG_PAIRS = {"WRITE": [_CSHistogramThroughputTags.WRITE.value, CSHistogramTags.WRITE.value],
+             "READ": [_CSHistogramThroughputTags.READ.value, CSHistogramTags.READ.value]}
 
 
 _CSHISTOGRAM_TAGS_MAPPING = {
@@ -229,25 +234,73 @@ class _CSRangeHistogramBuilder:
 
         return _CSRangeHistogramBuilder._get_summary_for_operation_by_hdr_tag(histogram)
 
-    def _build_histogram_from_file(self, hdr_file: str, hdr_tag: str) -> _CSRangeHistogram:
+    @staticmethod
+    def switch_tags(hdr_tag: str):
+        tag_pairs = copy.deepcopy(TAG_PAIRS)
+        # hdr_tag value like: WRITE-st
+        tags = tag_pairs[hdr_tag.split("-")[0]]
+        tags.remove(hdr_tag)
+        return tags
+
+    def _build_histogram_from_file(self, hdr_file: str, hdr_tag: str) -> _CSRangeHistogram | None:
+        def analyze_hdr_file():
+            """
+            :return: tuple(tag_not_found, file_with_correct_time_interval)
+            tag_not_found: bool - row with HDR tag (like "WRITE-st") is not found in the file
+            file_with_correct_time_interval: bool - HDR file keep the data for different time interval
+            """
+            hdr_reader = HistogramLogReader(hdr_file, _CSHistogram())
+            if not (next_hist := hdr_reader.get_next_interval_histogram(range_start_time_sec=self.start_time,
+                                                                        range_end_time_sec=self.end_time,
+                                                                        absolute=self.absolute_time)):
+                return True, False
+
+            tag_not_found = True
+            file_with_correct_time_interval = True
+            while next_hist:
+                tag = next_hist.get_tag()
+                if tag == hdr_tag:
+                    if histogram.get_start_time_stamp() == 0:
+                        histogram.set_start_time_stamp(next_hist.get_start_time_stamp())
+                    histogram.add(next_hist)
+                    tag_not_found = False
+
+                next_hist = hdr_reader.get_next_interval_histogram(range_start_time_sec=self.start_time,
+                                                                   range_end_time_sec=self.end_time,
+                                                                   absolute=self.absolute_time)
+            return tag_not_found, file_with_correct_time_interval
+
         if not os.path.exists(hdr_file):
             LOGGER.error("File doesn't exists: %s", hdr_file)
             return _CSRangeHistogram(start_time=0, end_time=0, histogram=None, hdr_tag=None)
 
-        hdr_reader = HistogramLogReader(hdr_file, _CSHistogram())
         histogram = _CSHistogram()
         histogram.set_tag(hdr_tag)
-        while True:
-            next_hist = hdr_reader.get_next_interval_histogram(range_start_time_sec=self.start_time,
-                                                               range_end_time_sec=self.end_time,
-                                                               absolute=self.absolute_time)
-            if not next_hist:
-                break
-            tag = next_hist.get_tag()
-            if tag == hdr_tag:
-                if histogram.get_start_time_stamp() == 0:
-                    histogram.set_start_time_stamp(next_hist.get_start_time_stamp())
-                histogram.add(next_hist)
+        tag_not_found, file_with_correct_time_interval = analyze_hdr_file()
+
+        if not file_with_correct_time_interval:
+            # Keep this message for future debug
+            LOGGER.debug("The file '%s' does not include the time interval from `%s` to `%s`",
+                         hdr_file, self.start_time, self.end_time)
+            return None
+
+        # Keep this message for future debug
+        LOGGER.debug("Collect data from the file '%s' (time interval from `%s` to `%s`)",
+                     hdr_file, self.start_time, self.end_time)
+        # When c-s load runs without fixed/throttle, the histogram data with WRITE-rt/READ-rt (latency) tags is not created in the HDR file.
+        # In this case all statistics will be reported with WRITE-st/READ-st (throughput) tags.
+        # It is according to the cassandra-stress code.
+        # So if rows with the hdr_tag is not found - try to find data with another tag
+        # For more explanation see https://github.com/scylladb/qa-tasks/issues/1675#issuecomment-2331257420
+        if tag_not_found:
+            tags = self.switch_tags(hdr_tag)
+            while tags:
+                hdr_tag = tags[0]
+                analyze_hdr_file()
+                tags.remove(hdr_tag)
+
+        if histogram.get_start_time_stamp() == 0:
+            return None
 
         return _CSRangeHistogram(start_time=self.start_time,
                                  end_time=self.end_time,
@@ -293,13 +346,15 @@ class _CSRangeHistogramBuilder:
         hdr_files = self._get_list_of_hdr_files(base_path)
         for hdr_file in hdr_files:
             file_range_histogram = self._build_histogram_from_file(hdr_file, hdr_tag)
-            collected_histograms.append(file_range_histogram)
+            if file_range_histogram:
+                collected_histograms.append(file_range_histogram)
         return self._merge_range_histograms(collected_histograms)
 
     @staticmethod
     def _get_summary_for_operation_by_hdr_tag(histogram: _CSRangeHistogram) -> dict[str, dict[str, int]] | None:
-        if parsed_summary := _CSRangeHistogramBuilder._convert_raw_histogram(histogram.histogram, histogram.start_time,
-                                                                             histogram.end_time):
+        if histogram.histogram and (parsed_summary := _CSRangeHistogramBuilder._convert_raw_histogram(histogram.histogram,
+                                                                                                      histogram.start_time,
+                                                                                                      histogram.end_time)):
             return {histogram.hdr_tag[:-3]: asdict(parsed_summary)}
         return None
 
