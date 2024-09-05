@@ -10,45 +10,45 @@ prepare_write_cmd:
   - >-
     latte run --tag latte --duration 75100100 --request-timeout 60 --retry-interval '2s,10s'
     --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 19000 -P offset=0
-    --function custom -P codes="\"T2F1,T14F1\""
+    --function custom -P codes="\"T2F1,T14F1\"" -P row_count=75100100
     scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
   - >-
     latte run --tag latte --duration 75100100 --request-timeout 60 --retry-interval '2s,10s'
     --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 19000 -P offset=75100100
-    --function custom -P codes="\"T2F1,T14F1\""
+    --function custom -P codes="\"T2F1,T14F1\"" -P row_count=75100100
     scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
 
   - >-
     latte run --tag latte --duration 35100100 --request-timeout 60 --retry-interval '2s,10s'
     --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 8900 -P offset=0
-    --function custom -P codes="\"T13F1\""
+    --function custom -P codes="\"T13F1\"" -P row_count=35100100
     scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
   - >-
     latte run --tag latte --duration 35100100 --request-timeout 60 --retry-interval '2s,10s'
     --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 8900 -P offset=35100100
-    --function custom -P codes="\"T13F1\""
+    --function custom -P codes="\"T13F1\"" -P row_count=35100100
     scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
 
   - >-
     latte run --tag latte --duration 25100100 --request-timeout 60 --retry-interval '2s,10s'
     --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 6350 -P offset=0
-    --function custom -P codes="\"T1F1,T3F1,T6F1,T9F1\""
+    --function custom -P codes="\"T1F1,T3F1,T6F1,T9F1\"" -P row_count=25100100
     scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
   - >-
     latte run --tag latte --duration 25100100 --request-timeout 60 --retry-interval '2s,10s'
     --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 6350 -P offset=25100100
-    --function custom -P codes="\"T1F1,T3F1,T6F1,T9F1\""
+    --function custom -P codes="\"T1F1,T3F1,T6F1,T9F1\"" -P row_count=25100100
     scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
 
   - >-
     latte run --tag latte --duration 5100100 --request-timeout 60 --retry-interval '2s,10s'
     --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 1280 -P offset=0
-    --function custom -P codes="\"T4F1,T5F1,T7F1\""
+    --function custom -P codes="\"T4F1,T5F1,T7F1\"" -P row_count=5100100
     scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
   - >-
     latte run --tag latte --duration 5100100 --request-timeout 60 --retry-interval '2s,10s'
     --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 1280 -P offset=5100100
-    --function custom -P codes="\"T4F1,T5F1,T7F1\""
+    --function custom -P codes="\"T4F1,T5F1,T7F1\"" -P row_count=5100100
     scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
 
 stress_cmd:
