@@ -1,9 +1,15 @@
 import logging
+import os
+from pathlib import Path
 from uuid import UUID
 
 from argus.client.sct.client import ArgusSCTClient
 from argus.client.base import ArgusClientError
+from argus.client.sct.types import EventsInfo
 from sdcm.keystore import KeyStore
+from sdcm.sct_events.events_processes import EventsProcessesRegistry
+from sdcm.sct_events.events_device import start_events_main_device
+from sdcm.sct_events.file_logger import get_logger_event_summary, start_events_logger, get_events_grouped_by_category
 
 LOGGER = logging.getLogger(__name__)
 
@@ -47,3 +53,19 @@ def terminate_resource_in_argus(client: ArgusSCTClient, resource_name: str):
             LOGGER.warning("%s doesn't exist in Argus", resource_name)
         else:
             LOGGER.error("Failure to communicate resource deletion to Argus", exc_info=True)
+
+
+def argus_offline_collect_events(client: ArgusSCTClient) -> None:
+    base_results_dir = Path(os.environ.get("HOME")) / "sct-results"
+    latest_log = os.readlink(str(base_results_dir / "latest"))
+    log_dir = base_results_dir / latest_log
+    registry = EventsProcessesRegistry(log_dir=log_dir)
+    start_events_main_device(_registry=registry)
+    start_events_logger(_registry=registry)
+    last_events = get_events_grouped_by_category(limit=100, _registry=registry)
+    events_sorted = []
+    events_summary = get_logger_event_summary(_registry=registry)
+    for severity, messages in last_events.items():
+        event_category = EventsInfo(severity=severity, total_events=events_summary.get(severity, 0), messages=messages)
+        events_sorted.append(event_category)
+    client.submit_events(events_sorted)
