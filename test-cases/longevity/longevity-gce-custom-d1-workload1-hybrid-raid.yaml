@@ -9,11 +9,13 @@ prepare_write_cmd:
   - >-
     latte run --tag latte --duration 82286400 --request-timeout 60 --retry-interval '2s,10s'
     --threads 30 --connections 3 --concurrency 180 --rate 17000 --sampling 5s -P offset=0
-    --function load scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+    --function load -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
   - >-
     latte run --tag latte --duration 82286400 --request-timeout 60 --retry-interval '2s,10s'
     --threads 30 --connections 3 --concurrency 180 --rate 17000 --sampling 5s -P offset=82286400
-    --function load scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
+    --function load -P row_count=82286400
+    scylla-qa-internal/custom_d1/workload1/latte/custom_d1_workload1.rn
 stress_cmd:
   # NOTE: 'latte' tag will be used by the log collector code.
   # 01) T4F10 -> -r 51.5k (~1/2 from 103k) - part1
