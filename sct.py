@@ -55,7 +55,7 @@ from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_
     update_sct_runner_tags, list_sct_runners
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
-from sdcm.utils.argus import get_argus_client
+from sdcm.utils.argus import argus_offline_collect_events, get_argus_client
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
@@ -1266,6 +1266,9 @@ def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
                 file_name = link.split("/")[-1]
                 log_links.append(LogLink(log_name=file_name, log_link=link))
         argus_client.submit_sct_logs(log_links)
+
+        if not argus_client.get_run().get("events"):
+            argus_offline_collect_events(client=argus_client)
     except Exception:  # pylint: disable=broad-except
         LOGGER.error("Error saving logs to argus", exc_info=True)
 
