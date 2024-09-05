@@ -34,7 +34,7 @@ class DistroBase(enum.Enum):
 KNOWN_OS = (
     ("CENTOS", "centos", ["7", "8", "9"], DistroBase.RHEL),
     ("RHEL", "rhel", ["7", "8", "9"], DistroBase.RHEL),
-    ("OEL", "ol", ["7", "8"], DistroBase.RHEL),
+    ("OEL", "ol", ["7", "8", "9"], DistroBase.RHEL),
     ("AMAZON", "amzn", ["2", "2023"], DistroBase.RHEL),
     ("ROCKY", "rocky", ["8", "9"], DistroBase.RHEL),
     ("DEBIAN", "debian", ["11", "12"], DistroBase.DEBIAN),
