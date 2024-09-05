@@ -1,9 +1,9 @@
 ami_db_scylla_user: 'ec2-user'
-ami_id_db_scylla: 'ami-0e883e67243efea62'
+ami_id_db_scylla: 'resolve:owner:131827586825/x86_64/OL9.*'
 root_disk_size_db: 50
 backtrace_decoding: false
 cluster_backend: 'aws'
-instance_type_db: 'i3.large'
+instance_type_db: 'i4i.large'
 instance_provision: "spot"
 instance_provision_fallback_on_demand: true
 logs_transport: 'ssh'
@@ -15,5 +15,5 @@ region_name: 'eu-west-1'
 scylla_linux_distro: 'centos'
 test_duration: 60
 use_preinstalled_scylla: false
-user_prefix: 'artifacts-oel81'
+user_prefix: 'artifacts-oel9'
 aws_fallback_to_next_availability_zone: true
