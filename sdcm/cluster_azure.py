@@ -292,6 +292,9 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
     def _wait_for_preinstalled_scylla(node):
         node.wait_for_machine_image_configured()
 
+    def _reuse_cluster_setup(self, node: AzureNode) -> None:
+        node.run_startup_script()
+
 
 class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
 
