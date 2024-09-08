@@ -14,6 +14,7 @@ import logging
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
+from collections import defaultdict
 
 from botocore.exceptions import ClientError
 import boto3
@@ -31,13 +32,18 @@ class SCTCapacityReservation:
 
     @staticmethod
     def _get_cr_request_based_on_sct_config(params) -> Tuple[dict[str, int], int]:
-        instance_counts = {}
+        instance_counts = defaultdict(int)
         nemesis_node_count = params.get("nemesis_add_node_cnt") or 0
-        cluster_max_size = (params.get("cluster_target_size") or params.get("n_db_nodes")) + nemesis_node_count
-        instance_counts[params.get("instance_type_db")] = instance_counts.get(
-            params.get("instance_type_db"), 0) + cluster_max_size
-        instance_counts[params.get("instance_type_loader")] = instance_counts.get(params.get("instance_type_loader"),
-                                                                                  0) + params.get("n_loaders")
+
+        cluster_max_size = (params.get("cluster_target_size") or params.get("n_db_nodes"))
+
+        if nemesis_grow_shrink_instance_type := params.get("nemesis_grow_shrink_instance_type"):
+            instance_counts[nemesis_grow_shrink_instance_type] += nemesis_node_count
+        else:
+            cluster_max_size += nemesis_node_count
+
+        instance_counts[params.get("instance_type_db")] += cluster_max_size
+        instance_counts[params.get("instance_type_loader")] += params.get("n_loaders")
         # don't reserve capacity for monitor - as usually it's not a problem to spin it
         duration = params.get("test_duration") + 60  # 60 to have margin for test setup
         instance_counts = {k: v for k, v in instance_counts.items() if v > 0}  # remove 0 values
