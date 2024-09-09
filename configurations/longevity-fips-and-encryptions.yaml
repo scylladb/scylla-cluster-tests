@@ -1,4 +1,5 @@
 ami_id_db_scylla: 'resolve:ssm:/aws/service/marketplace/prod-k6fgbnayirmrc/latest' # Ubuntu Pro FIPS 20.04 LTS amd64
+assert_linux_distro_features: ['fips']
 scylla_linux_distro: 'ubuntu-focal'
 use_preinstalled_scylla: false
 ami_db_scylla_user: 'ubuntu'

@@ -292,6 +292,9 @@ class SCTConfiguration(dict):
         dict(name="scylla_linux_distro_loader", env="SCT_SCYLLA_LINUX_DISTRO_LOADER", type=str,
              help="""The distro name and family name to use. Example: 'ubuntu-jammy' or 'debian-bookworm'."""),
 
+        dict(name="assert_linux_distro_features", env="SCT_ASSERT_LINUX_DISTRO_FEATURES", type=str_or_list_or_eval,
+             help="""List of distro features relevant to SCT test. Example: 'fips'."""),
+
         dict(name="scylla_repo_m", env="SCT_SCYLLA_REPO_M", type=str,
              help="Url to the repo of scylla version to install scylla from for managment tests"),
 
