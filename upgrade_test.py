@@ -34,6 +34,7 @@ from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
+from sdcm.sct_events.setup import enable_default_filters
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.decorators import retrying
 from sdcm.utils.user_profile import get_profile_content
@@ -362,6 +363,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message='upgrade_node - starting to "_update_argus_upgraded_version"').publish()
         self._update_argus_upgraded_version(node, new_ver)
         InfoEvent(message='upgrade_node - ended to "_update_argus_upgraded_version"').publish()
+        enable_default_filters(sct_config=self.params)
         if upgrade_sstables:
             InfoEvent(message='upgrade_node - starting to "upgradesstables_if_command_available"').publish()
             self.upgradesstables_if_command_available(node)
@@ -463,6 +465,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self.upgradesstables_if_command_available(node)
 
         self.db_cluster.wait_all_nodes_un()
+        enable_default_filters(sct_config=self.params)
 
     @staticmethod
     def upgradesstables_if_command_available(node, queue=None):  # pylint: disable=invalid-name
