@@ -785,21 +785,29 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             startup_interface_command = "ip link set {} up"
         self.remoter.sudo(startup_interface_command.format(interface_name))
 
-    @cached_property
+    @optional_cached_property
     def is_enterprise(self) -> bool | None:
         _is_enterprise = None
+
         if self.distro.is_rhel_like:
-            result = self.remoter.sudo("yum search scylla-enterprise 2>&1", ignore_status=True)
-            if result.ok:
-                _is_enterprise = "scylla-enterprise.x86_64" in result.stdout or "No matches found" not in result.stdout
+            oss_command = "yum info scylla"
+            enterprise_command = "yum info scylla-enterprise"
         elif self.distro.is_sles:
-            result = self.remoter.sudo("zypper search scylla-enterprise 2>&1", ignore_status=True)
-            if result.ok:
-                _is_enterprise = "scylla-enterprise" in result.stdout or "No matching items found" not in result.stdout
+            oss_command = "zypper info scylla"
+            enterprise_command = "zypper info scylla-enterprise"
         elif self.distro.is_debian_like:
-            result = self.remoter.sudo("apt-cache search scylla-enterprise", ignore_status=True)
-            if result.ok:
-                _is_enterprise = "scylla-enterprise" in result.stdout
+            oss_command = "apt-cache show scylla"
+            enterprise_command = "apt-cache show scylla-enterprise"
+        else:
+            raise ValueError(f"Unsupported OS [{self.distro}]")
+
+        oss_installed = self.remoter.sudo(oss_command, ignore_status=True).ok
+        enterprise_installed = self.remoter.sudo(enterprise_command, ignore_status=True).ok
+        if oss_installed or enterprise_installed:
+            _is_enterprise = enterprise_installed
+        else:
+            raise NoValue
+
         return _is_enterprise
 
     @property
