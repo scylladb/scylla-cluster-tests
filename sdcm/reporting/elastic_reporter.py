@@ -45,7 +45,10 @@ class ElasticRunReporter:
             "status": status,
             "build_id": job_name,
             "build_url": build_url,
+<<<<<<< HEAD
             "argus_url": f"https://argus.scylladb.com/tests/scylla-cluster-tests/{run_id}",
+=======
+>>>>>>> 55ca8fb6e (feature(sdcm/reporting): Add initial simple elasticsearch reporter)
             "build_number": build_number,
         }
 
