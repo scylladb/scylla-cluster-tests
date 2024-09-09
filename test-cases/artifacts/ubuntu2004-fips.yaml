@@ -1,4 +1,4 @@
-ami_id_db_scylla: 'ubuntu-pro-fips-server/images/hvm-ssd/ubuntu-focal-20.04-amd64-pro-fips-server-20221121-7bc828d1-c072-4d33-a989-fbad50380cfb'  # 'ami-03cf7ddd346310b5f'
+ami_id_db_scylla: 'resolve:ssm:/aws/service/marketplace/prod-k6fgbnayirmrc/latest' # Ubuntu Pro FIPS 20.04 LTS amd64
 root_disk_size_db: 50
 backtrace_decoding: false
 cluster_backend: 'aws'
