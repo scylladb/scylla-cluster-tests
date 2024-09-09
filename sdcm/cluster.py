@@ -4616,13 +4616,15 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if self.params.get('logs_transport') == 'ssh':
             node.install_package('python3')
 
-        if node.distro.is_ubuntu:
-            result = node.remoter.sudo("pro status", ignore_status=True)
+        # check fips enabled only if we specify it in sct config (so we can use ubuntu pro in other cases)
+        if node.distro.is_ubuntu and 'fips' in (self.params.get('assert_linux_distro_features') or []):
             # https://canonical-ubuntu-pro-client.readthedocs-hosted.com/en/latest/explanations/status_columns.html
-            if "ENTITLED" in result.stdout:  # Pro is enabled
-                result = node.remoter.run("cat /proc/sys/crypto/fips_enabled", ignore_status=True)
-                assert int(result.stdout) == 1, "Even though Ubuntu pro is enabled, FIPS is not enabled"
-                # https://ubuntu.com/tutorials/using-the-ua-client-to-enable-fips#4-enabling-fips-crypto-modules
+            # https://ubuntu.com/tutorials/using-the-ua-client-to-enable-fips#4-enabling-fips-crypto-modules
+            pro_status = node.remoter.sudo("pro status", ignore_status=True)
+            fibs_enabled = node.remoter.run("cat /proc/sys/crypto/fips_enabled", ignore_status=True)
+            assert "ENTITLED" in pro_status.stdout and int(
+                fibs_enabled.stdout) == 1, "Even though Ubuntu pro is enabled, FIPS is not enabled"
+
         node.update_repo_cache()
         node.install_package('lsof net-tools')
         install_scylla = True
