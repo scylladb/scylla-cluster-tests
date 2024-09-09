@@ -1,4 +1,5 @@
 ami_id_db_scylla: 'resolve:ssm:/aws/service/marketplace/prod-k6fgbnayirmrc/latest' # Ubuntu Pro FIPS 20.04 LTS amd64
+assert_linux_distro_features: ['fips']
 root_disk_size_db: 50
 backtrace_decoding: false
 cluster_backend: 'aws'

@@ -242,3 +242,5 @@ validate_large_collections: false
 scylla_d_overrides_files: []
 
 enterprise_disable_kms: false
+
+assert_linux_distro_features: []
