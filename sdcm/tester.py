@@ -57,6 +57,7 @@ from sdcm.cluster_k8s import mini_k8s, gke, eks
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import provisioner_factory
+from sdcm.reporting.elastic_reporter import ElasticRunReporter
 from sdcm.reporting.tooling_reporter import PythonDriverReporter
 from sdcm.scan_operation_thread import ScanOperationThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
@@ -2778,6 +2779,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.finalize_teardown()
         self.argus_finalize_test_run()
+        try:
+            ElasticRunReporter().report_run(run_id=self.test_config.test_id(), status=self.get_test_status())
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            pass
         self.argus_heartbeat_stop_signal.set()
 
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
