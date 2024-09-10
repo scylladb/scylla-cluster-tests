@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 import random
+from pathlib import Path
 
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.utils.version_utils import ComparableScyllaVersion
@@ -68,8 +69,8 @@ class SstableUtils:
 
         if ComparableScyllaVersion(self.db_node.scylla_version) >= '2023.1.3':
             dump_cmd = (
-                f"{self.db_node.add_install_prefix('/usr/bin/scylla')} sstable dump-scylla-metadata"
-                f" --scylla-yaml-file {self.db_node.add_install_prefix(SCYLLA_YAML_PATH)}"
+                f"SCYLLA_CONF={Path(self.db_node.add_install_prefix(SCYLLA_YAML_PATH)).parent}"
+                f" {self.db_node.add_install_prefix('/usr/bin/scylla')} sstable dump-scylla-metadata"
                 "  --logger-log-level scylla-sstable=debug"
                 f" --keyspace {self.keyspace} --table {self.table} --sstables"
             )

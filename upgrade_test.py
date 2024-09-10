@@ -23,6 +23,7 @@ import re
 from functools import wraps, cache
 from typing import List
 import contextlib
+from pathlib import Path
 
 from argus.client.sct.types import Package
 from cassandra import ConsistencyLevel
@@ -781,8 +782,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         if should_use_sstabledump:
             dump_cmd = 'sstabledump'
         else:
-            dump_cmd = (f'{first_node.add_install_prefix("/usr/bin/scylla")} sstable dump-data '
-                        f'--scylla-yaml-file {first_node.add_install_prefix(SCYLLA_YAML_PATH)} '
+            dump_cmd = (f'SCYLLA_CONF={Path(first_node.add_install_prefix(SCYLLA_YAML_PATH)).parent} '
+                        f'{first_node.add_install_prefix("/usr/bin/scylla")} sstable dump-data '
                         f'--keyspace {keyspace} '
                         f'--table {table} '
                         '--sstables')
