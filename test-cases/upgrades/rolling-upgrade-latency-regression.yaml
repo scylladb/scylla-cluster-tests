@@ -1,0 +1,72 @@
+test_duration: 360
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+prepare_write_cmd:
+  # NOTE: --duration in these commands is number of rows that will be written.
+  #       Time gets specified with 's', 'm' or 'h' letters.
+  - >-
+    latte run --tag latte-prepare --duration 115272000 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 180100 -P offset=0
+    --function custom -P codes="\"T13F1\"" -P row_count=115272000
+    scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
+stress_before_upgrade:
+  - >-
+    latte run --tag latte-before --duration 115272000 --request-timeout 30 --retry-interval '500ms,5s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 160100 -P offset=0
+    --function custom -P row_count=115272000 --warmup 3202000
+    -P print_applied_func_names=2 -P codes="\"T13F3\"" --generate-report
+    scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
+stress_during_entire_upgrade:
+  - >-
+    latte run --tag latte-during --duration 115272000 --request-timeout 30 --retry-interval '500ms,5s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 100100 -P offset=0
+    --function custom -P row_count=115272000
+    -P print_applied_func_names=2 -P codes="\"T13F3\""
+    scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
+stress_after_cluster_upgrade:
+  - >-
+    latte run --tag latte-after --duration 115272000 --request-timeout 30 --retry-interval '500ms,5s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 160100 -P offset=0
+    --function custom -P row_count=115272000 --warmup 3202000
+    -P print_applied_func_names=2 -P codes="\"T13F3\"" --generate-report
+    scylla-qa-internal/custom_d1/workload2/latte/custom_d1_workload2.rn
+
+scylla_linux_distro: 'ubuntu-jammy'
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts'
+gce_instance_type_db: 'n2-highmem-32'
+gce_instance_type_loader: 'e2-highcpu-32'
+
+prepare_wait_no_compactions_timeout: 60 # (minutes)
+num_nodes_to_rollback: 1  # max is "n_db_nodes -1"
+upgrade_sstables: true
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_during_prepare: false
+use_mgmt: false
+
+user_prefix: 'rolling-upgrade-ltncy-rgrssn'
+
+server_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+use_legacy_cluster_init: false
+internode_compression: 'all'
+
+# NOTE: number of local SSDs which can be attached to the 'n2-highmem-32' instance type
+#       must be divisible by 4 (platform requirement).
+gce_n_local_ssd_disk_db: 4
+# NOTE: each local SSD on GCE has 375Gb, so PD size must match 'ssd-num'*'ssd-size' formula.
+gce_pd_ssd_disk_size_db: 1500
+gce_setup_hybrid_raid: true
+
+use_preinstalled_scylla: false
+
+scylla_d_overrides_files: [
+  'scylla-qa-internal/custom_d1/workload1/scylla.d/cpuset.conf',
+  'scylla-qa-internal/custom_d1/workload1/scylla.d/io.conf',
+  'scylla-qa-internal/custom_d1/workload1/scylla.d/io_properties.yaml',
+]
