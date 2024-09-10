@@ -39,7 +39,9 @@ class LatencyCalculatorMixedResult(GenericResultTable):
             ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT),
             ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT),
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION)
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
 
 
@@ -50,7 +52,9 @@ class LatencyCalculatorWriteResult(GenericResultTable):
         Columns = [
             ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT),
             ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION)
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
 
 
@@ -61,7 +65,9 @@ class LatencyCalculatorReadResult(GenericResultTable):
         Columns = [
             ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT),
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION)
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
 
 
@@ -102,6 +108,19 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
                                     status=Status.PASS if value < operation_error_thresholds[f"percentile_{percentile}"] else Status.ERROR)
     result_table.add_result(column="duration", row=f"Cycle #{cycle}",
                             value=result["duration_in_sec"], status=Status.PASS)
+    try:
+        overview_screenshot = [screenshot for screenshot in result["screenshots"] if "overview" in screenshot][0]
+        result_table.add_result(column="Overview", row=f"Cycle #{cycle}",
+                                value=overview_screenshot, status=Status.UNSET)
+    except IndexError:
+        pass
+    try:
+        qa_screenshot = [screenshot for screenshot in result["screenshots"]
+                         if "scylla-per-server-metrics-nemesis" in screenshot][0]
+        result_table.add_result(column="QA dashboard", row=f"Cycle #{cycle}",
+                                value=qa_screenshot, status=Status.UNSET)
+    except IndexError:
+        pass
     argus_client.submit_results(result_table)
     for event in result["reactor_stalls_stats"]:  # each stall event has own table
         event_name = event.split(".")[-1]
