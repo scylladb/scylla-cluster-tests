@@ -2474,6 +2474,7 @@ class SCTConfiguration(dict):
                                             ('oracle_user_data_format_version', ami_id_db_oracle)]:
                 if ami_list:
                     user_data_format_versions = set()
+                    self[key_to_update] = '2'
                     for ami_id, region_name in zip(ami_list, region_names):
                         if not ami_built_by_scylla(ami_id, region_name):
                             continue
