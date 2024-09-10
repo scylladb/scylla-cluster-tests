@@ -92,6 +92,8 @@ SCYLLA_REPO_BUCKET = "downloads.scylladb.com"
 LATEST_SYMLINK_NAME = "latest"
 NO_TIMESTAMP = dateutil.parser.parse("1961-04-12T06:07:00Z", ignoretz=True)  # Poyekhali!
 
+SUPPORTED_PACKAGES = ("scylla", "scylla-enterprise", "scylla-manager")
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -359,7 +361,8 @@ def get_all_versions_from_centos_repository(urls: set[str]) -> set[str]:
         xml_url = url.replace(REPOMD_XML_PATH, primary_path)
 
         parser = Parser(url=xml_url)
-        major_versions = [package['version'][1]['ver'] for package in parser.getList()]
+        major_versions = [package['version'][1]['ver']
+                          for package in parser.getList() if package['name'][0] in SUPPORTED_PACKAGES]
         return set(major_versions)
 
     threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
