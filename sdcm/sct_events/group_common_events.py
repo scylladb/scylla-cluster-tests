@@ -381,6 +381,24 @@ def ignore_raft_topology_cmd_failing():
             regex=r".*raft_topology - drain rpc failed, proceed to fence old writes:.*failed status returned from",
             extra_time_to_expiration=30
         ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - drain rpc failed, proceed to fence old writes.*connection is closed",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - topology change coordinator fiber got error std::runtime_error.*connection is closed",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - transition_state::write_both_read_new, global_token_metadata_barrier failed.*connection is closed",
+            extra_time_to_expiration=30
+        ))
         yield
 
 
