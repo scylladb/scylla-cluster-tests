@@ -1770,7 +1770,7 @@ def finish_argus_test_run(jenkins_status):
         test_config.set_test_id_only(params.get('test_id'))
         test_config.init_argus_client(params)
         status = test_config.argus_client().get_status()
-        if status in [TestStatus.PASSED, TestStatus.FAILED]:
+        if status in [TestStatus.PASSED, TestStatus.FAILED, TestStatus.TEST_ERROR]:
             LOGGER.info("Argus TestRun already finished with status %s", status.value)
             return
         new_status = TestStatus.FAILED
