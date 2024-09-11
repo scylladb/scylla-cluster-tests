@@ -168,23 +168,40 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
     def wrapper(func):
 
         @wraps(func)
-        def wrapped(*args, **kwargs):  # pylint: disable=too-many-branches, too-many-locals
+        def wrapped(*args, **kwargs):  # noqa: PLR0914
+            from sdcm.tester import ClusterTester
+            from sdcm.nemesis import Nemesis
             start = time.time()
-            start_node_list = args[0].cluster.nodes[:]
-            reactor_stall_stats = {}
+            # If the decorator is applied dynamically, "self" argument is not transferred  via "args" and may be found in bounded function
+            _self = getattr(func, "__self__", None) or args[0]
+            if isinstance(_self, ClusterTester):
+                cluster = _self.db_cluster
+                tester = _self
+                monitoring_set = _self.monitors
+            elif isinstance(_self, Nemesis):
+                cluster = _self.cluster
+                tester = _self.tester
+                monitoring_set = _self.monitoring_set
+            else:
+                raise ValueError(
+                    f"Not expected instance type '{type(_self)}'. Supported types: 'ClusterTester', 'Nemesis'")
+
+            # Keep for debug purposes
+            LOGGER.debug("latency_calculator_decorator cluster: %s", cluster)
+            start_node_list = cluster.nodes[:]
             with EventCounterContextManager(name=func.__name__,
                                             event_type=(DatabaseLogEvent.REACTOR_STALLED, )) as counter:
 
                 res = func(*args, **kwargs)
                 reactor_stall_stats = counter.get_stats().copy()
-            end_node_list = args[0].cluster.nodes[:]
+            end_node_list = cluster.nodes[:]
             all_nodes_list = list(set(start_node_list + end_node_list))
             end = time.time()
-            test_name = args[0].tester.__repr__().split('testMethod=')[-1].split('>')[0]
-            if not args[0].monitoring_set or not args[0].monitoring_set.nodes:
+            test_name = tester.__repr__().split('testMethod=')[-1].split('>')[0]
+            if not monitoring_set or not monitoring_set.nodes:
                 return res
-            monitor = args[0].monitoring_set.nodes[0]
-            screenshots = args[0].monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
+            monitor = monitoring_set.nodes[0]
+            screenshots = monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
             if 'read' in test_name:
                 workload = 'read'
             elif 'write' in test_name:
@@ -194,7 +211,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             else:
                 return res
 
-            latency_results_file_path = args[0].tester.latency_results_file
+            latency_results_file_path = tester.latency_results_file
             if not os.path.exists(latency_results_file_path):
                 latency_results = {}
             else:
@@ -208,23 +225,44 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 if 'cycles' not in latency_results[func.__name__]:
                     latency_results[func.__name__]['cycles'] = []
 
-            result = latency.collect_latency(monitor, start, end, workload, args[0].cluster, all_nodes_list)
+            result = latency.collect_latency(monitor, start, end, workload, cluster, all_nodes_list)
             result["screenshots"] = screenshots
             result["duration"] = f"{datetime.timedelta(seconds=int(end - start))}"
             result["duration_in_sec"] = int(end - start)
-            result["hdr"] = args[0].tester.get_cs_range_histogram_by_interval(stress_operation=workload,
-                                                                              start_time=start,
-                                                                              end_time=end)
-            result["hdr_summary"] = args[0].tester.get_cs_range_histogram(stress_operation=workload,
-                                                                          start_time=start,
-                                                                          end_time=end)
+            result["hdr"] = tester.get_cs_range_histogram_by_interval(stress_operation=workload,
+                                                                      start_time=start,
+                                                                      end_time=end)
+            result["hdr_summary"] = tester.get_cs_range_histogram(stress_operation=workload,
+                                                                  start_time=start,
+                                                                  end_time=end)
             result["reactor_stalls_stats"] = reactor_stall_stats
 
             if "steady" in func.__name__.lower():
                 if 'Steady State' not in latency_results:
                     latency_results['Steady State'] = result
+<<<<<<< HEAD
             else:
                 latency_results[func.__name__]['cycles'].append(result)
+=======
+                    send_result_to_argus(
+                        argus_client=tester.test_config.argus_client(),
+                        workload=workload,
+                        name="Steady State",
+                        description="Latencies without any operation running",
+                        cycle=0,
+                        result=result
+                    )
+            else:
+                latency_results[func.__name__]['cycles'].append(result)
+                send_result_to_argus(
+                    argus_client=tester.test_config.argus_client(),
+                    workload=workload,
+                    name=f"{func.__name__}",
+                    description=legend or "",
+                    cycle=len(latency_results[func.__name__]['cycles']),
+                    result=result
+                )
+>>>>>>> 21a216e24 (improvement(decorator): adapt latency_calculator_decorator)
 
             with open(latency_results_file_path, 'w', encoding="utf-8") as file:
                 json.dump(latency_results, file)
