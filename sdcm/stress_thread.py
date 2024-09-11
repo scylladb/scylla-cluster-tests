@@ -280,11 +280,12 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner = cleanup_context = RemoteDocker(loader, self.docker_image_name,
                                                         command_line="-c 'tail -f /dev/null'",
                                                         extra_docker_opts=f'{cpu_options} '
-                                                                          '--network=host '
-                                                                          '--security-opt seccomp=unconfined '
-                                                                          f'--label shell_marker={self.shell_marker}'
-                                                                          f' --entrypoint /bin/bash'
-                                                                          f' -v $HOME/{remote_hdr_file_name}:/{remote_hdr_file_name}')
+                                                        '--network=host '
+                                                        '--security-opt seccomp=unconfined '
+                                                        f'--label shell_marker={self.shell_marker}'
+                                                        f' --entrypoint /bin/bash'
+                                                        f' -w /'
+                                                        f' -v $HOME/{remote_hdr_file_name}:/{remote_hdr_file_name}')
 
         stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx, loader)
         if self.params.get('cs_debug'):
