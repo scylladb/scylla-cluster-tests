@@ -106,21 +106,25 @@ def call(Map pipelineParams) {
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
 
-            string(defaultValue: "${pipelineParams.get('scylla_mgmt_address', '')}",
-                   description: 'If empty - the default manager version will be taken',
-                   name: 'scylla_mgmt_address')
-
             string(defaultValue: "${pipelineParams.get('manager_version', 'master_latest')}",
                    description: 'master_latest|3.2|3.1',
                    name: 'manager_version')
 
-            string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
-                   description: 'master_latest|3.2|3.1',
-                   name: 'target_manager_version')
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_address', '')}",
+                   description: 'If empty - the default manager version will be taken',
+                   name: 'scylla_mgmt_address')
 
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_address', '')}",
                    description: 'manager agent repo',
                    name: 'scylla_mgmt_agent_address')
+
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_pkg', '')}",
+                   description: 'Url to the scylla manager packages',
+                   name: 'scylla_mgmt_pkg')
+
+            string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
+                   description: 'master_latest|3.2|3.1. Only for upgrade test',
+                   name: 'target_manager_version')
 
             string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_server_address', '')}",
                    description: 'Link to the repository of the manager that will be used as a target of the manager server in the manager upgrade test',
@@ -133,10 +137,6 @@ def call(Map pipelineParams) {
             string(defaultValue: "'qa@scylladb.com','mgmt@scylladb.com'",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
-
-            string(defaultValue: "${pipelineParams.get('scylla_mgmt_pkg', '')}",
-                   description: 'Url to the scylla manager packages',
-                   name: 'scylla_mgmt_pkg')
 
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
                    description: 'Test configuration file',
