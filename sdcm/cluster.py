@@ -1839,6 +1839,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
     def install_manager_agent(self, package_path: Optional[str] = None) -> None:
         package_name = "scylla-manager-agent"
+        package_version = None
         if package_path:
             package_name = f"{package_path}scylla-manager-agent*"
         elif self.parent_cluster.params.get("scylla_mgmt_agent_address"):
@@ -1847,8 +1848,11 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             manager_version = self.parent_cluster.params.get("manager_version")
             agent_repo_url = get_manager_repo_from_defaults(manager_version, self.distro)
             self.download_scylla_manager_repo(agent_repo_url)
+            # If patch version, this specific patch version should be installed. Otherwise, the latest is installed.
+            if len(manager_version.split(".")) == 3:
+                package_version = manager_version
 
-        self.install_package(package_name)
+        self.install_package(package_name, package_version)
 
         tls_cert_file = tls_key_file = None
         if self.remoter.sudo("scyllamgr_ssl_cert_gen", ignore_status=True).ok:
@@ -2296,16 +2300,23 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         elif not self.distro.is_debian_like:
             raise ValueError(f"Unsupported Linux distribution: {self.distro}")
 
-        package_names = "scylla-manager-server scylla-manager-client"
+        package_names = ["scylla-manager-server", "scylla-manager-client"]
+        package_version = None
+
         if package_url:
-            package_names = f"{package_url}scylla-manager-server* {package_url}scylla-manager-client*"
+            package_names = [f"{package_url}scylla-manager-server*", f"{package_url}scylla-manager-client*"]
         elif self.parent_cluster.params.get("scylla_mgmt_address"):
             self.download_scylla_manager_repo(self.parent_cluster.params.get("scylla_mgmt_address"))
         else:
             manager_version = self.parent_cluster.params.get("manager_version")
             manager_repo_url = get_manager_repo_from_defaults(manager_version, self.distro)
             self.download_scylla_manager_repo(manager_repo_url)
-        self.install_package(package_names)
+            # If patch version, this specific patch version should be installed. Otherwise, the latest is installed.
+            if len(manager_version.split(".")) == 3:
+                package_version = manager_version
+
+        for package_name in package_names:
+            self.install_package(package_name, package_version)
 
         if self.is_docker():
             try:
