@@ -6,8 +6,8 @@ manager_repos_by_version:
     rhel: 'https://downloads.scylladb.com/rpm/centos/scylladb-manager-3.4.repo'
     debian: 'https://downloads.scylladb.com/deb/debian/scylladb-manager-3.4.list'
   "3.3":
-    rhel: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-3.3.repo'
-    debian: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/debian/scylladb-manager-3.3.list'
+    rhel: 'https://downloads.scylladb.com/rpm/centos/scylladb-manager-3.3.repo'
+    debian: 'https://downloads.scylladb.com/deb/debian/scylladb-manager-3.3.list'
   "3.2":
     rhel: 'https://downloads.scylladb.com/rpm/centos/scylladb-manager-3.2.repo'
     debian: 'https://downloads.scylladb.com/deb/debian/scylladb-manager-3.2.list'
