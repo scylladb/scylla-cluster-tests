@@ -52,17 +52,21 @@ def create_cron_list_from_timedelta(minutes=0, hours=0):
     return cron_list
 
 
-def get_manager_repo_from_defaults(manager_version_name, distro):
+def get_manager_repo_from_defaults(manager_version, distro):
     with (Path(get_sct_root_path()) / "defaults/manager_versions.yaml").open(encoding="utf-8") as mgmt_config:
         manager_repos_by_version_dict = yaml.safe_load(mgmt_config)["manager_repos_by_version"]
 
-    version_specific_repos = manager_repos_by_version_dict.get(manager_version_name, None)
-    assert version_specific_repos, f"Couldn't find manager version {manager_version_name} in manager defaults"
+    # If the version is a patch version, we need to remove the patch part
+    if len(version_parts := manager_version.split('.')) == 3:
+        manager_version = f"{version_parts[0]}.{version_parts[1]}"
+
+    version_specific_repos = manager_repos_by_version_dict.get(manager_version, None)
+    assert version_specific_repos, f"Couldn't find manager version {manager_version} in manager defaults"
 
     distro_name = get_distro_name(distro)
 
     repo_address = version_specific_repos.get(distro_name, None)
-    assert repo_address, f"Could not find manager repo for distro {distro_name} in version {manager_version_name}"
+    assert repo_address, f"Could not find manager repo for distro {distro_name} in version {manager_version}"
 
     return repo_address
 
