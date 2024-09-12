@@ -1982,7 +1982,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if self.distro.is_amazon2:
             self.remoter.sudo('amazon-linux-extras install java-openjdk11')
         elif self.distro.is_rhel_like:
-            self.install_package(package_name='java-11-openjdk-headless')
+            self.install_package(package_name='java-11-openjdk-headless tar')
         elif self.distro.is_sles:
             raise Exception("Offline install on SLES isn't supported")
         elif self.distro.is_debian:
