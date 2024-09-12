@@ -237,6 +237,10 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             result["hdr_summary"] = tester.get_cs_range_histogram(stress_operation=workload,
                                                                   start_time=start,
                                                                   end_time=end)
+            hdr_throughput = 0
+            for summary, values in result["hdr_summary"].items():
+                hdr_throughput += values["throughput"]
+            result["cycle_hdr_throughput"] = round(hdr_throughput)
             result["reactor_stalls_stats"] = reactor_stall_stats
 
             if "steady" in func.__name__.lower():

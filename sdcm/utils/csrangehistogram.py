@@ -121,7 +121,8 @@ def _generate_percentile_name(percentile: int):
 
 
 _HistorgramSummary = make_dataclass("HistorgramSummary",
-                                    [(_generate_percentile_name(perc), float) for perc in PERCENTILES],
+                                    [(_generate_percentile_name(perc), float)
+                                     for perc in PERCENTILES] + [("throughput", float)],
                                     bases=(_HistorgramSummaryBase,))
 
 
@@ -366,7 +367,8 @@ class _CSRangeHistogramBuilder:
         if percentiles := histogram.get_percentile_to_value_dict(PERCENTILES):
             for perc, value in percentiles.items():
                 percentiles_data[_generate_percentile_name(perc)] = round(value / 1_000_000, 2)
-
+            percentiles_data["throughput"] = round(histogram.get_total_count(
+            ) / ((histogram.get_end_time_stamp() - histogram.get_start_time_stamp()) / 1000))
             return _HistorgramSummary(
                 start_time=histogram.get_start_time_stamp() or base_start_ts,
                 end_time=histogram.get_end_time_stamp() or base_end_ts,
