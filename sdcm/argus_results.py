@@ -39,9 +39,11 @@ class LatencyCalculatorMixedResult(GenericResultTable):
             ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT),
             ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT),
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT),
+            ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER),
+            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER),
             ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
-            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT)
         ]
 
 
@@ -52,9 +54,10 @@ class LatencyCalculatorWriteResult(GenericResultTable):
         Columns = [
             ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT),
             ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT),
+            ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER),
             ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
-            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT)
         ]
 
 
@@ -65,9 +68,10 @@ class LatencyCalculatorReadResult(GenericResultTable):
         Columns = [
             ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT),
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT),
+            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER),
             ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
-            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
+            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT)
         ]
 
 
@@ -106,6 +110,13 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
                                     row=f"Cycle #{cycle}",
                                     value=value,
                                     status=Status.PASS if value < operation_error_thresholds[f"percentile_{percentile}"] else Status.ERROR)
+        if value := summary[operation.upper()].get("throughput", None):
+            # TODO: This column will be validated in the gradual test. `PASS` is temporary status. Should be handled later
+            result_table.add_result(column=f"Throughput {operation.lower()}",
+                                    row=f"Cycle #{cycle}",
+                                    value=value,
+                                    status=Status.UNSET)
+
     result_table.add_result(column="duration", row=f"Cycle #{cycle}",
                             value=result["duration_in_sec"], status=Status.PASS)
     try:
