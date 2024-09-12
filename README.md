@@ -103,6 +103,13 @@ hydra bash
 hydra list-resources --user `whoami`
 ```
 
+#### Reuse already running cluster:
+```bash
+export SCT_REUSE_CLUSTER=$(cat ~/sct-results/latest/test_id)
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml --config configurations/network_config/test_communication_public.yaml
+```
+More details on reusing a cluster can be found in [reuse_cluster](./docs/reuse_cluster.md)
+
 #### Clear resources:
 ```bash
 hydra clean-resources --user `whoami`
