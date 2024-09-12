@@ -2,15 +2,7 @@
 
 ## Reusing already running Cluster
 
-Running a test with already provisioned cluster, you can get the test_id in the AWS console or from jenkins logs:
-
-```
-# add the following to your config yaml
-reuse_cluster: 7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
-
-# or with using the new configuration, before the run test command
-export SCT_REUSE_CLUSTER=7c86f6de-f87d-45a8-9e7f-61fe7b7dbe84
-```
+See: [reuse_cluster](./reuse_cluster.md)
 
 ## using SCT_UPDATE_DB_PACKAGES to override AMI with newer binaries
 
