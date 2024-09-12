@@ -251,6 +251,7 @@ function run_in_docker () {
         -v /tmp:/tmp \
         -v /var/tmp:/var/tmp \
         -v "${HOME_DIR}:${HOME_DIR}" \
+        --tmpfs "${HOME_DIR}/.local:exec,uid=$(id -u ${USER}),gid=$(id -g ${USER})" \
         -w "${SCT_DIR}" \
         -e JOB_NAME="${JOB_NAME}" \
         -e BUILD_URL="${BUILD_URL}" \
