@@ -1225,6 +1225,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return new_node
 
     def disrupt_nodetool_decommission(self, add_node=True):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
         return self._nodetool_decommission(add_node=add_node)
 
     def disrupt_nodetool_seed_decommission(self, add_node=True):
