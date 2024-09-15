@@ -120,3 +120,125 @@ class temporary_replication_strategy_setter(ContextDecorator):  # pylint: disabl
         for keyspace, strategy in keyspaces.items():
             self._preserve_replication_strategy(keyspace)
             strategy.apply(self.node, keyspace)
+<<<<<<< HEAD
+=======
+
+
+class DataCenterTopologyRfControl:
+    """
+    This class manages and controls the replication factor (RF) of keyspaces in a ScyllaDB data center, when nodes are removed or re-added to the cluster.
+
+    **Purpose**:
+    - In scenarios where a keyspace has an RF equal to the total number of nodes in a data center, decommissioning a node is not supported where tablets are used.
+    - This class provides functionality to temporarily decrease the RF of such keyspaces before a node decommissioning operation and revert them back to their original RF after a new node is added.
+
+    **Usage**:
+    1. **`decrease_keyspaces_rf`**: Identifies keyspaces with RF equal to the total number of nodes in the data center and decreases their RF by 1. This is necessary so decommissioning a node is allowed (with tablets).
+    2. **`revert_to_original_keyspaces_rf`**: Reverts the RF of the keyspaces back to their original values after a new node is added to the data center.
+
+    Attributes:
+    - `target_node`: The node to decommission.
+    - `datacenter`: The data center to which the target node belongs.
+    - `decreased_rf_keyspaces`: A list of keyspaces whose RF has been decreased.
+    - `original_nodes_number`: The original number of nodes in the data center (before decommission).
+    """
+
+    def __init__(self, target_node: 'BaseNode') -> None:
+        self.target_node = target_node
+        self.cluster = target_node.parent_cluster
+        self.datacenter = target_node.datacenter
+        self.decreased_rf_keyspaces = []
+        self.original_nodes_number = self._get_original_nodes_number(target_node)
+
+    def _get_original_nodes_number(self, node: 'BaseNode') -> int:
+        # Get the original number of nodes in the data center
+        return len([n for n in self.cluster.nodes if n.dc_idx == node.dc_idx])
+
+    def _get_keyspaces_to_decrease_rf(self, session) -> list:
+        """
+        Returns a list of keyspaces of the data-center that have the specified replication factor.
+
+        Example:
+            For a replication_factor of 3 and dc of "dc1", the output might be:
+            ["keyspace1", "scylla_bench"]
+        """
+        query = "SELECT keyspace_name, replication FROM system_schema.keyspaces"
+        cql_result = session.execute(query)
+
+        matching_keyspaces = []
+
+        for row in cql_result.current_rows:
+            keyspace_name = row.keyspace_name
+
+            if is_system_keyspace(keyspace_name):
+                continue
+
+            replication = row.replication
+
+            if 'SimpleStrategy' in replication['class']:
+                continue  # Skip keyspace using SimpleStrategy
+
+            if 'NetworkTopologyStrategy' in replication['class']:
+                rf = replication.get(self.datacenter)
+                if rf is None:
+                    LOGGER.warning(
+                        f"Datacenter {self.datacenter} not found in replication strategy for keyspace {keyspace_name}.")
+                    continue
+                if int(rf) == self.original_nodes_number:
+                    matching_keyspaces.append(keyspace_name)
+            else:
+                LOGGER.warning("Unexpected replication strategy found: %s", replication['class'])
+
+        return matching_keyspaces
+
+    def _alter_keyspace_rf(self, keyspace: str, replication_factor: int, session):
+        # Alter the replication factor for keyspace of the data-center.
+
+        alter_ks_cmd = f"ALTER KEYSPACE {keyspace} WITH REPLICATION = {{ 'class' : 'NetworkTopologyStrategy', '{self.datacenter}':{replication_factor} }}"
+        message = f"Altering {keyspace} RF with: {alter_ks_cmd}"
+        LOGGER.debug(message)
+        try:
+            session.execute(alter_ks_cmd)
+        except Exception as error:
+            LOGGER.error(f"{message} Failed with: {error}")
+            raise error
+
+    def revert_to_original_keyspaces_rf(self, node_to_wait_for_balance: 'BaseNode' = None):
+        if self.decreased_rf_keyspaces:
+            LOGGER.debug(f"Reverting keyspaces replication factor to original value of {self.datacenter}..")
+            with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
+                for keyspace in self.decreased_rf_keyspaces:
+                    self._alter_keyspace_rf(keyspace=keyspace, replication_factor=self.original_nodes_number,
+                                            session=session)
+        if node_to_wait_for_balance:
+            wait_for_tablets_balanced(node_to_wait_for_balance)
+
+    def decrease_keyspaces_rf(self):
+        """
+            If any keyspace RF equals to number-of-cluster-nodes, where tablets are in use,
+            then a decommission is not supported.
+            In this case, the user has to decrease the replication-factor of any such keyspace first.
+            Later on, after adding a new node, such a keyspace can be reconfigured back to its original
+            replication-factor value.
+        """
+        node = self.target_node
+        with self.cluster.cql_connection_patient(node) as session:
+            # Ensure that nodes_num is 2 or greater
+            if self.original_nodes_number > 1:
+                if decreased_rf_keyspaces := self._get_keyspaces_to_decrease_rf(session=session):
+                    LOGGER.debug(
+                        f"Found the following keyspaces with replication factor to decrease: {decreased_rf_keyspaces}")
+                    try:
+                        for keyspace in decreased_rf_keyspaces:
+                            self._alter_keyspace_rf(keyspace=keyspace, replication_factor=self.original_nodes_number - 1,
+                                                    session=session)
+                            self.decreased_rf_keyspaces.append(keyspace)
+                    except Exception as error:
+                        self.revert_to_original_keyspaces_rf()
+                        LOGGER.error(
+                            f"Decreasing keyspace replication factor failed with: ({error}), aborting operation")
+                        raise error
+            else:
+                LOGGER.error(
+                    f"DC {self.datacenter} has {self.original_nodes_number} nodes. Cannot alter replication factor")
+>>>>>>> e57d75b34 (fix(_get_keyspaces_to_decrease_rf): Address a case where no keyspace RF value of DC)
