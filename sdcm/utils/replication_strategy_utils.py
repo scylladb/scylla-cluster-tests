@@ -180,8 +180,12 @@ class DataCenterTopologyRfControl:
                 continue  # Skip keyspace using SimpleStrategy
 
             if 'NetworkTopologyStrategy' in replication['class']:
-                rf = int(replication.get(self.datacenter))
-                if rf == self.original_nodes_number:
+                rf = replication.get(self.datacenter)
+                if rf is None:
+                    LOGGER.warning(
+                        f"Datacenter {self.datacenter} not found in replication strategy for keyspace {keyspace_name}.")
+                    continue
+                if int(rf) == self.original_nodes_number:
                     matching_keyspaces.append(keyspace_name)
             else:
                 LOGGER.warning("Unexpected replication strategy found: %s", replication['class'])
