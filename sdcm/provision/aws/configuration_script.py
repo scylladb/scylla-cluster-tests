@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-from sdcm.provision.aws.utils import network_config_ipv6_workaround_script, configure_eth1_script
+from sdcm.provision.aws.utils import network_config_ipv6_workaround_script
 from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 
 
@@ -27,8 +27,6 @@ class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):  # pylint: disa
 
     def _script_body(self) -> str:
         script = super()._script_body()
-        if self.aws_additional_interface:
-            script += configure_eth1_script()
         if self.aws_ipv6_workaround:
             script += network_config_ipv6_workaround_script()
         return script
