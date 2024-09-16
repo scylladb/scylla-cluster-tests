@@ -4615,7 +4615,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 "add_remove_dc skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)")
         InfoEvent(message='Starting New DC Nemesis').publish()
         node = self.cluster.nodes[0]
-        system_keyspaces = ["system_auth", "system_distributed", "system_traces"]
+        system_keyspaces = ["system_distributed", "system_traces"]
+        if not node.raft.is_consistent_topology_changes_enabled:  # auth-v2 is used when consistent topology is enabled
+            system_keyspaces.insert(0, "system_auth")
         self._switch_to_network_replication_strategy(self.cluster.get_test_keyspaces() + system_keyspaces)
         datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
         self.tester.create_keyspace("keyspace_new_dc", replication_factor={
