@@ -21,7 +21,10 @@ class TestAddNewDc(LongevityTest):
 
         self.log.info("Starting add new DC test...")
         assert self.params.get('n_db_nodes').endswith(" 0"), "n_db_nodes must be a list and last dc must equal 0"
-        system_keyspaces = ["system_auth", "system_distributed", "system_traces"]
+        system_keyspaces = ["system_distributed", "system_traces"]
+        # auth-v2 is used when consistent topology is enabled
+        if not self.db_cluster.nodes[0].raft.is_consistent_topology_changes_enabled:
+            system_keyspaces.insert(0, "system_auth")
 
         # reconfigure system keyspaces to use NetworkTopologyStrategy
         status = self.db_cluster.get_nodetool_status()
