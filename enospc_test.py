@@ -15,6 +15,7 @@
 
 from sdcm.tester import ClusterTester
 from sdcm.nemesis import EnospcAllNodesMonkey
+from sdcm.utils.common import skip_optional_stage
 
 
 class EnospcTest(ClusterTester):
@@ -27,11 +28,13 @@ class EnospcTest(ClusterTester):
         self.db_cluster.add_nemesis(nemesis=EnospcAllNodesMonkey,
                                     tester_obj=self)
 
-        # run a write workload
-        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
-                                              stress_num=2, keyspace_num=1)
+        if not skip_optional_stage('main_load'):
+            # run a write workload
+            stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'),
+                                                  stress_num=2, keyspace_num=1)
 
         self.db_cluster.start_nemesis(interval=15)
         self.db_cluster.stop_nemesis(timeout=1000)
 
-        self.get_stress_results(queue=stress_queue)
+        if not skip_optional_stage('main_load'):
+            self.get_stress_results(queue=stress_queue)

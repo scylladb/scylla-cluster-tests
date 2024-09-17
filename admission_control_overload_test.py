@@ -2,6 +2,7 @@ import time
 from invoke import exceptions
 from sdcm.tester import ClusterTester
 from sdcm.db_stats import PrometheusDBStats
+from sdcm.utils.common import skip_optional_stage
 
 
 class AdmissionControlOverloadTest(ClusterTester):
@@ -24,19 +25,18 @@ class AdmissionControlOverloadTest(ClusterTester):
         return is_admission_control_triggered
 
     def run_load(self, job_num, job_cmd, is_prepare=False):
-        if is_prepare:
+        is_ever_triggered = False
+        if is_prepare and not skip_optional_stage('prepare_write'):
             prepare_stress_queue = self.run_stress_thread(stress_cmd=job_cmd, stress_num=job_num, prefix='preload-',
                                                           stats_aggregate_cmds=False)
             self.get_stress_results(prepare_stress_queue)
-            is_ever_triggered = False
-        else:
+        elif not is_prepare and not skip_optional_stage('main_load'):
             stress_queue = []
             stress_res = []
             stress_queue.append(self.run_stress_thread(stress_cmd=job_cmd, stress_num=job_num,
                                                        stats_aggregate_cmds=False))
 
             start_time = time.time()
-            is_ever_triggered = False
             while stress_queue:
                 stress_res.append(stress_queue.pop(0))
                 while not all(future.done() for future in stress_res[-1].results_futures):

@@ -3,6 +3,7 @@ import time
 from longevity_test import LongevityTest
 from sdcm.cluster import BaseNode
 from sdcm.utils.alternator.consts import NO_LWT_TABLE_NAME
+from sdcm.utils.common import skip_optional_stage
 
 
 class AlternatorTtlLongevityTest(LongevityTest):
@@ -81,8 +82,8 @@ class AlternatorTtlLongevityTest(LongevityTest):
 
         # Rerun the stress_cmd a second time
         stress_cmd = self.params.get('stress_cmd')
-        if stress_cmd:
-            stress_queue = []
+        stress_queue = []
+        if stress_cmd and not skip_optional_stage('main_load'):
             params = {'stress_cmd': stress_cmd, 'round_robin': self.params.get('round_robin')}
             self._run_all_stress_cmds(stress_queue, params)
 
@@ -114,7 +115,7 @@ class AlternatorTtlLongevityTest(LongevityTest):
         # Run write stress
         self.run_prepare_write_cmd()
         stress_cmd = self.params.get('stress_cmd')
-        if stress_cmd:
+        if stress_cmd and not skip_optional_stage('main_load'):
             params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd,
                       'round_robin': self.params.get('round_robin')}
             self._run_all_stress_cmds(stress_queue, params)
@@ -131,7 +132,7 @@ class AlternatorTtlLongevityTest(LongevityTest):
 
         # Run read stress as a background thread while TTL scans are going over existing data.
         stress_read_cmd = self.params.get('stress_read_cmd')
-        if stress_read_cmd:
+        if stress_read_cmd and not skip_optional_stage('main_load'):
             params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_read_cmd}
             self._run_all_stress_cmds(stress_queue, params)
 

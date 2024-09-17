@@ -7,6 +7,8 @@ from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from longevity_test import LongevityTest
 from sdcm.cluster import BaseNode
 from sdcm.stress_thread import CassandraStressThread
+from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.decorators import optional_stage
 from sdcm.utils.replication_strategy_utils import NetworkTopologyReplicationStrategy
 
 warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
@@ -33,7 +35,8 @@ class TestAddNewDc(LongevityTest):
             replication_factors={dc: len(status[dc].keys()) for dc in status}
         )
         self.prewrite_db_with_data()
-        read_thread, write_thread = self.start_stress_during_adding_new_dc()
+        if not skip_optional_stage('main_load'):
+            read_thread, write_thread = self.start_stress_during_adding_new_dc()
         # no need to change network topology
         new_node = self.add_node_in_new_dc()
 
@@ -52,9 +55,10 @@ class TestAddNewDc(LongevityTest):
         for node in self.db_cluster.nodes:
             node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
 
-        # wait for stress to complete
-        self.verify_stress_thread(cs_thread_pool=read_thread)
-        self.verify_stress_thread(cs_thread_pool=write_thread)
+        if not skip_optional_stage('main_load'):
+            # wait for stress to complete
+            self.verify_stress_thread(cs_thread_pool=read_thread)
+            self.verify_stress_thread(cs_thread_pool=write_thread)
 
         self.verify_data_can_be_read_from_new_dc(new_node)
         self.log.info("Test completed.")
@@ -69,6 +73,7 @@ class TestAddNewDc(LongevityTest):
             node.run_cqlsh(cql)
         self.log.info("Replication Strategies for {} reconfigured".format(keyspaces))
 
+    @optional_stage('prepare_write')
     def prewrite_db_with_data(self) -> None:
         self.log.info("Prewriting database...")
         stress_cmd = self.params.get('prepare_write_cmd')
@@ -97,6 +102,7 @@ class TestAddNewDc(LongevityTest):
         self.log.info("New DC to cluster has been added")
         return new_node
 
+    @optional_stage('post_test_load')
     def verify_data_can_be_read_from_new_dc(self, new_node: BaseNode) -> None:
         self.log.info("Veryfing if data has been transferred successfully to the new DC")
         stress_cmd = self.params.get('verify_data_after_entire_test') + f" -node {new_node.ip_address}"

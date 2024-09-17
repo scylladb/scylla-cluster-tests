@@ -1,6 +1,7 @@
 import time
 
 from sdcm.tester import ClusterTester
+from sdcm.utils.common import skip_optional_stage
 
 
 class FullClusterStopStart(ClusterTester):
@@ -11,12 +12,13 @@ class FullClusterStopStart(ClusterTester):
         kill_cmd = "sudo pkill -9 scylla"
         # run cs write
         start_time = time.time()
-        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'))
-        self.get_stress_results(queue=stress_queue)
-        self.verify_stress_thread(cs_thread_pool=stress_queue)
-        # verify read
-        stress_read = self.run_stress_thread(stress_cmd=self.params.get('stress_read_cmd'))
-        self.verify_stress_thread(cs_thread_pool=stress_read)
+        if not skip_optional_stage('main_load'):
+            stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'))
+            self.get_stress_results(queue=stress_queue)
+            self.verify_stress_thread(cs_thread_pool=stress_queue)
+            # verify read
+            stress_read = self.run_stress_thread(stress_cmd=self.params.get('stress_read_cmd'))
+            self.verify_stress_thread(cs_thread_pool=stress_read)
         # stop all nodes
         nodes = self.db_cluster.nodes
         for node in nodes:
@@ -33,6 +35,7 @@ class FullClusterStopStart(ClusterTester):
             self.log.info("making sure node '{}' is up".format(node))
             node.wait_db_up(verbose=True, timeout=300)
 
-        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_read_cmd'))
-        self.verify_stress_thread(cs_thread_pool=stress_queue)
+        if not skip_optional_stage('main_load'):
+            stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_read_cmd'))
+            self.verify_stress_thread(cs_thread_pool=stress_queue)
         self.verify_no_drops_and_errors(starting_from=start_time)

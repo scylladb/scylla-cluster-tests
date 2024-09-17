@@ -26,7 +26,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.health import PartitionRowsValidationEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import PageFetcher
-from sdcm.utils.decorators import retrying
+from sdcm.utils.decorators import retrying, optional_stage
 
 LOGGER = logging.getLogger(__name__)
 
@@ -137,6 +137,7 @@ class PartitionsValidationAttributes:  # pylint: disable=too-few-public-methods,
         LOGGER.debug('Save partitions info before reads')
         self.partitions_dict_before = self.collect_partitions_info(ignore_limit_rows_number=True)
 
+    @optional_stage('data_validation')
     def validate_rows_per_partitions(self, ignore_limit_rows_number: bool = False):
         """
         Validating partition rows-number is the same before and after running a nemesis/stress.

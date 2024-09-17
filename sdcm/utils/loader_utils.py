@@ -18,6 +18,8 @@ import time
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.decorators import optional_stage
 
 DEFAULT_USER = "cassandra"
 DEFAULT_USER_PASSWORD = "cassandra"
@@ -63,6 +65,7 @@ class LoaderUtilsMixin:
                     AND speculative_retry = '99.0PERCENTILE';
             """)
 
+    @optional_stage('main_load')
     def assemble_and_run_all_stress_cmd(self, stress_queue, stress_cmd, keyspace_num):
         if stress_cmd:
             round_robin = self.params.get('round_robin')
@@ -79,6 +82,7 @@ class LoaderUtilsMixin:
                 params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd, 'round_robin': round_robin}
                 self._run_all_stress_cmds(stress_queue, params)
 
+    @optional_stage('main_load')
     def assemble_and_run_all_stress_cmd_by_ks_names(self, stress_queue, stress_cmd, ks_names=None):
         for ks_name in ks_names:
             params = {
@@ -233,24 +237,25 @@ class LoaderUtilsMixin:
         if not prepare_write_cmd and not prepare_cs_user_profiles:
             self.log.debug("No prepare write commands are configured to run. Continue with stress commands")
             return
-        if prepare_write_cmd:
-            # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
-            # the loaders (round_robin).
-            if keyspace_num > 1 and self.params.get('round_robin'):
-                self.log.debug("Using round_robin for multiple Keyspaces...")
-                for i in range(1, keyspace_num + 1):
-                    keyspace_name = self._get_keyspace_name(i)
+        if not skip_optional_stage('prepare_write'):
+            if prepare_write_cmd:
+                # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
+                # the loaders (round_robin).
+                if keyspace_num > 1 and self.params.get('round_robin'):
+                    self.log.debug("Using round_robin for multiple Keyspaces...")
+                    for i in range(1, keyspace_num + 1):
+                        keyspace_name = self._get_keyspace_name(i)
+                        self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
+                                                                       'keyspace_name': keyspace_name,
+                                                                       'round_robin': True})
+                # Not using round_robin and all keyspaces will run on all loaders
+                else:
                     self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                                   'keyspace_name': keyspace_name,
-                                                                   'round_robin': True})
-            # Not using round_robin and all keyspaces will run on all loaders
-            else:
-                self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
-                                                               'keyspace_num': keyspace_num,
-                                                               'round_robin': self.params.get('round_robin')})
+                                                                   'keyspace_num': keyspace_num,
+                                                                   'round_robin': self.params.get('round_robin')})
 
-        if prepare_cs_user_profiles:
-            self.run_cs_user_profiles(cs_profiles=prepare_cs_user_profiles, stress_queue=write_queue)
+            if prepare_cs_user_profiles:
+                self.run_cs_user_profiles(cs_profiles=prepare_cs_user_profiles, stress_queue=write_queue)
         # In some cases we don't want the nemesis to run during the "prepare" stage in order to be 100% sure that
         # all keys were written succesfully
         if self.params.get('nemesis_during_prepare'):
@@ -272,15 +277,16 @@ class LoaderUtilsMixin:
         # self._flush_all_nodes()
 
         # In case we would like to verify all keys were written successfully before we start other stress / nemesis
-        prepare_verify_cmd = self.params.get('prepare_verify_cmd')
-        if prepare_verify_cmd:
-            self._run_all_stress_cmds(verify_queue, params={'stress_cmd': prepare_verify_cmd,
-                                                            'keyspace_num': keyspace_num})
+        if not skip_optional_stage('prepare_write'):
+            prepare_verify_cmd = self.params.get('prepare_verify_cmd')
+            if prepare_verify_cmd:
+                self._run_all_stress_cmds(verify_queue, params={'stress_cmd': prepare_verify_cmd,
+                                                                'keyspace_num': keyspace_num})
 
-            for stress in verify_queue:
-                self.verify_stress_thread(cs_thread_pool=stress)
+                for stress in verify_queue:
+                    self.verify_stress_thread(cs_thread_pool=stress)
 
-        self.run_post_prepare_cql_cmds()
+            self.run_post_prepare_cql_cmds()
 
         prepare_wait_no_compactions_timeout = self.params.get('prepare_wait_no_compactions_timeout')
         if prepare_wait_no_compactions_timeout:

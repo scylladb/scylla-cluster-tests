@@ -335,3 +335,30 @@ def skip_on_capacity_issues(func: callable) -> callable:
                 raise UnsupportedNemesis("Capacity Issue") from ex
             raise
     return wrapper
+
+
+def optional_stage(stage_names: str | list[str]):
+    """
+    Decorator skips the decorated functon if the provided test stage is set to be skipped in the test configuration
+    'skip_test_stages' parameter.
+    More details can be found in https://github.com/scylladb/scylla-cluster-tests/blob/master/docs/faq.md
+
+    :param stage_names: str or list, name of the test stage(s)
+    """
+    stage_names = stage_names if isinstance(stage_names, list) else [stage_names]
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # making import here, to work around circular import issue
+            from sdcm.cluster import TestConfig
+            skip_test_stages = TestConfig().tester_obj().skip_test_stages
+            skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]
+
+            if not skipped_stages:
+                return func(*args, **kwargs)
+            else:
+                skipped_stages_str = ', '.join(skipped_stages)
+                LOGGER.warning("'%s' is skipped as '%s' test stage(s) is disabled.", func.__name__, skipped_stages_str)
+        return wrapper
+    return decorator

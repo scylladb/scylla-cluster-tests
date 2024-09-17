@@ -23,6 +23,7 @@ import logging
 import getpass
 import pathlib
 import tempfile
+import yaml
 from copy import deepcopy
 from typing import List, Union, Set
 
@@ -149,6 +150,14 @@ def dict_or_str(value):
             return ast.literal_eval(value)
         except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
+
+        # ast.literal_eval() can fail on some strings (e.g. which contain lowercased booleans), try parsing such strings
+        # using yaml.safe_load()
+        try:
+            return yaml.safe_load(value)
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            pass
+
     if isinstance(value, dict):
         return value
 
@@ -1643,6 +1652,9 @@ class SCTConfiguration(dict):
 
         dict(name="run_scylla_doctor", env="SCT_RUN_SCYLLA_DOCTOR", type=boolean,
              help="Run scylla-doctor in artifact tests"),
+
+        dict(name="skip_test_stages", env="SCT_SKIP_TEST_STAGES", type=dict_or_str,
+             help="""Skip selected stages of a test scenario"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
