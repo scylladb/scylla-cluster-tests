@@ -20,6 +20,7 @@ import logging
 import contextlib
 from enum import Enum
 
+
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
@@ -158,7 +159,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         return sb_summary, errors
 
-    def create_stress_cmd(self, stress_cmd, loader, cmd_runner):
+    def create_stress_cmd(self, stress_cmd, loader, cmd_runner, is_shell_supported):
         if self.connection_bundle_file:
             stress_cmd = f'{stress_cmd.strip()} -cloud-config-path={self.target_connection_bundle_file}'
         else:
@@ -183,7 +184,9 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     # server_names = ' '.join(f'-tls-server-name {ip}' for ip in ips.split(","))
                     # stress_cmd = f'{stress_cmd.strip()} -tls-host-verification {server_names}'
 
-        return stress_cmd
+        if is_shell_supported:
+            return stress_cmd
+        return stress_cmd.removeprefix('scylla-bench')
 
     def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=too-many-locals
         cmd_runner = None
@@ -202,6 +205,9 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                                   '--security-opt seccomp=unconfined '
             )
             cmd_runner_name = loader.ip_address
+
+        is_shell_supported = cmd_runner.run(
+            cmd="sh -c true", timeout=self.timeout, retry=0, env={"DOCKER_IMAGE_WITH_TAG": self.docker_image_name}).returncode == 0
 
         if self.connection_bundle_file:
             cmd_runner.send_files(str(self.connection_bundle_file), self.target_connection_bundle_file)
@@ -229,7 +235,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             os.makedirs(loader.logdir, exist_ok=True)
 
         log_file_name = os.path.join(loader.logdir, f'scylla-bench-l{loader_idx}-{uuid.uuid4()}.log')
-        stress_cmd = self.create_stress_cmd(stress_cmd, loader, cmd_runner)
+        stress_cmd = self.create_stress_cmd(stress_cmd, loader, cmd_runner, is_shell_supported)
         with ScyllaBenchStressExporter(instance_name=cmd_runner_name,
                                        metrics=nemesis_metrics_obj(),
                                        stress_operation=self.sb_mode,
@@ -247,6 +253,8 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     timeout=self.timeout,
                     log_file=log_file_name,
                     retry=0,
+                    # DOCKER_IMAGE_WITH_TAG is here to let k8s runner know correct image for dynamic runner
+                    env={"DOCKER_IMAGE_WITH_TAG": self.docker_image_name},
                 )
             except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=scylla_bench_event, exc=exc)

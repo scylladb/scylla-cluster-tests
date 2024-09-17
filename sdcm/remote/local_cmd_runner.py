@@ -46,7 +46,7 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
 
     def run(self, cmd: str, timeout: Optional[float] = None, ignore_status: bool = False,  # pylint: disable=too-many-arguments
             verbose: bool = True, new_session: bool = False, log_file: Optional[str] = None, retry: int = 1,
-            watchers: Optional[List[StreamWatcher]] = None, change_context: bool = False) -> Result:
+            watchers: Optional[List[StreamWatcher]] = None, change_context: bool = False, env: dict[str, str | int] = None) -> Result:
 
         watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
@@ -67,7 +67,8 @@ class LocalCmdRunner(CommandRunner):  # pylint: disable=too-few-public-methods
                     hide=True,
                     watchers=watchers,
                     timeout=timeout,
-                    env=os.environ, replace_env=True,
+                    env=env or os.environ,
+                    replace_env=True,
                     in_stream=False
                 )
                 if new_session:

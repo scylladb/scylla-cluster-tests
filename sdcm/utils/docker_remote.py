@@ -68,6 +68,11 @@ class RemoteDocker(BaseNode):
         raise NotImplementedError()
 
     @cached_property
+    def is_shell_supported(self) -> bool:
+        return self.node.remoter.run(f'{self.sudo_needed} docker exec {self.docker_id} /bin/sh -c true',
+                                     ignore_status=True).return_code == 0
+
+    @cached_property
     def running_in_docker(self):
         ok = self.node.remoter.run("test /.dockerenv", ignore_status=True).ok
         ok |= 'docker' in self.node.remoter.run('ls /proc/self/cgroup', ignore_status=True).stdout
@@ -102,7 +107,9 @@ class RemoteDocker(BaseNode):
         return self.node.remoter.run(f"{self.sudo_needed} docker logs {self.docker_id}").stdout.strip()
 
     def run(self, cmd, *args, **kwargs):
-        return self.node.remoter.run(f'{self.sudo_needed} docker exec {self.docker_id} /bin/sh -c {shlex.quote(cmd)}', *args, **kwargs)
+        if self.is_shell_supported:
+            return self.node.remoter.run(f'{self.sudo_needed} docker exec {self.docker_id} /bin/sh -c {shlex.quote(cmd)}', *args, **kwargs)
+        return self.node.remoter.run(f'{self.sudo_needed} docker exec {self.docker_id} {shlex.quote(cmd)}', *args, **kwargs)
 
     def kill(self):
         return self.node.remoter.run(f"{self.sudo_needed} docker rm -f {self.docker_id}", verbose=False, ignore_status=True)

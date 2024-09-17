@@ -555,7 +555,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
 
     def _run_execute(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
                      ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-                     watchers: Optional[List[StreamWatcher]] = None):
+                     watchers: Optional[List[StreamWatcher]] = None, env: dict[str, str] = None):
         if verbose:
             self.log.debug('<%s>: Running command "%s"...', self.hostname, cmd)
         start_time = time.perf_counter()
@@ -617,7 +617,8 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             log_file: str | None = None,
             retry: int = 1,
             watchers: List[StreamWatcher] | None = None,
-            change_context: bool = False
+            change_context: bool = False,
+            env: dict[str, str | int] = None,
             ) -> Result:
         """
         Run command at the remote endpoint and return result
@@ -632,6 +633,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         :param change_context: If True, next run will trigger reconnect on all threads.
           Needed for cases when environment context is changed by the command,
           for example group has been added to the user.
+        :param env: Environment variables
         :return:
         """
 

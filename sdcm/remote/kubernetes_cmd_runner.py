@@ -47,14 +47,6 @@ LOGGER = logging.getLogger(__name__)
 KEY_BASED_LOCKS = KeyBasedLock()
 
 
-def is_scylla_bench_command(command):
-    return all((str_part in command for str_part in ("scylla-bench", " -workload=", " -mode=")))
-
-
-def is_ycsb_command(command):
-    return "ycsb " in command and (" run " in command or " load " in command)
-
-
 class KubernetesRunner(Runner):
     read_timeout = 0.1
 
@@ -163,14 +155,9 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
         )
 
     def run(self, cmd, **kwargs):  # pylint: disable=arguments-differ
-        if hasattr(self, "dynamic_remoter") and hasattr(self, "pod_image"):
-            if is_scylla_bench_command(cmd) and "scylla-bench" not in self.pod_image:
-                LOGGER.info(
-                    "Running following 'scylla-bench' command in a separate dynamic loader pod: %s", cmd)
-                return self.dynamic_remoter.run(cmd, **kwargs)
-            elif is_ycsb_command(cmd) and "ycsb" not in self.pod_image:
-                LOGGER.info("Running following 'ycsb' command in a separate dynamic loader pod: %s", cmd)
-                return self.dynamic_remoter.run(cmd, **kwargs)
+        docker_image = kwargs.get("env", {}).get("DOCKER_IMAGE_WITH_TAG", None)
+        if hasattr(self, "dynamic_remoter") and hasattr(self, "pod_image") and docker_image != self.pod_image:
+            return self.dynamic_remoter.run(cmd, **kwargs)
         return super().run(cmd, **kwargs)
 
     def get_init_arguments(self) -> dict:
@@ -388,16 +375,6 @@ class KubernetesPodWatcher(KubernetesRunner):
             self.context.config.k8s_pod_name, command)
         self._start()
 
-    def _get_docker_image(self, command) -> str:
-        params = self.context.config.k8s_kluster.params
-        if is_scylla_bench_command(command):
-            return params.get('stress_image.scylla-bench')
-        if is_ycsb_command(command):
-            return params.get("stress_image.ycsb")
-        if loader_image := params.get('stress_image.cassandra-stress'):
-            return loader_image
-        raise ValueError("No loader image found in the params")
-
     def _get_pod_status(self) -> dict:
         result_raw = self.context.config.k8s_kluster.kubectl(
             f"get pod {self.context.config.k8s_pod_name} "
@@ -542,7 +519,10 @@ class KubernetesPodWatcher(KubernetesRunner):
         environ["K8S_POD_COMMAND"] = command
         environ["K8S_POD_NAME"] = pod_name
         if not environ.get("DOCKER_IMAGE_WITH_TAG"):
-            environ["DOCKER_IMAGE_WITH_TAG"] = self._get_docker_image(command)
+            environ["DOCKER_IMAGE_WITH_TAG"] = kwargs.pop("env", {}).get("DOCKER_IMAGE_WITH_TAG", None)
+
+        if not environ["DOCKER_IMAGE_WITH_TAG"]:
+            raise "DOCKER_IMAGE_WITH_TAG is empty"
 
         # NOTE: create loader pod and wait for it's readiness
         KubernetesOps.apply_file(

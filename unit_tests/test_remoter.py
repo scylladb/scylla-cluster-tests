@@ -402,7 +402,7 @@ class TestSudoAndRunShellScript(unittest.TestCase):
 
     def test_sudo_non_root(self):
         remoter = self.remoter_cls("localhost", user="joe")
-        remoter.sudo("true")
+        remoter.sudo("true", env={"tmp": "123"})
         self.assertEqual(remoter.command_to_run, "sudo true")
 
     def test_shell_script_cmd(self):

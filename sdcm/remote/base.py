@@ -100,7 +100,8 @@ class CommandRunner(metaclass=ABCMeta):
             log_file: Optional[str] = None,
             retry: int = 1,
             watchers: Optional[List[StreamWatcher]] = None,
-            change_context: bool = False
+            change_context: bool = False,
+            env: dict[str, str | int] = None,
             ) -> Result:
         pass
 
@@ -114,7 +115,9 @@ class CommandRunner(metaclass=ABCMeta):
              log_file: Optional[str] = None,
              retry: int = 1,
              watchers: Optional[List[StreamWatcher]] = None,
-             user: Optional[str] = 'root') -> Result:
+             user: Optional[str] = 'root',
+             env: dict[str, str | int] = None,
+             ) -> Result:
         if user != self.user:
             if user == 'root':
                 cmd = f"sudo {cmd}"
@@ -127,7 +130,8 @@ class CommandRunner(metaclass=ABCMeta):
                         new_session=new_session,
                         log_file=log_file,
                         retry=retry,
-                        watchers=watchers)
+                        watchers=watchers,
+                        env=env)
 
     @abstractmethod
     def _create_connection(self):
