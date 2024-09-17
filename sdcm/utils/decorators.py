@@ -157,7 +157,8 @@ def measure_time(func):
     return wrapped
 
 
-def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None):
+def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None,
+                                 cycle_name: Optional[str] = None):
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
 
@@ -191,6 +192,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             # Keep for debug purposes
             LOGGER.debug("latency_calculator_decorator cluster: %s", cluster)
             start_node_list = cluster.nodes[:]
+            func_name = cycle_name or func.__name__
             with EventCounterContextManager(name=func.__name__,
                                             event_type=(DatabaseLogEvent.REACTOR_STALLED, )) as counter:
 
@@ -221,29 +223,39 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                     data = file.read().strip()
                     latency_results = json.loads(data or '{}')
 
-            if "steady" not in func.__name__.lower():
-                if func.__name__ not in latency_results:
-                    latency_results[func.__name__] = {"legend": legend or func.__name__}
-                if 'cycles' not in latency_results[func.__name__]:
-                    latency_results[func.__name__]['cycles'] = []
+            if "steady" not in func_name.lower():
+                if func_name not in latency_results:
+                    latency_results[func_name] = {"legend": legend or func_name}
+                if 'cycles' not in latency_results[func_name]:
+                    latency_results[func_name]['cycles'] = []
 
             result = latency.collect_latency(monitor, start, end, workload, cluster, all_nodes_list)
             result["screenshots"] = screenshots
             result["duration"] = f"{datetime.timedelta(seconds=int(end - start))}"
             result["duration_in_sec"] = int(end - start)
-            result["hdr"] = tester.get_cs_range_histogram_by_interval(stress_operation=workload,
+            try:
+                result["hdr"] = tester.get_cs_range_histogram_by_interval(stress_operation=workload,
+                                                                          start_time=start,
+                                                                          end_time=end)
+                LOGGER.debug("hdr: %s", result["hdr"])
+            except Exception as err:  # noqa: BLE001
+                LOGGER.error("Failed to get cs_range_histogram_by_interval error: %s", err)
+                result["hdr"] = {}
+
+            try:
+                result["hdr_summary"] = tester.get_cs_range_histogram(stress_operation=workload,
                                                                       start_time=start,
                                                                       end_time=end)
-            result["hdr_summary"] = tester.get_cs_range_histogram(stress_operation=workload,
-                                                                  start_time=start,
-                                                                  end_time=end)
+            except Exception as err:  # noqa: BLE001
+                LOGGER.error("Failed to get cs_range_histogram error: %s", err)
+                result["hdr_summary"] = {}
             hdr_throughput = 0
             for summary, values in result["hdr_summary"].items():
                 hdr_throughput += values["throughput"]
             result["cycle_hdr_throughput"] = round(hdr_throughput)
             result["reactor_stalls_stats"] = reactor_stall_stats
 
-            if "steady" in func.__name__.lower():
+            if "steady" in func_name.lower():
                 if 'Steady State' not in latency_results:
                     latency_results['Steady State'] = result
                     send_result_to_argus(
@@ -255,13 +267,13 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                         result=result
                     )
             else:
-                latency_results[func.__name__]['cycles'].append(result)
+                latency_results[func_name]['cycles'].append(result)
                 send_result_to_argus(
                     argus_client=tester.test_config.argus_client(),
                     workload=workload,
-                    name=f"{func.__name__}",
+                    name=f"{func_name}",
                     description=legend or "",
-                    cycle=len(latency_results[func.__name__]['cycles']),
+                    cycle=len(latency_results[func_name]['cycles']),
                     result=result
                 )
 
