@@ -111,7 +111,7 @@ from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
     check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers, \
     check_group0_tokenring_consistency, CHECK_NODE_HEALTH_RETRIES, CHECK_NODE_HEALTH_RETRY_DELAY
-from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property
+from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property, optional_stage
 from sdcm.test_config import TestConfig
 from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 from sdcm.utils.sstable.sstable_utils import SstableUtils
@@ -4489,6 +4489,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self.log.debug("Done waiting on cfstats: %s" % node_space)
         return reached_threshold
 
+    @optional_stage('wait_total_space_used')
     def wait_total_space_used_per_node(self, size=None, keyspace='keyspace1'):
         if size is None:
             size = int(self.params.get('space_node_threshold'))
@@ -4500,6 +4501,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           text="Waiting until cfstat '%s' reaches value '%s'" % (key, size),
                           key=key, threshold=size, keyspaces=keyspace, throw_exc=False)
 
+    @optional_stage('nemesis')
     def add_nemesis(self, nemesis, tester_obj):
         for nem in nemesis:
             nemesis_obj = nem['nemesis'](tester_obj=tester_obj,
@@ -4511,6 +4513,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def clean_nemesis(self):
         self.nemesis = []
 
+    @optional_stage('nemesis')
     @log_run_info("Start nemesis threads on cluster")
     def start_nemesis(self, interval=None, cycles_count: int = -1):
         self.log.info('Clear _nemesis_termination_event')
@@ -4521,6 +4524,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             nemesis_thread.start()
             self.nemesis_threads.append(nemesis_thread)
 
+    @optional_stage('nemesis')
     @log_run_info("Stop nemesis threads on cluster")
     def stop_nemesis(self, timeout=10):
         if self.nemesis_termination_event.is_set():

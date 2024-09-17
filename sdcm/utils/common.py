@@ -2652,3 +2652,23 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
         LOGGER.info("Found total of {} instances.".format(total_items))
 
     return placement_groups
+
+
+def skip_optional_stage(stage_names: str | list[str]) -> bool:
+    """
+    Checks if the given test stage(s) is skipped for execution
+
+    :param stage_names: str or list, name of the test stage(s)
+    :return: bool
+    """
+    # making import here, to work around circular import issue
+    from sdcm.cluster import TestConfig
+    stage_names = stage_names if isinstance(stage_names, list) else [stage_names]
+    skip_test_stages = TestConfig().tester_obj().skip_test_stages
+    skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]
+
+    if skipped_stages:
+        skipped_stages_str = ', '.join(skipped_stages)
+        LOGGER.warning("'%s' test stage(s) is disabled.", skipped_stages_str)
+        return False
+    return True

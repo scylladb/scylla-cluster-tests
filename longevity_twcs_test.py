@@ -4,6 +4,7 @@
 
 from longevity_test import LongevityTest
 from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
+from sdcm.utils.common import skip_optional_stage
 
 
 class TWCSLongevityTest(LongevityTest):
@@ -24,14 +25,15 @@ class TWCSLongevityTest(LongevityTest):
                     'compaction_window_unit': 'MINUTES'}}""")
 
     def run_prepare_write_cmd(self):
-        self.create_tables_for_scylla_bench()
-        if self.params.get("prepare_write_cmd"):
-            # run_prepare_write_cmd executes run_post_prepare_cql_cmds
-            # it doesn't need to call run_post_prepare_cql_cmds twice.
-            with ignore_mutation_write_errors():
-                super().run_prepare_write_cmd()
-        else:
-            self.run_post_prepare_cql_cmds()
+        if not skip_optional_stage('prepare_write'):
+            self.create_tables_for_scylla_bench()
+            if self.params.get("prepare_write_cmd"):
+                # run_prepare_write_cmd executes run_post_prepare_cql_cmds
+                # it doesn't need to call run_post_prepare_cql_cmds twice.
+                with ignore_mutation_write_errors():
+                    super().run_prepare_write_cmd()
+            else:
+                self.run_post_prepare_cql_cmds()
 
         # Run nemesis during stress as it was stopped before copy expected data
         if self.params.get('nemesis_during_prepare'):

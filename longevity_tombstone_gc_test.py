@@ -4,7 +4,7 @@ import time
 from functools import partial
 
 from longevity_twcs_test import TWCSLongevityTest
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.common import ParallelObject, skip_optional_stage
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 
 
@@ -72,7 +72,8 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
 
         stress_cmd = self.params.get('stress_cmd')
         params = {'stress_cmd': stress_cmd, 'round_robin': self.params.get('round_robin')}
-        self._run_all_stress_cmds(stress_queue, params)
+        if not skip_optional_stage('main_load'):
+            self._run_all_stress_cmds(stress_queue, params)
 
         self.log.info('Wait a duration of TTL + propagation_delay_in_seconds')
         time.sleep(self.propagation_delay + self.ttl)

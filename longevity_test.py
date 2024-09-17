@@ -30,6 +30,8 @@ from sdcm.sct_events.group_common_events import \
 from sdcm.tester import ClusterTester
 from sdcm.utils import loader_utils
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
+from sdcm.utils.common import skip_optional_stage
+from sdcm.utils.decorators import optional_stage
 from sdcm.utils.operations_thread import ThreadParams
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events import Severity
@@ -85,6 +87,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.log.info('Scan operation scan_operation_params_list are: %s', scan_operation_params_list)
         return scan_operation_params_list
 
+    @optional_stage('prepare_write')
     def run_pre_create_schema(self):
         pre_create_schema = self.params.get('pre_create_schema')
         keyspace_num = self.params.get('keyspace_num')
@@ -92,10 +95,12 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self._pre_create_schema(keyspace_num, scylla_encryption_options=self.params.get(
                 'scylla_encryption_options'))
 
+    @optional_stage('prepare_write')
     def run_pre_create_keyspace(self):
         if self.params.get('pre_create_keyspace'):
             self._pre_create_keyspace()
 
+    @optional_stage('main_load')
     def _run_validate_large_collections_in_system(self, node, table='table_with_large_collection'):
         self.log.info("Verifying large collections in system tables on node: {}".format(node))
         with self.db_cluster.cql_connection_exclusive(node=node) as session:
@@ -106,6 +111,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             if not data:
                 InfoEvent("Did not find expected row in system.large_cells", severity=Severity.ERROR)
 
+    @optional_stage('main_load')
     def _run_validate_large_collections_warning_in_logs(self, node):
         self.log.info("Verifying warning for large collections in logs on node: {}".format(node))
         msg = "Writing large collection"
@@ -187,7 +193,8 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                             stress_cmd = (cmd.format(profile_dst, cs_duration))
                             params = {'stress_cmd': stress_cmd, 'profile': cs_profile}
                             self.log.debug('Stress cmd: {}'.format(stress_cmd))
-                            self._run_all_stress_cmds(stress_queue, params)
+                            if not skip_optional_stage('main_load'):
+                                self._run_all_stress_cmds(stress_queue, params)
 
         # Check if we shall wait for total_used_space or if nemesis wasn't started
         if not prepare_write_cmd or not self.params.get('nemesis_during_prepare'):
@@ -195,7 +202,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             self.db_cluster.start_nemesis()
 
         stress_read_cmd = self.params.get('stress_read_cmd')
-        if stress_read_cmd:
+        if stress_read_cmd and not skip_optional_stage('main_load'):
             params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_read_cmd}
             self._run_all_stress_cmds(stress_queue, params)
 
@@ -231,15 +238,16 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         batch_size = self.params.get('batch_size')
 
         prepare_write_cmd = self.params.get('prepare_write_cmd')
-        if prepare_write_cmd:
+        if prepare_write_cmd and not skip_optional_stage('prepare_write'):
             self._run_stress_in_batches(total_stress=total_stress, batch_size=batch_size,
                                         stress_cmd=prepare_write_cmd)
 
         self.db_cluster.start_nemesis()
 
         stress_cmd = self.params.get('stress_cmd')
-        self._run_stress_in_batches(total_stress=batch_size, batch_size=batch_size,
-                                    stress_cmd=stress_cmd)
+        if not skip_optional_stage('main_load'):
+            self._run_stress_in_batches(total_stress=batch_size, batch_size=batch_size,
+                                        stress_cmd=stress_cmd)
 
     def test_user_batch_custom_time(self):
         """
@@ -296,9 +304,9 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 for _ in range(user_profile_table_count):
                     stress_params_list += self.create_templated_user_stress_params(next(templated_table_counter),
                                                                                    cs_profile)
-
-            self._run_user_stress_in_batches(batch_size=batch_size,
-                                             stress_params_list=stress_params_list, duration=duration)
+            if not skip_optional_stage('main_load'):
+                self._run_user_stress_in_batches(batch_size=batch_size,
+                                                 stress_params_list=stress_params_list, duration=duration)
 
     def _run_user_stress_in_batches(self, batch_size, stress_params_list, duration):
         """
