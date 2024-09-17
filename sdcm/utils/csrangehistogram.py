@@ -122,7 +122,7 @@ def _generate_percentile_name(percentile: int):
 
 _HistorgramSummary = make_dataclass("HistorgramSummary",
                                     [(_generate_percentile_name(perc), float)
-                                     for perc in PERCENTILES] + [("throughput", float)],
+                                     for perc in PERCENTILES] + [("throughput", int)],
                                     bases=(_HistorgramSummaryBase,))
 
 
@@ -346,6 +346,10 @@ class _CSRangeHistogramBuilder:
         collected_histograms: list[_CSRangeHistogram] = []
         hdr_files = self._get_list_of_hdr_files(base_path)
         for hdr_file in hdr_files:
+            if os.stat(hdr_file).st_size == 0:
+                LOGGER.error("File %s is empty", hdr_file)
+                continue
+
             file_range_histogram = self._build_histogram_from_file(hdr_file, hdr_tag)
             if file_range_histogram:
                 collected_histograms.append(file_range_histogram)
@@ -380,6 +384,8 @@ class _CSRangeHistogramBuilder:
         if os.path.exists(path) and os.path.isfile(path):
             histogram = self._build_histogram_from_file(
                 hdr_file=path, hdr_tag=hdr_tag)
+            if not histogram:
+                return None
         elif os.path.exists(path) and os.path.isdir(path):
             histogram = self._build_histogram_from_dir(
                 base_path=path, hdr_tag=hdr_tag)
