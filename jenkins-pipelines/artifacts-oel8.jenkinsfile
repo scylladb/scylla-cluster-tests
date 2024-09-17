@@ -3,16 +3,12 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-<<<<<<<< HEAD:jenkins-pipelines/longevity-10gb-3h-ipv6.jenkinsfile
-longevityPipeline(
-========
 artifactsPipeline(
     test_config: 'test-cases/artifacts/oel8.yaml',
->>>>>>>> 0715f8596 (improvement(oel support): Take the latest oel8 and oel9 from aws):jenkins-pipelines/oss/artifacts/artifacts-oel8.jenkinsfile
     backend: 'aws',
     region: 'eu-west-1',
-    ip_ssh_connections: 'ipv6',
-    test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-10gb-3h.yaml'
+    provision_type: 'spot_low_price',
 
+    timeout: [time: 60, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy'
 )
