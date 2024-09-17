@@ -1,0 +1,31 @@
+test_duration: 680
+prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=100000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..2000000",
+                    "scylla-bench -workload=sequential -mode=write -replication-factor=2 -partition-count=10 -partition-offset=0 -clustering-row-count=1000000 -clustering-row-size=uniform:100..5120 -concurrency=1000 -rows-per-request=10 -timeout=30s -connection-count 1000  -consistency-level=all",
+                    "scylla-bench -workload=sequential -mode=write -replication-factor=2 -partition-count=10 -partition-offset=10 -clustering-row-count=1000000 -clustering-row-size=uniform:100..5120 -concurrency=1000 -rows-per-request=10 -timeout=30s -connection-count 1000  -consistency-level=all",
+                    "scylla-bench -workload=sequential -mode=write -replication-factor=2 -partition-count=10 -partition-offset=20 -clustering-row-count=1000000 -clustering-row-size=uniform:100..5120 -concurrency=1000 -rows-per-request=10 -timeout=30s -connection-count 1000  -consistency-level=all"]
+
+stress_cmd_r: "cassandra-stress read cl=ALL duration=600m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=10 throttle=100/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..100000,50000,50000)' "
+stress_cmd_no_mv: "scylla-bench -workload=uniform -mode=write -replication-factor=2 -partition-count=30 -clustering-row-count=1000000 -clustering-row-size=uniform:100..5120 -concurrency=500 -max-rate=16000 -rows-per-request=1 -timeout=30s -connection-count 500  -consistency-level=one -iterations=0 -duration=15m"
+stress_cmd_mv: "scylla-bench -workload=uniform -mode=write -replication-factor=2 -partition-count=30 -clustering-row-count=1000000 -clustering-row-size=uniform:100..5120 -concurrency=500 -max-rate=4000 -rows-per-request=1 -timeout=30s -connection-count 500  -consistency-level=one -iterations=0 -duration=15m"
+
+n_db_nodes: 3
+n_loaders: 2
+n_monitor_nodes: 1
+
+instance_type_loader: 'c6i.2xlarge'
+instance_type_monitor: 't3.large'
+instance_type_db: 'i4i.2xlarge'
+
+user_prefix: 'perf-latency-mv-overloaded'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1'
+backtrace_decoding: false
+print_kernel_callstack: true
+
+store_perf_results: true
+use_prepared_loaders: true
+use_hdr_cs_histogram: true
+custom_es_index: 'mv-overloading-latency-read'

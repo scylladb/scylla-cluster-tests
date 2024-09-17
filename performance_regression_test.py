@@ -30,6 +30,7 @@ from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
 from sdcm.utils.decorators import log_run_info, latency_calculator_decorator
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes
+from sdcm.utils.nemesis_utils.indexes import wait_for_view_to_be_built
 
 KB = 1024
 
@@ -891,3 +892,71 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
     def test_latency_mixed_with_upgrade(self):
         self._prepare_latency_with_upgrade()
         self.run_workload_and_upgrade(stress_cmd=self.params.get('stress_cmd_m'))
+
+
+class PerformanceRegressionMaterializedViewLatencyTest(PerformanceRegressionTest):
+    """
+    the idea is to reproduce the hardest scenario for MV
+    based on internal doc "Consistency problems in materialized views"
+
+    modifying a column that is a regular column in the base table,
+    but in the materialized view is one of the primary key columns.
+    Other types of materialized view updates are easier to handle,
+    once we figure out how to do the hardest case correctly, all of the other cases will be solved as well.
+
+    currently this problem is not solved.
+    The test is just reproducer of this problem and should not be used in regular runs
+
+    test steps:
+    1 - 3 node cluster with 2 tables
+    2 - do special prepare CMD for table 1, and use table 2 as for latency PERF TEST (prepare_write_cmd)
+    3 - start read workload for table 2 - measure latency for table 2 (10min) (stress_cmd_r)
+    4 - do a special rewrite workload for table 1 to measure latency for table 2 (while changing for table 1 applying )(stress_cmd_no_mv)
+    5 - create MV, and wait for MV to sync - measure latency for table 2 (while MV is syncing )
+    6- do special rewrite workload for table 1 again - measure latency for table 2 (while changing for table 1 applying ) (stress_cmd_mv)
+    """
+
+    def test_read_mv_latency(self):
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()  # prepare_write_cmd
+        self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
+
+        self.create_test_stats(sub_type="read", append_sub_test_to_name=False, test_index="mv-overloading-latency-read")
+        self.run_stress_thread(stress_cmd=self.params.get('stress_cmd_r'), stress_num=1,
+                               stats_aggregate_cmds=False)
+
+        self.steady_state_read_workload_latency()  # stress_cmd_r
+        self.do_rewrite_workload()  # stress_cmd_no_mv + #stress_cmd_r
+        self.wait_mv_sync()  # stress_cmd_r
+        self.do_rewrite_workload_with_mv()  # stress_cmd_mv + #stress_cmd_r
+        self.loaders.kill_stress_thread()
+        self.check_latency_during_ops()
+
+    @latency_calculator_decorator
+    def steady_state_read_workload_latency(self):
+        InfoEvent(message='start_read_workload_latency begin').publish()
+        time.sleep(15*60)
+        InfoEvent(message='start_read_workload_latency ended').publish()
+
+    @latency_calculator_decorator
+    def do_rewrite_workload(self):
+        base_cmd = self.params.get('stress_cmd_no_mv')
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
+        results = self.get_stress_results(queue=stress_queue, store_results=False)
+        self.display_results(results, test_name='do_rewrite_workload')
+
+    @latency_calculator_decorator
+    def wait_mv_sync(self):
+        node1 = self.db_cluster.nodes[0]
+        node1.run_cqlsh(
+            "CREATE TABLE IF NOT EXISTS scylla_bench.test (pk bigint,ck bigint,v blob,PRIMARY KEY(pk, ck)) WITH compression = { }")
+        node1.run_cqlsh("CREATE MATERIALIZED VIEW IF NOT EXISTS scylla_bench.view_test AS SELECT * FROM scylla_bench.test where v IS NOT NULL AND ck IS NOT NULL AND pk IS NOT NULL PRIMARY KEY (v, pk, ck)")
+        wait_for_view_to_be_built(node1, 'scylla_bench', 'view_test', timeout=1000)
+
+    @latency_calculator_decorator
+    def do_rewrite_workload_with_mv(self):
+        base_cmd = self.params.get('stress_cmd_mv')
+        stress_queue = self.run_stress_thread(stress_cmd=base_cmd, stress_num=1, stats_aggregate_cmds=False)
+        results = self.get_stress_results(queue=stress_queue, store_results=False)
+        self.display_results(results, test_name='do_rewrite_workload_with_mv')
