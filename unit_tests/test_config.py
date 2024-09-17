@@ -999,6 +999,33 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
+    @pytest.mark.integration
+    def test_35_test_required_params_check(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['JOB_NAME'] = 'perf-regression-gradual-throughput-grow'
+        os.environ['SCT_CONFIG_FILES'] = '''["test-cases/performance/perf-regression-gradual-throughput-grow-2.3tb.yaml", "configurations/performance/cassandra_stress_gradual_load_steps.yaml"]'''
+
+        conf = sct_config.SCTConfiguration()
+        conf._check_test_required_params()
+        del os.environ['JOB_NAME']
+
+    @pytest.mark.integration
+    def test_36_test_required_params_missed_check(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['JOB_NAME'] = 'perf-regression-gradual-throughput-grow'
+        os.environ['SCT_CONFIG_FILES'] = '''["test-cases/performance/perf-regression-gradual-throughput-grow-2.3tb.yaml"]'''
+
+        conf = sct_config.SCTConfiguration()
+
+        with self.assertRaises(AssertionError) as context:
+            conf._check_test_required_params()
+
+        self.assertEqual(
+            "Parameters ['perf_gradual_throttle_steps', 'perf_gradual_threads'] are mandatory parameter "
+            "for the 'perf-regression-gradual-throughput-grow' test", str(context.exception))
+
+        del os.environ['JOB_NAME']
+
 
 if __name__ == "__main__":
     unittest.main()
