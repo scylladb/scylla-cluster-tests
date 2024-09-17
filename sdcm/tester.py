@@ -83,7 +83,7 @@ from sdcm.utils.common import format_timestamp, wait_ami_available, \
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.get_username import get_username
-from sdcm.utils.decorators import log_run_info, retrying
+from sdcm.utils.decorators import log_run_info, retrying, measure_time
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
     LdapConfigurationError, LdapServerType
@@ -3357,6 +3357,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             assert self.is_compaction_running, "Waiting for compaction to start"
         _is_compaction_running()
 
+    @measure_time
     def wait_no_compactions_running(self, n=80, sleep_time=60):  # pylint: disable=invalid-name
         # Wait until there are no running compactions
         @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
@@ -3775,6 +3776,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             workload=CSWorkloadTypes(stress_operation),
             base_path=self.loaders.logdir, start_time=start_time, end_time=end_time,
             tag_type=tag_type)
+        self.log.info("HDR histogram summary result: %s", histogram_data)
         return histogram_data[0] if histogram_data else {}
 
     def get_cs_range_histogram_by_interval(
