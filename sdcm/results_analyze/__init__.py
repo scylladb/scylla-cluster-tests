@@ -43,6 +43,8 @@ PP = pprint.PrettyPrinter(indent=2)
 
 
 class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
+    PARAMS = TestStatsMixin.STRESS_STATS
+
     # pylint: disable=too-many-arguments
     def __init__(self, es_index, es_doc_type, email_recipients=(), email_template_fp="", query_limit=1000, logger=None,
                  events=None):
@@ -206,6 +208,44 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         else:
             self.log.debug('Successfully wrote %s to file %s', file_content, file_path)
 
+    def _get_best_value(self, key, val1, val2, params=PARAMS):
+        if key == params[0]:  # op rate
+            return val1 if val1 > val2 else val2
+        return val1 if val2 == 0 or val1 < val2 else val2  # latency
+
+    def cmp(self, src, dst, version_dst, best_test_id):
+        """
+        Compare current test results with the best results
+        :param src: current test results
+        :param dst: previous best test results
+        :param version_dst: scylla server version to compare with
+        :param best_test_id: the best results test id(for each parameter)
+        :return: dictionary with compare calculation results
+        """
+        cmp_res = {"version_dst": version_dst, "res": {}}
+        for param in self.PARAMS:
+            param_key_name = param.replace(' ', '_')
+            status = 'Progress'
+            try:
+                delta = src[param] - dst[param]
+                change_perc = int(math.fabs(delta) * 100 / dst[param])
+                best_id = best_test_id[param]
+                if (param.startswith('latency') and delta > 0) or (param == 'op rate' and delta < 0):
+                    status = 'Regression'
+                if change_perc == 0:
+                    status = "Difference"
+                cmp_res["res"][param_key_name] = {
+                    "percent": f"{change_perc}%",
+                    "val": src[param],
+                    "best_val": dst[param],
+                    "best_id": best_id,
+                    "status": status,
+                }
+            except TypeError:
+                self.log.exception('Failed to compare {} results: {} vs {}, version {}'.format(
+                    param, src[param], dst[param], version_dst))
+        return cmp_res
+
 
 class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     """
@@ -222,12 +262,16 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
     def get_reactor_stall_events(self):
         debug_events, _ = self.get_debug_events()
-        events_list = [stall for stall in debug_events[Severity.DEBUG.name] if 'type=REACTOR_STALLED' in stall]
+        events_list = []
+        if debug_events:
+            events_list = [stall for stall in debug_events[Severity.DEBUG.name] if 'type=REACTOR_STALLED' in stall]
         return events_list
 
     def get_kernel_callstack_events(self):
         debug_events, _ = self.get_debug_events()
-        events_list = [stall for stall in debug_events[Severity.DEBUG.name] if 'type=KERNEL_CALLSTACK' in stall]
+        events_list = []
+        if debug_events:
+            events_list = [stall for stall in debug_events[Severity.DEBUG.name] if 'type=KERNEL_CALLSTACK' in stall]
         return events_list
 
     def _get_previous_results(self, test_doc, is_gce=False):
@@ -250,8 +294,12 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             return []
         return test_results["hits"]["hits"]
 
+    @staticmethod
+    def _get_nemesis_data(stat):
+        return stat.get('cycles', [])
+
     def _calculate_cycles_average(self, stat):
-        nemesis_cycles = stat.get('cycles', [])
+        nemesis_cycles = self._get_nemesis_data(stat)
         nemesis_average_by_workloads = {}
         operation_time_summary = []
         operation_time_average = 0
@@ -372,7 +420,6 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                 return "N/A"
             else:
                 return round(((current_value - best_value) / best_value) * 100, 2)
-
         try:
             for nemesis in current_result:
                 if nemesis in ["Steady State", "summary"]:
@@ -421,11 +468,11 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
         last_error_events, error_events_summary = self.get_events(event_severity=[Severity.ERROR.name])
         last_critical_events, critical_events_summary = self.get_events(event_severity=[Severity.CRITICAL.name])
-        last_events = {Severity.ERROR.name: last_error_events[Severity.ERROR.name][:100],
-                       Severity.CRITICAL.name: last_critical_events[Severity.CRITICAL.name][:100]}
+        last_events = {Severity.ERROR.name: last_error_events[Severity.ERROR.name][:100] if Severity.ERROR.name in last_error_events else [],
+                       Severity.CRITICAL.name: last_critical_events[Severity.CRITICAL.name][:100] if Severity.CRITICAL.name in last_critical_events else []}
         events_summary = {
-            Severity.ERROR.name: error_events_summary[Severity.ERROR.name],
-            Severity.CRITICAL.name: critical_events_summary[Severity.CRITICAL.name]
+            Severity.ERROR.name: error_events_summary[Severity.ERROR.name] if Severity.ERROR.name in error_events_summary else 0,
+            Severity.CRITICAL.name: critical_events_summary[Severity.CRITICAL.name] if Severity.CRITICAL.name in critical_events_summary else 0
         }
 
         reactor_stall_events = self.get_reactor_stall_events()
@@ -434,7 +481,8 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         kernel_callstack_events_summary = {Severity.DEBUG.name: len(kernel_callstack_events)}
 
         config_files = ' '.join(doc["_source"]["setup_details"]["config_files"])
-        dataset_size = re.search(r'(\d{3}gb)', config_files).group() or 'unknown size'
+        search_size = re.search(r'(\d.*(?#t|g)b)', config_files)
+        dataset_size = search_size.group() if search_size else 'unknown size'
 
         subject = (f'{self._get_email_tags(doc, is_gce)} Performance Regression Compare Results '
                    f'({email_subject_postfix} {dataset_size}) -'
@@ -464,7 +512,18 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             node_benchmarks=node_benchmarks,
             best_stat_per_version=best_results_per_nemesis,
         )
-        attachment_file = [
+        attachment_file = self.prepare_attachment_files_for_email(results)
+
+        email_data = {'email_body': results,
+                      'attachments': attachment_file,
+                      'template': self._email_template_fp}
+        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+
+        return True
+
+    def prepare_attachment_files_for_email(self, results):
+        self.log.debug("prepare_attachment_files_for_email results: %s", results)
+        return [
             self.save_html_to_file(results,
                                    file_name='reactor_stall_events_list.html',
                                    template_file='results_reactor_stall_events_list.html'),
@@ -475,12 +534,6 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                                    file_name='hdr_details_report.html',
                                    template_file='results_latency_during_ops_details_hdr_report.html')
         ]
-        email_data = {'email_body': results,
-                      'attachments': attachment_file,
-                      'template': self._email_template_fp}
-        self.save_email_data_file(subject, email_data, file_path='email_data.json')
-
-        return True
 
 
 class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
@@ -1454,27 +1507,61 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
 
-class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(BaseResultsAnalyzer):
+class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(LatencyDuringOperationsPerformanceAnalyzer):
     """
     Performance Analyzer for results with throughput and latency of gradual payload increase
     """
 
     def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
-                         email_template_fp="results_incremental_throughput_increase.html", logger=logger, events=events)
+                         logger=logger, events=events)
+        self._email_template_fp = "results_incremental_throughput_increase.html"
+        self.percentiles = ['percentile_95', 'percentile_99']
 
-    def check_regression(self, test_name, test_results, test_details) -> None:  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
-        results = dict(
-            test_id=test_details.get("test_id", ""),
-            stats=test_results,
-            test_name=test_name,
-            test_details=test_details,
-            screenshots=test_details.pop("screenshots"),
-        )
-        subject = f"Performance Regression: {test_name} - {format_timestamp(test_details['start_time'])}"
-        email_data = {'email_body': results,
-                      'template': self._email_template_fp}
-        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+    def _test_stats(self, test_doc):
+        # check if stats exists
+        if 'perf_gradual_stats' not in test_doc['_source']:
+            self.log.error('Cannot find the field: results for test id: {}!'.format(test_doc['_id']))
+            return None
+        test_stats = {}
+        for step, stats in test_doc['_source']['perf_gradual_stats'].items():
+            test_stats[step] = {'sub_type': stats['sub_type']}
+            for param, agg in self.PARAMS.items():
+                if param in stats:
+                    current_step_result = stats[param]
+                    if isinstance(stats[param], dict) and agg in stats[param]:
+                        current_step_result = stats[param][agg]
+                    test_stats[step].update({param: current_step_result})
+        return test_stats
+
+    @staticmethod
+    def _query_filter(test_doc, is_gce,  use_wide_query=False, lastyear=False, extra_jobs_to_compare=None):
+        if test_doc['_source']['test_details'].get('scylla-bench'):
+            return PerformanceFilterScyllaBench(test_doc, is_gce, use_wide_query, lastyear,
+                                                extra_jobs_to_compare=extra_jobs_to_compare)()
+        elif test_doc['_source']['test_details'].get('ycsb'):
+            return PerformanceFilterYCSB(test_doc, is_gce, use_wide_query, lastyear,
+                                         extra_jobs_to_compare=extra_jobs_to_compare)()
+        elif "cdc" in test_doc['_source']['test_details'].get('sub_type', ''):
+            return CDCQueryFilterCS(test_doc, is_gce, use_wide_query, lastyear,
+                                    extra_jobs_to_compare=extra_jobs_to_compare)()
+        else:
+            return PerformanceFilterCS(test_doc, is_gce, use_wide_query, lastyear,
+                                       extra_jobs_to_compare=extra_jobs_to_compare)()
+
+    @staticmethod
+    def _get_nemesis_data(stat):
+        return stat.get('run_step', []).get('cycles', [])
+
+    def prepare_attachment_files_for_email(self, results):
+        return [
+            self.save_html_to_file(results,
+                                   file_name='reactor_stall_events_list.html',
+                                   template_file='results_reactor_stall_events_list.html'),
+            self.save_html_to_file(results,
+                                   file_name='full_email_report.html',
+                                   template_file='results_incremental_throughput_increase.html'),
+        ]
 
 
 class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
