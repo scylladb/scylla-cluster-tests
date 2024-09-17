@@ -5,15 +5,22 @@
     {% endblock %}
     <h3>
         <span>Test start time: </span>
-        <span class="blue">{{ test_details.pop('start_time') }}</span>
+        <span class="blue">{{ test_start_time }}</span>
+        <br>
+        <span>Test id: </span>
+        <span class="blue">{{ test_id }}</span>
         <br>
         <span>Scylla Server Version: </span>
-        <span class="blue">{{ test_details.pop('scylla_version') }}</span>
+        {% if build_id %}
+            <span class="blue">{{ test_version }} with build-id {{ build_id }}</span>
+        {% else %}
+            <span class="blue">{{ test_version }}</span>
+        {% endif %}
     </h3>
     <div>
         <span> Setup Details: </span>
         <ul>
-        {% for key, val in test_details.items()%}
+        {% for key, val in setup_details.items()|sort %}
             <li>
                 {{ key }}: <span class="blue"> {{ val }} </span>
             </li>
@@ -21,38 +28,147 @@
         </ul>
     </div>
     <div>
-        <table id="results_table">
-            <th> Operation per seconds (KOps) </th>
-            <th> Latency 95th percintile (ms) </th>
-            {% if "latency 95th percentile read" in stats[0] %}
-                <th> Latency 95th percintile read (ms) </th>
-            {% endif %}
-            {% if "latency 95th percentile write" in stats[0] %}
-                <th> Latency 95th percintile write (ms) </th>
-            {% endif %}
-
-            {% for round_stat in stats %}
-            <tr>
-                <td>{{ round_stat['ops'] }}</td>
-                <td>{{ round_stat['latency 95th percentile'] }}</td>
-                {% if "latency 95th percentile read" in round_stat %}
-                    <td>{{ round_stat['latency 95th percentile read'] }}</td>
-                {% endif %}
-                {% if "latency 95th percentile write" in round_stat %}
-                    <td>{{ round_stat['latency 95th percentile write'] }}</td>
-                {% endif %}
-
-            </tr>
-            {% endfor %}
-        </table>
-
+        <h3>
+            <span>Amount of reactor stalls:</span>
+            <span class="blue">{{ reactor_stall_events_summary.get('DEBUG', 0) }}</span>
+        </h3>
+        <h3>
+            <span>Amount of kernel callstacks:</span>
+            <span class="blue">{{ kernel_callstack_events_summary.get('DEBUG', 0) }}</span>
+        </h3>
     </div>
-    <div>
-        {% if screenshots %}
-            <h3>Grafana Screenshots:</h3>
-            {% for screenshot in screenshots %}
-                <img src="{{ screenshot }}"  height="50%" width="50%">
+        <tr>
+            <table id="results_table">
+                {% for operation, results in stats.items() %}
+                <tr>
+                    <td  colspan="100%">
+                        <h3>{{ results.get('legend', '') }}</h3>
+                    </td>
+                </tr>
+                    {% if results.get('hdr') %}
+                        <tr>
+                            <td colspan="100%"> <b>Total actual throughput from HDR (op/s)</b> - {{ results.get('cycle_hdr_throughput', '') }} </td>
+                        </tr>
+                        {% for row in results.get('hdr') %}
+                            <th> Workload </th>
+                            <th> Throughput, ops </th>
+                            <th> Start time </th>
+                            <th> End time </th>
+                            <th> Percentile 50 </th>
+                            <th> Percentile 90 </th>
+                            <th> Percentile 99 </th>
+                            <th> Percentile 99.9 </th>
+                            {% for workload, data in row.items() %}
+                                <tr>
+                                    <td> {{ workload }} </td>
+                                    <td> {{ data['throughput'] }} </td>
+                                    <td> {{ data['start_time'] | format_timestamp }} </td>
+                                    <td> {{ data['end_time'] | format_timestamp }} </td>
+                                    <td> {{ data["percentile_50"] }}</td>
+                                    <td style="background-color: {{ data["color"]["percentile_90"] }}"> {{ data["percentile_90"] }}</td>
+                                    <td style="background-color: {{ data["color"]["percentile_99"] }}"> {{ data["percentile_99"] }}</td>
+                                    <td> {{ data["percentile_99_9"] }}</td>
+                                </tr>
+                            {% endfor %}
+                        {% endfor %}
+                    {% else %}
+                        {% if results.get('cycles') %}
+                            <th> Workload </th>
+                            <th> Throughput, ops </th>
+                            <th> Start time </th>
+                            <th> End time </th>
+                            <th> Percentile 50 </th>
+                            <th> Percentile 90 </th>
+                            <th> Percentile 99 </th>
+                            <th> Percentile 99.9 </th>
+                            {% for row in results.get('cycles') %}
+                                <tr>
+                                    <td colspan="100%"> <b>Total actual throughput from HDR (op/s) - <span style="color: #006600;">{{ row.get('cycle_hdr_throughput', '') }} </span></b> </td>
+                                </tr>
+                                {% set cycle_index = loop.index %}
+                                {% if row.get('hdr') %}
+                                    <tr>
+                                        <td colspan="100%"> Cycle #{{ cycle_index }} </td>
+                                    </tr>
+                                    {% for hdr_row in row.get('hdr') %}
+                                        {% for workload, data in hdr_row.items() %}
+                                            <tr>
+                                                <td> {{ workload }} </td>
+                                                <td> {{ data['throughput'] }} </td>
+                                                <td> {{ data['start_time'] | format_timestamp }} </td>
+                                                <td> {{ data['end_time'] | format_timestamp }} </td>
+                                                <td> {{ data["percentile_50"] }}</td>
+                                                <td style="background-color: {{ data["color"]["percentile_90"] }}"> {{ data["percentile_90"] }}</td>
+                                                <td style="background-color: {{ data["color"]["percentile_99"] }}"> {{ data["percentile_99"] }}</td>
+                                                <td> {{ data["percentile_99_9"] }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    {% endfor %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    {% endif %}
+                    <tr>
+                        <td colspan="100%"> &nbsp; </td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+        <div>
+            {% for operation, results in stats.items() %}
+                {% if operation != 'Steady State' %}
+                    <h2>{{ results.get('legend', '') }}</h2>
+                    <table id="results_table">
+                        <caption>{{ results['legend'] }}</caption>
+                        <th>Latency Type</th>
+                        {% for cycle in results['cycles'] %}
+                            <th>Cycle #{{ loop.index }}</th>
+                        {% endfor %}
+                        <th>Cycles Average</th>
+                        <th>Steady State</th>
+                        <th>Relative to Steady</th>
+                        {% set lat_type_list = [] %}
+                        {% for cycle in results['cycles'] %}
+                            {% for key, value in cycle.items() %}
+                                {% if key not in lat_type_list %}
+                                    {{ lat_type_list.append(key) or "" }}
+                                {% endif %}
+                            {% endfor %}
+                        {% endfor %}
+
+                        {% for lat_type in lat_type_list|sort %}
+                            {% if 'color' in results and lat_type in results['color'] and results['color'][lat_type] == 'red' %}
+                                <tr style ="background-color: red">
+                            {% else %}
+                                   <tr>
+                            {% endif %}
+                                <td>{{ lat_type }}</td>
+                                {% for cycle in results['cycles'] %}
+                                    <td>{{ cycle[lat_type] }}</td>
+                                {% endfor %}
+                                {% if 'Cycles Average' in results %}
+                                    <td>{{ results['Cycles Average'][lat_type] }}</td>
+                                {% endif %}
+                                {% if 'Steady State' in results %}
+                                    <td>{{ stats['Steady State'][lat_type] }}</td>
+                                {% endif %}
+                                {% if 'Relative to Steady' in results %}
+                                    <td>{{ results['Relative to Steady'][lat_type] }}</td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </table>
+                    <span STYLE="font-size:12px" class="red">* All latency values are in ms.</span>
+
+                    <div>
+                        {% for cycle in results['cycles'] %}
+                            {% for screenshot in cycle['screenshots'] %}
+                                <span style="vertical-align: top"><img src="{{ screenshot }}"  height="250" width="150"></span>
+                            {% endfor %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
             {% endfor %}
-        {% endif %}
-    </div>
+        </div>
+
 {% endblock %}
