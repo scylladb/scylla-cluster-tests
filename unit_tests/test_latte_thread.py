@@ -11,21 +11,21 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-import re
-
 import pytest
+import re
 import requests
 
-from sdcm.utils.decorators import timeout
+from sdcm import sct_abs_path
 from sdcm.stress.latte_thread import LatteStressThread
+from sdcm.utils.decorators import timeout
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [
     pytest.mark.usefixtures("events"),
-    pytest.mark.integration,
 ]
 
 
+@pytest.mark.integration
 def test_01_latte_schema(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy(params=params)
 
@@ -45,6 +45,7 @@ def test_01_latte_schema(request, docker_scylla, params):
     latte_thread.get_results()
 
 
+@pytest.mark.integration
 def test_02_latte_load(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy()
     loader_set.params = params
@@ -65,6 +66,7 @@ def test_02_latte_load(request, docker_scylla, params):
     latte_thread.get_results()
 
 
+@pytest.mark.integration
 def test_03_latte_run(request, docker_scylla, prom_address, params):
     loader_set = LocalLoaderSetDummy(params=params)
 
@@ -99,7 +101,11 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
     assert "latency 99th percentile" in output[0]
     assert float(output[0]["latency 99th percentile"]) > 0
 
+    assert "op rate" in output[0]
+    assert int(output[0]["op rate"]) > 0
 
+
+@pytest.mark.integration
 @pytest.mark.docker_scylla_args(ssl=True)
 def test_04_latte_run_client_encrypt(request, docker_scylla, params):
     params['client_encrypt'] = True
@@ -126,3 +132,24 @@ def test_04_latte_run_client_encrypt(request, docker_scylla, params):
 
     assert "latency 99th percentile" in output[0]
     assert float(output[0]["latency 99th percentile"]) > 0
+
+    assert "op rate" in output[0]
+    assert int(output[0]["op rate"]) > 0
+
+
+def test_05_latte_parse_final_output():
+    latte = LatteStressThread(
+        loader_set=["fake-loader"], stress_cmd="fake", timeout=1,
+        node_list=["fake-db-node-1"], params={"cluster_backend": "aws"})
+    with open(sct_abs_path("data_dir/latte_stress_output.log"), "r", encoding="utf-8") as latte_output:
+        stress_result = type("FakeStressResult", (), {"stdout": latte_output.read()})
+
+    parsed_output = latte.parse_final_output(stress_result)
+
+    assert isinstance(parsed_output, dict)
+    assert "latency 99th percentile" in parsed_output
+    assert parsed_output["latency 99th percentile"] == "6.206"
+    assert "latency mean" in parsed_output
+    assert parsed_output["latency mean"] == "2.272"
+    assert "op rate" in parsed_output
+    assert parsed_output["op rate"] == "160100"

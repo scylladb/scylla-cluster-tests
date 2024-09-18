@@ -162,21 +162,24 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         :param result: output of latte stats
         :return: dict
         """
-        ops_regex = re.compile(r'Throughput(.*?)\[op/s\]\s*(?P<op_rate>\d*)\s')
-        latency_99_regex = re.compile(r'\s*99\s*(?P<latency_99th_percentile>\d*\.\d*)\s')
-        latency_mean_regex = re.compile(r'\s*Mean resp. time\s.*\s(?P<latency_mean>\d*\.\d*)\s')
+        ops_regex = re.compile(r'\s*Throughput(.*?)\[op\/s\]\s*(?P<op_rate>\d*)\s')
+        latency_99_regex = re.compile(r'\s* 99 \s*(?P<latency_99th_percentile>\d*\.\d*)\s')
+        latency_mean_regex = re.compile(r'\s*Mean resp. time\s*(?:\[(ms|s)\])?\s*(?P<latency_mean>\d+\.\d+)')
 
         output = {'latency 99th percentile': 0,
                   'latency mean': 0,
                   'op rate': 0
                   }
-        for line in result.stdout.splitlines():
+        for line in result.stdout.split("SUMMARY STATS")[-1].splitlines():
             if match := ops_regex.match(line):
                 output['op rate'] = match.groupdict()['op_rate']
+                continue
             if match := latency_99_regex.match(line):
                 output['latency 99th percentile'] = float(match.groupdict()['latency_99th_percentile'])
+                continue
             if match := latency_mean_regex.match(line):
                 output['latency mean'] = float(match.groupdict()['latency_mean'])
+                continue
 
         # output back to strings
         output = {k: str(v) for k, v in output.items()}
