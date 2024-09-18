@@ -45,8 +45,8 @@ def function_setup():
 
 @pytest.mark.parametrize(argnames='scylla_version, expected_docker_image, expected_outcome',
                          argvalues=[
-                             pytest.param('5.4', 'scylladb/scylla', ('5.4', False), id='5.4'),
-                             pytest.param('2023.1', 'scylladb/scylla-enterprise', ('2023.1', True), id='2023.1'),
+                             pytest.param('6.1', 'scylladb/scylla', ('6.1', False), id='6.1'),
+                             pytest.param('2024.1', 'scylladb/scylla-enterprise', ('2024.1', True), id='2024.1'),
                              pytest.param('latest', 'scylladb/scylla-nightly', (None, False),  id='latest'),
                              pytest.param('master:latest', 'scylladb/scylla-nightly',
                                           (None, False), id='master:latest'),
@@ -76,10 +76,10 @@ def test_docker(scylla_version, expected_docker_image, expected_outcome):
                          )
 @pytest.mark.parametrize(argnames='scylla_version, expected_outcome',
                          argvalues=[
-                             pytest.param('5.4', ('5.4', False), id='5.4'),
-                             pytest.param('2023.1', ('2023.1', True), id='2023.1'),
+                             pytest.param('6.1', ('6.1', False), id='6.1'),
+                             pytest.param('2024.1', ('2024.1', True), id='2024.1'),
                              pytest.param('master:latest', (None, False), id='master'),
-                             pytest.param('branch-5.2:latest', (None, False), id='branch-5.2'),
+                             pytest.param('branch-6.0:latest', (None, False), id='branch-6.0'),
                              pytest.param('enterprise:latest', (None, True), id='enterprise'),
                              pytest.param('enterprise-2023.1:latest', (None, True), id='enterprise-2023.1'),
                              pytest.param('enterprise-2024.1:latest', (None, True), id='enterprise-2024.1'),
@@ -104,11 +104,8 @@ def test_scylla_repo(scylla_version, expected_outcome, distro):
 
 @pytest.mark.parametrize(argnames='scylla_version, expected_outcome',
                          argvalues=[
-                             pytest.param('5.4', ('5.4', False), id='5.4'),
-                             pytest.param('2023.1', ('2023.1', True), id='2023.1'),
-                             pytest.param('master:latest', (None, False), id='master'),
-                             pytest.param('branch-5.2:latest', (None, False), id='branch-5.2'),
-                             pytest.param('enterprise:latest', (None, True), id='enterprise'),
+                             pytest.param('6.1', ('6.1', False), id='6.1'),
+                             pytest.param('2024.1', ('2024.1', True), id='2024.1'),
                              pytest.param('branch-2023.1:latest', (None, True), id='branch-2023.1'),
                              pytest.param('branch-2024.1:latest', (None, True), id='branch-2024.1'),
                          ],
@@ -132,7 +129,7 @@ def test_images(backend, scylla_version, expected_outcome):
 
 def test_baremetal():
     os.environ['SCT_CLUSTER_BACKEND'] = 'baremetal'
-    os.environ['SCT_SCYLLA_VERSION'] = '5.4'
+    os.environ['SCT_SCYLLA_VERSION'] = '6.1'
     os.environ['SCT_S3_BAREMETAL_CONFIG'] = "some_config"
     os.environ['SCT_DB_NODES_PRIVATE_IP'] = '["127.0.0.1"]'
     os.environ['SCT_DB_NODES_PUBLIC_IP'] = '["127.0.0.1"]'
@@ -142,7 +139,7 @@ def test_baremetal():
 
     _version, _is_enterprise = conf.get_version_based_on_conf()
 
-    assert '5.4' in _version
+    assert '6.1' in _version
     assert not _is_enterprise
 
 
