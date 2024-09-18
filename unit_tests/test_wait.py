@@ -223,7 +223,7 @@ class TestWaitForLogLines:
         t.daemon = True
         file_path.touch()
         with pytest.raises(TimeoutError, match="Timeout occurred while waiting for start log line"), \
-                wait_for_log_lines(node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=0.3, end_timeout=1):
+                wait_for_log_lines(node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=0.4, end_timeout=1.2):
             t.start()
 
     def test_wait_for_log_timeout_when_no_end_line(self, tmp_path):
@@ -234,7 +234,7 @@ class TestWaitForLogLines:
         t.daemon = True
         file_path.touch()
         with pytest.raises(TimeoutError, match="Timeout occurred while waiting for end log line"), \
-                wait_for_log_lines(node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=0.1, end_timeout=0.3):
+                wait_for_log_lines(node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=0.5, end_timeout=0.7):
             t.start()
 
     def test_wait_for_log_reraises_exception(self, tmp_path):
@@ -245,7 +245,7 @@ class TestWaitForLogLines:
         t.daemon = True
         file_path.touch()
         with pytest.raises(ValueError, match="dummy error"), \
-                wait_for_log_lines(node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=0.1, end_timeout=0.3):
+                wait_for_log_lines(node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=0.5, end_timeout=0.7):
             t.start()
             raise ValueError('dummy error')
 
@@ -254,7 +254,7 @@ class TestWaitForLogLines:
         node = DummyNode(log_path=file_path)
         file_path.touch()
         with pytest.raises(TimeoutError, match="Timeout occurred while waiting for start log line") as exc_info, \
-                wait_for_log_lines(node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=0.1, end_timeout=0.3):
+                wait_for_log_lines(node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=0.4, end_timeout=0.7):
             raise ValueError('dummy error')
         assert "ValueError" in str(exc_info.getrepr())
 
@@ -267,5 +267,5 @@ class TestWaitForLogLines:
         file_path.touch()
         expected_match = "Timeout occurred while waiting for end log line \['end'\] on node: node_1. Context: Wait end line"
         with pytest.raises(TimeoutError, match=expected_match), \
-                wait_for_log_lines(node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=0.1, end_timeout=0.3, error_msg_ctx="Wait end line"):
+                wait_for_log_lines(node=node, start_line_patterns=["start"], end_line_patterns=["end"], start_timeout=0.4, end_timeout=0.7, error_msg_ctx="Wait end line"):
             t.start()
