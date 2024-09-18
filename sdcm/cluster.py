@@ -5218,10 +5218,9 @@ class BaseLoaderSet():
             for node in self.nodes:
                 node.remoter.stop()
         else:  # noqa: PLR5501
+            self.kill_docker_loaders()
             if self.params.get("use_prepared_loaders"):
                 self.kill_cassandra_stress_thread()
-            else:
-                self.kill_docker_loaders()
 
     def kill_cassandra_stress_thread(self):
         search_cmds = [
