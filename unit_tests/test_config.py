@@ -598,7 +598,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
-        self.assertNotIn('user_data_format_version', conf)
+        self.assertEqual(conf['user_data_format_version'], '3')
+        self.assertNotIn('oracle_user_data_format_version', conf)
 
     @pytest.mark.integration
     def test_20_user_data_format_version_gce_1(self):
@@ -632,7 +633,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     def test_20_user_data_format_version_azure(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'azure'
         os.environ['SCT_AZURE_REGION_NAME'] = 'eastus'
-        os.environ['SCT_SCYLLA_VERSION'] = 'master:latest'
+        os.environ['SCT_SCYLLA_VERSION'] = '2024.1.9'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.verify_configuration_urls_validity()
