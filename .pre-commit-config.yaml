@@ -5,7 +5,11 @@ repos:
     rev: v4.0.1
     hooks:
     -   id: trailing-whitespace
-        exclude: ^\.git/.*$
+        exclude: >
+            (?x)^(
+                \.git/.*|
+                data_dir/latte_stress_output\.log
+            )$
     -   id: end-of-file-fixer
         exclude: ^\.git/.*$
     -   id: check-yaml
