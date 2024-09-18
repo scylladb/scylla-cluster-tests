@@ -70,7 +70,7 @@ def test_03_latte_run(request, docker_scylla, prom_address, params):
     loader_set = LocalLoaderSetDummy()
     loader_set.params = params
 
-    cmd = ("latte run --function run -d 10s docker/latte/workloads/workload.rn")
+    cmd = ("latte run --function run -d 10s docker/latte/workloads/workload.rn --generate-report")
 
     latte_thread = LatteStressThread(
         loader_set, cmd, node_list=[docker_scylla], timeout=5, params=params
@@ -109,7 +109,7 @@ def test_04_latte_run_client_encrypt(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy()
     loader_set.params = params
 
-    cmd = ("latte run -d 10s docker/latte/workloads/workload.rn")
+    cmd = ("latte run -d 10s docker/latte/workloads/workload.rn --generate-report")
 
     latte_thread = LatteStressThread(
         loader_set, cmd, node_list=[docker_scylla], timeout=5,
