@@ -17,8 +17,9 @@ import os
 import shutil
 import logging
 
-from sdcm.remote import LocalCmdRunner
 from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
+from sdcm.remote import LocalCmdRunner
+from sdcm.sct_config import SCTConfiguration
 
 
 class DummyOutput:
@@ -76,7 +77,7 @@ class LocalLoaderSetDummy(BaseCluster):
     # pylint: disable=super-init-not-called,abstract-method
     def __init__(self, nodes=None):
         self.name = "LocalLoaderSetDummy"
-        self.params = {}
+        self.params = SCTConfiguration()
         self.nodes = nodes if nodes is not None else [LocalNode("loader_node", parent_cluster=self)]
 
     @staticmethod
@@ -92,7 +93,7 @@ class LocalScyllaClusterDummy(BaseScyllaCluster):
     # pylint: disable=super-init-not-called
     def __init__(self):
         self.name = "LocalScyllaClusterDummy"
-        self.params = {}
+        self.params = SCTConfiguration()
 
     @staticmethod
     def get_db_auth():
