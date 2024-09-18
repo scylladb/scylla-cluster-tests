@@ -149,12 +149,14 @@ def wait_for_log_lines(node, start_line_patterns, end_line_patterns, start_timeo
         started = any(start_follower)
         while not started and (time.time() - start_time < start_timeout):
             started = any(start_follower)
+            time.sleep(0.1)
         if not started:
             raise TimeoutError(
                 f"timeout occurred while waiting for start log line ({start_line_patterns} on node: {node.name}")
         ended = any(end_follower)
         while not ended and (time.time() - start_time < end_timeout):
             ended = any(end_follower)
+            time.sleep(0.1)
         if not ended:
             raise TimeoutError(
                 f"timeout occurred while waiting for end log line ({end_line_patterns} on node: {node.name}")
