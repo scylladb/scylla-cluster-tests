@@ -54,7 +54,7 @@
                         {% for cycle in results['cycles'] %}
                             {% for key, value in cycle.items() %}
                                 {% if key not in lat_type_list %}
-                                    {{ lat_type_list.append(key) }}
+                                    {{ lat_type_list.append(key) or "" }}
                                 {% endif %}
                             {% endfor %}
                         {% endfor %}
