@@ -6,44 +6,6 @@ pull_request_rules:
     actions:
       edit:
          draft: true
-  - name: Automate backport pull request 5.2
-    conditions:
-      - base=master # Ensure this rule only applies to PRs merged into the master branch
-      - label=backport/5.2 # The PR must have this label to trigger the backport
-    actions:
-      backport:
-        title: "[Backport 5.2] {{ title }}"
-        body: |
-          {{ body }}
-
-          {% for c in commits %}
-          (cherry picked from commit {{ c.sha }} )
-          {% endfor %}
-
-          Parent PR: #{{number}}
-        branches:
-          - branch-5.2
-        assignees:
-          - "{{ author }}"
-  - name: Automate backport pull request 5.4
-    conditions:
-      - base=master # Ensure this rule only applies to PRs merged into the master branch
-      - label=backport/5.4 # The PR must have this label to trigger the backport
-    actions:
-      backport:
-        title: "[Backport 5.4] {{ title }}"
-        body: |
-          {{ body }}
-
-          {% for c in commits %}
-          (cherry picked from commit {{ c.sha }})
-          {% endfor %}
-
-          Parent PR: #{{number}}
-        branches:
-          - branch-5.4
-        assignees:
-          - "{{ author }}"
   - name: Automate backport pull request 6.0
     conditions:
       - base=master # Ensure this rule only applies to PRs merged into the master branch
@@ -80,6 +42,25 @@ pull_request_rules:
           Parent PR: #{{number}}
         branches:
           - branch-6.1
+        assignees:
+          - "{{ author }}"
+  - name: Automate backport pull request 6.2
+    conditions:
+      - base=master # Ensure this rule only applies to PRs merged into the master branch
+      - label=backport/6.2 # The PR must have this label to trigger the backport
+    actions:
+      backport:
+        title: "[Backport 6.2] {{ title }}"
+        body: |
+          {{ body }}
+
+          {% for c in commits %}
+          (cherry picked from commit {{ c.sha }})
+          {% endfor %}
+
+          Parent PR: #{{number}}
+        branches:
+          - branch-6.2
         assignees:
           - "{{ author }}"
   - name: Automate backport pull request 2023.1
