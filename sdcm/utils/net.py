@@ -5,7 +5,11 @@ import ipaddress
 
 import os
 import socket
+import logging
+
 import requests
+
+LOGGER = logging.getLogger(__name__)
 
 
 def get_sct_runner_ip() -> str:
@@ -21,18 +25,18 @@ def get_my_ip():
 
 
 def get_my_public_ip() -> str:
-    hostnames = ['https://api4.my-ip.io/ip', 'https://api.ipify.org', 'https://ip4.seeip.org/ip',
-                 'http://ipv4.icanhazip.com']
+    hostnames = ['https://checkip.amazonaws.com', 'https://api4.ipify.org',
+                 'https://v4.ident.me/', 'https://myip.dnsomatic.com']
 
-    ip_address = "[Not Found]"
-    for idx, hostname in enumerate(hostnames):
+    for hostname in hostnames:
         try:
             result = requests.get(hostname, timeout=10)
             result.raise_for_status()
 
             ip_address = result.text.strip()
-            ipaddress.ip_address(ip_address)  # validating that we got IP address
-        except (ValueError, requests.exceptions.RequestException):
-            if idx == len(hostnames) - 1:
-                raise
-    return ip_address
+            ipaddress.IPv4Address(ip_address)  # validating that we got IPv4 address
+            return ip_address
+        except (ipaddress.AddressValueError, ipaddress.NetmaskValueError, requests.exceptions.RequestException):
+            LOGGER.warning("Failed to get my public IP from %s", hostname)
+
+    raise ValueError("Failed to get my public IP from any service")
