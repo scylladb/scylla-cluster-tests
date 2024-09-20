@@ -571,6 +571,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         def check_error(event: str):
             errors = [
                 re.compile(r"SpotTerminationEvent", re.IGNORECASE),
+                re.compile(r"ZonalAllocationFailed", re.IGNORECASE),
                 re.compile(r"source=[\w]+.SetUp\(\).+exception=403 FORBIDDEN QUOTA_EXCEEDED",
                            re.IGNORECASE | re.DOTALL),
                 re.compile(r"source=[\w]+.SetUp\(\).+InsufficientInstanceCapacity", re.IGNORECASE | re.DOTALL),
