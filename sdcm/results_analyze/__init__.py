@@ -1507,6 +1507,30 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
 
+class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(BaseResultsAnalyzer):
+    """
+    ### This is original gradual grow throughput test. Keep it for the future ####
+    Performance Analyzer for results with throughput and latency of gradual payload increase
+    """
+
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+                         email_template_fp="results_incremental_throughput_increase.html", logger=logger, events=events)
+
+    def check_regression(self, test_name, test_results, test_details) -> None:  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+        results = dict(
+            test_id=test_details.get("test_id", ""),
+            stats=test_results,
+            test_name=test_name,
+            test_details=test_details,
+            screenshots=test_details.pop("screenshots"),
+        )
+        subject = f"Performance Regression: {test_name} - {format_timestamp(test_details['start_time'])}"
+        email_data = {'email_body': results,
+                      'template': self._email_template_fp}
+        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+
+
 class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
     """
     Get latency during operations performance analyzer

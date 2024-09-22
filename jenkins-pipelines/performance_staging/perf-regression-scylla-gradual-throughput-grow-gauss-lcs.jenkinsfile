@@ -3,6 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
+// This is original gradual grow throughput test pipeline. Keep it for the future
+
 perfRegressionParallelPipeline(
     backend: "aws",
     aws_region: "us-east-1",
