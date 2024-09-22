@@ -1627,6 +1627,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._kill_scylla_daemon()
 
     def disrupt_no_corrupt_repair(self):
+
+        if SkipPerIssues("https://github.com/scylladb/scylladb/issues/18059", self.tester.params):
+            raise UnsupportedNemesis('Disabled due to https://github.com/scylladb/scylladb/issues/18059 not fixed yet')
+
         # prepare test tables and fill test data
         for i in range(10):
             self.log.debug('Prepare test tables if they do not exist')
