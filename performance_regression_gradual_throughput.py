@@ -8,7 +8,7 @@ import json
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.results_analyze import ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer
+from sdcm.results_analyze import ThroughputLatencyGradualPerformanceAnalyzer
 from sdcm.utils.decorators import latency_calculator_decorator
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 
@@ -18,7 +18,7 @@ class CSPopulateDistribution(Enum):
     UNIFORM = "uniform"
 
 
-class PerformanceRegressionGradualGrowThroughputTest(PerformanceRegressionTest):  # pylint: disable=too-many-instance-attributes
+class PerformanceRegressionGradualThroughputTest(PerformanceRegressionTest):  # pylint: disable=too-many-instance-attributes
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # all parameters were taken from scylla-stress-orch repo
@@ -202,7 +202,7 @@ class PerformanceRegressionGradualGrowThroughputTest(PerformanceRegressionTest):
             "job_url": os.environ.get("BUILD_URL"),
             "shard_aware_driver": self.is_shard_awareness_driver,
         }
-        perf_analyzer = ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(
+        perf_analyzer = ThroughputLatencyGradualPerformanceAnalyzer(
             es_index=self._test_index,
             es_doc_type=self._es_doc_type,
             email_recipients=self.params.get('email_recipients'))

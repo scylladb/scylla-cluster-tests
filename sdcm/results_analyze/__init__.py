@@ -1507,7 +1507,30 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
 
-class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(LatencyDuringOperationsPerformanceAnalyzer):
+class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
+    """
+    Get latency during operations performance analyzer
+    """
+
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+                         email_template_fp="results_search_best_throughput_config.html", logger=logger, events=events)
+
+    def check_regression(self, test_name, setup_details, test_results) -> None:  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+        subject = f"Performance Regression Best throughput with configuation - {test_name} - {setup_details['start_time']}"
+        results = {
+            "test_id": setup_details.get("test_id", ""),
+            "test_name": test_name,
+            "setup_details": setup_details,
+            "test_results": test_results
+        }
+        email_data = {'email_body': results,
+
+                      'template': self._email_template_fp}
+        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+
+
+class ThroughputLatencyGradualPerformanceAnalyzer(LatencyDuringOperationsPerformanceAnalyzer):
     """
     Performance Analyzer for results with throughput and latency of gradual payload increase
     """
@@ -1515,7 +1538,7 @@ class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(LatencyDuringOperat
     def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          logger=logger, events=events)
-        self._email_template_fp = "results_incremental_throughput_increase.html"
+        self._email_template_fp = "results_gradual_throughput.html"
         self.percentiles = ['percentile_95', 'percentile_99']
 
     def _test_stats(self, test_doc):
@@ -1560,28 +1583,5 @@ class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(LatencyDuringOperat
                                    template_file='results_reactor_stall_events_list.html'),
             self.save_html_to_file(results,
                                    file_name='full_email_report.html',
-                                   template_file='results_incremental_throughput_increase.html'),
+                                   template_file=self._email_template_fp),
         ]
-
-
-class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
-    """
-    Get latency during operations performance analyzer
-    """
-
-    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
-        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
-                         email_template_fp="results_search_best_throughput_config.html", logger=logger, events=events)
-
-    def check_regression(self, test_name, setup_details, test_results) -> None:  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
-        subject = f"Performance Regression Best throughput with configuation - {test_name} - {setup_details['start_time']}"
-        results = {
-            "test_id": setup_details.get("test_id", ""),
-            "test_name": test_name,
-            "setup_details": setup_details,
-            "test_results": test_results
-        }
-        email_data = {'email_body': results,
-
-                      'template': self._email_template_fp}
-        self.save_email_data_file(subject, email_data, file_path='email_data.json')
