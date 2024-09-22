@@ -2426,7 +2426,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             SCYLLA_PROPERTIES_PATH: self.offline_install_dir / SCYLLA_PROPERTIES_PATH[1:],
             '/etc/scylla.d/io.conf': self.offline_install_dir / 'etc/scylla.d/io.conf',
             '/usr/bin/scylla': self.offline_install_dir / 'bin/scylla',
-            '/usr/bin/nodetool': self.offline_install_dir / 'share/cassandra/bin/nodetool',
+            '/usr/bin/nodetool': self.offline_install_dir / 'bin/nodetool',
             '/usr/bin/cqlsh': self.offline_install_dir / 'share/cassandra/bin/cqlsh',
             '/usr/bin/cassandra-stress': self.offline_install_dir / 'share/cassandra/bin/cassandra-stress',
             '/opt/scylladb/scripts/perftune.py': self.offline_install_dir / 'scripts/perftune.py',
