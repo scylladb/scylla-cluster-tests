@@ -20,11 +20,26 @@ stress_cmd_r: [
   "cassandra-stress read no-warmup cl=QUORUM duration=30m -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
 ]
 
+stress_cmd_r_warm_up: [
+  "cassandra-stress read no-warmup cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
+  "cassandra-stress read no-warmup cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
+  "cassandra-stress read no-warmup cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
+  "cassandra-stress read no-warmup cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
+]
+
 stress_cmd_m: [
   "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
   "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
   "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
   "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads $throttle' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
+]
+
+# For mixed workflow run read warm up
+stress_cmd_m_warm_up: [
+  "cassandra-stress read no-warmup cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..5000000",
+  "cassandra-stress read no-warmup cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=5000001..10000000",
+  "cassandra-stress read no-warmup cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=10000001..15000000",
+  "cassandra-stress read no-warmup cl=ALL n=5000000 -mode connectionsPerHost=8 cql3 native -rate 'threads=$threads' -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=15000001..20000000"
 ]
 
 round_robin: true
@@ -40,7 +55,7 @@ use_capacity_reservation: true
 
 use_preinstalled_scylla: true
 
-user_prefix: 'perf-regression-gradual'
+user_prefix: 'perf-regression-predefined-steps'
 
 backtrace_decoding: false
 print_kernel_callstack: true
