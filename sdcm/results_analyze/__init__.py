@@ -1507,7 +1507,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
 
-class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(LatencyDuringOperationsPerformanceAnalyzer):
+class PredefinedStepsTestPerformanceAnalyzer(LatencyDuringOperationsPerformanceAnalyzer):
     """
     Performance Analyzer for results with throughput and latency of gradual payload increase
     """
@@ -1515,7 +1515,7 @@ class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(LatencyDuringOperat
     def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
                          logger=logger, events=events)
-        self._email_template_fp = "results_incremental_throughput_increase.html"
+        self._email_template_fp = "results_performance_predefined_steps.html"
         self.percentiles = ['percentile_95', 'percentile_99']
 
     def _test_stats(self, test_doc):
@@ -1560,7 +1560,7 @@ class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(LatencyDuringOperat
                                    template_file='results_reactor_stall_events_list.html'),
             self.save_html_to_file(results,
                                    file_name='full_email_report.html',
-                                   template_file='results_incremental_throughput_increase.html'),
+                                   template_file='results_performance_predefined_steps.html'),
         ]
 
 
