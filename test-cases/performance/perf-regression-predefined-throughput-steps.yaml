@@ -40,7 +40,7 @@ use_capacity_reservation: true
 
 use_preinstalled_scylla: true
 
-user_prefix: 'perf-regression-gradual'
+user_prefix: 'perf-regression-predefined-steps'
 
 backtrace_decoding: false
 print_kernel_callstack: true
