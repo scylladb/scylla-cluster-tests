@@ -956,6 +956,52 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         assert conf["ami_id_db_scylla"].startswith('ami-')
 
+<<<<<<< HEAD
+=======
+    @pytest.mark.integration
+    def test_33_resolve_aws_by_owner(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'resolve:owner:131827586825/x86_64/OL8.*'
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        assert conf["ami_id_db_scylla"].startswith('ami-')
+
+    @pytest.mark.integration
+    def test_34_nemesis_grow_shrink_instance_type_aws(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
+        os.environ['SCT_N_DB_NODES'] = '2 2'
+        os.environ['SCT_SCYLLA_VERSION'] = "6.0.0"
+        os.environ['SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE'] = 'i4i.xlarge'
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    @pytest.mark.integration
+    def test_34_nemesis_grow_shrink_instance_type_gcp(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
+        os.environ['SCT_GCE_DATACENTER'] = 'us-east1 us-west1'
+        os.environ['SCT_N_DB_NODES'] = '2 2'
+        os.environ['SCT_SCYLLA_VERSION'] = "6.0.0"
+        os.environ['SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE'] = 'n2-highmem-32'
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+    @pytest.mark.integration
+    def test_34_nemesis_grow_shrink_instance_type_azure(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'azure'
+        os.environ['SCT_AZURE_REGION_NAME'] = 'eastus'
+        os.environ['SCT_N_DB_NODES'] = '2 2'
+        os.environ['SCT_SCYLLA_VERSION'] = "6.0.0"
+        os.environ['SCT_NEMESIS_GROW_SHRINK_INSTANCE_TYPE'] = 'Standard_L8s_v3'
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+>>>>>>> 0a61389c3 (fix(unittest): remove config tests 35 and 36)
 
 if __name__ == "__main__":
     unittest.main()
