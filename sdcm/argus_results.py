@@ -16,7 +16,6 @@ from argus.client.generic_result import GenericResultTable, ColumnMetadata, Resu
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 
-
 LATENCY_ERROR_THRESHOLDS = {
     "replace_node": {
         "percentile_90": 5,
@@ -34,11 +33,11 @@ class LatencyCalculatorMixedResult(GenericResultTable):
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
         Columns = [
-            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
@@ -49,9 +48,9 @@ class LatencyCalculatorWriteResult(GenericResultTable):
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
         Columns = [
-            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
@@ -62,9 +61,9 @@ class LatencyCalculatorReadResult(GenericResultTable):
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
         Columns = [
-            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
