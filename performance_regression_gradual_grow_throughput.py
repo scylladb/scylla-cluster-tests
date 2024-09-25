@@ -1,10 +1,11 @@
-import os
 import pathlib
 import time
 from enum import Enum
 from collections import defaultdict
 
 import json
+from typing import NamedTuple
+
 from performance_regression_test import PerformanceRegressionTest
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
@@ -18,13 +19,39 @@ class CSPopulateDistribution(Enum):
     UNIFORM = "uniform"
 
 
+class Workload(NamedTuple):
+    workload_type: str
+    cs_cmd_tmpl: list
+    cs_cmd_warm_up: list | None
+    num_threads: int
+    throttle_steps: list
+    preload_data: bool
+    drop_keyspace: bool
+    wait_no_compactions: bool
+
+
 class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # pylint: disable=too-many-instance-attributes
+    """
+    This class presents new performance test that run gradual increased throughput steps.
+    The test run steps with different throughput.
+    Throughput of every step is fixed and defined hardcoded according to the load type (write, read
+    and mixed). Last step is unthrottled.
+    Latency for every step is received from cassandra-stress HDR file and reported in Argus and email.
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # all parameters were taken from scylla-stress-orch repo
-        # Planned data size is 3 TB in total: 1tb per node
         self.CLUSTER_SIZE = self.params.get("n_db_nodes")  # pylint: disable=invalid-name
         self.REPLICATION_FACTOR = 3  # pylint: disable=invalid-name
+
+    def throttle_steps(self, workload_type):
+        throttle_steps = self.params["perf_gradual_throttle_steps"]
+        if workload_type not in throttle_steps:
+            TestFrameworkEvent(source=self.__class__.__name__,
+                               message=f"Throttle steps for '{workload_type}' test is not defined in "
+                                       f"'perf_gradual_throttle_steps' parameter",
+                               severity=Severity.CRITICAL).publish()
+        return throttle_steps[workload_type]
 
     def test_mixed_gradual_increase_load(self):  # pylint: disable=too-many-locals
         """
@@ -33,9 +60,17 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         1. Run a write workload as a preparation
         2. Run a mixed workload with gradual increase load
         """
-        self._base_test_workflow(cs_cmd_tmpl=self.params.get('stress_cmd_m'),
-                                 test_name="test_mixed_gradual_increase_load (read:50%,write:50%)",
-                                 sub_type="mixed")
+        workload_type = "mixed"
+        workload = Workload(workload_type=workload_type,
+                            cs_cmd_tmpl=self.params.get('stress_cmd_m'),
+                            cs_cmd_warm_up=self.params.get('stress_cmd_cache_warmup'),
+                            num_threads=self.params["perf_gradual_threads"][workload_type],
+                            throttle_steps=self.throttle_steps(workload_type),
+                            preload_data=True,
+                            drop_keyspace=False,
+                            wait_no_compactions=True)
+        self._base_test_workflow(workload=workload,
+                                 test_name="test_mixed_gradual_increase_load (read:50%,write:50%)")
 
     def test_write_gradual_increase_load(self):  # pylint: disable=too-many-locals
         """
@@ -44,9 +79,17 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         1. Run a write workload as a preparation
         2. Run a write workload with gradual increase load
         """
-        self._base_test_workflow(cs_cmd_tmpl=self.params.get('stress_cmd_w'),
-                                 test_name="test_write_gradual_increase_load (100% writes)",
-                                 sub_type="write")
+        workload_type = "write"
+        workload = Workload(workload_type=workload_type,
+                            cs_cmd_tmpl=self.params.get('stress_cmd_w'),
+                            cs_cmd_warm_up=None,
+                            num_threads=self.params["perf_gradual_threads"][workload_type],
+                            throttle_steps=self.throttle_steps(workload_type),
+                            preload_data=False,
+                            drop_keyspace=True,
+                            wait_no_compactions=False)
+        self._base_test_workflow(workload=workload,
+                                 test_name="test_write_gradual_increase_load (100% writes)")
 
     def test_read_gradual_increase_load(self):  # pylint: disable=too-many-locals
         """
@@ -55,27 +98,33 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         1. Run a write workload as a preparation
         2. Run a read workload with gradual increase load
         """
-        self._base_test_workflow(cs_cmd_tmpl=self.params.get('stress_cmd_r'),
-                                 test_name="test_read_gradual_increase_load (100% reads)",
-                                 sub_type="read")
+        workload_type = "read"
+        workload = Workload(workload_type=workload_type,
+                            cs_cmd_tmpl=self.params.get('stress_cmd_r'),
+                            cs_cmd_warm_up=self.params.get('stress_cmd_cache_warmup'),
+                            num_threads=self.params["perf_gradual_threads"][workload_type],
+                            throttle_steps=self.throttle_steps(workload_type),
+                            preload_data=True,
+                            drop_keyspace=False,
+                            wait_no_compactions=True)
+        self._base_test_workflow(workload=workload,
+                                 test_name="test_read_gradual_increase_load (100% reads)")
 
-    def _base_test_workflow(self, cs_cmd_tmpl, test_name, sub_type):
+    def _base_test_workflow(self, workload: Workload, test_name):
         stress_num = 1
         num_loaders = len(self.loaders.nodes)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
         compaction_strategy = self.params.get('compaction_strategy')
-        if sub_type in ["mixed", "read"]:
+        if workload.preload_data:
             self.preload_data(compaction_strategy=compaction_strategy)
             self.wait_no_compactions_running(n=400, sleep_time=120)
             self.run_fstrim_on_all_db_nodes()
 
-        self.run_gradual_increase_load(stress_cmd_templ=cs_cmd_tmpl,
+        self.run_gradual_increase_load(workload=workload,
                                        stress_num=stress_num,
                                        num_loaders=num_loaders,
-                                       compaction_strategy=compaction_strategy,
-                                       test_name=test_name,
-                                       sub_type=sub_type)
+                                       test_name=test_name)
 
     def preload_data(self, compaction_strategy=None):
         population_commands: list = self.params.get("prepare_write_cmd")
@@ -140,43 +189,40 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
             session.execute(f'DROP KEYSPACE IF EXISTS {"keyspace1"};')
 
     # pylint: disable=too-many-arguments,too-many-locals
-    def run_gradual_increase_load(self, stress_cmd_templ, stress_num, num_loaders, compaction_strategy, test_name, sub_type):  # noqa: PLR0914
-        if sub_type in ["read", "mixed"]:
-            self.warmup_cache(stress_cmd_templ)
+    def run_gradual_increase_load(self, workload: Workload, stress_num, num_loaders, test_name):  # noqa: PLR0914
+        if workload.cs_cmd_warm_up is not None:
+            self.warmup_cache(workload.cs_cmd_warm_up, workload.num_threads)
 
         if not self.exists():
             self.log.debug("Create test statistics in ES")
-            self.create_test_stats(sub_type=sub_type, doc_id_with_timestamp=True)
+            self.create_test_stats(sub_type=workload.workload_type, doc_id_with_timestamp=True)
         total_summary = {}
-        num_threads = self.params["perf_gradual_threads"][sub_type]
-        throttle_steps = self.params["perf_gradual_throttle_steps"]
-        if sub_type not in throttle_steps:
-            TestFrameworkEvent(source=self.__class__.__name__,
-                               message=f"Throttle steps for '{sub_type}' test is not defined in 'perf_gradual_throttle_steps' parameter",
-                               severity=Severity.CRITICAL).publish()
 
-        for throttle_step in throttle_steps[sub_type]:
+        for throttle_step in workload.throttle_steps:
             self.log.info("Run cs command with rate: %s Kops", throttle_step)
             current_throttle = f"fixed={int(int(throttle_step) // (num_loaders * stress_num))}/s" if throttle_step != "unthrottled" else ""
             run_step = ((latency_calculator_decorator(legend=f"Gradual test step {throttle_step} op/s",
                                                       cycle_name=throttle_step))(self.run_step))
-            results = run_step(stress_cmds=stress_cmd_templ, current_throttle=current_throttle,
-                               num_threads=num_threads)
+            results = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
+                               num_threads=workload.num_threads)
 
             calculate_result = self._calculate_average_max_latency(results)
             self.update_test_details(scylla_conf=True)
             summary_result = self.check_latency_during_steps(step=throttle_step)
             summary_result[throttle_step].update({"ops_rate": calculate_result["op rate"] * num_loaders})
-            self.log.debug("summary_result: %s", summary_result)
             total_summary.update(summary_result)
-            if sub_type == "write":
+            if workload.drop_keyspace:
                 self.drop_keyspace()
             # We want 3 minutes (180 sec) wait between steps.
-            # In case of "write" / "mixed" workflow - wait for compactions finished.
+            # In case of "mixed" workflow - wait for compactions finished.
             # In case of "read" workflow -  it just will wait for 3 minutes
-            if sub_type != "write" and (wait_time := self.wait_no_compactions_running()[0]) < 180:
+            if workload.wait_no_compactions and (wait_time := self.wait_no_compactions_running()[0]) < 180:
                 time.sleep(180 - wait_time)
 
+        self.save_total_summary_in_file(total_summary)
+        self.run_performance_analyzer(total_summary=total_summary)
+
+    def save_total_summary_in_file(self, total_summary):
         total_summary_json = json.dumps(total_summary, indent=4, separators=(", ", ": "))
         self.log.debug("---------------------------------")
         self.log.debug("Final table with results: \n %s", total_summary_json)
@@ -186,30 +232,14 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         with open(filename, "w", encoding="utf-8") as res_file:
             res_file.write(total_summary_json)
 
-        screenshots = self.monitors.get_grafana_screenshots(self.monitors.nodes[0], self.start_time)
-
-        setup_details = {
-            "test_id": self.test_id,
-            "scylla_version": self.db_cluster.nodes[0].scylla_version_detailed,
-            "num_loaders": len(self.loaders.nodes),
-            "cluster_size": len(self.db_cluster.nodes),
-            "db_instance_type": self.params.get("instance_type_db"),
-            "loader_instance_type": self.params.get("instance_type_loader"),
-            "scylladb_ami": self.params.get("ami_id_db_scylla"),
-            "loader_ami": self.params.get("ami_id_loader"),
-            "start_time": self.start_time,
-            "screenshots": screenshots,
-            "job_url": os.environ.get("BUILD_URL"),
-            "shard_aware_driver": self.is_shard_awareness_driver,
-        }
+    def run_performance_analyzer(self, total_summary):
         perf_analyzer = PredefinedStepsTestPerformanceAnalyzer(
             es_index=self._test_index,
             es_doc_type=self._es_doc_type,
             email_recipients=self.params.get('email_recipients'))
-        # Keep next 3 lines for debug purpose
+        # Keep next 2 lines for debug purpose
         self.log.debug("es_index: %s", self._test_index)
         self.log.debug("total_summary: %s", total_summary)
-        self.log.debug("setup_details: %s", setup_details)
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             perf_analyzer.check_regression(test_id=self.test_id,
@@ -246,19 +276,11 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
 
         return status
 
-    def warmup_cache(self, stress_cmd_templ):
+    def warmup_cache(self, stress_cmd_templ, num_threads):
         stress_queue = []
         for stress_cmd in stress_cmd_templ:
             params = {"round_robin": True, "stats_aggregate_cmds": False}
-            stress_cmd_to_run = stress_cmd.replace("$threads", "1000")
-            # Run c-s command without throttle
-            stress_cmd_to_run = stress_cmd_to_run.replace("$throttle", "")
-            # TODO: get "n" from c-s command or do it configurable
-            stress_cmd_to_run = stress_cmd_to_run.replace(
-                "duration=20m", "n=216666669" if "gauss" in stress_cmd_to_run else "n=20000000")
-            # For mixed workflow run read warm up
-            stress_cmd_to_run = stress_cmd_to_run.replace("mixed", "read")
-            stress_cmd_to_run = stress_cmd_to_run.replace("cl=QUORUM", "cl=ALL")
+            stress_cmd_to_run = stress_cmd.replace("$threads", str(num_threads))
             params.update({'stress_cmd': stress_cmd_to_run})
             # Run all stress commands
             self.log.debug('RUNNING warm up stress cmd: %s', stress_cmd_to_run)
