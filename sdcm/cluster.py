@@ -4658,7 +4658,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 datacenters = self.datacenter  # pylint: disable=no-member
             SnitchConfig(node=node, datacenters=datacenters).apply()
 
-        if self.params.get('server_encrypt'):
+        if any([self.params.get('server_encrypt'), self.params.get('client_encrypt')]):
             # Create node certificate for internode communication
             node.create_node_certificate(cert_file=node.ssl_conf_dir / TLSAssets.DB_CERT,
                                          cert_key=node.ssl_conf_dir / TLSAssets.DB_KEY,
