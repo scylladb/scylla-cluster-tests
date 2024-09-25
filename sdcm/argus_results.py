@@ -17,7 +17,6 @@ from argus.client.generic_result import GenericResultTable, ColumnMetadata, Resu
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 
-
 LATENCY_ERROR_THRESHOLDS = {
     "replace_node": {
         "percentile_90": 5,
@@ -35,13 +34,13 @@ class LatencyCalculatorMixedResult(GenericResultTable):
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
         Columns = [
-            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER),
-            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT)
         ]
@@ -52,10 +51,10 @@ class LatencyCalculatorWriteResult(GenericResultTable):
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
         Columns = [
-            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT)
         ]
@@ -66,10 +65,10 @@ class LatencyCalculatorReadResult(GenericResultTable):
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
         Columns = [
-            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT)
         ]
@@ -156,7 +155,17 @@ def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: di
         class Meta:
             name = f"{workload} - Perf Simple Query"
             description = json.dumps(parameters)
-            Columns = [ColumnMetadata(name=param, unit="", type=ResultType.FLOAT) for param in stats.keys()]
+            Columns = [ColumnMetadata(name="allocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                       ColumnMetadata(name="cpu_cycles_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                       ColumnMetadata(name="instructions_per_op", unit="",
+                                      type=ResultType.FLOAT, higher_is_better=False),
+                       ColumnMetadata(name="logallocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                       ColumnMetadata(name="mad tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                       ColumnMetadata(name="max tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                       ColumnMetadata(name="median tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                       ColumnMetadata(name="min tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                       ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                       ]
 
     def _get_status_based_on_previous_results(metric: str):
         if previous_results is None:
