@@ -1167,6 +1167,13 @@ class SCTConfiguration(dict):
                     be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
+        dict(name="stress_cmd_cache_warmup", env="SCT_STRESS_CMD_CACHE_WARM_UP",
+             type=str_or_list, k8s_multitenancy_supported=True,
+             help="""cassandra-stress commands for warm-up before read workload.
+                You can specify everything but the -node parameter, which is going to
+                be provided by the test suite infrastructure.
+                multiple commands can passed as a list"""),
+
         dict(name="prepare_write_cmd", env="SCT_PREPARE_WRITE_CMD",
              type=str_or_list, k8s_multitenancy_supported=True,
              help="""cassandra-stress commands.
