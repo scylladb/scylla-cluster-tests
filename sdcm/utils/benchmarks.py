@@ -90,7 +90,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
     """
 
     def __init__(self, global_compare: bool = False):
-        self._nodes: list["BaseNode"] = []
+        self._nodes: list["BaseNode"] = []  # noqa: F821
         self._benchmark_runners: list[ScyllaNodeBenchmarkRunner] = []
         self._es = ES()
         self._comparison = {}
@@ -101,13 +101,13 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
     def comparison(self):
         return self._comparison
 
-    def add_node(self, new_node: "BaseNode"):
+    def add_node(self, new_node: "BaseNode"):  # noqa: F821
         if new_node.distro.is_debian_like:
             self._benchmark_runners.append(ScyllaNodeBenchmarkRunner(new_node))
         else:
             LOGGER.debug("Skipped installing benchmarking tools on a non-debian-like distro.")
 
-    def add_nodes(self, nodes: list["BaseNode"]):
+    def add_nodes(self, nodes: list["BaseNode"]):  # noqa: F821
         for node in nodes:
             self.add_node(node)
 
@@ -256,7 +256,7 @@ class ScyllaNodeBenchmarkRunner:
     tools on given cluster nodes and collects the output.
     """
 
-    def __init__(self, node: "BaseNode"):
+    def __init__(self, node: "BaseNode"):  # noqa: F821
         self._node = node
         self._remoter: RemoteCmdRunnerBase = node.remoter
         self.node_instance_type = self._get_db_node_instance_type()
