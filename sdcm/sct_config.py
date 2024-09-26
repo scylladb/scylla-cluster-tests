@@ -1662,6 +1662,9 @@ class SCTConfiguration(dict):
 
         # 2) load the config files
         try:
+            for conf_file in list(config_files):
+                if not os.path.exists(conf_file):
+                    raise FileNotFoundError(f"Couldn't find config file: {conf_file}")
             files = anyconfig.load(list(config_files))
             anyconfig.merge(self, files)
         except ValueError:
