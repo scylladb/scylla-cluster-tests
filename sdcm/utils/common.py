@@ -1505,8 +1505,8 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, regions: list = None,
 
 
 def filter_k8s_clusters_by_tags(tags_dict: dict,
-                                clusters: list[Union["EksCluster", "GkeCluster"]]) -> list[
-        Union["EksCluster", "GkeCluster"]]:
+                                clusters: list[Union["EksCluster", "GkeCluster"]]) -> list[  # noqa: F821
+        Union["EksCluster", "GkeCluster"]]:   # noqa: F821
     if "NodeType" in tags_dict and "k8s" not in tags_dict.get("NodeType"):
         return []
 

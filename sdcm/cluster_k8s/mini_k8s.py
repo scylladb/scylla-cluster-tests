@@ -286,7 +286,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
 
     @property
     @abc.abstractmethod
-    def host_node(self) -> 'BaseNode':
+    def host_node(self) -> 'BaseNode':  # noqa: F821
         """
         Host where kind/k3d/minikube is running
         """
@@ -457,7 +457,7 @@ class LocalMinimalClusterBase(MinimalClusterBase):
 class LocalKindCluster(LocalMinimalClusterBase):
     docker_pull: Callable
     docker_tag: Callable
-    host_node: 'BaseNode'
+    host_node: 'BaseNode'  # noqa: F821
     scylla_image: Optional[str]
     software_version: str
     _target_user: str

@@ -173,7 +173,7 @@ class SyslogAuditLogReader(AuditLogReader):  # pylint: disable=too-few-public-me
 class Audit:
     """Manage audit state and query audit log on Scylla cluster."""
 
-    def __init__(self, cluster: "BaseCluster"):
+    def __init__(self, cluster: "BaseCluster"):  # noqa: F821
         self._cluster = cluster
         self._configuration = self._get_audit_configuration()
 

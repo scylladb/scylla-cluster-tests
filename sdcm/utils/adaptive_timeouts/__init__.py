@@ -76,14 +76,15 @@ class Operations(Enum):
 
 class TestInfoServices:  # pylint: disable=too-few-public-methods
     @staticmethod
-    def get(node: "BaseNode") -> dict:
+    def get(node: "BaseNode") -> dict:  # noqa: F821
         return dict(
             n_db_nodes=len(node.parent_cluster.nodes),
         )
 
 
 @contextmanager
-def adaptive_timeout(operation: Operations, node: "BaseNode", stats_storage: AdaptiveTimeoutStore = ESAdaptiveTimeoutStore(), **kwargs):
+def adaptive_timeout(operation: Operations, node: "BaseNode",  # noqa: F821
+                     stats_storage: AdaptiveTimeoutStore = ESAdaptiveTimeoutStore(), **kwargs):
     """
     Calculate timeout in seconds for given operation based on node load info and return its value.
     Upon exit, verify if timeout occurred and publish SoftTimeoutEvent if happened.

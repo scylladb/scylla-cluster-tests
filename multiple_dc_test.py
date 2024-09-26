@@ -15,6 +15,7 @@
 
 # TODO: this test seem to be broken, hence disabling all pylint checks
 # pylint: disable=all
+# ruff: noqa: F821
 
 from sdcm.tester import ClusterTester
 

@@ -35,14 +35,14 @@ class AttrBuilder(BaseModel):
     def dict(
         self,
         *,
-        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
-        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
+        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
+        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_unset: bool = False,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
-    ) -> 'DictStrAny':
+    ) -> 'DictStrAny':  # noqa: F821
         """
         Pydantic does not treat properties as fields, so you can't get their values when call dict
         This function is to enable property extraction

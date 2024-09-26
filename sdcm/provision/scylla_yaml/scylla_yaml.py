@@ -349,15 +349,15 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     def dict(  # pylint: disable=arguments-differ
         self,
         *,
-        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
-        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
+        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
+        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
         exclude_unset: bool = False,
-        explicit: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
-    ) -> 'DictStrAny':
+        explicit: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,  # noqa: F821
+    ) -> 'DictStrAny':  # noqa: F821
         to_dict = super().dict(
             include=include, exclude=exclude, by_alias=by_alias, skip_defaults=skip_defaults,
             exclude_unset=exclude_unset, exclude_defaults=exclude_defaults, exclude_none=exclude_none)

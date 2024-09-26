@@ -22,6 +22,6 @@ class EventHandler(abc.ABC):
     def __init__(self):
         """Initializes event handler"""
 
-    def handle(self, event: SctEvent, tester_obj: "sdcm.tester.ClusterTester"):
+    def handle(self, event: SctEvent, tester_obj: "sdcm.tester.ClusterTester"):  # noqa: F821
         """Handler main function"""
         raise NotImplementedError()

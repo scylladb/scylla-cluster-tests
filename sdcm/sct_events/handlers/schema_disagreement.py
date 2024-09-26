@@ -34,7 +34,7 @@ class SchemaDisagreementHandler(EventHandler):
         # upload sstables once per hour as usually these events come multiple times for some period of time
         return time.time() - 3600 > self._sstables_uploaded_time
 
-    def handle(self, event: CassandraStressLogEvent, tester_obj: "sdcm.tester.ClusterTester"):
+    def handle(self, event: CassandraStressLogEvent, tester_obj: "sdcm.tester.ClusterTester"):  # noqa: F821
         if self._should_upload_sstables():
             self._sstables_uploaded_time = time.time()
             # create new event with details to make them visible in error events log/argus

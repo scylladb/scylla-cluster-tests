@@ -20,7 +20,8 @@ class SstableUtils:
     """
 
     # pylint: disable=too-many-instance-attributes
-    def __init__(self, propagation_delay_in_seconds: int = 0, ks_cf: str = None, db_node: 'BaseNode' = None,
+    def __init__(self, propagation_delay_in_seconds: int = 0, ks_cf: str = None,
+                 db_node: 'BaseNode' = None,  # noqa: F821
                  **kwargs):
         self.db_node = db_node
         self.db_cluster = self.db_node.parent_cluster if self.db_node else None

@@ -36,7 +36,7 @@ from sdcm.sct_events.decorators import raise_event_on_failure
 @dataclass
 class CoreDumpInfo:
     pid: str
-    node: 'BaseNode' = None
+    node: 'BaseNode' = None  # noqa: F821
     corefile: str = ''
     source_timestamp: Optional[float] = None
     coredump_info: str = ''
@@ -62,7 +62,7 @@ class CoreDumpInfo:
 
     # pylint: disable=too-many-arguments
     def update(self,
-               node: 'BaseNode' = None,
+               node: 'BaseNode' = None,  # noqa: F821
                corefile: str = None,
                source_timestamp: Optional[float] = None,
                coredump_info: str = None,
@@ -91,7 +91,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
     upload_retry_limit = 3
     max_coredump_thread_exceptions = 10
 
-    def __init__(self, node: 'BaseNode', max_core_upload_limit: int):
+    def __init__(self, node: 'BaseNode', max_core_upload_limit: int):  # noqa: F821
         self.node = node
         self.log = SDCMAdapter(node.log, extra={"prefix": self.__class__.__name__})
         self.max_core_upload_limit = max_core_upload_limit
@@ -514,7 +514,7 @@ class CoredumpExportFileThread(CoredumpThreadBase):
     """
     checkup_time_core_to_complete = 1
 
-    def __init__(self, node: 'BaseNode', max_core_upload_limit: int, coredump_directories: List[str]):
+    def __init__(self, node: 'BaseNode', max_core_upload_limit: int, coredump_directories: List[str]):  # noqa: F821
         self.coredumps_directories = coredump_directories
         super().__init__(node=node, max_core_upload_limit=max_core_upload_limit)
 

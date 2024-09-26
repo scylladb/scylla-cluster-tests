@@ -69,7 +69,7 @@ ABORT_BOOTSTRAP_LOG_PATTERNS: Iterable[MessagePosition] = [
 
 
 class RaftFeatureOperations(Protocol):
-    _node: "BaseNode"
+    _node: "BaseNode"  # noqa: F821
     TOPOLOGY_OPERATION_LOG_PATTERNS: dict[TopologyOperations, Iterable[MessagePosition]]
 
     @property
@@ -119,7 +119,7 @@ class RaftFeature(RaftFeatureOperations):
         TopologyOperations.BOOTSTRAP: ABORT_BOOTSTRAP_LOG_PATTERNS,
     }
 
-    def __init__(self, node: "BaseNode") -> None:
+    def __init__(self, node: "BaseNode") -> None:  # noqa: F821
         super().__init__()
         self._node = node
 
@@ -284,7 +284,7 @@ class NoRaft(RaftFeatureOperations):
         ]
     }
 
-    def __init__(self, node: "BaseNode") -> None:
+    def __init__(self, node: "BaseNode") -> None:  # noqa: F821
         super().__init__()
         self._node = node
 

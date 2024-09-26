@@ -404,7 +404,7 @@ class K8sClientLogger(LoggerBase):  # pylint: disable=too-many-instance-attribut
     RECONNECT_DELAY = 30
     CHUNK_SIZE = 64
 
-    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", target_log_file: str):
+    def __init__(self, pod: "sdcm.cluster_k8s.BasePodContainer", target_log_file: str):  # noqa: F821
         """
         Reads logs from a k8s pod using k8s client API and forwards it to a file.
 

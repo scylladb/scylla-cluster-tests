@@ -18,6 +18,7 @@ import pytest
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from unit_tests.dummy_remote import LocalLoaderSetDummy
+from unit_tests.lib.alternator_utils import ALTERNATOR_PORT
 
 pytestmark = [
     pytest.mark.usefixtures("events"),
