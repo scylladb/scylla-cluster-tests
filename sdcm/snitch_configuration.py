@@ -18,7 +18,7 @@ from typing import List
 class SnitchConfig:  # pylint: disable=too-few-public-methods
     """Keeps all cassandra-rackdc.properties settings and function to apply them"""
 
-    def __init__(self, node: "sdcm.cluster.BaseNode", datacenters: List[str]):
+    def __init__(self, node: "sdcm.cluster.BaseNode", datacenters: List[str]):  # noqa: F821
         self._node = node
         self._is_multi_dc = len(datacenters) > 1
         self._rack = f"RACK{node.rack}"
