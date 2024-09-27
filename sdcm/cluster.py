@@ -4246,26 +4246,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         start_time = time.time()
 
-        if len(node_list) == 1:
-            # Stop only new nodes
-            self.run_func_parallel(func=stop_scylla, node_list=node_list)  # pylint: disable=no-member
-            # Then, update packages only on requested node
-            self.run_func_parallel(func=update_scylla_packages, node_list=node_list)  # pylint: disable=no-member
-            if start_service:
-                # Start new nodes
-                self.run_func_parallel(func=start_scylla, node_list=node_list)  # pylint: disable=no-member
-        else:
-            # First, stop *all* non seed nodes
-            self.run_func_parallel(func=stop_scylla, node_list=self.non_seed_nodes)  # pylint: disable=no-member
-            # First, stop *all* seed nodes
-            self.run_func_parallel(func=stop_scylla, node_list=self.seed_nodes)  # pylint: disable=no-member
-            # Then, update packages only on requested nodes
-            self.run_func_parallel(func=update_scylla_packages, node_list=node_list)  # pylint: disable=no-member
-            if start_service:
-                # Start all seed nodes
-                self.run_func_parallel(func=start_scylla, node_list=self.seed_nodes)  # pylint: disable=no-member
-                # Start all non seed nodes
-                self.run_func_parallel(func=start_scylla, node_list=self.non_seed_nodes)  # pylint: disable=no-member
+        self.run_func_parallel(func=stop_scylla, node_list=node_list)  # pylint: disable=no-member
+        self.run_func_parallel(func=update_scylla_packages, node_list=node_list)  # pylint: disable=no-member
+        if start_service:
+            self.run_func_parallel(func=start_scylla, node_list=node_list)  # pylint: disable=no-member
 
         time_elapsed = time.time() - start_time
         self.log.info('Update DB packages duration -> %s s', int(time_elapsed))
