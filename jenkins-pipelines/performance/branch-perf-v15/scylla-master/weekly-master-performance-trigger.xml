@@ -12,7 +12,7 @@ Performance master tests (latency &amp; throughput) - currently don't pass scyll
   <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
   <triggers>
     <hudson.triggers.TimerTrigger>
-      <spec>00 9 * * 0</spec>
+      <spec>00 15 * * 0</spec>
     </hudson.triggers.TimerTrigger>
   </triggers>
   <concurrentBuild>false</concurrentBuild>
