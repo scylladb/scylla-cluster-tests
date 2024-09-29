@@ -84,6 +84,7 @@ from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
+from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
     LdapConfigurationError, LdapServerType
 from sdcm.utils.log import configure_logging, handle_exception
