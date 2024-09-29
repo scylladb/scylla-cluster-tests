@@ -39,6 +39,7 @@ availability_zone=b</properties>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>scylla_version=master:latest
 aws_region=us-east-1
+region=us-east-1
 provision_type=on_demand
 availability_zone=b</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
@@ -54,6 +55,7 @@ availability_zone=b</properties>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>scylla_version=master:latest
 aws_region=us-east-1
+region=us-east-1
 provision_type=on_demand
 availability_zone=b</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
