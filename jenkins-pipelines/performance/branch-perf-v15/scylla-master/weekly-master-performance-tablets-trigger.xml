@@ -30,7 +30,24 @@ availability_zone=b</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>perf-regression/scylla-master-perf-regression-latency-650gb-during-rolling-upgrade-tablets,perf-regression/scylla-master-perf-regression-latency-650gb-with-nemesis-tablets,perf-regression/scylla-master-perf-regression-latency-650gb-elasticity</projects>
+          <projects>perf-regression/scylla-master-perf-regression-latency-650gb-with-nemesis-tablets,perf-regression/scylla-master-perf-regression-latency-650gb-elasticity</projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+              <properties>scylla_version=6.0
+aws_region=us-east-1
+region=us-east-1
+new_scylla_repo=http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list
+provision_type=on_demand
+availability_zone=b</properties>
+              <textParamValueOnNewLine>false</textParamValueOnNewLine>
+            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+          </configs>
+          <projects>perf-regression/scylla-master-perf-regression-latency-650gb-during-rolling-upgrade-tablets</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
