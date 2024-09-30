@@ -8,16 +8,16 @@ instance_type_db: 'i4i.large'
 user_prefix: 'ics-gemini-basic-3h'
 ami_db_scylla_user: 'centos'
 
-# gemini
-# cmd: gemini -d -n [NUM_OF_TEST_ITERATIONS] -c [NUM_OF_THREADS] -m mixed -f
-# the below cmd runs about 3 hours
-gemini_cmd: "gemini -d --duration 10800s --warmup 1800s -c 50 -m mixed -f --non-interactive \
---cql-features normal --table-options \"compaction={'class': 'IncrementalCompactionStrategy'}\" \
---max-mutation-retries 5 --max-mutation-retries-backoff 500ms \
---async-objects-stabilization-attempts 5 --async-objects-stabilization-backoff 500ms "
-
+gemini_cmd: |
+  --duration 3h
+  --warmup 30m
+  --concurrency 50
+  --mode mixed
 
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
+gemini_table_options:
+  - "compaction={'class': 'IncrementalCompactionStrategy'}"
+gemini_log_cql_statements: false
 
 db_type: mixed_scylla
 instance_type_db_oracle: 'i4i.8xlarge'
