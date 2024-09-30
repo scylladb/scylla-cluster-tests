@@ -98,7 +98,6 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             # These two are used to control the memory usage of Gemini
             "token-range-slices": 512,  # Number of partitions
             "partition-key-buffer-reuse-size": 100,  # Internal Channel Size per parittion value generation
-            "statement-log-file-compression": "zstd",
         }
 
         self.gemini_oracle_statements_file = f"gemini_oracle_statements_{self.unique_id}.log"
@@ -109,22 +108,21 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         seed = self.params.get("gemini_seed") or random.randint(1, 100)
         table_options = self.params.get("gemini_table_options")
         log_statements = self.params.get("gemini_log_cql_statements") or False
+
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
+        oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips())
 
         cmd = f"gemini \
                 --non-interactive \
+                --oracle-cluster=\"{oracle_nodes}\" \
                 --test-cluster=\"{test_nodes}\" \
                 --seed={seed} \
                 --schema-seed={seed} \
                 --profiling-port=6060 \
-                --bind=0.0.0.0:2112 \
+                --bind=0.0.0.0:2121 \
                 --outfile=/{self.gemini_result_file} \
                 --replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}}\" \
                 --oracle-replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}}\" "
-
-        if self.oracle_cluster is not None:
-            oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips())
-            cmd += f'--oracle-cluster="{oracle_nodes}" '
 
         if log_statements:
             cmd += f"--test-statement-log-file=/{self.gemini_test_statements_file} \
@@ -158,13 +156,13 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         docker = cleanup_context = RemoteDocker(
             loader,
             self.docker_image_name,
-            extra_docker_opts=f'--cpuset-cpus="{cpu_idx}" '
+            extra_docker_opts=f'--cpuset-cpus="{cpu_idx}"'
             if self.stress_num > 1
             else ""
+            "--label shell_marker={self.shell_marker}"
             "--network=host "
             "--security-opt seccomp=unconfined "
             '--entrypoint="" '
-            f"--label shell_marker={self.shell_marker} "
             f"-v $HOME/{self.gemini_result_file}:/{self.gemini_result_file} "
             f"-v $HOME/{self.gemini_test_statements_file}:/{self.gemini_test_statements_file} "
             f"-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file} ",
@@ -205,10 +203,8 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             results_copied = docker.receive_files(src=self.gemini_result_file, dst=local_gemini_result_file)
             assert results_copied, "gemini results aren't available, did gemini even run ?"
 
-            local_gemini_test_statements_file = os.path.join(
-                docker.node.logdir, os.path.basename(self.gemini_test_statements_file))
-            local_gemini_oracle_statements_file = os.path.join(
-                docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file))
+            local_gemini_test_statements_file = os.path.join(docker.node.logdir, os.path.basename(self.gemini_test_statements_file))
+            local_gemini_oracle_statements_file = os.path.join(docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file))
             docker.receive_files(src=self.gemini_test_statements_file, dst=local_gemini_test_statements_file)
             docker.receive_files(src=self.gemini_oracle_statements_file, dst=local_gemini_oracle_statements_file)
 
@@ -275,6 +271,6 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
 
             split_idx = line.index(":")
             key = line[:split_idx].strip()
-            value = line[split_idx + 1:].split()[0]
+            value = line[split_idx + 1 :].split()[0]
             results[key] = int(value)
         return results
