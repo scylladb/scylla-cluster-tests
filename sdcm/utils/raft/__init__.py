@@ -69,13 +69,8 @@ ABORT_BOOTSTRAP_LOG_PATTERNS: Iterable[MessagePosition] = [
 ]
 
 
-<<<<<<< HEAD
-class RaftFeatureOperations(Protocol):
-    _node: "BaseNode"
-=======
 class RaftFeatureOperations(ABC):
     _node: "BaseNode"  # noqa: F821
->>>>>>> 03eb8b05c (fix(nodebootstrapabortmanager): always clean scylla data before rebootstrap)
     TOPOLOGY_OPERATION_LOG_PATTERNS: dict[TopologyOperations, Iterable[MessagePosition]]
     message_iter: Iterable | None = None
 
@@ -133,7 +128,7 @@ class RaftFeature(RaftFeatureOperations):
         TopologyOperations.BOOTSTRAP: ABORT_BOOTSTRAP_LOG_PATTERNS,
     }
 
-    def __init__(self, node: "BaseNode") -> None:
+    def __init__(self, node: "BaseNode") -> None:  # noqa: F821
         super().__init__()
         self._node = node
 
@@ -323,7 +318,7 @@ class NoRaft(RaftFeatureOperations):
         ]
     }
 
-    def __init__(self, node: "BaseNode") -> None:
+    def __init__(self, node: "BaseNode") -> None:  # noqa: F821
         super().__init__()
         self._node = node
 
