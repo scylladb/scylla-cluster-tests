@@ -73,15 +73,15 @@ class AWSInstanceParams(InstanceParamsBase):
     def dict(
         self,
         *,
-        include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
-        exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
+        include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,  # noqa: F821
+        exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,  # noqa: F821
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_unset: bool = False,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
         encode_user_data: bool = False
-    ) -> 'DictStrAny':
+    ) -> 'DictStrAny':  # noqa: F821
         dict_data = super().dict(
             include=include,
             exclude=exclude,
