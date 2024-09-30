@@ -66,50 +66,105 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
-        self._gemini_result_file = None
         self.gemini_commands = []
-        self.gemini_request_timeout = 180
-        self.gemini_connect_timeout = 120
+        self.unique_id = uuid.uuid4()
+        self.gemini_default_flags = {
+            "level": "info",
+            "request-timeout": "60s",
+            "connect-timeout": "60s",
+            "consistency": "QUORUM",
+            "async-objects-stabilization-backoff": "1s",
+            "async-objects-stabilization-attempts": 10,
+            "max-mutation-retries-backoff": "1s",
+            "max-mutation-retries": 10,
+            "dataset-size": "large",
+            "oracle-host-selection-policy": "token-aware",
+            "test-host-selection-policy": "token-aware",
+            "drop-schema": "true",
+            "cql-features": "normal",
+            "fail-fast": "true",
+            "materialized-views": "false",
+            "use-server-timestamps": "true",
+            "use-lwt": "false",
+            "use-counters": "false",
+            "max-tables": 1,
+            "max-columns": 16,
+            "min-columns": 8,
+            "max-partition-keys": 6,
+            "min-partition-keys": 2,
+            "max-clustering-keys": 4,
+            "min-clustering-keys": 2,
+            "partition-key-distribution": "normal",  # Distribution for hitting the partition
+            # These two are used to control the memory usage of Gemini
+            "token-range-slices": 512,  # Number of partitions
+            "partition-key-buffer-reuse-size": 100,  # Internal Channel Size per parittion value generation
+        }
 
-    @property
-    def gemini_result_file(self):
-        if not self._gemini_result_file:
-            self._gemini_result_file = os.path.join("/", "gemini_result_{}.log".format(uuid.uuid4()))
-        return self._gemini_result_file
+        self.gemini_oracle_statements_file = f"gemini_oracle_statements_{self.unique_id}.log"
+        self.gemini_test_statements_file = f"gemini_test_statements_{self.unique_id}.log"
+        self.gemini_result_file = f"gemini_result_{self.unique_id}.log"
 
     def _generate_gemini_command(self):
-        seed = self.params.get('gemini_seed')
+        seed = self.params.get('gemini_seed') or random.randint(1, 100)
         table_options = self.params.get('gemini_table_options')
-        if not seed:
-            seed = random.randint(1, 100)
-        test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
-        oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips()) if self.oracle_cluster else None
+        log_statements = self.params.get('gemini_log_cql_statements') or False
 
-        cmd = "./{} --test-cluster={} --outfile {} --seed {} --request-timeout {}s --connect-timeout {}s ".format(
-            self.stress_cmd.strip(),
-            test_nodes,
-            self.gemini_result_file,
-            seed,
-            self.gemini_request_timeout,
-            self.gemini_connect_timeout)
-        if oracle_nodes:
-            cmd += "--oracle-cluster={} ".format(oracle_nodes)
+        test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
+        oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips())
+
+        cmd = f"gemini \
+                --non-interactive \
+                --oracle-cluster=\"{oracle_nodes}\" \
+                --test-cluster=\"{test_nodes}\" \
+                --seed={seed} \
+                --schema-seed={seed} \
+                --profiling-port=6060 \
+                --bind=0.0.0.0:2121 \
+                --outfile=/{self.gemini_result_file} \
+                --replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}}\" \
+                --oracle-replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}}\" "
+
+        if log_statements:
+            cmd += f"--test-statement-log-file=/{self.gemini_test_statements_file} \
+                    --oracle-statement-log-file=/{self.gemini_oracle_statements_file} "
+
+        credentials = self.loader_set.get_db_auth()
+
+        if credentials and '--test-username' not in cmd:
+            cmd += f"--test-username={credentials[0]} \
+                --test-password={credentials[1]} \
+                --oracle-username={credentials[0]} \
+                --oracle-password={credentials[1]} "
+
         if table_options:
-            cmd += " ".join([f"--table-options \"{table_opt}\"" for table_opt in table_options])
+            cmd += " ".join([f"--table-options=\"{table_opt}\"" for table_opt in table_options])
+
+        stress_cmd = self.stress_cmd.replace('\n', ' ').strip()
+
+        for key, value in self.gemini_default_flags.items():
+            if not key in stress_cmd:
+                cmd += f"--{key}={value} "
+
+        cmd += stress_cmd
         self.gemini_commands.append(cmd)
         return cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
+        for file_name in [self.gemini_result_file, self.gemini_test_statements_file, self.gemini_oracle_statements_file]:
+            loader.remoter.run(f"touch $HOME/{file_name}", ignore_status=True, verbose=False)
 
-        cpu_options = ""
-        if self.stress_num > 1:
-            cpu_options = f'--cpuset-cpus="{cpu_idx}"'
-
-        docker = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} '
-                                                                  '--network=host '
-                                                                  '--security-opt seccomp=unconfined '
-                                                                  '--entrypoint=""')
+        docker = cleanup_context = RemoteDocker(
+            loader,
+            self.docker_image_name,
+            extra_docker_opts=f'--cpuset-cpus="{cpu_idx}"' if self.stress_num > 1 else ""
+            '--label shell_marker={self.shell_marker}'
+            '--network=host '
+            '--security-opt seccomp=unconfined '
+            '--entrypoint="" '
+            f'-v $HOME/{self.gemini_result_file}:/{self.gemini_result_file} '
+            f'-v $HOME/{self.gemini_test_statements_file}:/{self.gemini_test_statements_file} '
+            f'-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file} '
+        )
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
@@ -147,6 +202,13 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             local_gemini_result_file = os.path.join(docker.node.logdir, os.path.basename(self.gemini_result_file))
             results_copied = docker.receive_files(src=self.gemini_result_file, dst=local_gemini_result_file)
             assert results_copied, "gemini results aren't available, did gemini even run ?"
+
+            local_gemini_test_statements_file = os.path.join(
+                docker.node.logdir, os.path.basename(self.gemini_test_statements_file))
+            local_gemini_oracle_statements_file = os.path.join(
+                docker.node.logdir, os.path.basename(self.gemini_oracle_statements_file))
+            docker.receive_files(src=self.gemini_test_statements_file, dst=local_gemini_test_statements_file)
+            docker.receive_files(src=self.gemini_oracle_statements_file, dst=local_gemini_oracle_statements_file)
 
         return docker, result, local_gemini_result_file
 
