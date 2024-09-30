@@ -31,7 +31,7 @@ class DBCluster:  # pylint: disable=too-few-public-methods
 
 
 def test_01_gemini_thread(request, docker_scylla, params):
-    loader_set = LocalLoaderSetDummy()
+    loader_set = LocalLoaderSetDummy(params=params)
     test_cluster = DBCluster([docker_scylla])
     cmd = (
         "gemini -d --duration 1m --warmup 0s -c 5 -m write --non-interactive --cql-features basic --max-mutation-retries 100 "
