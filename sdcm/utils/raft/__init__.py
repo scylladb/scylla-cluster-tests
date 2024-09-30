@@ -1,15 +1,18 @@
 import contextlib
 import logging
 import random
+import time
 
 from enum import Enum
 from typing import Protocol, NamedTuple, Mapping, Iterable
 
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events import Severity
-from sdcm.utils.features import is_consistent_topology_changes_feature_enabled, is_consistent_cluster_management_feature_enabled
-
+from sdcm.rest.remote_curl_client import RemoteCurlClient
+from sdcm.utils.features import is_consistent_topology_changes_feature_enabled, is_consistent_cluster_management_feature_enabled, is_tablets_feature_enabled
+from sdcm.utils.health_checker import HealthEventsGenerator
 
 LOGGER = logging.getLogger(__name__)
 RAFT_DEFAULT_SCYLLA_VERSION = "5.5.0-dev"
@@ -74,6 +77,12 @@ class RaftFeatureOperations(Protocol):
 
     @property
     def is_enabled(self) -> bool:
+        """
+                    Please do not use this method in simple statements like:
+                        if not current_node.raft.is_enabled
+                    move logic into separate methods of RaftFeature/NoRaft
+                    classes instead
+                """
         ...
 
     @property
@@ -93,6 +102,14 @@ class RaftFeatureOperations(Protocol):
         ...
 
     def clean_group0_garbage(self, raise_exception: bool = False) -> None:
+        ...
+
+    def wait_for_tablets_balanced(self) -> None:
+        ...
+
+    def check_group0_tokenring_consistency(
+            self, group0_members: list[dict[str, str]],
+            tokenring_members: list[dict[str, str]]) -> [HealthEventsGenerator|None]:
         ...
 
     def get_message_waiting_timeout(self, message_position: MessagePosition) -> MessageTimeout:
@@ -274,6 +291,50 @@ class RaftFeature(RaftFeatureOperations):
 
         return not diff and not non_voters_ids and len(group0_ids) == len(token_ring_ids) == num_of_nodes
 
+    def wait_for_tablets_balanced(self) -> None:
+        """
+            Waiting for tablets to be balanced using REST API.
+
+            doing it several times as there's a risk of:
+            "currently a small time window after adding nodes and before load balancing starts during which
+            topology may appear as quiesced because the state machine goes through an idle state before it enters load balancing state"
+        """
+        with self._node.parent_cluster.cql_connection_patient(node=self._node) as session:
+            if not is_tablets_feature_enabled(session):
+                LOGGER.info("Tablets are disabled, skipping wait for balance")
+                return
+        time.sleep(60)  # one minute gap before checking, just to give some time to the state machine
+        client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=self._node)
+        LOGGER.info("Waiting for tablets to be balanced")
+        for _ in range(3):
+            client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology",
+                                    params={}, timeout=3600, retry=3)
+            time.sleep(5)
+        LOGGER.info("Tablets are balanced")
+
+    def check_group0_tokenring_consistency(
+            self, group0_members: list[dict[str, str]],
+            tokenring_members: list[dict[str, str]]) -> HealthEventsGenerator:
+        LOGGER.debug("Check group0 and token ring consistency on node %s (host_id=%s)...",
+                     self._node.name, self._node.host_id)
+        token_ring_node_ids = [member["host_id"] for member in tokenring_members]
+        for member in group0_members:
+            if member["voter"] and member["host_id"] in token_ring_node_ids:
+                continue
+            error_message = f"Node {self._node.name} has group0 member with host_id {member['host_id']} with " \
+                            f"can_vote {member['voter']} and " \
+                            f"presents in token ring {member['host_id'] in token_ring_node_ids}. " \
+                            f"Inconsistency between group0: {group0_members} " \
+                            f"and tokenring: {tokenring_members}"
+            LOGGER.error(error_message)
+            yield ClusterHealthValidatorEvent.Group0TokenRingInconsistency(
+                severity=Severity.ERROR,
+                node=self._node.name,
+                error=error_message,
+            )
+        LOGGER.debug("Group0 and token-ring are consistent on node %s (host_id=%s)...",
+                     self._node.name, self._node.host_id)
+
 
 class NoRaft(RaftFeatureOperations):
     TOPOLOGY_OPERATION_LOG_PATTERNS = {
@@ -325,6 +386,14 @@ class NoRaft(RaftFeatureOperations):
         LOGGER.debug("Number of nodes in sct cluster %s", num_of_nodes)
 
         return len(token_ring_ids) == num_of_nodes
+
+    def wait_for_tablets_balanced(self) -> None:
+        LOGGER.info("Raft is disabled, skipping wait for balance")
+
+    def check_group0_tokenring_consistency(
+            self, group0_members: list[dict[str, str]],
+            tokenring_members: list[dict[str, str]]) -> None:
+        LOGGER.debug("Raft feature is disabled on node %s (host_id=%s)", self._node.name, self._node.host_id)
 
 
 def get_raft_mode(node) -> RaftFeature | NoRaft:
