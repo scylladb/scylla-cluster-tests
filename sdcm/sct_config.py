@@ -613,6 +613,9 @@ class SCTConfiguration(dict):
 
         dict(name="gemini_seed", env="SCT_GEMINI_SEED", type=int,
              help="Seed number for gemini command"),
+        dict(name="gemini_log_cql_statements",
+             env="SCT_GEMINI_LOG_CQL_STATEMENTS",
+             type=boolean, help="Log CQL statements to file"),
         dict(name="gemini_table_options", env="SCT_GEMINI_TABLE_OPTIONS", type=list,
              help="""table options for created table. example:
                      ["cdc={'enabled': true}"]
