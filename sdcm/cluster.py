@@ -800,7 +800,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             raise ValueError(f"Unsupported OS [{self.distro}]")
 
         oss_installed = self.remoter.sudo(oss_command, ignore_status=True).ok
-        enterprise_installed = self.remoter.sudo(enterprise_command, ignore_status=True).ok
+        enterprise_installed = "scylla-enterprise" in self.remoter.sudo(enterprise_command, ignore_status=True).stdout
         if oss_installed or enterprise_installed:
             _is_enterprise = enterprise_installed
         else:
