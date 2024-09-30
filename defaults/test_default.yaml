@@ -1,4 +1,4 @@
-db_type: "scylla"
+db_type: 'scylla'
 
 test_duration: 60
 prepare_stress_duration: 300 # 5 hours
@@ -42,16 +42,16 @@ nemesis_add_node_cnt: 1
 
 nemesis_filter_seeds: false
 
-seeds_selector: "all"
+seeds_selector: 'all'
 seeds_num: 1
 
-instance_provision: "spot"
+instance_provision: 'spot'
 
 execute_post_behavior: false
-post_behavior_db_nodes: "keep-on-failure"
-post_behavior_loader_nodes: "destroy"
-post_behavior_monitor_nodes: "keep-on-failure"
-post_behavior_k8s_cluster: "keep-on-failure"
+post_behavior_db_nodes: 'keep-on-failure'
+post_behavior_loader_nodes: 'destroy'
+post_behavior_monitor_nodes: 'keep-on-failure'
+post_behavior_k8s_cluster: 'keep-on-failure'
 
 cloud_credentials_path: ''
 use_cloud_manager: false
@@ -62,7 +62,7 @@ print_kernel_callstack: true
 
 update_db_packages: ''
 
-logs_transport: "syslog-ng"
+logs_transport: 'syslog-ng'
 
 store_perf_results: false
 email_recipients: ['qa@scylladb.com']
@@ -71,7 +71,7 @@ email_subject_postfix: ''
 collect_logs: false
 
 hinted_handoff: 'disabled'
-parallel_node_operations: false  # supported from Scylla 6.0
+parallel_node_operations: false # supported from Scylla 6.0
 
 server_encrypt: false
 client_encrypt: false
@@ -88,7 +88,6 @@ alternator_enforce_authorization: false
 alternator_access_key_id: ''
 alternator_secret_access_key: ''
 dynamodb_primarykey_type: 'HASH'
-
 
 store_cdclog_reader_stats_in_es: false
 region_aware_loader: false
@@ -142,7 +141,7 @@ disable_raft: true
 enable_tablets_on_upgrade: false
 upgrade_node_system: true
 
-stress_cdclog_reader_cmd: "cdc-stressor -stream-query-round-duration 30s"
+stress_cdclog_reader_cmd: 'cdc-stressor -stream-query-round-duration 30s'
 
 jepsen_scylla_repo: 'https://github.com/jepsen-io/scylla.git'
 jepsen_test_cmd:
@@ -150,14 +149,14 @@ jepsen_test_cmd:
   - 'test-all -w counter --concurrency 10n'
   - 'test-all -w cmap --concurrency 10n'
   - 'test-all -w cset --concurrency 10n'
-#  - 'test-all -w mv --concurrency 10n'
+  #  - 'test-all -w mv --concurrency 10n'
   - 'test-all -w write-isolation --concurrency 10n'
   - 'test-all -w list-append --concurrency 10n'
   - 'test-all -w wr-register --concurrency 10n'
 jepsen_test_count: 1
 jepsen_test_run_policy: all
 
-max_events_severities: ""
+max_events_severities: ''
 scylla_mgmt_agent_version: '3.4.0'
 mgmt_docker_image: 'scylladb/scylla-manager:3.4.0'
 k8s_log_api_calls: false
@@ -174,7 +173,7 @@ k8s_scylla_utils_docker_image: ''
 
 scylla_rsyslog_setup: false
 
-backup_bucket_region: ''  # use the same region as a cluster
+backup_bucket_region: '' # use the same region as a cluster
 
 events_limit_in_email: 10
 
@@ -184,17 +183,17 @@ data_volume_disk_size: 0
 data_volume_disk_iops: 0 # depend on type iops could be 100-16000 for io2|io3 and 3000-16000 for gp3
 gce_pd_standard_disk_size_db: 0
 
-install_mode: 'repo'  # install from scylla_repo
+install_mode: 'repo' # install from scylla_repo
 run_db_node_benchmarks: false
 
 nemesis_multiply_factor: 6
 
 scylla_apt_keys:
-  - '17723034C56D4B19'  # ScyllaDB Package Signing Key 2018 <security@scylladb.com>
-  - '5E08FBD8B5D6EC9C'  # ScyllaDB Package Signing Key 2020 <security@scylladb.com>
-  - 'D0A112E067426AB2'  # ScyllaDB Package Signing Key 2022 <security@scylladb.com>
-  - '491C93B9DE7496A7'  # ScyllaDB Package Signing Key 2024 <security@scylladb.com>
-  - 'A43E06657BAC99E3'  # ScyllaDB Package Signing Key 2024 (RSA) <security@scylladb.com>
+  - '17723034C56D4B19' # ScyllaDB Package Signing Key 2018 <security@scylladb.com>
+  - '5E08FBD8B5D6EC9C' # ScyllaDB Package Signing Key 2020 <security@scylladb.com>
+  - 'D0A112E067426AB2' # ScyllaDB Package Signing Key 2022 <security@scylladb.com>
+  - '491C93B9DE7496A7' # ScyllaDB Package Signing Key 2024 <security@scylladb.com>
+  - 'A43E06657BAC99E3' # ScyllaDB Package Signing Key 2024 (RSA) <security@scylladb.com>
 
 raid_level: 0
 
