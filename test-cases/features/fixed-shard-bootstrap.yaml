@@ -1,4 +1,4 @@
-test_duration: 1200
+test_duration: 6000
 
 n_db_nodes: 2
 n_loaders: 4
