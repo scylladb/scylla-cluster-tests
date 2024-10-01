@@ -96,7 +96,6 @@ from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sla.sla_tests import SlaTests
-from sdcm.utils.argus import get_argus_client
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
@@ -5170,7 +5169,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
         if not isinstance(start_time, int):
             start_time = int(start_time)
         try:
-            argus_client = get_argus_client(run_id=nemesis.cluster.test_config.test_id())
+            argus_client = nemesis.cluster.test_config.argus_client()
             if nemesis_event.severity == Severity.ERROR:
                 argus_client.finalize_nemesis(name=method_name, start_time=start_time,
                                               status=NemesisStatus.FAILED, message=nemesis_event.full_traceback)
