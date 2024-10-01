@@ -2275,6 +2275,13 @@ Don't install/update ScyllaDB on DB nodes
 **default:** N/A
 
 
+## **force_run_iotune** / SCT_FORCE_RUN_IOTUNE
+
+Force running iotune on the DB nodes, regdless if image has predefined values
+
+**default:** N/A
+
+
 ## **stress_cdclog_reader_cmd** / SCT_STRESS_CDCLOG_READER_CMD
 
 cdc-stressor command to read cdc_log table.<br>You can specify everything but the -node , -keyspace, -table, parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list
