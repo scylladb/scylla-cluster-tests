@@ -4711,6 +4711,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             if result.ok:
                 self.log.info("Scylla_io_setup result: %s", result.stdout)
 
+        if self.params.get('force_run_iotune'):
+            node.remoter.sudo(
+                cmd=f"iotune --evaluation-directory {SCYLLA_DIR} --properties-file /etc/scylla.d/io_properties.yaml", timeout=600)
+
         if self.params.get('gce_setup_hybrid_raid'):
             gce_n_local_ssd_disk_db = self.params.get('gce_n_local_ssd_disk_db')
             gce_pd_ssd_disk_size_db = self.params.get('gce_pd_ssd_disk_size_db')
