@@ -1426,6 +1426,10 @@ class SCTConfiguration(dict):
 
         dict(name="use_preinstalled_scylla", env="SCT_USE_PREINSTALLED_SCYLLA", type=boolean,
              help="Don't install/update ScyllaDB on DB nodes"),
+
+        dict(name="force_run_iotune", env="SCT_FORCE_RUN_IOTUNE", type=boolean,
+             help="Force running iotune on the DB nodes, regdless if image has predefined values"),
+
         dict(name="stress_cdclog_reader_cmd", env="SCT_STRESS_CDCLOG_READER_CMD",
              type=str,
              help="""cdc-stressor command to read cdc_log table.
