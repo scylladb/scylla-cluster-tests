@@ -14,6 +14,7 @@ from sdcm.provision.common.configuration_script import ConfigurationScriptBuilde
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.argus import ArgusError, get_argus_client
+from sdcm.utils.ci_tools import get_job_name
 from sdcm.utils.net import get_my_ip
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
@@ -258,7 +259,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
 
     @classmethod
     def init_argus_client(cls, params: dict, test_id: str | None = None):
-        if params.get("enable_argus"):
+        if params.get("enable_argus") and get_job_name() != 'local_run':
             LOGGER.info("Initializing Argus connection...")
             try:
                 cls._argus_client = get_argus_client(run_id=cls.test_id() if not test_id else test_id)
