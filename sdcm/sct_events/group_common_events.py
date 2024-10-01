@@ -333,6 +333,54 @@ def ignore_raft_topology_cmd_failing():
             regex=r".*raft_topology - send_raft_topology_cmd\(stream_ranges\) failed with exception \(node state is replacing\)",
             extra_time_to_expiration=30
         ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - send_raft_topology_cmd\(stream_ranges\) failed with exception \(node state is bootstrapping\)",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - topology change coordinator fiber got error.*connection is closed",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - topology change coordinator fiber got error.*failed status returned from",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - raft_topology_cmd.*failed with: service::raft_group_not_found",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - raft_topology_cmd.*failed with: service::wait_for_ip_timeout",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - raft_topology_cmd.*failed with:.*abort requested",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - drain rpc failed, proceed to fence old writes:.*connection is closed",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft_topology - drain rpc failed, proceed to fence old writes:.*failed status returned from",
+            extra_time_to_expiration=30
+        ))
         yield
 
 
@@ -344,6 +392,12 @@ def ignore_raft_transport_failing():
             new_severity=Severity.WARNING,
             event_class=DatabaseLogEvent,
             regex=r".*raft::transport_error \(.*rpc::closed_error \(connection is closed\)",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*raft - .* Transferring snapshot.*not found",
             extra_time_to_expiration=30
         ))
         yield
