@@ -132,7 +132,7 @@ from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 from sdcm.utils.tablets.common import wait_for_tablets_balanced
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
-from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
+from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions, ComparableScyllaVersion
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
 from sdcm.utils.raft.common import NodeBootstrapAbortManager, FailedDecommissionOperationMonitoring
 from sdcm.utils.issues import SkipPerIssues
@@ -3190,7 +3190,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             This function check if all expected keyspace/tables are in the snapshot
         """
         snapshot_params = nodetool_cmd.split()
-        ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node, filter_empty_tables=False)
+
+        def is_virtual_tables_get_snapshot():
+            """
+            scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
+            has stopped creating snapshots for virtual tables.
+            hence we need to filter them out when compare tables to snapshot content.
+            """
+            if self.target_node.is_enterprise:
+                return ComparableScyllaVersion(self.target_node.scylla_version) >= "2024.3.0-dev"
+            else:
+                return ComparableScyllaVersion(self.target_node.scylla_version) >= "6.3.0-dev"
+
+        filter_func = self.cluster.is_table_has_no_sstables if is_virtual_tables_get_snapshot() else None
+        ks_cf = self.cluster.get_any_ks_cf_list(
+            db_node=self.target_node, filter_empty_tables=False, filter_func=filter_func)
         # remove quotes from keyspace or column family, since output of `nodetool listsnapshots` isn't returning them quoted
         ks_cf = [k_c.replace('"', '') for k_c in ks_cf]
         keyspace_table = []

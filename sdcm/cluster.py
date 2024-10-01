@@ -3094,6 +3094,11 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
         return statistics_files
 
+    def sstable_folder_exists(self, keyspace_name: str, table_name: str, verbose=True) -> bool:
+        find_cmd = f"find /var/lib/scylla/data/{keyspace_name}/{table_name}-* -type d"
+        result = self.remoter.run(find_cmd, ignore_status=True, verbose=verbose)
+        return result.ok
+
     def reload_config(self):
         """
         Reloads scylla configuration without restarting scylla.
@@ -3643,10 +3648,14 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.log.debug("%s replication_factors", set(ks_rf.replication_factors))
         return set(ks_rf.replication_factors) == {1}
 
+    @staticmethod
+    def is_table_has_no_sstables(keyspace_name: str, node: BaseNode, table_name: str, **kwarg) -> bool:  # pylint: disable=unused-argument
+        return not bool(node.sstable_folder_exists(keyspace_name, table_name, verbose=False))
+
     def get_non_system_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
                                   filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
                                   filter_by_keyspace: list = None,
-                                  filter_func: Callable[[...], bool] = None) -> List[str]:
+                                  filter_func: Callable[..., bool] = None) -> List[str]:
         return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
                                        filter_out_mv=filter_out_mv, filter_empty_tables=filter_empty_tables,
                                        filter_out_system=True, filter_out_cdc_log_tables=True, filter_by_keyspace=filter_by_keyspace,
@@ -3655,7 +3664,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def get_any_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments,too-many-statements
                            filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
                            filter_out_system=False, filter_out_cdc_log_tables=False,
-                           filter_by_keyspace: list = None, filter_func: Callable[[...], bool] = None) -> List[str]:
+                           filter_by_keyspace: list = None, filter_func: Callable[..., bool] = None) -> List[str]:
         regular_column_names = ["keyspace_name", "table_name"]
         materialized_view_column_names = ["keyspace_name", "view_name"]
         regular_table_names, materialized_view_table_names = set(), set()
