@@ -1261,16 +1261,8 @@ def _manage_runner_keep_tag_value(utc_now: datetime,
                                   dry_run: bool = False) -> SctRunnerInfo:
     LOGGER.info("Managing runner's tags. Timeout flag: %s, logs_collected: %s, dry_run: %s",
                 timeout_flag, sct_runner_info.logs_collected, dry_run)
-
-    if test_status == "SUCCESS" and sct_runner_info.logs_collected:
-        if not dry_run:
-            sct_runner_info.sct_runner_class.set_tags(sct_runner_info, {"keep": "0", "keep-action": "terminate"})
-        sct_runner_info.keep = 0
-        sct_runner_info.keep_action = "terminate"
-        return sct_runner_info
-
-    if not timeout_flag and sct_runner_info.logs_collected:
-        current_run_time_hrs = int((utc_now - sct_runner_info.launch_time).total_seconds() // 3600)
+    current_run_time_hrs = int((utc_now - sct_runner_info.launch_time).total_seconds() // 3600)
+    if timeout_flag and sct_runner_info.logs_collected:
         new_keep_value = int(sct_runner_info.keep) - current_run_time_hrs + 6
 
         if new_keep_value > 0:
@@ -1279,7 +1271,18 @@ def _manage_runner_keep_tag_value(utc_now: datetime,
             sct_runner_info.keep = new_keep_value
         return sct_runner_info
 
-    LOGGER.info("No changes to make to runner tags.")
+    if sct_runner_info.logs_collected:
+        if not dry_run:
+            sct_runner_info.sct_runner_class.set_tags(sct_runner_info, {"keep": "0", "keep-action": "terminate"})
+        sct_runner_info.keep = 0
+        sct_runner_info.keep_action = "terminate"
+        return sct_runner_info
+    else:
+        new_keep_value = current_run_time_hrs + 48
+        if not dry_run:
+            sct_runner_info.sct_runner_class.set_tags(sct_runner_info, {"keep": str(new_keep_value)})
+        sct_runner_info.keep = new_keep_value
+        return sct_runner_info
 
 
 def clean_sct_runners(test_status: str,
