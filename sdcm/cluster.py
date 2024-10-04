@@ -1910,7 +1910,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.remoter.sudo("zypper update scylla-manager-agent -y")
         else:
             self.remoter.sudo("apt-get update", ignore_status=True)
-            self.remoter.sudo("apt-get install -o DPkg::Lock::Timeout=300 -y scylla-manager-agent")
+            self.remoter.sudo("DEBIAN_FRONTEND=noninteractive apt-get install -o Dpkg::Lock::Timeout=300 "
+                              "-o Dpkg::Options::='--force-confold' -o Dpkg::Options::='--force-confdef' "
+                              "-y scylla-manager-agent")
         self.remoter.sudo("scyllamgr_agent_setup -y")
         if start_agent_after_upgrade:
             if self.is_docker():
