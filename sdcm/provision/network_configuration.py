@@ -17,6 +17,8 @@ class NetworkInterface:  # pylint: disable=too-many-instance-attributes
     dns_private_name: str
     dns_public_name: Optional[str]
     device_index: int
+    device_name: Optional[str]
+    mac_address: Optional[str]
 
 
 class ScyllaNetworkConfiguration:
@@ -88,6 +90,15 @@ class ScyllaNetworkConfiguration:
             return self.network_interfaces[0].ipv6_public_addresses[0]
         else:
             return None
+
+    @property
+    def device(self):
+        # Depend on network configuration:
+        # if broadcast_address.device_name if found
+        # else empty string.
+        if address_config := [conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"]:
+            return "".join([ni.device_name for ni in self.network_interfaces if ni.device_index == address_config[0]['nic']])
+        return ""
 
     def get_ip_by_address_config(self, address_config: dict) -> str:
         if not (interface := [conf for conf in self.network_interfaces if address_config["nic"] == conf.device_index]):
