@@ -33,7 +33,7 @@ import json
 import ipaddress
 from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from textwrap import dedent
 from functools import cached_property, wraps, lru_cache, partial
 from collections import defaultdict
@@ -5854,6 +5854,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         self.save_sct_dashboards_config(node)
         self.save_monitoring_version(node)
         Path(self.sct_dashboard_json_file).unlink(missing_ok=True)
+        end_time = self.params["test_duration"] * 60 + time.time() + 120 * 60  # 2h margin
+        self.update_default_time_range(time.time(), end_time)
 
     def save_monitoring_version(self, node):
         node.remoter.run(
@@ -5878,6 +5880,24 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
         node.remoter.run('mkdir -p {}'.format(sct_monitoring_addons_dir), ignore_status=True)
         node.remoter.send_files(src=self.sct_dashboard_json_file, dst=sct_monitoring_addons_dir)
+
+    def update_default_time_range(self, start_timestamp: float, end_timestamp: float) -> None:
+        """
+        Specify the Grafana time range for all dashboards by updating the JSON files.
+
+        This method will find all JSON files in the `grafana/build/<subdir>` directories and replace
+        the "from" and "to" time range values with the provided start and end timestamps.
+        """
+        start_iso = datetime.fromtimestamp(start_timestamp, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_iso = datetime.fromtimestamp(end_timestamp, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        cmd = (f"find {os.path.join(self.monitor_install_path, 'grafana/build/')} -name '*.json' -exec "
+               f"sed -i 's/\"from\": \"[^\"]*\"/\"from\": \"{start_iso}\"/; "
+               f"s/\"to\": \"[^\"]*\"/\"to\": \"{end_iso}\"/' {{}} +")
+        for node in self.nodes:
+            try:
+                node.remoter.run(cmd)
+            except Exception:
+                LOGGER.error(f"Failed to update time range for Grafana dashboards on {node}", exc_info=True)
 
     @log_run_info
     def install_scylla_monitoring(self, node):
@@ -6005,6 +6025,9 @@ class NoMonitorSet():
 
     def get_grafana_screenshots_from_all_monitors(self, test_start_time=None):  # pylint: disable=unused-argument,no-self-use,invalid-name
         return []
+
+    def update_default_time_range(self, start_timestamp: float, end_timestamp: float) -> None:
+        pass
 
 
 class LocalNode(BaseNode):
