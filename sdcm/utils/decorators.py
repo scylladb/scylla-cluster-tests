@@ -248,7 +248,8 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                         name="Steady State",
                         description="Latencies without any operation running",
                         cycle=0,
-                        result=result
+                        result=result,
+                        start_time=start,
                     )
             else:
                 latency_results[func.__name__]['cycles'].append(result)
@@ -258,7 +259,8 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                     name=f"{func.__name__}",
                     description=legend or "",
                     cycle=len(latency_results[func.__name__]['cycles']),
-                    result=result
+                    result=result,
+                    start_time=start,
                 )
 
             with open(latency_results_file_path, 'w', encoding="utf-8") as file:
