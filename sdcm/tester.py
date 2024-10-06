@@ -2967,6 +2967,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.kafka_cluster:
             with silence(parent=self, name='stopping kafka'):
                 self.kafka_cluster.stop()
+        self.monitors.update_default_time_range(self.start_time, time.time())
         if self.params.get('collect_logs'):
             self.collect_logs()
         self.clean_resources()
@@ -2977,8 +2978,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.argus_collect_gemini_results()
         self.destroy_localhost()
         self.stop_event_device()
-        if self.params.get('collect_logs'):
-            self.collect_sct_logs()
         with silence(parent=self, name='Cleaning up SSL config directory'):
             cleanup_ssl_config()
 
