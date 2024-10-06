@@ -3372,8 +3372,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         # get the last 10min avg network bandwidth used, and limit  30% to 70% of it
         prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
-        query = 'avg(node_network_receive_bytes_total{instance=~".*?%s.*?", device="eth0"})' % \
-                self.target_node.ip_address
+        # If test runs with 2 network interfaces configuration, "node_network_receive_bytes_total" will be reported on device that
+        # broadcast_address is configured on it
+        query = 'avg(node_network_receive_bytes_total{instance=~".*?%s.*?", device="%s"})' % \
+                (self.target_node.ip_address, self.target_node.scylla_network_configuration.device)
         now = time.time()
         results = prometheus_stats.query(query=query, start=now - 600, end=now)
         assert results, "no results for node_network_receive_bytes_total metric in Prometheus "
@@ -3445,6 +3447,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         if not self.target_node.install_traffic_control():
             raise UnsupportedNemesis("Traffic control package not installed on system")
+
+        if not self.target_node.scylla_network_configuration.device:
+            raise ValueError("The network device name is not recognized")
 
         rate_limit: Optional[str] = self.get_rate_limit_for_network_disruption()
         if not rate_limit:
