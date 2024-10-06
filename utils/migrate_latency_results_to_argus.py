@@ -81,13 +81,17 @@ def migrate(creds, job_name, days=7, index_name="performancestatsv2", dry_run=Tr
                     print(f"Would send {operation} - {workload} - latencies - cycle 0 to Argus")
                     continue
                 try:
+                    start_time = result["hdr_summary"].get("READ", result["hdr_summary"].get("WRITE"))[
+                        "start_time"] / 1000
                     send_result_to_argus(argus_client=client, workload=workload, name=operation,
-                                         description=description, cycle=0, result=result)
+                                         description=description, cycle=0, result=result, start_time=start_time)
                 except argus.client.base.ArgusClientError:
                     print(
                         f"Failed to send {operation} - {workload} - latencies to Argus: {hit['_source']['test_details']['job_url']}")
                 continue
             for idx, cycle in enumerate(latency_during_ops[operation]["cycles"], start=1):
+                start_time = cycle["hdr_summary"].get("READ", cycle["hdr_summary"].get("WRITE"))["start_time"]
+                start_time = start_time if start_time < 1000000000000 else start_time / 1000
                 if dry_run:
                     print(f"Would send {operation} - {workload} - latencies - cycle {idx} to Argus")
                     continue
@@ -98,7 +102,8 @@ def migrate(creds, job_name, days=7, index_name="performancestatsv2", dry_run=Tr
                         name=operation,
                         description=latency_during_ops[operation]["legend"] or "",
                         cycle=idx,
-                        result=cycle
+                        result=cycle,
+                        start_time=start_time
                     )
                 except argus.client.base.ArgusClientError:
                     print(
