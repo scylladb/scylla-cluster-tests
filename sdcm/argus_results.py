@@ -10,6 +10,8 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2024 ScyllaDB
+import time
+from datetime import timezone, datetime
 
 from argus.client import ArgusClient
 from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status
@@ -38,6 +40,8 @@ class LatencyCalculatorMixedResult(GenericResultTable):
             ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
+            # help jump into proper place in logs/monitoring
+            ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
@@ -51,6 +55,8 @@ class LatencyCalculatorWriteResult(GenericResultTable):
             ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
+            # help jump into proper place in logs/monitoring
+            ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
@@ -64,6 +70,8 @@ class LatencyCalculatorReadResult(GenericResultTable):
             ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
+            # help jump into proper place in logs/monitoring
+            ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
@@ -89,11 +97,16 @@ workload_to_table = {
 }
 
 
-def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str, cycle: int, result: dict):
+def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str, cycle: int, result: dict,
+                         start_time: float = 0):
     result_table = workload_to_table[workload]()
     result_table.name = f"{workload} - {name} - latencies"
     result_table.description = f"{workload} workload - {description}"
     operation_error_thresholds = LATENCY_ERROR_THRESHOLDS.get(name, LATENCY_ERROR_THRESHOLDS["default"])
+    try:
+        start_time = datetime.fromtimestamp(start_time or time.time(), tz=timezone.utc).strftime('%H:%M:%S')
+    except ValueError:
+        start_time = "N/A"
     for operation in ["write", "read"]:
         summary = result["hdr_summary"]
         if operation.upper() not in summary:
@@ -119,6 +132,8 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
                                 value=qa_screenshot, status=Status.UNSET)
     except IndexError:
         pass
+    result_table.add_result(column="start time", row=f"Cycle #{cycle}",
+                            value=start_time, status=Status.UNSET)
     argus_client.submit_results(result_table)
     for event in result["reactor_stalls_stats"]:  # each stall event has own table
         event_name = event.split(".")[-1]
