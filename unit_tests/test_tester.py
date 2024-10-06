@@ -18,6 +18,7 @@ import tempfile
 import time
 import unittest.mock
 from time import sleep
+from unittest.mock import MagicMock
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
@@ -97,6 +98,7 @@ class ClusterTesterForTests(ClusterTester):
         pass
 
     def tearDown(self):
+        self.monitors = MagicMock()
         super().tearDown()
         self._validate_results()
         self.events_processes_registry_patcher.stop()
@@ -273,6 +275,7 @@ class SetupFailsTest(ClusterTesterForTests):
         pass
 
     def tearDown(self):
+        self.monitors = MagicMock()
         ClusterTester.tearDown(self)
 
     def _validate_results(self):
