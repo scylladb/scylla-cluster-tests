@@ -357,6 +357,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def network_interfaces(self):
         raise NotImplementedError()
 
+    @property
+    def network_configuration(self):
+        raise NotImplementedError()
+
     def init(self) -> None:
         if self.logdir:
             os.makedirs(self.logdir, exist_ok=True)
