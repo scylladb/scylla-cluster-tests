@@ -102,23 +102,6 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_docker_image', '')}",
                    description: 'Scylla Operator docker image',
                    name: 'k8s_scylla_operator_docker_image')
-<<<<<<< HEAD
-=======
-            string(defaultValue: "${pipelineParams.get('gce_project', '')}",
-               description: 'Gce project to use',
-               name: 'gce_project')
-            string(defaultValue: '',
-                   description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
-                   name: 'requested_by_user')
-            text(defaultValue: "${pipelineParams.get('extra_environment_variables', '')}",
-                 description: (
-                     'Extra environment variables to be set in the test environment, uses the java Properties File Format.\n' +
-                     'Example:\n' +
-                     '\tSCT_STRESS_IMAGE.cassandra-stress=scylladb/cassandra-stress:3.13.0\n' +
-                     '\tSCT_USE_MGMT=false'
-                     ),
-                 name: 'extra_environment_variables')
->>>>>>> 5a6c5f555 (feature(pipelines): read extra environment variables from text paramter)
         }
         options {
             timestamps()
