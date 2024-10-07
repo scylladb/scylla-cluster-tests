@@ -1211,7 +1211,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         if task_type == "backup":
             suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
         elif task_type == "repair":
-            suspendable_task = mgr_cluster.create_repair_task()
+            # Set intensity and parallel to 1 to make repair task run longer to be able to catch RUNNING state
+            suspendable_task = mgr_cluster.create_repair_task(intensity=1, parallel=1)
         else:
             raise ValueError(f"Not familiar with task type: {task_type}")
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
