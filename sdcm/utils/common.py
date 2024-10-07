@@ -1587,7 +1587,11 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
     name_filter = "ScyllaDB *"
 
     if version and version != "all":
-        name_filter = f"ScyllaDB *{version.replace('enterprise-', 'Enterprise ')}*"
+        name_filter = f"ScyllaDB *{version.replace('enterprise-', 'Enterprise ')}"
+
+        if len(version.split('.')) < 3:
+            # if version is not exact version, we need to add the wildcard to the end, to catch all minor versions
+            name_filter = f"{name_filter}*"
 
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
     images = []
@@ -1618,7 +1622,7 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, ver
 
     if version and version != "all":
         filters += f"(name eq 'scylla(db)?(-enterprise)?-{version.replace('.', '-')}"
-        if 'rc' not in version:
+        if 'rc' not in version and len(version.split('.')) < 3:
             filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
         else:
             filters += "')"
