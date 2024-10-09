@@ -45,6 +45,7 @@ class ElasticRunReporter:
             "status": status,
             "build_id": job_name,
             "build_url": build_url,
+            "argus_url": f"https://argus.scylladb.com/tests/scylla-cluster-tests/{run_id}",
             "build_number": build_number,
         }
 
