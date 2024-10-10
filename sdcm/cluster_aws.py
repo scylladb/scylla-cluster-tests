@@ -471,9 +471,25 @@ class AWSNode(cluster.BaseNode):
             self._dc_info_str())
 
     @property
+    def network_configuration(self):
+        # Output example:
+        #   0a:7b:18:de:f9:71: eth0
+        #   0a:7b:18:de:f9:72: eth1
+        ip_link_cmd = """ip -o link | awk '$2 != "lo:" {gsub(/:/,"",$2);print $17": " $2}'"""
+        network_config = self.remoter.run(ip_link_cmd).stdout.strip()
+        network_devices = yaml.safe_load(network_config)
+        self.log.debug("Node %s ethernets: %s", self.name, network_devices)
+        return network_devices
+
+    @property
     def network_interfaces(self):
         interfaces_tmp = []
         device_indexes = []
+        devices = {}
+        if self.remoter:
+            devices = self.network_configuration
+            self.log.debug("Node %s devices: %s", self.name, devices)
+
         for interface in self._instance.network_interfaces:
             private_ip_addresses = [private_address["PrivateIpAddress"]
                                     for private_address in interface.private_ip_addresses]
@@ -489,7 +505,9 @@ class AWSNode(cluster.BaseNode):
                                                    ipv6_private_address='',
                                                    dns_private_name=interface.private_dns_name,
                                                    dns_public_name=dns_public_name,
-                                                   device_index=interface.attachment['DeviceIndex']
+                                                   device_index=interface.attachment['DeviceIndex'],
+                                                   device_name=devices[interface.mac_address] if devices else '',
+                                                   mac_address=interface.mac_address,
                                                    )
                                   )
         # Order interfaces by device_index (set primary interface first)
@@ -519,6 +537,8 @@ class AWSNode(cluster.BaseNode):
         self.log.debug("Node %s network_interfaces: %s", self.name,
                        self.scylla_network_configuration.network_interfaces)
         super().init()
+        # Refresh network interfaces info after node remoter init
+        self.refresh_network_interfaces_info()
 
     def wait_for_cloud_init(self):
         if self.remoter.sudo("bash -c 'command -v cloud-init'", ignore_status=True).ok:
