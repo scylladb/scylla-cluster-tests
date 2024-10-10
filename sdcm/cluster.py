@@ -4548,7 +4548,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def get_test_keyspaces(self, db_node=None):
         """Function returning a list of non-system keyspaces (created by test)"""
-        db_node = db_node or self.nodes[0]
+        db_node = db_node or self.data_nodes[0]
         keyspaces = db_node.run_cqlsh("describe keyspaces").stdout.split()
         return [ks for ks in keyspaces if not is_system_keyspace(ks)]
 
@@ -4566,7 +4566,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             keyspaces = self.get_test_keyspaces()
 
         self.log.debug("Waiting for threshold: %s" % (threshold))
-        node = self.nodes[0]
+        node = self.data_nodes[0]
         node_space = 0
         # Calculate space on the disk of all test keyspaces on the one node.
         # It's decided to check the threshold on one node only
@@ -5116,13 +5116,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def decommission(self, node: BaseNode, timeout: int | float = None) -> DataCenterTopologyRfControl | None:
-        with node.parent_cluster.cql_connection_patient(node) as session:
-            if tablets_enabled := is_tablets_feature_enabled(session):
-                dc_topology_rf_change = DataCenterTopologyRfControl(target_node=node)
-                dc_topology_rf_change.decrease_keyspaces_rf()
+        if not node._is_zero_token_node:
+            with node.parent_cluster.cql_connection_patient(node) as session:
+                if tablets_enabled := is_tablets_feature_enabled(session):
+                    dc_topology_rf_change = DataCenterTopologyRfControl(target_node=node)
+                    dc_topology_rf_change.decrease_keyspaces_rf()
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
             node.run_nodetool("decommission", timeout=timeout, long_running=True, retry=0)
         self.verify_decommission(node)
+        if node._is_zero_token_node:
+            return None
         return dc_topology_rf_change if tablets_enabled else None
 
     @property

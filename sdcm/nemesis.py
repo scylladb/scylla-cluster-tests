@@ -361,7 +361,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             dc_idx: Optional[int] = None,
             rack: Optional[int] = None) -> list:
         """
-        Filters and return nodes in the cluster that has no running nemesis on them
+        Filters and return data nodes in the cluster that has no running nemesis on them
         It can filter node by following criteria: is_seed, dc_idx, rack
         Same mechanism works for other parameters, if multiple criteria provided it will return nodes
         that match all of them.
@@ -373,7 +373,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         if is_seed is DefaultValue:
             is_seed = False if self.filter_seed else None
-        nodes = [node for node in self.cluster.nodes if not node.running_nemesis]
+        nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
         if is_seed is not None:
             nodes = [node for node in nodes if node.is_seed == is_seed]
         if dc_idx is not None:
@@ -1274,14 +1274,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
 
-    def _add_and_init_new_cluster_nodes(self, count, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=None, instance_type: str = None) -> list[BaseNode]:
+    def _add_and_init_new_cluster_nodes(self, count, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=None, instance_type: str = None, is_zero_node: bool = False) -> list[BaseNode]:
         if rack is None and self._is_it_on_kubernetes():
             rack = 0
         self.log.info("Adding %s new nodes to cluster...", count)
         InfoEvent(message=f'StartEvent - Adding {count} new nodes to cluster').publish()
-        new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(
-            count=count, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack,
-            instance_type=instance_type)
+        add_node_args = {"count": count,
+                         "dc_idx": self.target_node.dc_idx,
+                         "enable_auto_bootstrap": True,
+                         "rack": rack,
+                         "instance_type": instance_type
+                         }
+        if is_zero_node:
+            instance_type = self.cluster.params.get("zero_token_instance_type_db") or instance_type
+            add_node_args.update({"is_zero_node": is_zero_node})
+
+        new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_args)
         self.monitoring_set.reconfigure_scylla_monitoring()
         for new_node in new_nodes:
             self.set_current_running_nemesis(node=new_node)
