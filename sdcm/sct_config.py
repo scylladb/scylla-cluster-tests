@@ -1643,6 +1643,13 @@ class SCTConfiguration(dict):
 
         dict(name="run_scylla_doctor", env="SCT_RUN_SCYLLA_DOCTOR", type=boolean,
              help="Run scylla-doctor in artifact tests"),
+
+        dict(name="n_db_zero_token_nodes", env="SCT_N_DB_ZERO_TOKEN_NODES", type=int_or_list,
+             help="""Number of zero token nodes"""),
+
+        dict(name="zero_token_instance_type_db", env="SCT_ZERO_TOKEN_INSTANCE_TYPE_DB", type=str,
+             help="""Instance type for zero token node"""),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -2063,9 +2070,40 @@ class SCTConfiguration(dict):
         # 20 Validate Manager agent backup general parameters
         if backup_params := self.get("mgmt_agent_backup_config"):
             self["mgmt_agent_backup_config"] = AgentBackupParameters(**backup_params)
+        # 22 Validate zero token nodes
+        zerotoken_nodes_num = self.get("n_db_zero_token_nodes")
+        token_nodes_num = self.get("n_db_nodes")
+        if backend == "aws" and zerotoken_nodes_num:
+
+            zerotoken_nodes_num = [zerotoken_nodes_num] if isinstance(zerotoken_nodes_num, int) else [
+                int(i) for i in str(zerotoken_nodes_num).split()]
+            token_nodes_num = [token_nodes_num] if isinstance(token_nodes_num, int) else [
+                int(i) for i in str(token_nodes_num).split()]
+            assert len(zerotoken_nodes_num) >= len(
+                token_nodes_num), "Config of zero token node per dc less than config of token nodes"
 
     def log_config(self):
         self.log.info(self.dump_config())
+
+    @property
+    def total_n_db_nodes(self):
+        """Used to get total number of db nodes data nodes and zero nodes"""
+        zerotoken_nodes_num = self.get("n_db_zero_token_nodes")
+        token_nodes_num = self.get("n_db_nodes")
+        zerotoken_nodes_num = [zerotoken_nodes_num] if isinstance(zerotoken_nodes_num, int) else [
+            int(i) for i in str(zerotoken_nodes_num).split()]
+        token_nodes_num = [token_nodes_num] if isinstance(token_nodes_num, int) else [
+            int(i) for i in str(token_nodes_num).split()]
+        total_nodes = token_nodes_num[:]
+
+        # temp for aws, but should work for any backend
+        if self.get('cluster_backend') == "aws" and zerotoken_nodes_num:
+
+            total_nodes = [n1 + n2 for n1,
+                           n2 in zip(token_nodes_num, zerotoken_nodes_num)]
+
+        self.log.debug("Total nodes: %s", total_nodes)
+        return total_nodes
 
     @property
     def region_names(self) -> List[str]:
