@@ -133,7 +133,7 @@ from sdcm.utils.tablets.common import wait_for_tablets_balanced
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions, ComparableScyllaVersion
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
-from sdcm.utils.raft.common import NodeBootstrapAbortManager, FailedDecommissionOperationMonitoring
+from sdcm.utils.raft.common import NodeBootstrapAbortManager
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.wait import wait_for, wait_for_log_lines
 from sdcm.exceptions import (
@@ -157,7 +157,7 @@ from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get
     get_gc_mode, GcMode
 from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
-
+from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
 
 LOGGER = logging.getLogger(__name__)
 # NOTE: following lock is needed in the K8S multitenant case
@@ -3931,7 +3931,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for expected_start_failed_context in self.target_node.raft.get_severity_change_filters_scylla_start_failed(
                     terminate_pattern.timeout):
                 stack.enter_context(expected_start_failed_context)
-            with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing():
+            with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing(), \
+                self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="DecommissionStreamingErr") as verification_node, \
+                FailedDecommissionOperationMonitoring(target_node=self.target_node,
+                                                      verification_node=verification_node,
+                                                      timeout=full_operations_timeout, expected_exception=(KillNemesis, )):
+
                 ParallelObject(objects=[trigger, watcher], timeout=full_operations_timeout).call_objects()
             if new_node := decommission_post_action():
                 new_node.wait_node_fully_start()
@@ -5113,7 +5118,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             monitoring_decommission_timeout = decommission_timeout + 100
             un_nodes = self.cluster.get_nodes_up_and_normal()
             with Nemesis.run_nemesis(node_list=un_nodes, nemesis_label="BootstrapStreaminError") as verification_node, \
-                    FailedDecommissionOperationMonitoring(target_node=new_node, verification_node=verification_node, timeout=monitoring_decommission_timeout):
+                    FailedDecommissionOperationMonitoring(target_node=new_node, verification_node=verification_node,
+                                                          timeout=monitoring_decommission_timeout, expected_exception=(KillNemesis, )):
 
                 self.cluster.decommission(new_node, timeout=decommission_timeout)
 
