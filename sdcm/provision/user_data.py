@@ -66,12 +66,12 @@ class UserDataBuilder:
             "yum_repos":
                 {
                     "epel-release": {
-                        "baseurl": "http://download.fedoraproject.org/pub/epel/7/$basearch",
+                        "baseurl": "https://dl.fedoraproject.org/pub/epel/9/Everything/$basearch",
                         "enabled": True,
                         "failovermethod": "priority",
                         "gpgcheck": True,
-                        "gpgkey": "http://download.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-7",
-                        "name": "Extra Packages for Enterprise Linux 7 - Release"
+                        "gpgkey": "https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-9",
+                        "name": "Extra Packages for Enterprise Linux 9 - Everything"
                     }
                 }
         }
