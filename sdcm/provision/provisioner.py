@@ -136,7 +136,8 @@ class Provisioner(ABC):
 
     def get_or_create_instance(self,
                                definition: InstanceDefinition,
-                               pricing_model: PricingModel = PricingModel.SPOT
+                               pricing_model: PricingModel = PricingModel.SPOT,
+                               public_access: bool = False,
                                ) -> VmInstance:
         """Create an instance specified by an InstanceDefinition.
         If instance already exists, returns it."""
@@ -144,7 +145,8 @@ class Provisioner(ABC):
 
     def get_or_create_instances(self,
                                 definitions: List[InstanceDefinition],
-                                pricing_model: PricingModel = PricingModel.SPOT
+                                pricing_model: PricingModel = PricingModel.SPOT,
+                                public_access: bool = False,
                                 ) -> List[VmInstance]:
         """Create a set of instances specified by a list of InstanceDefinition.
         If instances already exist, returns them."""
