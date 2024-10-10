@@ -458,7 +458,9 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method,too-many-instance-
                                  ipv6_private_address='',
                                  dns_private_name="",
                                  dns_public_name="",
-                                 device_index=0
+                                 device_index=0,
+                                 device_name='',
+                                 mac_address=''
                                  ),
                 NetworkInterface(ipv4_public_address=None,
                                  ipv6_public_addresses=[self._ipv6_ip_address[1]],
@@ -466,7 +468,9 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method,too-many-instance-
                                  ipv6_private_address='',
                                  dns_private_name="",
                                  dns_public_name="",
-                                 device_index=1
+                                 device_index=1,
+                                 device_name='',
+                                 mac_address=''
                                  )
                 ]
 
