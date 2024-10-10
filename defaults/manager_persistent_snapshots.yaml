@@ -23,12 +23,12 @@ aws:
       number_of_rows: 10485760
       expected_timeout: 3600  # 60 minutes
       snapshots:
-        'sm_20240812150753UTC':
-          keyspace_name: "10gb_sizetiered_2024_2_0_rc1"
-          scylla_version: "2024.2.0~rc1"
+        'sm_20241010102035UTC':
+          keyspace_name: "10gb_sizetiered_2024_2_0_rc3"
+          scylla_version: "2024.2.0~rc3"
           scylla_product: "enterprise"
           number_of_nodes: 3
-          cluster_id: "c1ac4a5f-cb1a-4312-aa00-e9fdddac7afb"
+          cluster_id: "c5ae2ea7-72f3-4350-85d4-7956c1837b8a"
         'sm_20240812150801UTC':
           keyspace_name: "10gb_sizetiered_6_0"
           scylla_version: "6.0.2"
