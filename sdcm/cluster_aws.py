@@ -437,6 +437,54 @@ class AWSNode(cluster.BaseNode):
             " | %s" % self.ipv6_ip_address if self.test_config.IP_SSH_CONNECTIONS == "ipv6" else "",
             self._dc_info_str())
 
+<<<<<<< HEAD
+=======
+    @property
+    def network_configuration(self):
+        # Output example:
+        #   0a:7b:18:de:f9:71: eth0
+        #   0a:7b:18:de:f9:72: eth1
+        ip_link_cmd = """ip -o link | awk '$2 != "lo:" {gsub(/:/,"",$2);print $17": " $2}'"""
+        network_config = self.remoter.run(ip_link_cmd).stdout.strip()
+        network_devices = yaml.safe_load(network_config)
+        self.log.debug("Node %s ethernets: %s", self.name, network_devices)
+        return network_devices
+
+    @property
+    def network_interfaces(self):
+        interfaces_tmp = []
+        device_indexes = []
+        devices = {}
+        if self.remoter:
+            devices = self.network_configuration
+            self.log.debug("Node %s devices: %s", self.name, devices)
+
+        for interface in self._instance.network_interfaces:
+            private_ip_addresses = [private_address["PrivateIpAddress"]
+                                    for private_address in interface.private_ip_addresses]
+            # make sure we use ipv6 long format (some tools remove leading zeros)
+            ipv6_addresses = [ipaddress.ip_address(
+                ipv6_address['Ipv6Address']).exploded for ipv6_address in interface.ipv6_addresses]
+            device_indexes.append(interface.attachment['DeviceIndex'])
+            ipv4_public_address = interface.association_attribute['PublicIp'] if interface.association_attribute else None
+            dns_public_name = interface.association_attribute['PublicDnsName'] if interface.association_attribute else None
+            interfaces_tmp.append(NetworkInterface(ipv4_public_address=ipv4_public_address,
+                                                   ipv6_public_addresses=ipv6_addresses,
+                                                   ipv4_private_addresses=private_ip_addresses,
+                                                   ipv6_private_address='',
+                                                   dns_private_name=interface.private_dns_name,
+                                                   dns_public_name=dns_public_name,
+                                                   device_index=interface.attachment['DeviceIndex'],
+                                                   device_name=devices[interface.mac_address] if devices else '',
+                                                   mac_address=interface.mac_address,
+                                                   )
+                                  )
+        # Order interfaces by device_index (set primary interface first)
+        interfaces = sorted(interfaces_tmp, key=lambda d: d.device_index)
+        self.log.debug("Sorted interfaces: %s", interfaces)
+        return interfaces
+
+>>>>>>> c6db2a484 (fix(nemesis): get bytes total for correct network device)
     def init(self):
         LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
         self._instance_wait_safe(self._instance.wait_until_running)
@@ -451,6 +499,8 @@ class AWSNode(cluster.BaseNode):
 
         self._wait_public_ip()
         super().init()
+        # Refresh network interfaces info after node remoter init
+        self.refresh_network_interfaces_info()
 
     @property
     def short_hostname(self):

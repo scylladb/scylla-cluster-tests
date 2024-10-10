@@ -438,6 +438,40 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
             ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
         )
 
+<<<<<<< HEAD
+=======
+    def init(self):
+        super().init()
+        if self.parent_cluster.params.environment['cluster_backend'] == 'aws':
+            self.scylla_network_configuration = ScyllaNetworkConfiguration(
+                network_interfaces=self.network_interfaces,
+                scylla_network_config=self.parent_cluster.params["scylla_network_config"])
+
+    @property
+    def network_interfaces(self):
+        return [NetworkInterface(ipv4_public_address=self._public_ip_address[0],
+                                 ipv6_public_addresses=[self._ipv6_ip_address[0]],
+                                 ipv4_private_addresses=[self._private_ip_address[0]],
+                                 ipv6_private_address='',
+                                 dns_private_name="",
+                                 dns_public_name="",
+                                 device_index=0,
+                                 device_name='',
+                                 mac_address=''
+                                 ),
+                NetworkInterface(ipv4_public_address=None,
+                                 ipv6_public_addresses=[self._ipv6_ip_address[1]],
+                                 ipv4_private_addresses=[self._private_ip_address[1]],
+                                 ipv6_private_address='',
+                                 dns_private_name="",
+                                 dns_public_name="",
+                                 device_index=1,
+                                 device_name='',
+                                 mac_address=''
+                                 )
+                ]
+
+>>>>>>> c6db2a484 (fix(nemesis): get bytes total for correct network device)
     def _init_remoter(self, ssh_login_info):
         self.remoter = FakeRemoter()
 
