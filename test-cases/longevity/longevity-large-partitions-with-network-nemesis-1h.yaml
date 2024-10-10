@@ -1,0 +1,73 @@
+test_duration: 100
+
+prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=5000 -clustering-row-count=5555                         -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data" ,
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=5000 -clustering-row-count=5555 -partition-offset=5001  -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=5000 -clustering-row-count=5555 -partition-offset=10001 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=5000 -clustering-row-count=5555 -partition-offset=15001 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s"
+                    ]
+
+stress_cmd: [
+             # Write additional 1000 partitions with various clustering rows each
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=250 -clustering-row-count=10000  -partition-offset=20001 -clustering-row-size=uniform:10..1024     -concurrency=10  -connection-count=10  -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 10",
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=250 -clustering-row-count=10     -partition-offset=20751 -clustering-row-size=uniform:8192..10240  -concurrency=10  -connection-count=10  -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 10",
+             # Read the entire data
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=5000 -clustering-row-count=5555                         -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=50m -validate-data",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=5000 -clustering-row-count=5555 -partition-offset=5001  -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=50m ",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=5000 -clustering-row-count=5555 -partition-offset=10001 -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=50m ",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=5000 -clustering-row-count=5555 -partition-offset=15001 -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=50m "
+            ]
+
+post_prepare_cql_cmds: "CREATE MATERIALIZED VIEW scylla_bench.view_test AS SELECT * FROM scylla_bench.test where ck IS NOT NULL AND pk is not null PRIMARY KEY (pk, ck) with comment = 'TEST VIEW'"
+
+n_db_nodes: 3
+
+n_loaders: 2
+n_monitor_nodes: 1
+
+round_robin: true
+
+instance_type_db: 'i4i.4xlarge'
+instance_type_loader: 'c7i.2xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: ['!limited','!sla','!manager_operation', '!config_changes', 'disruptive']
+nemesis_seed: '007'
+nemesis_interval: 3
+nemesis_multiply_factor: 1
+nemesis_during_prepare: false
+
+user_prefix: 'longevity-large-partitions-1h'
+
+run_fullscan:
+  - '{"mode": "table", "ks_cf": "scylla_bench.test", "interval": 20}'
+  - '{"mode": "partition", "ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 5555, "validate_data": true, "include_data_column": true}'
+
+
+scylla_network_config:
+- address: listen_address  # Address Scylla listens for connections from other nodes. See storage_port and ssl_storage_ports.
+  ip_type: ipv4
+  public: false
+  listen_all: false
+  use_dns: false
+  nic: 1
+- address: rpc_address  # Address on which Scylla is going to expect Thrift and CQL client connections.
+  ip_type: ipv4
+  public: false
+  listen_all: false
+  use_dns: false
+  nic: 1
+- address: broadcast_rpc_address  # Address that is broadcasted to tell the clients to connect to. Related to rpc_address.
+  ip_type: ipv4
+  public: false  # Should be False when multiple interfaces
+  use_dns: false
+  nic: 1
+- address: broadcast_address  # Address that is broadcasted to tell other Scylla nodes to connect to. Related to listen_address above.
+  ip_type: ipv4
+  public: false  # Should be False when multiple interfaces
+  use_dns: false
+  nic: 1  #  If ipv4 and public is True it has to be primary network interface (device index is 0)
+- address: test_communication  # Type of IP used to connect from test to DB/monitor instances
+  ip_type: ipv4
+  public: false
+  use_dns: false
+  nic: 0  #  If ipv4 and public is True it has to be primary network interface (device index is 0)
