@@ -253,9 +253,11 @@ def init_monitoring_info_from_params(monitor_info: dict, params: dict, regions: 
 
 def init_db_info_from_params(db_info: dict, params: dict, regions: List, root_device: str = None):
     if db_info['n_nodes'] is None:
-        n_db_nodes = params.get('n_db_nodes')
+        n_db_nodes = params.total_n_db_nodes
         if isinstance(n_db_nodes, int):  # legacy type
             db_info['n_nodes'] = [n_db_nodes]
+        elif isinstance(n_db_nodes, list):
+            db_info['n_nodes'] = n_db_nodes
         elif isinstance(n_db_nodes, str):  # latest type to support multiple datacenters
             db_info['n_nodes'] = [int(n) for n in n_db_nodes.split()]
         else:
