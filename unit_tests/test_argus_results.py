@@ -30,7 +30,8 @@ def test_send_latency_decorator_result_to_argus():
         name="test",
         description="test",
         cycle=1,
-        result=result
+        result=result,
+        start_time=1721564063.4528425
     )
     expected_calls = [
         call(LatencyCalculatorMixedResult(
@@ -50,7 +51,8 @@ def test_send_latency_decorator_result_to_argus():
                      value='https://cloudius-jenkins-test.s3.amazonaws.com/a9b9a308-6ff8-4cc8-b33d-c439f75c9949/20240721_125838/'
                            'grafana-screenshot-scylla-master-perf-regression-latency-650gb-grow-shrink-scylla-per-server-metrics-nemesis'
                            '-20240721_125845-perf-latency-grow-shrink-ubuntu-monitor-node-a9b9a308-1.png',
-                     status=Status.UNSET)
+                     status=Status.UNSET),
+                Cell(column='start time', row='Cycle #1', value='12:14:23', status=Status.UNSET)
             ]
         )),
         call(ReactorStallStatsResult(

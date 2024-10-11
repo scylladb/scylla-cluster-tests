@@ -23,6 +23,7 @@ import logging
 import getpass
 import pathlib
 import tempfile
+import yaml
 from copy import deepcopy
 from typing import List, Union, Set
 
@@ -149,6 +150,14 @@ def dict_or_str(value):
             return ast.literal_eval(value)
         except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
+
+        # ast.literal_eval() can fail on some strings (e.g. which contain lowercased booleans), try parsing such strings
+        # using yaml.safe_load()
+        try:
+            return yaml.safe_load(value)
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            pass
+
     if isinstance(value, dict):
         return value
 
@@ -1167,6 +1176,13 @@ class SCTConfiguration(dict):
                     be provided by the test suite infrastructure.
                     multiple commands can passed as a list"""),
 
+        dict(name="stress_cmd_cache_warmup", env="SCT_STRESS_CMD_CACHE_WARM_UP",
+             type=str_or_list, k8s_multitenancy_supported=True,
+             help="""cassandra-stress commands for warm-up before read workload.
+                You can specify everything but the -node parameter, which is going to
+                be provided by the test suite infrastructure.
+                multiple commands can passed as a list"""),
+
         dict(name="prepare_write_cmd", env="SCT_PREPARE_WRITE_CMD",
              type=str_or_list, k8s_multitenancy_supported=True,
              help="""cassandra-stress commands.
@@ -1419,6 +1435,10 @@ class SCTConfiguration(dict):
 
         dict(name="use_preinstalled_scylla", env="SCT_USE_PREINSTALLED_SCYLLA", type=boolean,
              help="Don't install/update ScyllaDB on DB nodes"),
+
+        dict(name="force_run_iotune", env="SCT_FORCE_RUN_IOTUNE", type=boolean,
+             help="Force running iotune on the DB nodes, regdless if image has predefined values"),
+
         dict(name="stress_cdclog_reader_cmd", env="SCT_STRESS_CDCLOG_READER_CMD",
              type=str,
              help="""cdc-stressor command to read cdc_log table.
@@ -1632,6 +1652,9 @@ class SCTConfiguration(dict):
 
         dict(name="run_scylla_doctor", env="SCT_RUN_SCYLLA_DOCTOR", type=boolean,
              help="Run scylla-doctor in artifact tests"),
+
+        dict(name="skip_test_stages", env="SCT_SKIP_TEST_STAGES", type=dict_or_str,
+             help="""Skip selected stages of a test scenario"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

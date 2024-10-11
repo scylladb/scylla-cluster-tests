@@ -15,6 +15,7 @@
 
 
 from sdcm.tester import ClusterTester
+from sdcm.utils.common import skip_optional_stage
 
 
 class ClusterConfigurationTests(ClusterTester):
@@ -91,6 +92,7 @@ class ClusterConfigurationTests(ClusterTester):
                 node.start_scylla(verify_down=False, verify_up=True)
         base_cmd_w = self.params.get('stress_cmd')
 
-        # run a workload
-        cs_thread_pool = self.run_stress_thread(stress_cmd=base_cmd_w)
-        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+        if not skip_optional_stage('main_load'):
+            # run a workload
+            cs_thread_pool = self.run_stress_thread(stress_cmd=base_cmd_w)
+            self.verify_stress_thread(cs_thread_pool=cs_thread_pool)

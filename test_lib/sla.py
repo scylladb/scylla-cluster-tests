@@ -83,8 +83,13 @@ class ServiceLevel:
     @classmethod
     def from_row(cls, session, row):
         row_dict = row._asdict()
-        row_dict["name"] = row_dict.pop("service_level")
-        return ServiceLevel(session=session, **row_dict)
+        LOGGER.debug("SERVICE_LEVEL row: %s", row_dict)
+        return ServiceLevel(
+            session=session,
+            name=row_dict["service_level"],
+            shares=row_dict["shares"],
+            timeout=row_dict["timeout"],
+            workload_type=row_dict["workload_type"])
 
     @property
     def scheduler_group_name(self) -> str:
@@ -180,10 +185,7 @@ class ServiceLevel:
         if len(res) == 0:
             return None
 
-        result_dict = res[0]._asdict()
-        result_dict["name"] = result_dict.pop("service_level")
-
-        return ServiceLevel(session=self.session, **result_dict)
+        return ServiceLevel.from_row(self.session, res[0])
 
     def list_all_service_levels(self) -> list[ServiceLevel]:
         query = 'LIST ALL SERVICE_LEVELS'
@@ -193,9 +195,7 @@ class ServiceLevel:
         output = []
 
         for res in res_list:
-            result_dict = res._asdict()
-            result_dict["name"] = result_dict.pop("service_level")
-            output.append(ServiceLevel(session=self.session, **result_dict))
+            output.append(ServiceLevel.from_row(self.session, res))
         return output
 
 # pylint: disable=too-many-arguments, too-many-instance-attributes, unused-argument

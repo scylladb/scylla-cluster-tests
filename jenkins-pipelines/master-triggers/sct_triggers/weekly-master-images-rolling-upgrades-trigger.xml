@@ -50,13 +50,27 @@ UPDATE 02/02/2023: Removed rolling-upgrade-multi-dc-ami-test and rolling-upgrade
         <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+              <properties>new_scylla_repo=http://downloads.scylladb.com/unstable/scylla/master/rpm/centos/latest/scylla.repo
+provision_type=on_demand
+gce_project=gcp-sct-project-1</properties>
+              <textParamValueOnNewLine>false</textParamValueOnNewLine>
+            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
+          </configs>
+          <projects>../rolling-upgrade/rolling-upgrade-centos9-test</projects>
+          <condition>SUCCESS</condition>
+          <triggerWithNoParameters>false</triggerWithNoParameters>
+          <triggerFromChildProjects>false</triggerFromChildProjects>
+        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
+          <configs>
+            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
               <properties>new_scylla_repo=http://downloads.scylladb.com.s3.amazonaws.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list
 provision_type=on_demand
 gce_project=gcp-sct-project-1</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../rolling-upgrade/rolling-upgrade-ami-test,../rolling-upgrade/rolling-upgrade-ami-arm-test,../rolling-upgrade/rolling-upgrade-azure-image-test,../rolling-upgrade/rolling-upgrade-alternator-test,../rolling-upgrade/rolling-upgrade-gce-image-test</projects>
+          <projects>../rolling-upgrade/rolling-upgrade-ami-test,../rolling-upgrade/rolling-upgrade-ami-arm-test,../rolling-upgrade/rolling-upgrade-azure-image-test,../rolling-upgrade/rolling-upgrade-alternator-test,../rolling-upgrade/rolling-upgrade-gce-image-test,../rolling-upgrade/rolling-upgrade-debian11-test,../rolling-upgrade/rolling-upgrade-ubuntu2004-test,../rolling-upgrade/rolling-upgrade-ubuntu2204-test,../rolling-upgrade/rolling-upgrade-ubuntu2404-test</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>

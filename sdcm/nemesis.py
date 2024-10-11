@@ -96,7 +96,6 @@ from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sla.sla_tests import SlaTests
-from sdcm.utils.argus import get_argus_client
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
@@ -132,7 +131,7 @@ from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.sstable.sstable_utils import SstableUtils
 from sdcm.utils.tablets.common import wait_for_tablets_balanced
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
-from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
+from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions, ComparableScyllaVersion
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
 from sdcm.utils.raft.common import NodeBootstrapAbortManager, FailedDecommissionOperationMonitoring
 from sdcm.utils.issues import SkipPerIssues
@@ -3190,7 +3189,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             This function check if all expected keyspace/tables are in the snapshot
         """
         snapshot_params = nodetool_cmd.split()
-        ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node, filter_empty_tables=False)
+
+        def is_virtual_tables_get_snapshot():
+            """
+            scylla commit https://github.com/scylladb/scylladb/commit/24589cf00cf8f1fae0b19a2ac1bd7b637061301a
+            has stopped creating snapshots for virtual tables.
+            hence we need to filter them out when compare tables to snapshot content.
+            """
+            if self.target_node.is_enterprise:
+                return ComparableScyllaVersion(self.target_node.scylla_version) >= "2024.3.0-dev"
+            else:
+                return ComparableScyllaVersion(self.target_node.scylla_version) >= "6.3.0-dev"
+
+        filter_func = self.cluster.is_table_has_no_sstables if is_virtual_tables_get_snapshot() else None
+        ks_cf = self.cluster.get_any_ks_cf_list(
+            db_node=self.target_node, filter_empty_tables=False, filter_func=filter_func)
         # remove quotes from keyspace or column family, since output of `nodetool listsnapshots` isn't returning them quoted
         ks_cf = [k_c.replace('"', '') for k_c in ks_cf]
         keyspace_table = []
@@ -3359,8 +3372,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         # get the last 10min avg network bandwidth used, and limit  30% to 70% of it
         prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
-        query = 'avg(node_network_receive_bytes_total{instance=~".*?%s.*?", device="eth0"})' % \
-                self.target_node.ip_address
+        # If test runs with 2 network interfaces configuration, "node_network_receive_bytes_total" will be reported on device that
+        # broadcast_address is configured on it
+        query = 'avg(node_network_receive_bytes_total{instance=~".*?%s.*?", device="%s"})' % \
+                (self.target_node.ip_address, self.target_node.scylla_network_configuration.device)
         now = time.time()
         results = prometheus_stats.query(query=query, start=now - 600, end=now)
         assert results, "no results for node_network_receive_bytes_total metric in Prometheus "
@@ -3432,6 +3447,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         if not self.target_node.install_traffic_control():
             raise UnsupportedNemesis("Traffic control package not installed on system")
+
+        if not self.target_node.scylla_network_configuration.device:
+            raise ValueError("The network device name is not recognized")
 
         rate_limit: Optional[str] = self.get_rate_limit_for_network_disruption()
         if not rate_limit:
@@ -5156,7 +5174,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
         if not isinstance(start_time, int):
             start_time = int(start_time)
         try:
-            argus_client = get_argus_client(run_id=nemesis.cluster.test_config.test_id())
+            argus_client = nemesis.cluster.test_config.argus_client()
             if nemesis_event.severity == Severity.ERROR:
                 argus_client.finalize_nemesis(name=method_name, start_time=start_time,
                                               status=NemesisStatus.FAILED, message=nemesis_event.full_traceback)

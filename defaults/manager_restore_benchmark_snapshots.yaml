@@ -8,7 +8,7 @@ sizes:  # size of backed up dataset in GB
         - standard1: 1
     number_of_rows: 1073760
     exp_timeout: 1200  # 20 minutes (timeout for restore data operation)
-    scylla_version: "2024.2.0-rc0"
+    scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
     compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: false
@@ -19,7 +19,7 @@ sizes:  # size of backed up dataset in GB
         - standard1: 500
     number_of_rows: 524288000
     exp_timeout: 14400  # 4 hours
-    scylla_version: "2024.2.0-rc0"
+    scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
     compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: false
@@ -30,7 +30,7 @@ sizes:  # size of backed up dataset in GB
         - standard1: 500
     number_of_rows: 524288000
     exp_timeout: 14400  # 4 hours
-    scylla_version: "2024.2.0-rc0"
+    scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
     compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: false
@@ -43,7 +43,7 @@ sizes:  # size of backed up dataset in GB
         - standard1: 250
     number_of_rows: 524288000
     exp_timeout: 14400  # 4 hours
-    scylla_version: "2024.2.0-rc0"
+    scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
     compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: true
@@ -54,7 +54,7 @@ sizes:  # size of backed up dataset in GB
         - standard1: 1024
     number_of_rows: 1073741824
     exp_timeout: 28800  # 8 hours
-    scylla_version: "2024.2.0-rc0"
+    scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
     compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: false
@@ -68,7 +68,7 @@ sizes:  # size of backed up dataset in GB
         - t_600gb: 600
     number_of_rows: 428571429
     exp_timeout: 28800  # 8 hours
-    scylla_version: "2024.2.0-rc0"
+    scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
     compaction_strategy: "TimeWindowCompactionStrategy"
     prohibit_verification_read: true
@@ -80,7 +80,7 @@ sizes:  # size of backed up dataset in GB
         - t_700gb: 700
     number_of_rows: 428571429
     exp_timeout: 28800  # 8 hours
-    scylla_version: "2024.2.0-rc0"
+    scylla_version: "2024.2.0-rc1"
     number_of_nodes: 9
     compaction_strategy: "TimeWindowCompactionStrategy"
     prohibit_verification_read: true
@@ -93,7 +93,7 @@ sizes:  # size of backed up dataset in GB
         - standard1: 1024
     number_of_rows: 1598029824
     exp_timeout: 43200  # 12 hours
-    scylla_version: "2024.2.0-rc0"
+    scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
     compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: true
@@ -104,7 +104,7 @@ sizes:  # size of backed up dataset in GB
         - standard1: 2048
     number_of_rows: 2147483648
     exp_timeout: 57600  # 16 hours
-    scylla_version: "2024.2.0-rc0"
+    scylla_version: "2024.2.0-rc1"
     number_of_nodes: 3
     compaction_strategy: "IncrementalCompactionStrategy"
     prohibit_verification_read: false

@@ -23,6 +23,7 @@ from longevity_test import LongevityTest
 from sdcm.sct_events import Severity
 from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.utils.data_validator import LongevityDataValidator
+from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
 
 
@@ -38,8 +39,9 @@ class LWTLongevityTest(LongevityTest):
         # operations on system.paxos table.
         #
         # Decrease severity of this event during prepare.  Shouldn't impact on test result.
-        with ignore_mutation_write_errors():
-            super().run_prepare_write_cmd()
+        if not skip_optional_stage('prepare_write'):
+            with ignore_mutation_write_errors():
+                super().run_prepare_write_cmd()
 
         # Stop nemesis. Prefer all nodes will be run before collect data for validation
         # Increase timeout to wait for nemesis finish

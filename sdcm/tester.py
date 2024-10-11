@@ -85,7 +85,7 @@ from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.get_username import get_username
-from sdcm.utils.decorators import log_run_info, retrying, measure_time
+from sdcm.utils.decorators import log_run_info, retrying, measure_time, optional_stage
 from sdcm.utils.git import get_git_commit_id, get_git_status_info
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
     LdapConfigurationError, LdapServerType
@@ -395,6 +395,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         start_events_device(log_dir=self.logdir,
                             _registry=getattr(self, "_registry", None) or self.events_processes_registry)
         enable_default_filters(sct_config=self.params)
+
+        self.skip_test_stages = defaultdict(lambda: False, self.params.get('skip_test_stages') or {})
 
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
@@ -1113,6 +1115,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 node.run_nodetool(sub_cmd=f"repair -pr {keyspace}", timeout=MINUTE_IN_SEC * 20)
             self.log.info('repair %s keyspace done', keyspace)
 
+    @optional_stage('prepare_write')
     @cache
     def pre_create_alternator_tables(self):
         node = self.db_cluster.nodes[0]
@@ -2972,6 +2975,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.kafka_cluster:
             with silence(parent=self, name='stopping kafka'):
                 self.kafka_cluster.stop()
+        self.monitors.update_default_time_range(self.start_time, time.time())
         if self.params.get('collect_logs'):
             self.collect_logs()
         self.clean_resources()
@@ -2982,8 +2986,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.argus_collect_gemini_results()
         self.destroy_localhost()
         self.stop_event_device()
-        if self.params.get('collect_logs'):
-            self.collect_sct_logs()
         with silence(parent=self, name='Cleaning up SSL config directory'):
             cleanup_ssl_config()
 

@@ -21,7 +21,7 @@ from sdcm.cluster import BaseNode
 from sdcm.db_stats import AVAIL_SIZE_METRIC, AVAIL_SIZE_METRIC_OLD, GB_SIZE
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.common import ParallelObject, skip_optional_stage
 from test_lib.compaction import CompactionStrategy, LOGGER
 
 KEYSPACE_NAME = 'keyspace1'
@@ -200,7 +200,8 @@ class IcsSpaceAmplificationTest(LongevityTest):
             start_time = time.time()
             params = {'keyspace_num': 1, 'stress_cmd': stress_cmd,
                       'round_robin': self.params.get('round_robin')}
-            self._run_all_stress_cmds(stress_queue, params)
+            if not skip_optional_stage('main_load'):
+                self._run_all_stress_cmds(stress_queue, params)
 
             for stress in stress_queue:
                 self.verify_stress_thread(cs_thread_pool=stress)

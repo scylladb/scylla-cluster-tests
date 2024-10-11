@@ -20,14 +20,16 @@ from pathlib import Path
 
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
+from sdcm.remote.libssh2_client.exceptions import Failure
 from sdcm.sct_events.loaders import LatteStressEvent
+from sdcm.sct_events import Severity
+from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.common import (
     FileFollowerThread,
     generate_random_string,
     get_sct_root_path,
 )
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.stress.base import DockerBasedStressThread
 
 LOGGER = logging.getLogger(__name__)
 
@@ -227,3 +229,29 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         return {}
         # TODOs:
         # 1) take back the report workload..3.0.8.p128.t1.c1.20231025.220812.json
+
+    def configure_event_on_failure(self, stress_event: LatteStressEvent, exc: Exception | Failure):
+        error_msg = format_stress_cmd_error(exc)
+        if (hasattr(exc, "result") and exc.result.failed) and exc.result.exited == 137:
+            error_msg = f"Stress killed by test/teardown\n{error_msg}"
+            stress_event.severity = Severity.WARNING
+        elif self.stop_test_on_failure:
+            stress_event.severity = Severity.CRITICAL
+        else:
+            stress_event.severity = Severity.ERROR
+        stress_event.add_error(errors=[error_msg])
+
+
+def format_stress_cmd_error(exc: Exception) -> str:
+    """Format nicely the exception from a stress command failure."""
+
+    if hasattr(exc, "result") and exc.result.failed:
+        # NOTE: print only last 2 lines in common case or whole 'panic' message
+        last_n_lines, line_index = exc.result.stderr.splitlines()[-30:], -2
+        for current_line_index, line in enumerate(last_n_lines):
+            if "panicked at" in line:
+                line_index = current_line_index
+                break
+        message = "\n".join(last_n_lines[line_index:])
+        return f"Stress command completed with bad status {exc.result.exited}: {message}"
+    return f"Stress command execution failed with: {exc}"

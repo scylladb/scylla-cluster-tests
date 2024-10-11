@@ -1,0 +1,7 @@
+skip_test_stages:
+  prepare_write: false
+  wait_total_space_used: false
+  main_load: false
+  post_test_load: false
+  nemesis: false
+  data_validation: false

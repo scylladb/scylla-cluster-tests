@@ -1134,7 +1134,11 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
     name_filter = "ScyllaDB *"
 
     if version and version != "all":
-        name_filter = f"ScyllaDB *{version.replace('enterprise-', 'Enterprise ')}*"
+        name_filter = f"ScyllaDB *{version.replace('enterprise-', 'Enterprise ')}"
+
+        if len(version.split('.')) < 3:
+            # if version is not exact version, we need to add the wildcard to the end, to catch all minor versions
+            name_filter = f"{name_filter}*"
 
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
     images = []
@@ -1165,7 +1169,7 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, ver
 
     if version and version != "all":
         filters += f"(name eq 'scylla(db)?(-enterprise)?-{version.replace('.', '-')}"
-        if 'rc' not in version:
+        if 'rc' not in version and len(version.split('.')) < 3:
             filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
         else:
             filters += "')"
@@ -2648,3 +2652,23 @@ def list_placement_groups_aws(tags_dict=None, region_name=None, available=False,
         LOGGER.info("Found total of {} instances.".format(total_items))
 
     return placement_groups
+
+
+def skip_optional_stage(stage_names: str | list[str]) -> bool:
+    """
+    Checks if the given test stage(s) is skipped for execution
+
+    :param stage_names: str or list, name of the test stage(s)
+    :return: bool
+    """
+    # making import here, to work around circular import issue
+    from sdcm.cluster import TestConfig
+    stage_names = stage_names if isinstance(stage_names, list) else [stage_names]
+    skip_test_stages = TestConfig().tester_obj().skip_test_stages
+    skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]
+
+    if skipped_stages:
+        skipped_stages_str = ', '.join(skipped_stages)
+        LOGGER.warning("'%s' test stage(s) is disabled.", skipped_stages_str)
+        return False
+    return True

@@ -11,12 +11,13 @@
 #
 # Copyright (c) 2024 ScyllaDB
 import json
+import time
+from datetime import timezone, datetime
 
 from argus.client import ArgusClient
-from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status
+from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status, ValidationRule
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
-
 
 LATENCY_ERROR_THRESHOLDS = {
     "replace_node": {
@@ -35,15 +36,17 @@ class LatencyCalculatorMixedResult(GenericResultTable):
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
         Columns = [
-            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER),
-            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
+            # help jump into proper place in logs/monitoring
+            ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
-            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT)
+            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
 
 
@@ -52,12 +55,14 @@ class LatencyCalculatorWriteResult(GenericResultTable):
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
         Columns = [
-            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="P90 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 write", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Throughput write", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
+            # help jump into proper place in logs/monitoring
+            ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
-            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT)
+            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
 
 
@@ -66,12 +71,14 @@ class LatencyCalculatorReadResult(GenericResultTable):
         name = ""  # to be set by the decorator to differentiate different operations
         description = ""
         Columns = [
-            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT),
-            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER),
-            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION),
+            ColumnMetadata(name="P90 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="P99 read", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Throughput read", unit="op/s", type=ResultType.INTEGER, higher_is_better=True),
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
+            # help jump into proper place in logs/monitoring
+            ColumnMetadata(name="start time", unit="", type=ResultType.TEXT),
             ColumnMetadata(name="Overview", unit="", type=ResultType.TEXT),
-            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT)
+            ColumnMetadata(name="QA dashboard", unit="", type=ResultType.TEXT),
         ]
 
 
@@ -88,6 +95,22 @@ class ReactorStallStatsResult(GenericResultTable):
         ]
 
 
+class ManagerRestoreBanchmarkResult(GenericResultTable):
+    class Meta:
+        name = "Restore benchmark"
+        description = "Restore benchmark"
+        Columns = [
+            ColumnMetadata(name="restore time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="repair time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="total", unit="s", type=ResultType.DURATION, higher_is_better=False),
+        ]
+        ValidationRules = {
+            "restore time": ValidationRule(best_pct=10),
+            "repair time": ValidationRule(best_pct=10),
+            "total": ValidationRule(best_pct=10)
+        }
+
+
 workload_to_table = {
     "mixed": LatencyCalculatorMixedResult,
     "write": LatencyCalculatorWriteResult,
@@ -95,11 +118,16 @@ workload_to_table = {
 }
 
 
-def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str, cycle: int, result: dict):
+def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str, cycle: int, result: dict,
+                         start_time: float = 0):
     result_table = workload_to_table[workload]()
     result_table.name = f"{workload} - {name} - latencies"
     result_table.description = f"{workload} workload - {description}"
     operation_error_thresholds = LATENCY_ERROR_THRESHOLDS.get(name, LATENCY_ERROR_THRESHOLDS["default"])
+    try:
+        start_time = datetime.fromtimestamp(start_time or time.time(), tz=timezone.utc).strftime('%H:%M:%S')
+    except ValueError:
+        start_time = "N/A"
     for operation in ["write", "read"]:
         summary = result["hdr_summary"]
         if operation.upper() not in summary:
@@ -132,6 +160,8 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
                                 value=qa_screenshot, status=Status.UNSET)
     except IndexError:
         pass
+    result_table.add_result(column="start time", row=f"Cycle #{cycle}",
+                            value=start_time, status=Status.UNSET)
     argus_client.submit_results(result_table)
     for event in result["reactor_stalls_stats"]:  # each stall event has own table
         event_name = event.split(".")[-1]
@@ -156,7 +186,17 @@ def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: di
         class Meta:
             name = f"{workload} - Perf Simple Query"
             description = json.dumps(parameters)
-            Columns = [ColumnMetadata(name=param, unit="", type=ResultType.FLOAT) for param in stats.keys()]
+            Columns = [ColumnMetadata(name="allocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                       ColumnMetadata(name="cpu_cycles_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                       ColumnMetadata(name="instructions_per_op", unit="",
+                                      type=ResultType.FLOAT, higher_is_better=False),
+                       ColumnMetadata(name="logallocs_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                       ColumnMetadata(name="mad tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                       ColumnMetadata(name="max tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                       ColumnMetadata(name="median tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                       ColumnMetadata(name="min tps", unit="", type=ResultType.FLOAT, higher_is_better=True),
+                       ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
+                       ]
 
     def _get_status_based_on_previous_results(metric: str):
         if previous_results is None:
@@ -169,4 +209,15 @@ def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: di
     result_table = PerfSimpleQueryResult()
     for key, value in stats.items():
         result_table.add_result(column=key, row="#1", value=value, status=_get_status_based_on_previous_results(key))
+    argus_client.submit_results(result_table)
+
+
+def send_manager_benchmark_results_to_argus(argus_client: ArgusClient, result: dict, sut_timestamp: int,
+                                            row_name: str = None) -> None:
+    if not row_name:
+        row_name = "#1"
+
+    result_table = ManagerRestoreBanchmarkResult(sut_timestamp=sut_timestamp)
+    for key, value in result.items():
+        result_table.add_result(column=key, row=row_name, value=value, status=Status.UNSET)
     argus_client.submit_results(result_table)

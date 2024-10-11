@@ -18,7 +18,7 @@ import datetime
 import random
 
 from sdcm.tester import ClusterTester
-from sdcm.utils.common import get_data_dir_path
+from sdcm.utils.common import get_data_dir_path, skip_optional_stage
 from sdcm import nemesis
 from sdcm import prometheus
 
@@ -83,8 +83,9 @@ class GrowClusterTest(ClusterTester):
                                     tester_obj=self)
         # default=1440 min (one day) if test_duration is not defined
         duration = self.params.get('test_duration')
-        cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd,
-                                                duration=duration)
+        if not skip_optional_stage('main_load'):
+            cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd,
+                                                    duration=duration)
 
         time.sleep(2 * 60)
 
@@ -108,7 +109,8 @@ class GrowClusterTest(ClusterTester):
         if self.params.get('nemesis_class_name').lower() != 'noopmonkey':
             self.db_cluster.start_nemesis()
 
-        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+        if not skip_optional_stage('main_load'):
+            self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
     def test_grow_x_to_y(self):
         """
@@ -139,7 +141,8 @@ class GrowClusterTest(ClusterTester):
         4) Decommission random chosen node
         5) Repeat 3) and 4) for number of times
         """
-        cs_thread_pool = self.run_stress_thread(stress_cmd=self.get_stress_cmd())
+        if not skip_optional_stage('main_load'):
+            cs_thread_pool = self.run_stress_thread(stress_cmd=self.get_stress_cmd())
 
         start = datetime.datetime.now()
         duration = 0
@@ -175,8 +178,9 @@ class GrowClusterTest(ClusterTester):
         # Run 2 more minutes before stop c-s
         time.sleep(2 * 60)
 
-        # Kill c-s when decommission is done
-        self.kill_stress_thread()
+        if not skip_optional_stage('main_load'):
+            # Kill c-s when decommission is done
+            self.kill_stress_thread()
 
-        self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
-        self.run_stress(stress_cmd=self.get_stress_cmd('read', 10))
+            self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+            self.run_stress(stress_cmd=self.get_stress_cmd('read', 10))

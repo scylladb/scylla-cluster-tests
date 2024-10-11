@@ -144,5 +144,12 @@ def enable_default_filters(sct_config: SCTConfiguration):  # pylint: disable=unu
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line='abort_requested_exception').publish()
 
+    # As per discussion in https://github.com/scylladb/scylla-enterprise/issues/4691#issuecomment-2348867638 and
+    # https://github.com/scylladb/scylla-cluster-tests/issues/8693#issuecomment-2358147285
+    # the 'aborting on shard' error is acceptable when RPC connections are dropped
+    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                event_class=DatabaseLogEvent.ABORTING_ON_SHARD,
+                                regex=r'.*Parent connection [\d]+ is aborting on shard').publish()
+
 
 __all__ = ("start_events_device", "stop_events_device", "enable_default_filters")

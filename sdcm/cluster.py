@@ -33,7 +33,7 @@ import json
 import ipaddress
 from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from textwrap import dedent
 from functools import cached_property, wraps, lru_cache, partial
 from collections import defaultdict
@@ -111,7 +111,7 @@ from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
     check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers, \
     check_group0_tokenring_consistency, CHECK_NODE_HEALTH_RETRIES, CHECK_NODE_HEALTH_RETRY_DELAY
-from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property
+from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property, optional_stage
 from sdcm.test_config import TestConfig
 from sdcm.utils.issues_by_keyword.find_known_issue import FindIssuePerBacktrace
 from sdcm.utils.sstable.sstable_utils import SstableUtils
@@ -355,6 +355,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
     @property
     def network_interfaces(self):
+        raise NotImplementedError()
+
+    @property
+    def network_configuration(self):
         raise NotImplementedError()
 
     def init(self) -> None:
@@ -800,7 +804,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             raise ValueError(f"Unsupported OS [{self.distro}]")
 
         oss_installed = self.remoter.sudo(oss_command, ignore_status=True).ok
-        enterprise_installed = self.remoter.sudo(enterprise_command, ignore_status=True).ok
+        enterprise_installed = "scylla-enterprise" in self.remoter.sudo(enterprise_command, ignore_status=True).stdout
         if oss_installed or enterprise_installed:
             _is_enterprise = enterprise_installed
         else:
@@ -1792,7 +1796,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.install_package('gnupg2')
             self.remoter.sudo("mkdir -p /etc/apt/keyrings")
             for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
-                self.remoter.sudo(f"apt-key adv --keyserver keyserver.ubuntu.com --recv-keys {apt_key}", retry=3)
                 self.remoter.sudo(f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
                                   f"--keyserver hkp://keyserver.ubuntu.com:80 --recv-keys {apt_key}", retry=3)
         self.update_repo_cache()
@@ -1804,7 +1807,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             repo_path = '/etc/zypp/repos.d/scylla-manager.repo'
         else:
             repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
-        self.remoter.sudo(f"curl -o {repo_path} -L {scylla_repo}")
+        self.remoter.sudo(f"curl -o {repo_path} -L {scylla_repo} --retry 5 --retry-max-time 300")
 
         # Prevent issue https://github.com/scylladb/scylla/issues/9683
         self.remoter.sudo(f"chmod 644 {repo_path}")
@@ -1812,7 +1815,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if self.distro.is_debian_like:
             self.remoter.sudo("mkdir -p /etc/apt/keyrings")
             for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
-                self.remoter.sudo(f"apt-key adv --keyserver keyserver.ubuntu.com --recv-keys {apt_key}", retry=3)
                 self.remoter.sudo(f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
                                   f"--keyserver hkp://keyserver.ubuntu.com:80 --recv-keys {apt_key}", retry=3)
             self.remoter.sudo("apt-get update", ignore_status=True)
@@ -3094,6 +3096,11 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
         return statistics_files
 
+    def sstable_folder_exists(self, keyspace_name: str, table_name: str, verbose=True) -> bool:
+        find_cmd = f"find /var/lib/scylla/data/{keyspace_name}/{table_name}-* -type d"
+        result = self.remoter.run(find_cmd, ignore_status=True, verbose=verbose)
+        return result.ok
+
     def reload_config(self):
         """
         Reloads scylla configuration without restarting scylla.
@@ -3643,10 +3650,14 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.log.debug("%s replication_factors", set(ks_rf.replication_factors))
         return set(ks_rf.replication_factors) == {1}
 
+    @staticmethod
+    def is_table_has_no_sstables(keyspace_name: str, node: BaseNode, table_name: str, **kwarg) -> bool:  # pylint: disable=unused-argument
+        return not bool(node.sstable_folder_exists(keyspace_name, table_name, verbose=False))
+
     def get_non_system_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
                                   filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
                                   filter_by_keyspace: list = None,
-                                  filter_func: Callable[[...], bool] = None) -> List[str]:
+                                  filter_func: Callable[..., bool] = None) -> List[str]:
         return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
                                        filter_out_mv=filter_out_mv, filter_empty_tables=filter_empty_tables,
                                        filter_out_system=True, filter_out_cdc_log_tables=True, filter_by_keyspace=filter_by_keyspace,
@@ -3655,7 +3666,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def get_any_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments,too-many-statements
                            filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
                            filter_out_system=False, filter_out_cdc_log_tables=False,
-                           filter_by_keyspace: list = None, filter_func: Callable[[...], bool] = None) -> List[str]:
+                           filter_by_keyspace: list = None, filter_func: Callable[..., bool] = None) -> List[str]:
         regular_column_names = ["keyspace_name", "table_name"]
         materialized_view_column_names = ["keyspace_name", "view_name"]
         regular_table_names, materialized_view_table_names = set(), set()
@@ -4482,6 +4493,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self.log.debug("Done waiting on cfstats: %s" % node_space)
         return reached_threshold
 
+    @optional_stage('wait_total_space_used')
     def wait_total_space_used_per_node(self, size=None, keyspace='keyspace1'):
         if size is None:
             size = int(self.params.get('space_node_threshold'))
@@ -4493,6 +4505,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           text="Waiting until cfstat '%s' reaches value '%s'" % (key, size),
                           key=key, threshold=size, keyspaces=keyspace, throw_exc=False)
 
+    @optional_stage('nemesis')
     def add_nemesis(self, nemesis, tester_obj):
         for nem in nemesis:
             nemesis_obj = nem['nemesis'](tester_obj=tester_obj,
@@ -4504,6 +4517,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def clean_nemesis(self):
         self.nemesis = []
 
+    @optional_stage('nemesis')
     @log_run_info("Start nemesis threads on cluster")
     def start_nemesis(self, interval=None, cycles_count: int = -1):
         self.log.info('Clear _nemesis_termination_event')
@@ -4514,6 +4528,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             nemesis_thread.start()
             self.nemesis_threads.append(nemesis_thread)
 
+    @optional_stage('nemesis')
     @log_run_info("Stop nemesis threads on cluster")
     def stop_nemesis(self, timeout=10):
         if self.nemesis_termination_event.is_set():
@@ -4701,6 +4716,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             result = node.remoter.sudo(cmd="scylla_io_setup")
             if result.ok:
                 self.log.info("Scylla_io_setup result: %s", result.stdout)
+
+        if self.params.get('force_run_iotune'):
+            node.remoter.sudo(
+                cmd=f"iotune --evaluation-directory {SCYLLA_DIR} --properties-file /etc/scylla.d/io_properties.yaml", timeout=600)
 
         if self.params.get('gce_setup_hybrid_raid'):
             gce_n_local_ssd_disk_db = self.params.get('gce_n_local_ssd_disk_db')
@@ -5841,6 +5860,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         self.save_sct_dashboards_config(node)
         self.save_monitoring_version(node)
         Path(self.sct_dashboard_json_file).unlink(missing_ok=True)
+        end_time = self.params["test_duration"] * 60 + time.time() + 120 * 60  # 2h margin
+        self.update_default_time_range(time.time(), end_time)
 
     def save_monitoring_version(self, node):
         node.remoter.run(
@@ -5865,6 +5886,24 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
         node.remoter.run('mkdir -p {}'.format(sct_monitoring_addons_dir), ignore_status=True)
         node.remoter.send_files(src=self.sct_dashboard_json_file, dst=sct_monitoring_addons_dir)
+
+    def update_default_time_range(self, start_timestamp: float, end_timestamp: float) -> None:
+        """
+        Specify the Grafana time range for all dashboards by updating the JSON files.
+
+        This method will find all JSON files in the `grafana/build/<subdir>` directories and replace
+        the "from" and "to" time range values with the provided start and end timestamps.
+        """
+        start_iso = datetime.fromtimestamp(start_timestamp, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_iso = datetime.fromtimestamp(end_timestamp, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        cmd = (f"find {os.path.join(self.monitor_install_path, 'grafana/build/')} -name '*.json' -exec "
+               f"sed -i 's/\"from\": \"[^\"]*\"/\"from\": \"{start_iso}\"/; "
+               f"s/\"to\": \"[^\"]*\"/\"to\": \"{end_iso}\"/' {{}} +")
+        for node in self.nodes:
+            try:
+                node.remoter.run(cmd)
+            except Exception:
+                LOGGER.error(f"Failed to update time range for Grafana dashboards on {node}", exc_info=True)
 
     @log_run_info
     def install_scylla_monitoring(self, node):
@@ -5992,6 +6031,9 @@ class NoMonitorSet():
 
     def get_grafana_screenshots_from_all_monitors(self, test_start_time=None):  # pylint: disable=unused-argument,no-self-use,invalid-name
         return []
+
+    def update_default_time_range(self, start_timestamp: float, end_timestamp: float) -> None:
+        pass
 
 
 class LocalNode(BaseNode):
