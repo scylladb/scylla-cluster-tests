@@ -144,7 +144,7 @@ from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
-from sdcm.utils.raft import get_raft_mode
+from sdcm.utils.raft import get_raft_mode, get_node_status_from_system_by
 from sdcm.coredump import CoredumpExportSystemdThread
 from sdcm.keystore import KeyStore
 from sdcm.paths import (
@@ -2751,7 +2751,11 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def get_nodes_status(self) -> dict[BaseNode, dict]:
         nodes_status = {}
         try:
-            statuses = self.parent_cluster.get_nodetool_status(verification_node=self)
+            if SkipPerIssues("scylladb/scylladb#20909", self.parent_cluster.params):
+                statuses = self.parent_cluster.get_cluster_status(verification_node=self)
+            else:
+                statuses = self.parent_cluster.get_nodetool_status(verification_node=self)
+
             node_ip_map = self.parent_cluster.get_ip_to_node_map()
             for dc, dc_status in statuses.items():
                 for node_ip, node_properties in dc_status.items():
@@ -4301,6 +4305,59 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self._update_db_packages(new_scylla_bin, node_list, start_service=start_service)
 
     @retrying(n=3, sleep_time=5)
+    def get_cluster_status(self, verification_node: BaseNode | None = None) -> dict[str, dict[str, Any]]:
+        query = "select * from system.cluster_status"
+        if not verification_node:
+            verification_node = random.choice(self.nodes)
+        try:
+            with self.cql_connection_exclusive(node=verification_node) as session:
+                session.default_timeout = 300
+                results = session.execute(query)
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            self.log.error("Failed to get cluster status from node %s", verification_node.name)
+            return {}
+        status = {}
+        for row in results:
+            if row.dc not in status:
+                status[row.dc] = {}
+            node_ip = ipaddress.ip_address(row.peer).exploded
+            # NOTE: following replacement is needed for the K8S case where
+            #       registered IP is different than the one used for network connections
+            if verification_node.is_kubernetes():
+                for node in self.nodes:
+                    if node_ip in node.get_all_ip_addresses() and node_ip != node.ip_address:
+                        node_ip = node.ip_address
+            if node_ip not in status[row.dc]:
+                status[row.dc][node_ip] = {}
+            updown = "U" if row.up else "D"
+            state = row.status[0]
+            rack_query = f"select rack from system.topology where key='topology' and host_id='{row.host_id}'"
+            try:
+                with self.cql_connection_exclusive(node=verification_node) as session:
+                    session.default_timeout = 300
+                    result = session.execute(rack_query).one()
+                    rack_name = results.rack if result else ""
+            except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                self.log.error("Failed to get rack name for node with host id %s from node %s",
+                               row.host_id, verification_node.name)
+                rack_name = ""
+
+            status[row.dc][node_ip].update(
+                {
+                    "state": f"{updown}{state}",
+                    "load": row.load,
+                    "owns": row.owns,
+                    "host_id": str(row.host_id),
+                    "tokens": row.tokens,
+                    "rack": rack_name,
+                }
+            )
+            self.log.info("Node %s:%s: status %s", node_ip, str(row.host_id), status[row.dc][node_ip])
+
+        self.log.info("Parsed Cluster status %s", status)
+        return status
+
+    @retrying(n=3, sleep_time=5)
     def get_nodetool_status(self, verification_node=None):  # pylint: disable=too-many-locals
         """
             Runs nodetool status and generates status structure.
@@ -4419,6 +4476,21 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.log.debug('Schema agreement is reached')
         return True
 
+    def check_nodes_up_and_normal_with_cql(self, nodes: Optional[list[BaseNode]] = None, verification_node: Optional[BaseNode] = None):
+        if not nodes:
+            nodes = self.nodes
+        up_statuses = []
+        for node in nodes:
+            try:
+                node_status = get_node_status_from_system_by(node, ip_address=node.ip_address)
+                self.log.info("Node %s state: %s", node.name, node_status)
+                up_statuses.append(node_status["up"] and node_status["state"] == "NORMAL")
+            except Exception as exc:  # pylint: disable=broad-except # noqa: BLE001
+                self.log.info("Check node status failed with %s", exc)
+                up_statuses.append(False)
+        if not all(up_statuses):
+            raise ClusterNodesNotReady("Not all nodes joined the cluster")
+
     def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
         if not nodes:
@@ -4467,7 +4539,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         @retrying(n=iterations, sleep_time=sleep_time, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
                   message="Waiting for nodes to join the cluster", timeout=timeout)
         def _wait_for_nodes_up_and_normal():
-            self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
+            if SkipPerIssues("scylladb/scylladb#20909", self.params):
+                self.check_nodes_up_and_normal_with_cql(nodes=nodes)
+            else:
+                self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
         _wait_for_nodes_up_and_normal()
 
