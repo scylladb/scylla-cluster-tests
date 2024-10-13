@@ -115,9 +115,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         num_loaders = len(self.loaders.nodes)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
-        compaction_strategy = self.params.get('compaction_strategy')
         if workload.preload_data:
-            self.preload_data(compaction_strategy=compaction_strategy)
+            self.preload_data()
             self.wait_no_compactions_running(n=400, sleep_time=120)
             self.run_fstrim_on_all_db_nodes()
 
