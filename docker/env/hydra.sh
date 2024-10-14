@@ -223,10 +223,20 @@ function EPHEMERAL_PORT() {
 function run_in_docker () {
     CMD_TO_RUN=$1
     REMOTE_DOCKER_HOST=$2
-    if [ -z "$is_podman" ]; then
+
+    # If running on macOS, we need to mount /var/run/docker.sock to communicate with Docker daemon
+    if [[ $OSTYPE == 'darwin'* ]]; then
+        docker_common_args+=(
+         -v /var/run/docker.sock:/var/run/docker.sock
+         -v /dev:/dev:rw
+         --tmpfs "${HOME_DIR}/.docker:exec,uid=$(id -u ${USER}),gid=$(id -g ${USER})"
+         -e HOME="${HOME_DIR}"
+       )
+    elif [ -z "$is_podman" ]; then
         docker_common_args+=(
            -v /var/run:/run
            -v /dev:/dev:rw
+           -u ${USER_ID}
            )
     else
         PODMAN_PORT=$(EPHEMERAL_PORT)
@@ -237,6 +247,7 @@ function run_in_docker () {
           -v $SCT_DIR/docker/docker_mocked_as_podman:/usr/local/bin/docker
           --userns=keep-id
           -e DOCKER_HOST=tcp://localhost:$PODMAN_PORT
+          -u ${USER_ID}
         )
     fi
 
@@ -256,7 +267,6 @@ function run_in_docker () {
         -e _SCT_BASE_DIR="${SCT_DIR}" \
         -e GIT_USER_EMAIL \
         -e RUNNER_IP \
-        -u ${USER_ID} \
         -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
         -v /etc/passwd:/etc/passwd:ro \
         -v /etc/group:/etc/group:ro \
