@@ -5894,6 +5894,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         This method will find all JSON files in the `grafana/build/<subdir>` directories and replace
         the "from" and "to" time range values with the provided start and end timestamps.
         """
+        if not self.nodes:
+            return  # no monitor nodes
         start_iso = datetime.fromtimestamp(start_timestamp, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         end_iso = datetime.fromtimestamp(end_timestamp, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
         cmd = (f"find {os.path.join(self.monitor_install_path, 'grafana/build/')} -name '*.json' -exec "
