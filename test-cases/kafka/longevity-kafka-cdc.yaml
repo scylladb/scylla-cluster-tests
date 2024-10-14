@@ -5,7 +5,7 @@ pre_create_keyspace: [
 ]
 
 stress_cmd: ["cassandra-stress write cl=ONE n=1000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=10 -pop seq=1..10000000 -log interval=5",
-             "python_thread thread=KafkaCDCReaderThread ; read_number_of_key=1000"]
+             "python_thread -thread=KafkaCDCReaderThread -read_number_of_key=1000"]
 
 n_loaders: 1
 n_monitor_nodes: 1
