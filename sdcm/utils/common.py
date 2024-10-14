@@ -38,6 +38,7 @@ import io
 import tempfile
 import traceback
 import ctypes
+import shlex
 from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any, Type
 from urllib.parse import urlparse
 from unittest.mock import Mock
@@ -2672,3 +2673,45 @@ def skip_optional_stage(stage_names: str | list[str]) -> bool:
         LOGGER.warning("'%s' test stage(s) is disabled.", skipped_stages_str)
         return True
     return False
+
+
+def parse_python_thread_command(cmd: str) -> dict:
+    """
+    Parses a command string into a dictionary of options
+
+    :param cmd: str, the command string to parse
+
+    :return: dict, dictionary of options' name-value pairs.
+    """
+    options = {}
+    tokens = shlex.split(cmd)
+    tokens_iter = iter(tokens)
+
+    command_name = next(tokens_iter, None)
+
+    if command_name is None:
+        LOGGER.error("Empty command string is provided.")
+        return options
+
+    for token in tokens_iter:
+        if token.startswith('-'):
+            if '=' in token:
+                # Option and value are in the same token ('-option=value')
+                option, value = token.split('=', 1)
+                option_name = option.lstrip('-')
+                options[option_name] = value
+            else:
+                # Option without separator; may be followed by its value
+                option_name = token.lstrip('-')
+                next_token = next(tokens_iter, None)
+                if next_token and not next_token.startswith('-'):
+                    # Next token is the value for the current option
+                    options[option_name] = next_token
+                else:
+                    # Option is a flag
+                    options[option_name] = True
+                    if next_token:
+                        # Next token is another option; re-insert it into the iterator
+                        tokens_iter = iter([next_token] + list(tokens_iter))
+
+    return options
