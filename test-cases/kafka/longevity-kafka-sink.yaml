@@ -1,0 +1,19 @@
+test_duration: 60
+
+n_loaders: 1
+n_monitor_nodes: 1
+n_db_nodes: 1
+
+instance_type_runner: c7i.2xlarge
+instance_type_db: i4i.large
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_interval: 1
+nemesis_filter_seeds: false
+
+user_prefix: 'kafka'
+use_mgmt: false
+
+docker_network: 'kafka-stack-docker-compose_default'
+
+kafka_backend: 'localstack'
