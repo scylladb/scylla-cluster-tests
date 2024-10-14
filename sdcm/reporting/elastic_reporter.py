@@ -2,7 +2,7 @@ import datetime
 import logging
 
 
-from sdcm.es import ES
+from sdcm.es import ES  # pylint: disable=import-error
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 
 LOGGER = logging.getLogger(__name__)
@@ -48,6 +48,7 @@ class ElasticRunReporter:
             "build_number": build_number,
         }
 
+        # pylint: disable=unexpected-keyword-arg,no-value-for-parameter
         self._es.create(index=index, document=document, id=run_id, doc_type="sct_test_run_short_v1")
         return True
 
