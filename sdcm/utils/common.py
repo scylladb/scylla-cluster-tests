@@ -39,6 +39,7 @@ import io
 import tempfile
 import traceback
 import ctypes
+import shlex
 from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any, Type
 from urllib.parse import urlparse
 from unittest.mock import MagicMock, Mock
@@ -3223,6 +3224,7 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
     else:
         aws_placement_groups = list_placement_groups_aws(tags_dict=tags_dict, group_as_region=True)
 
+<<<<<<< HEAD
     for region, instance_list in aws_placement_groups.items():
         if not instance_list:
             LOGGER.debug("There are no placement groups to remove in AWS region %s", region)
@@ -3239,3 +3241,61 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
                     LOGGER.debug("Failed to delete placement group: %s", str(ex))
                     raise
 # ----------
+=======
+    :param stage_names: str or list, name of the test stage(s)
+    :return: bool
+    """
+    # making import here, to work around circular import issue
+    from sdcm.cluster import TestConfig
+    stage_names = stage_names if isinstance(stage_names, list) else [stage_names]
+    skip_test_stages = TestConfig().tester_obj().skip_test_stages
+    skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]
+
+    if skipped_stages:
+        skipped_stages_str = ', '.join(skipped_stages)
+        LOGGER.warning("'%s' test stage(s) is disabled.", skipped_stages_str)
+        return True
+    return False
+
+
+def parse_python_thread_command(cmd: str) -> dict:
+    """
+    Parses a command string into a dictionary of options
+
+    :param cmd: str, the command string to parse
+
+    :return: dict, dictionary of options' name-value pairs.
+    """
+    options = {}
+    tokens = shlex.split(cmd)
+    tokens_iter = iter(tokens)
+
+    command_name = next(tokens_iter, None)
+
+    if command_name is None:
+        LOGGER.error("Empty command string is provided.")
+        return options
+
+    for token in tokens_iter:
+        if token.startswith('-'):
+            if '=' in token:
+                # Option and value are in the same token ('-option=value')
+                option, value = token.split('=', 1)
+                option_name = option.lstrip('-')
+                options[option_name] = value
+            else:
+                # Option without separator; may be followed by its value
+                option_name = token.lstrip('-')
+                next_token = next(tokens_iter, None)
+                if next_token and not next_token.startswith('-'):
+                    # Next token is the value for the current option
+                    options[option_name] = next_token
+                else:
+                    # Option is a flag
+                    options[option_name] = True
+                    if next_token:
+                        # Next token is another option; re-insert it into the iterator
+                        tokens_iter = iter([next_token] + list(tokens_iter))
+
+    return options
+>>>>>>> 56a1d5e39 (feature(kafka-conn-sink): add tests for kafka sink connector)
