@@ -115,8 +115,9 @@ DatabaseLogEvent.add_subevent_type("COMPACTION_STOPPED", severity=Severity.NORMA
                                    regex="compaction_stopped_exception")
 DatabaseLogEvent.add_subevent_type("BAD_ALLOC", severity=Severity.ERROR,
                                    regex="std::bad_alloc")
+# Due to scylla issue https://github.com/scylladb/scylladb/issues/19093, we need to suppress the below error
 DatabaseLogEvent.add_subevent_type("SCHEMA_FAILURE", severity=Severity.ERROR,
-                                   regex="Failed to load schema version")
+                                   regex=r'(.*ERROR|!ERR).*Failed to load schema version')
 DatabaseLogEvent.add_subevent_type("RUNTIME_ERROR", severity=Severity.ERROR,
                                    regex="std::runtime_error")
 # remove below workaround after dropping support for Scylla 2023.1 and 5.2 (see scylladb/scylla#13538)
