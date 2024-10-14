@@ -14,6 +14,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 # pylint: disable=too-many-lines
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 import os
 import re
@@ -27,7 +28,7 @@ import uuid
 import pprint
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from functools import partial
+from functools import partial, reduce
 from typing import List
 from uuid import UUID
 
@@ -962,7 +963,8 @@ def investigate():
 @investigate.command('show-logs', help="Show logs collected for testrun filtered by test-id")
 @click.argument('test_id')
 @click.option('-o', '--output-format', type=click.Choice(["table", "markdown"]), default="table", help="type of the output")
-def show_log(test_id, output_format):
+@click.option("--update-argus/--no-update-argus", type=bool, required=False, default=False, help='Update argus with links')
+def show_log(test_id, output_format, update_argus: bool):
     add_file_logger()
 
     files = list_logs_by_test_id(test_id)
@@ -977,6 +979,13 @@ def show_log(test_id, output_format):
         click.echo("\n## Logs\n")
         for log in files:
             click.echo(f'* **{log["type"]}** - {log["link"]}')
+
+    if update_argus:
+        try:
+            store_logs_in_argus(test_id=test_id, logs=reduce(lambda acc, log: acc[log["type"]].append(
+                log["link"]) or acc, files, defaultdict(list)), update=True)
+        except Exception:  # pylint: disable=broad-except # noqa: BLE001
+            LOGGER.error("Error updating logs in argus.", exc_info=True)
 
 
 @investigate.command('show-monitor', help="Run monitoring stack with saved data locally")
@@ -1258,15 +1267,21 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
         store_logs_in_argus(test_id=UUID(collector.test_id), logs=collected_logs)
 
 
-def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
-    # pylint: disable=import-outside-toplevel
+def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]], update: bool = False):
     try:
         argus_client = get_argus_client(run_id=test_id)
         log_links = []
+        existing_links = [name for [name, _] in argus_client.get_run().get('logs', [])] if update else []
         for _, s3_links in logs.items():
             for link in s3_links:
                 file_name = link.split("/")[-1]
-                log_links.append(LogLink(log_name=file_name, log_link=link))
+                if update and file_name not in existing_links:
+                    LOGGER.info("Adding missing log link %s to Argus...", file_name)
+                    log_links.append(LogLink(log_name=file_name, log_link=link))
+                elif not update:
+                    log_links.append(LogLink(log_name=file_name, log_link=link))
+                else:
+                    LOGGER.info("Skipping %s because it has been already sent to argus.", file_name)
         argus_client.submit_sct_logs(log_links)
 
         if not argus_client.get_run().get("events"):
