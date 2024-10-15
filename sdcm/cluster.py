@@ -1491,7 +1491,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                     continue
                 while True:
                     try:
-                        log_time = datetime.fromisoformat(line.split(' ')[0]).replace(tzinfo=None)
+                        log_time = datetime.fromisoformat(line.split(' ')[0]).replace(tzinfo=timezone.utc)
                     except ValueError:
                         # in case it gets to split line fragment
                         line = log_file.readline()
