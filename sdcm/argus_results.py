@@ -14,9 +14,11 @@ import time
 from datetime import timezone, datetime
 
 from argus.client import ArgusClient
+from argus.client.base import ArgusClientError
 from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
+from sdcm.sct_events.system import FailedResultEvent
 
 LATENCY_ERROR_THRESHOLDS = {
     "replace_node": {
@@ -97,6 +99,17 @@ workload_to_table = {
 }
 
 
+def submit_results_to_argus(argus_client: ArgusClient, result_table: GenericResultTable):
+    try:
+        argus_client.submit_results(result_table)
+    except ArgusClientError as exc:
+        if exc.args[1] == "DataValidationError":
+            FailedResultEvent(f"Argus validation failed for the result in {result_table.name}."
+                              f" Please check the 'Results' tab for more details.").publish()
+        else:
+            raise
+
+
 def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str, cycle: int, result: dict,
                          start_time: float = 0):
     result_table = workload_to_table[workload]()
@@ -134,7 +147,7 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         pass
     result_table.add_result(column="start time", row=f"Cycle #{cycle}",
                             value=start_time, status=Status.UNSET)
-    argus_client.submit_results(result_table)
+    submit_results_to_argus(argus_client, result_table)
     for event in result["reactor_stalls_stats"]:  # each stall event has own table
         event_name = event.split(".")[-1]
         stall_stats = result["reactor_stalls_stats"][event]
@@ -146,4 +159,4 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         for interval, value in stall_stats["ms"].items():
             result_table.add_result(column=f"{interval}ms", row=f"Cycle #{cycle}",
                                     value=value, status=Status.PASS)
-        argus_client.submit_results(result_table)
+        submit_results_to_argus(argus_client, result_table)
