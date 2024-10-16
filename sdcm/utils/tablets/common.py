@@ -46,3 +46,20 @@ def wait_for_tablets_balanced(node):
                                 params={}, timeout=3600, retry=3)
         time.sleep(5)
     LOGGER.info("Tablets are balanced")
+
+
+def get_tablets_count(keyspace: str, session) -> int:
+    """
+    Returns the number of tablets in a keyspace.
+    :param session:
+    :param keyspace:
+    :return: tablets count int
+    """
+    cmd = f"select tablet_count from system.tablets where keyspace_name='{keyspace}' ALLOW FILTERING"
+    cql_result = session.execute(cmd)
+    if not cql_result or not cql_result.current_rows:
+        return 0
+    LOGGER.debug(f"Got CQL result of: {cql_result.current_rows}")
+    tablet_count = cql_result.current_rows[0].tablet_count
+    LOGGER.debug('Retrieved a tablets count of: %s for keyspace %s', tablet_count, keyspace)
+    return int(tablet_count)
