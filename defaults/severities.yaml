@@ -143,3 +143,4 @@ CommitLogCheckErrorEvent: ERROR
 ValidatorEvent: ERROR
 ScrubValidationErrorEvent: ERROR
 PartitionRowsValidationEvent: CRITICAL
+FailedResultEvent: ERROR
