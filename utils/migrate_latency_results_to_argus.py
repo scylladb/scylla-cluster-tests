@@ -2,7 +2,6 @@
 import sys
 import os.path
 import datetime
-import logging
 import logging.config
 from collections import OrderedDict
 
@@ -105,6 +104,9 @@ def migrate(creds, job_name, days=7, index_name="performancestatsv2", dry_run=Tr
                         result=cycle,
                         start_time=start_time
                     )
+                except RuntimeError:
+                    # happens when no EventsDevice is running and trying to raise SCT event
+                    pass
                 except argus.client.base.ArgusClientError:
                     print(
                         f"Failed to send {operation} - {workload} - latencies - cycle {idx} to Argus: {hit['_source']['test_details']['job_url']}")

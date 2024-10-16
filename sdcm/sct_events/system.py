@@ -300,3 +300,13 @@ INSTANCE_STATUS_EVENTS = (
 
 INSTANCE_STATUS_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex, re.IGNORECASE), event) for event in INSTANCE_STATUS_EVENTS]
+
+
+class FailedResultEvent(InformationalEvent):
+    def __init__(self, message: str, severity: Severity = Severity.ERROR):
+        super().__init__(severity)
+        self.message = message
+
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": message={0.message}"
