@@ -12,9 +12,11 @@
 # Copyright (c) 2024 ScyllaDB
 
 from argus.client import ArgusClient
+from argus.client.base import ArgusClientError
 from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
+from sdcm.sct_events.system import FailedResultEvent
 
 
 LATENCY_ERROR_THRESHOLDS = {
@@ -84,6 +86,17 @@ workload_to_table = {
 }
 
 
+def submit_results_to_argus(argus_client: ArgusClient, result_table: GenericResultTable):
+    try:
+        argus_client.submit_results(result_table)
+    except ArgusClientError as exc:
+        if exc.args[1] == "DataValidationError":
+            FailedResultEvent(f"Argus validation failed for the result in {result_table.name}."
+                              f" Please check the 'Results' tab for more details.").publish()
+        else:
+            raise
+
+
 def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str, cycle: int, result: dict):
     result_table = workload_to_table[workload]()
     result_table.name = f"{workload} - {name} - latencies"
@@ -101,7 +114,7 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
                                     status=Status.PASS if value < operation_error_thresholds[f"percentile_{percentile}"] else Status.ERROR)
     result_table.add_result(column="duration", row=f"Cycle #{cycle}",
                             value=result["duration_in_sec"], status=Status.PASS)
-    argus_client.submit_results(result_table)
+    submit_results_to_argus(argus_client, result_table)
     for event in result["reactor_stalls_stats"]:  # each stall event has own table
         event_name = event.split(".")[-1]
         stall_stats = result["reactor_stalls_stats"][event]
@@ -113,4 +126,4 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         for interval, value in stall_stats["ms"].items():
             result_table.add_result(column=f"{interval}ms", row=f"Cycle #{cycle}",
                                     value=value, status=Status.PASS)
-        argus_client.submit_results(result_table)
+        submit_results_to_argus(argus_client, result_table)
