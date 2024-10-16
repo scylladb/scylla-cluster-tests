@@ -2670,5 +2670,5 @@ def skip_optional_stage(stage_names: str | list[str]) -> bool:
     if skipped_stages:
         skipped_stages_str = ', '.join(skipped_stages)
         LOGGER.warning("'%s' test stage(s) is disabled.", skipped_stages_str)
-        return False
-    return True
+        return True
+    return False
