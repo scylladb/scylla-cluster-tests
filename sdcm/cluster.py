@@ -252,7 +252,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
     SYSTEM_EVENTS_PATTERNS = SYSTEM_ERROR_EVENTS_PATTERNS + INSTANCE_STATUS_EVENTS_PATTERNS
 
-    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0):  # pylint: disable=too-many-arguments,unused-argument
+    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0, shard_num=None):  # pylint: disable=too-many-arguments,unused-argument
         self.name = name
         self.rack = rack
         self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
@@ -260,6 +260,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.ssh_login_info = ssh_login_info
         self.logdir = os.path.join(base_logdir, self.name) if base_logdir else None
         self.dc_idx = dc_idx
+        self.shard_num = shard_num
 
         self._containers = {}
         self.is_seed = False
@@ -1745,7 +1746,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                     message="Following arguments are filtered out: " + ','.join(args)
                 ).publish()
             )
-        if self.parent_cluster.params.get('db_nodes_shards_selection') == 'random':
+        if self.shard_num:
+            append_scylla_args += f" --smp {self.shard_num}"
+        elif self.parent_cluster.params.get('db_nodes_shards_selection') == 'random':
             append_scylla_args += f" --smp {self.scylla_random_shards()}"
 
         if append_scylla_args:
@@ -2454,7 +2457,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def verify_up_timeout(self):
         return 300
 
-    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=500, verify_up_timeout=None):
+    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=50000, verify_up_timeout=None):
         verify_up_timeout = verify_up_timeout or self.verify_up_timeout
         if verify_down:
             self.wait_db_down(timeout=timeout)
@@ -3206,7 +3209,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster', node_prefix='node', n_nodes=3, params=None,
-                 region_names=None, node_type=None, extra_network_interface=False, add_nodes=True):
+                 region_names=None, node_type=None, extra_network_interface=False, add_nodes=True, nodes_smp=[]):
         self.extra_network_interface = extra_network_interface
         if params is None:
             params = {}
@@ -3218,6 +3221,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.shortid = str(self.uuid)[:8]
         self.name = '%s-%s' % (cluster_prefix, self.shortid)
         self.node_prefix = '%s-%s' % (node_prefix, self.shortid)
+        self.nodes_smp = nodes_smp
         self._node_index = 0
         # I wanted to avoid some parameter passing
         # from the tester class to the cluster test.
@@ -3907,7 +3911,7 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
         def verify_node_setup_or_startup(start_time, task_queue: queue.Queue, results: list):
             time_elapsed = time.perf_counter() - start_time
             try:
-                node, setup_exception = task_queue.get(block=True, timeout=5)
+                node, setup_exception = task_queue.get(block=True)
                 if setup_exception:
                     raise NodeSetupFailed(
                         node=node, error_msg=setup_exception[0], traceback_str=setup_exception[1])
@@ -4777,7 +4781,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 manager_agent_version = node.remoter.run("scylla-manager-agent --version").stdout
                 node.log.info("node %s has scylla-manager-agent version %s", node.name, manager_agent_version)
 
-        node.wait_db_up(verbose=verbose, timeout=timeout)
+        node.wait_db_up(verbose=verbose, timeout=360000)
         nodes_status = node.get_nodes_status()
         check_nodes_status(nodes_status=nodes_status, current_node=node)
         self.clean_replacement_node_options(node)
