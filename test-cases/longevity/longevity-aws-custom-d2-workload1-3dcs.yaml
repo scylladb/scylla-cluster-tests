@@ -1,0 +1,173 @@
+test_duration: 255
+n_monitor_nodes: 1
+n_db_nodes: '3 3 3'
+n_loaders: '3 1 1'
+
+instance_type_db: 'i4i.2xlarge'
+instance_type_loader: 'c6i.xlarge'
+
+user_prefix: 'long-custom-d2-wrkld1-small'
+enterprise_disable_kms: true
+use_preinstalled_scylla: true
+
+endpoint_snitch: GossipingPropertyFileSnitch
+internode_compression: 'all'
+client_encrypt: true
+append_scylla_yaml:
+  consistent_cluster_management: false
+  compaction_static_shares: 100
+  compaction_enforce_min_threshold: true
+  compaction_throughput_mb_per_sec: 0
+  # NOTE: workaround for the https://github.com/scylladb/scylladb/issues/19131
+  enable_repair_based_node_ops: true
+  allowed_repair_based_node_ops: "replace,removenode,rebuild,decommission"
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '029'
+nemesis_interval: 5
+nemesis_during_prepare: true
+
+round_robin: true
+prepare_write_cmd:
+  # NOTE: --duration in these commands is number of rows that will be written.
+  #       Time gets specified with 's', 'm' or 'h' letters.
+
+  # NOTE: first group of loaders from a single/first region write to all per-region main tables
+  - >-
+    latte run --tag latte --duration 50100100 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 25000 -P offset=0
+    --function custom -P row_count=50100100 -P codes="\"T12F1\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag latte --duration 50100100 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 25000 -P offset=0
+    --function custom -P row_count=50100100 -P codes="\"T13F1\"" --consistency=QUORUM
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag latte --duration 50100100 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 25000 -P offset=0
+    --function custom -P row_count=50100100 -P codes="\"T14F1\"" --consistency=QUORUM
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: other loaders write multi-region tables, first half
+  - >-
+    latte run --tag latte --duration 250050 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 30 --rate 1500 -P offset=0
+    --function custom -P row_count=250050 -P codes="\"T1F1\"" --consistency=QUORUM
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag latte --duration 550050 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 28 --connections 2 --concurrency 56 --rate 560 -P offset=0
+    --function custom -P row_count=550050 -P codes="\"T2F1,T3F1,T4F1\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: first group of loaders from a single/first region write to all per-region secondary tables
+  - >-
+    latte run --tag latte --duration 1100100 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 28 --connections 2 --concurrency 56 --rate 560 -P offset=0
+    --function custom -P row_count=1100100 -P codes="\"T6F1\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag latte --duration 1100100 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 28 --connections 2 --concurrency 56 --rate 560 -P offset=0
+    --function custom -P row_count=1100100 -P codes="\"T7F1\"" --consistency=QUORUM
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag latte --duration 1100100 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 28 --connections 2 --concurrency 56 --rate 560 -P offset=0
+    --function custom -P row_count=1100100 -P codes="\"T8F1\"" --consistency=QUORUM
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: other loaders write multi-region tables, second half
+  - >-
+    latte run --tag latte --duration 250050 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 30 --rate 1500 -P offset=250050
+    --function custom -P row_count=250050 -P codes="\"T1F1\"" --consistency=QUORUM
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag latte --duration 550050 --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 28 --connections 2 --concurrency 56 --rate 560 -P offset=550050
+    --function custom -P row_count=550050 -P codes="\"T2F1,T3F1,T4F1\""
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+stress_cmd:
+  # NOTE: write to main per-dc tables from loaders of dc-1
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 50000 -P offset=0
+    --function custom -P row_count=50100100 -P codes="\"T12F1\"" -P print_applied_func_names=2
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 50000 -P offset=0
+    --function custom -P row_count=50100100 -P codes="\"T13F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 30 --connections 3 --concurrency 180 --rate 50000 -P offset=0
+    --function custom -P row_count=50100100 -P codes="\"T14F1\"" -P print_applied_func_names=2 --consistency=QUORUM
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: read dc-2 main table from dc-2 loader
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 24 --connections 3 --concurrency 96 --rate 6000 -P offset=0
+    --function custom -P row_count=50100100 -P codes="\"T13F3\"" -P print_applied_func_names=2
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: read dc-3 main table from dc-3 loader
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 24 --connections 3 --concurrency 96 --rate 6000 -P offset=0
+    --function custom -P row_count=50100100 -P codes="\"T14F3\"" -P print_applied_func_names=2
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: read dc-1 main table from dc-1 loader
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 24 --connections 3 --concurrency 96 --rate 6000 -P offset=0
+    --function custom -P row_count=50100100 -P codes="\"T12F3\"" -P print_applied_func_names=2
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  # NOTE: read from special table with replication everywhere
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 24 --connections 3 --concurrency 24 --rate 240 -P offset=0
+    --function custom -P row_count=500100 -P codes="\"T1F3\"" -P print_applied_func_names=2 --consistency=QUORUM
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  # NOTE: read dc-1 secondary table from dc-1 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 24 --connections 3 --concurrency 24 --rate 240 -P offset=0
+    --function custom -P row_count=1100100 -P codes="\"T6F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: read dc-2 secondary table from dc-2 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 24 --connections 3 --concurrency 24 --rate 240 -P offset=0
+    --function custom -P row_count=1100100 -P codes="\"T7F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: read dc-3 secondary table from dc-3 loader and read 3 other multi-region tables
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 24 --connections 3 --concurrency 24 --rate 240 -P offset=0
+    --function custom -P row_count=1100100 -P codes="\"T8F3,T2F2,T3F3,T4F3\"" -P print_applied_func_names=2
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+
+  # NOTE: run per-dc main table specific scenario functions with insertions and deletions
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 24 --connections 3 --concurrency 96 --rate 550 -P offset=50100100
+    --function custom -P row_count=1100100 -P codes="\"T12F7\"" -P print_applied_func_names=2
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 24 --connections 3 --concurrency 96 --rate 550 -P offset=50100100
+    --function custom -P row_count=1100100 -P codes="\"T13F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
+  - >-
+    latte run --tag latte --duration 180m --request-timeout 60 --retry-interval '2s,10s'
+    --sampling 5s --threads 24 --connections 3 --concurrency 96 --rate 550 -P offset=50100100
+    --function custom -P row_count=1100100 -P codes="\"T14F7\"" -P print_applied_func_names=2 --consistency=QUORUM
+    scylla-qa-internal/custom_d2/workload1/latte/custom_d2_workload1.rn
