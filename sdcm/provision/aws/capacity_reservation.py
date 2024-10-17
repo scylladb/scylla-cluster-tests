@@ -34,8 +34,13 @@ class SCTCapacityReservation:
     def _get_cr_request_based_on_sct_config(params) -> Tuple[dict[str, int], int]:
         instance_counts = defaultdict(int)
         nemesis_node_count = params.get("nemesis_add_node_cnt") or 0
-
         cluster_max_size = (params.get("cluster_target_size") or params.get("n_db_nodes"))
+
+        if zero_token_nodes := params.get("n_db_zero_token_nodes"):
+            if zero_token_instance_type := params.get("zero_token_instance_type_db"):
+                instance_counts[zero_token_instance_type] += zero_token_nodes
+            else:
+                cluster_max_size += zero_token_nodes
 
         if nemesis_grow_shrink_instance_type := params.get("nemesis_grow_shrink_instance_type"):
             instance_counts[nemesis_grow_shrink_instance_type] += nemesis_node_count

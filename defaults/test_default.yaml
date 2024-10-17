@@ -270,3 +270,6 @@ enterprise_disable_kms: false
 assert_linux_distro_features: []
 
 skip_test_stages: {}
+
+n_db_zero_token_nodes: 0
+zero_token_instance_type_db: 'i4i.large'

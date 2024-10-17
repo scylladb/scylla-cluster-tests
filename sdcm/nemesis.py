@@ -361,7 +361,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             dc_idx: Optional[int] = None,
             rack: Optional[int] = None) -> list:
         """
-        Filters and return nodes in the cluster that has no running nemesis on them
+        Filters and return data nodes in the cluster that has no running nemesis on them
         It can filter node by following criteria: is_seed, dc_idx, rack
         Same mechanism works for other parameters, if multiple criteria provided it will return nodes
         that match all of them.
@@ -373,7 +373,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         if is_seed is DefaultValue:
             is_seed = False if self.filter_seed else None
-        nodes = [node for node in self.cluster.nodes if not node.running_nemesis]
+        nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
         if is_seed is not None:
             nodes = [node for node in nodes if node.is_seed == is_seed]
         if dc_idx is not None:
@@ -1274,14 +1274,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
 
-    def _add_and_init_new_cluster_nodes(self, count, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=None, instance_type: str = None) -> list[BaseNode]:
+    def _add_and_init_new_cluster_nodes(self, count, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=None, instance_type: str = None, is_zero_node: bool = False) -> list[BaseNode]:
         if rack is None and self._is_it_on_kubernetes():
             rack = 0
         self.log.info("Adding %s new nodes to cluster...", count)
         InfoEvent(message=f'StartEvent - Adding {count} new nodes to cluster').publish()
-        new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(
-            count=count, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack,
-            instance_type=instance_type)
+        add_node_args = {"count": count,
+                         "dc_idx": self.target_node.dc_idx,
+                         "enable_auto_bootstrap": True,
+                         "rack": rack,
+                         "instance_type": instance_type
+                         }
+        if is_zero_node:
+            instance_type = self.cluster.params.get("zero_token_instance_type_db") or instance_type
+            add_node_args.update({"is_zero_node": is_zero_node})
+
+        new_nodes = skip_on_capacity_issues(self.cluster.add_nodes)(**add_node_args)
         self.monitoring_set.reconfigure_scylla_monitoring()
         for new_node in new_nodes:
             self.set_current_running_nemesis(node=new_node)
@@ -4578,9 +4586,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert actual_cdc_settings == cdc_settings, \
                 f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}"
 
-    def _add_new_node_in_new_dc(self) -> BaseNode:
-        new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
-            1, dc_idx=0, enable_auto_bootstrap=True)[0]  # add node
+    def _add_new_node_in_new_dc(self, zero_token=False) -> BaseNode:
+        if self.tester.params.get("cluster_backend") == "aws":
+            new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
+                1, dc_idx=0, enable_auto_bootstrap=True, zero_token=zero_token)[0]  # add node
+        else:
+            new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
+                1, dc_idx=0, enable_auto_bootstrap=True)[0]  # add node
         with new_node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
@@ -5150,6 +5162,53 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.warning("'%s' node will be restarted to make the CQL work again", self.target_node)
             self.target_node.restart_scylla_server()
             raise
+
+    def disrupt_grow_shrink_znodes(self):
+        """"Add/remove znodes to same dc where target node"""
+        duration_with_znode = 300
+        new_znode = self._add_and_init_new_cluster_nodes(count=1, zero_token=True)[0]
+        self.log.debug("Run with zero-token node %s for %ds", new_znode.name, duration_with_znode)
+        znode = random.choice([node for node in self.cluster.zero_nodes if node.dc_idx == self.target_node.dc_idx])
+        self.decommission_nodes(nodes=[znode])
+
+    def disrupt_add_remove_dc_with_znode(self) -> None:
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Operator doesn't support multi-DC yet. Skipping.")
+        if self.cluster.test_config.MULTI_REGION:
+            raise UnsupportedNemesis(
+                "add_remove_dc skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)")
+        InfoEvent(message='Starting New DC Nemesis').publish()
+        node = self.cluster.data_nodes[0]
+        system_keyspaces = ["system_distributed", "system_traces"]
+        if not node.raft.is_consistent_topology_changes_enabled:  # auth-v2 is used when consistent topology is enabled
+            system_keyspaces.insert(0, "system_auth")
+        self._switch_to_network_replication_strategy(self.cluster.get_test_keyspaces() + system_keyspaces)
+        datacenters = list(self.tester.db_cluster.get_cluster_status().keys())
+        node_added = False
+        with ExitStack() as context_manager:
+            def finalizer(exc_type, *_):
+                # in case of test end/killed, leave the cleanup alone
+                if exc_type is not KillNemesis:
+                    # with self.cluster.cql_connection_patient(node) as session:
+                    #     session.execute('DROP KEYSPACE IF EXISTS keyspace_new_dc')
+                    if node_added:
+                        self.cluster.decommission(new_node)
+            context_manager.push(finalizer)
+
+            new_node = self._add_new_node_in_new_dc(zero_token=True)
+            node_added = True
+            status = self.tester.db_cluster.get_cluster_status()
+            new_dc_list = [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")]
+            assert new_dc_list, "new datacenter was not registered"
+            InfoEvent(message='Running full cluster repair on each node').publish()
+            for cluster_node in self.cluster.data_nodes:
+                cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
+            time.sleep(300)
+            self.cluster.decommission(new_node)
+            node_added = False
+
+            datacenters = list(self.tester.db_cluster.get_cluster_status().keys())
+            assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
 
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements  # noqa: PLR0915
@@ -6664,3 +6723,21 @@ class EndOfQuotaNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_end_of_quota_nemesis()
+
+
+class GrowShrinkZeroTokenNode(Nemesis):
+
+    disruptive = True
+    schema_changes = False
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_grow_shrink_znodes()
+
+
+class AddRemoveDCwithZeroToken(Nemesis):
+    disruptive = True
+    schema_changes = False
+
+    def disrupt(self):
+        self.disrupt_add_remove_dc_with_znode()
