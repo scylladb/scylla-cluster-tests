@@ -21,6 +21,7 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.es import ES
 from sdcm.sct_events import Severity
 from sdcm.sct_events.workload_prioritisation import WorkloadPrioritisationEvent
+from sdcm.utils.version_utils import ComparableScyllaVersion
 from test_lib.sla import ServiceLevel, Role, User
 
 
@@ -828,8 +829,7 @@ class SlaPerUserTest(LongevityTest):
         comparison_axis = {"latency 95th percentile": 2.0,
                            "latency 99th percentile": 2.0,
                            "op rate": 2.0}
-        release = parse_version(self.db_cluster.nodes[0].scylla_version.replace("~", "-")).release
-        if release[0] > 2024 or (release[0] == 2024 and release[1] >= 3):
+        if ComparableScyllaVersion(self.db_cluster.nodes[0].scylla_version) >= '2024.2.0~rc3':
             # Running the test with 2024.3  - deviation was improved
             comparison_axis = {"latency 95th percentile": 1.0,
                                "latency 99th percentile": 1.0,
