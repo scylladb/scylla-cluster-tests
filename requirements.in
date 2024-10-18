@@ -28,7 +28,6 @@ mysql-connector-python==8.0.26
 docker==7.1.0
 python-jenkins==1.7.0
 ssh2-python==1.0.0
-argus-alm==0.12.10
 parameterized==0.8.1
 ruff==0.4.7  # Needed for pre-commit hooks
 autopep8==1.5.7  # Needed for pre-commit hooks
