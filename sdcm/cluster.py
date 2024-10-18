@@ -58,7 +58,7 @@ from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-modu
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy, HostFilterPolicy, RoundRobinPolicy
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
-from argus.backend.util.enums import ResourceState
+from argus.common.enums import ResourceState
 from argus.client.sct.types import LogLink
 from sdcm.node_exporter_setup import NodeExporterSetup
 from sdcm.db_log_reader import DbLogReader
