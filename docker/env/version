@@ -1,1 +1,5 @@
+<<<<<<< HEAD
 1.75-event-collect-argus-0.12.7
+=======
+1.78-argus-0.13.0
+>>>>>>> 9b54d483d (improvement(argus-client): ship argus client within sct)
