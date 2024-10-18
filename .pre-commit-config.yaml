@@ -8,10 +8,11 @@ repos:
         exclude: >
             (?x)^(
                 \.git/.*|
-                data_dir/latte_stress_output\.log
+                data_dir/latte_stress_output\.log|
+                argus/.*
             )$
     -   id: end-of-file-fixer
-        exclude: ^\.git/.*$
+        exclude: ^(\.git/.*|argus/.*)$
     -   id: check-yaml
         args:
         - --allow-multiple-documents
@@ -41,13 +42,14 @@ repos:
         entry: autopep8 -i -j 2 --max-line-length=120 --ignore=E226,E24,W50,W690,E402,E731
         language: system
         types: [python]
-        exclude: '\.sh$'
+        exclude: '(\.sh$|argus/.*)'
 
     -   id: ruff
         name: ruff
         entry: ruff check --fix --preview
         language: system
         types: [python]
+        exclude: ^argus/.*$
 
 - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
   rev: v5.0.0
