@@ -42,7 +42,7 @@ from cassandra import ConsistencyLevel, InvalidRequest
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
-from argus.backend.util.enums import NemesisStatus
+from argus.common.enums import NemesisStatus
 
 from sdcm import wait
 from sdcm.audit import Audit, AuditConfiguration, AuditStore
