@@ -25,10 +25,10 @@ from typing import List
 import contextlib
 from pathlib import Path
 
-from argus.client.sct.types import Package
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
+from argus.client.sct.types import Package
 from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.fill_db_data import FillDatabaseData
