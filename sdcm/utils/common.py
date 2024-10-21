@@ -3224,7 +3224,6 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
     else:
         aws_placement_groups = list_placement_groups_aws(tags_dict=tags_dict, group_as_region=True)
 
-<<<<<<< HEAD
     for region, instance_list in aws_placement_groups.items():
         if not instance_list:
             LOGGER.debug("There are no placement groups to remove in AWS region %s", region)
@@ -3241,21 +3240,6 @@ def clean_placement_groups_aws(tags_dict: dict, regions=None, dry_run=False):
                     LOGGER.debug("Failed to delete placement group: %s", str(ex))
                     raise
 # ----------
-=======
-    :param stage_names: str or list, name of the test stage(s)
-    :return: bool
-    """
-    # making import here, to work around circular import issue
-    from sdcm.cluster import TestConfig
-    stage_names = stage_names if isinstance(stage_names, list) else [stage_names]
-    skip_test_stages = TestConfig().tester_obj().skip_test_stages
-    skipped_stages = [stage for stage in stage_names if skip_test_stages[stage]]
-
-    if skipped_stages:
-        skipped_stages_str = ', '.join(skipped_stages)
-        LOGGER.warning("'%s' test stage(s) is disabled.", skipped_stages_str)
-        return True
-    return False
 
 
 def parse_python_thread_command(cmd: str) -> dict:
@@ -3298,4 +3282,3 @@ def parse_python_thread_command(cmd: str) -> dict:
                         tokens_iter = iter([next_token] + list(tokens_iter))
 
     return options
->>>>>>> 56a1d5e39 (feature(kafka-conn-sink): add tests for kafka sink connector)
