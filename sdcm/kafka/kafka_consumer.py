@@ -14,10 +14,11 @@
 import base64
 import json
 import logging
+import time
 
 from threading import Event, Thread
 
-import kafka
+from confluent_kafka import Consumer
 
 from sdcm.sct_config import SCTConfiguration
 from sdcm.kafka.kafka_config import SctKafkaConfiguration
@@ -46,18 +47,19 @@ class KafkaCDCReaderThread(Thread):  # pylint: disable=too-many-instance-attribu
         self.read_number_of_key = int(kwargs.get('read_number_of_key', 0))
 
         connector_config: SctKafkaConfiguration = params.get("kafka_connectors")[connector_index]
+        consumer_config = {
+            'bootstrap.servers': ','.join(self.kafka_addresses),
+            'group.id': self.group_id,
+            'auto.offset.reset': 'earliest',
+            'enable.auto.commit': True,
+            'auto.commit.interval.ms': 1000,
+        }
+        self.consumer = Consumer(consumer_config)
 
         # TODO: handle setup of multiple tables
         topic = f'{connector_config.config.scylla_name}.{connector_config.config.scylla_table_names}'
         self.wait_for_topic(topic, timeout=60)
-        self.consumer = kafka.KafkaConsumer(
-            topic,
-            auto_offset_reset='earliest',
-            enable_auto_commit=True,
-            auto_commit_interval_ms=1000,
-            group_id=self.group_id,
-            bootstrap_servers=self.kafka_addresses,
-        )
+        self.consumer.subscribe([topic])
 
         super().__init__(daemon=True)
 
@@ -70,8 +72,7 @@ class KafkaCDCReaderThread(Thread):  # pylint: disable=too-many-instance-attribu
         return None
 
     def get_topics(self):
-        admin_client = kafka.KafkaAdminClient(bootstrap_servers=self.kafka_addresses)
-        topics = admin_client.list_topics()
+        topics = list(self.consumer.list_topics(timeout=10).topics.keys())
         LOGGER.debug(topics)
         return topics
 
@@ -84,16 +85,19 @@ class KafkaCDCReaderThread(Thread):  # pylint: disable=too-many-instance-attribu
 
     def run(self):
         while not self.termination_event.is_set():
-            records = self.consumer.poll(timeout_ms=1000)
-            for _, consumer_records in records.items():
-                for msg in consumer_records:
-                    data = json.loads(msg.value).get('payload', {}).get('after', {})
-                    key = base64.b64decode(data.get('key')).decode()
-                    self.keys.add(key)
+            msgs = self.consumer.consume(num_messages=self.read_number_of_key, timeout=1.0)
+            if not msgs:
+                time.sleep(0.5)
+                continue
+            for msg in msgs:
+                data = json.loads(msg.value()).get('payload', {}).get('after', {})
+                key = base64.b64decode(data.get('key')).decode()
+                self.keys.add(key)
 
-            if len(self.keys) >= self.read_number_of_key:
-                LOGGER.info("reach `read_number_of_key` stopping reader thread")
-                self.stop()
+                if len(self.keys) >= self.read_number_of_key:
+                    LOGGER.info("reach `read_number_of_key` stopping reader thread")
+                    self.stop()
+                    break
 
     def stop(self):
         self.termination_event.set()
