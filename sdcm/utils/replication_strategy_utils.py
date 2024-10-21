@@ -153,7 +153,7 @@ class DataCenterTopologyRfControl:
 
     def _get_original_nodes_number(self, node: 'BaseNode') -> int:
         # Get the original number of nodes in the data center
-        return len([n for n in self.cluster.nodes if n.dc_idx == node.dc_idx])
+        return len([n for n in self.cluster.data_nodes if n.dc_idx == node.dc_idx])
 
     def _get_keyspaces_to_decrease_rf(self, session) -> list:
         """

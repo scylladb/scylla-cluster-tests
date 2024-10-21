@@ -355,6 +355,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     force_gossip_topology_changes: bool = None  # False
 
     reader_concurrency_semaphore_cpu_concurrency: int = None
+    join_ring: bool = None,  # False is default
 
     def dict(  # pylint: disable=arguments-differ
         self,

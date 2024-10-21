@@ -229,7 +229,9 @@ class SCTConfiguration(dict):
                   and is used in test duration calculation
              """),
         dict(name="n_db_nodes", env="SCT_N_DB_NODES", type=int_or_list,
-             help="Number list of database nodes in multiple data centers."),
+             help="""Number list of database data nodes in multiple data centers. To use with
+             multi data centers and zero nodes, dc with zero-nodes only should be set as 0,
+             ex. "3 3 0"."""),
 
         dict(name="n_test_oracle_db_nodes", env="SCT_N_TEST_ORACLE_DB_NODES", type=int_or_list,
              help="Number list of oracle test nodes in multiple data centers."),
@@ -1655,6 +1657,15 @@ class SCTConfiguration(dict):
 
         dict(name="skip_test_stages", env="SCT_SKIP_TEST_STAGES", type=dict_or_str,
              help="""Skip selected stages of a test scenario"""),
+
+        dict(name="n_db_zero_token_nodes", env="SCT_N_DB_ZERO_TOKEN_NODES", type=int_or_list,
+             help="""Number of zero token nodes in cluster. Value should be set as "0 1 1"
+               for multidc configuration in same manner as 'n_db_nodes' and should be equal
+               number of regions"""),
+
+        dict(name="zero_token_instance_type_db", env="SCT_ZERO_TOKEN_INSTANCE_TYPE_DB", type=str,
+             help="""Instance type for zero token node"""),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -2075,9 +2086,38 @@ class SCTConfiguration(dict):
         # 20 Validate Manager agent backup general parameters
         if backup_params := self.get("mgmt_agent_backup_config"):
             self["mgmt_agent_backup_config"] = AgentBackupParameters(**backup_params)
+        # Validate zero token nodes
+        zero_nodes_num = self.get("n_db_zero_token_nodes")
+        data_nodes_num = self.get("n_db_nodes")
+        if zero_nodes_num:
+            self._validate_zero_token_backend_support(backend=cluster_backend)
+            zero_nodes_num = [zero_nodes_num] if isinstance(zero_nodes_num, int) else [
+                int(i) for i in str(zero_nodes_num).split()]
+            data_nodes_num = [data_nodes_num] if isinstance(data_nodes_num, int) else [
+                int(i) for i in str(data_nodes_num).split()]
+            assert len(zero_nodes_num) == len(
+                data_nodes_num), "Config of zero token nodes is not equal config of data nodes for multi dc"
 
     def log_config(self):
         self.log.info(self.dump_config())
+
+    @property
+    def total_db_nodes(self):
+        """Used to get total number of db nodes data nodes and zero nodes"""
+        zero_nodes_num = self.get("n_db_zero_token_nodes")
+        data_nodes_num = self.get("n_db_nodes")
+        zero_nodes_num = [zero_nodes_num] if isinstance(zero_nodes_num, int) else [
+            int(i) for i in str(zero_nodes_num).split()]
+        data_nodes_num = [data_nodes_num] if isinstance(data_nodes_num, int) else [
+            int(i) for i in str(data_nodes_num).split()]
+        total_nodes = data_nodes_num[:]
+        # temp for aws, but should work for any backend
+        if zero_nodes_num:
+            total_nodes = [n1 + n2 for n1,
+                           n2 in zip(data_nodes_num, zero_nodes_num)]
+
+        self.log.debug("Total nodes: %s", total_nodes)
+        return total_nodes
 
     @property
     def region_names(self) -> List[str]:
@@ -2298,6 +2338,9 @@ class SCTConfiguration(dict):
             self._validate_nemesis_can_run_on_non_seed()
             self._validate_number_of_db_nodes_divides_by_az_number()
 
+        if self.get('n_db_zero_token_nodes'):
+            self._validate_zero_token_backend_support(backend)
+
         self._check_partition_range_with_data_validation_correctness()
         self._verify_scylla_bench_mode_and_workload_parameters()
 
@@ -2486,6 +2529,10 @@ class SCTConfiguration(dict):
 
             if int(partition_range_splitted[1]) < int(partition_range_splitted[0]):
                 raise ValueError(error_message_template.format('<max PK value> should be bigger then <min PK value>. '))
+
+    @staticmethod
+    def _validate_zero_token_backend_support(backend: str):
+        assert backend == "aws", "Only AWS supports zero nodes configuration"
 
     def verify_configuration_urls_validity(self):  # pylint: disable=too-many-branches
         """
