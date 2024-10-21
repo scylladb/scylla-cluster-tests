@@ -1,0 +1,15 @@
+test_duration: 300
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+user_prefix: 'df-test'
+instance_type_db: 'i4i.large'
+instance_provision: 'spot'
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"
+enterprise_disable_kms: true
+
+append_scylla_yaml:
+  enable_tablets: true
