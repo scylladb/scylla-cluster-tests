@@ -1,0 +1,17 @@
+test_duration: 3600
+n_db_nodes: 4
+n_loaders: 1
+n_monitor_nodes: 1
+user_prefix: 'storage-utilization'
+instance_type_db: 'i4i.xlarge'
+instance_provision: 'spot'
+
+enterprise_disable_kms: true
+scaling_action_type: "scale_in"
+diskusage_softlimit: 45
+diskusage_hardlimit: 67
+
+stress_cmd_w: 'cassandra-stress write duration=30m -rate threads=<THREADS_PLACE_HOLDER> "throttle=1400/s" -mode cql3 native -pop seq=1..5000000 -col "size=FIXED(10240) n=FIXED(1)" -schema "replication(strategy=NetworkTopologyStrategy,replication_factor=3)"'
+stress_cmd_r: 'cassandra-stress read duration=30m -rate threads=<THREADS_PLACE_HOLDER> "throttle=1400/s" -mode cql3 native -pop seq=1..5000000 -col "size=FIXED(10240) n=FIXED(1)" -schema "replication(strategy=NetworkTopologyStrategy,replication_factor=3)"'
+append_scylla_yaml:
+  enable_tablets: true

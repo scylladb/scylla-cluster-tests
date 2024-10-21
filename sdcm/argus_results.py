@@ -12,6 +12,7 @@
 # Copyright (c) 2024 ScyllaDB
 import json
 import time
+from contextlib import contextmanager
 from datetime import timezone, datetime
 
 from argus.client import ArgusClient
@@ -132,6 +133,26 @@ class ManagerBackupReadResult(GenericResultTable):
         description = "Read timing"
         Columns = [
             ColumnMetadata(name="read time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+        ]
+
+class DiskUsageResult(GenericResultTable):
+    class Meta:
+        name = "Disk Usage"
+        description = "The disk usage of each instance in the cluster"
+        Columns = [
+            ColumnMetadata(name="Total", unit="GB", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Used", unit="GB", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Available", unit="GB", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Usage %", unit="", type=ResultType.FLOAT, higher_is_better=False),
+        ]
+
+
+class TimerResult(GenericResultTable):
+    class Meta:
+        name = "Timer"
+        description = "The duration of the operation named in the row name"
+        Columns = [
+            ColumnMetadata(name="duration", unit="HH:MM:SS", type=ResultType.DURATION, higher_is_better=False),
         ]
 
 
@@ -256,3 +277,25 @@ def send_manager_benchmark_results_to_argus(argus_client: ArgusClient, result: d
     for key, value in result.items():
         result_table.add_result(column=key, row=row_name, value=value, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)
+
+
+@contextmanager
+def timer_results_to_argus(label: str, argus_client: ArgusClient):
+    start = time.time()
+    yield
+    elapsed = int(time.time() - start)
+
+    data_table = TimerResult()
+    data_table.add_result(column="duration", row=label, value=elapsed, status=Status.UNSET)
+    submit_results_to_argus(argus_client, data_table)
+
+
+def disk_usage_to_argus(argus_client: ArgusClient, label: str, data: dict[str, dict[str, int]]):
+    data_table = DiskUsageResult()
+
+    for name, disk_info in data.items():
+        row = f"{f'{name}':<8} [{label}]"
+        for key, value in disk_info.items():
+            data_table.add_result(column=key, row=row, value=value, status=Status.UNSET)
+
+    submit_results_to_argus(argus_client, data_table)

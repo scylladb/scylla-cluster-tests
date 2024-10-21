@@ -1,0 +1,17 @@
+test_duration: 3600
+n_db_nodes: 4
+n_loaders: 1
+n_monitor_nodes: 1
+user_prefix: 'storage-utilization'
+instance_type_db: 'i4i.large'
+instance_provision: 'spot'
+
+enterprise_disable_kms: true
+diskusage_softlimit: 70
+diskusage_hardlimit: 90
+
+append_scylla_yaml:
+  enable_tablets: true
+  auto_snapshot: false
+
+data_removal_action: "truncate"
