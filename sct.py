@@ -38,7 +38,7 @@ import yaml
 from prettytable import PrettyTable
 from argus.client.sct.types import LogLink
 from argus.client.base import ArgusClientError
-from argus.backend.util.enums import TestStatus
+from argus.common.enums import TestStatus
 
 import sct_ssh
 import sct_scan_issues
