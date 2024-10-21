@@ -4451,6 +4451,14 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                         up_nodes.append(node)
         return up_nodes
 
+    def flush_all_nodes(self):
+        """
+        This function will connect all db nodes in the cluster and run "nodetool flush" command.
+        :return:
+        """
+        for node in self.nodes:
+            node.run_nodetool("flush")
+
     def get_node_status_dictionary(self, ip_address=None, verification_node=None):
         """Get node status dictionary via nodetool (in case it's not found return None)"""
         node_status = None
