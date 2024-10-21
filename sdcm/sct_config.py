@@ -1233,6 +1233,14 @@ class SCTConfiguration(dict):
         dict(name="perf_gradual_throttle_steps", env="SCT_PERF_GRADUAL_THROTTLE_STEPS", type=dict,
              help="Used for gradual performance test. Define throttle for load step in ops. Example: {'read': ['100000', '150000'], 'mixed': ['300']}"),
 
+        # StorageUtilizationTest
+        dict(name="scaling_action_type", env="SCT_SCALING_ACTION_TYPE", type=str,
+             help="Refers to scaling task like scaleout, scalein etc that needs to be performed when storage reaches specific threshold."),
+        dict(name="diskusage_softlimit", env="SCT_DISKUSAGE_SOFTLIMIT", type=int,
+             help="Soft disk usage limit until this limit data will be written as 10% of available diskspace, after this chunksize will be 1GB."),
+        dict(name="diskusage_hardlimit", env="SCT_DISKUSAGE_HARDLIMIT", type=int,
+             help="Hard disk usage limit where scaling tasks will be performed."),
+
         # RefreshTest
         dict(name="skip_download", env="SCT_SKIP_DOWNLOAD", type=boolean,
              help=""),

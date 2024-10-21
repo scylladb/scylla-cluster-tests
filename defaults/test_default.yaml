@@ -274,3 +274,6 @@ skip_test_stages: {}
 n_db_zero_token_nodes: 0
 zero_token_instance_type_db: 'i4i.large'
 use_zero_nodes: false
+# Storageutilization default values
+diskusage_softlimit: 70
+diskusage_hardlimit: 90
