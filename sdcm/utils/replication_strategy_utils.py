@@ -133,6 +133,9 @@ class DataCenterTopologyRfControl:
     - In scenarios where a keyspace has an RF equal to the total number of nodes in a data center, decommissioning a node is not supported where tablets are used.
     - This class provides functionality to temporarily decrease the RF of such keyspaces before a node decommissioning operation and revert them back to their original RF after a new node is added.
 
+    **Notes**:
+    - zero token nodes should be ignored when counting RF, because the zero token nodes are not used in replication and doesn't store user data
+
     **Usage**:
     1. **`decrease_keyspaces_rf`**: Identifies keyspaces with RF equal to the total number of nodes in the data center and decreases their RF by 1. This is necessary so decommissioning a node is allowed (with tablets).
     2. **`revert_to_original_keyspaces_rf`**: Reverts the RF of the keyspaces back to their original values after a new node is added to the data center.
@@ -153,7 +156,7 @@ class DataCenterTopologyRfControl:
 
     def _get_original_nodes_number(self, node: 'BaseNode') -> int:
         # Get the original number of nodes in the data center
-        return len([n for n in self.cluster.nodes if n.dc_idx == node.dc_idx])
+        return len([n for n in self.cluster.data_nodes if n.dc_idx == node.dc_idx])
 
     def _get_keyspaces_to_decrease_rf(self, session) -> list:
         """
@@ -207,7 +210,7 @@ class DataCenterTopologyRfControl:
     def revert_to_original_keyspaces_rf(self, node_to_wait_for_balance: 'BaseNode' = None):
         if self.decreased_rf_keyspaces:
             LOGGER.debug(f"Reverting keyspaces replication factor to original value of {self.datacenter}..")
-            with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
+            with self.cluster.cql_connection_patient(self.cluster.data_nodes[0]) as session:
                 for keyspace in self.decreased_rf_keyspaces:
                     self._alter_keyspace_rf(keyspace=keyspace, replication_factor=self.original_nodes_number,
                                             session=session)
