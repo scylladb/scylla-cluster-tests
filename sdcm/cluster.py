@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import queue
 import logging
 import os
@@ -509,7 +510,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             scylla_yml.replace_address_first_boot = self.replacement_node_ip
         if self.replacement_host_id:
             scylla_yml.replace_node_first_boot = self.replacement_host_id
-        if append_scylla_yaml := self.parent_cluster.params.get('append_scylla_yaml') or {}:
+        if append_scylla_yaml := copy.deepcopy(self.parent_cluster.params.get('append_scylla_yaml')) or {}:
             if any(key in append_scylla_yaml for key in (
                     "system_key_directory", "system_info_encryption", "kmip_hosts")):
                 install_encryption_at_rest_files(self.remoter)
