@@ -534,6 +534,7 @@ class TestNodetoolStatus(unittest.TestCase):
         node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153")
         node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname='10.1.59.34')
         db_cluster = DummyScyllaCluster([node1, node2, node3])
+        setattr(db_cluster, "params", {"use_zero_nodes": False})
         node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
         datacenter_name_per_region = db_cluster.get_datacenter_name_per_region()
         assert datacenter_name_per_region == {'east-us': 'eastus', 'west-us': 'westus'}
@@ -561,6 +562,7 @@ class TestNodetoolStatus(unittest.TestCase):
         node2 = NodetoolDummyNode(resp=resp, myregion="east-us", myname="10.0.198.153", myrack=1)
         node3 = NodetoolDummyNode(resp=resp, myregion="west-us", myname='10.1.59.34', myrack=2)
         db_cluster = DummyScyllaCluster([node1, node2, node3])
+        setattr(db_cluster, "params", {"use_zero_nodes": False})
         node1.parent_cluster = node2.parent_cluster = node3.parent_cluster = db_cluster
         datacenter_name_per_region = db_cluster.get_rack_names_per_datacenter_and_rack_idx()
         assert datacenter_name_per_region == {('east-us', '1'): '1a', ('west-us', '2'): '2a'}

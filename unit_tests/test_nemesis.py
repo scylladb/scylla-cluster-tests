@@ -38,6 +38,14 @@ class Cluster:
     def check_cluster_health(self):
         pass
 
+    @property
+    def data_nodes(self):
+        return self.nodes
+
+    @property
+    def zero_nodes(self):
+        return self.nodes
+
 
 @dataclass
 class FakeTester:
@@ -119,26 +127,32 @@ def test_is_it_on_kubernetes():
     class FakeLocalMinimalScyllaPodCluster(LocalMinimalScyllaPodCluster):
         def __init__(self, params: dict = None):
             self.params = params
+            self.nodes = []
 
     class FakeGkeScyllaPodCluster(GkeScyllaPodCluster):
         def __init__(self, params: dict = None):
             self.params = params
+            self.nodes = []
 
     class FakeEksScyllaPodCluster(EksScyllaPodCluster):
         def __init__(self, params: dict = None):
             self.params = params
+            self.nodes = []
 
     class FakeScyllaGCECluster(ScyllaGCECluster):
         def __init__(self, params: dict = None):
             self.params = params
+            self.nodes = []
 
     class FakeScyllaAWSCluster(ScyllaAWSCluster):
         def __init__(self, params: dict = None):
             self.params = params
+            self.nodes = []
 
     class FakeScyllaDockerCluster(ScyllaDockerCluster):
         def __init__(self, params: dict = None):
             self.params = params
+            self.nodes = []
 
     params = {'nemesis_interval': 10, 'nemesis_filter_seeds': 1}
 
