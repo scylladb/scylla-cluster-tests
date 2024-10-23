@@ -31,9 +31,6 @@ def wait_for_tablets_balanced(node):
     "currently a small time window after adding nodes and before load balancing starts during which
     topology may appear as quiesced because the state machine goes through an idle state before it enters load balancing state"
     """
-    if not node.raft.is_enabled:
-        LOGGER.info("Raft is disabled, skipping wait for balance")
-        return
     with node.parent_cluster.cql_connection_patient(node=node) as session:
         if not is_tablets_feature_enabled(session):
             LOGGER.info("Tablets are disabled, skipping wait for balance")
