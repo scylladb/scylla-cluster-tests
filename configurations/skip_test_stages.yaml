@@ -5,3 +5,5 @@ skip_test_stages:
   post_test_load: false
   nemesis: false
   data_validation: false
+  perf_preload_data: false
+  perf_steady_state_calc: false

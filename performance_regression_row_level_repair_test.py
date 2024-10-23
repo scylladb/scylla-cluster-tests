@@ -19,7 +19,7 @@ from textwrap import dedent
 import six
 
 from sdcm.tester import ClusterTester
-from sdcm.utils.decorators import measure_time, retrying
+from sdcm.utils.decorators import measure_time, retrying, optional_stage
 from test_lib.scylla_bench_tools import create_scylla_bench_table_query
 
 THOUSAND = 1000
@@ -63,6 +63,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.debug("Could not find a 'cl' parameter in stress command: {}".format(str_stress_cmd))
         return str_stress_cmd
 
+    @optional_stage('perf_preload_data')
     def preload_data(self, consistency_level=None):
         # if test require a pre-population of data
 
