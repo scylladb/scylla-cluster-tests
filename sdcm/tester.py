@@ -2920,7 +2920,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 k8s_cluster.gather_k8s_logs_by_operator()
                 k8s_cluster.gather_k8s_logs()
 
-        self.monitors.update_default_time_range(self.start_time, time.time())
+        if self.monitors is not None:
+            self.monitors.update_default_time_range(self.start_time, time.time())
         if self.params.get('collect_logs'):
             self.collect_logs()
         self.clean_resources()
