@@ -5220,6 +5220,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.restart_scylla_server()
             raise
 
+    @target_all_nodes
+    def disrupt_grow_shrink_zero_nodes(self):
+        """"Add/remove znodes to same dc where target node. The target node could be any node"""
+        if not self.cluster.params.get('use_zero_nodes'):
+            raise UnsupportedNemesis("The zero tokens support is not enabled")
+
+        duration_with_znode = 300
+        new_znode = self._add_and_init_new_cluster_nodes(count=1, is_zero_node=True)[0]
+        self.log.debug("Run with zero-token node %s for %ds", new_znode.name, duration_with_znode)
+        time.sleep(duration_with_znode)
+        znode = random.choice([node for node in self.cluster.zero_nodes if node.dc_idx == self.target_node.dc_idx])
+        self.decommission_nodes(nodes=[znode])
+
 
 def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-many-statements  # noqa: PLR0915
     """
@@ -5481,6 +5494,7 @@ class StopWaitStartMonkey(Nemesis):
     disruptive = True
     kubernetes = True
     limited = True
+    zero_node_changes = True
 
     def disrupt(self):
         self.disrupt_stop_wait_start_scylla_server(600)
@@ -6114,6 +6128,7 @@ class NodeTerminateAndReplace(Nemesis):
     # While on kubernetes we put it all on scylla-operator
     kubernetes = False
     topology_changes = True
+    zero_node_changes = True
 
     def disrupt(self):
         self.disrupt_terminate_and_replace_node()
@@ -6740,3 +6755,28 @@ class EndOfQuotaNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_end_of_quota_nemesis()
+
+
+class GrowShrinkZeroTokenNode(Nemesis):
+
+    disruptive = True
+    schema_changes = False
+    free_tier_set = False
+    zero_node_changes = True
+
+    def disrupt(self):
+        self.disrupt_grow_shrink_zero_nodes()
+
+
+class ZeroTokenSetMonkey(SisyphusMonkey):
+    """Nemesis set for testing Scylla with configured zero nodes
+
+    Disruptions that can be caused by random failures and user actions with
+    zero node configured
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(SisyphusMonkey, self).__init__(*args, **kwargs)  # pylint: disable=bad-super-call
+        self.use_all_nodes_as_target = True
+        self.build_list_of_disruptions_to_execute(nemesis_selector=['zero_node_changes'])
+        self.shuffle_list_of_disruptions()
