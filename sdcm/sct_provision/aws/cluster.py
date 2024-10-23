@@ -13,7 +13,7 @@
 
 import abc
 from functools import cached_property
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from pydantic import BaseModel
 from sdcm import cluster
@@ -25,7 +25,7 @@ from sdcm.provision.common.provisioner import TagsType
 from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.aws.instance_parameters_builder import ScyllaInstanceParamsBuilder, \
-    LoaderInstanceParamsBuilder, MonitorInstanceParamsBuilder, OracleScyllaInstanceParamsBuilder
+    LoaderInstanceParamsBuilder, MonitorInstanceParamsBuilder, OracleScyllaInstanceParamsBuilder, ScyllaZeroTokenParamsBuilder
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder, AWSInstanceUserDataBuilder
 from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_SPOT, INSTANCE_PROVISION_SPOT_FLEET
 from sdcm.test_config import TestConfig
@@ -245,7 +245,10 @@ class DBCluster(ClusterBase):
     _NODE_PREFIX = 'db'
     _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
     _NODE_NUM_PARAM_NAME = 'n_db_nodes'
+    _ZEROTOKEN_NODE_NUM_PARAM_NAME = 'n_db_zero_token_nodes'
+    _ZEROTOKEN_NODE_INSTANCE_TYPE_PARAM_NAME = "zero_token_instance_type_db"
     _INSTANCE_PARAMS_BUILDER = ScyllaInstanceParamsBuilder
+    _ZERO_TOKEN_INSTANCE_PARAMS_BUILDER = ScyllaZeroTokenParamsBuilder
     _USER_PARAM = 'ami_db_scylla_user'
 
     @property
@@ -256,6 +259,103 @@ class DBCluster(ClusterBase):
             user_data_format_version=self.params.get('user_data_format_version'),
             syslog_host_port=self._test_config.get_logging_service_host_port(),
         ).to_string()
+
+    def _zero_token_instance_parameters(self, region_id: int, availability_zone: int = 0) -> AWSInstanceParams:
+        params_builder = self._ZERO_TOKEN_INSTANCE_PARAMS_BUILDER(  # pylint: disable=not-callable
+            params=self.params,
+            region_id=region_id,
+            user_data_raw=self._user_data,
+            availability_zone=availability_zone,
+            placement_group=self.placement_group_name
+        )
+        return AWSInstanceParams(**params_builder.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True))
+
+    def _az_nodes(self, region_id: int) -> Tuple[List[int], List[int]]:
+        az_token_nodes = [0] * len(self._azs)
+        az_zerotoken_nodes = [0] * len(self._azs)
+        for node_num in range(self._get_data_nodes()[region_id]):
+            az_token_nodes[node_num % len(self._azs)] += 1
+        if zero_token_nodes := self._get_zero_token_nodes():
+            for node_num in range(zero_token_nodes[region_id]):
+                az_zerotoken_nodes[node_num % len(self._azs)] += 1
+
+        return az_token_nodes, az_zerotoken_nodes
+
+    def _get_data_nodes(self) -> list[int]:
+        node_nums = self.params.get(self._NODE_NUM_PARAM_NAME)
+        if isinstance(node_nums, list):
+            return [int(num) for num in node_nums]
+        elif isinstance(node_nums, int):
+            return [node_nums]
+        elif isinstance(node_nums, str):
+            return [int(num) for num in node_nums.split()]
+        else:
+            raise ValueError('Unexpected value of %s parameter' % (self._NODE_NUM_PARAM_NAME,))
+
+    def _get_zero_token_nodes(self) -> list[int]:
+        zero_token_nodes_num = self.params.get(self._ZEROTOKEN_NODE_NUM_PARAM_NAME)
+        if not zero_token_nodes_num:
+            return []
+        if isinstance(zero_token_nodes_num, list):
+            return [int(num) for num in zero_token_nodes_num]
+        elif isinstance(zero_token_nodes_num, int):
+            return [zero_token_nodes_num]
+        elif isinstance(zero_token_nodes_num, str):
+            return [int(num) for num in zero_token_nodes_num.split()]
+        else:
+            raise ValueError('Unexpected value of %s parameter' % (self._ZEROTOKEN_NODE_NUM_PARAM_NAME,))
+
+    @cached_property
+    def _node_nums(self) -> List[int]:
+        total_nodes = self._get_data_nodes()
+        zero_token_nodes = self._get_zero_token_nodes()
+        if zero_token_nodes:
+            total_nodes = [n1 + n2 for n1,
+                           n2 in zip(total_nodes, zero_token_nodes)]
+        return total_nodes
+
+    def provision(self):
+        if self._node_nums == [0]:
+            return []
+        total_instances_provisioned = []
+        for region_id in range(len(self._regions_with_nodes)):
+            az_nodes, az_zero_nodes = self._az_nodes(region_id=region_id)
+            for az_id, _ in enumerate(self._azs):
+
+                node_count = az_nodes[az_id]
+                zero_node_count = az_zero_nodes[az_id]
+                if node_count:
+
+                    instance_parameters = self._instance_parameters(region_id=region_id, availability_zone=az_id)
+                    node_tags = self._node_tags(region_id=region_id, az_id=az_id)[:node_count]
+                    node_names = self._node_names(region_id=region_id, az_id=az_id)[:node_count]
+                    instances = self.provision_plan(region_id, self._azs[az_id]).provision_instances(
+                        instance_parameters=instance_parameters,
+                        node_tags=node_tags,
+                        node_names=node_names,
+                        node_count=node_count
+                    )
+                    if not instances:
+                        raise RuntimeError('End of provision plan reached, but no instances provisioned')
+                    total_instances_provisioned.extend(instances)
+
+                if zero_node_count:
+                    instance_parameters = self._zero_token_instance_parameters(
+                        region_id=region_id, availability_zone=az_id)
+                    node_tags = self._node_tags(region_id=region_id, az_id=az_id)[node_count:]
+                    for node_tag in node_tags:
+                        node_tag.update({"ZeroTokenNode": "True"})
+                    node_names = self._node_names(region_id=region_id, az_id=az_id)[node_count:]
+                    instances = self.provision_plan(region_id, self._azs[az_id]).provision_instances(
+                        instance_parameters=instance_parameters,
+                        node_tags=node_tags,
+                        node_names=node_names,
+                        node_count=zero_node_count
+                    )
+                    if not instances:
+                        raise RuntimeError('End of provision plan reached, but no instances provisioned')
+                    total_instances_provisioned.extend(instances)
+        return total_instances_provisioned
 
 
 class OracleDBCluster(ClusterBase):

@@ -145,7 +145,7 @@ from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
-from sdcm.utils.raft import get_raft_mode
+from sdcm.utils.raft import get_raft_mode, get_node_status_from_system_by
 from sdcm.coredump import CoredumpExportSystemdThread
 from sdcm.keystore import KeyStore
 from sdcm.paths import (
@@ -307,6 +307,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.scylla_network_configuration = None
         self._datacenter_name = None
         self._node_rack = None
+        self._is_zero_token_node = False
 
     def _is_node_ready_run_scylla_commands(self) -> bool:
         """
@@ -479,6 +480,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def db_node_instance_type(self) -> Optional[str]:
         backend = self.parent_cluster.cluster_backend
         if backend in ("aws", "aws-siren"):
+            if self._is_zero_token_node:
+                return self.parent_cluster.params.get("zero_token_instance_type_db") \
+                    or self.parent_cluster.params.get("instance_type_db")
             return self.parent_cluster.params.get("instance_type_db")
         elif backend == "azure":
             return self.parent_cluster.params.get('azure_instance_type_db')
@@ -510,6 +514,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             scylla_yml.replace_address_first_boot = self.replacement_node_ip
         if self.replacement_host_id:
             scylla_yml.replace_node_first_boot = self.replacement_host_id
+        if self._is_zero_token_node:
+            scylla_yml.join_ring = False
         if append_scylla_yaml := copy.deepcopy(self.parent_cluster.params.get('append_scylla_yaml')) or {}:
             if any(key in append_scylla_yaml for key in (
                     "system_key_directory", "system_info_encryption", "kmip_hosts")):
@@ -2746,7 +2752,11 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def get_nodes_status(self) -> dict[BaseNode, dict]:
         nodes_status = {}
         try:
-            statuses = self.parent_cluster.get_nodetool_status(verification_node=self)
+            if SkipPerIssues("scylladb/scylladb#20909", self.parent_cluster.params):
+                statuses = self.parent_cluster.get_cluster_status(verification_node=self)
+            else:
+                statuses = self.parent_cluster.get_nodetool_status(verification_node=self)
+
             node_ip_map = self.parent_cluster.get_ip_to_node_map()
             for dc, dc_status in statuses.items():
                 for node_ip, node_properties in dc_status.items():
@@ -3868,7 +3878,6 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
         default_critical_events = [{'event': type(event), 'regex': r'.*Startup failed.*'}
                                    for event in SYSTEM_ERROR_EVENTS]
         critical_events = kwargs.pop("critical_node_setup_events", default_critical_events)
-
         node_list = kwargs.get('node_list', None) or cl_inst.nodes
         timeout = kwargs.get('timeout', None)
         # remove all arguments which are not supported by BaseScyllaCluster.node_setup method
@@ -4009,6 +4018,14 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         force_gossip = (self.params.get('append_scylla_yaml') or {}).get('force_gossip_topology_changes', False)
         self.parallel_node_operations = False if force_gossip else self.params.get("parallel_node_operations") or False
         super().__init__(*args, **kwargs)
+
+    @property
+    def data_nodes(self):
+        return [node for node in self.nodes if not node._is_zero_token_node]
+
+    @property
+    def zero_nodes(self):
+        return [node for node in self.nodes if node._is_zero_token_node]
 
     def get_node_ips_param(self, public_ip=True):
         if self.test_config.MIXED_CLUSTER:
@@ -4289,6 +4306,59 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self._update_db_packages(new_scylla_bin, node_list, start_service=start_service)
 
     @retrying(n=3, sleep_time=5)
+    def get_cluster_status(self, verification_node: BaseNode | None = None) -> dict[str, dict[str, Any]]:
+        query = "select * from system.cluster_status"
+        if not verification_node:
+            verification_node = random.choice(self.nodes)
+        try:
+            with self.cql_connection_exclusive(node=verification_node) as session:
+                session.default_timeout = 300
+                results = session.execute(query)
+        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            self.log.error("Failed to get cluster status from node %s", verification_node.name)
+            return {}
+        status = {}
+        for row in results:
+            if row.dc not in status:
+                status[row.dc] = {}
+            node_ip = ipaddress.ip_address(row.peer).exploded
+            # NOTE: following replacement is needed for the K8S case where
+            #       registered IP is different than the one used for network connections
+            if verification_node.is_kubernetes():
+                for node in self.nodes:
+                    if node_ip in node.get_all_ip_addresses() and node_ip != node.ip_address:
+                        node_ip = node.ip_address
+            if node_ip not in status[row.dc]:
+                status[row.dc][node_ip] = {}
+            updown = "U" if row.up else "D"
+            state = row.status[0]
+            rack_query = f"select rack from system.topology where key='topology' and host_id={row.host_id}"
+            try:
+                with self.cql_connection_exclusive(node=verification_node) as session:
+                    session.default_timeout = 300
+                    result = session.execute(rack_query).one()
+                    rack_name = result.rack if result else ""
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                self.log.error("Failed to get rack name for node with host id %s from node %s error: %s",
+                               row.host_id, verification_node.name, exc)
+                rack_name = ""
+
+            status[row.dc][node_ip].update(
+                {
+                    "state": f"{updown}{state}",
+                    "load": row.load,
+                    "owns": row.owns,
+                    "host_id": str(row.host_id),
+                    "tokens": row.tokens,
+                    "rack": rack_name,
+                }
+            )
+            self.log.info("Node %s:%s: status %s", node_ip, str(row.host_id), status[row.dc][node_ip])
+
+        self.log.info("Parsed Cluster status %s", status)
+        return status
+
+    @retrying(n=3, sleep_time=5)
     def get_nodetool_status(self, verification_node=None):  # pylint: disable=too-many-locals
         """
             Runs nodetool status and generates status structure.
@@ -4407,6 +4477,21 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.log.debug('Schema agreement is reached')
         return True
 
+    def check_nodes_up_and_normal_with_cql(self, nodes: Optional[list[BaseNode]] = None, verification_node: Optional[BaseNode] = None):
+        if not nodes:
+            nodes = self.nodes
+        up_statuses = []
+        for node in nodes:
+            try:
+                node_status = get_node_status_from_system_by(node, ip_address=node.ip_address)
+                self.log.info("Node %s state: %s", node.name, node_status)
+                up_statuses.append(node_status["up"] and node_status["state"] == "NORMAL")
+            except Exception as exc:  # pylint: disable=broad-except # noqa: BLE001
+                self.log.info("Check node status failed with %s", exc)
+                up_statuses.append(False)
+        if not all(up_statuses):
+            raise ClusterNodesNotReady("Not all nodes joined the cluster")
+
     def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
         if not nodes:
@@ -4455,13 +4540,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         @retrying(n=iterations, sleep_time=sleep_time, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
                   message="Waiting for nodes to join the cluster", timeout=timeout)
         def _wait_for_nodes_up_and_normal():
-            self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
+            if SkipPerIssues("scylladb/scylladb#20909", self.params):
+                self.check_nodes_up_and_normal_with_cql(nodes=nodes)
+            else:
+                self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
         _wait_for_nodes_up_and_normal()
 
     def get_test_keyspaces(self, db_node=None):
         """Function returning a list of non-system keyspaces (created by test)"""
-        db_node = db_node or self.nodes[0]
+        db_node = db_node or self.data_nodes[0]
         keyspaces = db_node.run_cqlsh("describe keyspaces").stdout.split()
         return [ks for ks in keyspaces if not is_system_keyspace(ks)]
 
@@ -4479,7 +4567,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             keyspaces = self.get_test_keyspaces()
 
         self.log.debug("Waiting for threshold: %s" % (threshold))
-        node = self.nodes[0]
+        node = self.data_nodes[0]
         node_space = 0
         # Calculate space on the disk of all test keyspaces on the one node.
         # It's decided to check the threshold on one node only
@@ -4940,6 +5028,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.stop_scylla_server()
 
         for node in self.nodes:
+            # zero token node contains only system keyspaces
+            if node._is_zero_token_node and 'system' not in ks:
+                continue
             node.remoter.sudo(f'cp -r "/var/lib/scylla/data/{ks}" "/var/lib/scylla/data/{backup_name}"')
 
         for node in self.nodes:
@@ -4953,6 +5044,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.stop_scylla_server()
 
         for node in self.nodes:
+            if node._is_zero_token_node and 'system' not in ks:
+                continue
             node.remoter.sudo(shell_script_cmd(f"""\
                 rm -rf '/var/lib/scylla/data/{ks}'
                 cp -r '/var/lib/scylla/data/{backup_name}' '/var/lib/scylla/data/{ks}'
@@ -5029,13 +5122,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def decommission(self, node: BaseNode, timeout: int | float = None) -> DataCenterTopologyRfControl | None:
-        with node.parent_cluster.cql_connection_patient(node) as session:
-            if tablets_enabled := is_tablets_feature_enabled(session):
-                dc_topology_rf_change = DataCenterTopologyRfControl(target_node=node)
-                dc_topology_rf_change.decrease_keyspaces_rf()
+        if not node._is_zero_token_node:
+            with node.parent_cluster.cql_connection_patient(node) as session:
+                if tablets_enabled := is_tablets_feature_enabled(session):
+                    dc_topology_rf_change = DataCenterTopologyRfControl(target_node=node)
+                    dc_topology_rf_change.decrease_keyspaces_rf()
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
             node.run_nodetool("decommission", timeout=timeout, long_running=True, retry=0)
         self.verify_decommission(node)
+        if node._is_zero_token_node:
+            return None
         return dc_topology_rf_change if tablets_enabled else None
 
     @property
