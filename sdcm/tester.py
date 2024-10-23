@@ -2968,7 +2968,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.kafka_cluster:
             with silence(parent=self, name='stopping kafka'):
                 self.kafka_cluster.stop()
-        self.monitors.update_default_time_range(self.start_time, time.time())
+        if self.monitors is not None:
+            self.monitors.update_default_time_range(self.start_time, time.time())
         if self.params.get('collect_logs'):
             self.collect_logs()
         self.clean_resources()
