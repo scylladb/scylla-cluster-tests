@@ -1,0 +1,24 @@
+stress_cmd: >
+  python_thread -thread=KafkaProducerThread -record-format=avro -topic=table1 -num-records=1000
+  -key-schema='{"type":"record","name":"key_schema","fields":[{"name":"id","type":"int"}]}'
+  -value-schema='{"type":"record","name":"value_schema","fields":[{"name":"firstName","type":"string"},{"name":"lastName","type":"string"}]}'
+stress_read_cmd: >
+  python_thread -thread=KafkaValidatorThread -keyspace=keyspace1 -table=table1 -record-format=avro -num-records=1000 -batch-size=500
+  -value-schema='{"type":"record","name":"value_schema","fields":[{"name":"firstName","type":"string"},{"name":"lastName","type":"string"}]}'
+
+kafka_connectors:
+  - source: 'hub:scylladb/kafka-connect-scylladb:1.1.1'
+    name: 'scylladb-sink-connector'
+    config:
+      "connector.class": 'io.connect.scylladb.ScyllaDbSinkConnector'
+      "tasks.max": 1
+      topics: 'table1'
+      "scylladb.keyspace": 'keyspace1'
+      "scylladb.consistency.level": 'ONE'
+      "key.converter": 'io.confluent.connect.avro.AvroConverter'
+      "key.converter.schema.registry.url": 'http://kafka-schema-registry:8081'
+      "value.converter": 'io.confluent.connect.avro.AvroConverter'
+      "value.converter.schema.registry.url": 'http://kafka-schema-registry:8081'
+      "key.converter.schemas.enable": true
+      "value.converter.schemas.enable": true
+      "topic.table1.keyspace1.table1.mapping": 'id=key.id, firstName=value.firstName, lastName=value.lastName'

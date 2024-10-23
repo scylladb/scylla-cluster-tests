@@ -60,6 +60,7 @@ from sdcm.cql_stress_cassandra_stress_thread import CqlStressCassandraStressThre
 from sdcm.mgmt import get_scylla_manager_tool
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
 from sdcm.kafka.kafka_cluster import LocalKafkaCluster
+from sdcm.kafka.kafka_producer import KafkaProducerThread, KafkaValidatorThread
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import provisioner_factory
@@ -80,7 +81,8 @@ from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_servi
 from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import format_timestamp, wait_ami_available, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, rows_to_list, \
-    make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, change_default_password
+    make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, change_default_password, \
+    parse_python_thread_command
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.features import is_tablets_feature_enabled
@@ -169,7 +171,7 @@ except ImportError:
 
 TEST_LOG = logging.getLogger(__name__)
 
-PYTHON_THREAD_LIST = (KafkaCDCReaderThread,)
+PYTHON_THREAD_LIST = (KafkaCDCReaderThread, KafkaProducerThread, KafkaValidatorThread)
 
 
 def teardown_on_exception(method):
@@ -2281,11 +2283,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def run_python_thread(self, stress_cmd, duration=None, **_):
         timeout = self.get_duration(duration)
 
-        options = dict(item.strip().split("=") for item in stress_cmd.replace('python_thread', '').strip().split(";"))
+        options = parse_python_thread_command(stress_cmd)
         klass_thread = next(iter([t for t in PYTHON_THREAD_LIST if options.get('thread') == t.__name__]), None)
         assert klass_thread
         thread = klass_thread(tester=self,
-                              stress_cmd=stress_cmd,
                               timeout=timeout,
                               params=self.params, **options)
         thread.start()
