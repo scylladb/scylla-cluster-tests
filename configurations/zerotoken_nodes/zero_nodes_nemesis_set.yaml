@@ -1,0 +1,3 @@
+nemesis_class_name: 'ZeroTokenSetMonkey'
+use_zero_nodes: true
+zero_token_instance_type_db: 'i4i.large'
