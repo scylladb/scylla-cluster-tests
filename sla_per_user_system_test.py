@@ -22,6 +22,7 @@ from sdcm.es import ES
 from sdcm.sct_events import Severity
 from sdcm.sct_events.workload_prioritisation import WorkloadPrioritisationEvent
 from test_lib.sla import ServiceLevel, Role, User
+from sdcm.utils.features import is_tablets_feature_enabled
 
 
 # pylint: disable=too-many-public-methods
@@ -37,7 +38,7 @@ class SlaPerUserTest(LongevityTest):
                                 ' -schema \'replication(strategy=NetworkTopologyStrategy,replication_factor=3)\' ' \
         '-mode cql3 native user={user} password={password} -rate threads={threads} ' \
         'throttle=10000/s -pop seq={pop}'
-    STRESS_READ_CMD = 'cassandra-stress read cl=ALL duration={duration} -mode cql3 native user={user} ' \
+    STRESS_READ_CMD = 'cassandra-stress read cl=ALL duration={duration} -mode connectionsPerHost=16 cql3 native user={user} ' \
                       'password={password} -rate threads={threads} -pop {pop}'
     STRESS_MIXED_CMD = r"cassandra-stress mixed ratio\(write={write_ratio},read={write_ratio}\) cl=QUORUM " \
                        "duration={duration} " \
@@ -371,6 +372,14 @@ class SlaPerUserTest(LongevityTest):
 
     def _two_users_load_througput_workload(self, shares, load, expected_shares_ratio=None):
         session = self.prepare_schema()
+
+        if is_tablets_feature_enabled(session=session):
+            self.run_pre_create_keyspace()
+            # after several test runs with Tablets decided to decrease by half of the percent(usually tests show about 96.8 - 97.5)
+            # due to unbalanced shards utilization with tablets(particular tablet belong to particular shard)
+            # during gauss distribution read
+            self.MIN_CPU_UTILIZATION = 96.5
+
         self.create_test_data_and_wait_no_compaction()
 
         # Define Service Levels/Roles/Users
