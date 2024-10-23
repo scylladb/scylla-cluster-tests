@@ -1,0 +1,26 @@
+test_duration: 240
+
+prepare_write_cmd: "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=50 -clustering-row-count=5555                       -clustering-row-size=1884 -concurrency=20 -connection-count=20 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data"
+stress_cmd:        "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=1000 -clustering-row-count=5555 -partition-offset=51 -clustering-row-size=1884 -concurrency=20 -connection-count=20 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data"
+stress_read_cmd:   "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=50 -clustering-row-count=5555                        -clustering-row-size=1884 -concurrency=20 -connection-count=20 -consistency-level=quorum -rows-per-request=10 -timeout=30s -retry-number=30 -retry-interval=80ms,1s -iterations 0 -duration=30m -validate-data"
+
+pre_create_keyspace: "CREATE KEYSPACE IF NOT EXISTS scylla_bench WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} and tablets={'initial':1};"
+
+data_validation: |
+  validate_partitions: true
+  table_name: "scylla_bench.test"
+  primary_key_column: "pk"
+  max_partitions_in_test_table: 1050
+  partition_range_with_data_validation: 0-50
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+instance_type_db: 'i3.large'
+
+append_scylla_yaml:
+  target_tablet_size_in_bytes: 536870912  # 0.5GB
+  enable_tablets: true
+
+user_prefix: 'tablets-split-merge'
+use_mgmt: false
