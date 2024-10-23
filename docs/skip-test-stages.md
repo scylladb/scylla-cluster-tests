@@ -16,6 +16,8 @@ For the moment, the following test stages can be skipped:
 - post_test_load
 - nemesis
 - data_validation
+- perf_preload_data: false
+- perf_steady_state_calc: false
 
 ### Configuration
 

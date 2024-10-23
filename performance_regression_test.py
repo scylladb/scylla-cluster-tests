@@ -28,7 +28,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
-from sdcm.utils.decorators import log_run_info, latency_calculator_decorator
+from sdcm.utils.decorators import log_run_info, latency_calculator_decorator, optional_stage
 from sdcm.utils.csrangehistogram import CSHistogramTagTypes
 from sdcm.utils.nemesis_utils.indexes import wait_for_view_to_be_built
 
@@ -218,6 +218,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                                          extra_time_to_expiration=60):
             self.loaders.kill_stress_thread()
 
+    @optional_stage('perf_preload_data')
     def preload_data(self, compaction_strategy=None):
         # if test require a pre-population of data
         prepare_write_cmd = self.params.get('prepare_write_cmd')
@@ -818,6 +819,7 @@ class PerformanceRegressionUpgradeTest(PerformanceRegressionTest, UpgradeTest): 
                                          extra_time_to_expiration=60):
             self.loaders.kill_stress_thread()
 
+    @optional_stage('perf_steady_state_calc')
     @latency_calculator_decorator
     def steady_state_latency(self):  # pylint: disable=no-self-use
         sleep_time = self.db_cluster.params.get('nemesis_interval') * 60

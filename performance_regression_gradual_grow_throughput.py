@@ -7,6 +7,7 @@ import json
 from typing import NamedTuple
 
 from performance_regression_test import PerformanceRegressionTest
+from sdcm.utils.common import skip_optional_stage
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.results_analyze import PredefinedStepsTestPerformanceAnalyzer
@@ -115,7 +116,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         num_loaders = len(self.loaders.nodes)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
-        if workload.preload_data:
+        if workload.preload_data and not skip_optional_stage('perf_preload_data'):
             self.preload_data()
             self.wait_no_compactions_running(n=400, sleep_time=120)
             self.run_fstrim_on_all_db_nodes()
