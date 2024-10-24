@@ -4,5 +4,6 @@ append_scylla_yaml:
   rpc_dict_training_min_bytes: 100000000
   internode_compression_zstd_max_cpu_fraction: 0.05
   rpc_dict_training_when: 'when_leader'
+  internode_compression_enable_advanced: true
 
 internode_compression: 'all'

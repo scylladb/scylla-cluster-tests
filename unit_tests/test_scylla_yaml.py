@@ -268,6 +268,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'inter_dc_tcp_nodelay': None,
                 'internode_authenticator': None,
                 'internode_compression': None,
+                'internode_compression_enable_advanced': None,
                 'rpc_dict_training_when': None,
                 'rpc_dict_training_min_time_seconds': None,
                 'rpc_dict_update_period_seconds': None,
