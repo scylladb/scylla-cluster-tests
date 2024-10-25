@@ -307,6 +307,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.scylla_network_configuration = None
         self._datacenter_name = None
         self._node_rack = None
+        self._is_zero_token_node = False
 
     def _is_node_ready_run_scylla_commands(self) -> bool:
         """
@@ -479,6 +480,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def db_node_instance_type(self) -> Optional[str]:
         backend = self.parent_cluster.cluster_backend
         if backend in ("aws", "aws-siren"):
+            if self._is_zero_token_node:
+                return self.parent_cluster.params.get("zero_token_instance_type_db") \
+                    or self.parent_cluster.params.get("instance_type_db")
             return self.parent_cluster.params.get("instance_type_db")
         elif backend == "azure":
             return self.parent_cluster.params.get('azure_instance_type_db')
@@ -510,6 +514,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             scylla_yml.replace_address_first_boot = self.replacement_node_ip
         if self.replacement_host_id:
             scylla_yml.replace_node_first_boot = self.replacement_host_id
+        if self._is_zero_token_node:
+            scylla_yml.join_ring = False
         if append_scylla_yaml := copy.deepcopy(self.parent_cluster.params.get('append_scylla_yaml')) or {}:
             if any(key in append_scylla_yaml for key in (
                     "system_key_directory", "system_info_encryption", "kmip_hosts")):
@@ -3868,7 +3874,6 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
         default_critical_events = [{'event': type(event), 'regex': r'.*Startup failed.*'}
                                    for event in SYSTEM_ERROR_EVENTS]
         critical_events = kwargs.pop("critical_node_setup_events", default_critical_events)
-
         node_list = kwargs.get('node_list', None) or cl_inst.nodes
         timeout = kwargs.get('timeout', None)
         # remove all arguments which are not supported by BaseScyllaCluster.node_setup method
@@ -4009,6 +4014,14 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         force_gossip = (self.params.get('append_scylla_yaml') or {}).get('force_gossip_topology_changes', False)
         self.parallel_node_operations = False if force_gossip else self.params.get("parallel_node_operations") or False
         super().__init__(*args, **kwargs)
+
+    @property
+    def data_nodes(self):
+        return [node for node in self.nodes if not node._is_zero_token_node]
+
+    @property
+    def zero_nodes(self):
+        return [node for node in self.nodes if node._is_zero_token_node]
 
     def get_node_ips_param(self, public_ip=True):
         if self.test_config.MIXED_CLUSTER:
