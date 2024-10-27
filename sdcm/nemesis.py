@@ -154,7 +154,7 @@ from sdcm.exceptions import (
     QuotaConfigurationFailure,
 )
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
-    get_gc_mode, GcMode
+    get_gc_mode, GcMode, calculate_allowed_twcs_ttl_borders, get_table_compaction_info
 from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
@@ -2656,6 +2656,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             },
         ]
         prop_val = random.choice(strategies)
+        # max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
+        if prop_val['class'] == 'TimeWindowCompactionStrategy':
+            self._modify_table_property(name="default_time_to_live", val=str(4300000))
+
         self._modify_table_property(name="compaction", val=str(prop_val))
 
     def modify_table_compression(self):
@@ -2696,6 +2700,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             The value of this property is a number of seconds. If it is set, Cassandra applies a
             default TTL marker to each column in the table, set to this value. When the table TTL
             is exceeded, Cassandra tombstones the table.
+            This nemesis selects random table, check if it has TimeWindowCompactionStrategy applied
+            and calculate possible default time to live, if no - sets random values in allowed range.
             default: default_time_to_live = 0
         """
         # Select table without columns with "counter" type for this nemesis - issue #1037:
@@ -2703,8 +2709,33 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         #    But table with counters doesn't support this
 
         # max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
-        self._modify_table_property(name="default_time_to_live", val=random.randint(864000, 4300000),
-                                    filter_out_table_with_counter=True)
+
+        default_min_ttl = 864000  # 10 days in seconds
+        default_max_ttl = 4300000
+
+        ks_cfs = self.cluster.get_non_system_ks_cf_list(
+            db_node=self.target_node, filter_out_table_with_counter=True,
+            filter_out_mv=True)
+
+        keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
+        keyspace, table = keyspace_table.split('.')
+        compaction_strategy = get_compaction_strategy(node=self.target_node, keyspace=keyspace, table=table)
+
+        if compaction_strategy == CompactionStrategy.TIME_WINDOW:
+            with self.cluster.cql_connection_patient(self.target_node) as session:
+                LOGGER.debug(f'Getting data from Scylla node: {self.target_node}, table: {keyspace_table}')
+                compaction_properties = get_table_compaction_info(
+                    keyspace=keyspace, table=table, session=session
+                )
+            default_min_ttl, default_max_ttl = calculate_allowed_twcs_ttl_borders(
+                compaction_properties, default_min_ttl
+            )
+
+        value = random.randint(default_min_ttl, default_max_ttl)
+
+        InfoEvent(f'New default time to live to be set: {value}, for table: {keyspace_table}').publish()
+        self._modify_table_property(name="default_time_to_live", val=value,
+                                    filter_out_table_with_counter=True, keyspace_table=keyspace_table)
 
     def modify_table_max_index_interval(self):
         """
