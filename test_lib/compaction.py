@@ -1,6 +1,8 @@
 import logging
 import random
+from dataclasses import dataclass, fields
 from enum import Enum
+from typing import Optional
 
 import yaml
 
@@ -29,6 +31,21 @@ class CompactionStrategy(Enum):
         except AttributeError as attr_err:
             err_msg = "Could not recognize compaction strategy value: {} - {}".format(output_str, attr_err)
             raise ValueError(err_msg) from attr_err
+
+
+@dataclass
+class TimeWindowCompactionProperties:
+    class_name: str = ''
+    compaction_window_unit: Optional[str] = None
+    compaction_window_size: Optional[int] = None
+    expired_sstable_check_frequency_seconds: Optional[int] = None
+    min_threshold: Optional[int] = None
+    max_threshold: Optional[int] = None
+
+    @classmethod
+    def from_dict(cls, data: dict, **kwargs):
+        field_names = [field.name for field in fields(cls)]
+        return cls(**{key: val for key, val in data.items() if key in field_names}, **kwargs)
 
 
 def get_gc_mode(node: BaseNode, keyspace: str, table: str) -> str | GcMode:
@@ -85,6 +102,21 @@ def get_compaction_strategy(node, keyspace, table):
     return compaction
 
 
+def get_table_compaction_info(keyspace: str, table: str, session: object):
+
+    query = f"SELECT compaction FROM system_schema.tables WHERE keyspace_name = '{keyspace}' AND table_name = '{table}';"
+    result = session.execute(query).one()
+    LOGGER.debug(f"Query result for {keyspace}.{table} compaction is: {result}")
+
+    if result and result.compaction:
+        compaction_dict = result.compaction
+        compaction_properties = TimeWindowCompactionProperties.from_dict(data=compaction_dict)
+    else:
+        compaction_properties = TimeWindowCompactionProperties(class_name='')
+
+    return compaction_properties
+
+
 def get_compaction_random_additional_params(strategy: CompactionStrategy):
     """
 
@@ -110,3 +142,35 @@ def get_compaction_random_additional_params(strategy: CompactionStrategy):
              {'sstable_size_in_mb': sstable_size_in_mb}]
     }
     return list_additional_params_options[strategy]
+
+
+def calculate_allowed_twcs_ttl_borders(compaction_info: TimeWindowCompactionProperties, default_min_ttl: int):
+
+    compaction_window_size = compaction_info.compaction_window_size or 1
+    compaction_window_unit = compaction_info.compaction_window_unit or 'DAYS'
+    LOGGER.debug(f'Compaction window size: {compaction_window_size}, Unit: {compaction_window_unit}')
+
+    # Convert compaction_window_size to seconds
+    unit_multipliers = {
+        'MINUTES': 60,
+        'HOURS': 3600,
+        'DAYS': 86400,
+        'WEEKS': 604800,
+    }
+    multiplier = unit_multipliers.get(compaction_window_unit.upper(), 86400)
+    compaction_window_size_seconds = int(compaction_window_size) * multiplier
+
+    # twcs_max_window_count default value is 50; adjust as necessary
+    # opensource.docs.scylladb.com/stable/reference/configuration-parameters.html
+    twcs_max_window_count = random.randint(10, 45)
+
+    # Calculate maximum allowed default_time_to_live
+    calculated_max_ttl = twcs_max_window_count * compaction_window_size_seconds
+    LOGGER.debug(f'Maximum allowed default_time_to_live: {calculated_max_ttl} seconds')
+
+    # Check if max_ttl is less than min_ttl
+    if calculated_max_ttl < default_min_ttl:
+        # If calculated max_ttl < default_min_ttl, return a range from (max_ttl // 3) to max_ttl
+        return calculated_max_ttl // 3, calculated_max_ttl
+    else:
+        return default_min_ttl, calculated_max_ttl
