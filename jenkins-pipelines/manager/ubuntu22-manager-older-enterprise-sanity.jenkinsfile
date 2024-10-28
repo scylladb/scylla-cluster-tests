@@ -7,7 +7,7 @@ managerPipeline(
     backend: 'aws',
     region: '''["us-east-1", "us-west-2"]''',
 
-    scylla_version: '2022.1',
+    scylla_version: '2022.2',
 
     test_name: 'mgmt_cli_test.MgmtCliTest.test_manager_sanity',
     test_config: 'test-cases/manager/manager-regression-multiDC-set-distro.yaml',
