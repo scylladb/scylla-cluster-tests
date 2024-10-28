@@ -9,8 +9,8 @@ managerPipeline(
 
     target_manager_version: 'master_latest',
 
-    // Upgrade from previous minor release (the last one), for this specific case it'd be 3.2.8
-    manager_version: '3.2',
+    // Upgrade from previous minor release (the last one), for this specific case it'd be 3.3.3
+    manager_version: '3.3',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
     test_config: 'test-cases/upgrades/manager-upgrade.yaml',
