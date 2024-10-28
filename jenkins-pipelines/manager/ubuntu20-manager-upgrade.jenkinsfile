@@ -10,7 +10,7 @@ managerPipeline(
     target_manager_version: 'master_latest',
 
     // Upgrade from previous minor release (the first one)
-    manager_version: '3.2.0',
+    manager_version: '3.3.0',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
     test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/ubuntu20.yaml"]''',
