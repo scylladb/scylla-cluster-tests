@@ -212,7 +212,7 @@ stress_image:
   ycsb: 'scylladb/hydra-loaders:ycsb-jdk8-20220918'
   nosqlbench: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
   cassandra-stress: 'scylladb/cassandra-stress:3.13.0'
-  scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.21'
+  scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.23'
   gemini: 'scylladb/hydra-loaders:gemini-v1.8.6'
   alternator-dns: 'scylladb/hydra-loaders:alternator-dns-0.1'
   cdc-stresser: 'scylladb/hydra-loaders:cdc-stresser-20210630'
