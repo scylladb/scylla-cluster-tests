@@ -109,7 +109,7 @@ class FullscanOperationBase:
         self.log.info("FullscanOperationBase init finished")
 
     def _get_random_node(self) -> BaseNode:
-        return self.generator.choice(self.fullscan_params.db_cluster.nodes)
+        return self.generator.choice(self.fullscan_params.db_cluster.data_nodes)
 
     @abstractmethod
     def randomly_form_cql_statement(self) -> str:

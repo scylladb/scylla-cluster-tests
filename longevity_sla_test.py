@@ -49,7 +49,7 @@ class LongevitySlaTest(LongevityTest, loader_utils.LoaderUtilsMixin):
         for role in self.roles + [self.fullscan_role]:
             # self.fullscan_role may be None if "run_fullscan" is not defined
             if role and is_enterprise:
-                with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=self.db_cluster.nodes[0], timeout=15,
+                with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=self.db_cluster.data_nodes[0], timeout=15,
                                       service_level_for_test_step="MAIN_SERVICE_LEVEL"):
                     SlaUtils().wait_for_service_level_propagated(cluster=self.db_cluster, service_level=role.attached_service_level)
 

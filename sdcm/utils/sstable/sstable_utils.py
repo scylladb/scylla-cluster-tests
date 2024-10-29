@@ -26,7 +26,7 @@ class SstableUtils:
                  **kwargs):
         self.db_node = db_node
         self.db_cluster = self.db_node.parent_cluster if self.db_node else None
-        self.ks_cf = ks_cf or random.choice(self.db_cluster.get_non_system_ks_cf_list(self.db_cluster.nodes[0]))
+        self.ks_cf = ks_cf or random.choice(self.db_cluster.get_non_system_ks_cf_list(self.db_cluster.data_nodes[0]))
         self.keyspace, self.table = self.ks_cf.split('.')
         self.propagation_delay_in_seconds = propagation_delay_in_seconds
         self.log = logging.getLogger(self.__class__.__name__)

@@ -87,7 +87,7 @@ class TombstoneGcVerificationThread:
     def run(self):
         end_time = time.time() + self.duration
         while time.time() < end_time and not self.termination_event.is_set():
-            self._sstable_utils.db_node = random.choice(self.db_cluster.nodes)
+            self._sstable_utils.db_node = random.choice(self.db_cluster.data_nodes)
             self._run_tombstone_gc_verification()
             self.log.debug('Executed %s', TombstoneGcVerificationEvent.__name__)
             time.sleep(self.interval)

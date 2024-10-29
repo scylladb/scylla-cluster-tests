@@ -154,7 +154,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         # Grow cluster to target size if requested
         if cluster_target_size := self.params.get('cluster_target_size'):
             add_node_cnt = self.params.get('add_node_cnt')
-            node_cnt = len(self.db_cluster.nodes)
+            node_cnt = len(self.db_cluster.data_nodes)
 
             InfoEvent(message=f"Starting to grow cluster from {node_cnt} to {cluster_target_size}").publish()
 
@@ -163,10 +163,10 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                 new_nodes = self.db_cluster.add_nodes(count=add_node_cnt, enable_auto_bootstrap=True)
                 self.monitors.reconfigure_scylla_monitoring()
                 up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
-                with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.nodes[0], timeout=up_timeout):
+                with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
                     self.db_cluster.wait_for_init(node_list=new_nodes, timeout=up_timeout, check_node_health=False)
                 self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
-                node_cnt = len(self.db_cluster.nodes)
+                node_cnt = len(self.db_cluster.data_nodes)
 
             InfoEvent(message=f"Growing cluster finished, new cluster size is {node_cnt}").publish()
 
@@ -214,7 +214,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         if (stress_read_cmd or stress_cmd) and self.validate_large_collections:
             with ignore_large_collection_warning():
-                for node in self.db_cluster.nodes:
+                for node in self.db_cluster.data_nodes:
                     self._run_validate_large_collections_in_system(node)
                     self._run_validate_large_collections_warning_in_logs(node)
 
@@ -369,7 +369,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
     @property
     def all_node_ips_for_stress_command(self):
-        return f' -node {",".join([n.cql_address for n in self.db_cluster.nodes])}'
+        return f' -node {",".join([n.cql_address for n in self.db_cluster.data_nodes])}'
 
     @staticmethod
     def _get_columns_num_of_single_stress(single_stress_cmd):

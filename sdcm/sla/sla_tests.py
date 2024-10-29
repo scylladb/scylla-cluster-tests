@@ -52,7 +52,7 @@ class Steps(SlaUtils):
             try:
                 service_level.alter(new_shares=new_shares)
                 # Wait for SL update is propagated to all nodes
-                with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=tester.db_cluster.nodes[0], timeout=15,
+                with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=tester.db_cluster.data_nodes[0], timeout=15,
                                       service_level_for_test_step="ALTER_SERVICE_LEVEL"):
                     self.wait_for_service_level_propagated(cluster=tester.db_cluster, service_level=service_level)
                 start_time = time.time() + 60
@@ -178,7 +178,7 @@ class SlaTests(Steps):
         role = None
         try:
             role = create_sla_auth(session=session, shares=shares, index=index, superuser=superuser)
-            with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=db_cluster.nodes[0], timeout=15,
+            with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=db_cluster.data_nodes[0], timeout=15,
                                   service_level_for_test_step="INITIAL_FOR_TEST"):
                 self.wait_for_service_level_propagated(cluster=db_cluster, service_level=role.attached_service_level)
             return role
@@ -194,7 +194,7 @@ class SlaTests(Steps):
         new_sl = ServiceLevel(session=session,
                               name=SERVICE_LEVEL_NAME_TEMPLATE % (shares, auth_entity_name_index),
                               shares=shares).create()
-        with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=db_cluster.nodes[0], timeout=15,
+        with adaptive_timeout(Operations.SERVICE_LEVEL_PROPAGATION, node=db_cluster.data_nodes[0], timeout=15,
                               service_level_for_test_step=service_level_for_test_step):
             self.wait_for_service_level_propagated(cluster=db_cluster, service_level=new_sl)
         return new_sl

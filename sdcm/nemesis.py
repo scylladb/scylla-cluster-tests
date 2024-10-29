@@ -1311,7 +1311,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             new_node.replacement_node_ip = old_node_ip
         try:
-            with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.nodes[0], timeout=timeout):
+            with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.data_nodes[0], timeout=timeout):
                 self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, check_node_health=False)
             self.cluster.clean_replacement_node_options(new_node)
             self.cluster.set_seeds()
@@ -1346,7 +1346,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for new_node in new_nodes:
             self.set_current_running_nemesis(node=new_node)
         try:
-            with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.nodes[0], timeout=timeout):
+            with adaptive_timeout(Operations.NEW_NODE, node=self.cluster.data_nodes[0], timeout=timeout):
                 self.cluster.wait_for_init(node_list=new_nodes, timeout=timeout, check_node_health=False)
             self.cluster.set_seeds()
             self.cluster.update_seed_provider()
@@ -1721,6 +1721,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_major_compaction(self):
         self._major_compaction()
 
+    @target_data_nodes
     def disrupt_load_and_stream(self):
         # Checking the columns number of keyspace1.standard1
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
@@ -1736,7 +1737,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
 
         if result is not None and result.exit_status == 0:
-            map_files_to_node = SstableLoadUtils.distribute_test_files_to_cluster_nodes(nodes=self.cluster.nodes,
+            map_files_to_node = SstableLoadUtils.distribute_test_files_to_cluster_nodes(nodes=self.cluster.data_nodes,
                                                                                         test_data=test_data)
             for sstables_info, load_on_node in map_files_to_node:
                 SstableLoadUtils.upload_sstables(load_on_node, test_data=sstables_info, table_name="standard1")
@@ -1746,6 +1747,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 SstableLoadUtils.run_load_and_stream(load_on_node, **kwargs)
 
     # pylint: disable=too-many-statements
+    @target_data_nodes
     def disrupt_nodetool_refresh(self, big_sstable: bool = False):
         # Checking the columns number of keyspace1.standard1
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
@@ -1775,15 +1777,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.debug('Key %s already exists before refresh', key)
 
             # Executing rolling refresh one by one
-            shards_num = self.cluster.nodes[0].scylla_shards
-            for node in self.cluster.nodes:
+            shards_num = self.cluster.data_nodes[0].scylla_shards
+            for node in self.cluster.data_nodes:
                 SstableLoadUtils.upload_sstables(node, test_data=test_data[0], table_name="standard1",
                                                  is_cloud_cluster=self.cluster.params.get("db_type") == 'cloud_scylla')
                 system_log_follower = SstableLoadUtils.run_refresh(node, test_data=test_data[0])
                 # NOTE: resharding happens only if we have more than 1 core.
                 #       We may have 1 core in a K8S multitenant setup.
                 # If tablets in use, skipping resharding validation since it doesn't work the same as vnodes
-                with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
+                with self.cluster.cql_connection_patient(self.cluster.data_nodes[0]) as session:
                     if shards_num > 1 and not is_tablets_feature_enabled(session=session):
                         SstableLoadUtils.validate_resharding_after_refresh(
                             node=node, system_log_follower=system_log_follower)
@@ -1815,10 +1817,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             node.restart_scylla_server(verify_up_after=True)
             assert no_space_errors, "There are no 'No space left on device' errors in db log during enospc disruption."
 
+    @target_data_nodes
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
 
         if all_nodes:
-            nodes = self.cluster.nodes
+            nodes = self.cluster.data_nodes
             InfoEvent('Enospc test on {}'.format([n.name for n in nodes])).publish()
         else:
             nodes = [self.target_node]
@@ -1838,6 +1841,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     finally:
                         clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
 
+    @target_data_nodes
     def disrupt_end_of_quota_nemesis(self, sleep_time=30):
         """
         Nemesis flow
@@ -3225,7 +3229,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # Wait until all other nodes see the target node as UN
         # Only then we can expect that hint sending started on all nodes
         def target_node_reported_un_by_others():
-            for node in self.cluster.nodes:
+            for node in self.cluster.data_nodes:
                 if node is not self.target_node:
                     self.cluster.check_nodes_up_and_normal(nodes=[self.target_node], verification_node=node)
             return True
@@ -4291,6 +4295,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     @scylla_versions(("2023.1.1-dev", None))
+    @target_data_nodes
     def _enable_disable_table_encryption(self, enable_kms_key_rotation, additional_scylla_encryption_options=None):  # noqa: PLR0914
         if self.cluster.params.get("cluster_backend") != "aws":
             raise UnsupportedNemesis("This nemesis is supported only on the AWS cluster backend")
@@ -4375,7 +4380,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     " -partition-count=50 -clustering-row-count=100 -clustering-row-size=uniform:75..125"
                     f" -keyspace {keyspace_name} -table {table_name} -timeout=120s -validate-data")
                 run_write_scylla_bench_load(write_cmd)
-                upgrade_sstables(self.cluster.nodes)
+                upgrade_sstables(self.cluster.data_nodes)
 
                 # Read data
                 read_cmd = (
@@ -4693,8 +4698,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def _switch_to_network_replication_strategy(self, keyspaces: List[str]) -> None:
         """Switches replication strategy to NetworkTopology for given keyspaces.
         """
-        node = self.cluster.nodes[0]
-        nodes_by_region = self.tester.db_cluster.nodes_by_region()
+        node = self.cluster.data_nodes[0]
+        nodes_by_region = self.tester.db_cluster.nodes_by_region(nodes=self.tester.db_cluster.data_nodes)
         region = list(nodes_by_region.keys())[0]
         dc_name = self.tester.db_cluster.get_nodetool_info(nodes_by_region[region][0])['Data Center']
         for keyspace in keyspaces:
@@ -4717,14 +4722,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis(
                 "add_remove_dc skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)")
         InfoEvent(message='Starting New DC Nemesis').publish()
-        node = self.cluster.nodes[0]
+        node = self.cluster.data_nodes[0]
         system_keyspaces = ["system_distributed", "system_traces"]
         if not node.raft.is_consistent_topology_changes_enabled:  # auth-v2 is used when consistent topology is enabled
             system_keyspaces.insert(0, "system_auth")
         self._switch_to_network_replication_strategy(self.cluster.get_test_keyspaces() + system_keyspaces)
         datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
         self.tester.create_keyspace("keyspace_new_dc", replication_factor={
-                                    datacenters[0]: min(3, len(self.cluster.nodes))})
+                                    datacenters[0]: min(3, len(self.cluster.data_nodes))})
         node_added = False
         with ExitStack() as context_manager:
             def finalizer(exc_type, *_):
@@ -4754,8 +4759,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                         end_line_patterns=["rebuild.*finished with keyspaces=", "Rebuild succeeded"],
                                         start_timeout=60, end_timeout=600):
                     new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", long_running=True, retry=0)
-                InfoEvent(message='Running full cluster repair on each node').publish()
-                for cluster_node in self.cluster.nodes:
+                InfoEvent(message='Running full cluster repair on each data node').publish()
+                for cluster_node in self.cluster.data_nodes:
                     cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
                 datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
                 self._write_read_data_to_multi_dc_keyspace(datacenters)
@@ -4993,6 +4998,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             finally:
                 drop_index(session, ks, index_name)
 
+    @target_data_nodes
     def disrupt_add_remove_mv(self):
         """
         Create a Materialized view on an existing table while a node is down.
@@ -5001,7 +5007,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Finally, drop the MV.
         """
 
-        free_nodes = [node for node in self.cluster.nodes if not node.running_nemesis]
+        free_nodes = [node for node in self.cluster.data_nodes if not node.running_nemesis]
         if not free_nodes:
             raise UnsupportedNemesis("Not enough free nodes for nemesis. Skipping.")
         cql_query_executor_node = random.choice(free_nodes)
@@ -5305,7 +5311,8 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
             args[0].set_target_node(current_disruption=current_disruption)
 
             args[0].cluster.check_cluster_health()
-            num_nodes_before = len(args[0].cluster.nodes)
+            num_data_nodes_before = len(args[0].cluster.data_nodes)
+            num_zero_nodes_before = len(args[0].cluster.zero_nodes)
             start_time = time.time()
             args[0].log.debug('Start disruption at `%s`', datetime.datetime.fromtimestamp(start_time))
             class_name = args[0].get_class_name()
@@ -5390,10 +5397,14 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                             start_time), nemesis_event=nemesis_event)
 
             args[0].cluster.check_cluster_health()
-            num_nodes_after = len(args[0].cluster.nodes)
-            if num_nodes_before != num_nodes_after:
-                args[0].log.error('num nodes before %s and nodes after %s does not match' %
-                                  (num_nodes_before, num_nodes_after))
+            num_data_nodes_after = len(args[0].cluster.data_nodes)
+            num_zero_nodes_after = len(args[0].cluster.zero_nodes)
+            if num_data_nodes_before != num_data_nodes_after:
+                args[0].log.error('num data nodes before %s and data nodes after %s does not match' %
+                                  (num_data_nodes_before, num_data_nodes_after))
+            if args[0].cluster.params.get("use_zero_nodes") and num_zero_nodes_before != num_zero_nodes_after:
+                args[0].log.error('num zero nodes before %s and zero nodes after %s does not match' %
+                                  (num_zero_nodes_before, num_zero_nodes_after))
             # TODO: Temporary print. Will be removed later
             data_validation_prints(args=args)
         finally:
