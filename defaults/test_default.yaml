@@ -218,7 +218,7 @@ stress_image:
   cdc-stresser: 'scylladb/hydra-loaders:cdc-stresser-20210630'
   kcl: 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'
   harry: 'scylladb/hydra-loaders:cassandra-harry-jdk11-20220816'
-  latte: 'scylladb/hydra-loaders:latte-0.26.3-scylladb'
+  latte: 'scylladb/hydra-loaders:latte-0.28.0-scylladb'
 
 service_level_shares: [1000]
 
