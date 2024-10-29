@@ -24,12 +24,13 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
 
     def _run_repair_and_major_compaction(self, wait_propagation_delay: bool = False):
         self.log.info('Run a flush for %s on nodes', self.keyspace)
-        triggers = [partial(node.run_nodetool, sub_cmd=f"flush -- {self.keyspace}", ) for node in self.db_cluster.nodes]
+        triggers = [partial(node.run_nodetool, sub_cmd=f"flush -- {self.keyspace}", )
+                    for node in self.db_cluster.data_nodes]
         ParallelObject(objects=triggers, timeout=1200).call_objects()
 
         self.log.info('Run a repair for %s on nodes', self.ks_cf)
         triggers = [partial(node.run_nodetool, sub_cmd="repair", args=f"-pr {self.keyspace} {self.table}", ) for node
-                    in self.db_cluster.nodes]
+                    in self.db_cluster.data_nodes]
         ParallelObject(objects=triggers, timeout=1200).call_objects()
 
         if wait_propagation_delay:

@@ -22,7 +22,7 @@ class CommitlogConfigParams:
     def __init__(self, db_cluster, ):
         logger = logging.getLogger(self.__class__.__name__)
         with db_cluster.cql_connection_patient(
-                node=db_cluster.nodes[0],
+                node=db_cluster.data_nodes[0],
                 connect_timeout=300,) as session:
             self.use_hard_size_limit = bool(strtobool(session.execute(
                 "SELECT value FROM system.config WHERE name='commitlog_use_hard_size_limit'").one().value))
@@ -33,7 +33,7 @@ class CommitlogConfigParams:
                 method="GET", path="metrics/max_disk_size", params=None).stdout)
             self.smp = len(re.findall(
                 "shard",
-                db_cluster.nodes[0].remoter.run('sudo seastar-cpu-map.sh -n scylla').stdout))
+                db_cluster.data_nodes[0].remoter.run('sudo seastar-cpu-map.sh -n scylla').stdout))
             self.total_space = int(self.max_disk_size / self.smp)
 
             logger.debug("CommitlogConfigParams")

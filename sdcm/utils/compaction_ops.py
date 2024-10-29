@@ -40,7 +40,7 @@ class CompactionOps:
 
     def __init__(self, cluster: Union[BaseCluster, BaseScyllaCluster], node: Optional[BaseNode] = None):
         self.cluster = cluster
-        self.node = node if node else self.cluster.nodes[0]
+        self.node = node if node and not node._is_zero_token_node else self.cluster.data_nodes[0]
         self.storage_service_client = StorageServiceClient(node=self.node)
 
     def trigger_major_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1") -> Result:
