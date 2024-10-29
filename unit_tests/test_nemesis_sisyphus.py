@@ -27,6 +27,14 @@ class Cluster:
     def check_cluster_health(self):
         pass
 
+    @property
+    def data_nodes(self):
+        return self.nodes
+
+    @property
+    def zero_nodes(self):
+        return self.nodes
+
 
 @dataclass
 class FakeTester:

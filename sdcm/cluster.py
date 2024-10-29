@@ -3802,7 +3802,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         if "db-cluster" not in self.name:
             return
         try:
-            self.node_benchmark_manager.add_nodes(self.nodes)
+            self.node_benchmark_manager.add_nodes(self.data_nodes)
             self.node_benchmark_manager.install_benchmark_tools()
             self.node_benchmark_manager.run_benchmarks()
         except Exception as ex:  # pylint: disable=broad-except  # noqa: BLE001
@@ -4567,7 +4567,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 try:
                     nemesis_class = self.nemesis[0] if self.nemesis else getattr(
                         import_module('sdcm.nemesis'), "Nemesis")
-                    with nemesis_class.run_nemesis(node_list=db_cluster.nodes, nemesis_label="KMS encryption check") as target_node:
+                    with nemesis_class.run_nemesis(node_list=db_cluster.data_nodes, nemesis_label="KMS encryption check") as target_node:
                         self.log.debug("Target node for 'rotate_kms_key' is %s", target_node.name)
 
                         ks_cf_list = db_cluster.get_non_system_ks_cf_list(
