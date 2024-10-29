@@ -690,7 +690,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
         soft_timeout = 36 * 60
         hard_timeout = 50 * 60
-        with adaptive_timeout(Operations.MGMT_REPAIR, self.db_cluster.nodes[0], timeout=soft_timeout):
+        with adaptive_timeout(Operations.MGMT_REPAIR, self.db_cluster.data_nodes[0], timeout=soft_timeout):
             self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task, ks_names=ks_names,
                                        restore_data_with_task=True, timeout=hard_timeout)
         self.run_verification_read_stress(ks_names)
