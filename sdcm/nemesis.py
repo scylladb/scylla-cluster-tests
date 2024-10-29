@@ -6198,7 +6198,6 @@ class RollingRestartConfigChangeInternodeCompression(Nemesis):
 class ClusterRollingRestartRandomOrder(Nemesis):
     disruptive = True
     kubernetes = True
-    config_changes = True
     free_tier_set = True
 
     def disrupt(self):
