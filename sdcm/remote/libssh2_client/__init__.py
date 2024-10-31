@@ -440,25 +440,30 @@ class Client:  # pylint: disable=too-many-instance-attributes
             if perf_counter() > end_time:
                 reader.stop()
                 return False
-            if stdout_stream is not None:
+
+            data_processed = False
+            if stdout_stream is not None and reader.stdout.qsize():
                 try:
                     stdout = reader.stdout.get(timeout=timeout_read_data_chunk)
                     data = stdout.decode(encoding, errors='ignore') + '\n'
                     stdout_stream.write(data)
                     for watcher in watchers:
                         watcher.submit_line(data)
+                    data_processed = True
                 except Exception:  # pylint: disable=broad-except  # noqa: BLE001
                     pass
-            if stderr_stream is not None:
-                if reader.stderr.qsize():
-                    try:
-                        stderr = reader.stderr.get(timeout=timeout_read_data_chunk)
-                        data = stderr.decode(encoding) + '\n'
-                        stderr_stream.write(data)
-                        for watcher in watchers:
-                            watcher.submit_line(data)
-                    except Exception:  # pylint: disable=broad-except  # noqa: BLE001
-                        pass
+            if stderr_stream is not None and reader.stderr.qsize():
+                try:
+                    stderr = reader.stderr.get(timeout=timeout_read_data_chunk)
+                    data = stderr.decode(encoding) + '\n'
+                    stderr_stream.write(data)
+                    for watcher in watchers:
+                        watcher.submit_line(data)
+                    data_processed = True
+                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                    pass
+            if not data_processed:  # prevent unbounded loop in case no data on the streams
+                sleep(timeout_read_data_chunk or 0.5)
         return True
 
     @staticmethod
