@@ -23,6 +23,7 @@ from google.cloud.compute_v1.types import Instance as GceInstance
 from mypy_boto3_ec2 import EC2Client
 
 from sdcm.provision.aws.capacity_reservation import SCTCapacityReservation
+from sdcm.provision.aws.dedicated_host import SCTDedicatedHosts
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.utils.argus import ArgusError, get_argus_client, terminate_resource_in_argus
 from sdcm.utils.aws_kms import AwsKms
@@ -93,6 +94,7 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
             SCTCapacityReservation.cancel(config)
         else:
             SCTCapacityReservation.cancel_all_regions(config.get("test_id"))
+        SCTDedicatedHosts.release(config)
         clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_placement_groups_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
