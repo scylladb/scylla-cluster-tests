@@ -2660,6 +2660,27 @@ reserves instances capacity for whole duration of the test run (AWS only).<br>Fa
 **default:** N/A
 
 
+## **use_dedicated_host** / SCT_USE_DEDICATED_HOST
+
+Allocates dedicated hosts for the instances for the entire duration of the test run (AWS only)
+
+**default:** N/A
+
+
+## **aws_dedicated_host_ids** / SCT_AWS_DEDICATED_HOST_IDS
+
+list of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)
+
+**default:** N/A
+
+
+## **post_behavior_dedicated_host** / SCT_POST_BEHAVIOR_DEDICATED_HOST
+
+Failure/post test behavior, i.e. what to do with the dedicate hosts at the end of the test.<br><br>'destroy' - Destroy hosts (default)<br>'keep' - Keep hosts allocated
+
+**default:** N/A
+
+
 ## **bisect_start_date** / SCT_BISECT_START_DATE
 
 Scylla build date from which bisecting should start.<br>Setting this date enables bisection. Format: YYYY-MM-DD
@@ -2700,3 +2721,5 @@ Run scylla-doctor in artifact tests
 Error thresholds for latency decorator. Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}
 
 **default:** {'write': {'default': {'P90 write': {'fixed_limit': 5}, 'P99 write': {'fixed_limit': 10}}}, 'read': {'default': {'P90 read': {'fixed_limit': 5}, 'P99 read': {'fixed_limit': 10}}}, 'mixed': {'default': {'P90 write': {'fixed_limit': 5}, 'P90 read': {'fixed_limit': 5}, 'P99 write': {'fixed_limit': 10}, 'P99 read': {'fixed_limit': 10}}}}
+
+
