@@ -1182,7 +1182,7 @@ if true, create 'cluster' placement group for test case for low-latency network 
 
 **default:** N/A
 
-**type:** str (appendable)
+**type:** boolean
 
 
 ## **subnet_id** / SCT_SUBNET_ID
@@ -3478,6 +3478,33 @@ reserves instances capacity for whole duration of the test run (AWS only).<br>Fa
 **default:** N/A
 
 **type:** boolean
+
+
+## **use_dedicated_host** / SCT_USE_DEDICATED_HOST
+
+Allocates dedicated hosts for the instances for the entire duration of the test run (AWS only)
+
+**default:** N/A
+
+**type:** boolean
+
+
+## **aws_dedicated_host_ids** / SCT_AWS_DEDICATED_HOST_IDS
+
+list of host ids to use, relevant only if `use_dedicated_host: true` (AWS only)
+
+**default:** N/A
+
+**type:** str_or_list_or_eval (appendable)
+
+
+## **post_behavior_dedicated_host** / SCT_POST_BEHAVIOR_DEDICATED_HOST
+
+Failure/post test behavior, i.e. what to do with the dedicate hosts at the end of the test.<br><br>'destroy' - Destroy hosts (default)<br>'keep' - Keep hosts allocated
+
+**default:** N/A
+
+**type:** str (appendable)
 
 
 ## **bisect_start_date** / SCT_BISECT_START_DATE
