@@ -334,6 +334,25 @@ class PrometheusDBStats:
                                                     [float(runtime[1]) for runtime in item['values']]})
         return res
 
+    def get_scylla_io_queue_total_operations(self, start_time, end_time, node_ip, irate_sample_sec='30s'):
+        """
+        Get Scylla CPU scheduler runtime from PrometheusDB
+
+        :return: list of tuples (unix time, op/s)
+        """
+        if not self._check_start_end_time(start_time, end_time):
+            return {}
+        # the query is taken from the Grafana Dashborad definition
+        query = f'avg(irate(scylla_io_queue_total_operations{{class=~"sl:.*", instance="{node_ip}"}}  [{irate_sample_sec}] )) by (class, instance)'
+        results = self.query(query=query, start=start_time, end=end_time)
+        # result example:
+        #  {'status': 'success', 'data': {'resultType': 'matrix', 'result': [{'metric': {'class': 'sl:default', 'instance': '10.4.3.205'}, 'values': [[1731495365.897, '1000'], [1731495385.897, '1000'], .....
+        res = defaultdict(dict)
+        for item in results:
+            res[item['metric']['instance']].update({item['metric']['class']:
+                                                    [float(runtime[1]) for runtime in item['values']]})
+        return res
+
     def get_scylla_scheduler_shares_per_sla(self, start_time, end_time, node_ip):  # pylint: disable=invalid-name
         """
         Get scylla_scheduler_shares from PrometheusDB
