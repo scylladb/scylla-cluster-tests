@@ -4,7 +4,7 @@ import random
 
 from enum import Enum
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Mapping, Iterable, Any
+from typing import NamedTuple, Mapping, Iterable, Any, Generator
 
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
@@ -334,10 +334,10 @@ class RaftFeature(RaftFeatureOperations):
             if member["voter"] and member["host_id"] in token_ring_node_ids:
                 continue
             error_message = f"Node {self._node.name} has group0 member with host_id {member['host_id']} with " \
-                            f"can_vote {member['voter']} and " \
-                            f"presents in token ring {member['host_id'] in token_ring_node_ids}. " \
-                            f"Inconsistency between group0: {group0_members} " \
-                            f"and tokenring: {tokenring_members}"
+                f"can_vote {member['voter']} and " \
+                f"presents in token ring {member['host_id'] in token_ring_node_ids}. " \
+                f"Inconsistency between group0: {group0_members} " \
+                f"and tokenring: {tokenring_members}"
             LOGGER.error(error_message)
             yield ClusterHealthValidatorEvent.Group0TokenRingInconsistency(
                 severity=Severity.ERROR,
@@ -401,8 +401,10 @@ class NoRaft(RaftFeatureOperations):
 
     def check_group0_tokenring_consistency(
             self, group0_members: list[dict[str, str]],
-            tokenring_members: list[dict[str, str]]) -> None:
+            tokenring_members: list[dict[str, str]]) -> Generator[None, None, None]:
         LOGGER.debug("Raft feature is disabled on node %s (host_id=%s)", self._node.name, self._node.host_id)
+
+        yield None
 
 
 def get_raft_mode(node) -> RaftFeature | NoRaft:
