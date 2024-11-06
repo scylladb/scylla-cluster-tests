@@ -132,7 +132,7 @@ class TestBaseVersion(unittest.TestCase):
         scylla_repo = self.url_base + '-enterprise/enterprise-2024.2/deb/unified/latest/scylladb-2024.2/scylla.list'
         linux_distro = 'ubuntu-focal'
         version_list = general_test(scylla_repo, linux_distro)
-        assert set(version_list) == {'6.0', '2024.1'}
+        assert set(version_list) == {'6.0', '2024.1', '2024.2'}
 
 
 if __name__ == "__main__":
