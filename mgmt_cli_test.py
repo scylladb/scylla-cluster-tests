@@ -113,9 +113,9 @@ class BackupFunctionsMixIn(LoaderUtilsMixin):
     def install_awscli_dependencies(self, node):
         if node.distro.is_ubuntu or node.distro.is_debian:
             cmd = dedent("""
-            apt update
-            apt install -y python3-pip
-            pip install awscli==1.18.140
+                apt update
+                apt install -y python3-pip
+                PIP_BREAK_SYSTEM_PACKAGES=1 pip install awscli
             """)
         elif node.distro.is_rhel_like:
             cmd = dedent("""
