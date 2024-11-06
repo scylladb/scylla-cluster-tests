@@ -4430,9 +4430,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                     AwsKmsEvent(
                         message=f"Failed to rotate AWS KMS key for the '{kms_key_alias_name}' alias",
                         traceback=traceback.format_exc()).publish()
-                if SkipPerIssues("https://github.com/scylladb/scylla-enterprise/issues/3896", self.params):
-                    self.log.warning("KMS encryption check is skipped due to the 'scylla-enterprise/issues/3896'")
-                    continue
                 try:
                     nemesis_class = self.nemesis[0] if self.nemesis else getattr(
                         import_module('sdcm.nemesis'), "Nemesis")
