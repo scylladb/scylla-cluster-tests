@@ -140,25 +140,25 @@ class SlaUtils:
         return results
 
     # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
-    def validate_scheduler_runtime(self, start_time, end_time, read_users, prometheus_stats, db_cluster,
-                                   expected_ratio=None, load_high_enough=None, publish_wp_error_event=False,
-                                   possible_issue=None):
+    def validate_io_queue_operations(self, start_time, end_time, read_users, prometheus_stats, db_cluster,
+                                     expected_ratio=None, load_high_enough=None, publish_wp_error_event=False,
+                                     possible_issue=None):
         # roles_full_info example:
         #   {'role250':
         #   {'service_level': ServiceLevel: name: 'sl250',
         #                                   attributes: ServiceLevelAttributes(shares=250,
         #                                                                      timeout=None, workload_type=None),
         #   'service_level_shares': 250, 'service_level_name': "'sl250'", 'sl_group': 'sl:sl250',
-        #   'sl_group_runtime': 181.23794405382156}}
+        #   'sl_group_ops': 181.23794405382156}}
         roles_full_info = {}
         for user in read_users:
             roles_full_info[user['role'].name] = user['role'].role_full_info_dict()
-            roles_full_info[user['role'].name]['sl_group_runtime'] = None
+            roles_full_info[user['role'].name]['sl_group_ops'] = None
             user['role'].validate_role_service_level_attributes_against_db()
         LOGGER.debug('ROLE - SERVICE LEVEL - SCHEDULER - SHARES: %s', roles_full_info)
 
         result = []
-        sl_group_runtime_zero = False
+        sl_group_ops_zero = False
         # for node_ip in db_cluster.get_node_private_ips():
         for node in db_cluster.nodes:
             # If Scylla is not running on the node - do not perform validation
@@ -168,58 +168,58 @@ class SlaUtils:
             node_ip = node.private_ip_address
             # TODO: follow after this issue (prometheus return empty answer despite the data exists),
             #  if it is reproduced
-            # Query 'scylla_scheduler_runtime_ms' from prometheus. If no data returned, try to increase the step time
+            # Query 'scylla_io_queue_total_operations' from prometheus. If no data returned, try to increase the step time
             # and query again
             for step in ['30s', '45s', '60s', '120s']:
-                LOGGER.debug("Query 'scylla_scheduler_runtime_ms' on the node %s with irate step %s ", node_ip, step)
-                if scheduler_runtime_per_sla := prometheus_stats.get_scylla_scheduler_runtime_ms(
+                LOGGER.debug("Query 'scylla_io_queue_total_operations' on the node %s with irate step %s ", node_ip, step)
+                if io_queue_total_operations := prometheus_stats.get_scylla_io_queue_total_operations(
                         start_time, end_time, node_ip, irate_sample_sec=step):
                     break
 
-            # Example of scheduler_runtime_per_sla:
+            # Example of get_scylla_io_queue_total_operations:
             #   {'10.0.2.177': {'sl:default': [410.5785714285715, 400.36428571428576],
             #   'sl:sl500_596ca81a': [177.11428571428573, 182.02857142857144]}
-            LOGGER.debug('SERVICE LEVEL GROUP - RUNTIMES: {}'.format(scheduler_runtime_per_sla))
-            if not scheduler_runtime_per_sla:
+            LOGGER.debug('SERVICE LEVEL GROUP - Total Operations: %s' % io_queue_total_operations)
+            if not io_queue_total_operations:
                 # Set this message as WARNING because I found that prometheus return empty answer despite the data
                 # exists (I run this request manually and got data). Prometheus request doesn't fail, it succeeded but
                 # empty, like:
                 # {'status': 'success', 'data': {'resultType': 'matrix', 'result': []}}
-                WorkloadPrioritisationEvent.EmptyPrometheusData(message=f'Failed to get scheduler_runtime data from '
+                WorkloadPrioritisationEvent.EmptyPrometheusData(message=f'Failed to get io_queue_total_operations data from '
                                                                         f'Prometheus for node {node_ip}',
                                                                 severity=Severity.WARNING).publish()
                 continue
 
             for role_sl_attribute in roles_full_info.values():
-                if role_sl_attribute['sl_group'] in scheduler_runtime_per_sla[node_ip]:
-                    role_sl_attribute['sl_group_runtime'] = sum(
-                        scheduler_runtime_per_sla[node_ip][role_sl_attribute['sl_group']]) / \
-                        len(scheduler_runtime_per_sla[node_ip][role_sl_attribute['sl_group']])
+                if role_sl_attribute['sl_group'] in io_queue_total_operations[node_ip]:
+                    role_sl_attribute['sl_group_ops'] = sum(
+                        io_queue_total_operations[node_ip][role_sl_attribute['sl_group']]) / \
+                        len(io_queue_total_operations[node_ip][role_sl_attribute['sl_group']])
                 else:
-                    role_sl_attribute['sl_group_runtime'] = 0.0
+                    role_sl_attribute['sl_group_ops'] = 0.0
 
-                # Zero Service Level group runtime is not expected. It may happen due to Prometheus problem
+                # Zero Service Level group operations is not expected. It may happen due to Prometheus problem
                 # (connection or else) or issue https://github.com/scylladb/scylla-enterprise/issues/2572
-                if role_sl_attribute['sl_group_runtime'] == 0.0:
-                    sl_group_runtime_zero = True
+                if role_sl_attribute['sl_group_ops'] == 0.0:
+                    sl_group_ops_zero = True
 
-            LOGGER.debug('RUN TIME PER ROLE: {}'.format(roles_full_info))
+            LOGGER.debug('OPERATIONS PER ROLE: %s' % roles_full_info)
 
             # We know and validate expected_ratio in the feature test. In the longevity we can not perform such kind
             # of validation because WP load runs in parallel with disruptive and non-disruptive nemeses, so we can not
-            # predict the runtime ratio. We can check only that role with higher shares receives more resources (or not)
+            # predict the ops ratio. We can check only that role with higher shares performed more operations (or not)
             if not expected_ratio:
                 node_cpu = None
                 if load_high_enough is None:
                     node_cpu = prometheus_stats.get_scylla_reactor_utilization(start_time=start_time,
                                                                                end_time=end_time,
                                                                                instance=node_ip)
-                result.append(self.validate_runtime_relatively_to_share(roles_full_info=roles_full_info,
-                                                                        node_ip=node_ip,
-                                                                        node_cpu=node_cpu,
-                                                                        load_high_enough=load_high_enough,
-                                                                        publish_wp_error_event=publish_wp_error_event,
-                                                                        possible_issue=possible_issue))
+                result.append(self.validate_io_queue_operations_relatively_to_share(roles_full_info=roles_full_info,
+                                                                                    node_ip=node_ip,
+                                                                                    node_cpu=node_cpu,
+                                                                                    load_high_enough=load_high_enough,
+                                                                                    publish_wp_error_event=publish_wp_error_event,
+                                                                                    possible_issue=possible_issue))
                 continue
 
             # TODO: next 5 lines will be used by sla_per_user_system_test.py. Will need to be adapted
@@ -230,21 +230,21 @@ class SlaUtils:
             #                             f'Run time per role: {roles_full_info}')
 
         if any(result):
-            if sl_group_runtime_zero:
+            if sl_group_ops_zero:
                 result.insert(0, "\nProbably the issue https://github.com/scylladb/scylla-enterprise/issues/2572")
             raise SchedulerRuntimeUnexpectedValue("".join(result))
 
     # pylint: disable=too-many-branches
     @staticmethod
-    def validate_runtime_relatively_to_share(roles_full_info: dict, node_ip: str,
-                                             load_high_enough: bool = None, node_cpu: float = None,
-                                             publish_wp_error_event=False,
-                                             possible_issue=None):
+    def validate_io_queue_operations_relatively_to_share(roles_full_info: dict, node_ip: str,
+                                                         load_high_enough: bool = None, node_cpu: float = None,
+                                                         publish_wp_error_event=False,
+                                                         possible_issue=None):
         # roles_full_info example:
         #   {'role250': {'service_level': ServiceLevel: name: 'sl250',
         #   attributes: ServiceLevelAttributes(shares=250, timeout=None, workload_type=None),
         #   'service_level_shares': 250, 'service_level_name': "'sl250'", 'sl_group': 'sl:sl250',
-        #   'sl_group_runtime': 181.23794405382156}}
+        #   'sl_group_ops': 181.23794405382156}}
         shares = [sl['service_level_shares'] for sl in roles_full_info.values()]
 
         if not shares or len([s for s in shares if s]) < 2:
@@ -270,46 +270,46 @@ class SlaUtils:
             # If shares[1] == 0 then shares_ratio can not be less than 1
             shares_ratio = False
 
-        runtimes = [sl['sl_group_runtime'] for sl in roles_full_info.values()]
-        # If runtime of role1 less than runtime of role2, dividing result will be less than 1 always
+        operations = [sl['sl_group_ops'] for sl in roles_full_info.values()]
+        # If operations of role1 less than operations of role2, dividing result will be less than 1 always
         try:
-            runtimes_ratio = (runtimes[0] / runtimes[1]) < 1
+            operations_ratio = (operations[0] / operations[1]) < 1
         except ZeroDivisionError:
-            # If runtimes[1] == 0 then runtimes_ratio can not be less than 1
-            runtimes_ratio = False
+            # If operations[1] == 0 then operations_ratio can not be less than 1
+            operations_ratio = False
 
         # Validate that role with higher shares get more resources and vice versa
-        if 0.0 not in runtimes and shares_ratio == runtimes_ratio:
+        if 0.0 not in operations and shares_ratio == operations_ratio:
             WorkloadPrioritisationEvent.RatioValidationEvent(
                 message=f'Role with higher shares got more resources on the node with IP {node_ip} as expected',
                 severity=Severity.NORMAL).publish()
             return ""
 
         error_message = ""
-        runtime_per_sl_group = []
-        zero_runtime_service_level = []
-        # If scheduler runtime per scheduler group is not as expected - return error.
+        ops_per_sl_group = []
+        zero_operations_service_level = []
+        # If operations per scheduler group is not as expected - return error.
         for service_level in roles_full_info.values():
-            runtime_per_sl_group.append(f"{service_level['sl_group']} (shares "
-                                        f"{service_level['service_level_shares']}): "
-                                        f"{round(service_level['sl_group_runtime'], 2)}")
-            if service_level['sl_group_runtime'] == 0.0:
-                zero_runtime_service_level.append(service_level['sl_group'])
+            ops_per_sl_group.append(f"{service_level['sl_group']} (shares "
+                                    f"{service_level['service_level_shares']}): "
+                                    f"{round(service_level['sl_group_ops'], 2)}")
+            if service_level['sl_group_ops'] == 0.0:
+                zero_operations_service_level.append(service_level['sl_group'])
 
-        runtime_per_sl_group_str = "\n  ".join(runtime_per_sl_group)
+        ops_per_sl_group_str = "\n  ".join(ops_per_sl_group)
 
         issue = ""
-        if zero_runtime_service_level:
+        if zero_operations_service_level:
             if possible_issue and possible_issue.get("zero resources"):
                 issue = f"\n  (Possible issue {possible_issue['zero resources']})"
-            message = (f'\n(Node {node_ip}) - Service level{"(s)" if len(zero_runtime_service_level) > 1 else ""} '
-                       f'{", ".join(zero_runtime_service_level)} did not get resources unexpectedly.%s '
-                       f'Runtime per service level group:\n  {runtime_per_sl_group_str}{issue}')
+            message = (f'\n(Node {node_ip}) - Service level{"(s)" if len(zero_operations_service_level) > 1 else ""} '
+                       f'{", ".join(zero_operations_service_level)} did not get resources unexpectedly.%s '
+                       f'Runtime per service level group:\n  {ops_per_sl_group_str}{issue}')
         else:
             if possible_issue and possible_issue.get("less resources"):
                 issue = f"\n  (Possible issue {possible_issue['less resources']})"
             message = (f'\n(Node {node_ip}) - Service level with higher shares got less resources unexpectedly.%s '
-                       f'Runtime per service level group:\n  {runtime_per_sl_group_str}{issue}')
+                       f'Runtime per service level group:\n  {ops_per_sl_group_str}{issue}')
 
         if load_high_enough is None and node_cpu is None:
             WorkloadPrioritisationEvent.RatioValidationEvent(
@@ -332,7 +332,7 @@ class SlaUtils:
     @staticmethod
     def calculate_metrics_ratio_per_user(two_users_list, metrics=None):  # pylint: disable=invalid-name
         """
-        :param metrics: calculate ratio for specific Scylla or cassandra-stress metrics (ops, scheduler_runtime etc..).
+        :param metrics: calculate ratio for specific Scylla or cassandra-stress metrics (ops for example).
                         If metrics name is not defined - ration will be calculated for service_shares
         """
         if two_users_list[0]['service_level'].shares > two_users_list[1]['service_level'].shares:

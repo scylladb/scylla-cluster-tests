@@ -17,10 +17,10 @@ LOGGER = logging.getLogger(__name__)
 
 class Steps(SlaUtils):
     # pylint: disable=too-many-arguments
-    def run_stress_and_validate_scheduler_runtime_during_load(self, tester, read_cmds, prometheus_stats, read_roles,
-                                                              stress_queue, sleep=600):
+    def run_stress_and_validate_scheduler_io_queue_operations_during_load(self, tester, read_cmds, prometheus_stats, read_roles,
+                                                                          stress_queue, sleep=600):
         # pylint: disable=not-context-manager
-        with TestStepEvent(step="Run stress command and validate scheduler runtime during load") as wp_event:
+        with TestStepEvent(step="Run stress command and validate io_queue_operations during load") as wp_event:
             try:
                 start_time = time.time() + 60
                 # pylint: disable=protected-access
@@ -28,13 +28,13 @@ class Steps(SlaUtils):
                 time.sleep(sleep)
                 end_time = time.time()
 
-                self.validate_scheduler_runtime(start_time=start_time,
-                                                end_time=end_time,
-                                                read_users=read_roles,
-                                                prometheus_stats=prometheus_stats,
-                                                db_cluster=tester.db_cluster,
-                                                possible_issue={'less resources': 'scylla-enterprise#2717'}
-                                                )
+                self.validate_io_queue_operations(start_time=start_time,
+                                                  end_time=end_time,
+                                                  read_users=read_roles,
+                                                  prometheus_stats=prometheus_stats,
+                                                  db_cluster=tester.db_cluster,
+                                                  possible_issue={'less resources': 'scylla-enterprise#2717'}
+                                                  )
                 return None
             except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 wp_event.add_error([str(details)])
@@ -43,11 +43,11 @@ class Steps(SlaUtils):
                 return wp_event
 
     # pylint: disable=too-many-arguments
-    def alter_sl_and_validate_scheduler_runtime(self, tester, service_level, new_shares, read_roles, prometheus_stats,
-                                                sleep=600):
+    def alter_sl_and_validate_io_queue_operations(self, tester, service_level, new_shares, read_roles, prometheus_stats,
+                                                  sleep=600):
         # pylint: disable=not-context-manager
         with TestStepEvent(step=f"Alter shares from {service_level.shares} to {new_shares} Service "
-                                f"Level {service_level.name} and validate scheduler runtime "
+                                f"Level {service_level.name} and validate io_queue_operations "
                                 f"during load") as wp_event:
             try:
                 service_level.alter(new_shares=new_shares)
@@ -59,12 +59,12 @@ class Steps(SlaUtils):
                 # Let load to run before validation
                 time.sleep(sleep)
                 end_time = time.time()
-                self.validate_scheduler_runtime(start_time=start_time,
-                                                end_time=end_time,
-                                                read_users=read_roles,
-                                                prometheus_stats=prometheus_stats,
-                                                db_cluster=tester.db_cluster,
-                                                possible_issue={'less resources': "scylla-enterprise#949"})
+                self.validate_io_queue_operations(start_time=start_time,
+                                                  end_time=end_time,
+                                                  read_users=read_roles,
+                                                  prometheus_stats=prometheus_stats,
+                                                  db_cluster=tester.db_cluster,
+                                                  possible_issue={'less resources': "scylla-enterprise#949"})
                 return None
             except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 wp_event.add_error([str(details)])
@@ -105,8 +105,8 @@ class Steps(SlaUtils):
                 return wp_event
 
     # pylint: disable=too-many-arguments
-    def attach_sl_and_validate_scheduler_runtime(self, tester, new_service_level, role_for_attach,
-                                                 read_roles, prometheus_stats, sleep=600):
+    def attach_sl_and_validate_io_queue_operations(self, tester, new_service_level, role_for_attach,
+                                                   read_roles, prometheus_stats, sleep=600):
         @retrying(n=15, sleep_time=1, message="Wait for service level has been attached to the role",
                   allowed_exceptions=(Exception, ValueError,))
         def validate_role_service_level_attributes_against_db():
@@ -115,7 +115,7 @@ class Steps(SlaUtils):
         # pylint: disable=not-context-manager
         with TestStepEvent(step=f"Attach service level {new_service_level.name} with "
                                 f"{new_service_level.shares} shares to {role_for_attach.name}. "
-                                f"Validate scheduler runtime during load") as wp_event:
+                                f"Validate io_queue_operations during load") as wp_event:
             try:
                 role_for_attach.attach_service_level(new_service_level)
                 role_for_attach.validate_role_service_level_attributes_against_db()
@@ -149,14 +149,14 @@ class Steps(SlaUtils):
                 start_time = time.time() + 60
                 time.sleep(sleep)
                 end_time = time.time()
-                self.validate_scheduler_runtime(start_time=start_time,
-                                                end_time=end_time,
-                                                read_users=read_roles,
-                                                prometheus_stats=prometheus_stats,
-                                                db_cluster=tester.db_cluster,
-                                                possible_issue={'less resources':
-                                                                'scylla-enterprise#2572 or scylla-enterprise#2717'}
-                                                )
+                self.validate_io_queue_operations(start_time=start_time,
+                                                  end_time=end_time,
+                                                  read_users=read_roles,
+                                                  prometheus_stats=prometheus_stats,
+                                                  db_cluster=tester.db_cluster,
+                                                  possible_issue={'less resources':
+                                                                  'scylla-enterprise#2572 or scylla-enterprise#2717'}
+                                                  )
                 return None
             except Exception as details:  # pylint: disable=broad-except  # noqa: BLE001
                 wp_event.add_error([str(details)])
@@ -254,10 +254,10 @@ class SlaTests(Steps):
             new_sl = None
             try:
                 error_events.append(
-                    self.run_stress_and_validate_scheduler_runtime_during_load(tester=tester, read_cmds=read_cmds,
-                                                                               prometheus_stats=prometheus_stats,
-                                                                               read_roles=read_roles,
-                                                                               stress_queue=stress_queue))
+                    self.run_stress_and_validate_scheduler_io_queue_operations_during_load(tester=tester, read_cmds=read_cmds,
+                                                                                           prometheus_stats=prometheus_stats,
+                                                                                           read_roles=read_roles,
+                                                                                           stress_queue=stress_queue))
                 # Create new role and attach it instead of detached
                 new_sl = self._create_new_service_level(session=session,
                                                         auth_entity_name_index=auth_entity_name_index,
@@ -266,12 +266,12 @@ class SlaTests(Steps):
                                                         service_level_for_test_step="NEW_FOR_REPLACE_EXISTING")
 
                 error_events.append(
-                    self.attach_sl_and_validate_scheduler_runtime(tester=tester,
-                                                                  new_service_level=new_sl,
-                                                                  role_for_attach=role_low,
-                                                                  read_roles=read_roles,
-                                                                  prometheus_stats=prometheus_stats,
-                                                                  sleep=600))
+                    self.attach_sl_and_validate_io_queue_operations(tester=tester,
+                                                                    new_service_level=new_sl,
+                                                                    role_for_attach=role_low,
+                                                                    read_roles=read_roles,
+                                                                    prometheus_stats=prometheus_stats,
+                                                                    sleep=600))
 
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
@@ -319,15 +319,15 @@ class SlaTests(Steps):
 
             try:
                 error_events.append(
-                    self.run_stress_and_validate_scheduler_runtime_during_load(tester=tester, read_cmds=read_cmds,
-                                                                               prometheus_stats=prometheus_stats,
-                                                                               read_roles=read_roles,
-                                                                               stress_queue=stress_queue))
+                    self.run_stress_and_validate_scheduler_io_queue_operations_during_load(tester=tester, read_cmds=read_cmds,
+                                                                                           prometheus_stats=prometheus_stats,
+                                                                                           read_roles=read_roles,
+                                                                                           stress_queue=stress_queue))
                 error_events.append(
-                    self.alter_sl_and_validate_scheduler_runtime(tester=tester,
-                                                                 service_level=role_low.attached_service_level,
-                                                                 new_shares=900, read_roles=read_roles,
-                                                                 prometheus_stats=prometheus_stats))
+                    self.alter_sl_and_validate_io_queue_operations(tester=tester,
+                                                                   service_level=role_low.attached_service_level,
+                                                                   new_shares=900, read_roles=read_roles,
+                                                                   prometheus_stats=prometheus_stats))
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
                 self.clean_auth(entities_list_of_dict=read_roles)
@@ -372,15 +372,15 @@ class SlaTests(Steps):
 
             try:
                 error_events.append(
-                    self.run_stress_and_validate_scheduler_runtime_during_load(tester=tester, read_cmds=read_cmds,
-                                                                               prometheus_stats=prometheus_stats,
-                                                                               read_roles=read_roles,
-                                                                               stress_queue=stress_queue))
+                    self.run_stress_and_validate_scheduler_io_queue_operations_during_load(tester=tester, read_cmds=read_cmds,
+                                                                                           prometheus_stats=prometheus_stats,
+                                                                                           read_roles=read_roles,
+                                                                                           stress_queue=stress_queue))
                 error_events.append(
-                    self.alter_sl_and_validate_scheduler_runtime(tester=tester,
-                                                                 service_level=role_low.attached_service_level,
-                                                                 new_shares=100, read_roles=read_roles,
-                                                                 prometheus_stats=prometheus_stats))
+                    self.alter_sl_and_validate_io_queue_operations(tester=tester,
+                                                                   service_level=role_low.attached_service_level,
+                                                                   new_shares=100, read_roles=read_roles,
+                                                                   prometheus_stats=prometheus_stats))
 
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
@@ -429,10 +429,10 @@ class SlaTests(Steps):
 
             try:
                 error_events.append(
-                    self.run_stress_and_validate_scheduler_runtime_during_load(tester=tester, read_cmds=read_cmds,
-                                                                               prometheus_stats=prometheus_stats,
-                                                                               read_roles=read_roles,
-                                                                               stress_queue=stress_queue))
+                    self.run_stress_and_validate_scheduler_io_queue_operations_during_load(tester=tester, read_cmds=read_cmds,
+                                                                                           prometheus_stats=prometheus_stats,
+                                                                                           read_roles=read_roles,
+                                                                                           stress_queue=stress_queue))
 
                 error_events.append(
                     self.detach_service_level_and_run_load(sl_for_detach=role_high.attached_service_level,
@@ -448,12 +448,12 @@ class SlaTests(Steps):
                                                         service_level_for_test_step="NEW_AFTER_DETACH")
 
                 error_events.append(
-                    self.attach_sl_and_validate_scheduler_runtime(tester=tester,
-                                                                  new_service_level=new_sl,
-                                                                  role_for_attach=role_high,
-                                                                  read_roles=read_roles,
-                                                                  prometheus_stats=prometheus_stats,
-                                                                  sleep=600))
+                    self.attach_sl_and_validate_io_queue_operations(tester=tester,
+                                                                    new_service_level=new_sl,
+                                                                    role_for_attach=role_high,
+                                                                    read_roles=read_roles,
+                                                                    prometheus_stats=prometheus_stats,
+                                                                    sleep=600))
 
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
@@ -505,10 +505,10 @@ class SlaTests(Steps):
 
             try:
                 error_events.append(
-                    self.run_stress_and_validate_scheduler_runtime_during_load(tester=tester, read_cmds=read_cmds,
-                                                                               prometheus_stats=prometheus_stats,
-                                                                               read_roles=read_roles,
-                                                                               stress_queue=stress_queue))
+                    self.run_stress_and_validate_scheduler_io_queue_operations_during_load(tester=tester, read_cmds=read_cmds,
+                                                                                           prometheus_stats=prometheus_stats,
+                                                                                           read_roles=read_roles,
+                                                                                           stress_queue=stress_queue))
 
                 error_events.append(
                     self.drop_service_level_and_run_load(sl_for_drop=role_low.attached_service_level,
@@ -524,12 +524,12 @@ class SlaTests(Steps):
                                                         service_level_for_test_step="NEW_AFTER_DROP")
 
                 error_events.append(
-                    self.attach_sl_and_validate_scheduler_runtime(tester=tester,
-                                                                  new_service_level=new_sl,
-                                                                  role_for_attach=role_low,
-                                                                  read_roles=read_roles,
-                                                                  prometheus_stats=prometheus_stats,
-                                                                  sleep=600))
+                    self.attach_sl_and_validate_io_queue_operations(tester=tester,
+                                                                    new_service_level=new_sl,
+                                                                    role_for_attach=role_low,
+                                                                    read_roles=read_roles,
+                                                                    prometheus_stats=prometheus_stats,
+                                                                    sleep=600))
 
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
@@ -572,11 +572,11 @@ class SlaTests(Steps):
 
             try:
                 error_events.append(
-                    self.run_stress_and_validate_scheduler_runtime_during_load(tester=tester,
-                                                                               read_cmds=read_cmds,
-                                                                               prometheus_stats=prometheus_stats,
-                                                                               read_roles=read_roles,
-                                                                               stress_queue=stress_queue))
+                    self.run_stress_and_validate_scheduler_io_queue_operations_during_load(tester=tester,
+                                                                                           read_cmds=read_cmds,
+                                                                                           prometheus_stats=prometheus_stats,
+                                                                                           read_roles=read_roles,
+                                                                                           stress_queue=stress_queue))
 
             finally:
                 self.verify_stress_threads(tester=tester, stress_queue=stress_queue)
