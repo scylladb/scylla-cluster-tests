@@ -166,6 +166,7 @@ class ScyllaInstanceParamsBuilder(AWSInstanceParamsBuilder):
             VolumeSize=self.params.get('data_volume_disk_size'),
             VolumeType=volume_type,
             Iops=self.params.get('data_volume_disk_iops') if volume_type in ['io1', 'io2', 'gp3'] else None,
+            Throughput=self.params.get('data_volume_disk_throughput') if volume_type == 'gp3' else None,
         )
         for disk_char in "fghijklmnop"[:disk_num]:
             device_mappings.append(
