@@ -2023,8 +2023,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.install_package(package_name='python2')
         # Offline install does't provide openjdk-11, it has to be installed in advance
         # https://github.com/scylladb/scylla-jmx/issues/127
-        if self.distro.is_amazon2:
-            self.remoter.sudo('amazon-linux-extras install java-openjdk11')
         elif self.distro.is_amazon2023:
             self.install_package(package_name="java-11-amazon-corretto-headless")
         elif self.distro.is_rhel_like:
@@ -2949,11 +2947,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         """
         if not self.distro.is_rhel_like:
             raise Exception('EPEL can only be installed for RHEL like distros')
-
-        if self.distro.is_amazon2:
-            # Enable amazon2-extras repo for installing epel
-            # Reference: https://aws.amazon.com/amazon-linux-2/faqs/#Amazon_Linux_Extras
-            self.remoter.run('sudo amazon-linux-extras install epel')
 
         if self.distro.is_rhel8:
             self.remoter.run(

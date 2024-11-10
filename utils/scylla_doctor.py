@@ -114,7 +114,7 @@ class ScyllaDoctor:
             return True
 
         # https://github.com/scylladb/scylladb/issues/18631
-        if self.node.distro.is_amazon2 and collector in ["CPUSetCollector", "PerftuneSystemConfigurationCollector"]:
+        if collector in ["CPUSetCollector", "PerftuneSystemConfigurationCollector"]:
             return True
 
         return False

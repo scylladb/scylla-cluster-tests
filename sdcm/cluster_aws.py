@@ -410,8 +410,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             node = self._create_node(instance, self._ec2_ami_username, self.node_prefix,
                                      self._node_index, self.logdir, dc_idx=dc_idx, rack=node_rack)
             node.enable_auto_bootstrap = enable_auto_bootstrap
-            if ssh_connection_ip_type(self.params) == 'ipv6' and not node.distro.is_amazon2 and \
-                    not node.distro.is_ubuntu:
+            if ssh_connection_ip_type(self.params) == 'ipv6' and not node.distro.is_ubuntu:
                 node.config_ipv6_as_persistent()
             self.nodes.append(node)
         self.write_node_public_ip_file()
@@ -864,10 +863,6 @@ class AWSNode(cluster.BaseNode):
             self.remoter.run('sudo bash -cxe "%s"' % tc_command)
 
     def install_traffic_control(self):
-        if self.distro.is_amazon2:
-            self.log.debug("Installing iproute-tc package for AMAZON2")
-            self.remoter.run("sudo yum install -y iproute-tc", ignore_status=True)
-
         return self.remoter.run("/sbin/tc -h", ignore_status=True).ok
 
     @property

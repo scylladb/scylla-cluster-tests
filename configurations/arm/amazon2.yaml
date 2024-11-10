@@ -1,7 +1,0 @@
-ami_id_db_scylla: 'resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2'  # Amazon Linux 2 LTS Arm64 latest AMI
-region_name: 'eu-west-1'
-instance_type_db: 'im4gn.xlarge'
-use_preinstalled_scylla: false
-# enhanced network isn't supported
-append_scylla_setup_args: ' --no-ec2-check '
-use_mgmt: false
