@@ -348,12 +348,6 @@ class TestDistro(unittest.TestCase):  # pylint: disable=too-many-public-methods
         self.assertTrue(distro.is_ubuntu22)
         self.assertTrue(distro.is_ubuntu)
 
-    def test_amazon2(self):
-        self.assertTrue(Distro.AMAZON2.is_amazon2)
-        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2"])
-        self.assertTrue(distro.is_amazon2)
-        self.assertTrue(distro.is_rhel_like)
-
     def test_amazon2023(self):
         self.assertTrue(Distro.AMAZON2023.is_amazon2023)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2023"])

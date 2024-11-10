@@ -14,7 +14,6 @@ There are pipeline files for Jenkins in the repository:
 vars
 `-- artifactsPipeline.groovy
 jenkins-pipelines
-|-- artifacts-amazon2.jenkinsfile
 |-- artifacts-ami.jenkinsfile
 |-- artifacts-centos7.jenkinsfile
 |-- artifacts-debian10.jenkinsfile
@@ -87,10 +86,6 @@ hydra run-test artifacts_test --backend gce --config test-cases/artifacts/rhel8.
 hydra run-test artifacts_test --backend aws --config test-cases/artifacts/oel76.yaml
 ```
 
-## Amazon Linux 2
-```sh
-hydra run-test artifacts_test --backend aws --config test-cases/artifacts/amazon2.yaml
-```
 
 ## Ubuntu 22.04 LTS (jammy)
 ```sh
