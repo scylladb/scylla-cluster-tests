@@ -1508,7 +1508,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             instances = sum([provisioner.list_instances() for provisioner in provisioners], [])
             collecting_nodes = [CollectingNode(name=instance.name,
                                                ssh_login_info={
-                                                   "hostname": instance.public_ip_address,
+                                                   "hostname": instance.public_ip_address or instance.private_ip_address,
                                                    "user": instance.user_name,
                                                    "key_file": f"~/.ssh/{instance.ssh_key_name}"},
                                                instance=instance,
