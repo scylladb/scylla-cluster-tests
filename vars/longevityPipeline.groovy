@@ -63,7 +63,7 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
-            string(defaultValue: "${pipelineParams.get('instance_provision_fallback_on_demand', 'false')}",
+            string(defaultValue: "${pipelineParams.get('instance_provision_fallback_on_demand', '')}",
                    description: 'true|false',
                    name: 'instance_provision_fallback_on_demand')
 
