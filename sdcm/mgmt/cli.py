@@ -16,6 +16,7 @@ import json
 import time
 import logging
 import datetime
+import re
 from pathlib import Path
 from re import findall
 from textwrap import dedent
@@ -505,6 +506,48 @@ class BackupTask(ManagerTask):
 class RestoreTask(ManagerTask):
     def __init__(self, task_id, cluster_id, manager_node):
         ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
+
+    @property
+    def download_bw(self) -> float | None:
+        """Restore download phase bandwidth in MiB/s/shard"""
+        # ...
+        # Bandwidth:
+        #   - Download:    22.313MiB/s/shard
+        #   - Load&stream: 3.556MiB/s/shard
+        #
+        # ...
+        res = self.progress_string()
+
+        try:
+            download_bandwidth_str = res[res.index(['Bandwidth:']) + 1][0]
+        except ValueError:
+            LOGGER.warning("Failed to extract Download bandwidth from the sctool restore progress output."
+                           "Check Manager version, bandwidth metrics are supported starting from 3.4.")
+            return None
+
+        download_bandwidth_match = re.search(r"(\d+\.\d+)", download_bandwidth_str)
+        return float(download_bandwidth_match.group(1))
+
+    @property
+    def load_and_stream_bw(self) -> float | None:
+        """Restore load&stream phase bandwidth in MiB/s/shard"""
+        # ...
+        # Bandwidth:
+        #   - Download:    22.313MiB/s/shard
+        #   - Load&stream: 3.556MiB/s/shard
+        #
+        # ...
+        res = self.progress_string()
+
+        try:
+            las_bandwidth_str = res[res.index(['Bandwidth:']) + 2][0]
+        except ValueError:
+            LOGGER.warning("Failed to extract Load&Stream bandwidth from the sctool restore progress output."
+                           "Check Manager version, bandwidth metrics are supported starting from 3.4.")
+            return None
+
+        las_bandwidth_match = re.search(r"(\d+\.\d+)", las_bandwidth_str)
+        return float(las_bandwidth_match.group(1))
 
     @property
     def post_restore_repair_duration(self) -> datetime.timedelta:
