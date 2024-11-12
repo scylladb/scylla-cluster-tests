@@ -103,13 +103,17 @@ class ManagerRestoreBanchmarkResult(GenericResultTable):
         description = "Restore benchmark"
         Columns = [
             ColumnMetadata(name="restore time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="download bandwidth", unit="MiB/s/shard", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="l&s bandwidth", unit="MiB/s/shard", type=ResultType.FLOAT, higher_is_better=True),
             ColumnMetadata(name="repair time", unit="s", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="total", unit="s", type=ResultType.DURATION, higher_is_better=False),
         ]
         ValidationRules = {
             "restore time": ValidationRule(best_pct=10),
+            "download bandwidth": ValidationRule(best_pct=10),
+            "l&s bandwidth": ValidationRule(best_pct=10),
             "repair time": ValidationRule(best_pct=10),
-            "total": ValidationRule(best_pct=10)
+            "total": ValidationRule(best_pct=10),
         }
 
 

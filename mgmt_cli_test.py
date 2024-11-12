@@ -1373,6 +1373,11 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             "repair time": repair_time,
             "total": total_restore_time,
         }
+        download_bw, load_and_stream_bw = task.download_bw, task.load_and_stream_bw
+        if download_bw:
+            results["download bandwidth"] = download_bw
+        if load_and_stream_bw:
+            results["l&s bandwidth"] = load_and_stream_bw
         send_manager_benchmark_results_to_argus(
             argus_client=self.test_config.argus_client(),
             result=results,
