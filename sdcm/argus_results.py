@@ -104,6 +104,9 @@ class ManagerRestoreBanchmarkResult(GenericResultTable):
         Columns = [
             ColumnMetadata(name="restore time", unit="s", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="repair time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="backup time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="upload time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="read stress time", unit="s", type=ResultType.DURATION, higher_is_better=False),
             ColumnMetadata(name="total", unit="s", type=ResultType.DURATION, higher_is_better=False),
         ]
         ValidationRules = {

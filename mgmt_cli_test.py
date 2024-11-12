@@ -16,6 +16,7 @@
 
 # pylint: disable=too-many-lines
 import random
+import threading
 from pathlib import Path
 from functools import cached_property
 import re
@@ -1390,6 +1391,12 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         5. Run the verification read stress to ensure the data is restored correctly.
         """
         self.run_prepare_write_cmd()
+
+        compaction_ops = CompactionOps(cluster=self.db_cluster)
+        #  Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
+        for node in self.db_cluster.nodes:
+            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
+
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self._ensure_and_get_cluster(manager_tool)
 
@@ -1439,6 +1446,11 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         for ks_name in snapshot_data.keyspaces:
             self.set_ks_strategy_to_network_and_rf_according_to_cluster(keyspace=ks_name, repair_after_alter=False)
 
+        compaction_ops = CompactionOps(cluster=self.db_cluster)
+        # Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
+        for node in self.db_cluster.nodes:
+            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
+
         if restore_outside_manager:
             self.log.info("Restoring the data outside the Manager")
             with ExecutionTimer() as timer:
@@ -1471,6 +1483,90 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                 assert self.verify_stress_thread(cs_thread_pool=stress), "Data verification stress command"
         else:
             self.log.info(f"Skipping verification read stress because of the test or snapshot configuration")
+
+    def test_backup_benchmark(self):
+        def report_to_argus(data, label):
+            send_manager_benchmark_results_to_argus(
+                argus_client=self.test_config.argus_client(),
+                result=data,
+                sut_timestamp=mgmt.get_scylla_manager_tool(
+                    manager_node=self.monitors.nodes[0]).sctool.client_version_timestamp,
+                row_name=label,
+            )
+
+        def create_backup(label):
+            mgr_cluster = self._ensure_and_get_cluster(
+                mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0]))
+
+            backup_start_time = time.time()
+            task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
+            backup_task_status = task.wait_for_uploading_stage(timeout=200000)
+            assert backup_task_status, "Backup has failed!"
+            backup_end_time = time.time()
+            InfoEvent(message=f'Backup without upload took: {backup_end_time - backup_start_time:.2f}s.').publish()
+            upload_start_time = time.time()
+            backup_status = task.wait_and_get_final_status(timeout=200000)
+            upload_end_time = time.time()
+            assert backup_status == TaskStatus.DONE, "Backup upload has failed!"
+            InfoEvent(
+                message=f'Backup upload upload took: {upload_end_time - upload_start_time}.').publish()
+            InfoEvent(
+                message=f'Backup total time is: {(backup_end_time - backup_start_time) + (upload_end_time - upload_start_time)}.').publish()
+            backup_report = {
+                "backup time": int(backup_end_time - backup_start_time),
+                "upload time": int(upload_end_time - upload_start_time),
+                "total": int((backup_end_time - backup_start_time) + (upload_end_time - upload_start_time)),
+            }
+            report_to_argus(backup_report, label)
+            return task
+
+        def run_read_stress(label):
+            stress_queue = []
+
+            for command in self.params.get('stress_read_cmd'):
+                stress_queue.append(self.run_stress_thread(command, round_robin=True, stop_test_on_failure=False))
+            read_start_time = time.time()
+            for stress in stress_queue:
+                assert self.verify_stress_thread(cs_thread_pool=stress), "Read stress command"
+
+            read_end_time = time.time()
+            InfoEvent(message=f'Read stress duration: {read_end_time - read_start_time:.2f}s.').publish()
+            read_stress_report = {
+                "read stress time": int(read_end_time - read_start_time),
+            }
+            report_to_argus(read_stress_report, label)
+
+        self.log.info("Executing test_backup_restore_benchmark...")
+
+        self.log.info("Write data to table")
+        self.run_prepare_write_cmd()
+
+        self.log.info("Disable clusterwide compaction")
+        compaction_ops = CompactionOps(cluster=self.db_cluster)
+        #  Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
+        for node in self.db_cluster.nodes:
+            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
+
+        self.log.info("Create and report backup time")
+        backup_task = create_backup("Backup times")
+
+        self.log.info("Remove backup")
+        backup_task.delete_backup_snapshot()
+
+        self.log.info("Run read test")
+        run_read_stress("Read stress")
+
+        self.log.info("Create and report backup time during read stress")
+
+        backup_thread = threading.Thread(target=create_backup, kwargs={"label": "Backup during read stress"})
+        backup_thread.start()
+
+        read_stress_thread = threading.Thread(target=run_read_stress, kwargs={"label": "Read stress during backup"})
+        read_stress_thread.start()
+
+        backup_thread.join()
+        read_stress_thread.join()
+
 
     def test_restore_benchmark(self):
         """Benchmark restore operation.

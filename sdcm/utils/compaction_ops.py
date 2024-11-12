@@ -1,6 +1,8 @@
+import inspect
 import time
 import logging
-from typing import Callable, Optional, NamedTuple, Union
+import traceback
+from typing import Callable, Optional, NamedTuple, Union, List
 
 from fabric.runners import Result
 
@@ -34,6 +36,11 @@ class NodetoolCommands(NamedTuple):
     stop_reshape_compaction: str = "stop RESHAPE"
 
 
+def print_stack():
+    LOGGER.info(
+        f"::FOO:: Function {inspect.currentframe().f_code.co_name} called from:\n{traceback.format_stack()}")
+
+
 class CompactionOps:
     NODETOOL_CMD = NodetoolCommands()
     SCRUB_MODES = ScrubModes()
@@ -44,54 +51,79 @@ class CompactionOps:
         self.storage_service_client = StorageServiceClient(node=self.node)
 
     def trigger_major_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1") -> Result:
-        return self.storage_service_client.compact_ks_cf(keyspace=keyspace, cf=cf)
+        return print_stack()
+        # return self.storage_service_client.compact_ks_cf(keyspace=keyspace, cf=cf)
 
     def trigger_scrub_compaction(self,
                                  keyspace: str = "keyspace1",
                                  cf: str = "standard1",
                                  scrub_mode: Optional[str] = None) -> Result:
         params = {"keyspace": keyspace, "cf": cf, "scrub_mode": scrub_mode}
-
-        return self.storage_service_client.scrub_ks_cf(**params)
+        return print_stack()
+        # return self.storage_service_client.scrub_ks_cf(**params)
 
     def trigger_cleanup_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1", timeout: int = 600) -> Result:
-        return self.storage_service_client.cleanup_ks_cf(keyspace=keyspace, cf=cf, timeout=timeout)
+        return print_stack()
+        # return self.storage_service_client.cleanup_ks_cf(keyspace=keyspace, cf=cf, timeout=timeout)
 
     def trigger_validation_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1") -> Result:
-        return self.storage_service_client.scrub_ks_cf(keyspace=keyspace,
-                                                       cf=cf,
-                                                       scrub_mode=self.SCRUB_MODES.VALIDATE)
+        return print_stack()
+        # return self.storage_service_client.scrub_ks_cf(keyspace=keyspace,
+        #                                                cf=cf,
+        #                                                scrub_mode=self.SCRUB_MODES.VALIDATE)
 
     def trigger_upgrade_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1") -> Result:
-        return self.storage_service_client.upgrade_sstables(keyspace=keyspace, cf=cf)
+        return print_stack()
+        # return self.storage_service_client.upgrade_sstables(keyspace=keyspace, cf=cf)
 
     def trigger_flush(self):
         self.node.run_nodetool(self.NODETOOL_CMD.flush)
 
+    def disable_compaction(self, nodes: List[BaseNode],  keyspace: str = "", cf: Optional[str] = ""):
+        self.stop_major_compaction()
+        self.stop_scrub_compaction()
+        self.stop_cleanup_compaction()
+        self.stop_cleanup_compaction()
+        self.stop_upgrade_compaction()
+        self.stop_reshape_compaction()
+        self.stop_validation_compaction()
+
+        for node in nodes:
+            self.disable_autocompaction_on_ks_cf(node, keyspace, cf)
+
     def stop_major_compaction(self) -> Result:
+        print_stack()
         LOGGER.info("Stopping major compaction with <nodetool stop>")
         return self._stop_compaction(self.NODETOOL_CMD.stop_major_compaction)
 
     def stop_scrub_compaction(self) -> Result:
+        print_stack()
         return self._stop_compaction(self.NODETOOL_CMD.stop_scrub_compaction)
 
     def stop_cleanup_compaction(self) -> Result:
+        print_stack()
         return self._stop_compaction(self.NODETOOL_CMD.stop_cleanup_compaction)
 
     def stop_upgrade_compaction(self) -> Result:
+        print_stack()
         return self._stop_compaction(self.NODETOOL_CMD.stop_upgrade_compaction)
 
     def stop_reshape_compaction(self) -> Result:
+        print_stack()
         return self._stop_compaction(self.NODETOOL_CMD.stop_reshape_compaction)
 
     def stop_validation_compaction(self) -> Result:
+        print_stack()
         return self.stop_scrub_compaction()
 
     def disable_autocompaction_on_ks_cf(self, node: BaseNode,  keyspace: str = "", cf: Optional[str] = ""):
+        print_stack()
         node = node if node else self.node
         node.run_nodetool(f'disableautocompaction {keyspace} {cf}')
 
+
     def _stop_compaction(self, nodetool_cmd: str) -> Result:
+        print_stack()
         LOGGER.info("Stopping compaction with nodetool %s", nodetool_cmd)
         return self.node.run_nodetool(nodetool_cmd)
 
