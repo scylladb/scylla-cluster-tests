@@ -3177,7 +3177,8 @@ class BaseNode(AutoSshContainerMixin):
         self.log.info('Waiting JMX services to start after node boot or reboot')
         self.wait_jmx_up(verbose=verbose, timeout=timeout)
         self.log.info('Waiting for all nodes to be Up Normal')
-        self.parent_cluster.wait_for_nodes_up_and_normal(nodes=[self])
+        # to avoid get verification node under nemesis, wait node itself to get UN
+        self.parent_cluster.wait_for_nodes_up_and_normal(nodes=[self], verification_node=self)
         self.log.info('Waiting for native_transport to be ready')
         self.wait_native_transport()
 
@@ -3371,7 +3372,7 @@ class BaseCluster:
         self.logdir = os.path.join(os.environ['_SCT_TEST_LOGDIR'], self.name)
         os.makedirs(self.logdir, exist_ok=True)
 
-    def nodes_by_region(self, nodes=None) -> dict:
+    def nodes_by_region(self, nodes=None) -> dict[str, list[BaseNode]]:
         """:returns {region_name: [list of nodes]}"""
         nodes = nodes if nodes else self.nodes
         grouped_by_region = defaultdict(list)
