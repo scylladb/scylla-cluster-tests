@@ -555,20 +555,26 @@ class RestoreTask(ManagerTask):
         - overall restore duration
         - post restore repair duration
 
-        If we are interested in the post restore repair duration, we need to extract the post-restore repair progress
-        table and sum all per table durations (last column).
+        This function returns the post-restore repair duration
         """
         res = self.progress_string()
 
-        if ['Post-restore repair progress'] not in res:
+        try:
+            repair_res = res[res.index(['Post-restore repair progress']):]
+        except ValueError:
             return duration_to_timedelta(duration_string="0")
 
-        # Extract the post-restore repair progress table
-        res = res[res.index(['Keyspace', 'Table', 'Progress', 'Duration']) + 1:]
-        # Overall repair duration is the sum of all the durations (last column) in the table
-        per_table_duration_timedelta = [duration_to_timedelta(table[-1]) for table in res]
-        duration_timedelta = sum(per_table_duration_timedelta, datetime.timedelta(0))
-        return duration_timedelta
+        if self.sctool.parsed_client_version >= LooseVersion("3.4.0"):
+            for task_property in repair_res:
+                if task_property[0].startswith("Duration"):
+                    return duration_to_timedelta(task_property[0].split(':')[-1])
+        else:
+            # Overall repair duration is defined as a sum of all the durations (last column) in the table
+            # because of the issue https://github.com/scylladb/scylla-manager/issues/4046
+            repair_by_tables = repair_res[repair_res.index(['Keyspace', 'Table', 'Progress', 'Duration']) + 1:]
+            per_table_duration_timedelta = [duration_to_timedelta(table[-1]) for table in repair_by_tables]
+            duration_timedelta = sum(per_table_duration_timedelta, datetime.timedelta(0))
+            return duration_timedelta
 
 
 class ManagerCluster(ScyllaManagerBase):
