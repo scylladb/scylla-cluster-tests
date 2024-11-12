@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import random
+import json
 
 from enum import Enum
 from abc import ABC, abstractmethod
@@ -476,5 +477,5 @@ def get_node_status_from_system_by(verification_node: "BaseNode", *, ip_address:
 
 __all__ = ["get_raft_mode",
            "get_node_status_from_system_by",
-           "Group0MembersNotConsistentWithTokenRingMembersException",
+           "Group0MembersNotConsistentWithTokenRingMembersException", "RestApiError",
            "TopologyOperations"]
