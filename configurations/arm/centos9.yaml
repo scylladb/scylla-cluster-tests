@@ -1,6 +1,5 @@
 ami_db_scylla_user: 'ec2-user'
-ami_id_db_scylla: 'ami-0e35cc6c9c975d78f' # CentOS Stream 9 aarch64
-region_name: 'eu-west-1'
+ami_id_db_scylla: 'resolve:owner:125523088429/arm64/CentOS*Stream*9*aarch64*' # CentOS Stream 9 aarch64
 instance_type_db: 'im4gn.xlarge'
 use_preinstalled_scylla: false
 # enhanced network isn't supported
