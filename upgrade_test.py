@@ -416,15 +416,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         elif self.upgrade_rollback_mode == 'minor_release':
             node.remoter.run(r'sudo yum downgrade scylla\*%s-\* -y' % self.orig_ver.split('-')[0])
         else:
-            # first check if scylla-cqlsh had version to downgrade to
-            # and if not, we need to remove it before downgrade whole of scylla
-            result = node.remoter.sudo(r"yum downgrade scylla-\*cqlsh -y", ignore_status=True)
-            new_introduced_pkgs = r"scylla-\*cqlsh" if ("Nothing to do" in result.stdout or result.failed) else ""
-            if new_introduced_pkgs:
-                node.remoter.run('sudo yum remove %s -y' % new_introduced_pkgs)
             node.remoter.run(r'sudo yum downgrade scylla\* -y')
-            if new_introduced_pkgs:
-                node.remoter.run('sudo yum install %s -y' % node.scylla_pkg())
             recover_conf(node)
             node.remoter.run('sudo systemctl daemon-reload')
 
