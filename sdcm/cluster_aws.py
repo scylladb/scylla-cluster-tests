@@ -150,7 +150,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         subnet_info = ec2.get_subnet_info(interfaces[0]["SubnetId"])
         region_name_with_az = subnet_info['AvailabilityZone']
         ec2.add_placement_group_name_param(params, self.placement_group_name)
-        if params.get('use_capacity_reservation'):
+        if self.params.get('use_capacity_reservation'):
             ec2.add_capacity_reservation_param(params, region_name_with_az[-1])
         LOGGER.debug('Sending an On-Demand request with params: %s', params)
         LOGGER.debug('Using EC2 service with DC-index: %s, (associated with region: %s)',
