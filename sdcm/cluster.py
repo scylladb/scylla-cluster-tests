@@ -2286,11 +2286,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.remoter.sudo("zypper update scylla-manager-server scylla-manager-client -y")
         else:
             self.remoter.sudo("apt-get update", ignore_status=True)
-            # Upgrade should update packages of:
-            # 1) scylla-manager
-            # 2) scylla-manager-client
-            # 3) scylla-manager-server
-            self.remoter.sudo('DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade '
+            self.remoter.sudo('DEBIAN_FRONTEND=noninteractive apt-get install '
                               '-o Dpkg::Options::="--force-confold" '
                               '-o Dpkg::Options::="--force-confdef" '
                               'scylla-manager-server scylla-manager-client -y ')
