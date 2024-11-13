@@ -14,6 +14,7 @@
 import os
 import json
 import hashlib
+import threading
 from typing import BinaryIO
 from concurrent.futures.thread import ThreadPoolExecutor
 from collections import namedtuple
@@ -27,6 +28,8 @@ KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 
 SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 
+BOTO3_CLIENT_CREATION_LOCK = threading.Lock()
+
 
 class KeyStore:  # pylint: disable=too-many-public-methods
     @property
@@ -35,7 +38,8 @@ class KeyStore:  # pylint: disable=too-many-public-methods
 
     @property
     def s3_client(self) -> S3Client:
-        return boto3.client("s3")
+        with BOTO3_CLIENT_CREATION_LOCK:
+            return boto3.client("s3")
 
     def get_file_contents(self, file_name):
         obj = self.s3.Object(KEYSTORE_S3_BUCKET, file_name)
