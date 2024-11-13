@@ -144,3 +144,4 @@ ValidatorEvent: ERROR
 ScrubValidationErrorEvent: ERROR
 PartitionRowsValidationEvent: CRITICAL
 FailedResultEvent: ERROR
+HDRFileMissed: ERROR
