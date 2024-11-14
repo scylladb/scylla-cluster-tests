@@ -745,6 +745,10 @@ class ScyllaLogCollector(LogCollector):
                                command='for i in /var/tmp/scylla/*.log;do echo [$i]; cat $i;done'),
                     CommandLog(name='scylla_doctor.vitals.json',
                                command='cat *.vitals.json'),
+                    CommandLog(name='schema.log',
+                               command='cat schema.log'),
+                    CommandLog(name='system_schema_tables.log',
+                               command='cat system_schema_tables.log'),
                     ]
     cluster_log_type = "db-cluster"
     cluster_dir_prefix = "db-cluster"
