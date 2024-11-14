@@ -117,6 +117,8 @@ def test_scylla_repo(scylla_version, expected_outcome, distro):
                          argvalues=('aws', 'gce', 'azure')
                          )
 def test_images(backend, scylla_version, expected_outcome):
+    if backend == "azure" and "2023.1" in scylla_version:
+        pytest.skip("Azure doesn't have 2023.1 images anymore")
     os.environ['SCT_CLUSTER_BACKEND'] = backend
     os.environ['SCT_SCYLLA_VERSION'] = scylla_version
 
