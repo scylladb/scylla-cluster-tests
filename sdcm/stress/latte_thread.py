@@ -164,7 +164,8 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         """
         ops_regex = re.compile(r'\s*Throughput(.*?)\[op\/s\]\s*(?P<op_rate>\d*)\s')
         latency_99_regex = re.compile(r'\s* 99 \s*(?P<latency_99th_percentile>\d*\.\d*)\s')
-        latency_mean_regex = re.compile(r'\s*Mean resp. time\s*(?:\[(ms|s)\])?\s*(?P<latency_mean>\d+\.\d+)')
+        latency_mean_regex = re.compile(
+            r'\s*(?:Mean resp\. time|Request latency)\s*(?:\[(ms|s)\])?\s*(?P<latency_mean>\d+\.\d+)')
 
         output = {'latency 99th percentile': 0,
                   'latency mean': 0,
