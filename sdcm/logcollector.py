@@ -749,6 +749,10 @@ class ScyllaLogCollector(LogCollector):
                                command='cat /var/log/cloud-init-output.log'),
                     CommandLog(name='cloud-init.log',
                                command='cat /var/log/cloud-init.log'),
+                    CommandLog(name='schema.log',
+                               command='cat schema.log'),
+                    CommandLog(name='system_schema_tables.log',
+                               command='cat system_schema_tables.log'),
                     ]
     cluster_log_type = "db-cluster"
     cluster_dir_prefix = "db-cluster"
