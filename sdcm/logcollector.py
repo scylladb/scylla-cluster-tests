@@ -745,6 +745,10 @@ class ScyllaLogCollector(LogCollector):
                                command='for i in /var/tmp/scylla/*.log;do echo [$i]; cat $i;done'),
                     CommandLog(name='scylla_doctor.vitals.json',
                                command='cat *.vitals.json'),
+                    CommandLog(name='schema.log',
+                               command='cat schema.log'),
+                    CommandLog(name='system_schema_tables.log',
+                               command='cat system_schema_tables.log'),
                     ]
 
     cmd = "test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}"
