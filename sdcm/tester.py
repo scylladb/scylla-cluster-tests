@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 # pylint: disable=too-many-lines
+import shutil
 from collections import defaultdict
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -24,6 +25,7 @@ import time
 import traceback
 import unittest
 import unittest.mock
+from pathlib import Path
 from typing import NamedTuple, Optional, Union, List, Dict, Any
 from uuid import uuid4
 from functools import wraps, cache
@@ -82,7 +84,7 @@ from sdcm.utils.ci_tools import get_job_name, get_job_url
 from sdcm.utils.common import format_timestamp, wait_ami_available, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, rows_to_list, \
     make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, change_default_password, \
-    parse_python_thread_command
+    parse_python_thread_command, get_data_dir_path
 from sdcm.utils.cql_utils import cql_quote_if_needed
 from sdcm.utils.database_query_utils import PartitionsValidationAttributes, fetch_all_rows
 from sdcm.utils.features import is_tablets_feature_enabled
@@ -665,6 +667,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             })
         except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             self.log.warning("Error submitting gemini results to argus", exc_info=True)
+
+    def collect_ssl_conf(self):
+        shutil.copytree(Path(get_data_dir_path('ssl_conf')), Path(self.logdir) / 'ssl_conf')
 
     def _init_data_validation(self):
         if data_validation := self.params.get('data_validation'):
@@ -2973,6 +2978,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors.update_default_time_range(self.start_time, time.time())
         if self.params.get('collect_logs'):
             self.collect_logs()
+        self.collect_ssl_conf()
         self.clean_resources()
         if self.create_stats:
             self.update_test_with_errors()
