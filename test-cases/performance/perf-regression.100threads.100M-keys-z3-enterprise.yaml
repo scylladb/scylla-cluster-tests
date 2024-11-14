@@ -20,9 +20,11 @@ n_monitor_nodes: 1
 # Loaders
 gce_instance_type_loader: 'c2-standard-30'
 n_loaders: 5
-stress_multiplier_r: 1
-stress_multiplier_w: 1
-stress_multiplier_m: 1
+
+# this option was removed
+# stress_multiplier_r: 1
+# stress_multiplier_w: 1
+# stress_multiplier_m: 1
 
 
 # AWS

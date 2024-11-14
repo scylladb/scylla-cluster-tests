@@ -139,7 +139,7 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         stress_queue = []
         if self.params.get('round_robin'):
             self.log.debug('Populating data using round_robin')
-            params.update({'stress_num': 1, 'round_robin': True})
+            params.update({'round_robin': True})
         if compaction_strategy:
             self.log.debug('Next compaction strategy will be used %s', compaction_strategy)
             params['compaction_strategy'] = compaction_strategy

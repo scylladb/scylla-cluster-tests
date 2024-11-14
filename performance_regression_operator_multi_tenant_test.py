@@ -60,7 +60,7 @@ class PerformanceRegressionOperatorMultiTenantTest(MultiTenantTestMixin, Perform
             if self.params.get('round_robin'):
                 self.log.debug(
                     "'%s' DB cluster: Populating data using round_robin", db_cluster_name)
-                params.update({'stress_num': 1, 'round_robin': True})
+                params.update({'round_robin': True})
             for stress_cmd in prepare_write_cmd:
                 params.update({'stress_cmd': stress_cmd})
                 # Run all stress commands

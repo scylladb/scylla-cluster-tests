@@ -5,7 +5,6 @@ k8s_scylla_cluster_name: "sct-perf-thrpt-2vcpus"
 user_prefix: "perf-thrpt-2vcpus"
 
 n_loaders: 1
-stress_multiplier: 1
 instance_type_loader: 'c6i.2xlarge'
 round_robin: true
 # https://github.com/scylladb/scylla-cluster-tests/issues/5883

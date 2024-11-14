@@ -96,10 +96,6 @@ class LoaderUtilsMixin:
         stress_cmds = params['stress_cmd']
         if not isinstance(stress_cmds, list):
             stress_cmds = [stress_cmds]
-        # In some cases we want the same stress_cmd to run several times (can be used with round_robin or not).
-        stress_multiplier = self.params.get('stress_multiplier')
-        if stress_multiplier > 1:
-            stress_cmds *= stress_multiplier
 
         for stress_cmd in stress_cmds:
             stress_params = dict(params)

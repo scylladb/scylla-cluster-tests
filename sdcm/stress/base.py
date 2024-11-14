@@ -29,7 +29,7 @@ LOGGER = logging.getLogger(__name__)
 class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
     DOCKER_IMAGE_PARAM_NAME = ""  # test yaml param that stores image
 
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None,  # pylint: disable=too-many-arguments
+    def __init__(self, loader_set, stress_cmd, timeout, node_list=None,  # pylint: disable=too-many-arguments
                  round_robin=False, params=None, stop_test_on_failure=True):
         self.loader_set: BaseLoaderSet = loader_set
         self.stress_cmd = stress_cmd
@@ -39,7 +39,6 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         # prolong soft timeout by 5%
         self.soft_timeout = self.timeout + int(self.timeout * 0.05)
 
-        self.stress_num = stress_num
         self.node_list = node_list or []
         self.round_robin = round_robin
         self.params = params or {}
@@ -63,14 +62,13 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
     def configure_executer(self):
 
         if self.round_robin:
-            self.stress_num = 1
             loaders = [self.loader_set.get_loader()]
             LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
         else:
             loaders = self.loader_set.nodes
         self.loaders = loaders
 
-        self.max_workers = len(loaders) * self.stress_num
+        self.max_workers = len(loaders)
         LOGGER.debug("Starting %d %s Worker threads", self.max_workers, self.__class__.__name__)
         self.executor = concurrent.futures.ThreadPoolExecutor(  # pylint: disable=consider-using-with
             max_workers=self.max_workers)
@@ -78,12 +76,11 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
     def run(self):
         self.configure_executer()
         for loader in self.loaders:
-            for cpu_idx in range(self.stress_num):
-                self.results_futures += [self.executor.submit(self._run_stress, *(loader, loader.node_index, cpu_idx))]
+            self.results_futures += [self.executor.submit(self._run_stress, *(loader, loader.node_index))]
 
         return self
 
-    def _run_stress(self, loader, loader_idx, cpu_idx):
+    def _run_stress(self, loader, loader_idx):
         raise NotImplementedError()
 
     def get_results(self):

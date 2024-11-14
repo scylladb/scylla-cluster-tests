@@ -28,15 +28,12 @@ from sdcm.utils.bisect_test import bisect_test
 @bisect_test
 def test_write(self):
     base_cmd_w = self.params.get('stress_cmd_w')
-    stress_multiplier = self.params.get('stress_multiplier')
-    if stress_multiplier_w := self.params.get("stress_multiplier_w"):
-        stress_multiplier = stress_multiplier_w
 
     self.create_test_stats(doc_id_with_timestamp=True)
     self.run_fstrim_on_all_db_nodes()
 
     stress_queue = self.run_stress_thread(
-        stress_cmd=base_cmd_w, stress_num=stress_multiplier, stats_aggregate_cmds=False)
+        stress_cmd=base_cmd_w, stats_aggregate_cmds=False)
     results = self.get_stress_results(queue=stress_queue)
 
     # set bisect_ref_value only for the first test run

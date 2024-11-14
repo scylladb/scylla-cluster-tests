@@ -35,7 +35,8 @@ stress_cmd_m: >-2
   -p readproportion=0.5 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0.5
   -p maxexecutiontime=1200 -p operationcount=60000000
 
-stress_multiplier: 6
+# this option was removed
+# stress_multiplier: 6
 alternator_write_isolation: 'forbid'
 
 n_db_nodes: 3

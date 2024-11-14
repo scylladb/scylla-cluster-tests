@@ -1975,12 +1975,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
     # pylint: disable=too-many-arguments,too-many-return-statements
-    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments  # noqa: PLR0911, PLR0913
+    def run_stress_thread(self, stress_cmd, duration=None, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments  # noqa: PLR0911, PLR0913
                           round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, compaction_strategy='',
                           use_single_loader=False,
                           stop_test_on_failure=True):
 
-        params = dict(stress_cmd=stress_cmd, duration=duration, stress_num=stress_num, keyspace_num=keyspace_num,
+        params = dict(stress_cmd=stress_cmd, duration=duration, keyspace_num=keyspace_num,
                       keyspace_name=keyspace_name, profile=profile, prefix=prefix, round_robin=round_robin,
                       stats_aggregate_cmds=stats_aggregate_cmds, use_single_loader=use_single_loader)
 
@@ -2019,7 +2019,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     # pylint: disable=too-many-arguments
     def run_stress_cassandra_thread(  # noqa: PLR0913
-            self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', round_robin=False,
+            self, stress_cmd, duration=None, keyspace_num=1, profile=None, prefix='', round_robin=False,
             stats_aggregate_cmds=True, keyspace_name=None, compaction_strategy='', stop_test_on_failure=True, params=None, **_):
         # pylint: disable=too-many-locals
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
@@ -2040,7 +2040,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cs_thread = CassandraStressThread(loader_set=self.loaders,
                                           stress_cmd=stress_cmd,
                                           timeout=timeout,
-                                          stress_num=stress_num,
                                           keyspace_num=keyspace_num,
                                           compaction_strategy=compaction_strategy,
                                           profile=profile,
@@ -2055,7 +2054,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     # pylint: disable=too-many-arguments
     def run_cql_stress_cassandra_thread(  # noqa: PLR0913
-            self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', round_robin=False,
+            self, stress_cmd, duration=None, keyspace_num=1, profile=None, prefix='', round_robin=False,
             stats_aggregate_cmds=True, keyspace_name=None, compaction_strategy='', stop_test_on_failure=True, params=None, **_):
         # pylint: disable=too-many-locals
         if duration:
@@ -2075,7 +2074,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cs_thread = CqlStressCassandraStressThread(loader_set=self.loaders,
                                                    stress_cmd=stress_cmd,
                                                    timeout=timeout,
-                                                   stress_num=stress_num,
                                                    keyspace_num=keyspace_num,
                                                    compaction_strategy=compaction_strategy,
                                                    profile=profile,
@@ -2141,7 +2139,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return harry_thread
 
     # pylint: disable=too-many-arguments
-    def run_ycsb_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
+    def run_ycsb_thread(self, stress_cmd, duration=None, prefix='',
                         round_robin=False, stats_aggregate_cmds=True, **_):
 
         timeout = self.get_duration(duration)
@@ -2152,11 +2150,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return YcsbStressThread(loader_set=self.loaders,
                                 stress_cmd=stress_cmd,
                                 timeout=timeout,
-                                stress_num=stress_num,
                                 node_list=self.db_cluster.nodes,
                                 round_robin=round_robin, params=self.params).run()
 
-    def run_latte_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
+    def run_latte_thread(self, stress_cmd, duration=None, prefix='',
                          round_robin=False, stats_aggregate_cmds=True, stop_test_on_failure=True, **_):
         if duration:
             timeout = self.get_duration(duration)
@@ -2173,14 +2170,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return LatteStressThread(loader_set=self.loaders,
                                  stress_cmd=stress_cmd,
                                  timeout=timeout,
-                                 stress_num=stress_num,
                                  node_list=self.db_cluster.nodes,
                                  round_robin=round_robin,
                                  stop_test_on_failure=stop_test_on_failure,
                                  params=self.params).run()
 
     # pylint: disable=too-many-arguments
-    def run_hydra_kcl_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
+    def run_hydra_kcl_thread(self, stress_cmd, duration=None, prefix='',
                              round_robin=False, stats_aggregate_cmds=True, **_):
 
         timeout = self.get_duration(duration)
@@ -2191,12 +2187,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return KclStressThread(loader_set=self.loaders,
                                stress_cmd=stress_cmd,
                                timeout=timeout,
-                               stress_num=stress_num,
                                node_list=self.db_cluster.nodes,
                                round_robin=round_robin, params=self.params).run()
 
     # pylint: disable=too-many-arguments
-    def run_nosqlbench_thread(self, stress_cmd, duration=None, stress_num=1, prefix='', round_robin=False,
+    def run_nosqlbench_thread(self, stress_cmd, duration=None, prefix='', round_robin=False,
                               stats_aggregate_cmds=True, stop_test_on_failure=True, **_):
 
         timeout = self.get_duration(duration)
@@ -2209,26 +2204,24 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             loader_set=self.loaders,
             stress_cmd=stress_cmd,
             timeout=timeout,
-            stress_num=stress_num,
             node_list=self.db_cluster.nodes,
             round_robin=round_robin,
             stop_test_on_failure=stop_test_on_failure,
             params=self.params).run()
 
     # pylint: disable=too-many-arguments
-    def run_table_compare_thread(self, stress_cmd, duration=None, stress_num=1, round_robin=False, **_):
+    def run_table_compare_thread(self, stress_cmd, duration=None, round_robin=False, **_):
 
         timeout = self.get_duration(duration)
 
         return CompareTablesSizesThread(loader_set=self.loaders,
                                         stress_cmd=stress_cmd,
                                         timeout=timeout,
-                                        stress_num=stress_num,
                                         node_list=self.db_cluster.nodes,
                                         round_robin=round_robin, params=self.params).run()
 
     # pylint: disable=too-many-arguments
-    def run_ndbench_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
+    def run_ndbench_thread(self, stress_cmd, duration=None, prefix='',
                            round_robin=False, stats_aggregate_cmds=True, **_):
 
         timeout = self.get_duration(duration)
@@ -2239,12 +2232,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return NdBenchStressThread(loader_set=self.loaders,
                                    stress_cmd=stress_cmd,
                                    timeout=timeout,
-                                   stress_num=stress_num,
                                    node_list=self.db_cluster.nodes,
                                    round_robin=round_robin, params=self.params).run()
 
     # pylint: disable=too-many-arguments
-    def run_cdclog_reader_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
+    def run_cdclog_reader_thread(self, stress_cmd, duration=None, prefix='',
                                  round_robin=False, stats_aggregate_cmds=True, enable_batching=True,
                                  keyspace_name=None, base_table_name=None):
         timeout = self.get_duration(duration)
@@ -2254,7 +2246,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return CDCLogReaderThread(loader_set=self.loaders,
                                   stress_cmd=stress_cmd,
                                   timeout=timeout,
-                                  stress_num=stress_num,
                                   node_list=self.db_cluster.nodes,
                                   keyspace_name=keyspace_name,
                                   base_table_name=base_table_name,

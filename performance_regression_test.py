@@ -509,9 +509,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         """
         # run a write workload
         base_cmd_w = self.params.get('stress_cmd_w')
-        stress_multiplier = self.params.get('stress_multiplier')
-        if stress_multiplier_w := self.params.get("stress_multiplier_w"):
-            stress_multiplier = stress_multiplier_w
+
         # create new document in ES with doc_id = test_id + timestamp
         # allow to correctly save results for future compare
         self.create_test_stats(doc_id_with_timestamp=True)
@@ -519,7 +517,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
         # run a workload
         stress_queue = self.run_stress_thread(
-            stress_cmd=base_cmd_w, stress_num=stress_multiplier, stats_aggregate_cmds=False)
+            stress_cmd=base_cmd_w, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
         self.build_histogram(PerformanceTestWorkload.WRITE, PerformanceTestType.THROUGHPUT)
@@ -536,9 +534,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         """
 
         base_cmd_r = self.params.get('stress_cmd_r')
-        stress_multiplier = self.params.get('stress_multiplier')
-        if stress_multiplier_r := self.params.get("stress_multiplier_r"):
-            stress_multiplier = stress_multiplier_r
+
         self.run_fstrim_on_all_db_nodes()
         # run a write workload
         self.preload_data()
@@ -551,7 +547,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.run_fstrim_on_all_db_nodes()
         # run a read workload
         stress_queue = self.run_stress_thread(
-            stress_cmd=base_cmd_r, stress_num=stress_multiplier, stats_aggregate_cmds=False)
+            stress_cmd=base_cmd_r, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
         self.build_histogram(PerformanceTestWorkload.READ, PerformanceTestType.THROUGHPUT)
@@ -568,9 +564,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         """
 
         base_cmd_m = self.params.get('stress_cmd_m')
-        stress_multiplier = self.params.get('stress_multiplier')
-        if stress_multiplier_m := self.params.get("stress_multiplier_m"):
-            stress_multiplier = stress_multiplier_m
+
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
         self.preload_data()
@@ -582,7 +576,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.wait_no_compactions_running(n=240, sleep_time=180)
         self.run_fstrim_on_all_db_nodes()
         stress_queue = self.run_stress_thread(
-            stress_cmd=base_cmd_m, stress_num=stress_multiplier, stats_aggregate_cmds=False)
+            stress_cmd=base_cmd_m, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
         self.build_histogram(PerformanceTestWorkload.MIXED, PerformanceTestType.THROUGHPUT)

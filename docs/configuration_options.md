@@ -234,10 +234,6 @@
 | **<a href="#user-content-cassandra_stress_population_size" name="cassandra_stress_population_size">cassandra_stress_population_size</a>**  |  | 1000000 | SCT_CASSANDRA_STRESS_POPULATION_SIZE
 | **<a href="#user-content-cassandra_stress_threads" name="cassandra_stress_threads">cassandra_stress_threads</a>**  |  | 1000 | SCT_CASSANDRA_STRESS_THREADS
 | **<a href="#user-content-add_node_cnt" name="add_node_cnt">add_node_cnt</a>**  |  | 1 | SCT_ADD_NODE_CNT
-| **<a href="#user-content-stress_multiplier" name="stress_multiplier">stress_multiplier</a>**  | Number of cassandra-stress processes | 1 | SCT_STRESS_MULTIPLIER
-| **<a href="#user-content-stress_multiplier_w" name="stress_multiplier_w">stress_multiplier_w</a>**  | Number of cassandra-stress processes for write workload | 1 | SCT_STRESS_MULTIPLIER_W
-| **<a href="#user-content-stress_multiplier_r" name="stress_multiplier_r">stress_multiplier_r</a>**  | Number of cassandra-stress processes for read workload | 1 | SCT_STRESS_MULTIPLIER_R
-| **<a href="#user-content-stress_multiplier_m" name="stress_multiplier_m">stress_multiplier_m</a>**  | Number of cassandra-stress processes for mixed workload | 1 | SCT_STRESS_MULTIPLIER_M
 | **<a href="#user-content-run_fullscan" name="run_fullscan">run_fullscan</a>**  |  | N/A | SCT_RUN_FULLSCAN
 | **<a href="#user-content-run_full_partition_scan" name="run_full_partition_scan">run_full_partition_scan</a>**  | Runs a background thread that issues reversed-queries on a table random partition by an interval | N/A | SCT_run_full_partition_scan
 | **<a href="#user-content-run_tombstone_gc_verification" name="run_tombstone_gc_verification">run_tombstone_gc_verification</a>**  | Runs a background thread that verifies Tombstones GC on a table by an interval | N/A | SCT_RUN_TOMBSTONE_GC_VERIFICATION

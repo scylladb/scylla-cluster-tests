@@ -38,7 +38,6 @@ instance_type_loader: 'c5.2xlarge'
 instance_type_monitor: 't3.small'
 instance_type_db: 'i3.4xlarge'
 
-stress_multiplier: 1
 alternator_write_isolation: 'forbid'
 alternator_port: 8080
 dynamodb_primarykey_type: HASH_AND_RANGE
