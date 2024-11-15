@@ -110,8 +110,15 @@ class VirtualMachineProvider:
         for definition, poller in pollers:
             try:
                 poller.wait()
-                v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, definition.name)
-                LOGGER.info("Provisioned VM %s in the %s resource group", v_m.name, self._resource_group_name)
+                v_m = self._azure_service.compute.virtual_machines.get(
+                    self._resource_group_name, definition.name, expand="instanceView")
+                if v_m.instance_view and v_m.instance_view.statuses:
+                    statuses = ", ".join(
+                        f"{status.code}: {status.display_status}" for status in v_m.instance_view.statuses
+                    )
+                    LOGGER.debug("Provisioned VM %s instance state: %s", v_m.name, statuses)
+                else:
+                    LOGGER.warning("Instance view is not available for VM %s", v_m.name)
                 self._cache[v_m.name] = v_m
                 v_ms.append(v_m)
             except AzureError as err:
