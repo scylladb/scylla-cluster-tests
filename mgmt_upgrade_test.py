@@ -19,13 +19,13 @@ from sdcm.tester import ClusterTester
 from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
 from sdcm.mgmt.cli import RepairTask
 from sdcm.mgmt.common import get_manager_repo_from_defaults, create_cron_list_from_timedelta
-from mgmt_cli_test import BackupFunctionsMixIn
+from mgmt_cli_test import ManagerTestFunctionsMixIn
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
+class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
     CLUSTER_NAME = "cluster_under_test"
 
     def create_simple_table(self, table_name, keyspace_name="ks1"):

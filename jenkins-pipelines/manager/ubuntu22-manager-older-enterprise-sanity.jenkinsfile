@@ -9,7 +9,7 @@ managerPipeline(
 
     scylla_version: '2023.1',
 
-    test_name: 'mgmt_cli_test.MgmtCliTest.test_manager_sanity',
+    test_name: 'mgmt_cli_test.ManagerSanityTests.test_manager_sanity',
     test_config: 'test-cases/manager/manager-regression-multiDC-set-distro.yaml',
 
     post_behavior_db_nodes: 'destroy',
