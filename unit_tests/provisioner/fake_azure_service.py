@@ -570,7 +570,7 @@ class FakeVirtualMachines:
             resource_group_name, nic.ip_configurations[0].public_ip_address.name)
         return WaitableObject()
 
-    def get(self, resource_group_name: str, vm_name: str) -> VirtualMachine:
+    def get(self, resource_group_name: str, vm_name: str, expand: str = "") -> VirtualMachine:
         try:
             with open(self.path / resource_group_name / f"vm-{vm_name}.json", "r", encoding="utf-8") as file:
                 return VirtualMachine.deserialize(json.load(file))
