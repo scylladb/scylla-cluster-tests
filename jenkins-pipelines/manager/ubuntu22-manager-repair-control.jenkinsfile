@@ -7,7 +7,7 @@ managerPipeline(
     params: params,
 
     backend: 'aws',
-    test_name: 'mgmt_cli_test.MgmtCliTest.test_repair_control',
+    test_name: 'mgmt_cli_test.ManagerRepairTests.test_repair_control',
     test_config: 'test-cases/manager/manager-repair-control.yaml',
 
     post_behavior_db_nodes: 'destroy',

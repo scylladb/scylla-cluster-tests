@@ -346,7 +346,7 @@ class ManagerUpgradeEmailReporter(BaseEmailReporter):
     email_template_file = "results_manager_upgrade.html"
 
 
-class MgmtEmailReporter(BaseEmailReporter):
+class ManagerEmailReporter(BaseEmailReporter):
     _fields = (
         "manager_server_repo",
         "manager_agent_repo",
@@ -594,8 +594,8 @@ def build_reporter(name: str,  # noqa: PLR0911
         return UpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Artifacts" in name:
         return ArtifactsEmailReporter(email_recipients=email_recipients, logdir=logdir)
-    elif "Mgmt" in name:
-        return MgmtEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "Manager" in name:
+        return ManagerEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "TestAborted" in name:
         return TestAbortedEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "CDCReplication" in name:
