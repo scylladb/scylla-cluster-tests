@@ -2024,7 +2024,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.install_package(package_name='python2')
         # Offline install does't provide openjdk-11, it has to be installed in advance
         # https://github.com/scylladb/scylla-jmx/issues/127
-        elif self.distro.is_amazon2023:
+
+        if self.distro.is_amazon2023:
             self.install_package(package_name="java-11-amazon-corretto-headless")
         elif self.distro.is_rhel_like:
             self.install_package(package_name='java-11-openjdk-headless tar')
