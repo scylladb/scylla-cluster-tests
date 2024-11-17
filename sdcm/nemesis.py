@@ -2797,7 +2797,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             The number of milliseconds before Cassandra flushes memtables associated with this table.
             default: memtable_flush_period_in_ms = 0
         """
-        self._modify_table_property(name="memtable_flush_period_in_ms", val=random.randint(1, 5000))
+        self._modify_table_property(name="memtable_flush_period_in_ms",
+                                    val=random.choice([0, random.randint(60000, 200000)]))
 
     def modify_table_read_repair_chance(self):
         """
