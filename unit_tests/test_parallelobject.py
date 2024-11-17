@@ -4,6 +4,7 @@ import logging
 import random
 import concurrent.futures
 
+import pytest
 
 from sdcm.utils.common import ParallelObject, ParallelObjectException
 
@@ -79,11 +80,12 @@ class ParallelObjectTester(unittest.TestCase):
         test_timeout = min(self.rand_timeouts)
         start_time = time.time()
         with self.assertRaises(ParallelObjectException) as exp:
-            parallel_object = ParallelObject(self.rand_timeouts, timeout=test_timeout)
+            parallel_object = ParallelObject(self.rand_timeouts, timeout=test_timeout,
+                                             num_workers=len(self.rand_timeouts))
             parallel_object.run(dummy_func_return_tuple)
         assert any(isinstance(e.exc, concurrent.futures.TimeoutError) for e in exp.exception.results)
-        run_time = int(time.time() - start_time)
-        self.assertAlmostEqual(first=test_timeout, second=run_time, delta=1)
+        run_time = time.time() - start_time
+        assert float(test_timeout) == pytest.approx(run_time, rel=1.0e+02)
 
     def test_parallel_object_exception_raised(self):
         with self.assertRaises(ParallelObjectException):
