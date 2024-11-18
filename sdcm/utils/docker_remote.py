@@ -22,6 +22,7 @@ class RemoteDocker(BaseNode):
         if docker_network:
             extra_docker_opts += f" --network {docker_network}"
             self.create_network(docker_network)
+        extra_docker_opts += f" --label TestId={node.test_config.test_id()}"
         res = self.node.remoter.run(
             f'{self.sudo_needed} docker run {extra_docker_opts} -d {ports} {image_name} {command_line}',
             verbose=True, retry=3)
