@@ -306,6 +306,7 @@ def call(Map pipelineParams) {
                                                     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                                     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
                                                     def perf_extra_jobs_to_compare = groovy.json.JsonOutput.toJson(params.perf_extra_jobs_to_compare)
+                                                    def current_region = initAwsRegionParam(params.region, builder.region)
 
                                                     timeout(time: testRunTimeout, unit: 'MINUTES') { dir('scylla-cluster-tests') {
 
@@ -319,17 +320,15 @@ def call(Map pipelineParams) {
                                                             export BUILD_USER_REQUESTED_BY=${params.requested_by_user}
                                                         fi
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
-                                                        if [[ -n "${params.region}" ]]; then
-                                                            export SCT_REGION_NAME=${params.region}
-                                                        else
-                                                            export SCT_REGION_NAME=${pipelineParams.region}
+                                                        if [[ -n "${params.region ? params.region : ''}" ]] ; then
+                                                            export SCT_REGION_NAME=${current_region}
                                                         fi
                                                         export SCT_CONFIG_FILES=${test_config}
 
                                                         export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
 
                                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-                                                            export SCT_GCE_DATACENTER=${params.gce_datacenter}
+                                                            export SCT_GCE_DATACENTER="${params.gce_datacenter}"
                                                         fi
 
                                                         export SCT_EMAIL_RECIPIENTS="${email_recipients}"
@@ -341,13 +340,13 @@ def call(Map pipelineParams) {
                                                         if [[ ! -z "${params.byo_scylla_branch}" ]] ; then
                                                             echo "Skipping 'scylla_ami_id', 'scylla_version' and 'scylla_repo' checks because BYO ScyllaDB was enabled"
                                                         elif [[ ! -z "${params.scylla_ami_id}" ]] ; then
-                                                            export SCT_AMI_ID_DB_SCYLLA=${params.scylla_ami_id}
+                                                            export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
                                                         elif [[ ! -z "${supportedVersions}" ]]; then
-                                                            export SCT_SCYLLA_VERSION=${supportedVersions}
+                                                            export SCT_SCYLLA_VERSION="${supportedVersions}"
                                                         elif [[ ! -z "${params.scylla_version}" ]] ; then
-                                                            export SCT_SCYLLA_VERSION=${params.scylla_version}
+                                                            export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                                         elif [[ ! -z "${params.scylla_repo}" ]] ; then
-                                                            export SCT_SCYLLA_REPO=${params.scylla_repo}
+                                                            export SCT_SCYLLA_REPO="${params.scylla_repo}"
                                                         elif [[ "${params.backend ? params.backend : ''}" == *"k8s"* ]] ; then
                                                             echo "Kubernetes backend can have empty scylla version. It will be taken from defaults of the scylla helm chart"
                                                         else
@@ -356,7 +355,7 @@ def call(Map pipelineParams) {
                                                         fi
 
                                                         if [[ ! -z "${params.new_scylla_repo}" ]] ; then
-                                                            export SCT_NEW_SCYLLA_REPO=${params.new_scylla_repo}
+                                                            export SCT_NEW_SCYLLA_REPO="${params.new_scylla_repo}"
                                                         fi
 
                                                         if [[ "${params.update_db_packages || false}" == "true" ]] ; then
@@ -367,7 +366,7 @@ def call(Map pipelineParams) {
                                                         export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
                                                         export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
                                                         export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
-                                                        export SCT_INSTANCE_PROVISION=${params.provision_type}
+                                                        export SCT_INSTANCE_PROVISION="${params.provision_type}"
                                                         export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                                         export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
 
@@ -376,25 +375,25 @@ def call(Map pipelineParams) {
                                                             export SCT_GKE_CLUSTER_VERSION="${params.k8s_version}"
                                                         fi
                                                         if [[ -n "${params.k8s_scylla_operator_helm_repo ? params.k8s_scylla_operator_helm_repo : ''}" ]] ; then
-                                                            export SCT_K8S_SCYLLA_OPERATOR_HELM_REPO=${params.k8s_scylla_operator_helm_repo}
+                                                            export SCT_K8S_SCYLLA_OPERATOR_HELM_REPO="${params.k8s_scylla_operator_helm_repo}"
                                                         fi
                                                         if [[ -n "${params.k8s_scylla_operator_chart_version ? params.k8s_scylla_operator_chart_version : ''}" ]] ; then
-                                                            export SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION=${params.k8s_scylla_operator_chart_version}
+                                                            export SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION="${params.k8s_scylla_operator_chart_version}"
                                                         fi
                                                         if [[ -n "${params.k8s_scylla_operator_docker_image ? params.k8s_scylla_operator_docker_image : ''}" ]] ; then
-                                                            export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
+                                                            export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE="${params.k8s_scylla_operator_docker_image}"
                                                         fi
                                                         if [[ -n "${pipelineParams.k8s_deploy_monitoring ? pipelineParams.k8s_deploy_monitoring : ''}" ]] ; then
-                                                            export SCT_K8S_DEPLOY_MONITORING=${pipelineParams.k8s_deploy_monitoring}
+                                                            export SCT_K8S_DEPLOY_MONITORING="${pipelineParams.k8s_deploy_monitoring}"
                                                         fi
                                                         if [[ -n "${pipelineParams.k8s_enable_performance_tuning ? pipelineParams.k8s_enable_performance_tuning : ''}" ]] ; then
-                                                            export SCT_K8S_ENABLE_PERFORMANCE_TUNING=${pipelineParams.k8s_enable_performance_tuning}
+                                                            export SCT_K8S_ENABLE_PERFORMANCE_TUNING="${pipelineParams.k8s_enable_performance_tuning}"
                                                         fi
                                                         if [[ -n "${pipelineParams.k8s_scylla_utils_docker_image ? pipelineParams.k8s_scylla_utils_docker_image : ''}" ]] ; then
-                                                            export SCT_K8S_SCYLLA_UTILS_DOCKER_IMAGE=${pipelineParams.k8s_scylla_utils_docker_image}
+                                                            export SCT_K8S_SCYLLA_UTILS_DOCKER_IMAGE="${pipelineParams.k8s_scylla_utils_docker_image}"
                                                         fi
                                                         if [[ -n "${params.k8s_enable_tls ? params.k8s_enable_tls : ''}" ]] ; then
-                                                            export SCT_K8S_ENABLE_TLS=${params.k8s_enable_tls}
+                                                            export SCT_K8S_ENABLE_TLS="${params.k8s_enable_tls}"
                                                         fi
                                                         if [[ -n "${params.test_email_title ? params.test_email_title : ''}" ]] ; then
                                                             export SCT_EMAIL_SUBJECT_POSTFIX="${params.test_email_title}"
