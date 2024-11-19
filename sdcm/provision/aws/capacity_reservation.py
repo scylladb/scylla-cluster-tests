@@ -118,10 +118,12 @@ class SCTCapacityReservation:
     @staticmethod
     def is_capacity_reservation_enabled(params: dict) -> bool:
         """Returns True if capacity reservation is enabled."""
+        is_single_dc = str(params.get("n_db_nodes")).isdigit() or params.get('simulated_regions') > 0
         return (params.get("cluster_backend") == "aws"
                 and (params.get("test_id") or params.get("reuse_cluster"))
                 and params.get('use_capacity_reservation') is True
-                and params.get('instance_provision') == 'on_demand')
+                and params.get('instance_provision') == 'on_demand'
+                and is_single_dc)
 
     @classmethod
     def reserve(cls, params) -> None:
