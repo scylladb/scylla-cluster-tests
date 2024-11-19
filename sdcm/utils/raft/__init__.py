@@ -57,7 +57,6 @@ ABORT_DECOMMISSION_LOG_PATTERNS: Iterable[MessagePosition] = [
     MessagePosition("became a group 0 non-voter", LogPosition.END),
     MessagePosition("leaving token ring", LogPosition.END),
     MessagePosition("left token ring", LogPosition.END),
-    MessagePosition("Finished token ring movement", LogPosition.END),
     MessagePosition("raft_topology - decommission: waiting for completion", LogPosition.BEGIN),
     MessagePosition("repair - decommission_with_repair", LogPosition.END)
 ]
