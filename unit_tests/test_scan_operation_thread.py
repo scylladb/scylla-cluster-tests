@@ -152,7 +152,7 @@ def test_negative_prometheus_validation_error(events, cluster):
             all_events = get_event_log_file(events)
             assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
             assert "Severity.ERROR" in all_events[1] and "period_type=end" in all_events[
-                1] and "Fullscan failed - 'mapreduce_service_requests_dispatched_to_other_nodes' was not triggered" in all_events[1]
+                1] and "Fullscan failed - 'forward_service_requests_dispatched_to_other_nodes' was not triggered" in all_events[1]
 
 
 class ExecuteOperationTimedOutMockCqlConnectionPatient(MockCqlConnectionPatient):

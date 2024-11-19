@@ -460,7 +460,7 @@ class FullScanAggregatesOperation(FullscanOperationBase):
                       event: Type[FullScanEvent | FullPartitionScanEvent
                                   | FullPartitionScanReversedOrderEvent]) -> None:
         self.log.debug('Will run command %s', cmd)
-        validate_mapreduce_service_requests_start_time = time.time()
+        validate_forward_service_requests_start_time = time.time()
         try:
             cmd_result = session.execute(
                 query=cmd, trace=False, timeout=self._session_execution_timeout)
@@ -483,7 +483,7 @@ class FullScanAggregatesOperation(FullscanOperationBase):
             event.severity = Severity.ERROR
             return
 
-        message, severity = self._validate_fullscan_result(cmd_result, validate_mapreduce_service_requests_start_time)
+        message, severity = self._validate_fullscan_result(cmd_result, validate_forward_service_requests_start_time)
         if not severity:
             event.message = f"{type(self).__name__} operation ended successfully: {message}"
         else:
@@ -491,7 +491,7 @@ class FullScanAggregatesOperation(FullscanOperationBase):
             event.message = f"{type(self).__name__} operation failed: {message}"
 
     def _validate_fullscan_result(
-            self, cmd_result: ResultSet, validate_mapreduce_service_requests_start_time):
+            self, cmd_result: ResultSet, validate_forward_service_requests_start_time):
         result = cmd_result.all()
 
         if not result:
@@ -504,36 +504,36 @@ class FullScanAggregatesOperation(FullscanOperationBase):
         self.log.debug("Fullscan aggregation result: %s", output)
 
         try:
-            self.validate_mapreduce_service_requests_dispatched_to_other_nodes(
-                validate_mapreduce_service_requests_start_time)
+            self.validate_forward_service_requests_dispatched_to_other_nodes(
+                validate_forward_service_requests_start_time)
         except Retry as retry_exception:
-            self.log.debug("prometheus_mapreduce_service_requests metrics:\n %s",
+            self.log.debug("prometheus_forward_service_requests metrics:\n %s",
                            str(retry_exception))
             self.log.debug("Fullscan aggregation result: %s", output)
-            return "Fullscan failed - 'mapreduce_service_requests_dispatched_to_other_nodes' was not triggered", \
+            return "Fullscan failed - 'forward_service_requests_dispatched_to_other_nodes' was not triggered", \
                 Severity.ERROR
 
         return f'result {result[0]}', None
 
     @retrying(n=6, sleep_time=10, allowed_exceptions=(Retry, ))
-    def validate_mapreduce_service_requests_dispatched_to_other_nodes(self, start_time):
+    def validate_forward_service_requests_dispatched_to_other_nodes(self, start_time):
         prometheus = PrometheusDBStats(
             TestConfig().tester_obj().monitors.nodes[0].external_address)
-        prometheus_mapreduce_service_requests = prometheus.query(
-            'scylla_mapreduce_service_requests_dispatched_to_other_nodes',
+        prometheus_forward_service_requests = prometheus.query(
+            'scylla_forward_service_requests_dispatched_to_other_nodes',
             start_time, time.time())
 
         # expected format is :
-        # [{'metric': {'__name__': 'scylla_mapreduce_service_requests_dispatched_to_other_nodes',
+        # [{'metric': {'__name__': 'scylla_forward_service_requests_dispatched_to_other_nodes',
         # 'instance': '10.4.0.181', 'job': 'scylla', 'shard': '0'}, 'values': [[1690287334.763, '0']]}, ...]
-        for metric in prometheus_mapreduce_service_requests:
-            mapreduce_service_requests_dispatched_before_query = int(metric["values"][0][1])
-            mapreduce_service_requests_dispatched_after_query = int(metric["values"][-1][1])
-            if mapreduce_service_requests_dispatched_before_query < mapreduce_service_requests_dispatched_after_query:
-                self.log.info('mapreduce_service_requests_dispatched_to_other_nodes was triggered')
+        for metric in prometheus_forward_service_requests:
+            forward_service_requests_dispatched_before_query = int(metric["values"][0][1])
+            forward_service_requests_dispatched_after_query = int(metric["values"][-1][1])
+            if forward_service_requests_dispatched_before_query < forward_service_requests_dispatched_after_query:
+                self.log.info('forward_service_requests_dispatched_to_other_nodes was triggered')
                 return
 
-        raise Retry(prometheus_mapreduce_service_requests)
+        raise Retry(prometheus_forward_service_requests)
 
 
 class PagedResultHandler:
