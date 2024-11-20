@@ -268,3 +268,27 @@ zero_token_instance_type_db: 'i4i.large'
 use_zero_nodes: false
 
 latte_schema_parameters: {}
+
+latency_decorator_error_thresholds:
+  write:
+    default:
+      P90 write:
+        fixed_limit: 5
+      P99 write:
+        fixed_limit: 10
+  read:
+    default:
+      P90 read:
+        fixed_limit: 5
+      P99 read:
+        fixed_limit: 10
+  mixed:
+    default:
+      P90 write:
+        fixed_limit: 5
+      P90 read:
+          fixed_limit: 5
+      P99 write:
+          fixed_limit: 10
+      P99 read:
+          fixed_limit: 10
