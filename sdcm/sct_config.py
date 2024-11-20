@@ -1645,6 +1645,11 @@ class SCTConfiguration(dict):
 
         dict(name="run_scylla_doctor", env="SCT_RUN_SCYLLA_DOCTOR", type=boolean,
              help="Run scylla-doctor in artifact tests"),
+
+        dict(name="latency_decorator_error_thresholds", env="SCT_LATENCY_DECORATOR_ERROR_THRESHOLDS", type=dict_or_str,
+             help="Error thresholds for latency decorator."
+                  " Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}"),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
