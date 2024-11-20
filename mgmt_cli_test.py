@@ -572,7 +572,7 @@ class ManagerTestFunctionsMixIn(
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
         assert restore_task.status == TaskStatus.DONE, f"Restoration of {snapshot_tag} has failed!"
         InfoEvent(message=f'The restore task has ended successfully. '
-                          f'Restore run time: {restore_task.duration}.').publish()
+                  f'Restore run time: {restore_task.duration}.').publish()
         if restore_schema:
             self.db_cluster.restart_scylla()  # After schema restoration, you should restart the nodes
         return restore_task
@@ -1441,6 +1441,12 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
         5. Run the verification read stress to ensure the data is restored correctly.
         """
         self.run_prepare_write_cmd()
+
+        compaction_ops = CompactionOps(cluster=self.db_cluster)
+        #  Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
+        for node in self.db_cluster.nodes:
+            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
+
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = self.ensure_and_get_cluster(manager_tool)
 
@@ -1489,6 +1495,11 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                                       restore_schema=True, location_list=location)
         for ks_name in snapshot_data.keyspaces:
             self.set_ks_strategy_to_network_and_rf_according_to_cluster(keyspace=ks_name, repair_after_alter=False)
+
+        compaction_ops = CompactionOps(cluster=self.db_cluster)
+        # Disable keyspace autocompaction cluster-wide since we dont want it to interfere with our restore timing
+        for node in self.db_cluster.nodes:
+            compaction_ops.disable_autocompaction_on_ks_cf(node=node)
 
         if restore_outside_manager:
             self.log.info("Restoring the data outside the Manager")
