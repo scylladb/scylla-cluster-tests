@@ -261,3 +261,27 @@ enterprise_disable_kms: false
 assert_linux_distro_features: []
 
 latte_schema_parameters: {}
+
+latency_decorator_error_thresholds:
+  write:
+    default:
+      P90 write:
+        fixed_limit: 5
+      P99 write:
+        fixed_limit: 10
+  read:
+    default:
+      P90 read:
+        fixed_limit: 5
+      P99 read:
+        fixed_limit: 10
+  mixed:
+    default:
+      P90 write:
+        fixed_limit: 5
+      P90 read:
+          fixed_limit: 5
+      P99 write:
+          fixed_limit: 10
+      P99 read:
+          fixed_limit: 10
