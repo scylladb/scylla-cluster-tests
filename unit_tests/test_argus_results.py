@@ -38,11 +38,11 @@ def test_send_latency_decorator_result_to_argus():
             sut_timestamp=0,
             sut_details='',
             results=[
-                Cell(column='P90 write', row='Cycle #1', value=2.15, status=Status.PASS),
-                Cell(column='P99 write', row='Cycle #1', value=3.62, status=Status.PASS),
-                Cell(column='P90 read', row='Cycle #1', value=2.86, status=Status.PASS),
-                Cell(column='P99 read', row='Cycle #1', value=5.36, status=Status.PASS),
-                Cell(column='duration', row='Cycle #1', value=2654, status=Status.PASS),
+                Cell(column='P90 write', row='Cycle #1', value=2.15, status=Status.UNSET),
+                Cell(column='P99 write', row='Cycle #1', value=3.62, status=Status.UNSET),
+                Cell(column='P90 read', row='Cycle #1', value=2.86, status=Status.UNSET),
+                Cell(column='P99 read', row='Cycle #1', value=5.36, status=Status.UNSET),
+                Cell(column='duration', row='Cycle #1', value=2654, status=Status.UNSET),
                 Cell(column='Overview', row='Cycle #1',
                      value='https://cloudius-jenkins-test.s3.amazonaws.com/a9b9a308-6ff8-4cc8-b33d-c439f75c9949/20240721_125838/'
                            'grafana-screenshot-overview-20240721_125838-perf-latency-grow-shrink-ubuntu-monitor-node-a9b9a308-1.png',
@@ -59,8 +59,8 @@ def test_send_latency_decorator_result_to_argus():
             sut_timestamp=0,
             sut_details='',
             results=[
-                Cell(column='total', row='Cycle #1', value=18, status=Status.PASS),
-                Cell(column='10ms', row='Cycle #1', value=18, status=Status.PASS)
+                Cell(column='total', row='Cycle #1', value=18, status=Status.UNSET),
+                Cell(column='10ms', row='Cycle #1', value=18, status=Status.UNSET)
             ]
         ))
     ]
