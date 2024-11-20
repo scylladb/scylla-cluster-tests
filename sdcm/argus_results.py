@@ -116,11 +116,13 @@ def submit_results_to_argus(argus_client: ArgusClient, result_table: GenericResu
 
 
 def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, description: str, cycle: int, result: dict,
-                         start_time: float = 0):
+                         start_time: float = 0, error_thresholds: dict = None):
     result_table = workload_to_table[workload]()
     result_table.name = f"{workload} - {name} - latencies"
     result_table.description = f"{workload} workload - {description}"
-    operation_error_thresholds = LATENCY_ERROR_THRESHOLDS.get(name, LATENCY_ERROR_THRESHOLDS["default"])
+    if error_thresholds:
+        error_thresholds = error_thresholds[workload]["default"] | error_thresholds[workload].get(name, {})
+        result_table.validation_rules = {metric: ValidationRule(**rules) for metric, rules in error_thresholds.items()}
     try:
         start_time = datetime.fromtimestamp(start_time or time.time(), tz=timezone.utc).strftime('%H:%M:%S')
     except ValueError:
@@ -134,16 +136,15 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
             result_table.add_result(column=f"P{percentile} {operation}",
                                     row=f"Cycle #{cycle}",
                                     value=value,
-                                    status=Status.PASS if value < operation_error_thresholds[f"percentile_{percentile}"] else Status.ERROR)
+                                    status=Status.UNSET)
         if value := summary[operation.upper()].get("throughput", None):
-            # TODO: This column will be validated in the gradual test. `PASS` is temporary status. Should be handled later
             result_table.add_result(column=f"Throughput {operation.lower()}",
                                     row=f"Cycle #{cycle}",
                                     value=value,
                                     status=Status.UNSET)
 
     result_table.add_result(column="duration", row=f"Cycle #{cycle}",
-                            value=result["duration_in_sec"], status=Status.PASS)
+                            value=result["duration_in_sec"], status=Status.UNSET)
     try:
         overview_screenshot = [screenshot for screenshot in result["screenshots"] if "overview" in screenshot][0]
         result_table.add_result(column="Overview", row=f"Cycle #{cycle}",
@@ -166,11 +167,11 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         result_table = ReactorStallStatsResult()
         result_table.name = f"{workload} - {name} - stalls - {event_name}"
         result_table.description = f"{event_name} event counts"
-        result_table.add_result(column=f"total", row=f"Cycle #{cycle}",
-                                value=stall_stats["counter"], status=Status.PASS)
+        result_table.add_result(column="total", row=f"Cycle #{cycle}",
+                                value=stall_stats["counter"], status=Status.UNSET)
         for interval, value in stall_stats["ms"].items():
             result_table.add_result(column=f"{interval}ms", row=f"Cycle #{cycle}",
-                                    value=value, status=Status.PASS)
+                                    value=value, status=Status.UNSET)
         submit_results_to_argus(argus_client, result_table)
 
 
