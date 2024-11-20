@@ -256,7 +256,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 hdr_throughput += values["throughput"]
             result["cycle_hdr_throughput"] = round(hdr_throughput)
             result["reactor_stalls_stats"] = reactor_stall_stats
-
+            error_thresholds = tester.params.get("latency_decorator_error_thresholds")
             if "steady" in func_name.lower():
                 if 'Steady State' not in latency_results:
                     latency_results['Steady State'] = result
@@ -268,6 +268,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                         cycle=0,
                         result=result,
                         start_time=start,
+                        error_thresholds=error_thresholds,
                     )
             else:
                 latency_results[func_name]['cycles'].append(result)
@@ -279,6 +280,7 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                     cycle=len(latency_results[func_name]['cycles']),
                     result=result,
                     start_time=start,
+                    error_thresholds=error_thresholds,
                 )
 
             with open(latency_results_file_path, 'w', encoding="utf-8") as file:
