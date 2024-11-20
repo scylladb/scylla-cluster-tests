@@ -12,4 +12,4 @@ class TestManagerVersions:
     def test_get_manager_repo_from_defaults_returns_repo_address(self):  # pylint: disable=no-self-use
         url = get_manager_repo_from_defaults("3.2", Distro.UBUNTU22)
 
-        assert url == 'http://downloads.scylladb.com.s3.amazonaws.com/deb/debian/scylladb-manager-3.2.list'
+        assert url == 'https://downloads.scylladb.com/deb/debian/scylladb-manager-3.2.list'
