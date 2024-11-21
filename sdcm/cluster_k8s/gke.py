@@ -274,7 +274,7 @@ class GkeCluster(KubernetesCluster):
                  gce_disk_type,
                  gce_network,
                  gce_service: tuple[compute_v1.InstancesClient, dict],
-                 gce_instance_type='n1-standard-2',
+                 gce_instance_type='n2-standard-2',
                  user_prefix=None,
                  params=None,
                  gce_datacenter=None,

@@ -448,7 +448,7 @@ def create_instance(  # pylint: disable=too-many-arguments,too-many-locals,too-m
     zone: str,
     instance_name: str,
     disks: List[compute_v1.AttachedDisk],
-    machine_type: str = "n1-standard-1",
+    machine_type: str = "n2-standard-1",
     network_name: str = None,
     subnetwork_link: str = None,
     internal_ip: str = None,
