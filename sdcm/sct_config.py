@@ -2349,6 +2349,8 @@ class SCTConfiguration(dict):
         if backend in ('aws', 'gce') and db_type != 'cloud_scylla' and (
                 self.get('simulated_regions') or 0) < 2:
             self._check_multi_region_params(backend)
+        if backend == 'docker':
+            self._validate_docker_backend_parameters()
 
         self._verify_data_volume_configuration(backend)
 
@@ -2795,6 +2797,10 @@ class SCTConfiguration(dict):
                         raise ValueError(f"Scylla-bench command {cmd} doesn't have parameter -mode")
                     if "-workload=" not in cmd:
                         raise ValueError(f"Scylla-bench command {cmd} doesn't have parameter -workload")
+
+    def _validate_docker_backend_parameters(self):
+        if self.get("use_mgmt"):
+            raise ValueError(f"Scylla Manager is not supported for docker backend")
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:

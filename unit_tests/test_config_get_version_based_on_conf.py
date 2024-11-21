@@ -58,6 +58,7 @@ def function_setup():
                          )
 def test_docker(scylla_version, expected_docker_image, expected_outcome):
     os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+    os.environ['SCT_USE_MGMT'] = 'false'
     os.environ['SCT_SCYLLA_VERSION'] = scylla_version
 
     conf = sct_config.SCTConfiguration()
