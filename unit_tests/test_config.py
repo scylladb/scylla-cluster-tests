@@ -95,6 +95,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_05_docker(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_USE_MGMT'] = 'false'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
 
         conf = sct_config.SCTConfiguration()
@@ -104,6 +105,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_06a_docker_latest_no_loader(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_USE_MGMT'] = 'false'
         os.environ['SCT_SCYLLA_VERSION'] = 'latest'
         os.environ['SCT_N_LOADERS'] = "0"
         docker_tag_after_processing = "fake_specific_docker_tag"
@@ -118,6 +120,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_06b_docker_development(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_USE_MGMT'] = 'false'
         os.environ['SCT_SCYLLA_VERSION'] = '666.development-blah'
         os.environ['SCT_SCYLLA_REPO_LOADER'] = RPM_URL
 
@@ -884,6 +887,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     @pytest.mark.integration
     def test_31_check_network_config_docker(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_USE_MGMT'] = 'false'
         os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
 
         conf = sct_config.SCTConfiguration()
