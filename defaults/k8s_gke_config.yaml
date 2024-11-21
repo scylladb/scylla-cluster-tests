@@ -6,7 +6,7 @@ gce_network: 'qa-vpc'
 gke_cluster_version: '1.27'
 gke_k8s_release_channel: ''
 
-gce_instance_type_db: 'n1-standard-8'
+gce_instance_type_db: 'n2-standard-8'
 gce_root_disk_type_db: 'pd-ssd'
 root_disk_size_db: 50
 gce_n_local_ssd_disk_db: 3
@@ -16,7 +16,7 @@ k8s_n_scylla_pods_per_cluster: 3
 k8s_n_monitor_nodes: 0
 k8s_n_auxiliary_nodes: 2
 
-k8s_instance_type_auxiliary: 'n1-standard-2'
+k8s_instance_type_auxiliary: 'n2-standard-2'
 
 scylla_version: '5.2.11'
 
