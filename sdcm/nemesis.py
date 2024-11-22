@@ -1645,7 +1645,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @target_all_nodes
     def disrupt_terminate_and_replace_node(self):  # pylint: disable=invalid-name
+        self._terminate_and_replace_node()
 
+    def _terminate_and_replace_node(self):
         def get_node_state(node_ip: str) -> List["str"] | None:
             """Gets node state by IP address from nodetool status response"""
             status = self.cluster.get_nodetool_status()
@@ -4292,6 +4294,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         InfoEvent(message=f'Start shrink cluster by {add_nodes_number} nodes').publish()
         # Check that number of nodes is enough for decommission:
+        self.log.debug("Current target_node %s, is zero_node: %s, dc_idx: %s", self.target_node.name,
+                       self.target_node._is_zero_token_node, self.target_node.dc_idx)
         cur_num_nodes_in_dc = len([n for n in self.cluster.data_nodes if n.dc_idx == self.target_node.dc_idx])
         initial_db_size = self.tester.params.get("n_db_nodes")
         if self._is_it_on_kubernetes():
@@ -4535,15 +4539,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.steady_state_latency()
             self.has_steady_run = True
         InfoEvent(message='StartEvent - start a repair by ScyllaManager').publish()
-        self.disrupt_mgmt_repair_cli()
-        InfoEvent(message='FinishEvent - Manager repair has finished').publish()
+        if self.cluster.params.get('use_mgmt') or self.cluster.params.get('use_cloud_manager'):
+            self._mgmt_repair_cli()
+            InfoEvent(message='FinishEvent - Manager repair has finished').publish()
+        else:
+            InfoEvent(message='FinishEvent - Manager repair was Skipped').publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting grow disruption').publish()
         self._grow_cluster(rack=None)
         InfoEvent(message='Finished grow disruption').publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting terminate_and_replace disruption').publish()
-        self.disrupt_terminate_and_replace_node()
+        self._terminate_and_replace_node()
         InfoEvent(message='Finished terminate_and_replace disruption').publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting shrink disruption').publish()
