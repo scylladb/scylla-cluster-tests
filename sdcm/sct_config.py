@@ -1566,6 +1566,9 @@ class SCTConfiguration(dict):
              help="""set c-s parameter '-pop' with gauss/uniform distribution for
              performance gradual throughtput grow tests"""),
 
+        dict(name="latte_schema_parameters", env="SCT_LATTE_SCHEMA_PARAMETERS", type=dict,
+             help="""Optional. Allows to pass through custom rune script parameters to the 'latte schema' command."""),
+
         dict(name="num_loaders_step", env="SCT_NUM_LOADERS_STEP", type=int,
              help="Number of loaders which should be added per step"),
         dict(name="stress_threads_start_num", env="SCT_STRESS_THREADS_START_NUM", type=int,
