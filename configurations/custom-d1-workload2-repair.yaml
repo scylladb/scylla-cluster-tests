@@ -1,0 +1,9 @@
+# NOTE: needed for reproducing of the following issues:
+# - https://github.com/scylladb/scylla-enterprise/issues/4284
+# - https://github.com/scylladb/scylla-enterprise/issues/4602
+# - https://github.com/scylladb/scylla-enterprise/issues/4588
+
+hinted_handoff: 'enabled'
+nemesis_class_name: 'MgmtRepair'
+latte_schema_parameters:
+  tombstone_gc_mode: repair
