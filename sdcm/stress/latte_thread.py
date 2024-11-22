@@ -136,8 +136,19 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     "Not found datacenter for loader region '%s'. Datacenter per loader dict: %s",
                     loader.region, datacenter_name_per_region)
 
+        custom_schema_params = ""
+        if latte_schema_parameters := self.params['latte_schema_parameters']:
+            # NOTE: string parameters in latte must be wrapped into escaped double-quotes: foo="\"bar\""
+            for k, v in latte_schema_parameters.items():
+                processed_v = v
+                try:
+                    processed_v = int(v)
+                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+                    if v not in ('true', 'false'):
+                        processed_v = r"\"%s\"" % v
+                custom_schema_params += " -P {k}={v}".format(k=k, v=processed_v)
         cmd_runner.run(
-            cmd=f'latte schema {script_name} {ssl_config} {auth_config} -- {hosts}',
+            cmd=f'latte schema {script_name} {ssl_config} {auth_config}{custom_schema_params} -- {hosts}',
             timeout=self.timeout,
             retry=0,
         )
