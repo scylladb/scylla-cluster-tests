@@ -1577,7 +1577,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         node.wait_for_pod_readiness()
 
     def disrupt_terminate_and_replace_node(self):  # pylint: disable=invalid-name
+        self._terminate_and_replace_node()
 
+    def _terminate_and_replace_node(self):
         def get_node_state(node_ip: str) -> List["str"] | None:
             """Gets node state by IP address from nodetool status response"""
             status = self.cluster.get_nodetool_status()
@@ -4388,15 +4390,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.steady_state_latency()
             self.has_steady_run = True
         InfoEvent(message='StartEvent - start a repair by ScyllaManager').publish()
-        self.disrupt_mgmt_repair_cli()
-        InfoEvent(message='FinishEvent - Manager repair has finished').publish()
+        if self.cluster.params.get('use_mgmt') or self.cluster.params.get('use_cloud_manager'):
+            self._mgmt_repair_cli()
+            InfoEvent(message='FinishEvent - Manager repair has finished').publish()
+        else:
+            InfoEvent(message='FinishEvent - Manager repair was Skipped').publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting grow disruption').publish()
         self._grow_cluster(rack=None)
         InfoEvent(message='Finished grow disruption').publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting terminate_and_replace disruption').publish()
-        self.disrupt_terminate_and_replace_node()
+        self._terminate_and_replace_node()
         InfoEvent(message='Finished terminate_and_replace disruption').publish()
         time.sleep(sleep_time_between_ops)
         InfoEvent(message='Starting shrink disruption').publish()
