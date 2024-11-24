@@ -109,6 +109,8 @@ pipeline {
             steps {
                 script {
                     try {
+                        checkoutQaInternal(params)
+
                         sh './docker/env/hydra.sh unit-tests'
                         pullRequestSetResult('success', 'jenkins/unittests', 'All unit tests are passed')
                     } catch(Exception ex) {
