@@ -128,6 +128,10 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     def _get_public_ip_address(self) -> str:
         return '127.0.0.1'
 
+    @property
+    def cql_address(self):
+        return '127.0.0.1'
+
     def start_task_threads(self) -> None:
         # disable all background threads
         pass

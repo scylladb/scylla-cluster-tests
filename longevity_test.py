@@ -19,11 +19,13 @@ import string
 import tempfile
 import itertools
 import contextlib
+from typing import List, Dict
 
 import yaml
 from cassandra import AlreadyExists, InvalidRequest
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
+from sdcm import sct_abs_path
 from sdcm.sct_events.group_common_events import \
     ignore_large_collection_warning, \
     ignore_max_memory_for_unlimited_query_soft_limit
@@ -113,7 +115,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         if not res:
             InfoEvent("Did not find expected log message warning: {}".format(msg), severity=Severity.ERROR)
 
-    def test_custom_time(self):
+    def test_custom_time(self):  # noqa: PLR0914
         """
         Run cassandra-stress with params defined in data_dir/scylla.yaml
         """
@@ -175,6 +177,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         if customer_profiles:
             cs_duration = self.params.get('cs_duration')
             for cs_profile in customer_profiles:
+                cs_profile = sct_abs_path(cs_profile)  # noqa: PLW2901
                 assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
                 self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
                 profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
@@ -288,6 +291,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             duration = int(cs_duration.translate(str.maketrans('', '', string.ascii_letters)))
 
             for cs_profile in customer_profiles:
+                cs_profile = sct_abs_path(cs_profile)  # noqa: PLW2901
                 assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
                 self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
 
@@ -324,12 +328,13 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             # add few stress threads with tables that weren't pre-created
             customer_profiles = self.params.get('cs_user_profiles')
             for cs_profile in customer_profiles:
+                cs_profile = sct_abs_path(cs_profile)  # noqa: PLW2901
                 # for now we'll leave to just one fresh table, to kick schema update
                 num_of_newly_created_tables = 1
                 self._pre_create_templated_user_schema(batch_start=extra_tables_idx,
                                                        batch_end=extra_tables_idx+num_of_newly_created_tables)
                 for i in range(num_of_newly_created_tables):
-                    batch.append(self.create_templated_user_stress_params(extra_tables_idx + i, cs_profile=cs_profile))
+                    batch += self.create_templated_user_stress_params(extra_tables_idx + i, cs_profile=cs_profile)  # noqa: PLW2901
 
             nodes_ips = self.all_node_ips_for_stress_command
             for params in batch:
@@ -418,7 +423,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         cs_user_profiles = self.params.get('cs_user_profiles')
         # read user-profile
         for profile_file in cs_user_profiles:
-            with open(profile_file, encoding="utf-8") as fobj:
+            with open(sct_abs_path(profile_file), encoding="utf-8") as fobj:
                 profile_yaml = yaml.safe_load(fobj)
             keyspace_definition = profile_yaml['keyspace_definition']
             keyspace_name = profile_yaml['keyspace']
@@ -479,7 +484,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         })
         return email_data
 
-    def create_templated_user_stress_params(self, idx, cs_profile):  # pylint: disable=invalid-name
+    def create_templated_user_stress_params(self, idx, cs_profile) -> List[Dict]:  # pylint: disable=invalid-name
         # pylint: disable=too-many-locals
         params_list = []
         cs_duration = self.params.get('cs_duration')
@@ -500,7 +505,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             # example:
             # cassandra-stress user profile={} cl=QUORUM 'ops(insert=1)' duration={} -rate threads=100 -pop 'dist=gauss(0..1M)'
             for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
-                stress_cmd = (cmd.format(profile_dst, cs_duration))
+                stress_cmd = cmd.format(profile_dst, cs_duration)
                 params = {'stress_cmd': stress_cmd, 'profile': profile_dst}
                 self.log.debug('Stress cmd: {}'.format(stress_cmd))
                 params_list.append(params)
