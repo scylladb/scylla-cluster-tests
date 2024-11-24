@@ -1812,7 +1812,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         else:
             repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
         self.remoter.sudo(f"curl -o {repo_path} -L {scylla_repo} "
-                          f"--connect-timeout 10 --retry 5 --retry-all-errors --retry-max-time 100", retry=3)
+                          f"--connect-timeout 10 --retry 5 --retry-max-time 100", retry=3)
 
         # Prevent issue https://github.com/scylladb/scylla/issues/9683
         self.remoter.sudo(f"chmod 644 {repo_path}")
