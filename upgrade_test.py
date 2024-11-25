@@ -51,8 +51,13 @@ from sdcm.sct_events.database import (
     DatabaseLogEvent,
 )
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
-from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused, \
-    ignore_abort_requested_errors, decorate_with_context
+from sdcm.sct_events.group_common_events import (
+    decorate_with_context,
+    ignore_abort_requested_errors,
+    ignore_topology_change_coordinator_errors,
+    ignore_upgrade_schema_errors,
+    ignore_ycsb_connection_refused,
+)
 from sdcm.utils import loader_utils
 from sdcm.utils.features import CONSISTENT_TOPOLOGY_CHANGES_FEATURE
 from sdcm.wait import wait_for
@@ -919,7 +924,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(
             message=f"Step {step} - Upgrade {node.name} from dc {node.dc_idx}").publish()
         InfoEvent(message='Upgrade Node %s begins' % node.name).publish()
-        with ignore_ycsb_connection_refused():
+        with ignore_ycsb_connection_refused(), ignore_topology_change_coordinator_errors():
             self.upgrade_node(node, upgrade_sstables=self.params.get('upgrade_sstables'))
         InfoEvent(message='Upgrade Node %s ended' % node.name).publish()
         node.check_node_health()
