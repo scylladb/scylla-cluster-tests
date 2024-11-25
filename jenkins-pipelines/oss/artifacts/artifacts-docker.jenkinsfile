@@ -9,4 +9,6 @@ artifactsPipeline(
 
     timeout: [time: 30, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'
+
+    extra_environment_variables: 'SCT_USE_MGMT=false'
 )
