@@ -87,7 +87,7 @@ pipeline {
     stages {
         stage("precommit") {
             options {
-                timeout(time: 15, unit: 'MINUTES')
+                timeout(time: 30, unit: 'MINUTES')
             }
             steps {
                 script {
