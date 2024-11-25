@@ -4639,6 +4639,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 status = self.tester.db_cluster.get_nodetool_status()
                 new_dc_list = [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")]
                 assert new_dc_list, "new datacenter was not registered"
+                # Mark a new node as "running nemesis" to prevent it be marked as "target node" by parallel nemesis.
+                # This new node should not be unset as running nemesis because the node will be terminated in the end of nemesis
+                # and removed from the list of nodes
+                self.set_current_running_nemesis(new_node)
                 new_dc_name = new_dc_list[0]
                 for keyspace in system_keyspaces + ["keyspace_new_dc"]:
                     strategy = ReplicationStrategy.get(node, keyspace)
