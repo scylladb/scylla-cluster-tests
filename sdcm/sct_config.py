@@ -1270,6 +1270,9 @@ class SCTConfiguration(dict):
         dict(name="upgrade_node_packages", env="SCT_UPGRADE_NODE_PACKAGES", type=str,
              help=""),
 
+        dict(name="upgrade_node_system", env="SCT_UPGRADE_NODE_SYSTEM", type=boolean,
+             help="Upgrade system packages on nodes before upgrading Scylla. Enabled by default"),
+
         dict(name="test_sst3", env="SCT_TEST_SST3", type=boolean,
              help=""),
 
