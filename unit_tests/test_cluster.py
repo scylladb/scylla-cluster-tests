@@ -153,8 +153,11 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
 
     def test_search_cdc_invalid_request(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_cdc_invalid_request.log')
-        with ignore_upgrade_schema_errors():
-            self._read_and_publish_events()
+        with unittest.mock.patch("sdcm.sct_events.group_common_events.TestConfig"):
+            with unittest.mock.patch("sdcm.sct_events.group_common_events.SkipPerIssues") as skip_per_issues:
+                skip_per_issues.return_value = False
+                with ignore_upgrade_schema_errors():
+                    self._read_and_publish_events()
 
         time.sleep(0.1)
         with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
