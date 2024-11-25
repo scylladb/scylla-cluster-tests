@@ -36,6 +36,7 @@ from sdcm.cluster import BaseNode
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import CassandraStressThread
+from sdcm.utils.common import ParallelObject
 from sdcm.utils.decorators import retrying
 from sdcm.utils.user_profile import get_profile_content
 from sdcm.utils.version_utils import (
@@ -158,6 +159,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     # would be recalculated after all the cluster finish upgrade
     expected_sstable_format_version = 'mc'
 
+    system_upgrade_timeout = 6 * 60
+
     @retrying(n=5)
     def _query_from_one_table(self, session, query, table_name) -> list:
         return self.rows_to_list(session.execute(SimpleStatement(query.format(table_name)), timeout=300))
@@ -220,15 +223,6 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             scylla_yaml_updates.update({"enable_sstables_mc_format": True})
 
         InfoEvent(message='Upgrading a Node').publish()
-        # because of scylladb/scylla-enterprise#2818 we are for now adding this workaround
-        if node.distro.is_ubuntu:
-            InfoEvent(message='upgrade_node - removing "shim-signed" package as a workaround').publish()
-            node.remoter.sudo("apt-get remove shim-signed -y --allow-remove-essential")
-            InfoEvent(message='upgrade_node - ended removing "shim-signed" package as a workaround').publish()
-        InfoEvent(message=f'upgrade_node - starting to "upgrade_system" of the node {node.name}').publish()
-        node.upgrade_system()
-        InfoEvent(message=f'upgrade_node - ended to "upgrade_system" of the node {node.name}').publish()
-
         # We assume that if update_db_packages is not empty we install packages from there.
         # In this case we don't use upgrade based on new_scylla_repo(ignored sudo yum update scylla...)
         result = node.remoter.run('scylla --version')
@@ -369,6 +363,17 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message='upgrade_node - ended to "upgradesstables_if_command_available"').publish()
 
         self.db_cluster.wait_all_nodes_un()
+
+    def upgrade_os(self, nodes):
+        def upgrade(node):
+            InfoEvent(message=f'upgrade_node_system - starting to "upgrade_system" of the node {node.name}').publish()
+            node.upgrade_system()
+            InfoEvent(message=f'upgrade_node_system - ended to "upgrade_system" of the node {node.name}').publish()
+
+        if self.params.get('upgrade_node_system'):
+            InfoEvent(message='Upgrading OS on nodes').publish()
+            parallel_obj = ParallelObject(objects=nodes, timeout=self.system_upgrade_timeout)
+            parallel_obj.run(upgrade)
 
     @truncate_entries
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
@@ -529,6 +534,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         Run a set of different cql queries against various types/tables before
         and after upgrade of every node to check the consistency of data
         """
+        self.upgrade_os(self.db_cluster.nodes)
+
         InfoEvent(message='Populate DB with many types of tables and data').publish()
         self.fill_db_data()
         InfoEvent(message='Run some Queries to verify data BEFORE UPGRADE').publish()
@@ -620,6 +627,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         we want to use this case to verify the read (cl=ALL) workload works
         well, upgrade all nodes to new version in the end.
         """
+        self.upgrade_os(self.db_cluster.nodes)
+
         InfoEvent(message='pre-test - prepare test keyspaces and tables').publish()
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
@@ -981,6 +990,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         For multi-dc upgrades, alternates upgraded nodes between dc's.
         """
+        self.upgrade_os(self.db_cluster.nodes)
+
         # Prepare keyspace and tables for truncate test
         self.fill_db_data_for_truncate_test(insert_rows=NUMBER_OF_ROWS_FOR_TRUNCATE_TEST)
 
@@ -1037,6 +1048,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         - Read latte data (stress_after_cluster_upgrade) generating report file
         - Compare latte report files and raise SCT ERROR event if latencies are worse for more than 10%
         """
+        self.upgrade_os(self.db_cluster.nodes)
 
         InfoEvent(message="Step1 - Populate DB data").publish()
         # Prepare keyspace and tables for truncate test
@@ -1505,6 +1517,8 @@ class UpgradeCustomTest(UpgradeTest):
         return cs_user_profiles
 
     def _custom_profile_rolling_upgrade(self, cs_user_profiles, new_scylla_repo=None, new_version=None):  # pylint: disable=too-many-locals,too-many-statements
+        self.upgrade_os(self.db_cluster.nodes)
+
         InfoEvent(message='Starting write workload during entire test').publish()
         user_profiles, duration_per_cs_profile = self.parse_cs_user_profiles_param(cs_user_profiles)
         entire_write_thread_pool = self.run_cs_user_profiles(cs_profiles=user_profiles,
