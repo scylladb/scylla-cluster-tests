@@ -30,7 +30,7 @@ import traceback
 import json
 import itertools
 from distutils.version import LooseVersion
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial
 from collections import defaultdict, Counter, namedtuple
@@ -65,6 +65,8 @@ from sdcm.cluster_k8s import (
 )
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
+from sdcm.target_node_lock import run_nemesis, set_running_nemesis, unset_running_nemesis, \
+    NEMESIS_TARGET_SELECTION_LOCK, lock_node, CantAcquireLockException
 from sdcm.logcollector import save_kallsyms_map
 from sdcm.mgmt.common import TaskStatus, ScyllaManagerError, get_persistent_snapshots
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
@@ -169,8 +171,6 @@ EXCLUSIVE_NEMESIS_NAMES = (
     "disrupt_drain_kubernetes_node_then_decommission_and_add_scylla_node",
     "disrupt_terminate_kubernetes_host_then_decommission_and_add_scylla_node",
 )
-
-NEMESIS_TARGET_SELECTION_LOCK = Lock()
 
 
 class DefaultValue:  # pylint: disable=too-few-public-methods
@@ -337,24 +337,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         setattr(cls, func.__name__, wrapper)  # bind it to Nemesis class
         return func  # returning func means func can still be used normally
 
-    @staticmethod
-    @contextmanager
-    def run_nemesis(node_list: list['BaseNode'], nemesis_label: str):
-        """
-        pick a node out of a `node_list`, and mark is as running_nemesis
-        for the duration of this context
-        """
-        with NEMESIS_TARGET_SELECTION_LOCK:
-            free_nodes = [node for node in node_list if not node.running_nemesis]
-            assert free_nodes, f"couldn't find nodes for running:`{nemesis_label}`, are all nodes running nemesis ?"
-            node = random.choice(free_nodes)
-            node.running_nemesis = nemesis_label
-        try:
-            yield node
-        finally:
-            with NEMESIS_TARGET_SELECTION_LOCK:
-                node.running_nemesis = None
-
     def use_nemesis_seed(self):
         if nemesis_seed := self.tester.params.get("nemesis_seed"):
             random.seed(nemesis_seed)
@@ -381,14 +363,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         DisruptionEvent(nemesis_name=disrupt, severity=severity, **data).publish()
 
     def set_current_running_nemesis(self, node):
-        with NEMESIS_TARGET_SELECTION_LOCK:
-            node.running_nemesis = self.current_disruption
+        set_running_nemesis(node, self.current_disruption)
 
     @staticmethod
     def unset_current_running_nemesis(node):
-        if node is not None:
-            with NEMESIS_TARGET_SELECTION_LOCK:
-                node.running_nemesis = None
+        unset_running_nemesis(node)
 
     def set_target_node_pool(self, nodelist: list[BaseNode] | None = None):
         """Set pool of nodes to choose target node """
@@ -453,10 +432,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.target_node = random.choice(nodes)
 
             if current_disruption:
-                self.target_node.running_nemesis = current_disruption
+                set_running_nemesis(self.target_node, current_disruption)
                 self.set_current_disruption(current_disruption)
             elif self.current_disruption:
-                self.target_node.running_nemesis = self.current_disruption
+                set_running_nemesis(self.target_node, self.current_disruption)
             else:
                 raise ValueError("current_disruption is not set")
             self.log.info('Current Target: %s with running nemesis: %s',
@@ -984,7 +963,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_rolling_restart_cluster(self, random_order=False):
-        self.cluster.restart_scylla(random_order=random_order)
+        try:
+            for node in self.cluster.nodes:
+                with lock_node(node, self.target_node.running_nemesis, timeout=3000):
+                    self.cluster.restart_scylla(nodes=[node], random_order=random_order)
+        except CantAcquireLockException as e:
+            UnsupportedNemesis(e)
 
     def disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back(self):
         """
@@ -4046,7 +4030,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     terminate_pattern.timeout):
                 stack.enter_context(expected_start_failed_context)
             with ignore_stream_mutation_fragments_errors(), ignore_raft_topology_cmd_failing(), \
-                self.run_nemesis(node_list=self.cluster.data_nodes, nemesis_label="DecommissionStreamingErr") as verification_node, \
+                run_nemesis(node_list=self.cluster.data_nodes, nemesis_label="DecommissionStreamingErr") as verification_node, \
                 FailedDecommissionOperationMonitoring(target_node=self.target_node,
                                                       verification_node=verification_node,
                                                       timeout=full_operations_timeout):
@@ -5240,7 +5224,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             decommission_timeout = 7200
             monitoring_decommission_timeout = decommission_timeout + 100
             un_nodes = self.cluster.get_nodes_up_and_normal()
-            with Nemesis.run_nemesis(node_list=un_nodes, nemesis_label="BootstrapStreaminError") as verification_node, \
+            with run_nemesis(node_list=un_nodes, nemesis_label="BootstrapStreaminError") as verification_node, \
                     FailedDecommissionOperationMonitoring(target_node=new_node, verification_node=verification_node,
                                                           timeout=monitoring_decommission_timeout):
 
