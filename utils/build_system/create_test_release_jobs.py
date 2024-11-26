@@ -14,9 +14,11 @@
 import os
 import logging
 from pathlib import Path
+import re
 import xml.etree.ElementTree as ET
 
 import jenkins
+import yaml
 
 from sdcm.wait import wait_for
 from sdcm.utils.common import get_sct_root_path
@@ -95,12 +97,17 @@ class JenkinsPipelines:
         except jenkins.JenkinsException as ex:
             self._log_jenkins_exception(ex)
 
-    def create_pipeline_job(self, jenkins_file: Path | str, group_name: Path | str, job_name: str = None, job_name_suffix="-test"):
+    def create_pipeline_job(self, jenkins_file: Path | str, group_name: Path | str, job_name: str = None, job_name_suffix="-test", defines: dict = None):
         jenkins_file = Path(jenkins_file)
         base_name = job_name or jenkins_file.stem
         sct_jenkinsfile = jenkins_file.relative_to(get_sct_root_path())
+        if defines:
+            description = f"{sct_jenkinsfile}\n\n### JobDefinitions\n{yaml.safe_dump(defines)}"
+        else:
+            description = sct_jenkinsfile
+
         xml_data = JOB_TEMPLATE % dict(sct_display_name=f"{base_name}{job_name_suffix}",
-                                       sct_description=sct_jenkinsfile,
+                                       sct_description=description,
                                        sct_repo=self.sct_repo,
                                        sct_branch_name=self.sct_branch_name,
                                        sct_jenkinsfile=sct_jenkinsfile)
@@ -144,6 +151,25 @@ class JenkinsPipelines:
         else:
             LOGGER.error(exc)
 
+    def load_defines(self, root: Path) -> dict[str, str]:
+        try:
+            content = (root / "_folder_definitions.yaml").open()
+        except FileNotFoundError:
+            return {}
+        defines = yaml.safe_load(content)
+        return defines
+
+    @staticmethod
+    def locate_job_overrides(job_name: str, overrides: dict[str, str]) -> dict[str, str]:
+        if full_match := overrides.get(job_name):
+            return full_match
+
+        for key in overrides:
+            if re.search(re.compile(key, re.IGNORECASE), job_name):
+                return overrides.get(key, {})
+
+        return {}
+
     def create_job_tree(self, local_path: str | Path,  # pylint: disable=too-many-arguments
                         create_freestyle_jobs: bool = True,
                         create_pipelines_jobs: bool = True,
@@ -151,9 +177,11 @@ class JenkinsPipelines:
                         job_name_suffix: str = '-test'):
         for root, _, job_files in os.walk(local_path):
             jenkins_path = Path(root).relative_to(local_path)
+            defines = self.load_defines(Path(root))
+            job_overrides = defines.pop("overrides", {})
 
             # get display names, if available
-            display_name = jenkins_path.name
+            display_name = defines.pop("folder-name", None) or jenkins_path.name
             if '_display_name' in job_files:
                 display_name = (Path(root) / '_display_name').read_text().strip()
 
@@ -167,6 +195,11 @@ class JenkinsPipelines:
             for job_file in job_files:
                 job_file = Path(root) / job_file  # noqa: PLW2901
                 if (job_file.suffix == '.jenkinsfile') and create_pipelines_jobs:
-                    self.create_pipeline_job(job_file, group_name=jenkins_path, job_name_suffix=job_name_suffix)
+                    self.create_pipeline_job(
+                        job_file,
+                        group_name=jenkins_path,
+                        job_name_suffix=job_name_suffix,
+                        defines={**defines, **self.locate_job_overrides(job_file.stem, job_overrides)}
+                    )
                 if (job_file.suffix == '.xml') and create_freestyle_jobs:
                     self.create_freestyle_job(job_file, group_name=jenkins_path, template_context=template_context)
