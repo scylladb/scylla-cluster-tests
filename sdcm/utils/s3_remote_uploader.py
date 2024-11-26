@@ -44,7 +44,7 @@ class SshOutAsFile(StreamingBody):
 
 
 def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str],  # pylint: disable=too-many-arguments
-                                       s3_bucket: str, s3_key: str, max_size_gb: int = 400, public_read_acl: bool = False):
+                                       s3_bucket: str, s3_key: str, max_size_gb: int = 80, public_read_acl: bool = False):
     """Streams given remote files/directories straight to S3 as tar.gz file. Returns download link."""
 
     def get_dir_size_kb(session, files):
@@ -63,6 +63,7 @@ def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str
         total = out.split(b"\n")[-2]
         return int(total.split(b'G')[0].decode())
 
+    LOGGER.info("Uploading %s directly to S3 bucket %s with key %s", files, s3_bucket, s3_key)
     extra_args = {}
     if public_read_acl is True:
         extra_args.update({"ACL": "public-read"})
@@ -72,7 +73,8 @@ def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str
     session.handshake(sock)
     session.userauth_publickey_fromfile(username=ssh_info.get("user"), privatekey=expanduser(ssh_info.get("key_file")))
     size = get_dir_size_kb(session, files)
-    if size > max_size_gb:
+    LOGGER.info("Size to upload (before compression): %s", size)
+    if size > min(max_size_gb, 80):  # ~80 GB is the maximum size of a single file in S3 with current transport settings
         LOGGER.warning("Skipping upload '%s' directory to S3 due its size: %s GB", files, size)
         return ""
     chan = session.open_session()
@@ -80,4 +82,6 @@ def upload_remote_files_directly_to_s3(ssh_info: dict[str, str], files: List[str
     chan_response = SshOutAsFile(chan)
     s3 = boto3.client("s3")
     s3.upload_fileobj(chan_response, s3_bucket, s3_key, ExtraArgs=extra_args)
-    return f"https://{s3_bucket}.s3.amazonaws.com/{s3_key}"
+    link = f"https://{s3_bucket}.s3.amazonaws.com/{s3_key}"
+    LOGGER.info("Uploaded successfully to %s", link)
+    return link
