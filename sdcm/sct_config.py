@@ -588,6 +588,9 @@ class SCTConfiguration(dict):
         dict(name="append_scylla_yaml", env="SCT_APPEND_SCYLLA_YAML", type=dict_or_str,
              help="More configuration to append to /etc/scylla/scylla.yaml"),
 
+        dict(name="append_scylla_node_exporter_args", env="SCT_SCYLLA_NODE_EXPORTER_ARGS", type=str,
+             help="More arguments to append to scylla-node-exporter command line"),
+
         # Nemesis config options
 
         dict(name="nemesis_class_name", env="SCT_NEMESIS_CLASS_NAME",

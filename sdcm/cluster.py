@@ -4644,7 +4644,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         node.remoter.run(
             f"sed -ie 's/^rpc_address: .*/rpc_address: {node.ip_address}/g' {node.offline_install_dir}/etc/scylla/scylla.yaml")
 
-    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches,too-many-statements,too-many-locals
+    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches,too-many-statements,too-many-locals  # noqa: PLR0912, PLR0914
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
         if node.distro.is_rhel_like:
             node.remoter.sudo('systemctl stop iptables', ignore_status=True)
@@ -4722,6 +4722,19 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         node.stop_scylla_server(verify_down=False)
         node.clean_scylla_data()
         node.remoter.sudo(cmd="rm -f /etc/scylla/ami_disabled", ignore_status=True)
+
+        if append_scylla_node_exporter_args := self.params.get('append_scylla_node_exporter_args'):
+            configuration_file = '/etc/default/scylla-node-exporter'
+            with remote_file(remoter=node.remoter,
+                             remote_path=configuration_file,
+                             serializer=properties.serialize,
+                             deserializer=properties.deserialize,
+                             sudo=True) as properties_file:
+                current_args = properties_file.get('SCYLLA_NODE_EXPORTER_ARGS', '')
+                if append_scylla_node_exporter_args not in current_args:
+                    current_args += f' {append_scylla_node_exporter_args}'
+                    properties_file['SCYLLA_NODE_EXPORTER_ARGS'] = current_args
+            node.remoter.sudo("systemctl restart scylla-node-exporter", verbose=True)
 
         if self.is_additional_data_volume_used():
             result = node.remoter.sudo(cmd="scylla_io_setup")
