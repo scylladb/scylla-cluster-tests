@@ -1836,6 +1836,10 @@ class SCTConfiguration(dict):
         else:
             self['user_prefix'] = user_prefix[:35]
 
+        # remove any special characters from user_prefix, since later it will be used as a part of the instance names
+        # and some platfrom don't support special characters in the instance names (docker, AWS and such)
+        self['user_prefix'] = re.sub(r"[^a-zA-Z0-9-]", "-", self['user_prefix'])
+
         # 11) validate that supported instance_provision selected
         if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet', 'spot_low_price']:
             raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
