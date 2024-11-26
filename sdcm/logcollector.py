@@ -1284,17 +1284,17 @@ class SSTablesCollector(BaseSCTLogCollector):
             s3_link = upload_remote_files_directly_to_s3(
                 node.ssh_login_info, [snapshot_path], s3_bucket=S3Storage.bucket_name,
                 s3_key=f"{self.test_id}/{self.current_run}/corrupted-sstables-{keyspace}-{table_name}.tar.gz",
-                max_size_gb=400, public_read_acl=True)
+                max_size_gb=20, public_read_acl=True)
             if not s3_link:
                 # upload malformed sstable along with several others and schema file
                 malformed_files = node.remoter.run(
                     f"ls {snapshot_path}/{sstable_name.rsplit('-', 1)[0]}*", ignore_status=True).stdout.split()
-                recent_sstables = node.remoter.run(f"ls -t {snapshot_path}/m?-* | head -n900").stdout.split()
+                recent_sstables = node.remoter.run(f"ls -t {snapshot_path}/m?-* | head -n30").stdout.split()
                 s3_link = upload_remote_files_directly_to_s3(
                     node.ssh_login_info, malformed_files + recent_sstables + [f"{snapshot_path}/schema.cql"],
                     s3_bucket=S3Storage.bucket_name,
                     s3_key=f"{self.test_id}/{self.current_run}/corrupted-sstables-{keyspace}-{table_name}.tar.gz",
-                    max_size_gb=400, public_read_acl=True)
+                    max_size_gb=80, public_read_acl=True)
         except Exception as error:  # pylint: disable=broad-except
             LOGGER.exception("failed collecting malformed sstables:\n%s", error, exc_info=error)
             return []
