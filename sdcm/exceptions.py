@@ -83,3 +83,8 @@ class SstablesNotFound(Exception):
 
 class CapacityReservationError(Exception):
     pass
+
+
+class ReadBarrierErrorException(Exception):
+    """Raise exception if read barrier call failed"""
+    pass
