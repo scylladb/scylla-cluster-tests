@@ -30,6 +30,7 @@ python-jenkins==1.7.0
 ssh2-python3==1.11.1
 parameterized==0.8.1
 ruff==0.4.7  # Needed for pre-commit hooks
+pycodestyle==2.10.0  # Needed for pre-commit hooks
 autopep8==1.5.7  # Needed for pre-commit hooks
 kubernetes==24.2.0
 packaging>=24
