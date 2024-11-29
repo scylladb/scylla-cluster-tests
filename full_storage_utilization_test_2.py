@@ -24,6 +24,7 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
                 int(i) for i in str(self.scale_out_n_nodes).split()]
         self.keyspaces = []
         self.timer_results_to_argus = partial(timer_results_to_argus, argus_client=self.test_config.argus_client())
+        self.initial_dcs = set(node.datacenter for node in self.db_cluster.nodes)
 
     def get_total_free_space(self):
         free = 0
@@ -59,8 +60,9 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
                 raise ValueError(f"data_removal_action={self.data_removal_action} is not supported!")
 
     def scale_out(self):
-        if len(self.scale_out_n_nodes) != 1:
+        if len(self.scale_out_n_nodes) == 1:
             # TODO: Find out why we get Critical Error
+            # Only happens when adding nodes to another cluster
             # Stress command completed with bad status 1: Failed to connect over JMX; not collecting these stats
             # java.io.IOException: Operation x0 on key(s) [4b3132355032384c4b30]: Data returned was not validated
             self.start_throttle_rw()
@@ -72,28 +74,38 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
 
     def add_new_node(self):
         with self.timer_results_to_argus("Add new node(s)"):
+            new_nodes: list[BaseNode] = []
             for dc_idx, n_nodes in enumerate(self.scale_out_n_nodes):
-                old_dc = self.db_cluster.nodes[0].datacenter
-                new_nodes: list[BaseNode] = self.db_cluster.add_nodes(
-                    count=n_nodes, enable_auto_bootstrap=True, dc_idx=dc_idx, instance_type=self.scale_out_instance_type)
+                new_nodes += self.db_cluster.add_nodes(count=n_nodes, enable_auto_bootstrap=True,
+                                                       dc_idx=dc_idx, instance_type=self.scale_out_instance_type)
                 self.db_cluster.wait_for_init(node_list=new_nodes)
                 self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
                 self.monitors.reconfigure_scylla_monitoring()
-                new_dc = new_nodes[0].datacenter
 
         InfoEvent(message=f"New node(s) added").publish()
         self.log.info(f"New node(s) added, total nodes in cluster: {len(self.db_cluster.nodes)}")
 
         with self.timer_results_to_argus("New node(s) ready"):
-            if old_dc != new_dc:
-                self.extend_to_new_dc(old_dc, new_dc, new_nodes)
+            self.update_cluster(new_nodes)
             wait_for_tablets_balanced(self.db_cluster.nodes[0])
         InfoEvent(message=f"New node(s) ready").publish()
 
-    def extend_to_new_dc(self, old_dc: str, new_dc: str, new_nodes: list[BaseNode]):
+    def update_cluster(self, new_nodes: list[BaseNode]):
         """
+        Update the cluster's configuration if needed
+
         https://enterprise.docs.scylladb.com/stable/operating-scylla/procedures/cluster-management/add-dc-to-existing-dc.html
         """
+        if len(self.initial_dcs) != 1:
+            # already have a setup with multiple dcs
+            return
+        if new_dcs := set(node.datacenter for node in self.db_cluster.nodes) - self.initial_dcs:
+            new_dc = new_dcs[0]
+            old_dc = self.initial_dcs[0]
+        else:
+            # added nodes were in the same dc
+            return
+
         self.reconfigure_keyspaces(old_dc, new_dc)
         self.rebuild_new_nodes(new_nodes)
         self.full_cluster_repair()
@@ -162,7 +174,7 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
 
             current_usage, current_used = self.get_max_disk_usage()
             self.log.info(
-                f"Current max disk usage after writing to {ks_name}: {current_usage}% ({current_used} GB / {target_used_size} GB)")
+                f"Max disk usage after writing to {ks_name}: {current_usage}% ({current_used} GB / {target_used_size} GB)")
             InfoEvent(message=f"{current_usage}% Limit Reached").publish()
 
     def log_disk_usage(self):
