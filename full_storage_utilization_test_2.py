@@ -79,9 +79,9 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
             for dc_idx, n_nodes in enumerate(self.scale_out_n_nodes):
                 new_nodes += self.db_cluster.add_nodes(count=n_nodes, enable_auto_bootstrap=True,
                                                        dc_idx=dc_idx, instance_type=self.scale_out_instance_type)
-                self.db_cluster.wait_for_init(node_list=new_nodes)
-                self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
-                self.monitors.reconfigure_scylla_monitoring()
+            self.db_cluster.wait_for_init(node_list=new_nodes)
+            self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
+            self.monitors.reconfigure_scylla_monitoring()
 
         InfoEvent(message=f"New node(s) added").publish()
         self.log.info(f"New node(s) added, total nodes in cluster: {len(self.db_cluster.nodes)}")
@@ -236,6 +236,7 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
 
         Configurations:
         - test-cases/scale/full-storage-utilization-scale-out-different-dc.yaml
+        - test-cases/scale/full-storage-utilization-scale-out-both-dcs.yaml
         - test-cases/scale/full-storage-utilization-scale-out-larger-instance.yaml
         - test-cases/scale/full-storage-utilization-scale-out-same-instance.yaml
         - test-cases/scale/full-storage-utilization-scale-out-smaller-instance.yaml
