@@ -847,9 +847,9 @@ class MonitorSetEKS(MonitorSetAWS):
         instances = sorted(instances, key=sort_by_index)
         return [ec2.get_instance(instance['InstanceId']) for instance in instances]
 
-    def _create_instances(self, count, ec2_user_data='', dc_idx=0, az_idx=0, instance_type=None):  # pylint: disable=too-many-arguments
+    def _create_instances(self, count, ec2_user_data='', dc_idx=0, az_idx=0, instance_type=None, is_zero_node=False):  # pylint: disable=too-many-arguments
         instances = super()._create_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx,
-                                              az_idx=az_idx, instance_type=instance_type)
+                                              az_idx=az_idx, instance_type=instance_type, is_zero_node=is_zero_node)
         for instance in instances:
             self._ec2_services[dc_idx].create_tags(
                 Resources=[instance.id],
