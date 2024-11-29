@@ -143,7 +143,7 @@ class DiskUsageResult(GenericResultTable):
             ColumnMetadata(name="Total", unit="GB", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="Used", unit="GB", type=ResultType.FLOAT, higher_is_better=False),
             ColumnMetadata(name="Available", unit="GB", type=ResultType.FLOAT, higher_is_better=False),
-            ColumnMetadata(name="Usage %", unit="", type=ResultType.FLOAT, higher_is_better=False),
+            ColumnMetadata(name="Usage", unit="%", type=ResultType.FLOAT, higher_is_better=False),
         ]
 
 

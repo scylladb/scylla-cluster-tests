@@ -11,7 +11,7 @@ def get_node_disk_usage(node: BaseNode) -> dict[str, int]:
         'Total': int(size),
         'Used': int(used),
         'Available': int(avail),
-        'Usage %': int(pcent)
+        'Usage': int(pcent)
     }
 
 
@@ -24,7 +24,7 @@ def get_cluster_disk_usage(cluster: ScyllaDBCluster) -> dict[str, dict[str, int]
         data[f"node_{idx}"] = info
 
     cluster_data = {key: sum(node_data[key] for node_data in data.values()) for key in data['node_1'].keys()}
-    cluster_data["Usage %"] = cluster_data["Usage %"] // len(cluster.nodes)
+    cluster_data["Usage"] = cluster_data["Usage"] // len(cluster.nodes)
     data["cluster"] = cluster_data
 
     return data

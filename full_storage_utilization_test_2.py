@@ -185,11 +185,11 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
 
         for idx in range(1, len(self.db_cluster.nodes) + 1):
             node_data = data[f"node_{idx}"]
-            row = f"{idx:<8} {node_data['Total']:<12} {node_data['Used']:<12} {node_data['Available']:<12} {node_data['Usage %']:.1f}%"
+            row = f"{idx:<8} {node_data['Total']:<12} {node_data['Used']:<12} {node_data['Available']:<12} {node_data['Usage']:.1f}%"
             self.log.info(row)
 
         cluster_data = data["cluster"]
-        total = f"{'Cluster':<8} {cluster_data['Total']:<12} {cluster_data['Used']:<12} {cluster_data['Available']:<12} {cluster_data['Usage %']:.1f}%"
+        total = f"{'Cluster':<8} {cluster_data['Total']:<12} {cluster_data['Used']:<12} {cluster_data['Available']:<12} {cluster_data['Usage']:.1f}%"
         self.log.info(total)
 
     def disk_usage_to_argus(self, label: str):
