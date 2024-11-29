@@ -4784,8 +4784,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         self.cluster.decommission(new_node)
             context_manager.push(finalizer)
 
-            with temporary_replication_strategy_setter(node) as replication_strategy_setter:
+            with self.run_nemesis(node_list=self.cluster.data_nodes, nemesis_label=self.current_disruption) as node, \
+                    temporary_replication_strategy_setter(node) as replication_strategy_setter:
                 new_node = self._add_new_node_in_new_dc()
+                self.set_current_disruption(new_node)
                 node_added = True
                 status = self.tester.db_cluster.get_nodetool_status()
                 new_dc_list = [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")]
