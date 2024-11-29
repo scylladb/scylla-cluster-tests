@@ -17,5 +17,5 @@ append_scylla_yaml:
   enable_tablets: true
   auto_snapshot: false
 
-scale_out_n_nodes: 1
+scale_out_n_nodes: 3
 scale_out_instance_type: 'i4i.large'
