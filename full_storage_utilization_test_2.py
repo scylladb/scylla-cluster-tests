@@ -24,7 +24,7 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
                 int(i) for i in str(self.scale_out_n_nodes).split()]
         self.keyspaces = []
         self.timer_results_to_argus = partial(timer_results_to_argus, argus_client=self.test_config.argus_client())
-        self.initial_dcs = set(node.datacenter for node in self.db_cluster.nodes)
+        self.initial_dcs = []
 
     def get_total_free_space(self):
         free = 0
@@ -73,6 +73,7 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
         self.log.info(f"Scale out finished with time: {duration}")
 
     def add_new_node(self):
+        self.initial_dcs = set(node.datacenter for node in self.db_cluster.nodes)
         with self.timer_results_to_argus("Add new node(s)"):
             new_nodes: list[BaseNode] = []
             for dc_idx, n_nodes in enumerate(self.scale_out_n_nodes):
