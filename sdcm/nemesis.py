@@ -30,7 +30,6 @@ import traceback
 import json
 import itertools
 import enum
-from distutils.version import LooseVersion
 from contextlib import ExitStack, contextmanager
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
 from functools import wraps, partial
@@ -3068,13 +3067,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                        snapshot_tag=chosen_snapshot_tag)
         restore_task.wait_and_get_final_status(step=30, timeout=chosen_snapshot_info["expected_timeout"])
         assert restore_task.status == TaskStatus.DONE, f'Data restoration of {chosen_snapshot_tag} has failed!'
-
-        manager_version = mgr_cluster.sctool.parsed_client_version
-        if manager_version < LooseVersion("3.2"):
-            mgr_task = mgr_cluster.create_repair_task()
-            task_final_status = mgr_task.wait_and_get_final_status(timeout=chosen_snapshot_info["expected_timeout"])
-            assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
-                mgr_task.id, str(mgr_task.status))
 
         confirmation_stress_template = (
             persistent_manager_snapshots_dict)[cluster_backend]["confirmation_stress_template"]
