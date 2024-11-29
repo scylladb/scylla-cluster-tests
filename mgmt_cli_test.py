@@ -278,6 +278,26 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
         for _thread in stress_queue:
             assert self.verify_stress_thread(cs_thread_pool=_thread), "Stress thread verification failed"
 
+    @staticmethod
+    def extract_compaction_strategy_from_cs_cmd(cs_cmd: str, lower: bool = True, remove_postfix: bool = True) -> str:
+        """Extracts the compaction strategy from the cassandra-stress command.
+
+        :param cs_cmd: cassandra-stress command
+        :param lower: if True, the resulting string will be lowercased
+        :param remove_postfix: if True, the resulting string will have the "CompactionStrategy" postfix removed
+        """
+        match = re.search(r"compaction\(strategy=([^)]+)\)", cs_cmd)
+        if match:
+            strategy = match.group(1)
+            if remove_postfix:
+                strategy = re.sub(r"CompactionStrategy$", "", strategy)
+            if lower:
+                strategy = strategy.lower()
+        else:
+            raise ValueError("Compaction strategy not found in cs_cmd.")
+
+        return strategy
+
 
 class ClusterOperations(ClusterTester):
     CLUSTER_NAME = "mgr_cluster1"
@@ -1256,6 +1276,56 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
             self._test_suspend_with_on_resume_start_tasks_flag_template(wait_for_duration=True)
         with self.subTest('Suspend with on resume start tasks flag before duration has passed'):
             self._test_suspend_with_on_resume_start_tasks_flag_template(wait_for_duration=False)
+
+
+class ManagerHelperTests(ManagerTestFunctionsMixIn):
+
+    def test_prepare_backup_snapshot(self):
+        """Test prepares backup snapshot for its future use in nemesis or restore benchmarks
+
+        Steps:
+        1. Populate the cluster with data.
+           - C-S write cmd is based on `confirmation_stress_template` template in manager_persistent_snapshots.yaml
+           - Backup size should be specified in Jenkins job passing `mgmt_prepare_snapshot_size` parameter
+        2. Run backup and wait for it to finish.
+        3. Log snapshot details into console.
+        """
+        self.log.info("Populate the cluster with data")
+        backup_size = self.params.get("mgmt_prepare_snapshot_size")  # in Gb
+        assert backup_size and backup_size >= 1, "Backup size must be at least 1Gb"
+
+        backend = self.params.get("cluster_backend")
+        cs_read_cmd_template = get_persistent_snapshots()[backend]["confirmation_stress_template"]
+        cs_write_cmd_template = cs_read_cmd_template.replace(" read ", " write ")
+
+        compaction = self.extract_compaction_strategy_from_cs_cmd(cs_write_cmd_template)
+        scylla_version = re.sub(r"[-.]", "_", self.params.get("scylla_version"))
+        keyspace_name = f"{backup_size}gb_{compaction}_{scylla_version}"
+
+        self.prepare_run_and_verify_stress_in_threads(
+            cmd_template=cs_write_cmd_template,
+            keyspace_name=keyspace_name,
+            num_of_rows=backup_size * 1024 * 1024,  # Considering 1 row = 1Kb
+            stop_on_failure=True,
+        )
+
+        self.log.info("Initialize Scylla Manager")
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+
+        self.log.info("Run backup and wait for it to finish")
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
+        assert backup_task_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+
+        self.log.info("Log snapshot details")
+        self.log.info(
+            f"Snapshot tag: {backup_task.get_snapshot_tag()}\n"
+            f"Keyspace name: {keyspace_name}\n"
+            f"Bucket: {self.locations}\n"
+            f"Cluster id: {mgr_cluster.id}\n"
+        )
 
 
 class ManagerSanityTests(
