@@ -101,8 +101,8 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
             # already have a setup with multiple dcs
             return
         if new_dcs := set(node.datacenter for node in self.db_cluster.nodes) - self.initial_dcs:
-            new_dc = new_dcs[0]
-            old_dc = self.initial_dcs[0]
+            new_dc = list(new_dcs)[0]
+            old_dc = list(self.initial_dcs)[0]
         else:
             # added nodes were in the same dc
             return
