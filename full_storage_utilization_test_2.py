@@ -168,12 +168,15 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
             num = len(self.keyspaces) + 1
             ks_name = f"keyspace_{'small' if smaller_dataset else 'large'}{num}"
             self.keyspaces.append(ks_name)
-            self.log.info(f"Writing chunk of size: {dataset_size} GB")
+            self.log.info(f"Writing chunk of size: {dataset_size} GB in keyspace {ks_name}")
+            self.log_disk_usage()
             self.insert_data(dataset_size, ks_name, num)
 
             self.db_cluster.flush_all_nodes()
 
             current_usage, current_used = self.get_max_disk_usage()
+            self.log.info(f"Wrote chunk of size: {dataset_size} GB in keyspace {ks_name}")
+            self.log_disk_usage()
             self.log.info(
                 f"Max disk usage after writing to {ks_name}: {current_usage}% ({current_used} GB / {target_used_size} GB)")
             InfoEvent(message=f"{current_usage}% Limit Reached").publish()
