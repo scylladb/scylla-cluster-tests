@@ -19,7 +19,7 @@
     <submoduleCfg class="empty-list"/>
     <extensions/>
   </scm>
-  <assignedNode>aws-sct-builders-eu-west-1-v2-asg || aws-sct-builders-us-east-1-v2-asg</assignedNode>
+  <assignedNode>aws-sct-builders-eu-west-1-v3-asg || aws-sct-builders-us-east-1-v3-asg</assignedNode>
   <canRoam>false</canRoam>
   <disabled>false</disabled>
   <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
