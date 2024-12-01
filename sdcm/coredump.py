@@ -44,6 +44,7 @@ class CoreDumpInfo:
     download_url: str = ''
     command_line: str = ''
     executable: str = ''
+    executable_version: str = ''
     process_retry: int = 0
 
     def publish_event(self):
@@ -52,7 +53,9 @@ class CoreDumpInfo:
             corefile_url=self.download_url,
             backtrace=self.coredump_info,
             download_instructions=self.download_instructions,
-            source_timestamp=self.source_timestamp
+            source_timestamp=self.source_timestamp,
+            executable=self.executable,
+            executable_version=self.executable_version
         ).publish()
 
     def __str__(self):
@@ -70,6 +73,7 @@ class CoreDumpInfo:
                download_url: str = None,
                command_line: str = None,
                executable: str = None,
+               executable_version: str = None,
                process_retry: int = None):
         for attr_name, attr_value in {
             'node': node,
@@ -80,6 +84,7 @@ class CoreDumpInfo:
             'download_url': download_url,
             'command_line': command_line,
             'executable': executable,
+            'executable_version': executable_version,
             'process_retry': process_retry,
         }.items():
             if attr_value is not None:
@@ -198,6 +203,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                     break
             if found:
                 continue
+            self.update_new_coredump_with_exec_information(new_core_info)
             self.publish_event(new_core_info)
             output.append(new_core_info)
         return output
@@ -298,6 +304,41 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
     @abstractmethod
     def update_coredump_info_with_more_information(self, core_info: CoreDumpInfo):
         pass
+
+    def _get_core_by_pid(self, pid: str) -> Optional[dict]:
+        result = self.node.remoter.sudo(f"coredumpctl list {pid} -q --json=short", verbose=False, ignore_status=True)
+        if not result.ok:
+            return None
+
+        try:
+            cores_info = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            self.log.warning("couldn't parse:\n %s", result.stdout)
+            return None
+        return cores_info[0]
+
+    def _get_executable_version(self, executable: str) -> Optional[str]:
+        if self.node.distro.is_rhel_like:
+            pkg = self.node.remoter.run(f"rpm -qf {executable}", ignore_status=True).stdout.strip()
+            release_version = self.node.remoter.run(
+                f"rpm -q --queryformat '%{{VERSION}}' {pkg}", ignore_status=True).stdout.strip()
+        elif self.node.distro.is_ubuntu or self.node.distro.is_debian:
+            pkg = self.node.remoter.sudo(f"dpkg -S {executable}", ignore_status=True).stdout.split(':')[0].strip()
+            release_version = self.node.remoter.run(
+                f"dpkg-query --showformat='${{Version}}' --show {pkg}", ignore_status=True).stdout.strip()
+        else:
+            raise RuntimeError("Distro is not supported")
+
+        return self._extract_version(release_version)
+
+    def update_new_coredump_with_exec_information(self, core_info: CoreDumpInfo) -> None:
+        core = self._get_core_by_pid(core_info.pid)
+        core_info.update(executable=core['exe'], executable_version=self._get_executable_version(core['exe']))
+
+    @staticmethod
+    def _extract_version(release_version: str) -> Optional[str]:
+        match = re.match(r"^([\d]+\.[\d]+(?:\.[\d]+)?)", release_version)
+        return match.group(1) if match else None
 
 
 class CoredumpExportSystemdThread(CoredumpThreadBase):
