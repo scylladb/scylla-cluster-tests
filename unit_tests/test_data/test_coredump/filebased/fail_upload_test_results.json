@@ -9,7 +9,8 @@
       "download_instructions": "failed to upload core",
       "download_url": "",
       "command_line": "/usr/bin/scylla --log-to-syslog 0 --log-to-stdout 1 --default-log-level info --",
-      "executable": ""
+      "executable": "/usr/bin/scylla",
+      "executable_version": "6.3.0"
     },
     {
       "__instance__": "sdcm.coredump.CoreDumpInfo",
@@ -20,7 +21,8 @@
       "download_instructions": "gsutil cp gs://upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz .\ngunzip ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "command_line": "/bin/bash /scylla-housekeeping-service.sh",
-      "executable": ""
+      "executable": "/usr/bin/bsh",
+      "executable_version": "5.2.21"
     }
   ],
   "in_progress": [],
@@ -34,7 +36,8 @@
       "download_instructions": "gsutil cp gs://upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz .\ngunzip ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "command_line": "/bin/bash /scylla-housekeeping-service.sh",
-      "executable": ""
+      "executable": "/usr/bin/bsh",
+      "executable_version": "5.2.21"
     },
     {
       "__instance__": "sdcm.coredump.CoreDumpInfo",
@@ -45,7 +48,8 @@
       "download_instructions": "failed to upload core",
       "download_url": "",
       "command_line": "/usr/bin/scylla --log-to-syslog 0 --log-to-stdout 1 --default-log-level info --",
-      "executable": ""
+      "executable": "/usr/bin/scylla",
+      "executable_version": "6.3.0"
     }
   ],
   "uploaded": [
@@ -58,7 +62,8 @@
       "download_instructions": "gsutil cp gs://upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz .\ngunzip ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/ac7d8023a369-41537-0-0-11-1600150672.core/ac7d8023a369-41537-0-0-11-1600150672.core.gz",
       "command_line": "/bin/bash /scylla-housekeeping-service.sh",
-      "executable": ""
+      "executable": "/usr/bin/bsh",
+      "executable_version": "5.2.21"
     }
   ]
 }

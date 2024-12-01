@@ -221,7 +221,9 @@ class CoreDumpEvent(InformationalEvent):
                  corefile_url: str,
                  backtrace: str,
                  download_instructions: str,
-                 source_timestamp: Optional[float] = None):
+                 source_timestamp: Optional[float] = None,
+                 executable: Optional[str] = None,
+                 executable_version: Optional[str] = None):
 
         super().__init__(severity=Severity.ERROR)
 
@@ -229,6 +231,8 @@ class CoreDumpEvent(InformationalEvent):
         self.corefile_url = corefile_url
         self.backtrace = backtrace
         self.download_instructions = download_instructions
+        self.executable = executable
+        self.executable_version = executable_version
         if source_timestamp is not None:
             self.source_timestamp = source_timestamp
 
@@ -245,6 +249,11 @@ class CoreDumpEvent(InformationalEvent):
             fmt += "Info about modules can be found in SCT logs by search for 'Coredump Modules info'\n"
         if self.download_instructions:
             fmt += "download_instructions:\n{0.download_instructions}\n"
+        if self.executable:
+            fmt += "executable={0.executable}"
+            if self.executable_version:
+                fmt += " executable_version={0.executable_version}"
+            fmt += "\n"
 
         return fmt
 
