@@ -21,6 +21,7 @@ from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter,
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
+from sdcm.sct_events.system import CoreDumpEvent
 from sdcm.utils.issues import SkipPerIssues
 
 
@@ -470,6 +471,17 @@ def ignore_take_snapshot_failing():
             new_severity=Severity.WARNING,
             event_class=DatabaseLogEvent,
             regex=r".*api - take_snapshot failed: std::runtime_error \(Keyspace.*snapshot.*already exists",
+            extra_time_to_expiration=60))
+        yield
+
+
+@contextmanager
+def ignore_coredump_on_network_block_disruption():
+    with ExitStack() as stack:
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=CoreDumpEvent,
+            regex=r".*executable=.*networkd.*executable_version=.*255.*",
             extra_time_to_expiration=60))
         yield
 
