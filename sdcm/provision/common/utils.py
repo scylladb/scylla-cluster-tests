@@ -30,7 +30,13 @@ def configure_syslogng_target_script(hostname: str = "") -> str:
         write_syslog_ng_destination
 
         if ! grep -P "log {{.*destination\\\\(remote_sct\\\\)" /etc/syslog-ng/syslog-ng.conf; then
-            echo "log {{ source($source_name); destination(remote_sct); }};" >> /etc/syslog-ng/syslog-ng.conf
+            echo "
+        filter filter_sct {{
+            # filter audit out
+            not program(\\"^audit\\");
+        }};
+            " >> /etc/syslog-ng/syslog-ng.conf
+            echo "log {{ source($source_name); filter(filter_sct); destination(remote_sct); }};" >> /etc/syslog-ng/syslog-ng.conf
         fi
 
         if [ ! -z "{hostname}" ]; then
