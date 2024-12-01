@@ -9,7 +9,8 @@
       "download_instructions": "",
       "download_url": "",
       "command_line": "python -m unittest tests.test_multithreading",
-      "executable": "/usr/bin/python3.8"
+      "executable": "/usr/bin/python3.8",
+      "executable_version": "3.8"
     },
     {
       "__instance__": "sdcm.coredump.CoreDumpInfo",
@@ -20,7 +21,8 @@
       "download_instructions": "gsutil cp gs://upload.scylladb.com/core.scylla.112.ff0f302ef93d4366812e6c5bcca67a90.5348.1669637980000000./core.scylla.112.ff0f302ef93d4366812e6c5bcca67a90.5348.1669637980000000.lz4 .\nunlz4 core.scylla.112.ff0f302ef93d4366812e6c5bcca67a90.5348.1669637980000000.lz4",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/core.scylla.112.ff0f302ef93d4366812e6c5bcca67a90.5348.1669637980000000./core.scylla.112.ff0f302ef93d4366812e6c5bcca67a90.5348.1669637980000000.lz4",
       "command_line": "/usr/bin/scylla --blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1 --smp 5 --log-to-syslog 1 --log-to-stdout 0 --default-log-level info --network-stack posix --io-properties-file=/etc/scylla.d/io_properties.yaml --cpuset 1-7 --lock-memory=1",
-      "executable": "/opt/scylladb/libexec/scylla"
+      "executable": "/opt/scylladb/libexec/scylla",
+      "executable_version": "6.3.0"
     }
   ],
   "in_progress": [],
@@ -34,7 +36,8 @@
       "download_instructions": "",
       "download_url": "",
       "command_line": "python -m unittest tests.test_multithreading",
-      "executable": "/usr/bin/python3.8"
+      "executable": "/usr/bin/python3.8",
+      "executable_version": "3.8"
     },
     {
       "__instance__": "sdcm.coredump.CoreDumpInfo",
@@ -45,7 +48,8 @@
       "download_instructions": "gsutil cp gs://upload.scylladb.com/core.scylla.112.ff0f302ef93d4366812e6c5bcca67a90.5348.1669637980000000./core.scylla.112.ff0f302ef93d4366812e6c5bcca67a90.5348.1669637980000000.lz4 .\nunlz4 core.scylla.112.ff0f302ef93d4366812e6c5bcca67a90.5348.1669637980000000.lz4",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/core.scylla.112.ff0f302ef93d4366812e6c5bcca67a90.5348.1669637980000000./core.scylla.112.ff0f302ef93d4366812e6c5bcca67a90.5348.1669637980000000.lz4",
       "command_line": "/usr/bin/scylla --blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1 --smp 5 --log-to-syslog 1 --log-to-stdout 0 --default-log-level info --network-stack posix --io-properties-file=/etc/scylla.d/io_properties.yaml --cpuset 1-7 --lock-memory=1",
-      "executable": "/opt/scylladb/libexec/scylla"
+      "executable": "/opt/scylladb/libexec/scylla",
+      "executable_version": "6.3.0"
     }
   ],
   "exception": null
