@@ -27,7 +27,7 @@ tcconfig==0.29.1
 mysql-connector-python==9.1.0
 docker==7.1.0
 python-jenkins==1.7.0
-ssh2-python==1.0.0
+ssh2-python3==1.11.1
 parameterized==0.8.1
 ruff==0.4.7  # Needed for pre-commit hooks
 autopep8==1.5.7  # Needed for pre-commit hooks
