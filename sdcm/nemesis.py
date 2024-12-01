@@ -90,6 +90,7 @@ from sdcm.sct_events.group_common_events import (
     ignore_raft_transport_failing,
     decorate_with_context_if_issues_open,
     ignore_take_snapshot_failing,
+    ignore_coredump_on_network_block_disruption,
 )
 from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
@@ -3612,6 +3613,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         time.sleep(15)
         self.cluster.wait_all_nodes_un()
 
+    @decorate_with_context_if_issues_open(
+        ignore_coredump_on_network_block_disruption,
+        issue_refs=['https://github.com/scylladb/scylla-cluster-tests/issues/9135'])
     def disrupt_network_block(self):
         list_of_timeout_options = [10, 60, 120, 300, 500]
         if self._is_it_on_kubernetes():
