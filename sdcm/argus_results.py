@@ -123,10 +123,11 @@ class ManagerRestoreBanchmarkResult(GenericResultTable):
 
 class ManagerBackupBenchmarkResult(GenericResultTable):
     class Meta:
-        name = "Backup benchmark"
-        description = "Backup benchmark"
+        name = "Backup/Restore benchmark"
+        description = "Backup/Restore benchmark"
         Columns = [
-            ColumnMetadata(name="backup time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="Size", unit="bytes", type=ResultType.TEXT, higher_is_better=False),
+            ColumnMetadata(name="Time", unit="s", type=ResultType.DURATION, higher_is_better=False),
         ]
 
 
@@ -136,6 +137,10 @@ class ManagerBackupReadResult(GenericResultTable):
         description = "Read timing"
         Columns = [
             ColumnMetadata(name="read time", unit="s", type=ResultType.DURATION, higher_is_better=False),
+            ColumnMetadata(name="op rate", unit="op/s", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="partition rate", unit="pk/s", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="row rate", unit="row/s", type=ResultType.FLOAT, higher_is_better=True),
+            ColumnMetadata(name="latency 99th percentile", unit="ms", type=ResultType.FLOAT, higher_is_better=False),
         ]
 
 
