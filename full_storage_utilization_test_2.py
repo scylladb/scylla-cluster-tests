@@ -60,9 +60,9 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
                 raise ValueError(f"data_removal_action={self.data_removal_action} is not supported!")
 
     def scale_out(self):
-        if len(self.scale_out_n_nodes) == 1:
+        if self.scale_out_n_nodes[0] == 0:
             # TODO: Find out why we get Critical Error
-            # Only happens when adding nodes to another cluster
+            # Only happens when adding nodes to another cluster (scale_out_n_nodes is of the form `0 x`)
             # Stress command completed with bad status 1: Failed to connect over JMX; not collecting these stats
             # java.io.IOException: Operation x0 on key(s) [4b3132355032384c4b30]: Data returned was not validated
             self.start_throttle_rw()
@@ -179,7 +179,7 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
             self.log_disk_usage()
             self.log.info(
                 f"Max disk usage after writing to {ks_name}: {current_usage}% ({current_used} GB / {target_used_size} GB)")
-            InfoEvent(message=f"{current_usage}% Limit Reached").publish()
+        InfoEvent(message=f"{target_usage}% Limit Reached").publish()
 
     def log_disk_usage(self):
         data = get_cluster_disk_usage(self.db_cluster)
