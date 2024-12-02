@@ -247,7 +247,7 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
         with self.timer_results_to_argus("Soft Limit"):
             self.run_stress(self.softlimit, sleep_time=self.sleep_time_fill_disk)
             self.disk_usage_to_argus(label="Soft Limit")
-            InfoEvent(message=f"Solf limit").publish()
+            InfoEvent(message=f"Soft limit").publish()
         with self.timer_results_to_argus("Hard Limit"):
             self.run_stress(self.hardlimit, sleep_time=self.sleep_time_fill_disk)
             self.disk_usage_to_argus(label="Hard Limit")
