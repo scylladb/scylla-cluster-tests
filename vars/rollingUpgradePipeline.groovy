@@ -131,6 +131,7 @@ def call(Map pipelineParams) {
                                     dir('scylla-cluster-tests') {
                                         checkout scm
                                         checkoutQaInternal(params)
+                                        dockerLogin(params)
 
                                         ArrayList base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
                                         supportedVersions = supportedUpgradeFromVersions(
@@ -175,6 +176,7 @@ def call(Map pipelineParams) {
                                                                 checkoutQaInternal(params)
                                                             }
                                                         }
+                                                        dockerLogin(params)
                                                     }
                                                 }
                                             }
