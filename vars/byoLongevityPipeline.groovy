@@ -134,6 +134,7 @@ def call() {
 
                       checkoutQaInternal(params)
                   }
+                  dockerLogin(params)
                }
             }
             stage('Create SCT Runner') {
