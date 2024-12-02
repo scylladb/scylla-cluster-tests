@@ -92,6 +92,7 @@ pipeline {
             }
             steps {
                 script {
+                    dockerLogin(params)
                     try {
                         sh './docker/env/hydra.sh pre-commit'
                         // also check the commit-messge for the rules we want
@@ -172,6 +173,8 @@ pipeline {
                             dir('scylla-cluster-tests') {
                                 checkout scm
 
+                                dockerLogin(params)
+
                                 wrap([$class: 'BuildUser']) {
                                     echo "calling createSctRunner"
                                     timeout(time: 5, unit: 'MINUTES') {
@@ -216,6 +219,7 @@ pipeline {
                                         dir(working_dir) {
                                             checkout scm
                                         }
+                                        dockerLogin(params)
                                         if (sct_runner_backends.contains(backend)){
                                             try {
                                                 wrap([$class: 'BuildUser']) {
