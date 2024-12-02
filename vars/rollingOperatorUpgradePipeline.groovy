@@ -112,6 +112,7 @@ def call(Map pipelineParams) {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
                                         checkout scm
+                                        dockerLogin(params)
                                         (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
                                     }
                                 }

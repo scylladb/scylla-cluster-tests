@@ -159,6 +159,7 @@ def call(Map pipelineParams) {
                                     loadEnvFromString(params.extra_environment_variables)
                                     dir('scylla-cluster-tests') {
                                         checkout scm
+                                        dockerLogin(params)
                                         (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
                                         base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
                                         def new_repo = params.new_scylla_repo
@@ -248,6 +249,7 @@ def call(Map pipelineParams) {
                                                             dir('scylla-cluster-tests') {
                                                                 checkout scm
                                                             }
+                                                        dockerLogin(params)
                                                         }
                                                     }
                                                 }
