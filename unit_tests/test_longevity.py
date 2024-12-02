@@ -17,6 +17,12 @@ def test_test_user_batch_custom_time(params):
         def _init_params(self):
             self.params = params
 
+        def start_argus_heartbeat_thread(self):
+            # prevent from heartbeat thread to start
+            # because it can be left running after the test
+            # and break other tests
+            return threading.Event()
+
         def _pre_create_templated_user_schema(self, *args, **kwargs):
             pass
 
