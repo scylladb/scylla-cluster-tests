@@ -2901,7 +2901,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             free_space_size = int(result.stdout.split()[1]) / 1024 ** 2  # Converting to GB
             return free_space_size
 
-        def choose_snapshot(snapshots_dict):
+        def choose_snapshot(snapshots_dict, region: str):
             snapshot_groups_by_size = snapshots_dict["snapshots_sizes"]
             total_partition_size = get_total_scylla_partition_size()
             all_snapshot_sizes = sorted(list(snapshot_groups_by_size.keys()), reverse=True)
@@ -2915,15 +2915,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             self.use_nemesis_seed()
             chosen_snapshot_size = random.choice(fitting_snapshot_sizes)
-            if self.cluster.nodes[0].is_enterprise:
-                snapshot_tag = random.choice(list(snapshot_groups_by_size[chosen_snapshot_size]["snapshots"].keys()))
-            else:
-                all_snapshots = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"]
-                oss_snapshots = [snapshot_key for snapshot_key, snapshot_value in all_snapshots.items() if
-                                 snapshot_value['scylla_product'] == "oss"]
+            all_snapshots_per_region = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"][region]
 
+            if self.cluster.nodes[0].is_enterprise:
+                snapshot_tag = random.choice(list(all_snapshots_per_region.keys()))
+            else:
+                oss_snapshots = [snapshot_key for snapshot_key, snapshot_value in all_snapshots_per_region.items() if
+                                 snapshot_value['scylla_product'] == "oss"]
                 snapshot_tag = random.choice(oss_snapshots)
-            snapshot_info = snapshot_groups_by_size[chosen_snapshot_size]["snapshots"][snapshot_tag]
+
+            snapshot_info = all_snapshots_per_region[snapshot_tag]
             snapshot_info.update({"expected_timeout": snapshot_groups_by_size[chosen_snapshot_size]["expected_timeout"],
                                   "number_of_rows": snapshot_groups_by_size[chosen_snapshot_size]["number_of_rows"]})
             return snapshot_tag, snapshot_info
@@ -2951,10 +2952,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         cluster_backend = self.cluster.params.get('cluster_backend')
         if cluster_backend == 'k8s-eks':
             cluster_backend = 'aws'
+
         persistent_manager_snapshots_dict = get_persistent_snapshots()
-        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"]
+        region = self.cluster.params.get('region_name').split()[0]
+        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"].format(region=region)
         chosen_snapshot_tag, chosen_snapshot_info = (
-            choose_snapshot(persistent_manager_snapshots_dict[cluster_backend]))
+            choose_snapshot(snapshots_dict=persistent_manager_snapshots_dict[cluster_backend], region=region)
+        )
 
         self.log.info("Restoring the keyspace %s", chosen_snapshot_info["keyspace_name"])
         location_list = [f"{self.cluster.params.get('backup_bucket_backend')}:{target_bucket}"]
