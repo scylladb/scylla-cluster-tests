@@ -17,6 +17,7 @@ import logging
 import tempfile
 import time
 import unittest.mock
+import threading
 from time import sleep
 from unittest.mock import MagicMock
 
@@ -96,6 +97,12 @@ class ClusterTesterForTests(ClusterTester):
 
     def argus_collect_manager_version(self):
         pass
+
+    def start_argus_heartbeat_thread(self):
+        # prevent from heartbeat thread to start
+        # because it can be left running after the test
+        # and break other tests
+        return threading.Event()
 
     def tearDown(self):
         self.monitors = MagicMock()
