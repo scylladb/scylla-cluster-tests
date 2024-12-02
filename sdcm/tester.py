@@ -2920,6 +2920,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.destroy_credentials()
 
+    @silence(name='Save node schema')
     def save_nodes_schema(self):
         if self.db_cluster is None:
             self.log.info("No nodes found in the Scylla cluster")
