@@ -144,6 +144,7 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
             for keyspace in self.keyspaces:
                 replication_factors = {old_dc: 3, new_dc: rf}
                 cql = f"ALTER KEYSPACE {keyspace} WITH replication = {NetworkTopologyReplicationStrategy(**replication_factors)}"
+                InfoEvent(message=f"ALTER KEYSPACE {keyspace} with {replication_factors}").publish()
                 self.execute_cql(cql)
                 wait_for_tablets_balanced(self.db_cluster.nodes[0])
 
