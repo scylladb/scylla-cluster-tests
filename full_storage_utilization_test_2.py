@@ -60,7 +60,7 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
                 raise ValueError(f"data_removal_action={self.data_removal_action} is not supported!")
 
     def scale_out(self):
-        if self.scale_out_n_nodes[0] == 0:
+        if self.scale_out_n_nodes[0] != 0:
             # TODO: Find out why we get Critical Error
             # Only happens when adding nodes to another cluster (scale_out_n_nodes is of the form `0 x`)
             # Stress command completed with bad status 1: Failed to connect over JMX; not collecting these stats
