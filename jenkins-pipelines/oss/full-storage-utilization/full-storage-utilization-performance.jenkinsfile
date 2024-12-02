@@ -9,4 +9,9 @@ perfRegressionParallelPipeline(
     test_name: "performance_regression_test.PerformanceRegressionTest",
     test_config: """["test-cases/performance/perf-regression-latency-i4i_2xlarge-elasticity-90-percent.yaml", "configurations/disable_kms.yaml"]""",
     sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
+    email_recipients: 'cezar.moise@scylladb.com',
+    post_behavior_db_nodes: 'destroy',
+    post_behavior_loader_nodes: 'destroy',
+    post_behavior_monitor_nodes: 'destroy',
+    post_behavior_k8s_cluster: 'destroy',
 )
