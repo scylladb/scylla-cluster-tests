@@ -111,6 +111,9 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):  # pylint: disable=abstrac
         self.log = logging.getLogger(__name__)
         self.node_type = "scylla-db"
 
+    def start_nemesis(self):
+        pass
+
 
 class DummyNode(BaseNode):  # pylint: disable=abstract-method
     _system_log = None
