@@ -12,6 +12,5 @@ diskusage_hardlimit: 90
 
 append_scylla_yaml:
   enable_tablets: true
-  auto_snapshot: false
 
 data_removal_action: "expire"

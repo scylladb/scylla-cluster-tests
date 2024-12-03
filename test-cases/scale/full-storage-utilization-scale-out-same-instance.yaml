@@ -15,7 +15,6 @@ stress_cmd_r: 'cassandra-stress read duration=30m -rate threads=<THREADS_PLACE_H
 
 append_scylla_yaml:
   enable_tablets: true
-  auto_snapshot: false
 
 scale_out_n_nodes: 1
 scale_out_instance_type: 'i4i.large'

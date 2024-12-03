@@ -202,6 +202,11 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
         data = get_cluster_disk_usage(self.db_cluster)
         disk_usage_to_argus(argus_client, label, data)
 
+    def reclaim_space(self):
+        for node in self.db_cluster.nodes:
+            node.run_nodetool("clearsnapshot")
+            node.run_nodetool("compact")
+
     def test_reclaim_space(self):
         """
         3 nodes cluster, RF=3.
@@ -209,18 +214,23 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
         Sleep for 60 minutes.
         Drop some data and verify space was reclaimed
         """
-        self.run_stress(self.softlimit, sleep_time=self.sleep_time_fill_disk)
-        self.run_stress(self.hardlimit, sleep_time=self.sleep_time_fill_disk)
-        self.disk_usage_to_argus(label="After data insertion")
+        with self.timer_results_to_argus("Soft Limit"):
+            self.run_stress(self.softlimit, sleep_time=self.sleep_time_fill_disk)
+            self.disk_usage_to_argus(label="Soft Limit")
+        with self.timer_results_to_argus("Hard Limit"):
+            self.run_stress(self.hardlimit, sleep_time=self.sleep_time_fill_disk)
+            self.disk_usage_to_argus(label="Hard Limit")
 
         free_before = self.get_total_free_space()
 
         # remove data from 2 large and 2 small keyspaces
         for keyspace in self.get_keyspaces(prefix="keyspace_large")[:2]:
             self.remove_data_from_cluster(keyspace)
+            self.reclaim_space()
             time.sleep(600)
         for keyspace in self.get_keyspaces(prefix="keyspace_small")[:2]:
             self.remove_data_from_cluster(keyspace)
+            self.reclaim_space()
             time.sleep(600)
 
         # sleep to let compaction happen
@@ -248,11 +258,9 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
         with self.timer_results_to_argus("Soft Limit"):
             self.run_stress(self.softlimit, sleep_time=self.sleep_time_fill_disk)
             self.disk_usage_to_argus(label="Soft Limit")
-            InfoEvent(message=f"Soft limit").publish()
         with self.timer_results_to_argus("Hard Limit"):
             self.run_stress(self.hardlimit, sleep_time=self.sleep_time_fill_disk)
             self.disk_usage_to_argus(label="Hard Limit")
-            InfoEvent(message=f"Hard limit").publish()
 
         self.scale_out()
         self.log_disk_usage()
