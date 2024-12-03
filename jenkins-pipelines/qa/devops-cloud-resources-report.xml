@@ -33,7 +33,7 @@ H 9 * * *</spec>
   <concurrentBuild>false</concurrentBuild>
   <builders>
     <hudson.tasks.Shell>
-      <command>./docker/env/hydra.sh cloud-usage-report --emails rnd-internal@scylladb.com,karin@scylladb.com --report-type general</command>
+      <command>./docker/env/hydra.sh cloud-usage-report --emails rnd-internal@scylladb.com,karin@scylladb.com,maciej.zbierski@scylladb.com --report-type general</command>
       <configuredLocalRules/>
     </hudson.tasks.Shell>
     <hudson.tasks.Shell>
@@ -41,7 +41,7 @@ H 9 * * *</spec>
       <configuredLocalRules/>
     </hudson.tasks.Shell>
     <hudson.tasks.Shell>
-      <command>./docker/env/hydra.sh cloud-usage-report --emails karin@scylladb.com,roy@scylladb.com,jakub.troc@scylladb.com --report-type last-7-days-non-qa</command>
+      <command>./docker/env/hydra.sh cloud-usage-report --emails karin@scylladb.com,roy@scylladb.com,jakub.troc@scylladb.com,maciej.zbierski@scylladb.com --report-type last-7-days-non-qa</command>
       <configuredLocalRules/>
     </hudson.tasks.Shell>
   </builders>
