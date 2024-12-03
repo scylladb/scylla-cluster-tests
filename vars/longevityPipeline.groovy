@@ -289,24 +289,22 @@ def call(Map pipelineParams) {
             }
             stage('Provision Resources') {
                 steps {
-                    catchError(stageResult: 'FAILURE') {
-                        script {
-                            wrap([$class: 'BuildUser']) {
-                                dir('scylla-cluster-tests') {
-                                    timeout(time: 30, unit: 'MINUTES') {
-                                        if (params.backend == 'aws' || params.backend == 'azure') {
-                                            provisionResources(params, builder.region)
-                                        } else if (params.backend.contains('docker')) {
-                                            sh """
-                                                echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
-                                            """
-                                        } else {
-                                            sh """
-                                                echo 'Skipping because non-AWS/Azure backends are not supported'
-                                            """
-                                        }
-                                        completed_stages['provision_resources'] = true
+                    script {
+                        wrap([$class: 'BuildUser']) {
+                            dir('scylla-cluster-tests') {
+                                timeout(time: 30, unit: 'MINUTES') {
+                                    if (params.backend == 'aws' || params.backend == 'azure') {
+                                        provisionResources(params, builder.region)
+                                    } else if (params.backend.contains('docker')) {
+                                        sh """
+                                            echo 'Tests are to be executed on Docker backend in SCT-Runner. No additional resources to be provisioned.'
+                                        """
+                                    } else {
+                                        sh """
+                                            echo 'Skipping because non-AWS/Azure backends are not supported'
+                                        """
                                     }
+                                    completed_stages['provision_resources'] = true
                                 }
                             }
                         }
@@ -449,6 +447,17 @@ def call(Map pipelineParams) {
                                         timeout(time: resourceCleanupTimeout, unit: 'MINUTES') {
                                             runCleanupResource(params, builder.region)
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!completed_stages['clean_sct_runner']) {
+                        catchError {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                      cleanSctRunners(params, currentBuild)
                                     }
                                 }
                             }

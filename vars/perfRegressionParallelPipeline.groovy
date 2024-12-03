@@ -281,23 +281,21 @@ def call(Map pipelineParams) {
                                         }
 
                                         stage("Provision Resources for ${sub_test}") {
-                                                catchError(stageResult: 'FAILURE') {
-                                                    script {
-                                                        wrap([$class: 'BuildUser']) {
-                                                            dir('scylla-cluster-tests') {
-                                                                timeout(time: 30, unit: 'MINUTES') {
-                                                                    if (params.backend == 'aws' || params.backend == 'azure') {
-                                                                        provisionResources(new_params, builder.region)
-                                                                    } else {
-                                                                        sh """
-                                                                            echo 'Skipping because non-AWS/Azure backends are not supported'
-                                                                        """
-                                                                    }
-                                                                }
+                                            script {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        timeout(time: 30, unit: 'MINUTES') {
+                                                            if (params.backend == 'aws' || params.backend == 'azure') {
+                                                                provisionResources(new_params, builder.region)
+                                                            } else {
+                                                                sh """
+                                                                    echo 'Skipping because non-AWS/Azure backends are not supported'
+                                                                """
                                                             }
                                                         }
                                                     }
                                                 }
+                                            }
                                         }
 
                                         stage("Run ${sub_test}"){
