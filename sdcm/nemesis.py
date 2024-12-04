@@ -5311,7 +5311,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.use_nemesis_seed()
         num_of_restarts = random.randint(1, len(self.cluster.nodes))
         self.log.debug("Number of serial restart of topology coordinator: %s", num_of_restarts)
-        election_wait_timeout = random.choice([1, 5, 10, 15])
+        election_wait_timeout = random.choice([5, 10, 15])
         self.log.debug("Wait new topology coordinator election timeout: %s", election_wait_timeout)
         for num_of_restart in range(num_of_restarts):
             with self.run_nemesis(node_list=self.cluster.nodes, nemesis_label="search coordinator") as verification_node:

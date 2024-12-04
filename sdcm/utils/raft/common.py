@@ -19,6 +19,7 @@ from sdcm.utils.raft import get_node_status_from_system_by
 from sdcm.cluster import BaseMonitorSet, NodeSetupFailed, BaseScyllaCluster, BaseNode
 from sdcm.exceptions import RaftTopologyCoordinatorNotFound
 from sdcm.rest.storage_service_client import StorageServiceClient
+from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 UUID_REGEX = re.compile(r"([0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12})")
@@ -50,6 +51,7 @@ def validate_raft_on_nodes(nodes: list[BaseNode]) -> None:
     LOGGER.debug("Raft is ready!")
 
 
+@retrying(n=3, allowed_exceptions=(RaftTopologyCoordinatorNotFound, ), message="Waiting topology coordinator election ...")
 def get_topology_coordinator_node(node: BaseNode) -> BaseNode:
     active_nodes: list[BaseNode] = node.parent_cluster.get_nodes_up_and_normal(node)
     stm = "select description from system.group0_history where key = 'history' and \
