@@ -4258,6 +4258,45 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self._double_cluster_load(duration)
         self._shrink_cluster(rack=None, new_nodes=new_nodes)
 
+    @target_data_nodes
+    def disrupt_grow_shrink_datacenter(self):
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Operator doesn't support multi-DC yet. Skipping.")
+        if self.cluster.test_config.MULTI_REGION:
+            raise UnsupportedNemesis(
+                "grow_shring_datacenter skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)")
+        InfoEvent(message='Starting Grow Shrink DC Nemesis').publish()
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        sleep_time_between_ops = sleep_time_between_ops if sleep_time_between_ops else 5
+        sleep_time_between_ops = sleep_time_between_ops * 60
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        # create a new dc
+        nodes_on_new_dc = []
+        initial_dc_nodes = self.cluster.params.get('n_db_nodes')
+        for _ in range(initial_dc_nodes):
+            nodes_on_new_dc += self._add_new_node_in_new_dc()
+        time.sleep(sleep_time_between_ops)
+
+        # add nodes to each dc
+        grow_nodes = []
+        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
+        grow_nodes += self._grow_cluster()
+        for _ in range(add_nodes_number):
+            grow_nodes += self._add_new_node_in_new_dc()
+        time.sleep(sleep_time_between_ops)
+
+        # remove nodes from each dc
+        for node in grow_nodes:
+            self.cluster.decommission(node)
+        time.sleep(sleep_time_between_ops)
+
+        # remove the new dc
+        for node in nodes_on_new_dc:
+            self.cluster.decommission(node)
+
     # NOTE: version limitation is caused by the following:
     #       - https://github.com/scylladb/scylla-enterprise/issues/3211
     #       - https://github.com/scylladb/scylladb/issues/14184
@@ -5568,6 +5607,15 @@ class GrowShrinkClusterNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_grow_shrink_cluster()
+
+
+class GrowShrinkDatacenterNemesis(Nemesis):
+    disruptive = True
+    kubernetes = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.disrupt_grow_shrink_datacenter()
 
 
 class AddRemoveRackNemesis(Nemesis):
