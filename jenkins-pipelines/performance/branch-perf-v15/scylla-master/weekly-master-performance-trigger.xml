@@ -45,22 +45,6 @@ availability_zone=b</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>perf-regression/scylla-master-perf-regression-latency-shard-aware-1TB,perf-regression/scylla-master-perf-regression-throughput-shard-aware-i4i</projects>
-          <condition>SUCCESS</condition>
-          <triggerWithNoParameters>false</triggerWithNoParameters>
-          <triggerFromChildProjects>false</triggerFromChildProjects>
-        </hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
-        <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
-          <configs>
-            <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
-              <properties>scylla_version=master:latest
-aws_region=us-east-1
-region=us-east-1
-provision_type=on_demand
-availability_zone=b</properties>
-              <textParamValueOnNewLine>false</textParamValueOnNewLine>
-            </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
-          </configs>
           <projects>perf-regression/scylla-master-perf-simple-query-weekly-microbenchmark_arm64,perf-regression/scylla-master-perf-simple-query-weekly-microbenchmark_x86_64</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>

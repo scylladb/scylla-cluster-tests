@@ -30,7 +30,7 @@ provision_type=on_demand</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-shard-aware-1TB,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-throughput-shard-aware-i4i</projects>
+          <projects>../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
