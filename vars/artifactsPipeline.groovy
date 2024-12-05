@@ -136,6 +136,7 @@ def call(Map pipelineParams) {
                                                     checkout scm
                                                 }
                                             }
+                                            dockerLogin(params)
                                         }
                                         stage('Create Argus Test Run') {
                                             catchError(stageResult: 'FAILURE') {
