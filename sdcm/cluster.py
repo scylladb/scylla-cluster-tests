@@ -4746,7 +4746,15 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.remoter.run(f"mkdir -p {pkg_path}")
             node.remoter.send_files(src=f"{pkg_path}*.rpm", dst=pkg_path)
         node.install_manager_agent(package_path=pkg_path)
-        node.update_manager_agent_config(region=self.params.get("backup_bucket_region"))
+
+        if self.params.get("mgmt_agent_backup_config"):
+            agent_backup_general_config = self.params.get("mgmt_agent_backup_config").dict()
+        else:
+            agent_backup_general_config = None
+        node.update_manager_agent_backup_config(
+            region=self.params.get("region_name").split()[0],
+            general_config=agent_backup_general_config,
+        )
 
     def _scylla_install(self, node):
         node.update_repo_cache()

@@ -178,7 +178,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                     "The missing table is still in s3, even though it should have been purged"
 
     def update_all_agent_config_files(self):
-        region_name = self.params.get("backup_bucket_region") or self.params.get("region_name").split()[0]
+        region_name = self.params.get("region_name").split()[0]
         for node in self.db_cluster.nodes:
             node.update_manager_agent_config(region=region_name)
         sleep(60)

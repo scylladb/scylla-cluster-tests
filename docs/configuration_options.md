@@ -1329,15 +1329,6 @@ the bucket name to be used for backup (e.g., 'manager-backup-tests')
 **type:** str_or_list (appendable)
 
 
-## **backup_bucket_region** / SCT_BACKUP_BUCKET_REGION
-
-the AWS region of a bucket to be used for backup (e.g., 'eu-west-1')
-
-**default:** N/A
-
-**type:** str (appendable)
-
-
 ## **use_prepared_loaders** / SCT_USE_PREPARED_LOADERS
 
 If True, we use prepared VMs for loader (instead of using docker images)
