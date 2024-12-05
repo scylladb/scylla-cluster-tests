@@ -4277,7 +4277,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         nodes_on_new_dc = []
         initial_dc_nodes = self.cluster.params.get('n_db_nodes')
         for _ in range(initial_dc_nodes):
-            nodes_on_new_dc += self._add_new_node_in_new_dc()
+            nodes_on_new_dc += [self._add_new_node_in_new_dc()]
         time.sleep(sleep_time_between_ops)
 
         # add nodes to each dc
@@ -4285,7 +4285,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         grow_nodes += self._grow_cluster()
         for _ in range(add_nodes_number):
-            grow_nodes += self._add_new_node_in_new_dc()
+            grow_nodes += [self._add_new_node_in_new_dc()]
         time.sleep(sleep_time_between_ops)
 
         # remove nodes from each dc
