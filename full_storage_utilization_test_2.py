@@ -133,15 +133,15 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
         if not self.db_cluster.nodes[0].raft.is_consistent_topology_changes_enabled:
             system_keyspaces.insert(0, "system_auth")
 
-        for rf in range(1, self.scale_out_n_nodes[1]):
-            for keyspace in system_keyspaces:
+        for keyspace in system_keyspaces:
+            for rf in range(1, self.scale_out_n_nodes[1] + 1):
                 replication_factors = {old_dc: 3, new_dc: rf}
                 cql = f"ALTER KEYSPACE {keyspace} WITH replication = {NetworkTopologyReplicationStrategy(**replication_factors)}"
                 self.execute_cql(cql)
                 wait_for_tablets_balanced(self.db_cluster.nodes[0])
 
-        for rf in range(1, self.scale_out_n_nodes[1]):
-            for keyspace in self.keyspaces:
+        for keyspace in self.keyspaces:
+            for rf in range(1, self.scale_out_n_nodes[1] + 1):
                 replication_factors = {old_dc: 3, new_dc: rf}
                 cql = f"ALTER KEYSPACE {keyspace} WITH replication = {NetworkTopologyReplicationStrategy(**replication_factors)}"
                 InfoEvent(message=f"ALTER KEYSPACE {keyspace} with {replication_factors}").publish()
