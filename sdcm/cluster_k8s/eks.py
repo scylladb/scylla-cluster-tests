@@ -575,7 +575,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):  # pylint: disable=
         if self.params.get("use_mgmt"):
             data["s3"] = {
                 "provider": "AWS",
-                "region": self.params.get("backup_bucket_region"),
+                "region": self.params.get("region_name").split()[0],
             }
         # Create kubernetes secret that holds scylla manager agent configuration
         self.update_secret_from_data(SCYLLA_AGENT_CONFIG_NAME, namespace, {
