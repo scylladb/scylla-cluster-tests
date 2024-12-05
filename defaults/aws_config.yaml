@@ -27,7 +27,6 @@ use_preinstalled_scylla: true
 
 backup_bucket_backend: 's3'
 backup_bucket_location: 'manager-backup-tests-us-east-1'
-backup_bucket_region: 'us-east-1'
 
 data_volume_disk_num: 0
 data_volume_disk_type: 'gp2'

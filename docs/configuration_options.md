@@ -148,7 +148,6 @@
 | **<a href="#user-content-aws_instance_profile_name_loader" name="aws_instance_profile_name_loader">aws_instance_profile_name_loader</a>**  | This is the name of the instance profile to set on all loader instances | N/A | SCT_AWS_INSTANCE_PROFILE_NAME_LOADER
 | **<a href="#user-content-backup_bucket_backend" name="backup_bucket_backend">backup_bucket_backend</a>**  | the backend to be used for backup (e.g., 's3', 'gcs' or 'azure') | N/A | SCT_BACKUP_BUCKET_BACKEND
 | **<a href="#user-content-backup_bucket_location" name="backup_bucket_location">backup_bucket_location</a>**  | the bucket name to be used for backup (e.g., 'manager-backup-tests') | N/A | SCT_BACKUP_BUCKET_LOCATION
-| **<a href="#user-content-backup_bucket_region" name="backup_bucket_region">backup_bucket_region</a>**  | the AWS region of a bucket to be used for backup (e.g., 'eu-west-1') | N/A | SCT_BACKUP_BUCKET_REGION
 | **<a href="#user-content-use_prepared_loaders" name="use_prepared_loaders">use_prepared_loaders</a>**  | If True, we use prepared VMs for loader (instead of using docker images) | N/A | SCT_USE_PREPARED_LOADERS
 | **<a href="#user-content-scylla_d_overrides_files" name="scylla_d_overrides_files">scylla_d_overrides_files</a>**  | list of files that should upload to /etc/scylla.d/ directory to override scylla config files | N/A | SCT_scylla_d_overrides_files
 | **<a href="#user-content-gce_project" name="gce_project">gce_project</a>**  | gcp project name to use | N/A | SCT_GCE_PROJECT
