@@ -114,6 +114,7 @@ def call(Map pipelineParams) {
                             checkoutQaInternal(params)
                         }
                     }
+                    dockerLogin(params)
                 }
             }
             stage('Create Argus Test Run') {
