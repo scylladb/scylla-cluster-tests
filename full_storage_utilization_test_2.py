@@ -150,10 +150,16 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
 
     def insert_data(self, dataset_size: int, ks_name: str, ks_num: int):
         stress_cmd = self.prepare_dataset_layout(dataset_size)
+        self.log.info(f"Calling `run_stress_thread` for keyspace={ks_name}")
         stress_queue = self.run_stress_thread(
             stress_cmd=stress_cmd, keyspace_name=ks_name, stress_num=1, keyspace_num=ks_num)
+        self.log.info(f"Finished `run_stress_thread` for keyspace={ks_name}")
+        self.log.info(f"Calling `verify_stress_thread` for keyspace={ks_name}")
         self.verify_stress_thread(cs_thread_pool=stress_queue)
+        self.log.info(f"Finished `verify_stress_thread` for keyspace={ks_name}")
+        self.log.info(f"Calling `get_stress_results` for keyspace={ks_name}")
         self.get_stress_results(queue=stress_queue)
+        self.log.info(f"Finished `get_stress_results` for keyspace={ks_name}")
 
     def run_stress_until_target(self, target_used_size, target_usage):
         current_usage, current_used = self.get_max_disk_usage()
