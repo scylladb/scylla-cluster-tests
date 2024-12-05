@@ -4755,7 +4755,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         else:
             agent_backup_general_config = None
         node.update_manager_agent_backup_config(
-            region=self.params.get("backup_bucket_region"),
+            region=self.params.get("region_name").split()[0],
             general_config=agent_backup_general_config,
         )
 

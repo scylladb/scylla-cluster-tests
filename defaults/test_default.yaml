@@ -173,8 +173,6 @@ k8s_scylla_utils_docker_image: ''
 
 scylla_rsyslog_setup: false
 
-backup_bucket_region: ''  # use the same region as a cluster
-
 events_limit_in_email: 10
 
 data_volume_disk_num: 0
