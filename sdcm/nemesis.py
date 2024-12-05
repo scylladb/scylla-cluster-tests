@@ -2094,6 +2094,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # NOTE: 'self' is used by the 'scylla_versions' decorator
         return ''
 
+    def disrupt_drop(self):
+        keyspace_drop = 'ks_drop'
+        table = 'standard1'
+
+        self._prepare_test_table(ks=keyspace_drop)
+
+        # do the actual drop
+        drop_timeout = 600
+        drop_cmd_timeout_suffix = self._truncate_cmd_timeout_suffix(drop_timeout)
+        self.target_node.run_cqlsh(
+            cmd=f'DROP {keyspace_drop}.{table}{drop_cmd_timeout_suffix}',
+            timeout=drop_timeout)
+
     def disrupt_truncate(self):
         keyspace_truncate = 'ks_truncate'
         table = 'standard1'
@@ -5836,6 +5849,16 @@ class NodeToolCleanupMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_nodetool_cleanup()
+
+
+class DropMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    limited = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_drop()
 
 
 class TruncateMonkey(Nemesis):
