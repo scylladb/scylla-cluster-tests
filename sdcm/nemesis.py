@@ -2101,11 +2101,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._prepare_test_table(ks=keyspace_drop)
 
         # do the actual drop
-        drop_timeout = 600
-        drop_cmd_timeout_suffix = self._truncate_cmd_timeout_suffix(drop_timeout)
-        self.target_node.run_cqlsh(
-            cmd=f'DROP {keyspace_drop}.{table}{drop_cmd_timeout_suffix}',
-            timeout=drop_timeout)
+        with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_drop) as session:
+            session.execute(f"DROP TABLE {table};")
 
     def disrupt_truncate(self):
         keyspace_truncate = 'ks_truncate'
