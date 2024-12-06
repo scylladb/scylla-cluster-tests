@@ -148,18 +148,11 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
                 self.execute_cql(cql)
                 wait_for_tablets_balanced(self.db_cluster.nodes[0])
 
-    def insert_data(self, dataset_size: int, ks_name: str, ks_num: int):
+    def insert_data(self, dataset_size: int, ks_name: str):
         stress_cmd = self.prepare_dataset_layout(dataset_size)
-        self.log.info(f"Calling `run_stress_thread` for keyspace={ks_name}")
-        stress_queue = self.run_stress_thread(
-            stress_cmd=stress_cmd, keyspace_name=ks_name, stress_num=1, keyspace_num=ks_num)
-        self.log.info(f"Finished `run_stress_thread` for keyspace={ks_name}")
-        self.log.info(f"Calling `verify_stress_thread` for keyspace={ks_name}")
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, keyspace_name=ks_name)
         self.verify_stress_thread(cs_thread_pool=stress_queue)
-        self.log.info(f"Finished `verify_stress_thread` for keyspace={ks_name}")
-        self.log.info(f"Calling `get_stress_results` for keyspace={ks_name}")
         self.get_stress_results(queue=stress_queue)
-        self.log.info(f"Finished `get_stress_results` for keyspace={ks_name}")
 
     def run_stress_until_target(self, target_used_size, target_usage):
         current_usage, current_used = self.get_max_disk_usage()
@@ -177,7 +170,7 @@ class FullStorageUtilizationTest2(FullStorageUtilizationTest):
             self.keyspaces.append(ks_name)
             self.log.info(f"Writing chunk of size: {dataset_size} GB in keyspace {ks_name}")
             self.log_disk_usage()
-            self.insert_data(dataset_size, ks_name, num)
+            self.insert_data(dataset_size, ks_name)
 
             self.db_cluster.flush_all_nodes()
 
