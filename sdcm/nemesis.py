@@ -4280,35 +4280,43 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 "grow_shring_datacenter skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)")
         InfoEvent(message='Starting Grow Shrink DC Nemesis').publish()
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
-        sleep_time_between_ops = sleep_time_between_ops if sleep_time_between_ops else 5
+        sleep_time_between_ops = sleep_time_between_ops if sleep_time_between_ops else 10
         sleep_time_between_ops = sleep_time_between_ops * 60
         if not self.has_steady_run and sleep_time_between_ops:
             self.steady_state_latency()
             self.has_steady_run = True
 
         # create a new dc
+        InfoEvent(message='New DC').publish()
         nodes_on_new_dc = []
         initial_dc_nodes = self.cluster.params.get('n_db_nodes')
         for _ in range(initial_dc_nodes):
             nodes_on_new_dc += [self._add_new_node_in_new_dc()]
+        self.monitoring_set.reconfigure_scylla_monitoring()
         time.sleep(sleep_time_between_ops)
 
         # add nodes to each dc
+        InfoEvent(message='Grow both DCs').publish()
         grow_nodes = []
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         grow_nodes += self._grow_cluster()
         for _ in range(add_nodes_number):
             grow_nodes += [self._add_new_node_in_new_dc()]
+        self.monitoring_set.reconfigure_scylla_monitoring()
         time.sleep(sleep_time_between_ops)
 
         # remove nodes from each dc
+        InfoEvent(message='Shrink both DCs').publish()
         for node in grow_nodes:
             self.cluster.decommission(node)
+        self.monitoring_set.reconfigure_scylla_monitoring()
         time.sleep(sleep_time_between_ops)
 
         # remove the new dc
+        InfoEvent(message='Remove DC').publish()
         for node in nodes_on_new_dc:
             self.cluster.decommission(node)
+        self.monitoring_set.reconfigure_scylla_monitoring()
 
     # NOTE: version limitation is caused by the following:
     #       - https://github.com/scylladb/scylla-enterprise/issues/3211
