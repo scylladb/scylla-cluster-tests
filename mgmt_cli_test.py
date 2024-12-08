@@ -258,19 +258,45 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
         stress_run_time = datetime.now() - stress_start_time
         InfoEvent(message=f'The read stress run was completed. Total run time: {stress_run_time}').publish()
 
-    def prepare_and_run_stress_read(self, command_template, keyspace_name, number_of_rows):
+    def prepare_run_and_verify_stress_in_threads(self, cmd_template: str, keyspace_name: str, num_of_rows: int,
+                                                 stop_on_failure: bool = False) -> None:
+        """Prepares C-S commands, runs them in threads and verifies their execution results.
+        Stress operation can be either read or write, depending on the cmd_template.
+        """
         stress_queue = []
-        number_of_loaders = self.params.get("n_loaders")
-        rows_per_loader = int(number_of_rows / number_of_loaders)
-        for loader_index in range(number_of_loaders):
-            stress_command = command_template.format(num_of_rows=rows_per_loader,
-                                                     keyspace_name=keyspace_name,
-                                                     sequence_start=rows_per_loader * loader_index + 1,
-                                                     sequence_end=rows_per_loader * (loader_index + 1),)
-            read_thread = self.run_stress_thread(stress_cmd=stress_command, round_robin=True,
-                                                 stop_test_on_failure=False)
-            stress_queue.append(read_thread)
-        return stress_queue
+        num_of_loaders = self.params.get("n_loaders")
+        rows_per_loader = int(num_of_rows / num_of_loaders)
+        for loader_index in range(num_of_loaders):
+            stress_cmd = cmd_template.format(num_of_rows=rows_per_loader,
+                                             keyspace_name=keyspace_name,
+                                             sequence_start=rows_per_loader * loader_index + 1,
+                                             sequence_end=rows_per_loader * (loader_index + 1),)
+            _thread = self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True,
+                                             stop_test_on_failure=stop_on_failure)
+            stress_queue.append(_thread)
+
+        for _thread in stress_queue:
+            assert self.verify_stress_thread(cs_thread_pool=_thread), "Stress thread verification failed"
+
+    @staticmethod
+    def extract_compaction_strategy_from_cs_cmd(cs_cmd: str, lower: bool = True, remove_postfix: bool = True) -> str:
+        """Extracts the compaction strategy from the cassandra-stress command.
+
+        :param cs_cmd: cassandra-stress command
+        :param lower: if True, the resulting string will be lowercased
+        :param remove_postfix: if True, the resulting string will have the "CompactionStrategy" postfix removed
+        """
+        match = re.search(r"compaction\(strategy=([^)]+)\)", cs_cmd)
+        if match:
+            strategy = match.group(1)
+            if remove_postfix:
+                strategy = re.sub(r"CompactionStrategy$", "", strategy)
+            if lower:
+                strategy = strategy.lower()
+        else:
+            raise ValueError("Compaction strategy not found in cs_cmd.")
+
+        return strategy
 
 
 class ClusterOperations(ClusterTester):
@@ -1252,6 +1278,56 @@ class ManagerSuspendTests(ManagerTestFunctionsMixIn):
             self._test_suspend_with_on_resume_start_tasks_flag_template(wait_for_duration=False)
 
 
+class ManagerHelperTests(ManagerTestFunctionsMixIn):
+
+    def test_prepare_backup_snapshot(self):
+        """Test prepares backup snapshot for its future use in nemesis or restore benchmarks
+
+        Steps:
+        1. Populate the cluster with data.
+           - C-S write cmd is based on `confirmation_stress_template` template in manager_persistent_snapshots.yaml
+           - Backup size should be specified in Jenkins job passing `mgmt_prepare_snapshot_size` parameter
+        2. Run backup and wait for it to finish.
+        3. Log snapshot details into console.
+        """
+        self.log.info("Populate the cluster with data")
+        backup_size = self.params.get("mgmt_prepare_snapshot_size")  # in Gb
+        assert backup_size and backup_size >= 1, "Backup size must be at least 1Gb"
+
+        backend = self.params.get("cluster_backend")
+        cs_read_cmd_template = get_persistent_snapshots()[backend]["confirmation_stress_template"]
+        cs_write_cmd_template = cs_read_cmd_template.replace(" read ", " write ")
+
+        compaction = self.extract_compaction_strategy_from_cs_cmd(cs_write_cmd_template)
+        scylla_version = re.sub(r"[-.]", "_", self.params.get("scylla_version"))
+        keyspace_name = f"{backup_size}gb_{compaction}_{scylla_version}"
+
+        self.prepare_run_and_verify_stress_in_threads(
+            cmd_template=cs_write_cmd_template,
+            keyspace_name=keyspace_name,
+            num_of_rows=backup_size * 1024 * 1024,  # Considering 1 row = 1Kb
+            stop_on_failure=True,
+        )
+
+        self.log.info("Initialize Scylla Manager")
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+
+        self.log.info("Run backup and wait for it to finish")
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
+        backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
+        assert backup_task_status == TaskStatus.DONE, \
+            f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+
+        self.log.info("Log snapshot details")
+        self.log.info(
+            f"Snapshot tag: {backup_task.get_snapshot_tag()}\n"
+            f"Keyspace name: {keyspace_name}\n"
+            f"Bucket: {self.locations}\n"
+            f"Cluster id: {mgr_cluster.id}\n"
+        )
+
+
 class ManagerSanityTests(
     ManagerBackupTests,
     ManagerRestoreTests,
@@ -1531,11 +1607,9 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
 
         if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
             self.log.info("Running verification read stress")
-            stress_queue = self.prepare_and_run_stress_read(command_template=snapshot_data.cs_read_cmd_template,
-                                                            keyspace_name=snapshot_data.keyspaces[0],
-                                                            number_of_rows=snapshot_data.number_of_rows)
-            for stress in stress_queue:
-                assert self.verify_stress_thread(cs_thread_pool=stress), "Data verification stress command"
+            self.prepare_run_and_verify_stress_in_threads(cmd_template=snapshot_data.cs_read_cmd_template,
+                                                          keyspace_name=snapshot_data.keyspaces[0],
+                                                          num_of_rows=snapshot_data.number_of_rows)
         else:
             self.log.info(f"Skipping verification read stress because of the test or snapshot configuration")
 
