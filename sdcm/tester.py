@@ -1480,13 +1480,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         def create_cluster(db_type='scylla'):
             cl_params = _get_instance_params()
             cl_params.update(common_params)
+            nodes_smp = self.params.get('nodes_smp') or []
             if db_type == 'scylla':
                 if self.params.get('aws_fallback_to_next_availability_zone'):
                     return _create_auto_zone_scylla_aws_cluster()
                 return ScyllaAWSCluster(
                     ec2_ami_id=self.params.get('ami_id_db_scylla').split(),
                     ec2_ami_username=self.params.get('ami_db_scylla_user'),
-                    **cl_params)
+                    **cl_params,
+                    nodes_smp=nodes_smp)
             elif db_type == 'cassandra':
                 return CassandraAWSCluster(
                     ec2_ami_id=self.params.get('ami_id_db_cassandra').split(),
@@ -1502,6 +1504,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     n_nodes=[self.params.get('n_test_oracle_db_nodes')],
                     node_type='oracle-db',
                     **(common_params | {'user_prefix': user_prefix + '-oracle'}),
+                    nodes_smp=nodes_smp,
                 )
             elif db_type == 'cloud_scylla':
                 cloud_credentials = self.params.get('cloud_credentials_path')
