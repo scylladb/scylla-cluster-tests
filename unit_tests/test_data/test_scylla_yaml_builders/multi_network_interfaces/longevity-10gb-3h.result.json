@@ -19,5 +19,6 @@
   "enable_ipv6_dns_lookup": false,
   "alternator_enforce_authorization": false,
   "auto_bootstrap": true,
+  "listen_interface": "eth1",
   "hinted_handoff_enabled": false
 }

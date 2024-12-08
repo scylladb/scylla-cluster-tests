@@ -115,6 +115,12 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
         return None
 
     @property
+    def listen_interface(self):
+        if self.node.scylla_network_configuration:
+            return self.node.scylla_network_configuration.device
+        return None
+
+    @property
     def enable_ipv6_dns_lookup(self) -> bool:
         return self._is_ip_ssh_connections_ipv6
 
