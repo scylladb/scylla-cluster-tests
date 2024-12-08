@@ -459,7 +459,7 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method,too-many-instance-
                                  dns_private_name="",
                                  dns_public_name="",
                                  device_index=0,
-                                 device_name='',
+                                 device_name='eth0',
                                  mac_address=''
                                  ),
                 NetworkInterface(ipv4_public_address=None,
@@ -469,7 +469,7 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method,too-many-instance-
                                  dns_private_name="",
                                  dns_public_name="",
                                  device_index=1,
-                                 device_name='',
+                                 device_name='eth1',
                                  mac_address=''
                                  )
                 ]

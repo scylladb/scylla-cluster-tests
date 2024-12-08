@@ -75,6 +75,7 @@ from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.provision.helpers.certificate import (
     create_ca, install_client_certificate, install_encryption_at_rest_files, create_certificate,
     export_pem_cert_to_pkcs12_keystore, CA_CERT_FILE, CA_KEY_FILE, JKS_TRUSTSTORE_FILE, TLSAssets)
+from sdcm.provision.network_configuration import network_interfaces_count
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd, RetryableNetworkException
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.remote.remote_long_running import run_long_running_cmd
@@ -3024,6 +3025,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
     def get_nic_devices(self) -> List:
         """Returns list of ethernet network interfaces"""
+        if self.scylla_network_configuration:
+            return [self.scylla_network_configuration.device]
+
         result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
         return result.stdout.strip().split()
 
@@ -4716,6 +4720,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         node.stop_scylla_server(verify_down=False)
         node.clean_scylla_data()
         node.remoter.sudo(cmd="rm -f /etc/scylla/ami_disabled", ignore_status=True)
+
+        if network_interfaces_count(self.params) > 1:
+            node.run_scylla_sysconfig_setup()
 
         if append_scylla_node_exporter_args := self.params.get('append_scylla_node_exporter_args'):
             configuration_file = '/etc/default/scylla-node-exporter'
