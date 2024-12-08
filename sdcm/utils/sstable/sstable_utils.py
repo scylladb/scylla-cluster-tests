@@ -69,15 +69,7 @@ class SstableUtils:
         if not sstables:
             raise SstablesNotFound(f"sstables for '{self.keyspace}.{self.table}' wasn't found")
 
-        if ComparableScyllaVersion(self.db_node.scylla_version) >= '2023.1.3':
-            dump_cmd = (
-                f"SCYLLA_CONF={Path(self.db_node.add_install_prefix(SCYLLA_YAML_PATH)).parent}"
-                f" {self.db_node.add_install_prefix('/usr/bin/scylla')} sstable dump-scylla-metadata"
-                "  --logger-log-level scylla-sstable=debug"
-                f" --keyspace {self.keyspace} --table {self.table} --sstables"
-            )
-        else:
-            dump_cmd = 'sstabledump'
+        dump_cmd = get_sstable_metadata_dump_command(self.db_node, self.keyspace, self.table)
         for sstable in sstables:
             sstables_res = self.db_node.remoter.sudo(
                 f"{dump_cmd} {sstable}",
@@ -138,8 +130,9 @@ class SstableUtils:
             f" Encryption results: {encryption_results}")
 
     def count_sstable_tombstones(self, sstable: str) -> int:
+        dump_cmd = get_sstable_data_dump_command(node=self.db_node, keyspace=self.keyspace, table=self.table)
         self.db_node.remoter.run(
-            f'sudo sstabledump  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
+            f'sudo {dump_cmd}  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
         tombstones_deletion_info = self.db_node.remoter.run(
             'sudo egrep \'"expired" : true|marked_deleted\' /tmp/sstabledump.json', verbose=False, ignore_status=True)
         if not tombstones_deletion_info:
@@ -183,8 +176,9 @@ class SstableUtils:
 
     def get_compacted_tombstone_deletion_info(self, sstable: str) -> list:
         tombstones_deletion_info = []
+        dump_cmd = get_sstable_data_dump_command(node=self.db_node, keyspace=self.keyspace, table=self.table)
         self.db_node.remoter.run(
-            f'sudo sstabledump  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
+            f'sudo {dump_cmd}  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
         result = self.db_node.remoter.run('sudo grep marked_deleted /tmp/sstabledump.json', verbose=False,
                                           ignore_status=True)
         if result.ok:
@@ -221,3 +215,66 @@ class SstableUtils:
         full_deletion_date = f'{deletion_date} {deletion_hour}:{deletion_minutes}:{deletion_seconds}'
         full_deletion_date_datetime = datetime.datetime.strptime(full_deletion_date, '%Y-%m-%d %H:%M:%S')
         return full_deletion_date_datetime
+
+
+def is_new_sstable_dump_supported(node) -> bool:
+    """
+    Determines if the new "scylla sstable" dump command is supported based on the Scylla version.
+
+    :param node: A DB node object to provide Scylla version.
+    :return: True if the new "scylla sstable" dump is supported, else False.
+    """
+    if node.is_enterprise:
+        return ComparableScyllaVersion(node.scylla_version) >= "2023.1.3"
+    return ComparableScyllaVersion(node.scylla_version) >= "5.4.0~rc0"
+
+
+def _generate_sstable_dump_command(node, command: str, keyspace: str, table: str) -> str:
+    """
+    Constructs the base command for the "scylla sstable" dump tool.
+
+    :param node: A DB node object to provide Scylla version.
+    :param command: Specific subcommand for the "scylla sstable" tool (e.g., "dump-data").
+    :param keyspace: Keyspace name.
+    :param table: Table name.
+    :return: Base command string.
+    """
+    scylla_conf_dir = Path(node.add_install_prefix(SCYLLA_YAML_PATH)).parent
+    return (
+        f'SCYLLA_CONF={scylla_conf_dir} '
+        f'{node.add_install_prefix("/usr/bin/scylla")} sstable {command} '
+        f'--keyspace {keyspace} --table {table} --sstables'
+    )
+
+
+def get_sstable_metadata_dump_command(node, keyspace: str, table: str, debug_log_level: bool = True) -> str:
+    """
+    Constructs the command for dumping sstable metadata using either "sstabledump" or "scylla sstable" tool.
+
+    :param node: A DB node object to provide Scylla version.
+    :param keyspace: Keyspace name.
+    :param table: Table name.
+    :param debug_log_level: If True, includes debug-level logging in the command.
+    :return: Command string for metadata dump.
+    """
+    if not is_new_sstable_dump_supported(node):
+        return 'sstabledump'
+
+    log_level_option = " --logger-log-level scylla-sstable=debug" if debug_log_level else ""
+    command = f"dump-scylla-metadata{log_level_option}"
+
+    return _generate_sstable_dump_command(node, command, keyspace, table)
+
+
+def get_sstable_data_dump_command(node, keyspace: str, table: str) -> str:
+    """
+    Constructs the command for dumping sstable data using either "sstabledump" or "scylla sstable" tool.
+
+    :param node: A DB node object to provide Scylla version.
+    :param keyspace: Keyspace name.
+    :param table: Table name.
+    :return: Command string for data dump.
+    """
+    if not is_new_sstable_dump_supported(node):
+        return 'sstabledump'
+    return _generate_sstable_dump_command(node, "dump-data", keyspace, table)
