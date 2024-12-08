@@ -103,7 +103,8 @@ from sdcm.utils.common import (get_db_tables, generate_random_string,
                                reach_enospc_on_node, clean_enospc_on_node,
                                parse_nodetool_listsnapshots,
                                update_authenticator, ParallelObject,
-                               ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table)
+                               ParallelObjectResult, sleep_for_percent_of_duration, get_views_of_base_table,
+                               SctDbNodesTypes)
 from sdcm.utils.features import is_tablets_feature_enabled
 from sdcm.utils.quota import configure_quota_on_node_for_scylla_user_context, is_quota_enabled_on_node, enable_quota_on_node, \
     write_data_to_reach_end_of_quota
@@ -184,10 +185,10 @@ def target_data_nodes(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
-            args[0].set_target_node_pool(args[0].cluster.data_nodes)
+            args[0].set_target_node_pool('data_nodes')
             return func(*args, **kwargs)
         finally:
-            args[0].set_target_node_pool(args[0].cluster.data_nodes)
+            args[0].set_target_node_pool('data_nodes')
     return wrapper
 
 
@@ -195,10 +196,10 @@ def target_zero_nodes(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
-            args[0].set_target_node_pool(args[0].cluster.zero_nodes)
+            args[0].set_target_node_pool('zero_nodes')
             return func(*args, **kwargs)
         finally:
-            args[0].set_target_node_pool(args[0].cluster.data_nodes)
+            args[0].set_target_node_pool('data_nodes')
     return wrapper
 
 
@@ -206,10 +207,10 @@ def target_all_nodes(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
-            args[0].set_target_node_pool(args[0].cluster.nodes)
+            args[0].set_target_node_pool('all_nodes')
             return func(*args, **kwargs)
         finally:
-            args[0].set_target_node_pool(args[0].cluster.data_nodes)
+            args[0].set_target_node_pool('data_nodes')
     return wrapper
 
 
@@ -287,7 +288,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         }
         self.es_publisher = NemesisElasticSearchPublisher(self.tester)
         self._init_num_deletions_factor()
-        self._target_node_pool = self.cluster.data_nodes
+        self._target_node_pool: SctDbNodesTypes = 'data_nodes'
 
     def _init_num_deletions_factor(self):
         # num_deletions_factor is a numeric divisor. It's a factor by which the available-partitions-for-deletion
@@ -397,12 +398,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with NEMESIS_TARGET_SELECTION_LOCK:
                 node.running_nemesis = None
 
-    def set_target_node_pool(self, nodelist: list[BaseNode] | None = None):
+    def set_target_node_pool(self, node_type: SctDbNodesTypes | None = None):
         """Set pool of nodes to choose target node """
-        if not nodelist:
-            self._target_node_pool = self.cluster.data_nodes
-        else:
-            self._target_node_pool = nodelist
+        self._target_node_pool = node_type or 'data_nodes'
 
     def _get_target_nodes(
             self,
@@ -424,7 +422,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         if is_seed is DefaultValue:
             is_seed = False if self.filter_seed else None
-        nodes = [node for node in self._target_node_pool if not node.running_nemesis]
+
+        match self._target_node_pool:
+            case 'all_nodes':
+                pool = self.cluster.nodes
+            case 'data_nodes':
+                pool = self.cluster.data_nodes
+            case 'zero_nodes':
+                pool = self.cluster.zero_nodes
+            case _:
+                raise ValueError(f"Unknown target node pool: {self._target_node_pool}")
+
+        nodes = [node for node in pool if not node.running_nemesis]
         if is_seed is not None:
             nodes = [node for node in nodes if node.is_seed == is_seed]
         if dc_idx is not None:
@@ -4219,7 +4228,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 if self._is_it_on_kubernetes():
                     if rack is None and self._is_it_on_kubernetes():
                         rack = 0
-                    self.set_target_node_pool(self.cluster.data_nodes)
+                    self.set_target_node_pool('data_nodes')
                     self.set_target_node(rack=rack, is_seed=is_seed, allow_only_last_node_in_rack=True)
                 else:
                     rack_idx = rack if rack is not None else idx % self.cluster.racks_count
@@ -5522,7 +5531,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                 #       gets killed/aborted. So, use safe 'pop' call with the default 'None' value.
                 NEMESIS_RUN_INFO.pop(nemesis_run_info_key, None)
 
-            args[0].set_target_node_pool(args[0].cluster.data_nodes)
+            args[0].set_target_node_pool('data_nodes')
 
         return result
 

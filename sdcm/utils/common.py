@@ -1184,6 +1184,8 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, ver
 
 ScyllaProduct = Literal['scylla', 'scylla-enterprise']
 
+SctDbNodesTypes = Literal['all_nodes', 'data_nodes', 'zero_nodes']
+
 
 def get_latest_scylla_ami_release(region: str = 'eu-west-1',
                                   product: ScyllaProduct = 'scylla') -> str:
