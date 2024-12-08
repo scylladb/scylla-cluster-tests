@@ -309,12 +309,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self._node_rack = None
         self._is_zero_token_node = False
 
-    def save_cqlsh_output_in_file(self, cmd: str, log_file: str):
-        self.log.info("Save command '%s' output in the file. Node %s", cmd, self.name)
-        result_tables = self.run_cqlsh(cmd, split=True)
-        for line in result_tables:
-            self.remoter.run(f"echo '{line}' >> {log_file}")
-
     def _is_node_ready_run_scylla_commands(self) -> bool:
         """
         When node is just created and started to configure, during first node initializing, it is impossible to connect to the node yet and
