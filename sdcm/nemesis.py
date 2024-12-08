@@ -2094,6 +2094,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # NOTE: 'self' is used by the 'scylla_versions' decorator
         return ''
 
+    @latency_calculator_decorator(legend="Drop Table")
     def disrupt_drop(self):
         keyspace_drop = 'ks_drop'
         table = 'standard1'
@@ -2104,6 +2105,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_drop) as session:
             session.execute(f"DROP TABLE {table};")
 
+    @latency_calculator_decorator(legend="Truncate Table")
     def disrupt_truncate(self):
         keyspace_truncate = 'ks_truncate'
         table = 'standard1'
