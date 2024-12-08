@@ -102,10 +102,17 @@ class BaseLogEntity:  # pylint: disable=too-few-public-methods
     collect_timeout = 300
     _params = {}
 
-    def __init__(self, name, command="", search_locally=False):
+    def __init__(self, name, command="", search_locally=False, collect_from_parent=False):
+        """
+         collect_from_parent: relevant for cluster:
+                            - there are logs of every node
+                            - there are logs that relevant for whole cluster
+                            If this parameter is True - collect logs on cluster level (cluster folder), not under node folder
+        """
         self.name = name
         self.cmd = command
         self.search_locally = search_locally
+        self.collect_from_parent = collect_from_parent
 
     def set_params(self, params):
         self._params = params
@@ -622,11 +629,16 @@ class LogCollector:
             LOGGER.info('Collecting logs on host: %s', node.name)
             remote_node_dir = self.create_remote_storage_dir(node)
             local_node_dir = os.path.join(self.local_dir, node.name)
+            local_parent_dir = self.local_dir
             for log_entity in self.log_entities:
                 try:
-                    log_entity.collect(node, local_node_dir, remote_node_dir, local_search_path=local_search_path)
+                    log_entity.collect(node=node,
+                                       local_dst=local_parent_dir if log_entity.collect_from_parent else local_node_dir,
+                                       remote_dst=remote_node_dir,
+                                       local_search_path=local_search_path)
                 except Exception as details:  # pylint: disable=unused-variable, broad-except  # noqa: BLE001
-                    LOGGER.error("Error occured during collecting on host: %s\n%s", node.name, details)
+                    LOGGER.error("Error occured during collecting of %s on host: %s\n%s",
+                                 log_entity.name, node.name, details)
 
         LOGGER.debug("Nodes list %s", [node.name for node in self.nodes])
 
@@ -718,6 +730,12 @@ class ScyllaLogCollector(LogCollector):
                             search_locally=True),
                     FileLog(name='netstat_*',
                             search_locally=True),
+                    FileLog(name='schema.log',
+                            search_locally=True,
+                            collect_from_parent=True),
+                    FileLog(name='system_schema_tables.log',
+                            search_locally=True,
+                            collect_from_parent=True),
                     CommandLog(name='cpu_info',
                                command='cat /proc/cpuinfo'),
                     CommandLog(name='mem_info',
@@ -749,10 +767,6 @@ class ScyllaLogCollector(LogCollector):
                                command='cat /var/log/cloud-init-output.log'),
                     CommandLog(name='cloud-init.log',
                                command='cat /var/log/cloud-init.log'),
-                    CommandLog(name='schema.log',
-                               command='cat schema.log'),
-                    CommandLog(name='system_schema_tables.log',
-                               command='cat system_schema_tables.log'),
                     ]
 
     cmd = "test -f /etc/scylla/ssl_conf/{0} && cat /etc/scylla/ssl_conf/{0}"
