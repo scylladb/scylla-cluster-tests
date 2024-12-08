@@ -220,10 +220,11 @@ class silence:  # pylint: disable=invalid-name
     test = None
     name: str = None
 
-    def __init__(self, parent=None, name: str = None, verbose: bool = False):
+    def __init__(self, parent=None, name: str = None, verbose: bool = False, raise_error_event=True):
         self.parent = parent
         self.name = name
         self.verbose = verbose
+        self.raise_error_event = raise_error_event
         self.log = logging.getLogger(self.__class__.__name__)
 
     def __enter__(self):
@@ -255,8 +256,10 @@ class silence:  # pylint: disable=invalid-name
             self._store_test_result(self.parent, exc_val, exc_tb, self.name)
         return True
 
-    @staticmethod
-    def _store_test_result(parent, exc_val, exc_tb, name):
+    def _store_test_result(self, parent, exc_val, exc_tb, name):
+        if not self.raise_error_event:
+            return
+
         TestFrameworkEvent(
             source=parent.__class__.__name__,
             source_method=name,
