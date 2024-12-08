@@ -4756,6 +4756,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert actual_cdc_settings == cdc_settings, \
                 f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}"
 
+    @latency_calculator_decorator(legend="Adding new nodes in new DC")
     def _add_new_node_in_new_dc(self, is_zero_node=False) -> BaseNode:
         if is_zero_node:
             new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
