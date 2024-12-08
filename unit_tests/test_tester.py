@@ -185,7 +185,7 @@ class ClusterTesterForTests(ClusterTester):
         time.sleep(0.5)
         super().stop_event_device()
 
-    def save_nodes_schema(self):
+    def save_schema(self):
         pass
 
 
