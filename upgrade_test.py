@@ -23,7 +23,6 @@ import re
 from functools import wraps, cache
 from typing import List
 import contextlib
-from pathlib import Path
 
 import cassandra
 import tenacity
@@ -37,10 +36,10 @@ from sdcm.fill_db_data import FillDatabaseData
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.decorators import retrying
+from sdcm.utils.sstable.sstable_utils import get_sstable_data_dump_command
 from sdcm.utils.user_profile import get_profile_content
 from sdcm.utils.version_utils import (
     get_node_supported_sstable_versions,
-    ComparableScyllaVersion,
     is_enterprise,
     get_node_enabled_sstable_version
 )
@@ -60,7 +59,6 @@ from sdcm.sct_events.group_common_events import (
 from sdcm.utils import loader_utils
 from sdcm.utils.features import CONSISTENT_TOPOLOGY_CHANGES_FEATURE
 from sdcm.wait import wait_for
-from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.rest.raft_upgrade_procedure import RaftUpgradeProcedure
 from test_lib.sla import create_sla_auth
 
@@ -797,18 +795,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         first_node = self.db_cluster.nodes[0]
         keyspace = "keyspace_complex"
         table = "user_with_ck"
-        if first_node.is_enterprise:
-            should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "2023.1.3"
-        else:
-            should_use_sstabledump = ComparableScyllaVersion(first_node.scylla_version) < "5.4.0~rc0"
-        if should_use_sstabledump:
-            dump_cmd = 'sstabledump'
-        else:
-            dump_cmd = (f'SCYLLA_CONF={Path(first_node.add_install_prefix(SCYLLA_YAML_PATH)).parent} '
-                        f'{first_node.add_install_prefix("/usr/bin/scylla")} sstable dump-data '
-                        f'--keyspace {keyspace} '
-                        f'--table {table} '
-                        '--sstables')
+        dump_cmd = get_sstable_data_dump_command(first_node, keyspace, table)
         first_node.remoter.run(
             f'for i in `sudo find /var/lib/scylla/data/{keyspace}/ -type f |grep -v manifest.json |'
             'grep -v snapshots |head -n 1`; do echo $i; '
