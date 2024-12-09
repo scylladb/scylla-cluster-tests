@@ -7,7 +7,7 @@ perfRegressionParallelPipeline(
     backend: "aws",
     availability_zone: 'a',
     test_name: "performance_regression_test.PerformanceRegressionTest",
-    test_config: """["test-cases/temp_90_percent/90-percent-perf-i4i-large-grow-shrink-i4i-4xlarge.yaml", "configurations/disable_kms.yaml"]""",
+    test_config: """["test-cases/temp_90_percent/90-percent-perf-i4i-4xlarge-grow-i4i-large.yaml", "configurations/disable_kms.yaml"]""",
     sub_tests: ["test_latency_mixed_with_nemesis"],
     scylla_version: 'enterprise:latest',
     email_recipients: 'cezar.moise@scylladb.com',

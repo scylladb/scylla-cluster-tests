@@ -4257,6 +4257,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info(f"Double load results: {results}")
 
     @target_data_nodes
+    def disrupt_grow_cluster(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+        self._grow_cluster(rack=None)
+
+    @target_data_nodes
     def disrupt_grow_shrink_cluster(self):
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
         if not self.has_steady_run and sleep_time_between_ops:
@@ -5619,6 +5627,15 @@ class AddRemoveDcNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_add_remove_dc()
+
+
+class GrowClusterNemesis(Nemesis):
+    disruptive = True
+    kubernetes = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.disrupt_grow_cluster()
 
 
 class GrowShrinkClusterNemesis(Nemesis):
