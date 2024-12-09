@@ -281,6 +281,8 @@ def init_db_info_from_params(db_info: dict, params: dict, regions: List, root_de
 
             if ebs_info['VolumeType'] in ['io1', 'io2', 'gp3']:
                 ebs_info["Iops"] = params.get('data_volume_disk_iops')
+            if ebs_info["VolumeType"] == "gp3":
+                ebs_info["Throughput"] = params.get("data_volume_disk_throughput")
 
             for disk_char in "fghijklmnop"[:additional_ebs_volumes_num]:
                 ebs_volume = {

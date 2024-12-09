@@ -38,7 +38,7 @@ class AWSDiskMappingEbsInfo(BaseModel):
     Iops: int = None
     SnapshotId: str = None
     KmsKeyId: str = None
-    Throughput: str = None
+    Throughput: int = None
     OutpostArn: str = None
     Encrypted: bool = None
 
