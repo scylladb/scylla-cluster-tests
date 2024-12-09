@@ -3265,7 +3265,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     events=get_events_grouped_by_category(
                                         _registry=self.events_processes_registry))
         with open(self.latency_results_file, encoding="utf-8") as file:
-            self.log.info(f"LATENCY RESULTS FILE: {file.read()}")
             latency_results = json.load(file)
         self.log.debug('latency_results were loaded from file %s and its result is %s',
                        self.latency_results_file, latency_results)
