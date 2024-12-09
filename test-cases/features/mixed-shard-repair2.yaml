@@ -1,0 +1,20 @@
+test_duration: 600
+
+n_db_nodes: 3
+n_loaders: 4
+n_monitor_nodes: 1
+
+nodes_smp: [60, 48, 32]
+
+instance_type_db: 'i3.16xlarge'
+instance_type_loader: 'c6i.2xlarge'
+
+collect_logs: true
+backtrace_decoding: true
+
+hinted_handoff: 'disabled'
+
+append_scylla_yaml:
+  enable_tablets: false
+
+append_scylla_args: '--logger-log-level repair=debug'
