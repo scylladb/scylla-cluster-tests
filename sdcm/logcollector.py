@@ -626,7 +626,8 @@ class LogCollector:
                 try:
                     log_entity.collect(node, local_node_dir, remote_node_dir, local_search_path=local_search_path)
                 except Exception as details:  # pylint: disable=unused-variable, broad-except  # noqa: BLE001
-                    LOGGER.error("Error occured during collecting on host: %s\n%s", node.name, details)
+                    LOGGER.error("Error occured during collecting of %s on host: %s\n%s",
+                                 log_entity.name, node.name, details)
 
         LOGGER.debug("Nodes list %s", [node.name for node in self.nodes])
 

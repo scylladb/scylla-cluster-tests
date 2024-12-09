@@ -311,9 +311,15 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
     def save_cqlsh_output_in_file(self, cmd: str, log_file: str):
         self.log.info("Save command '%s' output in the file. Node %s", cmd, self.name)
-        result_tables = self.run_cqlsh(cmd, split=True)
-        for line in result_tables:
-            self.remoter.run(f"echo '{line}' >> {log_file}")
+        file_path = self.remoter.sudo(f"touch {log_file};realpath {log_file}",
+                                      verbose=True, ignore_status=True).stdout.strip()
+        if not (result_tables := self.run_cqlsh(cmd).stdout):
+            return
+
+        self.log.debug("Schema file path: %s", file_path)
+        with remote_file(remoter=self.remoter, remote_path=file_path, sudo=True) as fobj:
+            fobj.truncate(0)  # first clear the file
+            fobj.write(result_tables.strip())
 
     def _is_node_ready_run_scylla_commands(self) -> bool:
         """

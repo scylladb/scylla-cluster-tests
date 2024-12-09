@@ -2961,16 +2961,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.destroy_credentials()
 
-    @silence(name='Save node schema')
     def save_nodes_schema(self):
         if self.db_cluster is None:
             self.log.info("No nodes found in the Scylla cluster")
 
         self.log.info("Save nodes user schema in the files")
         for node in self.db_cluster.nodes:
-            node.save_cqlsh_output_in_file(cmd="desc schema", log_file="schema.log")
-            node.save_cqlsh_output_in_file(cmd="select JSON * from system_schema.tables",
-                                           log_file="system_schema_tables.log")
+            with silence(name=f"Save node '{node.name}' schema", raise_error_event=False):
+                node.save_cqlsh_output_in_file(cmd="desc schema", log_file="schema.log")
+            with silence(name=f"Save node '{node.name}' system_schema.tables", raise_error_event=False):
+                node.save_cqlsh_output_in_file(cmd="select JSON * from system_schema.tables",
+                                               log_file="system_schema_tables.log")
 
     def tearDown(self):
         self.teardown_started = True
