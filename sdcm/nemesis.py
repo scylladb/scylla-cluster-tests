@@ -29,6 +29,7 @@ import time
 import traceback
 import json
 import itertools
+import enum
 from distutils.version import LooseVersion
 from contextlib import ExitStack, contextmanager
 from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union, Iterable
@@ -172,6 +173,13 @@ EXCLUSIVE_NEMESIS_NAMES = (
 )
 
 NEMESIS_TARGET_SELECTION_LOCK = Lock()
+DISRUPT_POOL_PROPERTY_NAME = "target_pool"
+
+
+class NEMESIS_TARGET_POOLS(enum.Enum):
+    data_nodes = "data_nodes"
+    zero_nodes = "zero_nodes"
+    all_nodes = "nodes"
 
 
 class DefaultValue:  # pylint: disable=too-few-public-methods
@@ -181,37 +189,19 @@ class DefaultValue:  # pylint: disable=too-few-public-methods
     ...
 
 
-def target_data_nodes(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            args[0].set_target_node_pool(args[0].cluster.data_nodes)
-            return func(*args, **kwargs)
-        finally:
-            args[0].set_target_node_pool(args[0].cluster.data_nodes)
-    return wrapper
+def target_data_nodes(func: Callable) -> Callable:
+    setattr(func, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
+    return func
 
 
-def target_zero_nodes(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            args[0].set_target_node_pool(args[0].cluster.zero_nodes)
-            return func(*args, **kwargs)
-        finally:
-            args[0].set_target_node_pool(args[0].cluster.data_nodes)
-    return wrapper
+def target_zero_nodes(func: Callable) -> Callable:
+    setattr(func, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.zero_nodes)
+    return func
 
 
-def target_all_nodes(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            args[0].set_target_node_pool(args[0].cluster.nodes)
-            return func(*args, **kwargs)
-        finally:
-            args[0].set_target_node_pool(args[0].cluster.data_nodes)
-    return wrapper
+def target_all_nodes(func: Callable) -> Callable:
+    setattr(func, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.all_nodes)
+    return func
 
 
 class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -288,7 +278,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         }
         self.es_publisher = NemesisElasticSearchPublisher(self.tester)
         self._init_num_deletions_factor()
-        self._target_node_pool = self.cluster.data_nodes
+        self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
 
     def _init_num_deletions_factor(self):
         # num_deletions_factor is a numeric divisor. It's a factor by which the available-partitions-for-deletion
@@ -391,12 +381,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with NEMESIS_TARGET_SELECTION_LOCK:
                 node.running_nemesis = None
 
-    def set_target_node_pool(self, nodelist: list[BaseNode] | None = None):
-        """Set pool of nodes to choose target node """
-        if not nodelist:
-            self._target_node_pool = self.cluster.data_nodes
-        else:
-            self._target_node_pool = nodelist
+    def set_target_node_pool_type(self, pool_type: NEMESIS_TARGET_POOLS = NEMESIS_TARGET_POOLS.data_nodes):
+        """Set pool type to choose nodes for target node """
+        self._target_node_pool_type = pool_type
 
     def _get_target_nodes(
             self,
@@ -418,7 +405,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         if is_seed is DefaultValue:
             is_seed = False if self.filter_seed else None
-        nodes = [node for node in self._target_node_pool if not node.running_nemesis]
+        self.log.debug("Target node pool type: %s", self._target_node_pool_type)
+        nodes = [node for node in getattr(self.cluster, self._target_node_pool_type.value) if not node.running_nemesis]
         if is_seed is not None:
             nodes = [node for node in nodes if node.is_seed == is_seed]
         if dc_idx is not None:
@@ -4168,7 +4156,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 if self._is_it_on_kubernetes():
                     if rack is None and self._is_it_on_kubernetes():
                         rack = 0
-                    self.set_target_node_pool(self.cluster.data_nodes)
+                    self.set_target_node_pool_type(NEMESIS_TARGET_POOLS.data_nodes)
                     self.set_target_node(rack=rack, is_seed=is_seed, allow_only_last_node_in_rack=True)
                 else:
                     rack_idx = rack if rack is not None else idx % self.cluster.racks_count
@@ -5312,6 +5300,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-branches
         method_name = method.__name__
+        target_pool_type = getattr(method, DISRUPT_POOL_PROPERTY_NAME, NEMESIS_TARGET_POOLS.data_nodes)
         nemesis_run_info_key = f"{id(args[0])}--{method_name}"
         try:
             NEMESIS_LOCK.acquire()  # pylint: disable=consider-using-with
@@ -5324,6 +5313,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     time.sleep(10)
 
             current_disruption = "".join(p.capitalize() for p in method_name.replace("disrupt_", "").split("_"))
+            args[0].set_target_node_pool_type(target_pool_type)
             args[0].set_target_node(current_disruption=current_disruption)
 
             args[0].cluster.check_cluster_health()
@@ -5438,7 +5428,7 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                 #       gets killed/aborted. So, use safe 'pop' call with the default 'None' value.
                 NEMESIS_RUN_INFO.pop(nemesis_run_info_key, None)
 
-            args[0].set_target_node_pool(args[0].cluster.data_nodes)
+            args[0].set_target_node_pool_type(NEMESIS_TARGET_POOLS.data_nodes)
 
         return result
 
