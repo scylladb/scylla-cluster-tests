@@ -474,6 +474,22 @@ def ignore_take_snapshot_failing():
         yield
 
 
+@contextmanager
+def ignore_ipv6_failure_to_assign():
+    with ExitStack() as stack:
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*init - Startup failed:.*Cannot assign requested address",
+            extra_time_to_expiration=60))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*init - Could not start Prometheus API server.*Cannot assign requested address",
+            extra_time_to_expiration=60))
+        yield
+
+
 def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
     """
     helper to decorate a function to run with a list of callables that return context managers
