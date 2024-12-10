@@ -15,6 +15,13 @@ from sdcm.sct_events.group_common_events import decorate_with_context, \
 from sdcm.utils.common import ParallelObject
 from sdcm.utils.raft import get_node_status_from_system_by
 from sdcm.cluster import BaseMonitorSet, NodeSetupFailed, BaseScyllaCluster, BaseNode
+<<<<<<< HEAD
+=======
+from sdcm.exceptions import RaftTopologyCoordinatorNotFound
+from sdcm.rest.storage_service_client import StorageServiceClient
+from sdcm.utils.decorators import retrying
+
+>>>>>>> b7220b1d3 (fix(raft): retry search topology coordinator)
 LOGGER = logging.getLogger(__name__)
 
 
@@ -44,6 +51,31 @@ def validate_raft_on_nodes(nodes: list[BaseNode]) -> None:
     LOGGER.debug("Raft is ready!")
 
 
+<<<<<<< HEAD
+=======
+@retrying(n=3, allowed_exceptions=(RaftTopologyCoordinatorNotFound, ), message="Waiting topology coordinator election ...")
+def get_topology_coordinator_node(node: BaseNode) -> BaseNode:
+    active_nodes: list[BaseNode] = node.parent_cluster.get_nodes_up_and_normal(node)
+    stm = "select description from system.group0_history where key = 'history' and \
+            description LIKE 'Starting new topology coordinator%' ALLOW FILTERING;"
+    with node.parent_cluster.cql_connection_patient(node) as session:
+        result = list(session.execute(stm))
+    coordinators_ids = []
+    for row in result:
+        if match := UUID_REGEX.search(row.description):
+            coordinators_ids.append(match.group(1))
+    if not coordinators_ids:
+        raise RaftTopologyCoordinatorNotFound("No host ids were found in raft group0 history")
+    LOGGER.debug("All coordinators history ids: %s", coordinators_ids)
+    for active_node in active_nodes:
+        node_hostid = loads(StorageServiceClient(active_node).get_local_hostid().stdout)
+        LOGGER.debug("Node %s host id is %s", active_node.name, node_hostid)
+        if node_hostid == coordinators_ids[0]:
+            return active_node
+    raise RaftTopologyCoordinatorNotFound(f"The node with host id {coordinators_ids[0]} was not found")
+
+
+>>>>>>> b7220b1d3 (fix(raft): retry search topology coordinator)
 class NodeBootstrapAbortManager:
     INSTANCE_START_TIMEOUT = 600
     SUCCESS_BOOTSTRAP_TIMEOUT = 3600
