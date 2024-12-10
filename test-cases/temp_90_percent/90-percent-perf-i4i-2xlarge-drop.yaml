@@ -18,9 +18,9 @@ instance_type_loader: 'c6i.2xlarge'
 instance_type_monitor: 't3.large'
 instance_type_db: 'i4i.2xlarge'
 
-nemesis_class_name: 'DropMonkey'
+nemesis_class_name: 'SteadyMonkey: DropMonkey:1'
 nemesis_interval: 30
-nemesis_sequence_sleep_between_ops: 10
+nemesis_sequence_sleep_between_ops: 60
 
 user_prefix: 'elasticity-test'
 space_node_threshold: 644245094
