@@ -1,6 +1,5 @@
 import datetime
 import logging
-import random
 import threading
 import time
 
@@ -29,6 +28,8 @@ class TombstoneGcVerificationThread:
         self.termination_event = termination_event
         self._thread = threading.Thread(daemon=True, name=self.__class__.__name__, target=self.run)
         self.db_cluster: [BaseScyllaCluster, BaseCluster] = db_cluster
+        node = next(node for node in self.db_cluster.data_nodes if node.db_up())
+        self._sstable_utils = SstableUtils(db_node=node, **kwargs)
         self.log = logging.getLogger(self.__class__.__name__)
 
     def _wait_until_user_table_exists(self, db_node, table_name: str = 'random', timeout_min: int = 20):
@@ -46,7 +47,14 @@ class TombstoneGcVerificationThread:
             return
         table_repair_date = datetime.datetime.strptime(table_repair_date, '%Y-%m-%d %H:%M:%S')
         delta_repair_date_minutes = int(
-            (datetime.datetime.now() - table_repair_date).seconds / 60) - self._sstable_utils.propagation_delay_in_seconds
+            (datetime.datetime.now() - table_repair_date).total_seconds()) - self._sstable_utils.propagation_delay_in_seconds
+        self.log.debug(
+            "Calculated delta_repair_date_minutes: %d, table_repair_date: %s, propagation_delay: %d",
+            delta_repair_date_minutes,
+            table_repair_date,
+            self._sstable_utils.propagation_delay_in_seconds,
+        )
+
         if delta_repair_date_minutes <= 0:
             self.log.debug('Table %s repair date is smaller than propagation delay, aborting.',
                            self._sstable_utils.ks_cf)
@@ -87,7 +95,7 @@ class TombstoneGcVerificationThread:
     def run(self):
         end_time = time.time() + self.duration
         while time.time() < end_time and not self.termination_event.is_set():
-            self._sstable_utils.db_node = random.choice(self.db_cluster.data_nodes)
+            self._sstable_utils.set_db_node_if_unset_or_down()
             self._run_tombstone_gc_verification()
             self.log.debug('Executed %s', TombstoneGcVerificationEvent.__name__)
             time.sleep(self.interval)
