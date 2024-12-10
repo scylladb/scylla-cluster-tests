@@ -1,31 +1,33 @@
-test_duration: 330
+test_duration: 30
 
-prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=209715 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=1) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..209715 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-             "cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
-             ]
+#stress_cmd: ["cassandra-stress write cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+#             "cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+#             ]
 
-n_db_nodes: 6
-n_loaders: 2
-n_monitor_nodes: 1
-seeds_num: 3
+n_db_nodes: 2
+n_loaders: 1
+n_monitor_nodes: 0
+#seeds_num: 3
 
-instance_type_db: 'i4i.4xlarge'
+instance_type_db: 'i4i.2xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
-nemesis_seed: '032'
+#nemesis_class_name: 'SisyphusMonkey'
+#nemesis_seed: '032'
 nemesis_interval: 5
 nemesis_filter_seeds: false
 
 user_prefix: 'longevity-100gb-4h'
 space_node_threshold: 64424
 
-server_encrypt: true
-client_encrypt: true
+#server_encrypt: true
+#client_encrypt: true
+#
+#pre_create_schema: True
+#sstable_size: 100
 
-pre_create_schema: True
-sstable_size: 100
+#hinted_handoff: 'enabled'
+#parallel_node_operations: true
 
-hinted_handoff: 'enabled'
-parallel_node_operations: true
+use_mgmt: false
