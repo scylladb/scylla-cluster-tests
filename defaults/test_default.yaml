@@ -114,6 +114,7 @@ n_test_oracle_db_nodes: 1
 gemini_seed: 0
 oracle_scylla_version: '2022.1.14'
 append_scylla_args_oracle: '--enable-cache false'
+gemini_log_cql_statements: false
 
 # cassandra-stress defaults
 stress_multiplier: 1
@@ -151,7 +152,7 @@ jepsen_test_cmd:
   - 'test-all -w counter --concurrency 10n'
   - 'test-all -w cmap --concurrency 10n'
   - 'test-all -w cset --concurrency 10n'
-#  - 'test-all -w mv --concurrency 10n'
+  #  - 'test-all -w mv --concurrency 10n'
   - 'test-all -w write-isolation --concurrency 10n'
   - 'test-all -w list-append --concurrency 10n'
   - 'test-all -w wr-register --concurrency 10n'
