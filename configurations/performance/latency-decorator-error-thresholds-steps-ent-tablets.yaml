@@ -1,0 +1,103 @@
+latency_decorator_error_thresholds:
+  write:
+    "200000":
+      P90 write:
+        fixed_limit: 5
+      P99 write:
+        fixed_limit: 10
+    "300000":
+      P99 write:
+        fixed_limit: 1000
+    "400000":
+      P99 write:
+        fixed_limit: 1000
+    unthrottled:
+      P90 write:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      Throughput write:
+        best_pct: 10
+
+  read:
+    "150000":
+      P90 read:
+        fixed_limit: 1
+      P99 read:
+        fixed_limit: 1
+    "300000":
+      P90 read:
+        fixed_limit: 1
+      P99 read:
+        fixed_limit: 1
+    "450000":
+      P90 read:
+        fixed_limit: 1
+      P99 read:
+        fixed_limit: 3
+    "600000":
+      P90 read:
+        fixed_limit: 1.5
+      P99 read:
+        fixed_limit: 50
+    "700000":
+      P90 read:
+        fixed_limit: 3
+      P99 read:
+        fixed_limit: 50
+    unthrottled:
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+      Throughput read:
+        best_pct: 10
+
+  mixed:
+    "50000":
+      P90 write:
+          fixed_limit: 1
+      P90 read:
+          fixed_limit: 1
+      P99 write:
+        fixed_limit: 2.5
+      P99 read:
+        fixed_limit: 2.5
+    "150000":
+      P90 write:
+        fixed_limit: 1
+      P90 read:
+        fixed_limit: 1.7
+      P99 write:
+        fixed_limit: 3
+      P99 read:
+        fixed_limit: 3
+    "300000":
+      P90 write:
+        fixed_limit: 3
+      P90 read:
+        fixed_limit: 3
+      P99 write:
+        fixed_limit: 5
+      P99 read:
+        fixed_limit: 5
+    "450000":
+      P90 write:
+        fixed_limit: 3
+      P90 read:
+        fixed_limit: 4
+      P99 write:
+        fixed_limit: 15
+      P99 read:
+        fixed_limit: 15
+    unthrottled:
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+      Throughput write:
+        best_pct: 10
