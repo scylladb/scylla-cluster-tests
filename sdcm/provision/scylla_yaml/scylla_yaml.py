@@ -32,6 +32,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     broadcast_address: str = None  # ""
     api_port: int = None  # 10000
     api_address: str = None  # ""
+    listen_interface: str = None  # "eth0"
     ssl_storage_port: int = None  # 7001
     background_writer_scheduling_quota: float = None  # 1.0
     auto_adjust_flush_quota: bool = None  # False
