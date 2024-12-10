@@ -947,6 +947,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         if self.params.get('print_kernel_callstack'):
             sysctls += ["kernel.perf_event_paranoid=0", ]
 
+        scylla_args = self.params.get('append_scylla_args')
+
         return HelmValues({
             'nameOverride': '',
             'fullnameOverride': cluster_name,
@@ -980,6 +982,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 'create': False
             },
             'datacenter': self.region_name,
+            'scyllaArgs': scylla_args,
             'dnsDomains': dns_domains,
             'exposeOptions': expose_options,
             'racks': [
@@ -1298,16 +1301,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             "Wait for %d secs before we start to apply changes to the cluster",
             DEPLOY_SCYLLA_CLUSTER_DELAY)
         self.start_scylla_cluster_events_thread(namespace=namespace)
-
-        # TODO: define 'scyllaArgs' option as part of the Scylla helm chart when following
-        #       operator bug gets fixed: https://github.com/scylladb/scylla-operator/issues/989
-        if self.params.get('append_scylla_args'):
-            data = {"spec": {"scyllaArgs": self.params.get('append_scylla_args')}}
-            self.kubectl(
-                f"patch scyllaclusters {cluster_name} --type merge "
-                f"-p '{json.dumps(data)}'",
-                namespace=namespace,
-            )
 
     @cached_property
     def _affinity_modifiers_for_monitoring_resources(self):
