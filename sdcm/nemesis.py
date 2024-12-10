@@ -91,6 +91,7 @@ from sdcm.sct_events.group_common_events import (
     ignore_raft_transport_failing,
     decorate_with_context_if_issues_open,
     ignore_take_snapshot_failing,
+    ignore_ipv6_failure_to_assign,
 )
 from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
@@ -3937,6 +3938,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @decorate_with_context([
         ignore_ycsb_connection_refused,
     ])
+    @decorate_with_context_if_issues_open(
+        ignore_ipv6_failure_to_assign,
+        issue_refs=['https://github.com/scylladb/scylladb/issues/20387'])
     def reboot_node(self, target_node, hard=True, verify_ssh=True):
         target_node.reboot(hard=hard, verify_ssh=verify_ssh)
         if self.tester.params.get('print_kernel_callstack'):
