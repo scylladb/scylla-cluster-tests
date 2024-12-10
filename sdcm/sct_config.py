@@ -1678,6 +1678,10 @@ class SCTConfiguration(dict):
         dict(name="zero_token_instance_type_db", env="SCT_ZERO_TOKEN_INSTANCE_TYPE_DB", type=str,
              help="""Instance type for zero token node"""),
 
+        dict(name="latency_decorator_error_thresholds", env="SCT_LATENCY_DECORATOR_ERROR_THRESHOLDS", type=dict_or_str,
+             help="Error thresholds for latency decorator."
+                  " Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}"),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
