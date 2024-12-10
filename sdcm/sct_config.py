@@ -1158,6 +1158,10 @@ class SCTConfiguration(dict):
              env="SCT_MGMT_NODETOOL_REFRESH_FLAGS", type=str,
              help="Nodetool refresh extra options like --load-and-stream or --primary-replica-only"),
 
+        dict(name="mgmt_prepare_snapshot_size",
+             env="SCT_MGMT_PREPARE_SNAPSHOT_SIZE", type=int,
+             help="Size of backup snapshot in Gb to be prepared to be prepared for backup"),
+
         # PerformanceRegressionTest
 
         dict(name="stress_cmd_w", env="SCT_STRESS_CMD_W",
