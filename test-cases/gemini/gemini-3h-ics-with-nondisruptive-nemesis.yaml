@@ -4,6 +4,7 @@ n_test_oracle_db_nodes: 1
 n_loaders: 1
 n_monitor_nodes: 1
 instance_type_db: 'i4i.large'
+root_disk_size_loader: 50
 
 user_prefix: 'ics-gemini-nemesis-3h'
 ami_db_scylla_user: 'centos'

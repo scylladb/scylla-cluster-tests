@@ -4,6 +4,7 @@ n_test_oracle_db_nodes: 1
 n_loaders: 1
 n_monitor_nodes: 1
 instance_type_db: 'i4i.xlarge'
+root_disk_size_loader: 50
 
 user_prefix: 'gemini-basic-3h'
 
