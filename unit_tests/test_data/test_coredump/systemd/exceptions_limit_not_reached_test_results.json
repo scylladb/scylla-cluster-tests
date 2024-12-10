@@ -9,7 +9,8 @@
       "download_instructions": "",
       "download_url": "",
       "command_line": "python -m unittest tests.test_multithreading",
-      "executable": "/usr/bin/python3.8"
+      "executable": "/usr/bin/python3.8",
+      "executable_version": "3.8"
     },
     {
       "__instance__": "sdcm.coredump.CoreDumpInfo",
@@ -20,7 +21,8 @@
       "download_instructions": "",
       "download_url": "",
       "command_line": "/usr/src/scylladb/scylla-cluster-tests/venv/bin/python /snap/pycharm-professional/211/plugins/python/helpers/pycharm/_jb_unittest_runner.py --path /usr/src/scylladb/scylla-cluster-tests/dkropachev/unit_tests/test_remoter.py",
-      "executable": "/usr/bin/python3.8"
+      "executable": "/usr/bin/python3.8",
+      "executable_version": "3.8"
     },
     {
       "__instance__": "sdcm.coredump.CoreDumpInfo",
@@ -31,7 +33,8 @@
       "download_instructions": "gsutil cp gs://upload.scylladb.com/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000./core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4 .\nunlz4 core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000./core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4",
       "command_line": "sshd: dkropachev [net]",
-      "executable": "/usr/sbin/sshd"
+      "executable": "/usr/sbin/sshd",
+      "executable_version": "8.0"
     }
   ],
   "in_progress": [],
@@ -45,7 +48,8 @@
       "download_instructions": "",
       "download_url": "",
       "command_line": "python -m unittest tests.test_multithreading",
-      "executable": "/usr/bin/python3.8"
+      "executable": "/usr/bin/python3.8",
+      "executable_version": "3.8"
     },
     {
       "__instance__": "sdcm.coredump.CoreDumpInfo",
@@ -56,7 +60,8 @@
       "download_instructions": "",
       "download_url": "",
       "command_line": "/usr/src/scylladb/scylla-cluster-tests/venv/bin/python /snap/pycharm-professional/211/plugins/python/helpers/pycharm/_jb_unittest_runner.py --path /usr/src/scylladb/scylla-cluster-tests/dkropachev/unit_tests/test_remoter.py",
-      "executable": "/usr/bin/python3.8"
+      "executable": "/usr/bin/python3.8",
+      "executable_version": "3.8"
     },
     {
       "__instance__": "sdcm.coredump.CoreDumpInfo",
@@ -67,7 +72,8 @@
       "download_instructions": "gsutil cp gs://upload.scylladb.com/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000./core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4 .\nunlz4 core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000./core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4",
       "command_line": "sshd: dkropachev [net]",
-      "executable": "/usr/sbin/sshd"
+      "executable": "/usr/sbin/sshd",
+      "executable_version": "8.0"
     }
   ],
   "uploaded": [
@@ -80,7 +86,8 @@
       "download_instructions": "gsutil cp gs://upload.scylladb.com/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000./core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4 .\nunlz4 core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4",
       "download_url": "https://storage.cloud.google.com/upload.scylladb.com/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000./core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4",
       "command_line": "sshd: dkropachev [net]",
-      "executable": "/usr/sbin/sshd"
+      "executable": "/usr/sbin/sshd",
+      "executable_version": "8.0"
     }
   ],
   "exception": null

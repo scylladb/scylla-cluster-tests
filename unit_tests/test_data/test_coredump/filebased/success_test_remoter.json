@@ -241,5 +241,59 @@
       "exited": 0,
       "exit_status": 0
     }
+  ],
+  "sudo coredumpctl list 5711 -q --json=short" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "[{\"time\":1733783727661621,\"pid\":609,\"uid\":998,\"gid\":998,\"sig\":11,\"corefile\":\"present\",\"exe\":\"/usr/bin/scylla\",\"size\":776650}]\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "sudo coredumpctl list 41537 -q --json=short" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "[{\"time\":1733783727661631,\"pid\":709,\"uid\":998,\"gid\":998,\"sig\":11,\"corefile\":\"present\",\"exe\":\"/usr/bin/bsh\",\"size\":776660}]\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "sudo dpkg -S /usr/bin/scylla" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "scylla-server: /usr/bin/scylla\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "sudo dpkg -S /usr/bin/bsh" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "bash: /usr/bin/bsh\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "dpkg-query --showformat='${Version}' --show scylla-server" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "6.3.0~dev-0.20241208.f744007e1365-1\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "dpkg-query --showformat='${Version}' --show bash" : [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "5.2.21-2ubuntu4\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
   ]
 }
