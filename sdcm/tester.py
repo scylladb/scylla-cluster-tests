@@ -2961,16 +2961,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.destroy_credentials()
 
-    @silence(name='Save node schema')
     def save_nodes_schema(self):
+        def _save(node):
+            with silence(name=f"Save node '{node.name}' schema", raise_error_event=False):
+                node.save_cqlsh_output_in_file(cmd="desc schema", log_file="schema.log")
+            with silence(name=f"Save node '{node.name}' system_schema.tables", raise_error_event=False):
+                node.save_cqlsh_output_in_file(cmd="select JSON * from system_schema.tables",
+                                               log_file="system_schema_tables.log")
         if self.db_cluster is None:
             self.log.info("No nodes found in the Scylla cluster")
 
         self.log.info("Save nodes user schema in the files")
-        for node in self.db_cluster.nodes:
-            node.save_cqlsh_output_in_file(cmd="desc schema", log_file="schema.log")
-            node.save_cqlsh_output_in_file(cmd="select JSON * from system_schema.tables",
-                                           log_file="system_schema_tables.log")
+        cluster = self.db_cluster or self.k8s_cluster
+        num_workers = len(cluster.nodes) if len(cluster.nodes) < 4 else 4
+        parallel_obj = ParallelObject(objects=cluster.nodes, timeout=60*60, num_workers=num_workers)
+        parallel_obj.run(_save, unpack_objects=True)
 
     def tearDown(self):
         self.teardown_started = True
