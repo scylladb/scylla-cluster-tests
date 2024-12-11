@@ -30,7 +30,7 @@ provision_type=on_demand</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-rbno-disabled</projects>
+          <projects>../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-rbno-disabled</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
