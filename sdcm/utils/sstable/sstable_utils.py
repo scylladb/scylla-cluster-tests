@@ -28,6 +28,7 @@ class SstableUtils:
         self.db_cluster = self.db_node.parent_cluster if self.db_node else None
         self.ks_cf = ks_cf or random.choice(self.db_cluster.get_non_system_ks_cf_list(self.db_cluster.data_nodes[0]))
         self.keyspace, self.table = self.ks_cf.split('.')
+        self.dump_cmd = get_sstable_dump_command(self.db_node, self.keyspace, self.table)
         self.propagation_delay_in_seconds = propagation_delay_in_seconds
         self.log = logging.getLogger(self.__class__.__name__)
         self.user = kwargs.get("user", None)
@@ -69,18 +70,9 @@ class SstableUtils:
         if not sstables:
             raise SstablesNotFound(f"sstables for '{self.keyspace}.{self.table}' wasn't found")
 
-        if ComparableScyllaVersion(self.db_node.scylla_version) >= '2023.1.3':
-            dump_cmd = (
-                f"SCYLLA_CONF={Path(self.db_node.add_install_prefix(SCYLLA_YAML_PATH)).parent}"
-                f" {self.db_node.add_install_prefix('/usr/bin/scylla')} sstable dump-scylla-metadata"
-                "  --logger-log-level scylla-sstable=debug"
-                f" --keyspace {self.keyspace} --table {self.table} --sstables"
-            )
-        else:
-            dump_cmd = 'sstabledump'
         for sstable in sstables:
             sstables_res = self.db_node.remoter.sudo(
-                f"{dump_cmd} {sstable}",
+                f"{self.dump_cmd} {sstable}",
                 ignore_status=True, verbose=True)
 
             self.log.debug("sstables_res.stdout: %s", sstables_res.stdout)
@@ -88,7 +80,7 @@ class SstableUtils:
             # NOTE: if we have 'stdout' then the data was successfully read and it means there was no encryption
             if sstables_res.stdout:
                 self.log.debug("Successfully read the sstable located at '%s'.", sstable)
-                if dump_cmd == 'sstabledump':
+                if self.dump_cmd == 'sstabledump':
                     sstables_encrypted_mapping[sstable] = False
                 else:
                     scylla_metadata = json.loads(sstables_res.stdout, strict=False)['sstables']
@@ -139,7 +131,7 @@ class SstableUtils:
 
     def count_sstable_tombstones(self, sstable: str) -> int:
         self.db_node.remoter.run(
-            f'sudo sstabledump  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
+            f'sudo {self.dump_cmd}  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
         tombstones_deletion_info = self.db_node.remoter.run(
             'sudo egrep \'"expired" : true|marked_deleted\' /tmp/sstabledump.json', verbose=False, ignore_status=True)
         if not tombstones_deletion_info:
@@ -221,3 +213,27 @@ class SstableUtils:
         full_deletion_date = f'{deletion_date} {deletion_hour}:{deletion_minutes}:{deletion_seconds}'
         full_deletion_date_datetime = datetime.datetime.strptime(full_deletion_date, '%Y-%m-%d %H:%M:%S')
         return full_deletion_date_datetime
+
+
+def get_sstable_dump_command(node, keyspace: str, table: str) -> str:
+    """
+    Returns the appropriate sstable dump command based on the Scylla version and node type.
+
+    :param node: A DB node object to provide Scylla version.
+    :param keyspace: Keyspace name
+    :param table: Table name
+    :return: The sstable dump command
+    """
+    if node.is_enterprise:
+        should_use_sstabledump = ComparableScyllaVersion(node.scylla_version) < "2023.1.3"
+    else:
+        should_use_sstabledump = ComparableScyllaVersion(node.scylla_version) < "5.4.0~rc0"
+
+    if should_use_sstabledump:
+        return 'sstabledump'
+    else:
+        return (
+            f'SCYLLA_CONF={Path(node.add_install_prefix(SCYLLA_YAML_PATH)).parent} '
+            f'{node.add_install_prefix("/usr/bin/scylla")} sstable dump-data '
+            f'--keyspace {keyspace} --table {table} --sstables'
+        )
