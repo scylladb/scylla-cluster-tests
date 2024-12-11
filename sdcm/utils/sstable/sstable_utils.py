@@ -41,6 +41,24 @@ class SstableUtils:
         self.log.debug('Got %s tombstones for %s', tombstones_num, self.ks_cf)
         return tombstones_num
 
+    def get_cf_dir_files(self):
+        """
+        Get the list of files in the Scylla column family (CF) directory.
+        """
+        files = []
+        ks_cf_path = self.ks_cf.replace('.', '/')
+        ls_cmd = f"ls -1 /var/lib/scylla/data/{ks_cf_path}-*/* 2>/dev/null"
+
+        files_res = self.db_node.remoter.sudo(ls_cmd, verbose=True, ignore_status=True)
+        if files_res.stderr:
+            self.log.debug('Failed to get files for %s. Error: %s', self.ks_cf, files_res.stderr)
+        else:
+            files = files_res.stdout.splitlines()  # Split output into lines.
+
+        self.log.debug('Got %s files', len(files))
+        self.log.debug(f"The files are: {files}")
+        return files
+
     def get_sstables(self, from_minutes_ago: int = 0):
         selected_sstables = []
         ks_cf_path = self.ks_cf.replace('.', '/')
@@ -221,3 +239,56 @@ class SstableUtils:
         full_deletion_date = f'{deletion_date} {deletion_hour}:{deletion_minutes}:{deletion_seconds}'
         full_deletion_date_datetime = datetime.datetime.strptime(full_deletion_date, '%Y-%m-%d %H:%M:%S')
         return full_deletion_date_datetime
+
+    def _get_file_sizes_in_kb(self, list_files):
+        """
+        Calculate the size of the given files in KB on the data node.
+        :param list_files: List of file names (not full paths).
+        :return: List of file sizes in KB.
+        """
+        self.log.debug(f"Getting sizes for files: {list_files}")
+        list_files_size = []
+
+        # Construct the base directory path
+        ks_cf_path = self.ks_cf.replace('.', '/')
+        base_dir = Path(f"/var/lib/scylla/data/{ks_cf_path}-*")
+
+        for file_name in list_files:
+            try:
+                file_path = base_dir / file_name
+
+                # Use the 'stat' command on the remote node to get the file size in bytes
+                stat_cmd = f"stat -c%s {file_path}"
+                stat_res = self.db_node.remoter.sudo(stat_cmd, verbose=False, ignore_status=True)
+
+                if stat_res.ok:
+                    # Parse the output and convert bytes to KB
+                    file_size_in_bytes = int(stat_res.stdout.strip())
+                    file_size_in_kb = file_size_in_bytes >> 10  # Shift by 10 bits to divide by 1024
+                    list_files_size.append(file_size_in_kb)
+                else:
+                    self.log.error(f"Failed to get size for {file_path}: {stat_res.stderr}")
+            except Exception as e:  # noqa: BLE001
+                self.log.error(f"Error retrieving size for {file_name}: {e}")
+
+        self.log.debug(f"Got {len(list_files_size)} file sizes")
+        self.log.debug(f"The file sizes are: {list_files_size}")
+        return list_files_size
+
+    def get_cf_dir_files_and_sizes(self):
+        """
+        Get all files in the keyspace-table directory and their sizes in MB.
+        :return: Tuple (list_of_files, list_of_sizes_in_mb)
+        """
+        self.log.debug(f"Fetching all files and their sizes from the {self.ks_cf} directory.")
+
+        # Fetch all files
+        files = self.get_cf_dir_files()
+        if not files:
+            self.log.warning("No files found in the keyspace-table directory.")
+            return [], []
+
+        file_sizes = self._get_file_sizes_in_kb(files)
+        self.log.debug(f"Files: {files}, Sizes: {file_sizes}")
+
+        return files, file_sizes
