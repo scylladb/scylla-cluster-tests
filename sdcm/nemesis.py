@@ -2105,11 +2105,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # NOTE: 'self' is used by the 'scylla_versions' decorator
         return ''
 
+    def disrupt_drop(self):
+        keyspace_drop = 'ks_drop'
+        table = 'standard1'
+
+        self._prepare_test_table(ks=keyspace_drop, table='standard1')
+
+        # do the actual drop
+        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=600) as session:
+            session.execute(f"DROP TABLE {keyspace_drop}.{table}", timeout=600)
+
     def disrupt_truncate(self):
         keyspace_truncate = 'ks_truncate'
         table = 'standard1'
 
-        self._prepare_test_table(ks=keyspace_truncate)
+        self._prepare_test_table(ks=keyspace_truncate, table='standard1')
 
         # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
         with adaptive_timeout(Operations.FLUSH, self.target_node, timeout=HOUR_IN_SEC * 2):
@@ -4310,6 +4320,39 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return stress_queue
 
     @target_data_nodes
+    def grow_cluster(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        self.set_target_node(current_disruption="GrowClusterMonkey")
+        self._grow_cluster_by_rack()
+
+    @target_data_nodes
+    def grow_fill_cluster(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        # grow cluster on each rack
+        self.set_target_node(current_disruption="GrowFillMonkey")
+        self._grow_cluster_by_rack()
+        time.sleep(sleep_time_between_ops)
+
+        # write more data to the cluster
+        stress_cmds = self.cluster.params.get('stress_cmd')
+        stress_queue = []
+        for stress_cmd in stress_cmds:
+            stress_queue.append(self.tester.run_stress_thread(stress_cmd=stress_cmd,
+                                stop_test_on_failure=False, stats_aggregate_cmds=False, round_robin=True))
+        for stress in stress_queue:
+            self.tester.verify_stress_thread(stress)
+
+        time.sleep(sleep_time_between_ops)
+
+    @target_data_nodes
     def disrupt_grow_shrink_cluster(self):
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
         if not self.has_steady_run and sleep_time_between_ops:
@@ -4788,6 +4831,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert actual_cdc_settings == cdc_settings, \
                 f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}"
 
+    @latency_calculator_decorator(legend="Adding new nodes in new DC")
     def _add_new_node_in_new_dc(self, is_zero_node=False) -> BaseNode:
         if is_zero_node:
             new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
@@ -5690,6 +5734,24 @@ class AddRemoveDcNemesis(Nemesis):
         self.disrupt_add_remove_dc()
 
 
+class GrowClusterMonkey(Nemesis):
+    disruptive = True
+    kubernetes = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.grow_cluster()
+
+
+class GrowFillMonkey(Nemesis):
+    disruptive = True
+    kubernetes = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.grow_fill_cluster()
+
+
 class GrowShrinkClusterNemesis(Nemesis):
     disruptive = True
     kubernetes = True
@@ -5931,6 +5993,16 @@ class NodeToolCleanupMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_nodetool_cleanup()
+
+
+class DropMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    limited = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_drop()
 
 
 class TruncateMonkey(Nemesis):
