@@ -23,6 +23,7 @@
 - DrainKubernetesNodeThenDecommissionAndAddScyllaNode
 - DrainKubernetesNodeThenReplaceScyllaNode
 - DrainerMonkey
+- DropMonkey
 - EnableDisableTableEncryptionAwsKmsProviderWithRotationMonkey
 - EnableDisableTableEncryptionAwsKmsProviderWithoutRotationMonkey
 - EndOfQuotaNemesis

@@ -74,6 +74,11 @@
 - disrupt_drain_kubernetes_node_then_replace_scylla_node:
   - disruptive = True
   - kubernetes = True
+- disrupt_drop:
+  - disruptive = False
+  - kubernetes = True
+  - limited = True
+  - free_tier_set = True
 - disrupt_enable_disable_table_encryption_aws_kms_provider_with_rotation:
   - disruptive = True
   - kubernetes = False
