@@ -22,7 +22,7 @@ jobs:
       - name: Upload folder to bucket
         uses: a-sync/s3-uploader@2.0.1
         with:
-          args: --recursive
+          args: --recursive --grants full=id=${{ secrets.CLOUDIUS_SYSTEMS_CANONICAL_ID }} read=id=${{ secrets.DBAAS_DATA_QA_CANONICAL_ID }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_AWS_SECRET_ACCESS_KEY }}
