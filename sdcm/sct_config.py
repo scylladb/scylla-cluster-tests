@@ -97,7 +97,7 @@ def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
             return ast.literal_eval(value)
         except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
-        return [str(value), ]
+        return [str(value), ] if str(value) else []
 
     if isinstance(value, list):
         ret_values = []
