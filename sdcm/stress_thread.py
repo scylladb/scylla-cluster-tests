@@ -17,6 +17,7 @@ import time
 import uuid
 import logging
 import contextlib
+from datetime import datetime
 from typing import Any
 from itertools import chain
 from pathlib import Path
@@ -28,6 +29,7 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, c_s_transport_str
 from sdcm.reporting.tooling_reporter import CassandraStressVersionReporter
 from sdcm.sct_events import Severity
+from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
 from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS, HDRFileMissed
@@ -72,7 +74,7 @@ class CassandraStressEventsPublisher(FileFollowerThread):
 
 
 class CSHDRFileLogger(SSHLoggerBase):
-    VERBOSE_RETRIEVE = False
+    VERBOSE_RETRIEVE = True
 
     def __init__(self, node: BaseNode, remote_log_file: str, target_log_file: str):
         super().__init__(node=node, target_log_file=target_log_file)
@@ -101,6 +103,25 @@ class CSHDRFileLogger(SSHLoggerBase):
 
         LOGGER.debug("The '%s' file found on the loader %s", self._remote_log_file, self._node.name)
         self._node.remoter.receive_files(src=self._remote_log_file, dst=self._target_log_file)
+
+    @raise_event_on_failure
+    def _journal_thread(self) -> None:
+        read_from_timestamp = None
+        while not self._termination_event.is_set():
+            LOGGER.debug("Start check if remoter ready")
+            if self._is_ready_to_retrieve():
+                LOGGER.debug("Remoter ready")
+                self._retrieve(since=read_from_timestamp)
+                read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                LOGGER.debug("Remoter is not ready")
+                time.sleep(self.READINESS_CHECK_DELAY)
+
+    def _is_ready_to_retrieve(self) -> bool:
+        LOGGER.debug("Before remoter is_up")
+        is_up = self._remoter.is_up()
+        LOGGER.debug("After remoter is_up. Result: %s", is_up)
+        return is_up
 
     def __enter__(self):
         self.start()
