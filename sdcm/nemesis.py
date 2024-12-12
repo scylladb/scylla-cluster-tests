@@ -3569,7 +3569,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                           .format(rnd_node.ip_address, host_id))
             with adaptive_timeout(Operations.REMOVE_NODE, rnd_node, timeout=HOUR_IN_SEC * 48):
                 res = rnd_node.run_nodetool("removenode {}".format(
-                    host_id), ignore_status=True, verbose=True, long_running=True)
+                    host_id), ignore_status=True, verbose=True, long_running=True, retry=0)
             if res.failed and re.match(removenode_reject_msg, res.stdout + res.stderr):
                 raise Exception(f"Removenode was rejected {res.stdout}\n{res.stderr}")
 
