@@ -7,5 +7,5 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_user_batch_custom_time',
-    test_config: '''["test-cases/scale/longevity-5000-tables.yaml", "configurations/raft/enable_raft_experimental.yaml"]''',
+    test_config: 'test-cases/scale/longevity-elasticity-many-small-tables.yaml',
 )
