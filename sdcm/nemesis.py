@@ -5069,6 +5069,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Create index on a random column (regular or static) of a table with the most number of partitions and wait until it gets build.
         Then verify it can be used in a query. Finally, drop the index.
         """
+        if self.cluster.nemesis_count > 1 and SkipPerIssues(issues="https://github.com/scylladb/scylladb/issues/21695", params=self.tester.params):
+            raise UnsupportedNemesis("Skip create index nemesis with parallel nemesis run")
+
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
 
             ks_cf_list = self.cluster.get_non_system_ks_cf_list(self.target_node, filter_out_mv=True)
