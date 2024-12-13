@@ -390,3 +390,4 @@
 | **<a href="#user-content-use_zero_nodes" name="use_zero_nodes">use_zero_nodes</a>**  | If True, enable support in sct of zero nodes(configuration, nemesis) | N/A | SCT_USE_ZERO_NODES
 | **<a href="#user-content-n_db_zero_token_nodes" name="n_db_zero_token_nodes">n_db_zero_token_nodes</a>**  | Number of zero token nodes in cluster. Value should be set as "0 1 1"<br>for multidc configuration in same manner as 'n_db_nodes' and should be equal<br>number of regions | N/A | SCT_N_DB_ZERO_TOKEN_NODES
 | **<a href="#user-content-zero_token_instance_type_db" name="zero_token_instance_type_db">zero_token_instance_type_db</a>**  | Instance type for zero token node | i4i.large | SCT_ZERO_TOKEN_INSTANCE_TYPE_DB
+| **<a href="#user-content-sct_aws_account_id" name="sct_aws_account_id">sct_aws_account_id</a>**  | AWS account id on behalf of which the test is run | N/A | SCT_AWS_ACCOUNT_ID
