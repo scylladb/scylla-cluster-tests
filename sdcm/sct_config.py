@@ -1685,6 +1685,9 @@ class SCTConfiguration(dict):
         dict(name="zero_token_instance_type_db", env="SCT_ZERO_TOKEN_INSTANCE_TYPE_DB", type=str,
              help="""Instance type for zero token node"""),
 
+        dict(name="sct_aws_account_id", env="SCT_AWS_ACCOUNT_ID", type=str,
+             help="AWS account id on behalf of which the test is run"),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
