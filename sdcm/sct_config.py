@@ -23,6 +23,7 @@ import logging
 import getpass
 import pathlib
 import tempfile
+import copy
 from copy import deepcopy
 from typing import List, Union, Set
 
@@ -154,6 +155,40 @@ def boolean(value):
         raise ValueError("{} isn't a boolean".format(type(value)))
 
 
+def is_config_option_appendable(option_name: str) -> bool:
+    for option in SCTConfiguration.config_options:
+        if option['name'] == option_name:
+            break
+    else:
+        raise ValueError(f"Option {option_name} not found in SCTConfiguration.config_options")
+
+    return option.get('appendable', option.get('type') in (str, str_or_list_or_eval, str_or_list))
+
+
+def merge_dicts_append_strings(d1, d2):
+    """
+    merge two dictionaries, while having option
+    to append string if the value starts with '++'
+    and append list if first item is '++'
+    """
+
+    for key, value in copy.deepcopy(d2).items():
+        if isinstance(value, str) and value.startswith('++'):
+            assert is_config_option_appendable(key), f"Option {key} is not appendable"
+            if key not in d1:
+                d1[key] = ''
+            d1[key] += value[2:]
+            del d2[key]
+        if isinstance(value, list) and value and isinstance(value[0], str) and value[0].startswith('++'):
+            assert is_config_option_appendable(key), f"Option {key} is not appendable"
+            if key not in d1:
+                d1[key] = []
+            d1[key].extend(value[1:])
+            del d2[key]
+
+    anyconfig.merge(d1, d2, ac_merge=anyconfig.MS_DICTS)
+
+
 class SCTConfiguration(dict):
     """
     Class the hold the SCT configuration
@@ -172,13 +207,14 @@ class SCTConfiguration(dict):
 
     config_options = [
         dict(name="config_files", env="SCT_CONFIG_FILES", type=str_or_list_or_eval,
-             help="a list of config files that would be used"),
+             help="a list of config files that would be used", appendable=False),
 
         dict(name="cluster_backend", env="SCT_CLUSTER_BACKEND", type=str,
-             help="backend that will be used, aws/gce/docker"),
+             help="backend that will be used, aws/gce/docker", appendable=False),
 
         dict(name="test_method", env="SCT_TEST_METHOD", type=str,
-             help="class.method used to run the test. Filled automatically with run-test sct command."),
+             help="class.method used to run the test. Filled automatically with run-test sct command.",
+             appendable=False),
 
         dict(name="test_duration", env="SCT_TEST_DURATION", type=int,
              help="""
@@ -265,38 +301,46 @@ class SCTConfiguration(dict):
              help="Install Scylla without required root priviledge"),
 
         dict(name="install_mode", env="SCT_INSTALL_MODE", type=str,
-             help="Scylla install mode, repo/offline/web"),
+             help="Scylla install mode, repo/offline/web",
+             appendable=False),
 
         dict(name="scylla_version", env="SCT_SCYLLA_VERSION",
              type=str,
              help="""Version of scylla to install, ex. '2.3.1'
                      Automatically lookup AMIs and repo links for formal versions.
-                     WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'"""),
+                     WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'""",
+             appendable=False),
 
         dict(name="user_data_format_version", env="SCT_USER_DATA_FORMAT_VERSION",
              type=str,
              help="""Format version of the user-data to use for scylla images,
-                     default to what tagged on the image used"""),
+                     default to what tagged on the image used""",
+             appendable=False),
 
         dict(name="oracle_user_data_format_version", env="SCT_ORACLE_USER_DATA_FORMAT_VERSION",
              type=str,
              help="""Format version of the user-data to use for scylla images,
-                 default to what tagged on the image used"""),
+                 default to what tagged on the image used""",
+             appendable=False),
 
         dict(name="oracle_scylla_version", env="SCT_ORACLE_SCYLLA_VERSION",
              type=str,
              help="""Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'
                      Automatically lookup AMIs for formal versions.
-                     WARNING: can't be used together with 'ami_id_db_oracle'"""),
+                     WARNING: can't be used together with 'ami_id_db_oracle'""",
+             appendable=False),
 
         dict(name="scylla_linux_distro", env="SCT_SCYLLA_LINUX_DISTRO", type=str,
-             help="""The distro name and family name to use. Example: 'ubuntu-jammy' or 'debian-bookworm'."""),
+             help="""The distro name and family name to use. Example: 'ubuntu-jammy' or 'debian-bookworm'.""",
+             appendable=False),
 
         dict(name="scylla_linux_distro_loader", env="SCT_SCYLLA_LINUX_DISTRO_LOADER", type=str,
-             help="""The distro name and family name to use. Example: 'ubuntu-jammy' or 'debian-bookworm'."""),
+             help="""The distro name and family name to use. Example: 'ubuntu-jammy' or 'debian-bookworm'.""",
+             appendable=False),
 
         dict(name="assert_linux_distro_features", env="SCT_ASSERT_LINUX_DISTRO_FEATURES", type=str_or_list_or_eval,
-             help="""List of distro features relevant to SCT test. Example: 'fips'."""),
+             help="""List of distro features relevant to SCT test. Example: 'fips'.""",
+             appendable=True),
 
         dict(name="scylla_repo_m", env="SCT_SCYLLA_REPO_M", type=str,
              help="Url to the repo of scylla version to install scylla from for managment tests"),
@@ -314,18 +358,22 @@ class SCTConfiguration(dict):
 
         dict(name="manager_version", env="SCT_MANAGER_VERSION",
              type=str,
-             help="Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml"),
+             help="Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml",
+             appendable=False),
 
         dict(name="target_manager_version", env="SCT_TARGET_MANAGER_VERSION",
              type=str,
-             help="Branch of scylla manager server and agent to upgrade to. Options in defaults/manager_versions.yaml"),
+             help="Branch of scylla manager server and agent to upgrade to. Options in defaults/manager_versions.yaml",
+             appendable=False),
 
         dict(name="manager_scylla_backend_version", env="SCT_MANAGER_SCYLLA_BACKEND_VERSION",
              type=str,
-             help="Branch of scylla db enterprise to install. Options in defaults/manager_versions.yaml"),
+             help="Branch of scylla db enterprise to install. Options in defaults/manager_versions.yaml",
+             appendable=False),
 
         dict(name="scylla_mgmt_agent_version", env="SCT_SCYLLA_MGMT_AGENT_VERSION", type=str,
-             help=""),
+             help="",
+             appendable=False),
 
         dict(name="scylla_mgmt_pkg", env="SCT_SCYLLA_MGMT_PKG",
              type=str,
@@ -478,7 +526,7 @@ class SCTConfiguration(dict):
         dict(name="email_subject_postfix", env="SCT_EMAIL_SUBJECT_POSTFIX", type=str,
              help="""Email subject postfix"""),
 
-        dict(name="enable_test_profiling", env="SCT_ENABLE_TEST_PROFILING", type=bool,
+        dict(name="enable_test_profiling", env="SCT_ENABLE_TEST_PROFILING", type=boolean,
              help="""Turn on sct profiling"""),
         dict(name="ssh_transport", env="SSH_TRANSPORT", type=str,
              help="""Set type of ssh library to use. Could be 'fabric' (default) or 'libssh2'"""),
@@ -542,7 +590,7 @@ class SCTConfiguration(dict):
         dict(name="alternator_secret_access_key", env="SCT_ALTERNATOR_SECRET_ACCESS_KEY", type=str,
              help="the aws_secret_access_key that would be used for alternator"),
 
-        dict(name="region_aware_loader", env="SCT_REGION_AWARE_LOADER", type=bool,
+        dict(name="region_aware_loader", env="SCT_REGION_AWARE_LOADER", type=boolean,
              help="When in multi region mode, run stress on loader that is located in the same region as db node"),
 
         dict(name="append_scylla_args", env="SCT_APPEND_SCYLLA_ARGS", type=str,
@@ -647,7 +695,7 @@ class SCTConfiguration(dict):
              help="instance type of the sct-runner node"),
 
         dict(name="region_name", env="SCT_REGION_NAME", type=str_or_list_or_eval,
-             help="AWS regions to use"),
+             help="AWS regions to use", appendable=False),
 
         dict(name="security_group_ids", env="SCT_SECURITY_GROUP_IDS", type=str_or_list,
              help="AWS security groups ids to use"),
@@ -723,7 +771,7 @@ class SCTConfiguration(dict):
         dict(name="use_prepared_loaders", env="SCT_USE_PREPARED_LOADERS", type=boolean,
              help="If True, we use prepared VMs for loader (instead of using docker images)"),
 
-        dict(name="scylla_d_overrides_files", env="SCT_scylla_d_overrides_files", type=str_or_list_or_eval,
+        dict(name="scylla_d_overrides_files", env="SCT_SCYLLA_D_OVERRIDES_FILES", type=str_or_list_or_eval,
              help="list of files that should upload to /etc/scylla.d/ directory to override scylla config files"),
 
         # GCE config options
@@ -732,7 +780,8 @@ class SCTConfiguration(dict):
 
         dict(name="gce_datacenter", env="SCT_GCE_DATACENTER", type=str_or_list_or_eval,
              help="Supported: us-east1 - means that the zone will be selected automatically or "
-                  "you can mention the zone explicitly, for example: us-east1-b"),
+                  "you can mention the zone explicitly, for example: us-east1-b",
+             appendable=False),
 
         dict(name="gce_network", env="SCT_GCE_NETWORK", type=str,
              help=""),
@@ -793,7 +842,8 @@ class SCTConfiguration(dict):
 
         # azure options
         dict(name="azure_region_name", env="SCT_AZURE_REGION_NAME", type=str_or_list_or_eval,
-             help="Supported: eastus "),
+             help="Supported: eastus ",
+             appendable=False),
 
         dict(name="azure_instance_type_loader", env="SCT_AZURE_INSTANCE_TYPE_LOADER", type=str,
              help=""),
@@ -1384,7 +1434,7 @@ class SCTConfiguration(dict):
              type=boolean,
              help="""retrieving data from multiple streams in one poll"""),
 
-        dict(name="use_legacy_cluster_init", env="SCT_USE_LEGACY_CLUSTER_INIT", type=bool,
+        dict(name="use_legacy_cluster_init", env="SCT_USE_LEGACY_CLUSTER_INIT", type=boolean,
              help="""Use legacy cluster initialization with autobootsrap disabled and parallel node setup"""),
         dict(name="availability_zone", env="SCT_AVAILABILITY_ZONE",
              type=str,
@@ -1714,7 +1764,7 @@ class SCTConfiguration(dict):
 
         # 1) load the default backend config files
         files = anyconfig.load(list(backend_config_files))
-        anyconfig.merge(self, files)
+        merge_dicts_append_strings(self, files)
 
         # 2) load the config files
         try:
@@ -1722,7 +1772,7 @@ class SCTConfiguration(dict):
                 if not os.path.exists(conf_file):
                     raise FileNotFoundError(f"Couldn't find config file: {conf_file}")
             files = anyconfig.load(list(config_files))
-            anyconfig.merge(self, files)
+            merge_dicts_append_strings(self, files)
         except ValueError:
             self.log.warning("Failed to load configuration files: %s", config_files)
 
@@ -1754,7 +1804,7 @@ class SCTConfiguration(dict):
                         raise ValueError(f"{region} isn't supported, use: {self.aws_supported_regions}")
 
         # 3) overwrite with environment variables
-        anyconfig.merge(self, env)
+        merge_dicts_append_strings(self, env)
 
         # 4) update events max severities
         add_severity_limit_rules(self.get("max_events_severities"))
@@ -2565,6 +2615,12 @@ class SCTConfiguration(dict):
         header = """
             # scylla-cluster-tests configuration options
 
+            #### Appending with environment variables or with config files
+            * **strings:** can be appended with adding `++` at the beginning of the string:
+                   `export SCT_APPEND_SCYLLA_ARGS="++ --overprovisioned 1"`
+            * **list:** can be appended by adding `++` as the first item of the list
+                   `export SCT_SCYLLA_D_OVERRIDES_FILES='["++", "extra_file/scylla.d/io.conf"]'`
+
         """
 
         def strip_help_text(text):
@@ -2581,11 +2637,10 @@ class SCTConfiguration(dict):
                 help_text = '<br>'.join(strip_help_text(opt['help']).splitlines())
             else:
                 help_text = ''
-
+            appendable = ' (appendable)' if is_config_option_appendable(opt.get('name')) else ''
             default = self.get_default_value(opt['name'])
             default_text = default if default else 'N/A'
-            ret += """## **{name}** / {env}\n\n{help_text}\n\n**default:** {default_text}\n\n\n""".format(
-                help_text=help_text, default_text=default_text, **opt)
+            ret += f"""## **{opt['name']}** / {opt['env']}\n\n{help_text}\n\n**default:** {default_text}\n\n**type:** {opt.get('type').__name__}{appendable}\n\n\n"""
 
         return ret
 
