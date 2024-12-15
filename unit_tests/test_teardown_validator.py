@@ -57,7 +57,7 @@ class TestErrorEventsValidator(unittest.TestCase):
 
     @patch('sdcm.teardown_validators.events.get_events_main_device')
     def test_validate_no_failing_events_no_critical_events(self, get_events_main_device_mock):
-        self.setup_validator(FAILING_EVENTS.values())
+        self.setup_validator(list(FAILING_EVENTS.values()))
         event_data = (
             '{"severity": "WARNING", "base": "Event1", "type": "Type1", "line": "failing event line"}\n'
             '{"severity": "ERROR", "base": "Event4", "type": "Type1", "line": "failing event line"}\n')
