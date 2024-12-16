@@ -2564,8 +2564,7 @@ class SCTConfiguration(dict):
         """
         header = """
             # scylla-cluster-tests configuration options
-            | Parameter | Description  | Default | Override environment<br>variable
-            | :-------  | :----------  | :------ | :-------------------------------
+
         """
 
         def strip_help_text(text):
@@ -2585,7 +2584,7 @@ class SCTConfiguration(dict):
 
             default = self.get_default_value(opt['name'])
             default_text = default if default else 'N/A'
-            ret += """| **<a href="#user-content-{name}" name="{name}">{name}</a>**  | {help_text} | {default_text} | {env}\n""".format(
+            ret += """## **{name}** / {env}\n\n{help_text}\n\n**default:** {default_text}\n\n\n""".format(
                 help_text=help_text, default_text=default_text, **opt)
 
         return ret
