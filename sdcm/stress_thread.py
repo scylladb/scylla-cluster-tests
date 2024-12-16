@@ -98,9 +98,12 @@ class CSHDRFileLogger(SSHLoggerBase):
         if not result.ok:
             HDRFileMissed(message=f"'{self._remote_log_file}' HDR file was not created on the loader {self._node.name}",
                           severity=Severity.ERROR).publish()
-
-        LOGGER.debug("The '%s' file found on the loader %s", self._remote_log_file, self._node.name)
-        self._node.remoter.receive_files(src=self._remote_log_file, dst=self._target_log_file)
+        try:
+            LOGGER.debug("The '%s' file found on the loader %s", self._remote_log_file, self._node.name)
+            self._node.remoter.receive_files(src=self._remote_log_file, dst=self._target_log_file)
+        except Exception:  # noqa: BLE001
+            HDRFileMissed(message=f"'{self._remote_log_file}' HDR file couldn't copied from loader {self._node.name}",
+                          severity=Severity.ERROR).publish()
 
     def __enter__(self):
         self.start()
@@ -287,6 +290,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
         LOGGER.debug("cassandra-stress HDR local file %s", local_hdr_file_name)
 
+        remote_hdr_file_name_full_path = remote_hdr_file_name
         if "k8s" in self.params.get("cluster_backend"):
             cmd_runner = loader.remoter
             cmd_runner_name = loader.remoter.pod_name
@@ -294,7 +298,9 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner = loader.remoter
             cmd_runner_name = loader.ip_address
         else:
-            loader.remoter.run(f"touch $HOME/{remote_hdr_file_name}", ignore_status=True, verbose=False)
+            loader.remoter.run(f"touch $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False)
+            remote_hdr_file_name_full_path = loader.remoter.run(
+                f"realpath $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False).stdout.strip()
             cmd_runner_name = loader.ip_address
 
             cpu_options = ""
@@ -306,7 +312,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                                                         f'--label shell_marker={self.shell_marker}'
                                                         f' --entrypoint /bin/bash'
                                                         f' -w /'
-                                                        f' -v $HOME/{remote_hdr_file_name}:/{remote_hdr_file_name}')
+                                                        f' -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}')
 
         stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx, loader)
         if self.params.get('cs_debug'):
@@ -337,7 +343,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)
             hdr_logger_context = CSHDRFileLogger(
                 node=loader,
-                remote_log_file=remote_hdr_file_name,
+                remote_log_file=remote_hdr_file_name_full_path,
                 target_log_file=os.path.join(loader.logdir, remote_hdr_file_name),
             )
         else:
