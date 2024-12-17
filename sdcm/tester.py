@@ -2928,7 +2928,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.destroy_credentials()
 
-    @silence(name=f"Save node schema", raise_error_event=False)
+    @silence(name="Save node schema", raise_error_event=False)
     def save_cqlsh_output_in_file(self, node, cmd: str, log_file: str):
         self.log.info("Save command '%s' output in the file. Node %s", cmd, node.name)
 

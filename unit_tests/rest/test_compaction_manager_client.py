@@ -39,4 +39,4 @@ def test_compaction_manager_stop_compaction():
     client = CompactionManagerClient(FakeNode())
     result = partial(client.stop_compaction, compaction_type="reshape")()
 
-    assert result.stdout == f'curl -v -X POST "http://localhost:10000/compaction_manager/stop_compaction?type=RESHAPE"'
+    assert result.stdout == 'curl -v -X POST "http://localhost:10000/compaction_manager/stop_compaction?type=RESHAPE"'
