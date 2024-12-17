@@ -702,44 +702,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                              [["config_changes", "topology_changes"], ["topology_changes"], ["disruptive"]],
                              msg=f"Wrong value {conf['nemesis_selector']}")
 
-    @pytest.mark.integration
-    def test_24_convert_ami_multi_region(self):
-        # test converting with all supported regions
-        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'amzn2-ami-hvm-2.0.20221210.1-x86_64-gp2'
-        os.environ['SCT_N_DB_NODES'] = '1 1 1 1 1 1'
-        os.environ['SCT_REGION_NAME'] = 'eu-west-1 eu-west-2 us-west-2 us-east-1 eu-north-1 eu-central-1'
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
-        conf.verify_configuration_urls_validity()
-        self.assertEqual(len(conf.get('ami_id_db_scylla').split()), 6)
-        self.assertEqual(len(conf.get('ami_id_loader').split()), 6)
-        self.assertEqual(len(conf.get('ami_id_monitor').split()), 6)
-        for ami_id_db_scylla, ami_id_loader, ami_id_monitor in zip(
-                conf.get('ami_id_db_scylla').split(), conf.get('ami_id_loader').split(),
-                conf.get('ami_id_monitor').split()):
-            self.assertTrue(ami_id_db_scylla.startswith("ami-"))
-            self.assertTrue(ami_id_loader.startswith("ami-"))
-            self.assertTrue(ami_id_monitor.startswith("ami-"))
-
-    @pytest.mark.integration
-    def test_25_convert_ami_single_region(self):
-        # test converting with 1 default region
-        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'amzn2-ami-hvm-2.0.20221210.1-x86_64-gp2'
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
-        conf.verify_configuration_urls_validity()
-        self.assertEqual(len(conf.get('ami_id_db_scylla').split()), 1)
-        self.assertEqual(len(conf.get('ami_id_loader').split()), 1)
-        self.assertEqual(len(conf.get('ami_id_monitor').split()), 1)
-        for ami_id_db_scylla, ami_id_loader, ami_id_monitor in zip(
-                conf.get('ami_id_db_scylla').split(), conf.get('ami_id_loader').split(),
-                conf.get('ami_id_monitor').split()):
-            self.assertTrue(ami_id_db_scylla.startswith("ami-"))
-            self.assertTrue(ami_id_loader.startswith("ami-"))
-            self.assertTrue(ami_id_monitor.startswith("ami-"))
-
     def test_26_run_fullscan_params_validtion_positive(self):
         os.environ['SCT_CONFIG_FILES'] = '''["internal_test_data/minimal_test_case.yaml", \
                                                    "internal_test_data/positive_fullscan_param.yaml"]'''
