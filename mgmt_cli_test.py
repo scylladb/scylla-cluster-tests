@@ -1611,7 +1611,7 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
                                                           keyspace_name=snapshot_data.keyspaces[0],
                                                           num_of_rows=snapshot_data.number_of_rows)
         else:
-            self.log.info(f"Skipping verification read stress because of the test or snapshot configuration")
+            self.log.info("Skipping verification read stress because of the test or snapshot configuration")
 
     def test_restore_benchmark(self):
         """Benchmark restore operation.
