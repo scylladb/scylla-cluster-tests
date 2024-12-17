@@ -204,7 +204,7 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         result_table = ReactorStallStatsResult()
         result_table.name = f"{workload} - {name} - stalls - {event_name}"
         result_table.description = f"{event_name} event counts"
-        result_table.add_result(column=f"total", row=f"Cycle #{cycle}",
+        result_table.add_result(column="total", row=f"Cycle #{cycle}",
                                 value=stall_stats["counter"], status=Status.PASS)
         for interval, value in stall_stats["ms"].items():
             result_table.add_result(column=f"{interval}ms", row=f"Cycle #{cycle}",

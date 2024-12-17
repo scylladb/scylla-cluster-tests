@@ -2823,7 +2823,7 @@ class SCTConfiguration(dict):
 
     def _validate_docker_backend_parameters(self):
         if self.get("use_mgmt"):
-            raise ValueError(f"Scylla Manager is not supported for docker backend")
+            raise ValueError("Scylla Manager is not supported for docker backend")
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:
