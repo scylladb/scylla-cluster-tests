@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
 from contextlib import contextmanager, ExitStack, ContextDecorator
 from functools import wraps
 from typing import ContextManager, Callable, Sequence
@@ -96,14 +95,18 @@ def ignore_topology_change_coordinator_errors():
             #   Therefore, it is OK to ignore this particular error until a proper fix is merged.
             stack.enter_context(DbEventsFilter(
                 db_event=DatabaseLogEvent.DATABASE_ERROR,
-                line="raft_topology - topology change coordinator fiber got error exceptions::unavailable_exception"
-                     " (Cannot achieve consistency level for cl ALL.",
+                line=r".*raft_topology - topology change coordinator fiber got error exceptions::unavailable_exception "
+                     r"\(Cannot achieve consistency level for cl ALL\.",
             ))
             stack.enter_context(DbEventsFilter(
                 db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                line="raft_topology - topology change coordinator fiber got error std::runtime_error"
-                     " (raft topology: exec_global_command(barrier) failed with seastar::rpc::closed_error"
-                     " (connection is closed))",
+                line=r".*raft_topology - topology change coordinator fiber got error std::runtime_error"
+                     r" \(raft topology: exec_global_command\(barrier\) failed with seastar::rpc::closed_erro"
+                     r"r \(connection is closed\)\)"
+            ))
+            stack.enter_context(DbEventsFilter(
+                db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                line=r".*raft_topology - drain rpc failed, proceed to fence old writes:.*connection is closed",
             ))
         yield
 
