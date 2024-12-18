@@ -187,7 +187,6 @@ class DefaultValue:  # pylint: disable=too-few-public-methods
     """
     This is class is intended to be used as default value for the cases when None is not applicable
     """
-    ...
 
 
 def target_data_nodes(func: Callable) -> Callable:
