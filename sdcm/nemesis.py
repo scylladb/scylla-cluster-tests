@@ -631,6 +631,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.wait_jmx_up()
         self.cluster.wait_for_schema_agreement()
 
+    @decorate_with_context(ignore_raft_topology_cmd_failing)
     def disrupt_stop_wait_start_scylla_server(self, sleep_time=300):  # pylint: disable=invalid-name
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.log.info("Sleep for %s seconds", sleep_time)
@@ -1098,7 +1099,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         return sstables
 
-    @decorate_with_context(ignore_ycsb_connection_refused)
+    @decorate_with_context([ignore_ycsb_connection_refused, ignore_raft_topology_cmd_failing])
     def _destroy_data_and_restart_scylla(self, keyspaces_for_destroy: list = None, sstables_to_destroy_perc: int = 50):  # pylint: disable=too-many-statements
         tables = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_empty_tables=False,
                                                         filter_by_keyspace=keyspaces_for_destroy)
@@ -1305,7 +1306,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message="FinishEvent - New Nodes are up and normal").publish()
         return new_nodes
 
-    @decorate_with_context(ignore_ycsb_connection_refused)
+    @decorate_with_context([ignore_ycsb_connection_refused, ignore_raft_topology_cmd_failing])
     def _terminate_cluster_node(self, node):
         self.cluster.terminate_node(node)
         self.monitoring_set.reconfigure_scylla_monitoring()
@@ -1626,7 +1627,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 new_node.set_seed_flag(True)
                 self.cluster.update_seed_provider()
 
-    @decorate_with_context(ignore_ycsb_connection_refused)
+    @decorate_with_context([ignore_ycsb_connection_refused, ignore_raft_topology_cmd_failing])
     def disrupt_kill_scylla(self):
         self._kill_scylla_daemon()
 
