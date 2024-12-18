@@ -508,7 +508,7 @@ def update_scylla_packages(test_id: str, backend: str, region: str, packages_loc
     if not (packages_location := packages_location or os.getenv('SCT_UPDATE_DB_PACKAGES')):
         LOGGER.error("No location is provided where new packages are placed")
         sys.exit(1)
-    if packages_location.startswith('s3') or packages_location.startswith('gs'):
+    if packages_location.startswith(('s3', 'gs')):
         packages_location = download_dir_from_cloud(packages_location)
     if not packages_location.endswith('/'):
         packages_location += '/'

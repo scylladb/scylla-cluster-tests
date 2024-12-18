@@ -50,10 +50,8 @@ class ResultableObject:  # pylint: disable=too-few-public-methods
         self.stderr = stderr
 
     def result(self,):
-        value = InstanceViewStatus(**{'additional_properties': {}, 'code': 'ProvisioningState/succeeded',
-                                      'level': 'Info', 'display_status': 'Provisioning succeeded',
-                                      'message': f'Enable succeeded: \n[stdout]\n{self.stdout}\n[stderr]\n{self.stderr}',
-                                      'time': None})
+        value = InstanceViewStatus(additional_properties={}, code='ProvisioningState/succeeded', level='Info',
+                                   display_status='Provisioning succeeded', message=f'Enable succeeded: \n[stdout]\n{self.stdout}\n[stderr]\n{self.stderr}', time=None)
         return RunCommandResult(value=[value])
 
 
