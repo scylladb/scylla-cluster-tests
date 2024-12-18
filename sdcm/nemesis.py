@@ -5637,16 +5637,6 @@ class NoOpMonkey(Nemesis):
         time.sleep(300)
 
 
-class SteadyMonkey(Nemesis):
-    kubernetes = True
-
-    def disrupt(self):
-        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
-        if not self.has_steady_run and sleep_time_between_ops:
-            self.steady_state_latency(sleep_time=sleep_time_between_ops)
-            self.has_steady_run = True
-
-
 class AddRemoveDcNemesis(Nemesis):
 
     disruptive = True
