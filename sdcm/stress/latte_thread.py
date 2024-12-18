@@ -219,6 +219,7 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         operation = self.function_name(stress_cmd)
 
+        result = {}
         with cleanup_context, \
                 LatteStatsPublisher(loader, loader_idx, latte_log_filename=log_file_name,
                                     operation=operation), \
@@ -233,12 +234,11 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                     log_file=log_file_name,
                     retry=0,
                 )
-                return self.parse_final_output(result)
-
+                result = self.parse_final_output(result)
             except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=latte_stress_event, exc=exc)
 
-        return {}
+        return loader, result, latte_stress_event
         # TODOs:
         # 1) take back the report workload..3.0.8.p128.t1.c1.20231025.220812.json
 
@@ -252,6 +252,9 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         else:
             stress_event.severity = Severity.ERROR
         stress_event.add_error(errors=[error_msg])
+
+    def get_results(self) -> list:
+        return [result for _, result, _ in super().get_results()]
 
 
 def format_stress_cmd_error(exc: Exception) -> str:
