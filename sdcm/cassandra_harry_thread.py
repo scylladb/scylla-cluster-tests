@@ -87,6 +87,8 @@ class CassandraHarryThread(DockerBasedStressThread):
 
         CassandraHarryEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
 
+        result = {}
+        harry_failure_event = harry_finish_event = None
         with CassandraHarryStressExporter(instance_name=loader.ip_address,
                                           metrics=nemesis_metrics_obj(),
                                           stress_operation='write',
@@ -106,22 +108,23 @@ class CassandraHarryThread(DockerBasedStressThread):
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = format_stress_cmd_error(exc)
                 if "timeout" in errors_str:
-                    event_type = CassandraHarryEvent.timeout
+                    harry_failure_event = CassandraHarryEvent.timeout
                 elif self.stop_test_on_failure:
-                    event_type = CassandraHarryEvent.failure
+                    harry_failure_event = CassandraHarryEvent.failure
                 else:
-                    event_type = CassandraHarryEvent.error
-                event_type(
+                    harry_failure_event = CassandraHarryEvent.error
+                harry_failure_event(
                     node=loader,
                     stress_cmd=self.stress_cmd,
                     log_file_name=log_file_name,
                     errors=[errors_str, ],
                 ).publish()
             else:
-                CassandraHarryEvent.finish(node=loader, stress_cmd=self.stress_cmd,
-                                           log_file_name=log_file_name).publish()
+                harry_finish_event = CassandraHarryEvent.finish(node=loader, stress_cmd=self.stress_cmd,
+                                                                log_file_name=log_file_name)
+                harry_finish_event.publish()
 
-        return result
+        return loader, result, harry_failure_event or harry_finish_event
 
     @staticmethod
     def _parse_harry_summary(lines):  # pylint: disable=too-many-branches
@@ -137,3 +140,6 @@ class CassandraHarryThread(DockerBasedStressThread):
         else:
             results['status'] = 'failed'
         return results
+
+    def get_results(self) -> list:
+        return [result for _, result, _ in super().get_results()]

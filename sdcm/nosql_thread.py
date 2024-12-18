@@ -84,6 +84,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                                      (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('nosql-bench-stress local log: %s', log_file_name)
         LOGGER.debug("'running: %s", stress_cmd)
+        result = {}
         with NoSQLBenchStressEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as stress_event, \
                 NoSQLBenchEventsPublisher(node=loader, log_filename=log_file_name):
             try:
@@ -105,12 +106,16 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                                    log_file=log_file_name,
                                    ignore_status=True)
 
-                return loader.remoter.run(cmd=f'docker run '
-                                              '--name=nb '
-                                              '--network=nosql '
-                                              f'{self.docker_image_name} '
-                                              f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
-                                          timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
-            except Exception as exc:  # pylint: disable=broad-except
+                result = loader.remoter.run(cmd=f'docker run '
+                                            '--name=nb '
+                                            '--network=nosql '
+                                            f'{self.docker_image_name} '
+                                            f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
+                                            timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=stress_event, exc=exc)
-            return None
+
+            return loader, result, stress_event
+
+    def get_results(self) -> list:
+        return [result for _, result, _ in super().get_results()]
