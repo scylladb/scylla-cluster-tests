@@ -325,7 +325,7 @@ class FillDatabaseData(ClusterTester):
             'truncates': ['TRUNCATE limit_ranges_test'],
             'inserts': [
                 "INSERT INTO limit_ranges_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id, tld)
-                for _id in range(0, 4) for tld in ['com', 'org', 'net']],
+                for _id in range(4) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_ranges_test WHERE token(userid) >= token(2) LIMIT 1",
                 "SELECT * FROM limit_ranges_test WHERE token(userid) > token(2) LIMIT 1"],  # issue ##2574
@@ -347,7 +347,7 @@ class FillDatabaseData(ClusterTester):
             'inserts': [
                 "INSERT INTO limit_multiget_test (userid, url, time) VALUES ({}, 'http://foo.{}', 42)".format(_id,
                                                                                                               tld)
-                for _id in range(0, 100) for tld in ['com', 'org', 'net']],
+                for _id in range(100) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_multiget_test WHERE userid IN (48, 2) LIMIT 1"],
             'results': [
@@ -393,7 +393,7 @@ class FillDatabaseData(ClusterTester):
             'truncates': ['TRUNCATE limit_sparse_test'],
             'inserts': [
                 "INSERT INTO limit_sparse_test (userid, url, day, month, year) VALUES ({}, 'http://foo.{}', 1, 'jan', 2012)".format(
-                    _id, tld) for _id in range(0, 100) for tld in ['com', 'org', 'net']],
+                    _id, tld) for _id in range(100) for tld in ['com', 'org', 'net']],
             'queries': [
                 "SELECT * FROM limit_sparse_test LIMIT 4"],
             'results': [
@@ -760,9 +760,9 @@ class FillDatabaseData(ClusterTester):
             ) WITH CLUSTERING ORDER BY (c1 ASC, c2 DESC)"""],
             'truncates': ['TRUNCATE reversed_comparator_test1', 'TRUNCATE reversed_comparator_test2'],
             'inserts': [f"INSERT INTO reversed_comparator_test1 (k, c, v) VALUES (0, {x}, {x})" for x in
-                        range(0, 10)] + [
+                        range(10)] + [
                 f"INSERT INTO reversed_comparator_test2 (k, c1, c2, v) VALUES (0, {x}, {y}, '{x}{y}')"
-                for x in range(0, 10) for y in range(0, 10)],
+                for x in range(10) for y in range(10)],
             'queries': [
                 "SELECT c, v FROM reversed_comparator_test1 WHERE k = 0 ORDER BY c ASC",
                 "SELECT c, v FROM reversed_comparator_test1 WHERE k = 0 ORDER BY c DESC",
@@ -771,11 +771,11 @@ class FillDatabaseData(ClusterTester):
                 "SELECT c1, c2, v FROM reversed_comparator_test2 WHERE k = 0 ORDER BY c1 DESC, c2 ASC"
             ],
             'results': [
-                [[x, x] for x in range(0, 10)],
+                [[x, x] for x in range(10)],
                 [[x, x] for x in range(9, -1, -1)],
-                [[x, y, '{}{}'.format(x, y)] for x in range(0, 10) for y in range(9, -1, -1)],
-                [[x, y, '{}{}'.format(x, y)] for x in range(0, 10) for y in range(9, -1, -1)],
-                [[x, y, '{}{}'.format(x, y)] for x in range(9, -1, -1) for y in range(0, 10)]],
+                [[x, y, '{}{}'.format(x, y)] for x in range(10) for y in range(9, -1, -1)],
+                [[x, y, '{}{}'.format(x, y)] for x in range(10) for y in range(9, -1, -1)],
+                [[x, y, '{}{}'.format(x, y)] for x in range(9, -1, -1) for y in range(10)]],
             'invalid_queries': [
                 "SELECT c1, c2, v FROM reversed_comparator_test2 WHERE k = 0 ORDER BY c1 ASC, c2 ASC",
                 "SELECT c1, c2, v FROM reversed_comparator_test2 WHERE k = 0 ORDER BY c1 DESC, c2 DESC",
@@ -1043,7 +1043,7 @@ class FillDatabaseData(ClusterTester):
                                                                               birth_year bigint)"""
                               ],
             'truncates': ['TRUNCATE no_range_ghost_test', 'TRUNCATE ks_no_range_ghost_test.users'],
-            'inserts': ["INSERT INTO no_range_ghost_test (k, v) VALUES (%d, 0)" % k for k in range(0, 5)],
+            'inserts': ["INSERT INTO no_range_ghost_test (k, v) VALUES (%d, 0)" % k for k in range(5)],
             'queries': ["#SORTED SELECT k FROM no_range_ghost_test",
                         "DELETE FROM no_range_ghost_test WHERE k = 2",
                         "#SORTED SELECT k FROM no_range_ghost_test",
@@ -1054,9 +1054,9 @@ class FillDatabaseData(ClusterTester):
                         "SELECT * FROM ks_no_range_ghost_test.users",
                         "SELECT * FROM ks_no_range_ghost_test.users WHERE KEY='user1'"
                         ],
-            'results': [[[k] for k in range(0, 5)],
+            'results': [[[k] for k in range(5)],
                         [],
-                        [[k] for k in range(0, 5) if not k == 2],
+                        [[k] for k in range(5) if not k == 2],
                         [],
                         [],
                         [],
@@ -1097,9 +1097,9 @@ class FillDatabaseData(ClusterTester):
                         )"""],
             'truncates': [],
             'inserts': ["INSERT INTO range_tombstones_test (k, c1, c2, v1, v2) VALUES (%d, %d, %d, %d, %d)" % (
-                i, j, k, (i * 4) + (j * 2) + k, (i * 4) + (j * 2) + k) for i in range(0, 5) for j in range(0, 2)
+                i, j, k, (i * 4) + (j * 2) + k, (i * 4) + (j * 2) + k) for i in range(5) for j in range(2)
                 for k
-                in range(0, 2)],
+                in range(2)],
             'queries': ["SELECT v1, v2 FROM range_tombstones_test where k = %d" % 0,
                         "SELECT v1, v2 FROM range_tombstones_test where k = %d" % 1,
                         "SELECT v1, v2 FROM range_tombstones_test where k = %d" % 2,
@@ -1157,7 +1157,7 @@ class FillDatabaseData(ClusterTester):
                         )"""],
             'truncates': [],
             'inserts': ["INSERT INTO range_tombstones_compaction_test (k, c1, c2, v1) VALUES (0, %d, %d, '%s')" % (
-                c1, c2, '%i%i' % (c1, c2)) for c1 in range(0, 4) for c2 in range(0, 2)],
+                c1, c2, '%i%i' % (c1, c2)) for c1 in range(4) for c2 in range(2)],
             'queries': ["#REMOTER_RUN nodetool flush",
                         "DELETE FROM range_tombstones_compaction_test WHERE k = 0 AND c1 = 1",
                         "#REMOTER_RUN nodetool flush",
@@ -1167,7 +1167,7 @@ class FillDatabaseData(ClusterTester):
                         [],
                         None,
                         None,
-                        [['%i%i' % (c1, c2)] for c1 in range(0, 4) for c2 in range(0, 2) if c1 != 1]],
+                        [['%i%i' % (c1, c2)] for c1 in range(4) for c2 in range(2) if c1 != 1]],
             'min_version': '',
             'max_version': '',
             'skip': ''},
@@ -1376,7 +1376,7 @@ class FillDatabaseData(ClusterTester):
             'truncates': ["TRUNCATE composite_row_key_test"],
             'inserts': [
                 f"INSERT INTO composite_row_key_test (k1, k2, c, v) VALUES (0, {i}, {i}, {i})" for i
-                in range(0, 4)
+                in range(4)
             ],
             'queries': [
                 "SELECT * FROM composite_row_key_test",
@@ -1444,8 +1444,8 @@ class FillDatabaseData(ClusterTester):
                         )
                     """],
             'truncates': ["TRUNCATE only_pk_test1", "TRUNCATE only_pk_test2"],
-            'inserts': ["INSERT INTO only_pk_test1 (k, c) VALUES (%s, %s)" % (k, c) for k in range(0, 2) for c in
-                        range(0, 2)],
+            'inserts': ["INSERT INTO only_pk_test1 (k, c) VALUES (%s, %s)" % (k, c) for k in range(2) for c in
+                        range(2)],
             'queries': ["#SORTED SELECT * FROM only_pk_test1",
                         "INSERT INTO only_pk_test2(k, c) VALUES(0, 0)",
                         "INSERT INTO only_pk_test2(k, c) VALUES(0, 1)",
@@ -1453,12 +1453,12 @@ class FillDatabaseData(ClusterTester):
                         "INSERT INTO only_pk_test2(k, c) VALUES(1, 1)",
                         "#SORTED SELECT * FROM only_pk_test2"
                         ],
-            'results': [[[x, y] for x in range(0, 2) for y in range(0, 2)],
+            'results': [[[x, y] for x in range(2) for y in range(2)],
                         [],
                         [],
                         [],
                         [],
-                        [[x, y] for x in range(0, 2) for y in range(0, 2)]],
+                        [[x, y] for x in range(2) for y in range(2)]],
             'min_version': '',
             'max_version': '',
             'skip': '',
@@ -1658,7 +1658,7 @@ class FillDatabaseData(ClusterTester):
                     )"""],
             'truncates': ["TRUNCATE remove_range_slice_test"],
             'inserts': [f"INSERT INTO remove_range_slice_test (k, v) VALUES ({i}, {i})" for i in
-                        range(0, 3)] + [
+                        range(3)] + [
                 "DELETE FROM remove_range_slice_test WHERE k = 1"],
             'queries': ["SELECT * FROM remove_range_slice_test"],
             'results': [[[0, 0], [2, 2]]],
@@ -1748,7 +1748,7 @@ class FillDatabaseData(ClusterTester):
                 """],
             'truncates': ["TRUNCATE reversed_compact_test1", "TRUNCATE reversed_compact_test2"],
             'inserts': [
-                "INSERT INTO %s(k, c, v) VALUES ('foo', %s, %s)" % (k, i, i) for i in range(0, 10) for k in
+                "INSERT INTO %s(k, c, v) VALUES ('foo', %s, %s)" % (k, i, i) for i in range(10) for k in
                 ['reversed_compact_test1', 'reversed_compact_test2']
             ],
             'queries': ["SELECT c FROM reversed_compact_test1 WHERE c > 2 AND c < 6 AND k = 'foo'",
@@ -1793,8 +1793,8 @@ class FillDatabaseData(ClusterTester):
             'truncates': ["TRUNCATE reversed_compact_multikey_test"],
             'inserts': [
                 "INSERT INTO reversed_compact_multikey_test(key, c1, c2, value) VALUES ('foo', %i, %i, 'bar');" % (
-                    i, j) for i in range(0, 3)
-                for j in range(0, 3)
+                    i, j) for i in range(3)
+                for j in range(3)
             ],
             'queries': ["SELECT c1, c2 FROM reversed_compact_multikey_test WHERE key='foo' AND c1 = 1",
                         "SELECT c1, c2 FROM reversed_compact_multikey_test WHERE key='foo' AND c1 = 1 ORDER BY c1 ASC, c2 ASC",
@@ -1909,8 +1909,8 @@ class FillDatabaseData(ClusterTester):
             ) WITH CLUSTERING ORDER BY (c1 ASC, c2 DESC)"""],
             'truncates': ["TRUNCATE multiordering_test"],
             'inserts': ["INSERT INTO multiordering_test(k, c1, c2) VALUES ('foo', %i, %i)" % (i, j) for i in
-                        range(0, 2) for j in
-                        range(0, 2)],
+                        range(2) for j in
+                        range(2)],
             'queries': ["SELECT c1, c2 FROM multiordering_test WHERE k = 'foo'",
                         "SELECT c1, c2 FROM multiordering_test WHERE k = 'foo' ORDER BY c1 ASC, c2 DESC",
                         "SELECT c1, c2 FROM multiordering_test WHERE k = 'foo' ORDER BY c1 DESC, c2 ASC"
@@ -2004,7 +2004,7 @@ class FillDatabaseData(ClusterTester):
             """],
             'truncates': ["TRUNCATE truncate_clean_cache_test"],
             'inserts': ["INSERT INTO truncate_clean_cache_test(k, v1, v2) VALUES (%d, %d, %d)" % (i, i, i * 2) for i
-                        in range(0, 3)
+                        in range(3)
                         ],
             'queries': ["SELECT v1, v2 FROM truncate_clean_cache_test WHERE k IN (0, 1, 2)",
                         "TRUNCATE truncate_clean_cache_test",
@@ -2025,7 +2025,7 @@ class FillDatabaseData(ClusterTester):
             """],
             'truncates': ["TRUNCATE range_with_deletes_test"],
             'inserts': [f"INSERT INTO range_with_deletes_test(k, v) VALUES ({i}, {i})" for i in
-                        range(0, 30)] + [
+                        range(30)] + [
                 f"DELETE FROM range_with_deletes_test WHERE k = {i}" for i in
                 random.sample(range(30), 5)],
             'queries': ["#LENGTH SELECT * FROM range_with_deletes_test LIMIT {}".format(15)],
@@ -2323,7 +2323,7 @@ class FillDatabaseData(ClusterTester):
                 ) WITH CLUSTERING ORDER BY (t DESC)"""],
             'truncates': ["TRUNCATE clustering_order_and_functions_test"],
             'inserts': ["INSERT INTO clustering_order_and_functions_test (k, t) VALUES (%d, now())" % i for i in
-                        range(0, 5)] + ["SELECT dateOf(t) FROM clustering_order_and_functions_test"],
+                        range(5)] + ["SELECT dateOf(t) FROM clustering_order_and_functions_test"],
             'queries': [],
             'results': [],
             'min_version': '',
@@ -2520,9 +2520,9 @@ class FillDatabaseData(ClusterTester):
                 "CREATE TABLE empty_in_test2 (k1 int, k2 int, v int, PRIMARY KEY (k1, k2)) "],
             'truncates': ["TRUNCATE empty_in_test1", "TRUNCATE empty_in_test2"],
             'inserts': ["INSERT INTO empty_in_test1 (k1, k2, v) VALUES (%d, %d, %d)" % (i, j, i + j) for i in
-                        range(0, 2) for j in range(0, 2)] +
+                        range(2) for j in range(2)] +
                        ["INSERT INTO empty_in_test2 (k1, k2, v) VALUES (%d, %d, %d)" % (i, j, i + j) for i in
-                        range(0, 2) for j in range(0, 2)],
+                        range(2) for j in range(2)],
             'queries': ["SELECT v FROM empty_in_test1 WHERE k1 IN ()",
                         "SELECT v FROM empty_in_test1 WHERE k1 = 0 AND k2 IN ()",
                         "DELETE FROM empty_in_test1 WHERE k1 IN ()",
@@ -2575,15 +2575,15 @@ class FillDatabaseData(ClusterTester):
             'truncates': ["TRUNCATE select_distinct_test1", "TRUNCATE select_distinct_test2",
                           "TRUNCATE select_distinct_test3"],
             'inserts': ['INSERT INTO select_distinct_test1 (pk0, pk1, ck0, val) VALUES (%d, %d, 0, 0)' % (i, i) for
-                        i in range(0, 3)] +
+                        i in range(3)] +
                        ['INSERT INTO select_distinct_test1 (pk0, pk1, ck0, val) VALUES (%d, %d, 1, 1)' % (i, i) for
-                        i in range(0, 3)] +
+                        i in range(3)] +
                        ['INSERT INTO select_distinct_test2 (pk0, pk1, val) VALUES (%d, %d, %d)' % (i, i, i) for i in
-                        range(0, 3)] +
+                        range(3)] +
                        ["INSERT INTO select_distinct_test3 (pk, name, val) VALUES (%d, 'name0', 0)" % i for i in
-                        range(0, 3)] +
+                        range(3)] +
                        ["INSERT INTO select_distinct_test3 (pk, name, val) VALUES (%d, 'name1', 1)" % i for i in
-                        range(0, 3)],
+                        range(3)],
             'queries': ['SELECT DISTINCT pk0, pk1 FROM select_distinct_test1 LIMIT 1',
                         '#SORTED SELECT DISTINCT pk0, pk1 FROM select_distinct_test1 LIMIT 3',
                         'SELECT DISTINCT pk0, pk1 FROM select_distinct_test2 LIMIT 1',
@@ -2622,8 +2622,8 @@ class FillDatabaseData(ClusterTester):
                           "UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {} IF consumed = FALSE;".format(
                               k),
                           "UPDATE cas_simple_test SET consumed = TRUE WHERE tkn = {} IF consumed = FALSE;".format(
-                              k).format(i)] for k in range(1, 10)][j][i] for j in range(0, 9) for i in
-                        range(0, 3)],
+                              k).format(i)] for k in range(1, 10)][j][i] for j in range(9) for i in
+                        range(3)],
             'results': [[], [[True]], [[False, True]]] * 3,
             'min_version': '',
             'max_version': '',
@@ -2943,8 +2943,8 @@ class FillDatabaseData(ClusterTester):
                 "CREATE TABLE tuple_notation_test (k int, v1 int, v2 int, v3 int, PRIMARY KEY (k, v1, v2, v3))"],
             'truncates': ["TRUNCATE tuple_notation_test"],
             'inserts': ["INSERT INTO tuple_notation_test(k, v1, v2, v3) VALUES (0, %d, %d, %d)" % (i, j, k) for i in
-                        range(0, 2)
-                        for j in range(0, 2) for k in range(0, 2)],
+                        range(2)
+                        for j in range(2) for k in range(2)],
             'queries': ["SELECT v1, v2, v3 FROM tuple_notation_test WHERE k = 0",
                         "SELECT v1, v2, v3 FROM tuple_notation_test WHERE k = 0 AND (v1, v2, v3) >= (1, 0, 1)",
                         "SELECT v1, v2, v3 FROM tuple_notation_test WHERE k = 0 AND (v1, v2) >= (1, 1)",

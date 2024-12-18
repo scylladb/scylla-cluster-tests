@@ -208,7 +208,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     def set_authenticator(cls, authenticator: str):
         if authenticator is None:
             return authenticator
-        if authenticator.startswith('org.apache.cassandra.auth.') or authenticator.startswith('com.scylladb.auth.'):
+        if authenticator.startswith(('org.apache.cassandra.auth.', 'com.scylladb.auth.')):
             return authenticator
         if authenticator in ['PasswordAuthenticator', 'AllowAllAuthenticator']:
             return 'org.apache.cassandra.auth.' + authenticator
@@ -229,7 +229,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     def set_authorizer(cls, authorizer: str):
         if authorizer is None:
             return authorizer
-        if authorizer.startswith('org.apache.cassandra.auth.') or authorizer.startswith('com.scylladb.auth.'):
+        if authorizer.startswith(('org.apache.cassandra.auth.', 'com.scylladb.auth.')):
             return authorizer
         if authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
             return 'org.apache.cassandra.auth.' + authorizer

@@ -5,6 +5,7 @@ lint.select = [
     "PL", "PLR0913","PLR0914", "PLR0916",
     "YTT",
     "F541",
+    "PIE",
 ]
 
 lint.ignore = ["E501", "PLR2004"]

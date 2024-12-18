@@ -814,7 +814,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                         f"--version {new_chart_version} --destination {tmpdir}")
                     crd_basedir = os.path.join(tmpdir, 'scylla-operator/crds')
                     for current_file in os.listdir(crd_basedir):
-                        if not (current_file.endswith(".yaml") or current_file.endswith(".yml")):
+                        if not current_file.endswith((".yaml", ".yml")):
                             continue
                         self.apply_file(
                             os.path.join(crd_basedir, current_file), modifiers=[], envsubst=False)

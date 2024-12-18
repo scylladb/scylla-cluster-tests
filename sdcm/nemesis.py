@@ -175,7 +175,6 @@ class DefaultValue:  # pylint: disable=too-few-public-methods
     """
     This is class is intended to be used as default value for the cases when None is not applicable
     """
-    ...
 
 
 class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-methods

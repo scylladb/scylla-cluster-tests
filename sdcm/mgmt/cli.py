@@ -1177,8 +1177,7 @@ class SCTool:
         if filtered_lines:
             if '╭' in res.stdout:
                 filtered_lines = [line.replace('│', "|") for line in filtered_lines if
-                                  not (line.startswith('╭') or line.startswith('├') or line.startswith(
-                                      '╰'))]  # filter out the dashes lines
+                                  not line.startswith(('╭', '├', '╰'))]  # filter out the dashes lines
             else:
                 filtered_lines = [line for line in filtered_lines if
                                   not line.startswith('+')]  # filter out the dashes lines

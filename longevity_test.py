@@ -348,7 +348,7 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
                                     scylla_encryption_options=self.params.get('scylla_encryption_options'))
 
         num_of_batches = int(total_stress / batch_size)
-        for batch in range(0, num_of_batches):
+        for batch in range(num_of_batches):
             for i in range(1 + batch * batch_size, (batch + 1) * batch_size + 1):
                 keyspace_name = self._get_keyspace_name(i)
                 if not isinstance(stress_cmd, list):

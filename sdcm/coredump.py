@@ -443,7 +443,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                 executable = line[12:].strip()
             elif line.startswith('Command Line:'):
                 command_line = line[14:].strip()
-            elif line.startswith('Coredump:') or line.startswith('Storage:'):
+            elif line.startswith(('Coredump:', 'Storage:')):
                 # Ignore inaccessible cores
                 # Storage: /var/lib/systemd/coredump/core.vi.1000.6c4de4c206a0476e88444e5ebaaac482.18554.1578994298000000.lz4 (inaccessible)
                 if "inaccessible" in line:
