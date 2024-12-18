@@ -144,7 +144,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
         results = self.get_results()
 
-        for _, result in results:
+        for _, result, _ in results:
             if not result:
                 # Silently skip if stress command threw an error, since it was already reported in _run_stress
                 continue
@@ -251,7 +251,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
                 self.configure_event_on_failure(stress_event=scylla_bench_event, exc=exc)
 
-        return loader, result
+        return loader, result, scylla_bench_event
 
     @classmethod
     def _parse_bench_summary(cls, lines):
