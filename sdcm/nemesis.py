@@ -98,6 +98,7 @@ from sdcm.sct_events.loaders import CassandraStressLogEvent, ScyllaBenchEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent, CoreDumpEvent
 from sdcm.sla.sla_tests import SlaTests
+from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.argus import get_argus_client
 from sdcm.utils.aws_kms import AwsKms
 from sdcm.utils import cdc
@@ -155,6 +156,7 @@ from sdcm.exceptions import (
     AuditLogTestFailure,
     BootstrapStreamErrorFailure,
     QuotaConfigurationFailure,
+    NemesisStressFailure,
 )
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
     get_gc_mode, GcMode
@@ -2069,6 +2071,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             cs_thread = self.tester.run_stress_thread(
                 stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False, round_robin=True)
             cs_thread.verify_results()
+            self.stop_nemesis_on_stress_errors(cs_thread)
+
+    def stop_nemesis_on_stress_errors(self, stress_thread: DockerBasedStressThread) -> None:
+        # Some implementations of stress threads override logic of the base class method
+        # DockerBasedStressThread.get_results() and filter out 'events' portion of a result (e.g. c-s stress thread).
+        # To retrieve all results of a thread we need to call the base class method directly
+        stress_results = super(stress_thread.__class__, stress_thread).get_results()
+        node_errors = {}
+        for node, result, event in stress_results:
+            if event.get('errors'):
+                node_errors.setdefault(node.name, []).extend(event.errors)
+
+        if len(node_errors) == len(stress_results):  # stop only if stress command failed on all loaders
+            errors_str = ''.join(f"  on node '{node_name}': {errors}\n" for node_name, errors in node_errors.items())
+            raise NemesisStressFailure(
+                f"Aborting '{self.__class__.__name__}' nemesis as '{stress_thread.stress_cmd}' stress command failed "
+                f"with the following errors:\n{errors_str}")
 
     @scylla_versions(("5.2.rc0", None), ("2023.1.rc0", None))
     def _truncate_cmd_timeout_suffix(self, truncate_timeout):  # pylint: disable=no-self-use
@@ -2115,6 +2134,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         bench_thread = self.tester.run_stress_thread(
             stress_cmd=stress_cmd, stop_test_on_failure=False)
         self.tester.verify_stress_thread(bench_thread)
+        self.stop_nemesis_on_stress_errors(bench_thread)
 
         # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
         with adaptive_timeout(Operations.FLUSH, self.target_node, timeout=HOUR_IN_SEC * 2):
@@ -4196,6 +4216,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         stress_queue = self.tester.run_stress_thread(
             stress_cmd=self.tester.stress_cmd, stress_num=1, stats_aggregate_cmds=False, duration=duration)
         results = self.tester.get_stress_results(queue=stress_queue, store_results=False)
+        self.stop_nemesis_on_stress_errors(stress_queue)
         self.log.info(f"Double load results: {results}")
 
     @target_data_nodes
@@ -4370,6 +4391,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     regex=".*sstable - Error while linking SSTable.*filesystem error: stat failed: No such file or directory.*"):
                 write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, stop_test_on_failure=False)
                 self.tester.verify_stress_thread(write_thread)
+                self.stop_nemesis_on_stress_errors(write_thread)
 
         try:
             for i in range(2 if (aws_kms and kms_key_alias_name and enable_kms_key_rotation) else 1):
@@ -4389,6 +4411,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     " -iterations=1 -concurrency=10 -connection-count=10 -rows-per-request=10")
                 read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
                 self.tester.verify_stress_thread(read_thread)
+                self.stop_nemesis_on_stress_errors(read_thread)
 
                 # Rotate KMS key
                 if enable_kms_key_rotation and aws_kms and kms_key_alias_name and i == 0:
@@ -4414,6 +4437,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # ReRead data
                 read_thread2 = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
                 self.tester.verify_stress_thread(read_thread2)
+                self.stop_nemesis_on_stress_errors(read_thread2)
 
                 # ReWrite data making the sstables be rewritten
                 run_write_scylla_bench_load(write_cmd)
@@ -4422,6 +4446,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # ReRead data
                 read_thread3 = self.tester.run_stress_thread(stress_cmd=read_cmd, stop_test_on_failure=False)
                 self.tester.verify_stress_thread(read_thread3)
+                self.stop_nemesis_on_stress_errors(read_thread3)
 
                 # Check that sstables of that table are not encrypted anymore
                 check_encryption_fact(sstable_util, False)
@@ -4688,6 +4713,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..10000 -log interval=5"
         write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, round_robin=True, stop_test_on_failure=False)
         self.tester.verify_stress_thread(cs_thread_pool=write_thread)
+        self.stop_nemesis_on_stress_errors(write_thread)
         self._verify_multi_dc_keyspace_data(consistency_level="ALL")
 
     def _verify_multi_dc_keyspace_data(self, consistency_level: str = "ALL"):
@@ -4696,6 +4722,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                    f"-pop seq=1..10000 -log interval=5"
         read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, round_robin=True, stop_test_on_failure=False)
         self.tester.verify_stress_thread(cs_thread_pool=read_thread)
+        self.stop_nemesis_on_stress_errors(read_thread)
 
     def _switch_to_network_replication_strategy(self, keyspaces: List[str]) -> None:
         """Switches replication strategy to NetworkTopology for given keyspaces.
@@ -5109,6 +5136,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             write_thread = self.tester.run_stress_thread(
                 stress_cmd=write_cmd, round_robin=True, stop_test_on_failure=False)
             self.tester.verify_stress_thread(cs_thread_pool=write_thread)
+            self.stop_nemesis_on_stress_errors(write_thread)
             read_cmd = f"cassandra-stress read no-warmup cl=ONE n=1000 " \
                        f" -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)" \
                        f" keyspace={audit_keyspace}' -mode cql3 native -rate 'threads=1 throttle=1000/s'" \
@@ -5116,6 +5144,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             read_thread = self.tester.run_stress_thread(
                 stress_cmd=read_cmd, round_robin=True, stop_test_on_failure=False)
             self.tester.verify_stress_thread(cs_thread_pool=read_thread)
+            self.stop_nemesis_on_stress_errors(read_thread)
             InfoEvent(message='Verifying Audit table contents').publish()
             rows = audit.get_audit_log(from_datetime=audit_start, category="DML", limit_rows=1500)
             # filter out USE keyspace rows due to https://github.com/scylladb/scylla-enterprise/issues/3169
