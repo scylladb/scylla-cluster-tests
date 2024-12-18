@@ -83,3 +83,11 @@ class SstablesNotFound(Exception):
 
 class CapacityReservationError(Exception):
     pass
+
+
+class RaftTopologyCoordinatorNotFound(Exception):
+    """Raise exception if no host id for raft topology was not found in group0 history"""
+
+
+class NemesisStressFailure(Exception):
+    """Exception to be raised to stop Nemesis flow, if stress command failed"""
