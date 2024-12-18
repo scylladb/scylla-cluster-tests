@@ -243,6 +243,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'enable_repair_based_node_ops': None,
                 'allowed_repair_based_node_ops': None,
                 'enable_shard_aware_drivers': None,
+                'enable_small_table_optimization_for_rbno': None,
                 'enable_sstable_data_integrity_check': None,
                 'enable_sstable_key_validation': None,
                 'enable_sstables_mc_format': None,
