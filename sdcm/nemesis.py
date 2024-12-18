@@ -4265,6 +4265,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._grow_cluster(rack=None)
 
     @target_data_nodes
+    def disrupt_grow_fill(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        stress_cmds = self.cluster.params.get('stress_cmd')
+        for stress_cmd in stress_cmds:
+            self._grow_cluster()
+            write_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd, stop_test_on_failure=False)
+            self.tester.verify_stress_thread(write_thread)
+
+    @target_data_nodes
     def disrupt_grow_shrink_cluster(self):
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
         if not self.has_steady_run and sleep_time_between_ops:
@@ -5656,6 +5669,15 @@ class GrowClusterNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_grow_cluster()
+
+
+class GrowFillNemesis(Nemesis):
+    disruptive = True
+    kubernetes = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.disrupt_grow_fill()
 
 
 class GrowShrinkClusterNemesis(Nemesis):
