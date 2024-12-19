@@ -1,0 +1,22 @@
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'docker/env/Dockerfile'
+      - 'docker/env/build_n_push.sh'
+      - 'requirements.in'
+      - 'requirements.txt'
+
+jobs:
+    test:
+        runs-on: macos-13
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.QA_USER_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_USER_AWS_SECRET_ACCESS_KEY }}
+        steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+        - name: Setup Docker
+          uses: douglascamata/setup-docker-macos-action@v1-alpha
+        - name: Run Hydra
+          run: bash -x ./docker/env/hydra.sh list-images
