@@ -1,0 +1,14 @@
+on:
+  pull_request:
+    branches:
+      - master
+jobs:
+    test:
+        runs-on: macos-13
+        steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+        - name: Setup Docker
+          uses: douglascamata/setup-docker-macos-action@v1-alpha
+        - name: Run Hydra
+          run: ./docker/env/hydra.sh list-images
