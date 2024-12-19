@@ -18,7 +18,7 @@ prepare_write_cmd: [
   "cassandra-stress write no-warmup cl=ALL n=312500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=4687500001..5000000000"
   ]
 
-stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=300 fixed=30000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2500000000,1250000000,25000000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=300 fixed=50000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2500000000,1250000000,25000000)' "
 
 stress_cmd: [
   "cassandra-stress write no-warmup cl=ALL n=312500000 -schema keyspace=keyspace2 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..312500000",
