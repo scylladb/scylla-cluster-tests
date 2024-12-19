@@ -4274,8 +4274,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         stress_cmds = self.cluster.params.get('stress_cmd')
         for stress_cmd in stress_cmds:
             self._grow_cluster()
-            write_thread = self.tester.run_stress_thread(stress_cmd=stress_cmd, stop_test_on_failure=False)
+            write_thread = self.tester.run_stress_thread(
+                stress_cmd=stress_cmd, stop_test_on_failure=False, stats_aggregate_cmds=False)
             self.tester.verify_stress_thread(write_thread)
+            self.log.info("Finish cluster fill")
+            time.sleep(self.interval)
 
     @target_data_nodes
     def disrupt_grow_shrink_cluster(self):
