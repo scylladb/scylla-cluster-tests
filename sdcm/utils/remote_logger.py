@@ -72,9 +72,14 @@ class SSHLoggerBase(LoggerBase):
         super().__init__(target_log_file=target_log_file)
         self._node = node
         self._termination_event = Event()
+        self._log.info("Termination event: %s; node: %s", self._termination_event, node.name)
+        self._log.info("Start child process; node: %s", node.name)
         self._child_process = Process(target=self._journal_thread, daemon=True)
+        self._log.info("The child process is started: %s; node: %s", type(self._child_process), node.name)
+        # self._child_process = ThreadPoolExecutor(target=self._journal_thread, daemon=True)
 
     def start(self) -> None:
+        self._log.info("Remoter type: %s", type(self._remoter))
         self._termination_event.clear()
         self._child_process.start()
 
