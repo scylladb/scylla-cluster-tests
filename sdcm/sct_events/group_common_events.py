@@ -105,6 +105,10 @@ def ignore_topology_change_coordinator_errors():
                      " (raft topology: exec_global_command(barrier) failed with seastar::rpc::closed_error"
                      " (connection is closed))",
             ))
+            stack.enter_context(DbEventsFilter(
+                db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                line=r"raft_topology - drain rpc failed.*connection is closed",
+            ))
         yield
 
 

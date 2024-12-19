@@ -23,7 +23,7 @@ from sdcm.sct_events.base import SctEvent, SctEventProtocol, BaseFilter, LogEven
 class DbEventsFilter(BaseFilter):
     def __init__(self,
                  db_event: Union[LogEventProtocol, Type[LogEventProtocol]],
-                 line: Optional[str] = None,
+                 line: Optional[Union[str, re.Pattern]] = None,
                  node: Optional = None,
                  extra_time_to_expiration: Optional[int] = 0):
         super().__init__()
@@ -31,8 +31,20 @@ class DbEventsFilter(BaseFilter):
         self.filter_type = db_event.type
         self.filter_line = line
         self.filter_node = str(node.name if hasattr(node, "name") else node) if node else None
-
         self.extra_time_to_expiration = extra_time_to_expiration
+        if isinstance(line, re.Pattern):
+            self.regex = line.pattern
+            self.regex_flags = line.flags
+        elif isinstance(line, str):
+            self.regex = f".*{re.escape(line)}.*"
+            self.regex_flags = re.MULTILINE | re.DOTALL
+
+    @cached_property
+    def _regex(self):
+        try:
+            return self.regex and re.compile(self.regex, self.regex_flags)
+        except Exception as exc:
+            raise ValueError(f'Compilation of the regexp "{self.regex}" failed with error: {exc}') from None
 
     def eval_filter(self, event: LogEventProtocol) -> bool:
         if not isinstance(event, LogEventProtocol):
@@ -43,8 +55,9 @@ class DbEventsFilter(BaseFilter):
 
         result = bool(self.filter_type) and self.filter_type == event.type
 
-        if self.filter_line:
-            result &= self.filter_line in (getattr(event, "line", "") or "")
+        if self._regex:
+            event_line = (getattr(event, "line", "") or "")
+            result &= (self._regex.search(event_line) is not None)
 
         if self.filter_node:
             result &= self.filter_node in (getattr(event, "node", "") or "").split()
@@ -62,7 +75,11 @@ class DbEventsFilter(BaseFilter):
         if self.filter_type:
             output.append('type={0.filter_type}')
         if self.filter_line:
-            output.append('line={0.filter_line}')
+            if isinstance(self.filter_line, str):
+                output.append(f'line={self.filter_line}')
+            else:
+                output.append(f'regex={self.filter_line.pattern}')
+
         if self.filter_node:
             output.append('node={0.filter_node}')
         return '(' + (' '.join(output)) + ')'
