@@ -1,0 +1,51 @@
+latency_decorator_error_thresholds:
+  write:
+    _mgmt_repair_cli:
+      duration:
+        fixed_limit: 7200
+    _terminate_and_wait:
+      duration:
+        fixed_limit: 450
+    add_new_nodes:
+      duration:
+        fixed_limit: 4200
+    decommission_nodes:
+      duration:
+        fixed_limit: 5200
+    replace_node:
+      duration:
+        fixed_limit: 1800
+
+  read:
+    _mgmt_repair_cli:
+      duration:
+        fixed_limit: 2000
+    _terminate_and_wait:
+      duration:
+        fixed_limit: 450
+    add_new_nodes:
+      duration:
+        fixed_limit: 1800
+    decommission_nodes:
+      duration:
+        fixed_limit: 2500
+    replace_node:
+      duration:
+        fixed_limit: 1300
+
+  mixed:
+    _mgmt_repair_cli:
+      duration:
+        fixed_limit: 2500
+    _terminate_and_wait:
+      duration:
+        fixed_limit: 450
+    add_new_nodes:
+      duration:
+        fixed_limit: 2400
+    decommission_nodes:
+      duration:
+        fixed_limit: 2800
+    replace_node:
+      duration:
+        fixed_limit: 1500
