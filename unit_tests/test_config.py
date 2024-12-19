@@ -55,6 +55,9 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     @classmethod
     def setup_default_env(cls):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
+        os.environ['SCT_USE_MGMT'] = 'false'
+        os.environ['SCT_SCYLLA_VERSION'] = get_latest_scylla_release(product='scylla')
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
 
     @classmethod
@@ -384,6 +387,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                       '-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da978aeec22/71/scylla' \
                       '.repo'
 
+        os.environ.pop('SCT_SCYLLA_VERSION', None)
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_SCYLLA_REPO'] = centos_repo
         os.environ['SCT_NEW_SCYLLA_REPO'] = centos_repo
@@ -537,7 +541,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     @pytest.mark.integration
     def test_18_error_if_no_version_repo_ami_selected(self):
         os.environ.pop('SCT_AMI_ID_DB_SCYLLA', None)
-
+        os.environ.pop('SCT_SCYLLA_VERSION', None)
         for backend in sct_config.SCTConfiguration.available_backends:
             if 'k8s' in backend:
                 continue
@@ -964,6 +968,44 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
+
+    @staticmethod
+    def test_35_append_str_options():
+        os.environ['SCT_APPEND_SCYLLA_ARGS'] = '++ --overprovisioned 5'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        assert conf.get('append_scylla_args') == ('--blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 '
+                                                  '--abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 '
+                                                  '--enable-sstable-key-validation 1 --overprovisioned 5')
+
+    @staticmethod
+    def test_35_append_list_options():
+        os.environ[
+            'SCT_SCYLLA_D_OVERRIDES_FILES'] = '["++", "extra_file/scylla.d/io.conf"]'
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        assert conf.get('scylla_d_overrides_files') == ["extra_file/scylla.d/io.conf"]
+
+    @staticmethod
+    def test_35_append_unsupported_list_options():
+        os.environ['SCT_AZURE_REGION_NAME'] = '["++", "euwest"]'
+
+        with pytest.raises(AssertionError) as context:
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+
+        assert 'Option azure_region_name is not appendable' == str(context.value)
+
+    @staticmethod
+    def test_35_append_unsupported_str_options():
+        os.environ['SCT_MANAGER_VERSION'] = '++ new version'
+
+        with pytest.raises(AssertionError) as context:
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+
+        assert 'Option manager_version is not appendable' == str(context.value)
 
 
 if __name__ == "__main__":
