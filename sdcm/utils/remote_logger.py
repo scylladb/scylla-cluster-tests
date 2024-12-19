@@ -75,6 +75,7 @@ class SSHLoggerBase(LoggerBase):
         self._child_process = Process(target=self._journal_thread, daemon=True)
 
     def start(self) -> None:
+        self._log.info("Remoter type: %s", type(self._remoter))
         self._termination_event.clear()
         self._child_process.start()
 
