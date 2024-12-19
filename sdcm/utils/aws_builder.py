@@ -163,7 +163,7 @@ class AwsBuilder:
                     **launch_template_data
                 )
                 version_number = res.get('LaunchTemplateVersion', {}).get('VersionNumber')
-                self.region.client.modify_launch_template(LaunchTemplateName="aws-sct-builders",
+                self.region.client.modify_launch_template(LaunchTemplateName=self.launch_template_name,
                                                           DefaultVersion=str(version_number))
             except botocore.exceptions.ClientError as error:
                 LOGGER.debug(error.response)
