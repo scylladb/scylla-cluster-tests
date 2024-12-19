@@ -31,12 +31,21 @@ class DBCluster:  # pylint: disable=too-few-public-methods
 
 
 def test_01_gemini_thread(request, docker_scylla, params):
-    loader_set = LocalLoaderSetDummy()
+    loader_set = LocalLoaderSetDummy(params=params)
     test_cluster = DBCluster([docker_scylla])
     cmd = (
-        "gemini -d --duration 1m --warmup 0s -c 5 -m write --non-interactive --cql-features basic --max-mutation-retries 100 "
-        "--max-mutation-retries-backoff 100ms --replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\" "
-        "--table-options \"cdc = {'enabled': true, 'ttl': 0}\" --use-server-timestamps"
+        "gemini -d "
+        "--duration=1m "
+        "--warmup=0s "
+        "--concurrency=5 "
+        "--mode=write "
+        "--non-interactive "
+        "--cql-features=basic "
+        "--max-mutation-retries=100 "
+        "--max-mutation-retries-backoff=100ms "
+        "--replication-strategy=\"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\" "
+        "--table-options=\"cdc = {'enabled': true, 'ttl': 0}\" "
+        "--use-server-timestamps=true "
     )
     gemini_thread = GeminiStressThread(
         loaders=loader_set,
