@@ -1,0 +1,73 @@
+latency_decorator_error_thresholds:
+  write:
+    unthrottled:
+      P90 write:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      Throughput write:
+        best_pct: 5
+
+  read:
+    "150000":
+      P90 read:
+        fixed_limit: 1
+      P99 read:
+        fixed_limit: 1
+    "300000":
+      P90 read:
+        fixed_limit: 1
+      P99 read:
+        fixed_limit: 1
+    "450000":
+      P90 read:
+        fixed_limit: 1
+      P99 read:
+        fixed_limit: 5
+    unthrottled:
+      P90 read:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+      Throughput read:
+        best_pct: 5
+
+  mixed:
+    "50000":
+      P90 write:
+          fixed_limit: 1
+      P90 read:
+          fixed_limit: 1
+      P99 write:
+        fixed_limit: 3
+      P99 read:
+        fixed_limit: 3
+    "150000":
+      P90 write:
+        fixed_limit: 1
+      P90 read:
+        fixed_limit: 2
+      P99 write:
+        fixed_limit: 3
+      P99 read:
+        fixed_limit: 3
+    "300000":
+      P90 write:
+        fixed_limit: 3
+      P90 read:
+        fixed_limit: 3
+      P99 write:
+        fixed_limit: 5
+      P99 read:
+        fixed_limit: 5
+    unthrottled:
+      P90 write:
+        fixed_limit: null
+      P90 read:
+        fixed_limit: null
+      P99 write:
+        fixed_limit: null
+      P99 read:
+        fixed_limit: null
+      Throughput write:
+        best_pct: 5
