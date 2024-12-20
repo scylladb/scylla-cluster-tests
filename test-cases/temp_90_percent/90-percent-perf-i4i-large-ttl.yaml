@@ -19,7 +19,7 @@ instance_type_loader: 'c6i.2xlarge'
 instance_type_monitor: 't3.large'
 instance_type_db: 'i4i.large'
 
-nemesis_class_name: 'GrowClusterNemesis'
+nemesis_class_name: 'TTLPerfMonkey'
 nemesis_interval: 60
 nemesis_sequence_sleep_between_ops: 60
 
