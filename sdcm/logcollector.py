@@ -597,7 +597,7 @@ class LogCollector:
     def collect_log_remotely(node, cmd: str, log_filename: str) -> Optional[str]:
         if not node.remoter:
             return None
-        collect_log_command = f"{cmd} >& '{log_filename}'"
+        collect_log_command = f"{cmd} > '{log_filename}' 2>&1"
         node.remoter.run(collect_log_command, ignore_status=True, verbose=True)
         result = node.remoter.run(f"test -f '{log_filename}'", ignore_status=True)
         return log_filename if result.ok else None
