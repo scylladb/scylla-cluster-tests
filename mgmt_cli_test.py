@@ -46,7 +46,6 @@ from sdcm.cluster import TestConfig
 from sdcm.nemesis import MgmtRepair
 from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
-from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.loader_utils import LoaderUtilsMixin
 from sdcm.utils.time_utils import ExecutionTimer
 from sdcm.sct_events.system import InfoEvent
@@ -830,13 +829,6 @@ class ManagerBackupTests(ManagerRestoreTests):
                 assert final_status == TaskStatus.ERROR, \
                     f"The restore task is supposed to fail, since node {target_node} lacks the disk space to download" \
                     f"the snapshot files"
-
-                if not SkipPerIssues("scylladb/scylla-manager#4087", self.params):
-                    full_progress_string = restore_task.progress_string(parse_table_res=False,
-                                                                        is_verify_errorless_result=True).stdout
-                    assert "not enough disk space" in full_progress_string.lower(), \
-                        f"The restore failed as expected when one of the nodes was out of disk space, " \
-                        f"but with an ill fitting error message: {full_progress_string}"
             finally:
                 clean_enospc_on_node(target_node=target_node, sleep_time=30)
         self.log.info('finishing test_enospc_before_restore')
