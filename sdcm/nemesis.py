@@ -2094,6 +2094,35 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # NOTE: 'self' is used by the 'scylla_versions' decorator
         return ''
 
+    def disrupt_ttl(self):
+        keyspace_ttl = 'ks_ttl'
+        table = 'standard1'
+
+        self._prepare_test_table(ks=keyspace_ttl)
+
+        # alter the table
+        ttl = 300
+        grace = 300
+        with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_ttl) as session:
+            session.execute(f"ALTER TABLE {table} WITH default_time_to_live = {ttl} and gc_grace_seconds = {grace};")
+
+        # write data with ttl
+        stress_cmd = self.cluster.params.get('stress_cmd')
+        write_thread = self.tester.run_stress_thread(
+            stress_cmd=stress_cmd, stop_test_on_failure=False, stats_aggregate_cmds=False)
+        self.tester.verify_stress_thread(write_thread)
+
+        # wait for data to expire
+        time.sleep(3600)
+
+    def disrupt_ttl_perf(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        latency_calculator_decorator(legend="Expire Table")(self.disrupt_tll)()
+
     def disrupt_drop(self):
         keyspace_drop = 'ks_drop'
         table = 'standard1'
@@ -5933,6 +5962,26 @@ class NodeToolCleanupMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_nodetool_cleanup()
+
+
+class TTLMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    limited = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_ttl()
+
+
+class TTLPerfMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    limited = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_ttl_perf()
 
 
 class DropMonkey(Nemesis):
