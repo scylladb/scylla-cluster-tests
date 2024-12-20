@@ -13,9 +13,9 @@ seeds_num: 3
 
 instance_type_db: 'i4i.4xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
+nemesis_class_name: 'ClusterRollingRestart'
 nemesis_seed: '032'
-nemesis_interval: 5
+nemesis_interval: 1
 nemesis_filter_seeds: false
 
 user_prefix: 'longevity-100gb-4h'
@@ -29,3 +29,5 @@ sstable_size: 100
 
 hinted_handoff: 'enabled'
 parallel_node_operations: true
+
+run_fullscan: ['{"mode": "table_and_aggregate", "ks_cf": "keyspace1.standard1", "interval": 60}']
