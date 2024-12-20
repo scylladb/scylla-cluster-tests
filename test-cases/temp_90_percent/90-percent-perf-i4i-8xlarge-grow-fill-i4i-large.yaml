@@ -1,4 +1,4 @@
-test_duration: 1080
+test_duration: 1440
 prepare_write_cmd: [
   "cassandra-stress write no-warmup cl=ALL n=312500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..312500000",
   "cassandra-stress write no-warmup cl=ALL n=312500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=312500001..625000000",
@@ -18,12 +18,12 @@ prepare_write_cmd: [
   "cassandra-stress write no-warmup cl=ALL n=312500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=4687500001..5000000000"
   ]
 
-stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=300 fixed=50000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2500000000,1250000000,25000000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=800m -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate 'threads=150 fixed=50000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..2500000000,1250000000,25000000)' "
 
 stress_cmd: [
-  "cassandra-stress write no-warmup cl=ALL n=312500000 -schema keyspace=keyspace2 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..312500000",
-  "cassandra-stress write no-warmup cl=ALL n=312500000 -schema keyspace=keyspace2 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=312500001..625000000",
-  "cassandra-stress write no-warmup cl=ALL n=312500000 -schema keyspace=keyspace2 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=625000001..937500000",
+  "cassandra-stress write no-warmup cl=ALL n=312500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=5000000001..5312500000",
+  "cassandra-stress write no-warmup cl=ALL n=312500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=5312500001..5625000000",
+  "cassandra-stress write no-warmup cl=ALL n=312500000 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=5625000001..5937500000",
 ]
 
 n_db_nodes: 3
@@ -37,8 +37,8 @@ instance_type_monitor: 't3.large'
 instance_type_db: 'i4i.8xlarge'
 
 nemesis_class_name: 'GrowFillNemesis'
-nemesis_interval: 30
-nemesis_sequence_sleep_between_ops: 10
+nemesis_interval: 60
+nemesis_sequence_sleep_between_ops: 60
 
 user_prefix: 'elasticity-test'
 space_node_threshold: 644245094
