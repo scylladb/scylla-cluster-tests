@@ -2086,6 +2086,53 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # NOTE: 'self' is used by the 'scylla_versions' decorator
         return ''
 
+    def disrupt_ttl(self):
+        keyspace_ttl = 'ks_ttl'
+        table = 'standard1'
+
+        self._prepare_test_table(ks=keyspace_ttl)
+
+        # alter the table
+        ttl = 3600
+        grace = 3600
+        with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_ttl) as session:
+            session.execute(f"ALTER TABLE {table} WITH default_time_to_live = {ttl} and gc_grace_seconds = {grace};")
+
+        # write data with ttl
+        stress_cmd = self.cluster.params.get('stress_cmd')
+        write_thread = self.tester.run_stress_thread(
+            stress_cmd=stress_cmd, stop_test_on_failure=False, stats_aggregate_cmds=False)
+        self.tester.verify_stress_thread(write_thread)
+
+        # wait for data to expire
+        time.sleep(3600 * 3)
+
+    def disrupt_ttl_perf(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        latency_calculator_decorator(legend="Expire Table")(self.disrupt_tll)()
+
+    def disrupt_drop(self):
+        keyspace_drop = 'ks_drop'
+        table = 'standard1'
+
+        self._prepare_test_table(ks=keyspace_drop)
+
+        # do the actual drop
+        with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_drop) as session:
+            session.execute(f"DROP TABLE {table};")
+
+    def disrupt_drop_perf(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        latency_calculator_decorator(legend="Drop Table")(self.disrupt_drop)()
+
     def disrupt_truncate(self):
         keyspace_truncate = 'ks_truncate'
         table = 'standard1'
@@ -2101,6 +2148,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.run_cqlsh(
             cmd=f'TRUNCATE {keyspace_truncate}.{table}{truncate_cmd_timeout_suffix}',
             timeout=truncate_timeout)
+
+    def disrupt_truncate_perf(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        latency_calculator_decorator(legend="Truncate Table")(self.disrupt_truncate)()
 
     def disrupt_truncate_large_partition(self):
         """
@@ -4251,6 +4306,30 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info(f"Double load results: {results}")
 
     @target_data_nodes
+    def disrupt_grow_cluster(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+        self._grow_cluster(rack=None)
+
+    @target_data_nodes
+    def disrupt_grow_fill(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        stress_cmds = self.cluster.params.get('stress_cmd')
+        for stress_cmd in stress_cmds:
+            self._grow_cluster()
+            write_thread = self.tester.run_stress_thread(
+                stress_cmd=stress_cmd, stop_test_on_failure=False, stats_aggregate_cmds=False)
+            self.tester.verify_stress_thread(write_thread)
+            self.log.info("Finish cluster fill")
+            time.sleep(self.interval)
+
+    @target_data_nodes
     def disrupt_grow_shrink_cluster(self):
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
         if not self.has_steady_run and sleep_time_between_ops:
@@ -4263,6 +4342,73 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if duration := self.tester.params.get('nemesis_double_load_during_grow_shrink_duration'):
             self._double_cluster_load(duration)
         self._shrink_cluster(rack=None, new_nodes=new_nodes)
+
+    @target_data_nodes
+    def disrupt_grow_shrink_datacenter(self):
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Operator doesn't support multi-DC yet. Skipping.")
+        if self.cluster.test_config.MULTI_REGION:
+            raise UnsupportedNemesis(
+                "grow_shring_datacenter skipped for multi-dc scenario (https://github.com/scylladb/scylla-cluster-tests/issues/5369)")
+        InfoEvent(message='Starting Grow Shrink DC Nemesis').publish()
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        sleep_time_between_ops = sleep_time_between_ops if sleep_time_between_ops else 10
+        sleep_time_between_ops = sleep_time_between_ops * 60
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        # Switch to NetworkTopologyReplicationStrategy using the existing DC
+        node = self.cluster.data_nodes[0]
+        system_keyspaces = ["system_distributed", "system_traces"]
+        if not node.raft.is_consistent_topology_changes_enabled:  # auth-v2 is used when consistent topology is enabled
+            system_keyspaces.insert(0, "system_auth")
+        self._switch_to_network_replication_strategy(self.cluster.get_test_keyspaces() + system_keyspaces)
+
+        # create a new dc
+        InfoEvent(message='New DC').publish()
+        nodes_on_new_dc = []
+        initial_dc_nodes = self.cluster.params.get('n_db_nodes')
+        for _ in range(initial_dc_nodes):
+            nodes_on_new_dc += [self._add_new_node_in_new_dc()]
+        time.sleep(sleep_time_between_ops)
+
+        # reconfigure keyspaces
+        datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
+        new_dc_list = [dc for dc in datacenters if dc.endswith("_nemesis_dc")]
+        assert new_dc_list, "new datacenter was not registered"
+        new_dc_name = new_dc_list[0]
+
+        for keyspace in system_keyspaces + self.cluster.get_test_keyspaces():
+            strategy = ReplicationStrategy.get(node, keyspace)
+            assert isinstance(
+                strategy, NetworkTopologyReplicationStrategy), "Should have been already switched to NetworkStrategy"
+            for rf in range(1, initial_dc_nodes+1):
+                strategy.replication_factors_per_dc.update({new_dc_name: rf})
+                strategy.apply(node, keyspace)
+
+        InfoEvent(message='execute rebuild on new datacenter').publish()
+        for new_node in nodes_on_new_dc:
+            with wait_for_log_lines(node=new_node, start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
+                                    end_line_patterns=["rebuild.*finished with keyspaces=", "Rebuild succeeded"],
+                                    start_timeout=60, end_timeout=600):
+                new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", long_running=True, retry=0)
+        InfoEvent(message='Running full cluster repair on each data node').publish()
+        for cluster_node in self.cluster.data_nodes:
+            cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
+
+        # add nodes to each dc
+        InfoEvent(message='Grow both DCs').publish()
+        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
+        self._grow_cluster()
+        for _ in range(add_nodes_number):
+            nodes_on_new_dc += [self._add_new_node_in_new_dc()]
+        time.sleep(sleep_time_between_ops)
+
+        # remove the new dc
+        InfoEvent(message='Remove DC').publish()
+        for node in nodes_on_new_dc:
+            self.cluster.decommission(node)
 
     # NOTE: version limitation is caused by the following:
     #       - https://github.com/scylladb/scylla-enterprise/issues/3211
@@ -4708,6 +4854,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert actual_cdc_settings == cdc_settings, \
                 f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}"
 
+    @latency_calculator_decorator(legend="Adding new nodes in new DC")
     def _add_new_node_in_new_dc(self, is_zero_node=False) -> BaseNode:
         if is_zero_node:
             new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
@@ -5578,6 +5725,24 @@ class AddRemoveDcNemesis(Nemesis):
         self.disrupt_add_remove_dc()
 
 
+class GrowClusterNemesis(Nemesis):
+    disruptive = True
+    kubernetes = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.disrupt_grow_cluster()
+
+
+class GrowFillNemesis(Nemesis):
+    disruptive = True
+    kubernetes = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.disrupt_grow_fill()
+
+
 class GrowShrinkClusterNemesis(Nemesis):
     disruptive = True
     kubernetes = True
@@ -5585,6 +5750,15 @@ class GrowShrinkClusterNemesis(Nemesis):
 
     def disrupt(self):
         self.disrupt_grow_shrink_cluster()
+
+
+class GrowShrinkDatacenterNemesis(Nemesis):
+    disruptive = True
+    kubernetes = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.disrupt_grow_shrink_datacenter()
 
 
 class AddRemoveRackNemesis(Nemesis):
@@ -5807,6 +5981,46 @@ class NodeToolCleanupMonkey(Nemesis):
         self.disrupt_nodetool_cleanup()
 
 
+class TTLMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    limited = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_ttl()
+
+
+class TTLPerfMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    limited = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_ttl_perf()
+
+
+class DropMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    limited = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_drop()
+
+
+class DropPerfMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    limited = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_drop_perf()
+
+
 class TruncateMonkey(Nemesis):
     disruptive = False
     kubernetes = True
@@ -5815,6 +6029,16 @@ class TruncateMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_truncate()
+
+
+class TruncatePerfMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    limited = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_truncate_perf()
 
 
 class TruncateLargeParititionMonkey(Nemesis):
