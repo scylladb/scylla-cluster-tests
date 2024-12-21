@@ -2121,7 +2121,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.steady_state_latency()
             self.has_steady_run = True
 
-        latency_calculator_decorator(legend="Expire Table")(self.disrupt_tll)()
+        latency_calculator_decorator(legend="Expire Table")(self.disrupt_ttl)()
 
     def disrupt_drop(self):
         keyspace_drop = 'ks_drop'
