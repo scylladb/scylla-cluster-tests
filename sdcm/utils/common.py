@@ -1132,14 +1132,14 @@ def filter_k8s_clusters_by_tags(tags_dict: dict, clusters: list[
 @lru_cache
 def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', version: str = None) -> list[EC2Image]:
     """Get the list of all the formal scylla ami from specific region."""
-    name_filter = "ScyllaDB *"
+    scylla_version_filter = "*"
 
     if version and version != "all":
-        name_filter = f"ScyllaDB *{version.replace('enterprise-', 'Enterprise ')}"
+        scylla_version_filter = f"*{version.replace('enterprise-', '')}-*"
 
         if len(version.split('.')) < 3:
             # if version is not exact version, we need to add the wildcard to the end, to catch all minor versions
-            name_filter = f"{name_filter}*"
+            scylla_version_filter = f"*{version.replace('enterprise-', '')}*"
 
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
     images = []
@@ -1148,8 +1148,9 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
         images += client.images.filter(
             Owners=[owner],
             Filters=[
-                {'Name': 'name', 'Values': [name_filter]},
+                {"Name": "tag:scylla_version", "Values": [scylla_version_filter, ], },
                 {'Name': 'architecture', 'Values': [arch]},
+                {'Name': 'tag:environment', 'Values': ['production']},
             ],
         )
     images = sorted(images, key=lambda x: x.creation_date, reverse=True)
@@ -1166,10 +1167,9 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, ver
     #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
     # or you can see brief explanation here:
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-    filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
-
+    filters = "(family eq 'scylla(-enterprise)?')( labels.environment eq 'production' )"
     if version and version != "all":
-        filters += f"(name eq 'scylla(db)?(-enterprise)?-{version.replace('.', '-')}"
+        filters += f"(labels.scylla_version eq '{version.replace('.', '-')}.*"
         if 'rc' not in version and len(version.split('.')) < 3:
             filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
         else:
