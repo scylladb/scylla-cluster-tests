@@ -122,7 +122,7 @@ def str_or_list_or_eval(value: Union[str, List[str]]) -> List[str]:
     raise ValueError(f"{value} isn't a string or a list")
 
 
-def int_or_list(value):
+def int_or_space_separated_ints(value):
     try:
         value = int(value)
         return value
@@ -134,10 +134,6 @@ def int_or_list(value):
             values = value.split()
             [int(v) for v in values]  # pylint: disable=expression-not-assigned
             return value
-        except Exception:  # pylint: disable=broad-except  # noqa: BLE001
-            pass
-        try:
-            return ast.literal_eval(value)
         except Exception:  # pylint: disable=broad-except  # noqa: BLE001
             pass
 
@@ -228,18 +224,18 @@ class SCTConfiguration(dict):
                   Time in minutes, Time of execution for stress commands from stress_cmd parameters
                   and is used in test duration calculation
              """),
-        dict(name="n_db_nodes", env="SCT_N_DB_NODES", type=int_or_list,
+        dict(name="n_db_nodes", env="SCT_N_DB_NODES", type=int_or_space_separated_ints,
              help="""Number list of database data nodes in multiple data centers. To use with
              multi data centers and zero nodes, dc with zero-nodes only should be set as 0,
              ex. "3 3 0"."""),
 
-        dict(name="n_test_oracle_db_nodes", env="SCT_N_TEST_ORACLE_DB_NODES", type=int_or_list,
+        dict(name="n_test_oracle_db_nodes", env="SCT_N_TEST_ORACLE_DB_NODES", type=int_or_space_separated_ints,
              help="Number list of oracle test nodes in multiple data centers."),
 
-        dict(name="n_loaders", env="SCT_N_LOADERS", type=int_or_list,
+        dict(name="n_loaders", env="SCT_N_LOADERS", type=int_or_space_separated_ints,
              help="Number list of loader nodes in multiple data centers"),
 
-        dict(name="n_monitor_nodes", env="SCT_N_MONITORS_NODES", type=int_or_list,
+        dict(name="n_monitor_nodes", env="SCT_N_MONITORS_NODES", type=int_or_space_separated_ints,
              help="Number list of monitor nodes in multiple data centers"),
 
         dict(name="intra_node_comm_public", env="SCT_INTRA_NODE_COMM_PUBLIC", type=boolean,
@@ -943,7 +939,7 @@ class SCTConfiguration(dict):
         dict(name="k8s_scylla_cluster_name", env="SCT_K8S_SCYLLA_CLUSTER_NAME", type=str,
              help=""),
         dict(name="k8s_n_scylla_pods_per_cluster", env="K8S_N_SCYLLA_PODS_PER_CLUSTER",
-             type=int_or_list,
+             type=int_or_space_separated_ints,
              help="Number of loader pods per loader cluster."),
 
         dict(name="k8s_scylla_disk_gi", env="SCT_K8S_SCYLLA_DISK_GI", type=int,
@@ -955,7 +951,7 @@ class SCTConfiguration(dict):
         dict(name="k8s_loader_cluster_name", env="SCT_K8S_LOADER_CLUSTER_NAME", type=str,
              help=""),
         dict(name="k8s_n_loader_pods_per_cluster", env="SCT_K8S_N_LOADER_PODS_PER_CLUSTER",
-             type=int_or_list,
+             type=int_or_space_separated_ints,
              help="Number of loader pods per loader cluster."),
         dict(name="k8s_loader_run_type", env="SCT_K8S_LOADER_RUN_TYPE",
              type=str, choices=("static", "dynamic"),
@@ -1677,7 +1673,7 @@ class SCTConfiguration(dict):
         dict(name="use_zero_nodes", env="SCT_USE_ZERO_NODES", type=bool,
              help="If True, enable support in sct of zero nodes(configuration, nemesis)"),
 
-        dict(name="n_db_zero_token_nodes", env="SCT_N_DB_ZERO_TOKEN_NODES", type=int_or_list,
+        dict(name="n_db_zero_token_nodes", env="SCT_N_DB_ZERO_TOKEN_NODES", type=int_or_space_separated_ints,
              help="""Number of zero token nodes in cluster. Value should be set as "0 1 1"
                for multidc configuration in same manner as 'n_db_nodes' and should be equal
                number of regions"""),
