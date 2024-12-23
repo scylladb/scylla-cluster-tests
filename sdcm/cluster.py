@@ -2911,7 +2911,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         return cqlsh_out if not split else list(map(str.strip, cqlsh_out.stdout.splitlines()))
 
     def run_startup_script(self):
-        startup_script_remote_path = '/tmp/sct-startup.sh'
+        remote_home_dir = self.remoter.run("echo $HOME").stdout.strip()
+        startup_script_remote_path = f"{remote_home_dir}/startup_script.sh"
 
         with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tmp_file:
             tmp_file.write(self.test_config.get_startup_script())
