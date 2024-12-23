@@ -2101,7 +2101,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._prepare_test_table(ks=keyspace_ttl)
 
         # alter the table
-        ttl = 3600
+        ttl = 3600 * 4
         grace = 3600
         with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_ttl) as session:
             session.execute(f"ALTER TABLE {table} WITH default_time_to_live = {ttl} and gc_grace_seconds = {grace};")
@@ -2113,7 +2113,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.tester.verify_stress_thread(write_thread)
 
         # wait for data to expire
-        time.sleep(3600 * 3)
+        time.sleep(3600 * 6)
 
     def disrupt_ttl_perf(self):
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
