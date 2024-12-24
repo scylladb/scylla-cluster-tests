@@ -58,6 +58,7 @@ from sdcm.utils.version_utils import (
     get_specific_tag_of_docker_image,
     find_scylla_repo,
     is_enterprise,
+    ComparableScyllaVersion,
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 from sdcm.utils.gce_utils import (
@@ -1321,6 +1322,11 @@ class SCTConfiguration(dict):
         dict(name="enable_tablets_on_upgrade", env="SCT_ENABLE_TABLETS_ON_UPGRADE", type=boolean,
              help="By default, the tablets feature is disabled. With this parameter, created for the upgrade test,"
                   "the tablets feature will only be enabled after the upgrade"),
+
+        dict(name="enable_views_with_tablets_on_upgrade", env="SCT_ENABLE_VIEWS_WITH_TABLETS_ON_UPGRADE", type=boolean,
+             help="Enables creating materialized views in keyspaces using tablets by adding an experimental feature."
+                  "It should not be used when upgrading to versions before 2025.1 and it should be used for upgrades"
+             "where we create such views."),
 
         dict(name="upgrade_node_packages", env="SCT_UPGRADE_NODE_PACKAGES", type=str,
              help=""),
@@ -2773,6 +2779,11 @@ class SCTConfiguration(dict):
         except Exception as exc:  # pylint: disable=broad-except
             self.log.exception("Failed to save target Scylla version in Argus", exc_info=exc)
 
+    def update_config_based_on_version(self):
+        if self.is_enterprise and ComparableScyllaVersion(self.scylla_version) >= "2025.1.0~dev":
+            if 'views-with-tablets' not in self.get('experimental_features', []):
+                self['experimental_features'].append('views-with-tablets')
+
     def dict(self):
         out = deepcopy(self)
 
@@ -2893,5 +2904,6 @@ def init_and_verify_sct_config() -> SCTConfiguration:
     sct_config.verify_configuration()
     sct_config.verify_configuration_urls_validity()
     sct_config.get_version_based_on_conf()
+    sct_config.update_config_based_on_version()
     sct_config.check_required_files()
     return sct_config
