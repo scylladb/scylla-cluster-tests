@@ -142,6 +142,7 @@ test_upgrade_from_installed_3_1_0: false
 target_upgrade_version: ''
 disable_raft: true
 enable_tablets_on_upgrade: false
+enable_views_with_tablets_on_upgrade: false
 upgrade_node_system: true
 
 stress_cdclog_reader_cmd: "cdc-stressor -stream-query-round-duration 30s"

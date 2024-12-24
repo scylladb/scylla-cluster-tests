@@ -2642,6 +2642,13 @@ By default, the tablets feature is disabled. With this parameter, created for th
 
 **type:** boolean
 
+## **enable_views_with_tablets_on_upgrade** / SCT_ENABLE_VIEWS_WITH_TABLETS_ON_UPGRADE
+
+Enables creating materialized views in keyspaces using tablets by adding an experimental feature. It should not be used when upgrading to versions before 2025.1 and it should be used for upgrades where we create such views. In particular, in 6.2 tablets are enabled by default, so for the 6.2 -> 2025.1 upgrade, it should also be enabled when using defaults.
+
+**default:** False
+
+**type:** boolean
 
 ## **upgrade_node_packages** / SCT_UPGRADE_NODE_PACKAGES
 
