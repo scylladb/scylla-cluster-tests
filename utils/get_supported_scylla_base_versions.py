@@ -4,6 +4,9 @@ import sys
 import re
 import os
 
+from aenum import NamedTuple
+
+from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.version_utils import is_enterprise, get_all_versions
 from sdcm.utils.version_utils import ComparableScyllaVersion, get_s3_scylla_repos_mapping
 
@@ -99,7 +102,10 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
             if version in supported_versions:
                 # The dest version is a released enterprise version
                 idx = ent_release_list.index(version)
-                oss_base_version.append(supported_src_oss.get(version))
+
+                params = NamedTuple("params", ["scylla_version"])  # at this point there is no test object
+                if not (version == '2024.2' and SkipPerIssues("https://github.com/scylladb/scylla-enterprise/issues/4740", params=params(scylla_version=version))):
+                    oss_base_version.append(supported_src_oss.get(version))
                 ent_base_version.append(version)
                 if idx != 0:
                     lts_version = re.compile(r'\d{4}\.1')  # lts = long term support
