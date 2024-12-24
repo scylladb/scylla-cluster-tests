@@ -221,7 +221,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
         if self.params.get("enable_tablets_on_upgrade"):
             scylla_yaml_updates.update({"enable_tablets": True})
-
+        if self.params.get("enable_views_with_tablets_on_upgrade"):
+            scylla_yaml_updates.update({"experimental_features": ["views-with-tablets"]})
         if self.params.get('test_sst3'):
             scylla_yaml_updates.update({"enable_sstables_mc_format": True})
 
