@@ -5591,6 +5591,15 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                     dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
                     dnf install -y docker-ce docker-ce-cli containerd.io
                 """)
+            elif node.distro.is_rhel9:
+                # TODO: Temporary workaround for RHEL9 installation issue https://github.com/moby/moby/issues/49169
+                # Install packages manually hardcoding the OS version ($releasever) in /etc/yum.repos.d/docker-ce.repo
+                # After issue resolution, we can return the previous approach with installation script
+                install_docker_cmd = dedent("""
+                    dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+                    sed -i \"s/\\$releasever/9/g\" /etc/yum.repos.d/docker-ce.repo
+                    dnf install -y docker-ce docker-ce-cli containerd.io
+                """)
             else:
                 install_docker_cmd = dedent("""
                     curl -fsSL get.docker.com --retry 5 --retry-max-time 300 -o get-docker.sh
