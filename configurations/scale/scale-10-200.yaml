@@ -1,6 +1,6 @@
 test_duration: 6000
 n_db_nodes: 10
-cluster_target_size: 100
+cluster_target_size: 200
 
 user_prefix: 'cluster-scale-10-100-test'
 nemesis_class_name: 'NoOpMonkey'
