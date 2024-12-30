@@ -16,7 +16,7 @@ from datetime import timezone, datetime
 
 from argus.client import ArgusClient
 from argus.client.base import ArgusClientError
-from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status
+from argus.client.generic_result import GenericResultTable, ColumnMetadata, ResultType, Status, ValidationRule
 
 from sdcm.sct_events.event_counter import STALL_INTERVALS
 from sdcm.sct_events.system import FailedResultEvent
