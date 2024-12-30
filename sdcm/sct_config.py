@@ -1738,6 +1738,10 @@ class SCTConfiguration(dict):
              help="Error thresholds for latency decorator."
                   " Defined by dict: {<write, read, mixed>: {<default|nemesis_name>:{<metric_name>: {<rule>: <value>}}}"),
 
+        dict(name="workload_name", env="SCT_WORKLOAD_NAME", type=str,
+             help="Workload name, can be: write|read|mixed|unset."
+                  "Used for e.g. latency_calculator_decorator (use with 'use_hdr_cs_histogram' set to true)."
+                  "If unset, workload is taken from test name."),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
