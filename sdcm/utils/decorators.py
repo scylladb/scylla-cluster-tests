@@ -162,6 +162,9 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
 
+    For proper usage, it requires workload name (write, read, mixed) to be included in the test name
+    or setting 'workload_name' test parameter. Also requires monitoring set and 'use_hdr_cs_histogram' test parameter to be set to True.
+
     :param func: Remote method to run.
     :return: Wrapped method.
     """
@@ -212,6 +215,8 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
                 workload = 'write'
             elif 'mixed' in test_name:
                 workload = 'mixed'
+            elif tester.params.get('workload_name'):
+                workload = tester.params['workload_name']
             else:
                 return res
 
