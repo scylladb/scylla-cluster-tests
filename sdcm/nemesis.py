@@ -3063,8 +3063,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             with ignore_ycsb_connection_refused():
                 self.cluster.restart_scylla()  # After schema restoration, you should restart the nodes
-            self.tester.set_ks_strategy_to_network_and_rf_according_to_cluster(
-                keyspace=chosen_snapshot_info["keyspace_name"], repair_after_alter=False)
+
+            # TODO: Bring it back after the implementation of https://github.com/scylladb/scylla-manager/issues/4049
+            # which will unblock schema restore into a different DC. For now, we can restore schema only within one DC.
+            # According to https://github.com/scylladb/scylla-manager/issues/4041#issuecomment-2565489699, the step
+            # below is not needed if restoring the schema within one DC.
+            #
+            # self.tester.set_ks_strategy_to_network_and_rf_according_to_cluster(
+            #    keyspace=chosen_snapshot_info["keyspace_name"], repair_after_alter=False)
 
         restore_task = mgr_cluster.create_restore_task(restore_data=True,
                                                        location_list=location_list,
