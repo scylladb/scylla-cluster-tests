@@ -2018,7 +2018,7 @@ class SCTConfiguration(dict):
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
                 ami_list = []
                 for region in region_names:
-                    aws_arch = get_arch_from_instance_type(self.get('instance_type_db'), region_name=region)
+                    aws_arch = get_arch_from_instance_type(self.get('instance_type_db_oracle'), region_name=region)
                     try:
                         if ':' in oracle_scylla_version:
                             ami = get_branched_ami(
