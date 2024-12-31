@@ -3854,6 +3854,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
                 return True
         return False
 
+<<<<<<< HEAD
     @property
     def is_rack_aware_policy(self) -> bool:
         all_events = get_events_grouped_by_category()
@@ -3865,6 +3866,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):
     def get_hdrhistogram(self, hdr_tags: list[str], stress_operation: str,
                          start_time: float, end_time: float) -> dict[str, Any]:
         if not self.params["use_hdrhistogram"]:
+||||||| parent of 537d042f5 (improvement(events): add rack aware policy event)
+    def get_cs_range_histogram(self, stress_operation: str,
+                               start_time: float, end_time: float,
+                               tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> dict[str, Any]:
+        if not self.params["use_hdr_cs_histogram"]:
+=======
+    @property
+    def is_rack_aware_policy(self) -> bool:
+        all_events = get_events_grouped_by_category()
+        for event_str in all_events["NORMAL"]:
+            if "type=RackAwarePolicy" in event_str:
+                return True
+        return False
+
+    def get_cs_range_histogram(self, stress_operation: str,
+                               start_time: float, end_time: float,
+                               tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> dict[str, Any]:
+        if not self.params["use_hdr_cs_histogram"]:
+>>>>>>> 537d042f5 (improvement(events): add rack aware policy event)
             return {}
         self.log.info("Build HDR histogram (tags: %s) with start time: %s, end time: %s; for operation: %s",
                       hdr_tags, start_time, end_time, stress_operation)
