@@ -3157,6 +3157,12 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.log.info('Waiting for native_transport to be ready')
         self.wait_native_transport()
 
+    def disable_firewall(self) -> None:
+        self.remoter.sudo('systemctl stop iptables', ignore_status=True)
+        self.remoter.sudo('systemctl disable iptables', ignore_status=True)
+        self.remoter.sudo('systemctl stop firewalld', ignore_status=True)
+        self.remoter.sudo('systemctl disable firewalld', ignore_status=True)
+
 
 class FlakyRetryPolicy(RetryPolicy):
 
@@ -4645,11 +4651,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches,too-many-statements,too-many-locals  # noqa: PLR0912, PLR0914
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
+
         if node.distro.is_rhel_like:
-            node.remoter.sudo('systemctl stop iptables', ignore_status=True)
-            node.remoter.sudo('systemctl disable iptables', ignore_status=True)
-            node.remoter.sudo('systemctl stop firewalld', ignore_status=True)
-            node.remoter.sudo('systemctl disable firewalld', ignore_status=True)
+            node.disable_firewall()
 
         if self.params.get('logs_transport') == 'ssh':
             node.install_package('python3')
@@ -5486,6 +5490,10 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
     def node_setup(self, node, **kwargs):  # pylint: disable=unused-argument
         self.log.info('TestConfig in BaseMonitorSet')
         node.wait_ssh_up()
+
+        if node.distro.is_rhel_like:
+            node.disable_firewall()
+
         node.disable_daily_triggered_services()
         # update repo cache and system after system is up
         node.update_repo_cache()
