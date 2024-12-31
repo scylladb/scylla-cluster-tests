@@ -209,6 +209,9 @@
             {% if shard_awareness_driver %}
                 <li> Cassandra-stress uses shared-aware driver</li>
             {% endif %}
+            {% if rack_aware_policy %}
+                <li> Cassandra-stress uses RackAwareRoundRobinPolicy with provided rack name</li>
+            {% endif %}
         </ul>
     </div>
 

@@ -402,6 +402,7 @@ class TestCassandraStressLogEvent(unittest.TestCase):
 
     def test_known_cs_normal(self):
         self.assertTrue(issubclass(CassandraStressLogEvent.ShardAwareDriver, CassandraStressLogEvent))
+        self.assertTrue(issubclass(CassandraStressLogEvent.RackAwarePolicy, CassandraStressLogEvent))
 
     def test_cs_all_events_list(self):
         self.assertSetEqual(set(dir(CassandraStressLogEvent)) - set(dir(LogEvent)),
@@ -440,6 +441,12 @@ class TestCassandraStressLogEvent(unittest.TestCase):
     def test_cs_normal_shared_awarnes_event(self):
         self.get_event(line='com.datastax.driver.core.Cluster - ===== Using optimized driver!!! =====',
                        expected_type='ShardAwareDriver',
+                       expected_severity=Severity.NORMAL)
+
+    def test_cs_normal_rack_awarnes_event(self):
+        self.get_event(line="Using provided rack name '1a' for RackAwareRoundRobinPolicy (if this is incorrect, please provide the correct "
+                            "rack name with RackAwareRoundRobinPolicy constructor",
+                       expected_type='RackAwarePolicy',
                        expected_severity=Severity.NORMAL)
 
 
