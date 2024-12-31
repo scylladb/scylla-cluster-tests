@@ -3763,6 +3763,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "test_status": test_status,
                 "username": get_username(),
                 "shard_awareness_driver": self.is_shard_awareness_driver,
+                "rack_aware_policy": self.is_rack_aware_policy,
                 "restore_monitor_job_base_link": restore_monitor_job_base_link,
                 "relocatable_pkg": get_relocatable_pkg_url(scylla_version)}
 
@@ -3800,6 +3801,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         all_events = get_events_grouped_by_category()
         for event_str in all_events["NORMAL"]:
             if "type=ShardAwareDriver" in event_str:
+                return True
+        return False
+
+    @property
+    def is_rack_aware_policy(self) -> bool:
+        all_events = get_events_grouped_by_category()
+        for event_str in all_events["NORMAL"]:
+            if "type=RackAwarePolicy" in event_str:
                 return True
         return False
 

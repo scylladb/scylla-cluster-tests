@@ -152,6 +152,7 @@ class BaseEmailReporter:
         "test_status",
         "username",
         "shard_awareness_driver",
+        "rack_aware_policy",
         "restore_monitor_job_base_link",
     )
     _fields = ()
