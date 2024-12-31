@@ -86,6 +86,7 @@ CassandraStressLogEvent.OperationOnKey: CRITICAL
 # TODO: mechanism.
 CassandraStressLogEvent.TooManyHintsInFlight: ERROR
 CassandraStressLogEvent.ShardAwareDriver: NORMAL
+CassandraStressLogEvent.RackAwarePolicy: NORMAL
 CassandraStressLogEvent.SchemaDisagreement: WARNING
 CqlStressCassandraStressLogEvent.ReadValidationError: CRITICAL
 SchemaDisagreementErrorEvent: ERROR
