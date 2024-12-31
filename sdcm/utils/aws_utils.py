@@ -441,13 +441,15 @@ def ec2_ami_get_root_device_name(image_id, region_name):
 
 @functools.cache
 def get_arch_from_instance_type(instance_type: str, region_name: str) -> AwsArchType:
-    client: EC2Client = boto3.client('ec2', region_name=region_name)
-    instance_type_info = client.describe_instance_types(InstanceTypes=[instance_type])
     arch = 'x86_64'
-    try:
-        arch = instance_type_info['InstanceTypes'][0].get('ProcessorInfo', {}).get('SupportedArchitectures')[0]
-    except (IndexError, KeyError):
-        pass
+    if instance_type:
+        client: EC2Client = boto3.client('ec2', region_name=region_name)
+        instance_type_info = client.describe_instance_types(InstanceTypes=[instance_type])
+
+        try:
+            arch = instance_type_info['InstanceTypes'][0].get('ProcessorInfo', {}).get('SupportedArchitectures')[0]
+        except (IndexError, KeyError):
+            pass
     return arch
 
 
