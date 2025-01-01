@@ -762,6 +762,15 @@ when enable scylla will use encryption on the client side
 **type:** boolean
 
 
+## **peer_verification** / SCT_PEER_VERIFICATION
+
+enable peer verification for encrypted communication
+
+**default:** True
+
+**type:** boolean
+
+
 ## **client_encrypt_mtls** / SCT_CLIENT_ENCRYPT_MTLS
 
 when enabled scylla will enforce mutual authentication when client-to-node encryption is enabled
@@ -3523,3 +3532,12 @@ Error thresholds for latency decorator. Defined by dict: {<write, read, mixed>: 
 **default:** {'write': {'default': {'P90 write': {'fixed_limit': 5}, 'P99 write': {'fixed_limit': 10}}}, 'read': {'default': {'P90 read': {'fixed_limit': 5}, 'P99 read': {'fixed_limit': 10}}}, 'mixed': {'default': {'P90 write': {'fixed_limit': 5}, 'P90 read': {'fixed_limit': 5}, 'P99 write': {'fixed_limit': 10}, 'P99 read': {'fixed_limit': 10}}}}
 
 **type:** dict_or_str
+
+
+## **workload_name** / SCT_WORKLOAD_NAME
+
+Workload name, can be: write|read|mixed|unset.Used for e.g. latency_calculator_decorator (use with 'use_hdr_cs_histogram' set to true).If unset, workload is taken from test name.
+
+**default:** N/A
+
+**type:** str (appendable)

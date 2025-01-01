@@ -122,6 +122,9 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                            f'--ssl-cert {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT} '
                            f'--ssl-key {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY}')
 
+            if self.params['peer_verification']:
+                ssl_config += ' --ssl-peer-verification'
+
         auth_config = ''
         if credentials := self.loader_set.get_db_auth():
             auth_config = f' --user {credentials[0]} --password {credentials[1]}'

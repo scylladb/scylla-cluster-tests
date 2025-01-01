@@ -76,6 +76,7 @@ parallel_node_operations: false  # supported from Scylla 6.0
 
 server_encrypt: false
 client_encrypt: false
+peer_verification: true  # when client encryption is used, peer verification is enabled by default
 client_encrypt_mtls: false
 server_encrypt_mtls: false
 
