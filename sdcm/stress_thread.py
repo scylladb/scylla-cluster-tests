@@ -205,7 +205,8 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             # put the credentials into the right place into -mode section
             stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*credentials), stress_cmd)
         if self.client_encrypt and 'transport' not in stress_cmd:
-            transport_str = c_s_transport_str(self.params.get('client_encrypt_mtls'))
+            transport_str = c_s_transport_str(
+                self.params.get('peer_verification'), self.params.get('client_encrypt_mtls'))
             stress_cmd += f" -transport '{transport_str}'"
 
         stress_cmd = self.adjust_cmd_connection_options(stress_cmd, loader, cmd_runner)

@@ -128,7 +128,8 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
     def run_cassandra_stress(self, args: str):
         stress_cmd = f"{self.node.add_install_prefix(STRESS_CMD)} {args} -node {self.node.ip_address}"
         if self.params.get('client_encrypt'):
-            transport_str = c_s_transport_str(self.params.get('client_encrypt_mtls'))
+            transport_str = c_s_transport_str(
+                self.params.get('peer_verification'), self.params.get('client_encrypt_mtls'))
             stress_cmd += f" -transport '{transport_str}'"
 
         result = self.node.remoter.run(stress_cmd)

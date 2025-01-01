@@ -73,18 +73,6 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
     docker_version = docker_scylla_args.get('image', "scylladb/scylla-nightly:6.1.0-dev-0.20240605.2c3f7c996f98")
     cluster = LocalScyllaClusterDummy(params=params)
 
-    if ssl:
-        curr_dir = os.getcwd()
-        try:
-            os.chdir(Path(__file__).parent.parent)
-            localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
-            create_ca(localhost)
-            create_certificate(CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, cname="scylladb",
-                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
-            create_certificate(CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb",
-                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
-        finally:
-            os.chdir(curr_dir)
     ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
     extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
                          f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}'
@@ -93,6 +81,20 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
                           command_line=f"--smp 1 {alternator_flags}",
                           extra_docker_opts=extra_docker_opts, docker_network=docker_network)
+
+    if ssl:
+        curr_dir = os.getcwd()
+        try:
+            os.chdir(Path(__file__).parent.parent)
+            localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
+            create_ca(localhost)
+            create_certificate(CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, cname="scylladb",
+                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE, ip_addresses=[scylla.ip_address])
+            create_certificate(CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb",
+                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
+        finally:
+            os.chdir(curr_dir)
+
     cluster.nodes = [scylla]
     DummyRemoter = collections.namedtuple('DummyRemoter', ['run', 'sudo'])
     scylla.remoter = DummyRemoter(run=scylla.run, sudo=scylla.run)
