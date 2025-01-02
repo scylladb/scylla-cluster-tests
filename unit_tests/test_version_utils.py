@@ -431,6 +431,7 @@ def test_scylla_version_for_argus_regexp(full_version, short, date, commit_id):
     ("5.2.0-dev-0.20230109.08b3a9c786d9-aarch64", (5, 2, 0, "dev-0.20230109", "08b3a9c786d9")),
     ("2024.2.0.dev.0.20231219.c7cdb16538f2.1", (2024, 2, 0, "dev-0.20231219", "c7cdb16538f2.1")),
     ("2024.1.0.rc2.0.20231218.a063c2c16185.1", (2024, 1, 0, "rc2-0.20231218", "a063c2c16185.1")),
+    ("3.5.0~dev_0.20250105+ef3b96816_SNAPSHOT", (3, 5, 0, "dev.0.20250105", "ef3b96816.SNAPSHOT")),
 ))
 def test_comparable_scylla_version_init_positive(version_string, expected):
     comparable_scylla_version = ComparableScyllaVersion(version_string)
