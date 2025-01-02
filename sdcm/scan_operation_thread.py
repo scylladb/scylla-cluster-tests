@@ -16,6 +16,7 @@ from pytz import utc
 from cassandra import ConsistencyLevel, OperationTimedOut, ReadTimeout
 from cassandra.cluster import ResponseFuture, ResultSet  # pylint: disable=no-name-in-module
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
+from cassandra.policies import ExponentialBackoffRetryPolicy
 
 from sdcm.remote import LocalCmdRunner
 from sdcm.sct_events import Severity
@@ -106,6 +107,10 @@ class FullscanOperationBase:
         self.db_node = self._get_random_node()
         self.current_operation_stat = None
         self.log.info("FullscanOperationBase init finished")
+        self._exp_backoff_retry_policy_params = {
+            "max_num_retries": 15.0, "min_interval": 1.0, "max_interval": 1800.0
+        }
+        self._request_default_timeout = 1800
 
     def _get_random_node(self) -> BaseNode:
         return self.generator.choice(self.fullscan_params.db_cluster.data_nodes)
@@ -120,6 +125,8 @@ class FullscanOperationBase:
                         | FullPartitionScanReversedOrderEvent]) -> ResultSet:
         # pylint: disable=unused-argument
         self.log.debug('Will run command %s', cmd)
+        session.cluster.default_retry_policy = ExponentialBackoffRetryPolicy(**self._exp_backoff_retry_policy_params)
+        session.default_timeout = self._request_default_timeout
         return session.execute(SimpleStatement(
             cmd,
             fetch_size=self.fullscan_params.page_size,
@@ -242,6 +249,8 @@ class FullPartitionScanOperation(FullscanOperationBase):
             with self.fullscan_params.db_cluster.cql_connection_patient(node=node, connect_timeout=300) as session:
                 # Using CL ONE. No need for a quorum since querying a constant fixed attribute of a table.
                 session.default_consistency_level = ConsistencyLevel.ONE
+                session.cluster.default_retry_policy = ExponentialBackoffRetryPolicy(
+                    **self._exp_backoff_retry_policy_params)
                 return get_table_clustering_order(ks_cf=self.fullscan_params.ks_cf,
                                                   ck_name=self.fullscan_params.ck_name, session=session)
         except Exception as error:  # pylint: disable=broad-except  # noqa: BLE001
@@ -266,6 +275,8 @@ class FullPartitionScanOperation(FullscanOperationBase):
 
         with self.fullscan_params.db_cluster.cql_connection_patient(
                 node=db_node, connect_timeout=300) as session:
+            session.cluster.default_retry_policy = ExponentialBackoffRetryPolicy(
+                **self._exp_backoff_retry_policy_params)
             ck_random_min_value = self.generator.randint(a=1, b=self.fullscan_params.rows_count)
             ck_random_max_value = self.generator.randint(a=ck_random_min_value, b=self.fullscan_params.rows_count)
             self.ck_filter = ck_filter = self.generator.choice(list(self.reversed_query_filter_ck_by.keys()))
@@ -351,6 +362,9 @@ class FullPartitionScanOperation(FullscanOperationBase):
         self.log.debug('Will run command "%s"', cmd)
         session.default_fetch_size = self.fullscan_params.page_size
         session.default_consistency_level = ConsistencyLevel.ONE
+        session.cluster.default_retry_policy = ExponentialBackoffRetryPolicy(**self._exp_backoff_retry_policy_params)
+        session.default_timeout = self._request_default_timeout
+
         return session.execute_async(cmd)
 
     def reset_output_files(self):
@@ -460,6 +474,9 @@ class FullScanAggregatesOperation(FullscanOperationBase):
                                   | FullPartitionScanReversedOrderEvent]) -> None:
         self.log.debug('Will run command %s', cmd)
         validate_mapreduce_service_requests_start_time = time.time()
+        session.cluster.default_retry_policy = ExponentialBackoffRetryPolicy(**self._exp_backoff_retry_policy_params)
+        session.default_timeout = self._session_execution_timeout
+
         try:
             cmd_result = session.execute(
                 query=cmd, trace=False, timeout=self._session_execution_timeout)
