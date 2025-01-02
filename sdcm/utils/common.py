@@ -1854,6 +1854,7 @@ def filter_docker_containers_by_type(containers):
 SSH_KEY_DIR = "~/.ssh"
 SSH_KEY_AWS_DEFAULT = "scylla_test_id_ed25519"
 SSH_KEY_GCE_DEFAULT = "scylla_test_id_ed25519"
+SSH_KEY_AZURE_DEFAULT = "scylla_test_id_ed25519"
 
 
 def get_aws_builders(tags=None, running=True):
