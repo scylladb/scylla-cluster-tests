@@ -174,14 +174,12 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                                               verbose=True)
                 stress_cmd = f'{stress_cmd.strip()} -tls -tls-ca-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CA_CERT}'
 
+                if self.params.get("peer_verification"):
+                    stress_cmd = f'{stress_cmd.strip()} -tls-host-verification'
                 if self.params.get("client_encrypt_mtls"):
                     stress_cmd = (
                         f'{stress_cmd.strip()} -tls-client-key-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_KEY} '
                         f'-tls-client-cert-file {SCYLLA_SSL_CONF_DIR}/{TLSAssets.CLIENT_CERT}')
-
-                    # TBD: update after https://github.com/scylladb/scylla-bench/issues/140 is resolved
-                    # server_names = ' '.join(f'-tls-server-name {ip}' for ip in ips.split(","))
-                    # stress_cmd = f'{stress_cmd.strip()} -tls-host-verification {server_names}'
 
         return stress_cmd
 
