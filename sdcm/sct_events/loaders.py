@@ -180,6 +180,7 @@ class CassandraStressLogEvent(LogEvent, abstract=True):
     OperationOnKey: Type[LogEventProtocol]
     TooManyHintsInFlight: Type[LogEventProtocol]
     ShardAwareDriver: Type[LogEventProtocol]
+    RackAwarePolicy: Type[LogEventProtocol]
     SchemaDisagreement: Type[LogEventProtocol]
 
 
@@ -230,6 +231,8 @@ CassandraStressLogEvent.add_subevent_type("ShardAwareDriver", severity=Severity.
                                           regex="Using optimized driver")
 CassandraStressLogEvent.add_subevent_type("SchemaDisagreement", severity=Severity.WARNING,
                                           regex="No schema agreement")
+CassandraStressLogEvent.add_subevent_type("RackAwarePolicy", severity=Severity.NORMAL,
+                                          regex=r"Using provided rack name '.+' for RackAwareRoundRobinPolicy")
 
 
 CS_ERROR_EVENTS = (
@@ -239,7 +242,7 @@ CS_ERROR_EVENTS = (
     CassandraStressLogEvent.ConsistencyError(),
     CassandraStressLogEvent.SchemaDisagreement(),
 )
-CS_NORMAL_EVENTS = (CassandraStressLogEvent.ShardAwareDriver(), )
+CS_NORMAL_EVENTS = (CassandraStressLogEvent.ShardAwareDriver(), CassandraStressLogEvent.RackAwarePolicy(), )
 
 CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in CS_ERROR_EVENTS]
