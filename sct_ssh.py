@@ -23,10 +23,12 @@ import click
 import questionary
 from questionary import Choice
 from google.cloud import compute_v1
+from azure.mgmt.compute.models import VirtualMachine
 
 from sdcm.cluster import BaseScyllaCluster, BaseCluster, BaseNode
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
+from sdcm.utils.azure_utils import AzureService, list_instances_azure
 from sdcm.utils.common import (
     list_instances_aws,
     get_free_port,
@@ -34,7 +36,8 @@ from sdcm.utils.common import (
     gce_meta_to_dict,
     SSH_KEY_AWS_DEFAULT,
     SSH_KEY_GCE_DEFAULT,
-    download_dir_from_cloud
+    SSH_KEY_AZURE_DEFAULT,
+    download_dir_from_cloud,
 )
 from sdcm.utils.gce_utils import (
     gce_public_addresses,
@@ -67,6 +70,11 @@ def _(instance: compute_v1.Instance) -> dict:
     return gce_meta_to_dict(instance.metadata)
 
 
+@get_tags.register
+def _(instance: VirtualMachine) -> dict:
+    return instance.tags
+
+
 @singledispatch
 def get_name(instance):
     raise NotImplementedError()
@@ -79,6 +87,11 @@ def _(instance: dict):
 
 @get_name.register(compute_v1.Instance)
 def _(instance: compute_v1.Instance):
+    return instance.name
+
+
+@get_name.register(VirtualMachine)
+def _(instance: VirtualMachine):
     return instance.name
 
 
@@ -95,6 +108,11 @@ def _(instance: dict):
 @get_target_ip.register(compute_v1.Instance)
 def _(instance: compute_v1.Instance):
     return list(gce_private_addresses(instance))[0]
+
+
+@get_target_ip.register(VirtualMachine)
+def _(instance: VirtualMachine):
+    return AzureService().get_virtual_machine_ips(virtual_machine=instance).private_ip
 
 
 def aws_find_bastion_for_instance(instance: dict) -> dict:
@@ -124,7 +142,14 @@ def gce_find_bastion_for_instance(instance: compute_v1.Instance) -> compute_v1.I
     return bastions[-1]
 
 
-def guess_username(instance: dict | compute_v1.Instance) -> str:
+def azure_find_bastion_for_instance(instance: VirtualMachine) -> VirtualMachine:
+    tags = {'bastion': 'true', 'TestId': get_tags(instance).get('TestId')}
+    bastions = list_instances_azure(tags, running=True)
+    assert bastions, "No bastion found"
+    return bastions[0]
+
+
+def guess_username(instance: dict | compute_v1.Instance | VirtualMachine) -> str:
     user_name = get_tags(instance).get('UserName')
     if isinstance(instance, compute_v1.Instance):
         user_name, _ = gce_get_user_and_ssh_keys(instance)
@@ -147,6 +172,10 @@ def get_proxy_command(instance: dict | compute_v1.Instance,
     if isinstance(instance, compute_v1.Instance):
         return gce_get_proxy_command(instance,
                                      strict_host_checking=strict_host_checking)
+    elif isinstance(instance, VirtualMachine):
+        return azure_get_proxy_command(instance,
+                                       force_use_public_ip=force_use_public_ip,
+                                       strict_host_checking=strict_host_checking)
     else:
         return aws_get_proxy_command(instance=instance,
                                      force_use_public_ip=force_use_public_ip,
@@ -178,6 +207,25 @@ def gce_get_proxy_command(instance: compute_v1.Instance, strict_host_checking: b
         proxy_command = f'-o ProxyCommand="ssh {strict_host_check} -i {target_key} -W %h:%p {bastion_username}@{bastion_ip}"'
     else:
         target_ip = list(gce_public_addresses(instance))[0]
+        proxy_command = ''
+        target_username = guess_username(instance)
+    return proxy_command, target_ip, target_username, target_key
+
+
+def azure_get_proxy_command(instance: VirtualMachine, force_use_public_ip: bool, strict_host_checking: bool):
+    target_key = f'~/.ssh/{SSH_KEY_AZURE_DEFAULT}'
+    if not force_use_public_ip:
+        target_username = guess_username(instance)
+        bastion = azure_find_bastion_for_instance(instance)
+        bastion_username, bastion_ip = guess_username(bastion), AzureService(
+        ).get_virtual_machine_ips(virtual_machine=bastion).public_ip
+        target_ip = get_target_ip(instance)
+        strict_host_check = ""
+        if not strict_host_checking:
+            strict_host_check = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+        proxy_command = f'-o ProxyCommand="ssh {strict_host_check} -i {target_key} -W %h:%p {bastion_username}@{bastion_ip}"'
+    else:
+        target_ip = AzureService().get_virtual_machine_ips(virtual_machine=instance).public_ip
         proxy_command = ''
         target_username = guess_username(instance)
     return proxy_command, target_ip, target_username, target_key
@@ -219,10 +267,12 @@ def select_instance(region: str = None, **tags) -> dict | None:
 
     gce_vms = list_instances_gce(tags, running=True, verbose=False)
 
-    if len(aws_vms + gce_vms) == 1:
-        return (aws_vms + gce_vms)[0]
+    azure_vms = list_instances_azure(tags, running=True, verbose=False)
 
-    if not aws_vms and not gce_vms:
+    if len(aws_vms + gce_vms + azure_vms) == 1:
+        return (aws_vms + gce_vms + azure_vms)[0]
+
+    if not aws_vms and not gce_vms and not azure_vms:
         click.echo(click.style("Found no matching instances", fg='red'))
         return {}
     # create the question object
@@ -234,6 +284,10 @@ def select_instance(region: str = None, **tags) -> dict | None:
         ] + [
             Choice(f"gce - {vm.name} - {list(gce_public_addresses(vm))[0]} {list(gce_private_addresses(vm))[0]} - {vm.zone.split('/')[-1]}",
                    value=vm) for vm in gce_vms
+        ] + [
+            Choice(
+                f"azure - {vm.name} - {AzureService().get_virtual_machine_ips(virtual_machine=vm).public_ip} {AzureService().get_virtual_machine_ips(virtual_machine=vm).private_ip} - {vm.location + '' if not vm.zones else vm.zones[0]}",
+                value=vm) for vm in azure_vms
         ],
         show_selected=True,
     )
@@ -272,10 +326,13 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
     if 'gce' in backends:
         gce_vms = list_instances_gce(tags, running=True, verbose=False)
 
-    if len(aws_vms + gce_vms) == 1:
-        return aws_vms + gce_vms
+    if 'azure' in backends:
+        azure_vms = list_instances_azure(tags, running=True, verbose=False)
 
-    if not aws_vms and not gce_vms:
+    if len(aws_vms + gce_vms + azure_vms) == 1:
+        return aws_vms + gce_vms + azure_vms
+
+    if not aws_vms and not gce_vms and not azure_vms:
         click.echo(click.style("Found no matching instances", fg='red'))
         return []
 
@@ -286,6 +343,10 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
         Choice(
             f"gce - {vm.name} - {list(gce_public_addresses(vm))[0]} {list(gce_private_addresses(vm))[0]} - {vm.zone.split('/')[-1]}",
             value=vm) for vm in gce_vms
+    ] + [
+        Choice(
+            f"azure - {vm.name} - {AzureService().get_virtual_machine_ips(virtual_machine=vm).public_ip} {AzureService().get_virtual_machine_ips(virtual_machine=vm).private_ip} - {vm.location + '' if not vm.zones else vm.zones[0]}",
+            value=vm) for vm in azure_vms
     ]
     # create the question object
     question = questionary.checkbox(
@@ -390,6 +451,12 @@ def tunnel(user, test_id, region, port, wait_for_port, node_name):
             bastion = gce_find_bastion_for_instance(connect_vm)
             bastion_username, bastion_ip = guess_username(bastion), list(gce_public_addresses(bastion))[0]
             target_ip = list(gce_private_addresses(connect_vm))[0]
+        elif isinstance(connect_vm, VirtualMachine):
+            target_key = f'~/.ssh/{SSH_KEY_AZURE_DEFAULT}'
+            bastion = azure_find_bastion_for_instance(connect_vm)
+            bastion_username, bastion_ip = guess_username(bastion), AzureService(
+            ).get_virtual_machine_ips(virtual_machine=bastion).public_ip
+            target_ip = get_target_ip(connect_vm)
         else:
             target_key = f'~/.ssh/{SSH_KEY_AWS_DEFAULT}'
             aws_region = AwsRegion(get_region(connect_vm))
@@ -502,9 +569,6 @@ def gcp_allow_public(user, test_id):
 @click.option('-r', '--region', type=str, help="Cloud region to search nodes in", default=None)
 def update_scylla_packages(test_id: str, backend: str, region: str, packages_location: str) -> None:
     """Update scylla DB packages on selected nodes."""
-    if backend in ['azure']:
-        LOGGER.error(f"Backend '{backend}' is not supported")
-        sys.exit(1)
     if not (packages_location := packages_location or os.getenv('SCT_UPDATE_DB_PACKAGES')):
         LOGGER.error("No location is provided where new packages are placed")
         sys.exit(1)
