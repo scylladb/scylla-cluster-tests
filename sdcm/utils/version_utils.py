@@ -69,7 +69,7 @@ SEMVER_REGEX = re.compile(
 )
 
 SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
-ARGUS_VERSION_RE = re.compile(r'((?P<short>[\w.~]+)-(0\.)?(?P<date>[0-9]{8,8})\.(?P<commit>\w+).*)')
+ARGUS_VERSION_RE = re.compile(r'((?P<short>[\w.~]+)(-(0\.)?(?P<date>[0-9]{8,8})?\.(?P<commit>\w+).*)?)')
 SCYLLA_VERSION_GROUPED_RE = re.compile(r'(?P<version>[\w.~]+)-(?P<build>0|rc\d)?\.?(?P<date>[\d]+)\.(?P<commit_id>\w+)')
 SSTABLE_FORMAT_VERSION_REGEX = re.compile(r'Feature (.*)_SSTABLE_FORMAT is enabled')
 ENABLED_SSTABLE_FORMAT_VERSION_REGEXP = re.compile(r'(.*)_SSTABLE_FORMAT')
@@ -313,11 +313,14 @@ def get_scylla_urls_from_repository(repo_details):
     return urls
 
 
-def get_branch_version_from_debian_repository(urls):
+def get_branch_version_from_debian_repository(urls, full_version: bool = False):
     def get_version(url):
         data = '\n'.join(get_url_content(url=url))
-        # Get only the major version (i.e. "2019.1.1-0.20190709.9f724fedb-1~stretch", get only "2019.1.1")
-        major_versions = [version.split('-', maxsplit=1)[0] for version in REPO_VERSIONS_REGEX.findall(data)]
+        if full_version:
+            major_versions = [version.strip() for version in REPO_VERSIONS_REGEX.findall(data)]
+        else:
+            # Get only the major version (i.e. "2019.1.1-0.20190709.9f724fedb-1~stretch", get only "2019.1.1")
+            major_versions = [version.split('-', maxsplit=1)[0] for version in REPO_VERSIONS_REGEX.findall(data)]
         if not major_versions:
             return ""
         return max(set(major_versions), key=ComparableScyllaVersion)
@@ -327,14 +330,18 @@ def get_branch_version_from_debian_repository(urls):
     return max(result, key=ComparableScyllaVersion)
 
 
-def get_branch_version_from_centos_repository(urls):
+def get_branch_version_from_centos_repository(urls, full_version: bool = False):
     def get_version(url):
         data = '\n'.join(get_url_content(url=url))
         primary_path = PRIMARY_XML_GZ_REGEX.search(data).groups()[0]
         xml_url = url.replace(REPOMD_XML_PATH, primary_path)
 
         parser = Parser(url=xml_url)
-        major_versions = [package['version'][1]['ver'] for package in parser.getList()]
+        if full_version:
+            major_versions = [
+                f"{package['version'][1]['ver']}-{package['version'][1]['rel']}" for package in parser.getList()]
+        else:
+            major_versions = [package['version'][1]['ver'] for package in parser.getList()]
         return max(set(major_versions), key=ComparableScyllaVersion)
 
     threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
@@ -342,11 +349,14 @@ def get_branch_version_from_centos_repository(urls):
     return max(result, key=ComparableScyllaVersion)
 
 
-def get_all_versions_from_debian_repository(urls: set[str]) -> set[str]:
+def get_all_versions_from_debian_repository(urls: set[str], full_version: bool = False) -> set[str]:
     def get_version(url: str) -> set[str]:
         data = '\n'.join(get_url_content(url=url))
-        # Get only the major version (i.e. "2019.1.1-0.20190709.9f724fedb-1~stretch", get only "2019.1.1")
-        major_versions = [version.split('-', maxsplit=1)[0] for version in REPO_VERSIONS_REGEX.findall(data)]
+        if full_version:
+            major_versions = [version.strip() for version in REPO_VERSIONS_REGEX.findall(data)]
+        else:
+            # Get only the major version (i.e. "2019.1.1-0.20190709.9f724fedb-1~stretch", get only "2019.1.1")
+            major_versions = [version.split('-', maxsplit=1)[0] for version in REPO_VERSIONS_REGEX.findall(data)]
         return set(major_versions)
 
     threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
@@ -354,15 +364,19 @@ def get_all_versions_from_debian_repository(urls: set[str]) -> set[str]:
     return result
 
 
-def get_all_versions_from_centos_repository(urls: set[str]) -> set[str]:
+def get_all_versions_from_centos_repository(urls: set[str], full_version: bool = False) -> set[str]:
     def get_version(url: str) -> set[str]:
         data = '\n'.join(get_url_content(url=url))
         primary_path = PRIMARY_XML_GZ_REGEX.search(data).groups()[0]
         xml_url = url.replace(REPOMD_XML_PATH, primary_path)
 
         parser = Parser(url=xml_url)
-        major_versions = [package['version'][1]['ver']
-                          for package in parser.getList() if package['name'][0] in SUPPORTED_PACKAGES]
+        if full_version:
+            major_versions = [f"{package['version'][1]['ver']}-{package['version'][1]['rel']}" for package in
+                              parser.getList()]
+        else:
+            major_versions = [package['version'][1]['ver']
+                              for package in parser.getList() if package['name'][0] in SUPPORTED_PACKAGES]
         return set(major_versions)
 
     threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
@@ -382,26 +396,26 @@ def get_repository_details(url):
     raise ValueError(VERSION_NOT_FOUND_ERROR)
 
 
-def get_branch_version(url):
+def get_branch_version(url, full_version: bool = False):
     repo_details = get_repository_details(url=url)
     urls = get_scylla_urls_from_repository(repo_details=repo_details)
 
     if repo_details.type == ScyllaFileType.DEBIAN:
-        return get_branch_version_from_debian_repository(urls=urls)
+        return get_branch_version_from_debian_repository(urls=urls, full_version=full_version)
     elif repo_details.type == ScyllaFileType.YUM:
-        return get_branch_version_from_centos_repository(urls=urls)
+        return get_branch_version_from_centos_repository(urls=urls, full_version=full_version)
     # To overcome on Pylint's "inconsistent-return-statements", a value must be returned
     return []
 
 
-def get_all_versions(url: str) -> set[str]:
+def get_all_versions(url: str, full_version: bool = False) -> set[str]:
     repo_details = get_repository_details(url=url)
     urls = get_scylla_urls_from_repository(repo_details=repo_details)
 
     if repo_details.type == ScyllaFileType.DEBIAN:
-        return get_all_versions_from_debian_repository(urls=urls)
+        return get_all_versions_from_debian_repository(urls=urls, full_version=full_version)
     elif repo_details.type == ScyllaFileType.YUM:
-        return get_all_versions_from_centos_repository(urls=urls)
+        return get_all_versions_from_centos_repository(urls=urls, full_version=full_version)
     # To overcome on Pylint's "inconsistent-return-statements", a value must be returned
     return set()
 
