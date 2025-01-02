@@ -1,7 +1,7 @@
 from sdcm.remote import shell_script_cmd
 
 
-NODE_EXPORTER_VERSION = '1.7.0'
+NODE_EXPORTER_VERSION = '1.8.2'
 
 
 class NodeExporterSetup:  # pylint: disable=too-few-public-methods
@@ -31,7 +31,7 @@ class NodeExporterSetup:  # pylint: disable=too-few-public-methods
             User=node_exporter
             Group=node_exporter
             Type=simple
-            ExecStart=/usr/local/bin/node_exporter
+            ExecStart=/usr/local/bin/node_exporter --no-collector.interrupts --no-collector.hwmon --no-collector.bcache --no-collector.btrfs --no-collector.fibrechannel --no-collector.infiniband --no-collector.ipvs --no-collector.nfs --no-collector.nfsd --no-collector.powersupplyclass --no-collector.rapl --no-collector.tapestats --no-collector.thermal_zone --no-collector.udp_queues --no-collector.zfs
 
             [Install]
             WantedBy=multi-user.target
