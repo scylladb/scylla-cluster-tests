@@ -3029,6 +3029,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 stress_queue.append(read_thread)
             return stress_queue
 
+        skip_issues = [
+            "https://github.com/scylladb/scylla-manager/issues/3829",
+            "https://github.com/scylladb/scylla-manager/issues/4049"
+        ]
+        is_multi_dc = len(self.cluster.params.get('region_name').split()) > 1
+        if SkipPerIssues(skip_issues, params=self.tester.params) and is_multi_dc:
+            raise UnsupportedNemesis("MultiDC cluster configuration is not supported by this nemesis")
+
         if not (self.cluster.params.get('use_mgmt') or self.cluster.params.get('use_cloud_manager')):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
         if self.cluster.params.get('cluster_backend') not in ('aws', 'k8s-eks'):
