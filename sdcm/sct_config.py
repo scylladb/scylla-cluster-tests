@@ -2311,10 +2311,11 @@ class SCTConfiguration(dict):
 
     def _get_target_upgrade_version(self):
         # 10) update target_upgrade_version automatically
-        new_scylla_repo = self.get('new_scylla_repo')
-        if new_scylla_repo and not self.get('target_upgrade_version'):
-            self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
-            self.update_argus_with_version(self.get('target_upgrade_version'), "scylla-server-upgrade-target")
+        if new_scylla_repo := self.get('new_scylla_repo'):
+            if not self.get('target_upgrade_version'):
+                self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
+            scylla_version = get_branch_version(new_scylla_repo, full_version=True)
+            self.update_argus_with_version(scylla_version, "scylla-server-upgrade-target")
 
     def _check_unexpected_sct_variables(self):
         # check if there are SCT_* environment variable which aren't documented
@@ -2545,7 +2546,7 @@ class SCTConfiguration(dict):
                 _is_enterprise = scylla_product == 'scylla-enterprise'
         elif not self.get('use_preinstalled_scylla'):
             scylla_repo = self.get('scylla_repo')
-            scylla_version = get_branch_version(scylla_repo)
+            scylla_version = get_branch_version(scylla_repo, full_version=True)
             _is_enterprise = is_enterprise(scylla_version)
         elif self.get('db_type') == 'cloud_scylla':
             _is_enterpise = True
