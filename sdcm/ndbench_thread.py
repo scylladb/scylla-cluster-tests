@@ -145,25 +145,33 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
 
         NdBenchStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
 
+        result = {}
+        ndbench_failure_event = ndbench_finish_event = None
         with NdBenchStatsPublisher(loader, loader_idx, ndbench_log_filename=log_file_name), \
                 NdBenchStressEventsPublisher(node=loader, ndbench_log_filename=log_file_name), \
                 cleanup_context:
             try:
-                docker_run_result = docker.run(cmd=node_cmd,
-                                               timeout=self.timeout + self.shutdown_timeout,
-                                               ignore_status=True,
-                                               log_file=log_file_name,
-                                               verbose=True,
-                                               retry=0,
-                                               )
-                return docker_run_result
-            except Exception as exc:  # pylint: disable=broad-except
-                NdBenchStressEvent.failure(node=str(loader),
-                                           stress_cmd=self.stress_cmd,
-                                           log_file_name=log_file_name,
-                                           errors=[format_stress_cmd_error(exc), ]).publish()
+                result = docker.run(cmd=node_cmd,
+                                    timeout=self.timeout + self.shutdown_timeout,
+                                    ignore_status=True,
+                                    log_file=log_file_name,
+                                    verbose=True,
+                                    retry=0)
+            except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+                ndbench_failure_event = NdBenchStressEvent.failure(
+                    node=str(loader),
+                    stress_cmd=self.stress_cmd,
+                    log_file_name=log_file_name,
+                    errors=[format_stress_cmd_error(exc), ])
+                ndbench_failure_event.publish()
             finally:
-                NdBenchStressEvent.finish(node=loader,
-                                          stress_cmd=self.stress_cmd,
-                                          log_file_name=log_file_name).publish()
-        return None
+                ndbench_finish_event = NdBenchStressEvent.finish(
+                    node=loader,
+                    stress_cmd=self.stress_cmd,
+                    log_file_name=log_file_name)
+                ndbench_finish_event.publish()
+
+        return loader, result, ndbench_failure_event or ndbench_finish_event
+
+    def get_results(self) -> list:
+        return [result for _, result, _ in super().get_results()]

@@ -223,7 +223,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         output = {k: str(v) for k, v in output.items()}
         return output
 
-    def _run_stress(self, loader, loader_idx, cpu_idx):
+    def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=too-many-locals
         dns_options = ""
         cpu_options = ""
         if self.params.get('alternator_use_dns_routing'):
@@ -259,6 +259,8 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
         YcsbStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
 
+        result = {}
+        ycsb_failure_event = ycsb_finish_event = None
         with YcsbStatsPublisher(loader, loader_idx, ycsb_log_filename=log_file_name):
             try:
                 result = docker.run(
@@ -274,16 +276,23 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                     ],
                     retry=0,
                 )
-                return self.parse_final_output(result)
-
+                result = self.parse_final_output(result)
             except Exception as exc:
                 errors_str = format_stress_cmd_error(exc)
-                YcsbStressEvent.failure(
+                ycsb_failure_event = YcsbStressEvent.failure(
                     node=loader,
                     stress_cmd=self.stress_cmd,
                     log_file_name=log_file_name,
                     errors=[errors_str, ],
-                ).publish()
+                )
+                ycsb_failure_event.publish()
                 raise
             finally:
-                YcsbStressEvent.finish(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()
+                ycsb_finish_event = YcsbStressEvent.finish(
+                    node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name)
+                ycsb_finish_event.publish()
+
+        return loader, result, ycsb_failure_event or ycsb_finish_event
+
+    def get_results(self) -> list:
+        return [result for _, result, _ in super().get_results()]

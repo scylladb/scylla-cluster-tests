@@ -73,6 +73,8 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
 
         KclStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
 
+        result = {}
+        kcl_finish_event = kcl_failure_event = None
         try:
             with cleanup_context:
                 result = docker.run(cmd=node_cmd,
@@ -80,20 +82,24 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
                                     log_file=log_file_name,
                                     retry=0,
                                     )
-
-                return result
-
         except Exception as exc:  # pylint: disable=broad-except
             errors_str = format_stress_cmd_error(exc)
-            KclStressEvent.failure(
+            kcl_failure_event = KclStressEvent.failure(
                 node=loader,
                 stress_cmd=self.stress_cmd,
                 log_file_name=log_file_name,
                 errors=[errors_str, ],
-            ).publish()
+            )
+            kcl_failure_event.publish()
             raise
         finally:
-            KclStressEvent.finish(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()
+            kcl_finish_event = KclStressEvent.finish(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name)
+            kcl_finish_event.publish()
+
+        return loader, result, kcl_failure_event or kcl_finish_event
+
+    def get_results(self) -> list:
+        return [result for _, result, _ in super().get_results()]
 
 
 class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
