@@ -1958,6 +1958,26 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             cs_thread = self.tester.run_stress_thread(
                 stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False, round_robin=True)
             cs_thread.verify_results()
+<<<<<<< HEAD
+=======
+            self.stop_nemesis_on_stress_errors(cs_thread)
+
+    def stop_nemesis_on_stress_errors(self, stress_thread: DockerBasedStressThread) -> None:
+        # Some implementations of stress threads override logic of the base class method
+        # DockerBasedStressThread.get_results() and filter out 'events' portion of a result (e.g. c-s stress thread).
+        # To retrieve all results of a thread we need to call the base class method directly
+        stress_results = super(stress_thread.__class__, stress_thread).get_results()
+        node_errors = {}
+        for node, _, event in stress_results:
+            if event.errors:
+                node_errors.setdefault(node.name, []).extend(event.errors)
+
+        if len(node_errors) == len(stress_results):  # stop only if stress command failed on all loaders
+            errors_str = ''.join(f"  on node '{node_name}': {errors}\n" for node_name, errors in node_errors.items())
+            raise NemesisStressFailure(
+                f"Aborting '{self.__class__.__name__}' nemesis as '{stress_thread.stress_cmd}' stress command failed "
+                f"with the following errors:\n{errors_str}")
+>>>>>>> ea1a40b5 (fix(nemesis.py): fix evaluation of stress command result)
 
     @scylla_versions(("5.2.rc0", None), ("2023.1.rc0", None))
     def _truncate_cmd_timeout_suffix(self, truncate_timeout):  # pylint: disable=no-self-use
