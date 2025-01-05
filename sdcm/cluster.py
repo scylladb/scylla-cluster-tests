@@ -2041,34 +2041,6 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         if not nonroot:
             self.install_package(package_name='xfsprogs mdadm')
 
-        if not any((self.distro.is_rocky9, self.distro.is_ubuntu24, self.distro.is_amazon2023, self.distro.is_centos9, self.distro.is_debian12, self.distro.is_oel9)):
-            # centos/rocky9/ubuntu24.04/amazon2023/debian12 and above don't have python2 anymore
-            self.install_package(package_name='python2')
-        # Offline install does't provide openjdk-11, it has to be installed in advance
-        # https://github.com/scylladb/scylla-jmx/issues/127
-        if self.distro.is_amazon2023:
-            self.install_package(package_name="java-11-amazon-corretto-headless")
-        elif self.distro.is_rhel_like:
-            self.install_package(package_name='java-11-openjdk-headless tar')
-        elif self.distro.is_sles:
-            raise Exception("Offline install on SLES isn't supported")
-        elif self.distro.is_debian11:
-            # FIXME: need to re-test and remove the following line once issue will be fixed:
-            # refs to https://github.com/scylladb/scylladb/issues/15878
-            self.install_package(package_name='openjdk-11-jre')
-            self.install_package(package_name='openjdk-11-jre-headless')
-        elif self.distro.is_debian12:
-            self.remoter.sudo(
-                'bash -c "curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg"')
-            self.remoter.sudo(
-                'bash -c "echo deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb bookworm main > /etc/apt/sources.list.d/adoptium.list"')
-            self.remoter.sudo('apt update')
-            self.install_package(package_name='temurin-11-jre')
-        else:
-            self.install_package(package_name='openjdk-11-jre-headless')
-            self.remoter.run('sudo update-java-alternatives --jre-headless '
-                             '-s java-1.11.0-openjdk-${dpkg-architecture -q DEB_BUILD_ARCH}')
-
         package_version_cmds_v2 = dedent("""
             tar -xzO --wildcards -f ./unified_package.tar.gz .relocatable_package_version
         """)
