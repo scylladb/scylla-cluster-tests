@@ -104,10 +104,13 @@ def test_scylla_repo(scylla_version, expected_outcome, distro):
 
 @pytest.mark.parametrize(argnames='scylla_version, expected_outcome',
                          argvalues=[
-                             pytest.param('6.1', ('6.1', False), id='6.1'),
-                             pytest.param('2024.1', ('2024.1', True), id='2024.1'),
-                             pytest.param('branch-2023.1:latest', (None, True), id='branch-2023.1'),
+                             pytest.param('6.2', ('6.2', False), id='6.2'),
+                             pytest.param('2024.2', ('2024.2', True), id='2024.2'),
+                             pytest.param('master:latest', (None, False), id='master'),
+                             pytest.param('branch-6.2:latest', (None, False), id='branch-6.2'),
+                             pytest.param('enterprise:latest', (None, True), id='enterprise'),
                              pytest.param('branch-2024.1:latest', (None, True), id='branch-2024.1'),
+                             pytest.param('branch-2024.2:latest', (None, True), id='branch-2024.2'),
                          ],
                          )
 @pytest.mark.parametrize(argnames='backend',

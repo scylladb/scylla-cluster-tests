@@ -1,0 +1,31 @@
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+    test:
+        permissions:
+          id-token: write
+          contents: read
+        runs-on: macos-13
+        # env:
+        #   AWS_ACCESS_KEY_ID: ${{ secrets.QA_USER_AWS_ACCESS_KEY_ID }}
+        #   AWS_SECRET_ACCESS_KEY: ${{ secrets.QA_USER_AWS_SECRET_ACCESS_KEY }}
+        steps:
+        - name: Configure AWS Credentials
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+            aws-region: us-east-1
+            role-to-assume: arn:aws:iam::797456418907:role/DeveloperAccessRole
+
+        - name: Checkout repository
+          uses: actions/checkout@v4
+        - name: Setup Docker
+          uses: douglascamata/setup-docker-macos-action@v1-alpha
+        - run: |
+            #!/usr/bin/env bash -x
+            AWS_OPTIONS=$(env | sed -n 's/\(AWS_.*\)=.*/--env \1/p')
+            echo $AWS_OPTIONS
+        - name: Run Hydra
+          run: bash -x ./docker/env/hydra.sh list-images
