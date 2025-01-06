@@ -2040,6 +2040,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
         if not nonroot:
             self.install_package(package_name='xfsprogs mdadm')
+        if self.distro.is_rhel_like:
+            self.install_package(package_name='tar')
 
         package_version_cmds_v2 = dedent("""
             tar -xzO --wildcards -f ./unified_package.tar.gz .relocatable_package_version
