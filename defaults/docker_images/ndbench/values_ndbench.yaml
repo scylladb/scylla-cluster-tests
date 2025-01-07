@@ -1,2 +1,2 @@
 ndbench:
-  image: 'scylladb/hydra-loaders:ndbench-jdk8-20210720'
+  image: scylladb/hydra-loaders:ndbench-jdk8-20210720
