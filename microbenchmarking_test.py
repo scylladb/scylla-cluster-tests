@@ -30,7 +30,6 @@ class PerfSimpleQueryTest(ClusterTester):
         result = self.db_cluster.nodes[0].remoter.run(
             "scylla perf-simple-query --json-result=perf-simple-query-result.txt --smp 1 -m 1G")
         if result.ok:
-            regression_report = {}
             output = self.db_cluster.nodes[0].remoter.run("cat perf-simple-query-result.txt").stdout
             results = json.loads(output)
             self.create_test_stats(
@@ -38,10 +37,7 @@ class PerfSimpleQueryTest(ClusterTester):
                 doc_id_with_timestamp=True)
             if self.create_stats:
                 is_gce = self.params.get('cluster_backend') == 'gce'
-                regression_report = PerfSimpleQueryAnalyzer(self._test_index, self._es_doc_type).check_regression(
+                PerfSimpleQueryAnalyzer(self._test_index, self._es_doc_type).check_regression(
                     self._test_id, is_gce=is_gce,
                     extra_jobs_to_compare=self.params.get('perf_extra_jobs_to_compare'))
-            send_perf_simple_query_result_to_argus(self.test_config.argus_client(),
-                                                   results,
-                                                   regression_report.get("scylla_date_results_table", [])
-                                                   )
+            send_perf_simple_query_result_to_argus(self.test_config.argus_client(), results)
