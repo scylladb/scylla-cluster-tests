@@ -1969,7 +1969,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         stress_results = super(stress_thread.__class__, stress_thread).get_results()
         node_errors = {}
         for node, _, event in stress_results:
-            if event.get('errors'):
+            if event.errors:
                 node_errors.setdefault(node.name, []).extend(event.errors)
 
         if len(node_errors) == len(stress_results):  # stop only if stress command failed on all loaders
