@@ -1,2 +1,2 @@
 cdc-stresser:
-  image: 'scylladb/hydra-loaders:cdc-stresser-20210630'
+  image: scylladb/hydra-loaders:cdc-stresser-20210630
