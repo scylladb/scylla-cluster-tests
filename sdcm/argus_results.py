@@ -175,7 +175,7 @@ def send_result_to_argus(argus_client: ArgusClient, workload: str, name: str, de
         submit_results_to_argus(argus_client, result_table)
 
 
-def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: dict, previous_results: list = None):
+def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: dict):
     stats = result["stats"]
     workload = result["test_properties"]["type"]
     parameters = result["parameters"]
@@ -196,15 +196,13 @@ def send_perf_simple_query_result_to_argus(argus_client: ArgusClient, result: di
                        ColumnMetadata(name="tasks_per_op", unit="", type=ResultType.FLOAT, higher_is_better=False),
                        ]
 
-    def _get_status_based_on_previous_results(metric: str):
-        if previous_results is None:
-            return Status.PASS
-        if all((result.get(f"is_{metric}_within_limits", True) for result in previous_results)):
-            return Status.PASS
-        else:
-            return Status.ERROR
+            ValidationRules = {
+                "allocs_per_op": ValidationRule(best_pct=5),
+                "cpu_cycles_per_op": ValidationRule(best_pct=5),
+                "instructions_per_op": ValidationRule(best_pct=5),
+            }
 
     result_table = PerfSimpleQueryResult()
     for key, value in stats.items():
-        result_table.add_result(column=key, row="#1", value=value, status=_get_status_based_on_previous_results(key))
+        result_table.add_result(column=key, row="#1", value=value, status=Status.UNSET)
     submit_results_to_argus(argus_client, result_table)
