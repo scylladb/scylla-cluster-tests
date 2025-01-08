@@ -1,0 +1,46 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+
+  "labels": [
+    "renovate",
+    "dependencies",
+    "New Hydra Version"
+  ],
+  "enabledManagers": [
+    "pip_requirements",
+    "pip_setup",
+    "pipenv",
+    "poetry"
+  ],
+  "packageRules": [
+    {
+      "groupName": "All pip dependencies",
+      "matchManagers": ["pip_requirements", "pip_setup", "pipenv", "poetry"],
+      "packageNames": ["!scylla-driver"],
+      "enabled": true
+    },
+    {
+      "groupName": "all non-major dependencies",
+      "groupSlug": "all-minor-patch",
+      "matchPackageNames": [
+        "*"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "enabled": false
+    },
+    {
+      "packageNames": ["scylla-driver"],
+      "enabled": true
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true
+  },
+  "osvVulnerabilityAlerts": true
+}
