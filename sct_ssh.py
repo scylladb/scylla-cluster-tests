@@ -319,6 +319,7 @@ def select_instance_group(region: str = None, backends: list | None = None, **ta
     backends = backends or ['aws', 'gce']
     aws_vms = []
     gce_vms = []
+    azure_vms = []
 
     if 'aws' in backends:
         aws_vms = list_instances_aws(tags, running=True, region_name=region)
