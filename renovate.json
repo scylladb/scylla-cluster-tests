@@ -14,7 +14,8 @@
     "pip_setup",
     "pipenv",
     "poetry",
-    "github-actions"
+    "github-actions",
+    "helm-values"
   ],
   "packageRules": [
     {
@@ -38,10 +39,21 @@
     {
       "packageNames": ["scylla-driver"],
       "enabled": true
+    },
+    {
+      "groupName": "All Helm values files",
+      "matchManagers": ["helm-values"],
+      "enabled": true
     }
   ],
   "vulnerabilityAlerts": {
     "enabled": true
   },
-  "osvVulnerabilityAlerts": true
+  "osvVulnerabilityAlerts": true,
+  "helm-values": {
+    "fileMatch": ["(^|/)values_.*\\.ya?ml$"]
+  },
+  "pip_requirements": {
+    "fileMatch": ["requirements\\.txt", "requirements\\.in"]
+  }
 }
