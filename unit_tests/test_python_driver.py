@@ -44,6 +44,7 @@ def test_01_test_python_driver_serverless_connectivity(params):
             assert len(output) == 1
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize('encrypted', [
     pytest.param(True, marks=pytest.mark.docker_scylla_args(ssl=True), id='encrypted'),
     pytest.param(False, marks=pytest.mark.docker_scylla_args(ssl=False), id='clear')
