@@ -39,7 +39,7 @@ google-api-python-client==2.93.0
 google-cloud-storage==2.10.0
 google-cloud-compute==1.13.0
 uv==0.2.24
-azure-identity==1.6.1
+azure-identity==1.16.1
 azure-mgmt-compute==30.5.0
 azure-mgmt-network==19.0.0
 azure-mgmt-resource==20.0.0
