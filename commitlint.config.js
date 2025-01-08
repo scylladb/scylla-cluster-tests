@@ -8,7 +8,7 @@ module.exports = {
         'subject-max-length': [2, 'always', 100],
         'subject-min-length': [2, 'always', 10],
         // Type
-        'type-enum': [2,'always',['ci','docs','feature','fix','improvement','perf','refactor','revert','style','test', 'unit-test', 'build']],
+        'type-enum': [2,'always',['ci','docs','feature','fix','improvement','perf','refactor','revert','style','test', 'unit-test', 'build', 'chore']],
         'type-empty': [2, 'never'],
         // Scope
         'scope-empty': [2, 'never'],
