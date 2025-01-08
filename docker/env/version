@@ -1,1 +1,5 @@
+<<<<<<< HEAD
 1.60-argus-0.13.0-for-branch-2024.1
+=======
+1.86-scylla-driver-3.28.0
+>>>>>>> 63550823 (chore(deps): update dependency scylla-driver to v3.28.0)

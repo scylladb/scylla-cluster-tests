@@ -128,9 +128,15 @@ botocore==1.31.4 \
     #   awscli
     #   boto3
     #   s3transfer
+<<<<<<< HEAD
 botocore-stubs==1.35.49 \
     --hash=sha256:367ce067e003de7e9b76320f551ba4fc8369a4b7ef10210f6071d3593fea2605 \
     --hash=sha256:c5006e31d77e290eca215e6a71292ea7b029b54900310ed0f87da8e844f1db38
+=======
+botocore-stubs==1.35.95 \
+    --hash=sha256:64b8829e6e10722ccc1ab6d68e5e0b1bf3198b3b11be7d1747119d7c5cc39e99 \
+    --hash=sha256:8b18f5b16df28c501c135f33a25ffdac24a746aac3bbc9357485b75b908057e6
+>>>>>>> 63550823 (chore(deps): update dependency scylla-driver to v3.28.0)
     # via boto3-stubs
 build==1.2.2.post1 \
     --hash=sha256:1d61c0887fa860c01971625baae8bdd338e517b836a2f70dd1f7aa3a6b2fc5b5 \
@@ -1290,6 +1296,7 @@ s3transfer==0.6.2 \
     # via
     #   awscli
     #   boto3
+<<<<<<< HEAD
 scylla-driver==3.25.11 \
     --hash=sha256:0ceecbb7cc243ff09569b3b932e4aa54dc7cd42b27e3b83a5ae8a1e4521b23b1 \
     --hash=sha256:0d76aa101712941259fbd979498d233f232d53ddaf4f7f0180bf7d4fb2a0bf77 \
@@ -1332,6 +1339,45 @@ scylla-driver==3.25.11 \
     --hash=sha256:e76696aa5f2fb553979577cbff881ce8cf06654be4a787d11eadfa5c33d03396 \
     --hash=sha256:fd0f9459c8add72136e40bb3f9cce9a7f5eb0d7e60056ef8f0efde5f4bc45908 \
     --hash=sha256:fec4707f9268ad0c5d99d1cf39ea64d2b8fe1593211be46eca5c6116fd393d59
+=======
+scylla-driver==3.28.0 \
+    --hash=sha256:0b259f1219492e91ec752559a9001989ec580502909475a215e4ad763108d601 \
+    --hash=sha256:14a64fac4a840e11f588882d525bb7836432952fbf29556cea8cb57c0381f12f \
+    --hash=sha256:156bd23dd7874d40d2d0acd73df85116ae0be0563307b5531e6fe4a99916df9c \
+    --hash=sha256:185a9e5ad92fa1d758b89a0fba43ce137b013ae430501b5db2302c93880829bb \
+    --hash=sha256:300b6062b8e81ba421d277226854e8c1839c80d9644925df3328529414ec3cc2 \
+    --hash=sha256:30871f2104a9bfcc60a14f9b44e4b6c236f7a98c8736d69762868a30147b3daf \
+    --hash=sha256:3b6ea22be90103d7ac8e6c9853647cbf187fbd255324270af5791a3316c7aeac \
+    --hash=sha256:464365edf4cee527b1cd8fecd373880351b557b77827d3f47ff3149ae3e680cb \
+    --hash=sha256:507bc38fe42cc67a92d05872569b33f34550180b4905c8ebeb82aa684e593d54 \
+    --hash=sha256:51b895d056224be8d028f8c5a931a440d6cd8e29dca0d2cb5b8e9196f06a0add \
+    --hash=sha256:551802f26239bb4cff7b66ca625b9966b513f5b384b9b23b18bd710ef19f9d30 \
+    --hash=sha256:5bf1bf8ac4faacf46d2d304ddc52bc427350aba58af3c88181e63af53a39d911 \
+    --hash=sha256:6d4b0b96bca5d49b9d83a24d4891f71f8806f4cb62111fdec8b16f600d3afaf5 \
+    --hash=sha256:718c9c5206ee1ed210f6e810f40024e0052cc2a92a508da5e3c340c0feffed22 \
+    --hash=sha256:7e4b599a1780783c9c467398922879a11094893f3d7e716a557f1d184bae9685 \
+    --hash=sha256:7fe537b8ad203bf4031ddad1da3617e8053794b38b30887f17edbc3ac80f947c \
+    --hash=sha256:83973908d14209d69a64178d388064ef4e95bd48fb11fdf92fbdcb577c176033 \
+    --hash=sha256:855217e14f9f25d63a58dae416ff115697e4785441fee3dad4e250348ad748df \
+    --hash=sha256:898dc9d3980eb5a1956450407abbf2883fd950e0d463c879c4f4c03e3f518427 \
+    --hash=sha256:9d7ae4707dbbe14dbb746cdd7acd86ec55262f350ecab9f72b605b6fcb479c75 \
+    --hash=sha256:a4995debf516fff5d3c470933524adbcb0baabe04fd8cbb696863854c1d3972a \
+    --hash=sha256:b0866112842d33214205cddc6b3d7b41f53d036472ed9f552702261843e98e68 \
+    --hash=sha256:b4f26a77ac4772ae12de2a813ec0bc3f91b1fa24bc438d2b238c89cecb3d8272 \
+    --hash=sha256:c0f1c111a7ee82c64a79b549edb8795ff99289bd368208a28e399eb61da2fa53 \
+    --hash=sha256:c4a31433482aaf50d17a6b5f51f1e2a997eaad7be58bca9d6de1e46edc4f2543 \
+    --hash=sha256:c631ac558d82725d16e7d3e0d1831d4aef28ffb3fb9827215f8a522034b98885 \
+    --hash=sha256:c9096b9cba11d4b2b95e13e327b9c3cf13c417e5f7109fec15c3c56d939232cd \
+    --hash=sha256:d183634005d230486b39f7ec8b62a6833cd703f92e9f6084e2c22a4ee581ebf4 \
+    --hash=sha256:d72411a4d84574b1b50d148911257a2bf342d14e2a35615ed1454e69fefbc542 \
+    --hash=sha256:d918d4bb0dd993aebf7d95c2c8d572ac625fd2b551eee625031dc087002318d7 \
+    --hash=sha256:dab53647283ab4ae59090d438b8d5bb668bd7fb901865daaaf640a6137c8b3e5 \
+    --hash=sha256:dde7b94a666d6fbc6d76906fe954c3de74e160a1495f6c5d5d9c1fc8c74a61bc \
+    --hash=sha256:ec06f2accfe5b1cb6808351545f2c9c974efba7c26e33b8b4ba8cab963ce264f \
+    --hash=sha256:f05e8f5bbbc5b70928ea4d0e3cc5f153bfbdbaade8b0fb5aa2bcf850170fbea7 \
+    --hash=sha256:fb50ac783000dd9e76cacf1d409d9d95026fbc21d591edea703ab0024b28a21c \
+    --hash=sha256:fe849a6a64082ed61bb24e5966aaa6f9e72f782a25ca5ce89f09a3512dbd6194
+>>>>>>> 63550823 (chore(deps): update dependency scylla-driver to v3.28.0)
     # via -r requirements.in
 selenium==3.141.0 \
     --hash=sha256:2d7131d7bc5a5b99a2d9b04aaf2612c411b03b8ca1b1ee8d3de5845a9be2cb3c \
@@ -1354,7 +1400,6 @@ six==1.16.0 \
     #   python-dateutil
     #   python-jenkins
     #   repodataparser
-    #   scylla-driver
 sortedcontainers==2.4.0 \
     --hash=sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88 \
     --hash=sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0
