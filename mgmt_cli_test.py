@@ -773,7 +773,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def _get_all_snapshot_files(self, cluster_id):
         bucket_name = self.params.get('backup_bucket_location').split()[0]
         if self.params.get('backup_bucket_backend') == 's3':
-            region_name = self.params.get("backup_bucket_region") or self.params.get("region_name").split()[0]
+            region_name = next(iter(self.params.region_names), '')
             return self._get_all_snapshot_files_s3(cluster_id=cluster_id, bucket_name=bucket_name,
                                                    region_name=region_name)
         elif self.params.get('backup_bucket_backend') == 'gcs':
