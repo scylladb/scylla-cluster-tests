@@ -1,1 +1,7 @@
+<<<<<<< HEAD
 1.60-argus-0.13.0-for-branch-2024.1
+||||||| parent of 63550823b (chore(deps): update dependency scylla-driver to v3.28.0)
+1.85-azure-identity_1.16.1_2
+=======
+1.86-scylla-driver-3.28.0
+>>>>>>> 63550823b (chore(deps): update dependency scylla-driver to v3.28.0)
