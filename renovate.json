@@ -13,7 +13,8 @@
     "pip_requirements",
     "pip_setup",
     "pipenv",
-    "poetry"
+    "poetry",
+    "github-actions"
   ],
   "packageRules": [
     {
