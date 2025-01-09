@@ -181,7 +181,7 @@ def main():
         logging.info(f"Found PR #{pr.number} with commit {commits} and the following labels: {backport_labels}")
         for backport_label in backport_labels:
             version = backport_label.replace('backport/', '')
-            backport_base_branch = backport_label.replace('backport/', 'master')
+            backport_base_branch = backport_label.replace('backport/', 'branch-')
             backport(repo, pr, version, commits, backport_base_branch)
 
 
