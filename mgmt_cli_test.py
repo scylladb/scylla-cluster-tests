@@ -40,7 +40,7 @@ from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostR
 from sdcm.mgmt.cli import ScyllaManagerTool, RestoreTask
 from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots
 from sdcm.provision.helpers.certificate import TLSAssets
-from sdcm.remote import shell_script_cmd
+from sdcm.remote import shell_script_cmd, LOCALRUNNER
 from sdcm.tester import ClusterTester
 from sdcm.cluster import TestConfig
 from sdcm.nemesis import MgmtRepair
@@ -363,6 +363,43 @@ class BucketOperations(ClusterTester):
         # azure://<bucket>/<path> -> https://<account>.blob.core.windows.net/<bucket>/<path>?SAS
         source = f"{source.replace('azure://', self.backup_azure_blob_service)}{self.backup_azure_blob_sas}"
         node.remoter.sudo(f"azcopy copy '{source}' '{destination}'")
+
+    @staticmethod
+    def create_s3_bucket(name: str, region: str) -> None:
+        LOCALRUNNER.run(f"aws s3 mb s3://{name} --region {region}")
+
+    @staticmethod
+    def create_gs_bucket(name: str, region: str) -> None:
+        LOCALRUNNER.run(f"gsutil mb -l {region} gs://{name}")
+
+    @staticmethod
+    def sync_s3_buckets(source: str, destination: str, acl: str = 'bucket-owner-full-control') -> None:
+        LOCALRUNNER.run(f"aws s3 sync s3://{source} s3://{destination} --acl {acl}")
+
+    @staticmethod
+    def sync_gs_buckets(source: str, destination: str) -> None:
+        LOCALRUNNER.run(f"gsutil -m rsync -r gs://{source} gs://{destination}")
+
+    def copy_backup_snapshot_bucket(self, source: str, destination: str) -> None:
+        """Copy bucket with Manager backup snapshots.
+        The process consists of two stages - new bucket creation and data sync (original bucket -> newly created).
+        The main use case is to make a copy of a bucket created in a test with Cloud (siren) cluster since siren
+        deletes the bucket together with cluster. Thus, if there is a goal to reuse backup snapshot of such cluster
+        afterward, it should be copied to a new bucket.
+
+        Only AWS and GCE backends are supported.
+        """
+        cluster_backend = self.params.get("cluster_backend")
+        region = next(iter(self.params.region_names), '')
+
+        if cluster_backend == "aws":
+            self.create_s3_bucket(name=destination, region=region)
+            self.sync_s3_buckets(source=source, destination=destination)
+        elif cluster_backend == "gce":
+            self.create_gs_bucket(name=destination, region=region)
+            self.sync_gs_buckets(source=source, destination=destination)
+        else:
+            raise ValueError(f"Unsupported cluster backend - {cluster_backend}, should be either aws or gce")
 
 
 class SnapshotOperations(ClusterTester):
@@ -1363,6 +1400,8 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         2. Run backup and wait for it to finish.
         3. Log snapshot details into console.
         """
+        is_cloud_manager = self.params.get("use_cloud_manager")
+
         self.log.info("Populate the cluster with data")
         backup_size = self.params.get("mgmt_prepare_snapshot_size")  # in Gb
         assert backup_size and backup_size >= 1, "Backup size must be at least 1Gb"
@@ -1371,20 +1410,35 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         self.run_and_verify_stress_in_threads(cs_cmds=cs_write_cmds, stop_on_failure=True)
 
         self.log.info("Initialize Scylla Manager")
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
+        mgr_cluster = self.db_cluster.get_cluster_manager()
+
+        self.log.info("Define backup location")
+        if is_cloud_manager:
+            # Extract location from automatically scheduled backup task
+            auto_backup_task = mgr_cluster.backup_task_list[0]
+            location_list = [auto_backup_task.get_task_info_dict()["location"]]
+        else:
+            location_list = self.locations
 
         self.log.info("Run backup and wait for it to finish")
-        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=["0"])
+        backup_task = mgr_cluster.create_backup_task(location_list=location_list, rate_limit_list=["0"])
         backup_task_status = backup_task.wait_and_get_final_status(timeout=200000)
         assert backup_task_status == TaskStatus.DONE, \
             f"Backup task ended in {backup_task_status} instead of {TaskStatus.DONE}"
+
+        if is_cloud_manager:
+            self.log.info("Copy bucket with snapshot since the original bucket is deleted together with cluster")
+            # from ["'AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53'"] to scylla-cloud-backup-8072-7216-v5dn53
+            original_bucket_name = location_list[0].split(":")[-1].rstrip("'")
+            bucket_name = original_bucket_name + "-manager-tests"
+
+            self.copy_backup_snapshot_bucket(source=original_bucket_name, destination=bucket_name)
 
         self.log.info("Log snapshot details")
         self.log.info(
             f"Snapshot tag: {backup_task.get_snapshot_tag()}\n"
             f"Keyspace name: {ks_name}\n"
-            f"Bucket: {self.locations}\n"
+            f"Bucket: {location_list}\n"
             f"Cluster id: {mgr_cluster.id}\n"
         )
 
