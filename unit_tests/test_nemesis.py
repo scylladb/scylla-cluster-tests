@@ -29,6 +29,9 @@ class Node:
     def scylla_shards(self):
         return 8
 
+    def log_message(self, *args, **kwargs):
+        pass
+
 
 @dataclass
 class Cluster:
@@ -36,6 +39,9 @@ class Cluster:
     params: dict = field(default_factory=lambda: PARAMS)
 
     def check_cluster_health(self):
+        pass
+
+    def log_message(self, *args, **kwargs):
         pass
 
 
