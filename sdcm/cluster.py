@@ -3156,26 +3156,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.log.info('Waiting for native_transport to be ready')
         self.wait_native_transport()
 
-<<<<<<< HEAD
-||||||| parent of da19d860a (fix(nemesis.py): log nemesis start/end on db nodes logs)
-    def disable_firewall(self) -> None:
-        self.remoter.sudo('systemctl stop iptables', ignore_status=True)
-        self.remoter.sudo('systemctl disable iptables', ignore_status=True)
-        self.remoter.sudo('systemctl stop firewalld', ignore_status=True)
-        self.remoter.sudo('systemctl disable firewalld', ignore_status=True)
-
-=======
-    def disable_firewall(self) -> None:
-        self.remoter.sudo('systemctl stop iptables', ignore_status=True)
-        self.remoter.sudo('systemctl disable iptables', ignore_status=True)
-        self.remoter.sudo('systemctl stop firewalld', ignore_status=True)
-        self.remoter.sudo('systemctl disable firewalld', ignore_status=True)
-
     def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
         self.remoter.run(
             f'scylla-api-client system log POST --level {level} --message {shlex.quote(message)}', verbose=verbose)
 
->>>>>>> da19d860a (fix(nemesis.py): log nemesis start/end on db nodes logs)
 
 class FlakyRetryPolicy(RetryPolicy):
 
