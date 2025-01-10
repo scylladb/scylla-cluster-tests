@@ -70,21 +70,21 @@ class SnapshotData:
     - bucket: S3 bucket name
     - tag: snapshot tag, for example 'sm_20240816185129UTC'
     - exp_timeout: expected timeout for the restore operation
+    - dataset: dict with snapshot dataset details such as cl, replication, schema, etc.
     - keyspaces: list of keyspaces presented in backup
     - cs_read_cmd_template: cassandra-stress read command template
     - prohibit_verification_read: if True, the verification read will be prohibited. Most likely, such a backup was
       created via c-s user profile.
-    - number_of_rows: number of data rows written in the DB
     - node_ids: list of node ids where backup was created
     """
     bucket: str
     tag: str
     exp_timeout: int
+    dataset: dict[str, str | int | dict]
     keyspaces: list[str]
     ks_tables_map: dict[str, list[str]]
     cs_read_cmd_template: str
     prohibit_verification_read: bool
-    number_of_rows: int
     node_ids: list[str]
 
 
@@ -257,45 +257,18 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
         stress_run_time = datetime.now() - stress_start_time
         InfoEvent(message=f'The read stress run was completed. Total run time: {stress_run_time}').publish()
 
-    def prepare_run_and_verify_stress_in_threads(self, cmd_template: str, keyspace_name: str, num_of_rows: int,
-                                                 stop_on_failure: bool = False) -> None:
-        """Prepares C-S commands, runs them in threads and verifies their execution results.
+    def run_and_verify_stress_in_threads(self, cs_cmds: list[str], stop_on_failure: bool = False) -> None:
+        """Runs C-S commands in threads and verifies their execution results.
         Stress operation can be either read or write, depending on the cmd_template.
         """
         stress_queue = []
-        num_of_loaders = self.params.get("n_loaders")
-        rows_per_loader = int(num_of_rows / num_of_loaders)
-        for loader_index in range(num_of_loaders):
-            stress_cmd = cmd_template.format(num_of_rows=rows_per_loader,
-                                             keyspace_name=keyspace_name,
-                                             sequence_start=rows_per_loader * loader_index + 1,
-                                             sequence_end=rows_per_loader * (loader_index + 1),)
+        for stress_cmd in cs_cmds:
             _thread = self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True,
                                              stop_test_on_failure=stop_on_failure)
             stress_queue.append(_thread)
 
         for _thread in stress_queue:
             assert self.verify_stress_thread(cs_thread_pool=_thread), "Stress thread verification failed"
-
-    @staticmethod
-    def extract_compaction_strategy_from_cs_cmd(cs_cmd: str, lower: bool = True, remove_postfix: bool = True) -> str:
-        """Extracts the compaction strategy from the cassandra-stress command.
-
-        :param cs_cmd: cassandra-stress command
-        :param lower: if True, the resulting string will be lowercased
-        :param remove_postfix: if True, the resulting string will have the "CompactionStrategy" postfix removed
-        """
-        match = re.search(r"compaction\(strategy=([^)]+)\)", cs_cmd)
-        if match:
-            strategy = match.group(1)
-            if remove_postfix:
-                strategy = re.sub(r"CompactionStrategy$", "", strategy)
-            if lower:
-                strategy = strategy.lower()
-        else:
-            raise ValueError("Compaction strategy not found in cs_cmd.")
-
-        return strategy
 
 
 class ClusterOperations(ClusterTester):
@@ -406,7 +379,7 @@ class SnapshotOperations(ClusterTester):
             raise ValueError(f"Snapshot data for size '{snapshot_name}'GB was not found in the {snapshots_config} file")
 
         ks_tables_map = {}
-        for ks, ts in snapshot_dict["schema"].items():
+        for ks, ts in snapshot_dict["dataset"]["schema"].items():
             t_names = [list(t.keys())[0] for t in ts]
             ks_tables_map[ks] = t_names
 
@@ -414,11 +387,11 @@ class SnapshotOperations(ClusterTester):
             bucket=all_snapshots_dict["bucket"],
             tag=snapshot_dict["tag"],
             exp_timeout=snapshot_dict["exp_timeout"],
-            keyspaces=list(snapshot_dict["schema"].keys()),
+            dataset=snapshot_dict["dataset"],
+            keyspaces=list(snapshot_dict["dataset"]["schema"].keys()),
             ks_tables_map=ks_tables_map,
             cs_read_cmd_template=all_snapshots_dict["cs_read_cmd_template"],
             prohibit_verification_read=snapshot_dict["prohibit_verification_read"],
-            number_of_rows=snapshot_dict["number_of_rows"],
             node_ids=snapshot_dict.get("node_ids"),
         )
         return snapshot_data
@@ -540,6 +513,40 @@ class SnapshotPreparerOperations(ClusterTester):
             cs_cmds.append(cs_cmd)
 
         return ks_name, cs_cmds
+
+    def build_cs_read_cmd_from_snapshot_details(self, snapshot: SnapshotData) -> list[str]:
+        """Define a list of cassandra-stress read commands from snapshot (dataset) details.
+
+        C-S read command template and snapshot details are defined in defaults/manager_restore_benchmark_snapshots.yaml.
+        Number of commands is equal to the number of loaders defined in the test parameters.
+        """
+        dataset = snapshot.dataset
+
+        rows_per_loader = self.calculate_rows_per_loader(overall_rows_num=dataset["num_of_rows"])
+        num_of_loaders = int(self.params.get("n_loaders"))
+
+        cs_cmds = []
+        cs_cmd_template = snapshot.cs_read_cmd_template
+
+        for loader_index in range(num_of_loaders):
+            sequence_start = rows_per_loader * loader_index + 1
+            sequence_end = rows_per_loader * (loader_index + 1)
+
+            cs_cmd = cs_cmd_template.format(
+                cl=dataset["cl"],
+                num_of_rows=rows_per_loader,
+                keyspace_name=snapshot.keyspaces[0],
+                replication=dataset["replication"],
+                rf=dataset["rf"],
+                compaction=dataset["compaction"],
+                col_size=dataset["col_size"],
+                col_n=dataset["col_n"],
+                sequence_start=sequence_start,
+                sequence_end=sequence_end,
+            )
+            cs_cmds.append(cs_cmd)
+
+        return cs_cmds
 
 
 class ManagerTestFunctionsMixIn(
@@ -1358,20 +1365,8 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         backup_size = self.params.get("mgmt_prepare_snapshot_size")  # in Gb
         assert backup_size and backup_size >= 1, "Backup size must be at least 1Gb"
 
-        backend = self.params.get("cluster_backend")
-        cs_read_cmd_template = get_persistent_snapshots()[backend]["confirmation_stress_template"]
-        cs_write_cmd_template = cs_read_cmd_template.replace(" read ", " write ")
-
-        compaction = self.extract_compaction_strategy_from_cs_cmd(cs_write_cmd_template)
-        scylla_version = re.sub(r"[-.]", "_", self.params.get("scylla_version"))
-        keyspace_name = f"{backup_size}gb_{compaction}_{scylla_version}"
-
-        self.prepare_run_and_verify_stress_in_threads(
-            cmd_template=cs_write_cmd_template,
-            keyspace_name=keyspace_name,
-            num_of_rows=backup_size * 1024 * 1024,  # Considering 1 row = 1Kb
-            stop_on_failure=True,
-        )
+        ks_name, cs_write_cmds = self.build_snapshot_preparer_cs_write_cmd(backup_size)
+        self.run_and_verify_stress_in_threads(cs_cmds=cs_write_cmds, stop_on_failure=True)
 
         self.log.info("Initialize Scylla Manager")
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
@@ -1386,7 +1381,7 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
         self.log.info("Log snapshot details")
         self.log.info(
             f"Snapshot tag: {backup_task.get_snapshot_tag()}\n"
-            f"Keyspace name: {keyspace_name}\n"
+            f"Keyspace name: {ks_name}\n"
             f"Bucket: {self.locations}\n"
             f"Cluster id: {mgr_cluster.id}\n"
         )
@@ -1671,9 +1666,8 @@ class ManagerRestoreBenchmarkTests(ManagerTestFunctionsMixIn):
 
         if not (self.params.get('mgmt_skip_post_restore_stress_read') or snapshot_data.prohibit_verification_read):
             self.log.info("Running verification read stress")
-            self.prepare_run_and_verify_stress_in_threads(cmd_template=snapshot_data.cs_read_cmd_template,
-                                                          keyspace_name=snapshot_data.keyspaces[0],
-                                                          num_of_rows=snapshot_data.number_of_rows)
+            cs_verify_cmds = self.build_cs_read_cmd_from_snapshot_details(snapshot_data)
+            self.run_and_verify_stress_in_threads(cs_cmds=cs_verify_cmds)
         else:
             self.log.info("Skipping verification read stress because of the test or snapshot configuration")
 
