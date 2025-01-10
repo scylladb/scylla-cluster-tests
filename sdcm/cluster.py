@@ -30,6 +30,7 @@ import traceback
 import itertools
 import json
 import ipaddress
+import shlex
 from importlib import import_module
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any, IO, AnyStr, Callable
 from datetime import datetime
@@ -3141,6 +3142,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.log.info('Waiting for native_transport to be ready')
         self.wait_native_transport()
 
+    def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
+        self.remoter.run(
+            f'scylla-api-client system log POST --level {level} --message {shlex.quote(message)}', verbose=verbose)
+
 
 class FlakyRetryPolicy(RetryPolicy):
 
@@ -5102,6 +5107,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         self.log.info("DB nodes CPU modes: %s", results)
         return results
+
+    def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
+        for node in self.nodes:
+            node.log_message(message, level, verbose)
 
 
 class BaseLoaderSet():
