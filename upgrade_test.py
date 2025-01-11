@@ -49,13 +49,6 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused, \
     ignore_abort_requested_errors, decorate_with_context
 from sdcm.utils import loader_utils
-<<<<<<< HEAD
-from sdcm.paths import SCYLLA_YAML_PATH
-=======
-from sdcm.utils.features import CONSISTENT_TOPOLOGY_CHANGES_FEATURE
-from sdcm.wait import wait_for
-from sdcm.rest.raft_upgrade_procedure import RaftUpgradeProcedure
->>>>>>> f1bdc1d0 (fix(sstbale dump): select the suitable sstable-dump command everywhere it is used)
 from test_lib.sla import create_sla_auth
 
 NUMBER_OF_ROWS_FOR_TRUNCATE_TEST = 10
