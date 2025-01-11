@@ -48,7 +48,7 @@ repos:
         name: pylint
         entry: pylint -j 1 -d consider-using-f-string
         language: system
-        exclude: '(^docker/alternator-dns/.*$|^argus/.*$)'
+        exclude: '(^docker/alternator-dns/.*$|^argus/.*$|^\.github/.*$)'
         types: [python]
 
 - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
