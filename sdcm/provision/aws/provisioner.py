@@ -103,7 +103,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             instance_parameters: AWSInstanceParams,
             count: int,
             tags: List[TagsType]) -> List[Instance]:
-        instance_parameters_dict = instance_parameters.dict(
+        instance_parameters_dict = instance_parameters.model_dump(
             exclude_none=True, exclude_defaults=True, exclude_unset=True, encode_user_data=False)
         if cr_id := SCTCapacityReservation.reservations.get(provision_parameters.availability_zone, {}).get(
                 instance_parameters.InstanceType):
@@ -171,7 +171,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             count=count,
             price=provision_parameters.price,
             fleet_role=self._iam_fleet_role,
-            instance_parameters=instance_parameters.dict(
+            instance_parameters=instance_parameters.model_dump(
                 exclude_none=True,
                 exclude_unset=True,
                 exclude_defaults=True,
@@ -263,7 +263,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             region_name=provision_parameters.region_name,
             count=count,
             price=getattr(provision_parameters, 'price', None),
-            instance_parameters=instance_parameters.dict(
+            instance_parameters=instance_parameters.model_dump(
                 exclude_none=True,
                 exclude_unset=True,
                 exclude_defaults=True,

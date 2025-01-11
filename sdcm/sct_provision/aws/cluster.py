@@ -13,9 +13,9 @@
 
 import abc
 from functools import cached_property
-from typing import List, Dict, Tuple
+from typing import List, Tuple
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, computed_field
 from sdcm import cluster
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
@@ -39,16 +39,21 @@ class ClusterNode(BaseModel):
     node_num: int
     node_name_prefix: str
 
+    @computed_field
     @property
-    def name(self):
+    def name(self) -> str:
         return self.node_name_prefix + '-' + str(self.node_num)
 
+    @computed_field
     @property
-    def tags(self) -> Dict[str, str]:
+    def tags(self) -> dict[str, str]:
         return self.parent_cluster.tags | {'NodeIndex': str(self.node_num)}
 
 
 class ClusterBase(BaseModel):
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     params: SCTConfiguration
     test_id: str
     common_tags: TagsType
@@ -64,8 +69,9 @@ class ClusterBase(BaseModel):
     def _provisioner(self):
         return AWSInstanceProvisioner()
 
+    @computed_field
     @property
-    def nodes(self):
+    def nodes(self) -> list[ClusterNode]:
         nodes = []
         node_num = 0
         for region_id in range(len(self._regions_with_nodes)):
@@ -98,12 +104,14 @@ class ClusterBase(BaseModel):
     def _user_prefix(self):
         return self.params.get('user_prefix')
 
+    @computed_field
     @property
-    def cluster_name(self):
+    def cluster_name(self) -> str:
         return '%s-%s' % (cluster.prepend_user_prefix(self._user_prefix, self._cluster_postfix), self._short_id)
 
+    @computed_field
     @property
-    def placement_group_name(self):
+    def placement_group_name(self) -> str | None:
         if self.params.get("use_placement_group") and self._USE_PLACEMENT_GROUP:
             return '%s-%s' % (
                 cluster.prepend_user_prefix(self._user_prefix, "placement_group"), self._short_id)
@@ -118,8 +126,9 @@ class ClusterBase(BaseModel):
     def _short_id(self):
         return str(self.test_id)[:8]
 
+    @computed_field
     @property
-    def tags(self):
+    def tags(self) -> dict[str, str]:
         return self.common_tags | {"NodeType": str(self._NODE_TYPE), "UserName": self.params.get(self._USER_PARAM)}
 
     def _az_nodes(self, region_id: int) -> List[int]:
@@ -213,7 +222,7 @@ class ClusterBase(BaseModel):
             availability_zone=availability_zone,
             placement_group=self.placement_group_name
         )
-        return AWSInstanceParams(**params_builder.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True))
+        return AWSInstanceParams(**params_builder.model_dump(exclude_none=True, exclude_unset=True, exclude_defaults=True))
 
     def provision(self):
         if self._node_nums == [0]:
@@ -269,7 +278,7 @@ class DBCluster(ClusterBase):
             availability_zone=availability_zone,
             placement_group=self.placement_group_name
         )
-        return AWSInstanceParams(**params_builder.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True))
+        return AWSInstanceParams(**params_builder.model_dump(exclude_none=True, exclude_unset=True, exclude_defaults=True))
 
     def _az_nodes(self, region_id: int) -> Tuple[List[int], List[int]]:
         az_token_nodes = [0] * len(self._azs)

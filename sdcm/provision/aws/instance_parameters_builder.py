@@ -14,6 +14,7 @@
 import abc
 from typing import List, Optional
 
+
 from sdcm.provision.aws.instance_parameters import AWSPlacementInfo, AWSDiskMapping
 from sdcm.provision.common.builders import AttrBuilder
 
