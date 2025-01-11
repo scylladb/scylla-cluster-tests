@@ -37,6 +37,6 @@ class ScyllaUserDataObject(SctUserDataObject):
             "start_scylla_on_first_boot": False,
             "data_device": data_device,
             "raid_level": self.params.get("raid_level") or 0,
-            "scylla_yaml": scylla_yaml.dict(exclude_defaults=True, exclude_none=True, exclude_unset=True)
+            "scylla_yaml": scylla_yaml.model_dump(exclude_defaults=True, exclude_none=True, exclude_unset=True)
         }
         return json.dumps(smi_payload)

@@ -68,7 +68,7 @@ class ScyllaYamlClusterAttrBuilderBase(unittest.TestCase):
 
     def _run_test(self, builder_params: dict, expected_as_dict: dict = None):
         instance = self.builder_class(**builder_params)
-        resulted_as_dict = instance.dict(exclude_defaults=True, exclude_unset=True)
+        resulted_as_dict = instance.model_dump(exclude_defaults=True, exclude_unset=True)
         if expected_as_dict:
             assert resulted_as_dict == expected_as_dict
             ScyllaYaml(**resulted_as_dict)
@@ -81,6 +81,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
         self._run_test(
             builder_params={
                 'node': FakeNode(),
+                'test_config': TestConfigWithoutLdap,
                 'cluster_name': 'test-cluster',
                 'params': {
                     'cluster_backend': 'aws',
@@ -538,7 +539,7 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method,too-many-instance-
             expected_node_yaml = expected_node_yaml.replace(
                 '__SEED_NODE_IPS__', seed_node_ips)
             expected_node_yaml = expected_node_yaml.replace('__NODE_IPV6_ADDRESS__', self.ipv6_ip_address)
-            assert json.loads(expected_node_yaml) == node_yaml.dict(
+            assert json.loads(expected_node_yaml) == node_yaml.model_dump(
                 exclude_unset=True, exclude_defaults=True, exclude_none=True)
 
 

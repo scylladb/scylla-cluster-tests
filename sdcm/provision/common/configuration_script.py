@@ -33,7 +33,7 @@ SYSLOGNG_LOG_THROTTLE_PER_SECOND = 10000
 
 
 class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
-    syslog_host_port: tuple[str, int] = None
+    syslog_host_port: tuple[str, int] | None = None
     logs_transport: str = 'syslog-ng'
     configure_sshd: bool = True
     hostname: str = ''

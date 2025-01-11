@@ -40,7 +40,11 @@ class FakeSCTConfiguration(SCTConfiguration):
         }
 
 
+ClusterTester.__test__ = False
+
 # pylint: disable=too-many-instance-attributes
+
+
 class ClusterTesterForTests(ClusterTester):
     _sct_log = None
     _final_event = None
@@ -49,6 +53,7 @@ class ClusterTesterForTests(ClusterTester):
     _get_event_summary_cached = None
     _get_events_grouped_by_category_cached = None
     _unittest_final_event = False
+    __test__ = True
 
     def __init__(self, *args):
         self.logdir = tempfile.mkdtemp()

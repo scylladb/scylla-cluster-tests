@@ -24,8 +24,8 @@ class ScyllaYamlTest(unittest.TestCase):
     @staticmethod
     def _run_test(object_type, init_params: dict, expected_without_defaults: dict, expected_with_defaults: dict):
         instance = object_type(**init_params)
-        assert instance.dict(exclude_unset=True) == expected_without_defaults
-        assert instance.dict(exclude_unset=False) == expected_with_defaults
+        assert instance.model_dump(exclude_unset=True) == expected_without_defaults
+        assert instance.model_dump(exclude_unset=False) == expected_with_defaults
 
     def test_server_encryption_options(self):
         self._run_test(
@@ -475,17 +475,17 @@ class ScyllaYamlTest(unittest.TestCase):
         )
         copy_instance = original.copy()
         assert copy_instance == original
-        assert copy_instance.dict(exclude_unset=True, exclude_defaults=True) == original.dict(
+        assert copy_instance.model_dump(exclude_unset=True, exclude_defaults=True) == original.model_dump(
             exclude_unset=True, exclude_defaults=True)
         copy_instance.client_encryption_options.enabled = False
         assert copy_instance.client_encryption_options.enabled is False
         assert original.client_encryption_options.enabled is True
         assert copy_instance != original
-        assert copy_instance.dict(exclude_unset=True, exclude_defaults=True) != original.dict(
+        assert copy_instance.model_dump(exclude_unset=True, exclude_defaults=True) != original.model_dump(
             exclude_unset=True, exclude_defaults=True)
 
         copy_instance = original.copy()
         copy_instance.client_encryption_options = None
         assert copy_instance != original
-        assert copy_instance.dict(exclude_unset=True, exclude_defaults=True) != original.dict(
+        assert copy_instance.model_dump(exclude_unset=True, exclude_defaults=True) != original.model_dump(
             exclude_unset=True, exclude_defaults=True)

@@ -11,11 +11,11 @@
 #
 # Copyright (c) 2021 ScyllaDB
 from difflib import unified_diff
-from typing import List, Literal, Union
+from typing import List, Literal, Union, Any
 
 import logging
 import yaml
-from pydantic import validator, BaseModel, Extra  # pylint: disable=no-name-in-module
+from pydantic import validator, BaseModel, ConfigDict  # pylint: disable=no-name-in-module
 
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
     ServerEncryptionOptions, ClientEncryptionOptions
@@ -26,8 +26,7 @@ logger = logging.getLogger(__name__)
 
 class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
-    class Config:  # pylint: disable=too-few-public-methods
-        extra = Extra.allow
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     broadcast_address: str = None  # ""
     api_port: int = None  # 10000
@@ -49,7 +48,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     saved_caches_directory: str = None  # ""
     commit_failure_policy: Literal["die", "stop", "stop_commit", "ignore"] = None  # "stop"
     disk_failure_policy: Literal["die", "stop_paranoid", "stop", "best_effort", "ignore"] = None  # "stop"
-    endpoint_snitch: EndPointSnitchType = None
+    endpoint_snitch: EndPointSnitchType | None = None
 
     # pylint: disable=no-self-argument,no-self-use
     @validator("endpoint_snitch", pre=True, always=True)
@@ -187,7 +186,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
     request_scheduler: Literal[
         'org.apache.cassandra.scheduler.NoScheduler',
         'org.apache.cassandra.scheduler.RoundRobinScheduler'
-    ] = None
+    ] | None = None
     stream_io_throughput_mb_per_sec: int = None  # 0
 
     # pylint: disable=no-self-argument,no-self-use
@@ -208,7 +207,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         "org.apache.cassandra.auth.AllowAllAuthenticator",
         "com.scylladb.auth.TransitionalAuthenticator",
         "com.scylladb.auth.SaslauthdAuthenticator"
-    ] = None  # "org.apache.cassandra.auth.AllowAllAuthenticator"
+    ] | None = None  # "org.apache.cassandra.auth.AllowAllAuthenticator"
 
     # pylint: disable=no-self-argument,no-self-use
     @validator("authenticator", pre=True, always=True)
@@ -229,7 +228,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         "org.apache.cassandra.auth.CassandraAuthorizer",
         "com.scylladb.auth.TransitionalAuthorizer",
         "com.scylladb.auth.SaslauthdAuthorizer"
-    ] = None  # "org.apache.cassandra.auth.AllowAllAuthorizer"
+    ] | None = None  # "org.apache.cassandra.auth.AllowAllAuthorizer"
 
     # pylint: disable=no-self-argument,no-self-use
     @validator("authorizer", pre=True, always=True)
@@ -359,21 +358,13 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
 
     reader_concurrency_semaphore_cpu_concurrency: int = None
 
-    def dict(  # pylint: disable=arguments-differ
+    def model_dump(  # pylint: disable=arguments-differ
         self,
         *,
-        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
-        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
-        by_alias: bool = False,
-        skip_defaults: bool = None,
-        exclude_defaults: bool = False,
-        exclude_none: bool = False,
-        exclude_unset: bool = False,
-        explicit: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,  # noqa: F821
-    ) -> 'DictStrAny':  # noqa: F821
-        to_dict = super().dict(
-            include=include, exclude=exclude, by_alias=by_alias, skip_defaults=skip_defaults,
-            exclude_unset=exclude_unset, exclude_defaults=exclude_defaults, exclude_none=exclude_none)
+        explicit: List[str] = None,
+        **kwargs,
+    ) -> dict[str, Any]:  # noqa: F821
+        to_dict = super().model_dump(**kwargs)
         if explicit:
             for required_attrs in explicit:
                 to_dict[required_attrs] = getattr(self, required_attrs)
@@ -384,12 +375,6 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
             attr_info = fields_data.get(attr_name, None)
             if attr_info is None:
                 logger.warning("Provided unknown attribute `%s`", attr_name)
-            if attr_info and hasattr(attr_info.type_, "__attrs_attrs__"):
-                if attr_value is not None:
-                    if not isinstance(attr_value, dict):
-                        raise ValueError("Unexpected data `%s` in attribute `%s`" % (
-                            type(attr_value), attr_name))
-                    attr_value = attr_info.type(**attr_value)  # noqa: PLW2901
             setattr(self, attr_name, attr_value)
 
     def update(self, *objects: Union['ScyllaYaml', dict]):
@@ -398,7 +383,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         It ignores whatever key if it's value equal to default
         This comes from module `attr` and probably could be tackled there
         """
-        fields_data = self.__fields__
+        fields_data = self.model_fields
         for obj in objects:
             if isinstance(obj, ScyllaYaml):
                 for attr_name, attr_value in obj.__dict__.items():
@@ -412,13 +397,13 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods,too-many-
         return self
 
     def diff(self, other: 'ScyllaYaml') -> str:
-        self_str = yaml.safe_dump(self.dict(
+        self_str = yaml.safe_dump(self.model_dump(
             exclude_defaults=True, exclude_unset=True, exclude_none=True)).splitlines(keepends=True)
-        other_str = yaml.safe_dump(other.dict(
+        other_str = yaml.safe_dump(other.model_dump(
             exclude_defaults=True, exclude_unset=True, exclude_none=True)).splitlines(keepends=True)
         return "".join(unified_diff(self_str, other_str))
 
     def __copy__(self):
-        return self.__class__(**self.dict(exclude_defaults=True, exclude_unset=True))
+        return self.__class__(**self.model_dump(exclude_defaults=True, exclude_unset=True))
 
     copy = __copy__

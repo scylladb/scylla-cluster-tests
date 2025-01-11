@@ -619,7 +619,7 @@ class ManagerTestFunctionsMixIn(
 
         agent_backup_config = self.params.get("mgmt_agent_backup_config")
         if agent_backup_config:
-            agent_backup_config = agent_backup_config.dict()
+            agent_backup_config = agent_backup_config.model_dump()
 
         email_data.update(
             {
