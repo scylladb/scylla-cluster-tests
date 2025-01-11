@@ -12,7 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 import base64
-from typing import List, Optional, Literal, Union
+from typing import List, Optional, Literal, Any
 
 from pydantic import BaseModel
 
@@ -50,7 +50,7 @@ class AWSDiskMapping(BaseModel):
 
 class AWSPlacementInfo(BaseModel):
     AvailabilityZone: str
-    GroupName: str = None
+    GroupName: str | None = None
     Tenancy: Literal['default', 'dedicated', 'host'] = 'default'
 
 
@@ -70,26 +70,14 @@ class AWSInstanceParams(InstanceParamsBase):
     EbsOptimized: bool = None
 
     # pylint: disable=arguments-differ
-    def dict(
+    def model_dump(
         self,
         *,
-        include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,  # noqa: F821
-        exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,  # noqa: F821
-        by_alias: bool = False,
-        skip_defaults: bool = None,
-        exclude_unset: bool = False,
-        exclude_defaults: bool = False,
-        exclude_none: bool = False,
-        encode_user_data: bool = False
-    ) -> 'DictStrAny':  # noqa: F821
-        dict_data = super().dict(
-            include=include,
-            exclude=exclude,
-            by_alias=by_alias,
-            skip_defaults=skip_defaults,
-            exclude_unset=exclude_unset,
-            exclude_defaults=exclude_defaults,
-            exclude_none=exclude_none,
+        encode_user_data: bool = False,
+        **kwargs,
+    ) -> dict[str, Any]:  # noqa: F821
+        dict_data = super().model_dump(
+            **kwargs,
         )
         if encode_user_data:
             if user_data := dict_data.get('UserData'):

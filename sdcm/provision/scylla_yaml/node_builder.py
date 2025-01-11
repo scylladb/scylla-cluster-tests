@@ -13,7 +13,7 @@
 from functools import cached_property
 from typing import Optional, List, Any
 
-from pydantic import Field
+from pydantic import Field, computed_field
 
 from sdcm.provision.network_configuration import is_ip_ssh_connections_ipv6
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase, SeedProvider
@@ -25,7 +25,7 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes that are needed to keep node connected to the other nodes in the cluster
     """
-    node: Any = Field(as_dict=False)
+    node: Any = Field(exclude=True)
 
     @property
     def _seed_address(self) -> str:
@@ -43,6 +43,7 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
     def _ipv6_ip_address(self) -> str:
         return self.node.ipv6_ip_address
 
+    @computed_field
     @property
     def seed_provider(self) -> Optional[List[SeedProvider]]:
         if not self._seed_address:
@@ -58,6 +59,7 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
     def _is_ip_ssh_connections_ipv6(self):
         return is_ip_ssh_connections_ipv6(self.params)
 
+    @computed_field
     @property
     def listen_address(self) -> Optional[str]:
         if self.node.scylla_network_configuration:
@@ -71,6 +73,7 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
             return '0.0.0.0'
         return self._private_ip_address
 
+    @computed_field
     @property
     def rpc_address(self) -> Optional[str]:
         if self.node.scylla_network_configuration:
@@ -84,6 +87,7 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
             return '0.0.0.0'
         return self._private_ip_address
 
+    @computed_field
     @property
     def broadcast_rpc_address(self) -> Optional[str]:
         if self.node.scylla_network_configuration:
@@ -99,6 +103,7 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
             return self._public_ip_address
         return None
 
+    @computed_field
     @property
     def broadcast_address(self) -> Optional[str]:
         if self.node.scylla_network_configuration:
@@ -114,16 +119,19 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
             return self._public_ip_address
         return None
 
+    @computed_field
     @property
-    def listen_interface(self):
+    def listen_interface(self) -> Optional[str]:
         if self.node.scylla_network_configuration:
             return self.node.scylla_network_configuration.device
         return None
 
+    @computed_field
     @property
     def enable_ipv6_dns_lookup(self) -> bool:
         return self._is_ip_ssh_connections_ipv6
 
+    @computed_field
     @property
     def prometheus_address(self) -> Optional[str]:
         if self._is_ip_ssh_connections_ipv6:

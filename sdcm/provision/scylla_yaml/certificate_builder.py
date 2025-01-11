@@ -15,7 +15,7 @@ from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import Optional, Any
 
-from pydantic import Field
+from pydantic import Field, computed_field
 
 from sdcm.provision.helpers.certificate import (
     install_client_certificate, CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, CA_CERT_FILE,
@@ -47,13 +47,14 @@ class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes regarding encryption
     """
-    node: Any = Field(as_dict=False)
+    node: Any = Field(exclude=True)
 
     @cached_property
     def _ssl_files_path(self) -> Path:
         install_client_certificate(self.node.remoter, self.node.ip_address)
         return SCYLLA_SSL_CONF_DIR
 
+    @computed_field
     @property
     def client_encryption_options(self) -> Optional[ClientEncryptionOptions]:
         if not self.params.get('client_encrypt'):
@@ -67,6 +68,7 @@ class ScyllaYamlCertificateAttrBuilder(ScyllaYamlAttrBuilderBase):
             require_client_auth=self.params.get('client_encrypt_mtls')
         )
 
+    @computed_field
     @property
     def server_encryption_options(self) -> Optional[ServerEncryptionOptions]:
         if not self.params.get('internode_encryption') or not self.params.get('server_encrypt'):

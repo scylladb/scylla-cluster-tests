@@ -16,7 +16,7 @@ import logging
 from functools import cached_property
 from typing import Union, List, Optional, Tuple
 
-from pydantic import Field
+from pydantic import Field, computed_field
 
 from sdcm.cluster import UserRemoteCredentials
 from sdcm.provision.aws.instance_parameters import AWSDiskMapping, AWSPlacementInfo, AWSDiskMappingEbsInfo
@@ -30,17 +30,18 @@ LOGGER = logging.getLogger(__name__)
 
 
 class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMeta):
-    params: Union[SCTConfiguration, dict] = Field(as_dict=False)
-    region_id: int = Field(as_dict=False)
-    user_data_raw: Union[str, UserDataBuilderBase] = Field(as_dict=False)
+    params: Union[SCTConfiguration, dict] = Field(exclude=True)
+    region_id: int = Field(exclude=True)
+    user_data_raw: Union[str, UserDataBuilderBase] = Field(exclude=True)
     availability_zone: int = 0
-    placement_group: str = None
+    placement_group: str | None = None
 
     _INSTANCE_TYPE_PARAM_NAME: str = None
     _IMAGE_ID_PARAM_NAME: str = None
     _ROOT_DISK_SIZE_PARAM_NAME: str = None
     _INSTANCE_PROFILE_PARAM_NAME: str = None
 
+    @computed_field
     @property
     def BlockDeviceMappings(self) -> List[AWSDiskMapping]:  # pylint: disable=invalid-name
         if not self.ImageId:
@@ -58,16 +59,19 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
             )
         return device_mappings
 
+    @computed_field
     @property
     def ImageId(self) -> Optional[str]:  # pylint: disable=invalid-name
         if not self._image_ids:
             return None
         return self._image_ids[self.region_id]
 
+    @computed_field
     @property
     def KeyName(self) -> str:  # pylint: disable=invalid-name
         return self._credentials[self.region_id].key_pair_name
 
+    @computed_field
     @property
     def NetworkInterfaces(self) -> List[dict]:  # pylint: disable=invalid-name
         output = []
@@ -75,22 +79,26 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
             output.append({'DeviceIndex': index, **self._network_interface_params(interface_index=index)})
         return output
 
+    @computed_field
     @property
-    def IamInstanceProfile(self):  # pylint: disable=invalid-name
+    def IamInstanceProfile(self) -> dict | None:  # pylint: disable=invalid-name
         if profile := self.params.get(self._INSTANCE_PROFILE_PARAM_NAME):
             return {'Name': profile}
         return None
 
+    @computed_field
     @property
     def InstanceType(self) -> str:  # pylint: disable=invalid-name
         return self.params.get(self._INSTANCE_TYPE_PARAM_NAME)
 
+    @computed_field
     @property
     def Placement(self) -> Optional[AWSPlacementInfo]:  # pylint: disable=invalid-name
         return AWSPlacementInfo(
             AvailabilityZone=self._region_name + self._availability_zones[self.availability_zone],
             GroupName=self.placement_group)
 
+    @computed_field
     @property
     def UserData(self) -> Optional[str]:  # pylint: disable=invalid-name
         if not self.user_data_raw:
@@ -100,11 +108,11 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return self.user_data_raw
 
     @cached_property
-    def _root_device_name(self):
+    def _root_device_name(self) -> str:
         return ec2_ami_get_root_device_name(image_id=self.ImageId, region_name=self._region_name)
 
     @property
-    def _root_device_size(self):
+    def _root_device_size(self) -> int:
         return self.params.get(self._ROOT_DISK_SIZE_PARAM_NAME)
 
     @cached_property
@@ -154,6 +162,7 @@ class ScyllaInstanceParamsBuilder(AWSInstanceParamsBuilder):
     _ROOT_DISK_SIZE_PARAM_NAME = 'root_disk_size_db'
     _INSTANCE_PROFILE_PARAM_NAME = 'aws_instance_profile_name_db'
 
+    @computed_field
     @property
     def BlockDeviceMappings(self) -> List[AWSDiskMapping]:
         device_mappings = super().BlockDeviceMappings

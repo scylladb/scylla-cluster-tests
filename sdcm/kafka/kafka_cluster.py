@@ -118,7 +118,7 @@ class LocalKafkaCluster(cluster.BaseCluster):
         # TODO: extend the number of tasks
         # TODO: handle client encryption SSL
 
-        connector_data = connector_config.dict(by_alias=True, exclude_none=True)
+        connector_data = connector_config.model_dump(by_alias=True, exclude_none=True)
         match connector_config.config.connector_class:
             case "io.connect.scylladb.ScyllaDbSinkConnector":
                 scylla_addresses = [node.cql_address for node in db_cluster.nodes]

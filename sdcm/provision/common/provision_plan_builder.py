@@ -36,7 +36,7 @@ class ProvisionPlanBuilder(BaseModel):
     fallback_provision_on_demand: bool
     region_name: str
     availability_zone: str
-    spot_low_price: float = None
+    spot_low_price: float | None = None
     provisioner: InstanceProvisionerBase
 
     @property

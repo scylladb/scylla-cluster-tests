@@ -11,64 +11,23 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-from typing import Union
+from typing import Any
 
-from pydantic import BaseModel  # pylint: disable=no-name-in-module
-
-
-OptionalType = type(Union[str, None])
+from pydantic import BaseModel, ConfigDict  # pylint: disable=no-name-in-module
 
 
 class AttrBuilder(BaseModel):
-    @classmethod
-    def get_properties(cls):
-        return [prop for prop in dir(cls) if isinstance(getattr(cls, prop), property) and prop[0] != '_']
 
-    @property
-    def _exclude_by_default(self):
-        exclude_fields = []
-        for field_name, field in self.__fields__.items():
-            if not field.field_info.extra.get('as_dict', True):
-                exclude_fields.append(field_name)
-        return set(exclude_fields)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def dict(
+    def model_dump(
         self,
         *,
-        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
-        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,  # noqa: F821
-        by_alias: bool = False,
-        skip_defaults: bool = None,
-        exclude_unset: bool = False,
-        exclude_defaults: bool = False,
-        exclude_none: bool = False,
-    ) -> 'DictStrAny':  # noqa: F821
-        """
-        Pydantic does not treat properties as fields, so you can't get their values when call dict
-        This function is to enable property extraction
-        """
-        if exclude is None:
-            exclude = self._exclude_by_default
-        attribs = super().dict(
-            include=include,
-            exclude=exclude,
-            by_alias=by_alias,
-            skip_defaults=skip_defaults,
-            exclude_unset=exclude_unset,
-            exclude_defaults=exclude_defaults,
-            exclude_none=exclude_none
+        exclude_none: bool = True,
+        **kwargs,
+    ) -> dict[str, Any]:
+        # we want just to default to exclude_none=True
+        return super().model_dump(
+            exclude_none=exclude_none,
+            **kwargs,
         )
-        props = self.get_properties()
-        if include:
-            props = [prop for prop in props if prop in include]
-        if exclude:
-            props = [prop for prop in props if prop not in exclude]
-        if props:
-            if exclude_unset or exclude_none or exclude_defaults:
-                for prop in props:
-                    prop_value = getattr(self, prop)
-                    if prop_value is not None:
-                        attribs[prop] = prop_value
-            else:
-                attribs.update({prop: getattr(self, prop) for prop in props})
-        return attribs

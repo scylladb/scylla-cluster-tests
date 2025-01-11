@@ -17,12 +17,12 @@ LOGGER = logging.getLogger()
 
 
 class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
-    params: Union[SCTConfiguration, dict] = Field(as_dict=False)
+    params: Union[SCTConfiguration, dict] = Field(exclude=True)
     cluster_name: str
-    bootstrap: bool = Field(default=None, as_dict=False)
-    user_data_format_version: str = Field(default='2', as_dict=False)
-    scylla_yaml_raw: ScyllaYaml = Field(default=None, as_dict=False)
-    syslog_host_port: tuple[str, int] = Field(default=None, as_dict=False)
+    bootstrap: bool = Field(default=None, exclude=True)
+    user_data_format_version: str = Field(default='2', exclude=True)
+    scylla_yaml_raw: ScyllaYaml = Field(default=None, exclude=True)
+    syslog_host_port: tuple[str, int] | None = Field(default=None, exclude=True)
 
     @property
     def scylla_yaml(self) -> dict:
@@ -30,7 +30,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
         scylla_yaml.cluster_name = self.cluster_name
         if self.bootstrap is not None:
             scylla_yaml.auto_bootstrap = self.bootstrap
-        return scylla_yaml.dict(exclude_defaults=True, exclude_none=True, exclude_unset=True)
+        return scylla_yaml.model_dump(exclude_defaults=True, exclude_none=True, exclude_unset=True)
 
     @property
     def start_scylla_on_first_boot(self):
@@ -75,7 +75,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
 
     def return_in_format_v3(self) -> str:
         msg = MIMEMultipart()
-        scylla_image_configuration = self.dict()
+        scylla_image_configuration = self.model_dump()
         scylla_image_configuration.pop('post_configuration_script', False)
         part = MIMEBase('x-scylla', 'json')
         part.set_payload(json.dumps(scylla_image_configuration, indent=4, sort_keys=True))
@@ -100,7 +100,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
         return str(msg)
 
     def return_in_format_v2(self) -> str:
-        return json.dumps(self.dict(exclude_defaults=True, exclude_unset=True, exclude_none=True), indent=4, sort_keys=True)
+        return json.dumps(self.model_dump(exclude_defaults=True, exclude_unset=True, exclude_none=True), indent=4, sort_keys=True)
 
     def return_in_format_v1(self) -> str:
         output = f'--clustername {self.cluster_name} --totalnodes 1 --stop-services'
@@ -112,8 +112,8 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
 
 
 class AWSInstanceUserDataBuilder(UserDataBuilderBase):
-    params: Union[SCTConfiguration, dict] = Field(as_dict=False)
-    syslog_host_port: tuple[str, int] = None
+    params: Union[SCTConfiguration, dict] = Field(exclude=True)
+    syslog_host_port: tuple[str, int] | None = None
     aws_additional_interface: bool = False
 
     def to_string(self) -> str:
