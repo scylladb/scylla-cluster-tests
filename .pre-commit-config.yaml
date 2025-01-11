@@ -47,6 +47,7 @@ repos:
         name: ruff
         entry: ruff check --fix --preview
         language: system
+        exclude: '(^docker/alternator-dns/.*$|^argus/.*$|^\.github/.*$)'
         types: [python]
 
 - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
