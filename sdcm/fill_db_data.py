@@ -3142,7 +3142,10 @@ class FillDatabaseData(ClusterTester):
         # Refs: https://github.com/scylladb/scylla/issues/5235
         time.sleep(30)
         for truncate in truncates:
-            session.execute(truncate)
+            # timeout was enlarged cause of
+            # - https://github.com/scylladb/scylladb/issues/22166
+            # - https://github.com/scylladb/scylladb/issues/21946
+            session.execute(truncate, timeout=300)
 
     @property
     def parsed_scylla_version(self):
