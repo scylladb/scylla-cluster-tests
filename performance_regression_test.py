@@ -57,17 +57,15 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
     throttle_step = 10_000
     max_ops = 200_000
 
-    def __init__(self, *args):
-        # need to remove the email_data.json file, as in the builders, it will accumulate and it will send multiple
-        # emails for each test. When we move to use SCT Runners, it won't be necessary.
-        self._clean_email_data()
-        super().__init__(*args)
-
     @teardown_on_exception
     @log_run_info
     def setUp(self):
         if es_index := self.params.get("custom_es_index"):
             self._test_index = es_index
+
+        # need to remove the email_data.json file, as in the builders, it will accumulate and it will send multiple
+        # emails for each test. When we move to use SCT Runners, it won't be necessary.
+        self._clean_email_data()
 
         super().setUp()
         if self.params.get("run_db_node_benchmarks"):
