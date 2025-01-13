@@ -22,8 +22,8 @@ class UDAUDFTest(ClusterTester):
     KEYSPACE_NAME = "ks"
     CF_NAME = "uda_udf"
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    def setUp(self):
+        super().setUp()
         self.email_reporter = LongevityEmailReporter(email_recipients=self.params.get('email_recipients'),
                                                      logdir=self.logdir)
 

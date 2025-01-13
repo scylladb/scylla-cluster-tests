@@ -53,9 +53,8 @@ class ClusterTesterForTests(ClusterTester):
     _get_event_summary_cached = None
     _get_events_grouped_by_category_cached = None
     _unittest_final_event = False
-    __test__ = True
 
-    def __init__(self, *args):
+    def setUp(self):
         self.logdir = tempfile.mkdtemp()
         self.events_processes_registry = EventsProcessesRegistry(log_dir=self.logdir)
         self.events_processes_registry_patcher = \
@@ -71,7 +70,7 @@ class ClusterTesterForTests(ClusterTester):
             },
             variables={'log_dir': self.logdir}
         )
-        super().__init__(*args)
+        super().setUp()
 
     def init_argus_run(self):
         pass
