@@ -23,8 +23,8 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
     Test Scylla performance regression with cassandra-stress using custom user profiles.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def setUp(self):
+        super().setUp()
         self.create_stats = False
 
     def _clean_keyspace(self, cs_profile):  # pylint: disable=invalid-name

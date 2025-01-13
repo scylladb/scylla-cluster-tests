@@ -29,8 +29,8 @@ class GrowClusterTest(ClusterTester):
     Test scylla cluster growth (adding nodes after an initial cluster size).
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def setUp(self):
+        super().setUp()
         self._cluster_starting_size = self.params.get('n_db_nodes')
         self._cluster_target_size = self.params.get('cluster_target_size')
         self.metrics_srv = prometheus.nemesis_metrics_obj()
