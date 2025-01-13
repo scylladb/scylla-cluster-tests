@@ -3071,7 +3071,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             "https://github.com/scylladb/scylla-manager/issues/3829",
             "https://github.com/scylladb/scylla-manager/issues/4049"
         ]
-        is_multi_dc = len(self.cluster.params.get('region_name').split()) > 1
+
+        regions = self.cluster.params.get('region_name')
+        if isinstance(regions, str):
+            regions = regions.split()
+
+        is_multi_dc = len(regions) > 1
         if SkipPerIssues(skip_issues, params=self.tester.params) and is_multi_dc:
             raise UnsupportedNemesis("MultiDC cluster configuration is not supported by this nemesis")
 
@@ -3086,10 +3091,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             cluster_backend = 'aws'
 
         persistent_manager_snapshots_dict = get_persistent_snapshots()
-        region = self.cluster.params.get('region_name').split()[0]
-        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"].format(region=region)
+        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"].format(region=regions[0])
         chosen_snapshot_tag, chosen_snapshot_info = (
-            choose_snapshot(snapshots_dict=persistent_manager_snapshots_dict[cluster_backend], region=region)
+            choose_snapshot(snapshots_dict=persistent_manager_snapshots_dict[cluster_backend], region=regions[0])
         )
 
         self.log.info("Restoring the keyspace %s", chosen_snapshot_info["keyspace_name"])
