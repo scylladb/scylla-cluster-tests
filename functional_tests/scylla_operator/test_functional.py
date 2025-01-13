@@ -432,7 +432,8 @@ def test_mgmt_backup(db_cluster, manager_version):
 
     # Run manager backup operation
     mgr_cluster = db_cluster.get_cluster_manager()
-    backup_bucket_location = db_cluster.params.get('backup_bucket_location')
+    region = next(iter(db_cluster.params.region_names), '')
+    backup_bucket_location = db_cluster.params.get('backup_bucket_location').format(region=region)
     bucket_name = f"s3:{backup_bucket_location.split()[0]}"
     mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
     assert mgr_task, "Failed to create backup task"

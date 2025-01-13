@@ -559,7 +559,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.log.error("Test supports only AWS ATM")
             return
         persistent_manager_snapshots_dict = get_persistent_snapshots()
-        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"]
+        region = next(iter(self.params.region_names), '')
+        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"].format(region=region)
         backup_bucket_backend = self.params.get("backup_bucket_backend")
         location_list = [f"{backup_bucket_backend}:{target_bucket}"]
         confirmation_stress_template = persistent_manager_snapshots_dict[cluster_backend]["confirmation_stress_template"]
