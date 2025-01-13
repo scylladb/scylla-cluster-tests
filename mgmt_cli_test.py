@@ -458,9 +458,9 @@ class SnapshotOperations(ClusterTester):
         return file_set
 
     def get_all_snapshot_files(self, cluster_id):
-        bucket_name = self.params.get('backup_bucket_location').split()[0]
+        region_name = next(iter(self.params.region_names), '')
+        bucket_name = self.params.get('backup_bucket_location').split()[0].format(region=region_name)
         if self.params.get('backup_bucket_backend') == 's3':
-            region_name = next(iter(self.params.region_names), '')
             return self._get_all_snapshot_files_s3(cluster_id=cluster_id, bucket_name=bucket_name,
                                                    region_name=region_name)
         elif self.params.get('backup_bucket_backend') == 'gcs':
@@ -509,7 +509,8 @@ class ManagerTestFunctionsMixIn(
     def locations(self) -> list[str]:
         backend = self.params.get("backup_bucket_backend")
 
-        buckets = self.params.get("backup_bucket_location")
+        region = next(iter(self.params.region_names), '')
+        buckets = self.params.get("backup_bucket_location").format(region=region)
         if not isinstance(buckets, list):
             buckets = buckets.split()
 
@@ -646,7 +647,8 @@ class ManagerRestoreTests(ManagerTestFunctionsMixIn):
             self.log.error("Test supports only AWS ATM")
             return
         persistent_manager_snapshots_dict = get_persistent_snapshots()
-        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"]
+        region = next(iter(self.params.region_names), '')
+        target_bucket = persistent_manager_snapshots_dict[cluster_backend]["bucket"].format(region=region)
         backup_bucket_backend = self.params.get("backup_bucket_backend")
         location_list = [f"{backup_bucket_backend}:{target_bucket}"]
         confirmation_stress_template = persistent_manager_snapshots_dict[cluster_backend]["confirmation_stress_template"]
