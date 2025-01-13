@@ -3127,7 +3127,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 raise UnsupportedNemesis('backup bucket location configuration is not defined!')
 
             backup_bucket_backend = self.cluster.params.get("backup_bucket_backend")
-            backup_bucket_location = self.cluster.params.get("backup_bucket_location")
+            region = next(iter(self.cluster.params.region_names), '')
+            backup_bucket_location = self.cluster.params.get("backup_bucket_location").format(region=region)
             location = f"{backup_bucket_backend}:{backup_bucket_location.split()[0]}"
         self._delete_existing_backups(mgr_cluster)
         if backup_specific_tables:
