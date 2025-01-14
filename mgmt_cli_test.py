@@ -34,8 +34,8 @@ from invoke import exceptions
 
 from argus.client.generic_result import Status
 from sdcm import mgmt
-from sdcm.argus_results import send_manager_benchmark_results_to_argus, submit_results_to_argus, \
-    ManagerBackupReadResult, ManagerBackupBenchmarkResult
+from sdcm.argus_results import (send_manager_benchmark_results_to_argus, send_manager_snapshot_details_to_argus,
+                                submit_results_to_argus, ManagerBackupReadResult, ManagerBackupBenchmarkResult)
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from sdcm.mgmt.cli import ScyllaManagerTool, RestoreTask
 from sdcm.mgmt.common import reconfigure_scylla_manager, get_persistent_snapshots
@@ -1429,15 +1429,22 @@ class ManagerHelperTests(ManagerTestFunctionsMixIn):
             # from ["'AWS_US_EAST_1:s3:scylla-cloud-backup-8072-7216-v5dn53'"] to scylla-cloud-backup-8072-7216-v5dn53
             original_bucket_name = location_list[0].split(":")[-1].rstrip("'")
             bucket_name = original_bucket_name + "-manager-tests"
-
             self.copy_backup_snapshot_bucket(source=original_bucket_name, destination=bucket_name)
+        else:
+            bucket_name = location_list[0]
 
-        self.log.info("Log snapshot details")
-        self.log.info(
-            f"Snapshot tag: {backup_task.get_snapshot_tag()}\n"
-            f"Keyspace name: {ks_name}\n"
-            f"Bucket: {location_list}\n"
-            f"Cluster id: {mgr_cluster.id}\n"
+        self.log.info("Send snapshot details to Argus")
+        snapshot_details = {
+            "tag": backup_task.get_snapshot_tag(),
+            "size": backup_size,
+            "bucket": bucket_name,
+            "ks_name": ks_name,
+            "scylla_version": self.params.get_version_based_on_conf()[0],
+            "cluster_id": mgr_cluster.id,
+        }
+        send_manager_snapshot_details_to_argus(
+            argus_client=self.test_config.argus_client(),
+            snapshot_details=snapshot_details,
         )
 
 
