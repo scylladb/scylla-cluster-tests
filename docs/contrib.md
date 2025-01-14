@@ -40,9 +40,7 @@ Once you have changes in the requirements.in or in Hydra Dockerfile
 
 Once a new branch is created, we could build all the need job for this branch with the following script ::
 ```bash
-JENKINS_USERNAME=[jenkins username] JENKINS_PASSWORD=[token from jenkins] hydra create-test-release-jobs scylla-4.0 --sct_branch branch-4.0
-# enterprise features
-JENKINS_USERNAME=[jenkins username] JENKINS_PASSWORD=[token from jenkins] hydra create-test-release-jobs-enterprise enterprise-2020.1 --sct_branch branch-2020.1
+JENKINS_USERNAME=[jenkins username] JENKINS_PASSWORD=[token from jenkins] hydra create-test-release-jobs scylla-2025.1 --sct_branch branch-2025.1
 ```
 
 ### Creating pipeline jobs for new scylla-operator branch/release/tag
