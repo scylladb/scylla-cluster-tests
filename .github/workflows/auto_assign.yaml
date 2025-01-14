@@ -10,4 +10,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Assign author to PR/issue
+        if: github.actor != 'scylladbbot'
         uses: technote-space/assign-author@v1
