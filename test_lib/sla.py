@@ -373,12 +373,12 @@ class Role(UserRoleBase):
         service_level = self.list_user_role_attached_service_levels()
         LOGGER.debug("List of service levels for role %s: %s", self.name, service_level)
         if not service_level and self.attached_service_level:
-            ValueError(f"No Service Level attached to the role '{self.name}'. But it is expected that Service Level "
-                       f"'{self._attached_service_level_name}' is attached to this role. Validate if it is test or "
-                       "Scylla issue")
+            raise ValueError(f"No Service Level attached to the role '{self.name}'. But it is expected that Service Level "
+                             f"'{self._attached_service_level_name}' is attached to this role. Validate if it is test or "
+                             "Scylla issue")
         elif not self.attached_service_level and service_level:
-            ValueError(f"Found attached Service Level '{service_level[0].service_level}' to the role '{self.name}'. "
-                       "But it is expected that no attached Service Level. Validate if it is test or Scylla issue")
+            raise ValueError(f"Found attached Service Level '{service_level[0].service_level}' to the role '{self.name}'. "
+                             "But it is expected that no attached Service Level. Validate if it is test or Scylla issue")
         elif not service_level and not self.attached_service_level:
             LOGGER.debug("No attached Service level to the role %s", self.name)
             return
@@ -389,12 +389,12 @@ class Role(UserRoleBase):
             db_service_level = self.attached_service_level.list_service_level()
             LOGGER.debug("db_service_level: %s", db_service_level)
             if db_service_level.shares != self.attached_service_level_shares:
-                ValueError(f"Found attached Service Level '{service_level[0].service_level}' to the role '{self.name}' "
-                           f"with {db_service_level.shares} shares. Expected {self._attached_service_level_shares} "
-                           f"shares. Validate if it is test or Scylla issue")
+                raise ValueError(f"Found attached Service Level '{service_level[0].service_level}' to the role '{self.name}' "
+                                 f"with {db_service_level.shares} shares. Expected {self._attached_service_level_shares} "
+                                 f"shares. Validate if it is test or Scylla issue")
         else:
-            ValueError(f"Found attached Service Level '{service_level[0].service_level}' to the role '{self.name}'. "
-                       "But it is expected that no attached Service Level. Validate if it is test or Scylla issue")
+            raise ValueError(f"Found attached Service Level '{service_level[0].service_level}' to the role '{self.name}'. "
+                             "But it is expected that no attached Service Level. Validate if it is test or Scylla issue")
 
 
 class User(UserRoleBase):
