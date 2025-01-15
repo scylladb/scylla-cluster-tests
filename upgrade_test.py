@@ -1485,7 +1485,7 @@ class UpgradeCustomTest(UpgradeTest):
     def prepare_data_before_upgrade(self):
         InfoEvent(message='Running a prepare load for the initial custom data').publish()
         if not (prepare_cs_user_profiles := self.params.get('prepare_cs_user_profiles')):
-            SyntaxError("Parameter 'prepare_cs_user_profiles' is not supplied")
+            raise SyntaxError("Parameter 'prepare_cs_user_profiles' is not supplied")
 
         user_profiles, duration_per_cs_profile = self.parse_cs_user_profiles_param(prepare_cs_user_profiles)
         stress_before_upgrade = self.run_cs_user_profiles(cs_profiles=user_profiles,
@@ -1495,7 +1495,7 @@ class UpgradeCustomTest(UpgradeTest):
 
         # write workload during entire test
         if not (cs_user_profiles := self.params.get('cs_user_profiles')):
-            SyntaxError("Parameter 'cs_user_profiles' is not supplied")
+            raise SyntaxError("Parameter 'cs_user_profiles' is not supplied")
 
         return cs_user_profiles
 
