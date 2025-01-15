@@ -205,7 +205,7 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
                 datetime_user_created = datetime.datetime.strptime(datetime_str.group(1), datetime_format)
                 self.log.info("User '%s' created at '%s'", user, datetime_user_created)
                 if datetime_user_created < instance_start_time and not user == "centos":
-                    AssertionError("User %s was created in the image. Only user centos should exist in the image")
+                    raise AssertionError("User %s was created in the image. Only user centos should exist in the image")
             else:
                 raise AssertionError(f"Unable to parse/find timestamp of the user {user} creation in {line}")
         self.log.info("All users except image user 'centos' were created after the boot.")
