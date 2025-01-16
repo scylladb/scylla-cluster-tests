@@ -20,7 +20,6 @@ import shutil
 import fnmatch
 import logging
 import datetime
-import tarfile
 import tempfile
 import traceback
 from collections import OrderedDict
@@ -29,6 +28,7 @@ from pathlib import Path
 from functools import cached_property
 
 import requests
+from invoke.exceptions import UnexpectedExit
 
 import sdcm.monitorstack.ui as monitoring_ui
 from sdcm.paths import SCYLLA_YAML_PATH, SCYLLA_PROPERTIES_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH, \
@@ -37,6 +37,7 @@ from sdcm.provision import provisioner_factory
 from sdcm.provision.network_configuration import ssh_connection_ip_type
 from sdcm.provision.provisioner import ProvisionerError
 from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
+from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.sct_events.events_device import EVENTS_LOG_DIR, RAW_EVENTS_LOG
 from sdcm.test_config import TestConfig
@@ -55,6 +56,7 @@ from sdcm.utils.common import (
     normalize_ipv6_url, create_remote_storage_dir,
 )
 from sdcm.utils.context_managers import environment
+from sdcm.utils.distro import Distro
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
 from sdcm.utils.get_username import get_username
@@ -86,6 +88,38 @@ class CollectingNode:
         else:
             self.grafana_address = grafana_ip
         self.tags = {**(tags or {}), "Name": self.name, }
+
+    @cached_property
+    def distro(self):
+        LOGGER.debug("Trying to detect Linux distribution...")
+        _distro = Distro.from_os_release(self.remoter.run("cat /etc/os-release", ignore_status=True, retry=5).stdout)
+        LOGGER.info("Detected Linux distribution: %s", _distro.name)
+        return _distro
+
+    @retrying(n=30, sleep_time=15, allowed_exceptions=(UnexpectedExit, Libssh2_UnexpectedExit,))
+    def install_package(self,
+                        package_name: str,
+                        package_version: str = None,
+                        ignore_status: bool = False) -> None:
+        if self.distro.is_rhel_like:
+            pkg_cmd = 'yum'
+            package_name = f"{package_name}-{package_version}*" if package_version else package_name
+        elif self.distro.is_sles:
+            pkg_cmd = 'zypper'
+            package_name = f"{package_name}-{package_version}" if package_version else package_name
+        else:
+            pkg_cmd = ('DEBIAN_FRONTEND=noninteractive apt-get '
+                       '-o DPkg::Lock::Timeout=120 -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef"')
+            version_prefix = f"={package_version}*" if package_version else ""
+            if version_prefix:
+                # get versioned dependencies as apt always get's the latest version which are not compatible
+                result = self.remoter.run(
+                    f'apt-cache depends --recurse {package_name}{version_prefix} | grep {package_name} | grep Depends | cut -d ":" -f 2',
+                    ignore_status=ignore_status)
+                packages_to_install = [f"{pkg}{version_prefix}" for pkg in [
+                    package_name] + list(set(result.stdout.splitlines()))]
+                package_name = " ".join(packages_to_install)
+        self.remoter.sudo(f'{pkg_cmd} install -y {package_name}', ignore_status=ignore_status)
 
 
 class PrometheusSnapshotErrorException(Exception):
@@ -607,8 +641,9 @@ class LogCollector:
         if not node.remoter:
             return None
         archive_dir, log_filename = os.path.split(log_filename)
-        archive_name = os.path.join(archive_dir, archive_name or log_filename) + ".tar.gz"
-        if not node.remoter.run(f"tar czf '{archive_name}' -C '{archive_dir}' '{log_filename}'", ignore_status=True).ok:
+        archive_name = os.path.join(archive_dir, archive_name or log_filename) + ".tar.zst"
+        node.install_package('zstd', ignore_status=True)
+        if not node.remoter.run(f"tar --zstd -cf '{archive_name}' -C '{archive_dir}' '{log_filename}'", ignore_status=True).ok:
             LOGGER.error("Unable to archive log `%s' to `%s'", log_filename, archive_name)
             return None
         if not check_archive(node.remoter, archive_name):
@@ -686,9 +721,12 @@ class LogCollector:
         pass
 
     def _compress_file(self, src_path: str, src_name: str) -> str:  # pylint: disable=no-self-use
-        archive_name = f"{src_name}.tar.gz"
-        with tarfile.open(archive_name, "w:gz") as tar:
-            tar.add(src_path, arcname=src_name)
+        archive_name = f"{src_name}.tar.zst"
+        archive_dir, log_filename = os.path.split(src_path)
+
+        LocalCmdRunner().run(
+            cmd=f"tar --zstd -cf '{archive_name}' -C '{archive_dir}' --transform 's/{log_filename}/{src_name}/' '{log_filename}'")
+
         return archive_name
 
     def archive_to_tarfile(self, src_path: str, add_test_id_to_archive: bool = False) -> str:
@@ -1068,7 +1106,7 @@ class PythonSCTLogCollector(BaseSCTLogCollector):
             runner.run(
                 f"bash {os.path.join(os.path.dirname(__file__), 'log_archive.sh')} "
                 f"{src_path} {self.too_big_log_size} {src_name}")
-            res = runner.run(f"ls *{src_name}.gz")
+            res = runner.run(f"ls *{src_name}.zst")
             return res.stdout.rstrip("\n").split("\n")
 
     def create_archive_and_upload(self) -> list[str]:
@@ -1666,6 +1704,8 @@ def check_archive(remoter, path: str) -> bool:
 
     if path.endswith(".tar.gz"):
         cmd = f"tar tzf '{path}'"
+    elif path.endswith(".tar.zst"):
+        cmd = f"tar --zstd -tf '{path}'"
     elif path.endswith(".zip"):
         cmd = f"unzip -qql '{path}'"
     elif path.endswith(".gz"):
