@@ -234,12 +234,14 @@ def extract_monitoring_data_archive(downloaded_monitor_set_archive, monitoring_s
                                      monitoring_stack_base_dir)
 
 
-def extract_file_from_archive(pattern, archive, extract_dir):
+def extract_file_from_archive(pattern, archive, extract_dir) -> dict[str, str | Path]:
     if archive.endswith('.zip'):
         return extract_file_from_zip_archive(pattern, archive, extract_dir)
     if archive.endswith('.tar.gz'):
         return extract_file_from_tar_archive(pattern, archive, extract_dir)
-    raise ValueError(f"Not supported archive type{archive.split('.')[-1]}")
+    if archive.endswith('.tar.zst'):
+        return extract_file_from_tar_zstd(pattern, archive, extract_dir)
+    raise ValueError(f"Not supported archive type - {archive.split('.')[-1]}")
 
 
 def extract_file_from_zip_archive(pattern, archive, extract_dir):
@@ -273,6 +275,26 @@ def extract_file_from_tar_archive(pattern, archive, extract_dir):
                     continue
                 tar_file.extract(name, extract_dir)
                 found_file[os.path.dirname(target_dir).split("/")[-1]] = target_dir
+    return found_file
+
+
+def extract_file_from_tar_zstd(pattern, archive, extract_dir) -> dict[str, str | Path]:
+    found_file = {}
+    result = LocalCmdRunner().run(f'tar --zstd -tf {archive}')
+    if not result.ok:
+        LOGGER.error("Error listing archive contents: %s", result.stderr)
+    else:
+        for name in result.stdout.splitlines():
+            if pattern in name:
+                target_path = Path(extract_dir) / name
+                if is_path_outside_of_dir(target_path, extract_dir):
+                    LOGGER.warning('Skipping %s file it leads to outside of the target dir', name)
+                    continue
+                extract_result = LocalCmdRunner().run(f"tar --zstd -xvf '{archive}' -C '{extract_dir}' '{name}'")
+                if not extract_result.ok:
+                    LOGGER.error("Error extracting file %s: %s", name, extract_result.stderr)
+                else:
+                    found_file[target_path.parent.name] = target_path
     return found_file
 
 
