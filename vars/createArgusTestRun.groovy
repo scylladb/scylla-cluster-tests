@@ -16,4 +16,17 @@ def call(Map params) {
 
         echo " Argus test run created."
     """
+    if (!currentBuild.description) {
+        currentBuild.description = ''
+    }
+    String runButton = """
+        <div style="margin: 12px 4px;">
+            <a
+                href='https://argus.scylladb.com/tests/scylla-cluster-tests/${SCT_TEST_ID}'
+            >
+                Argus: <span style='font-weight: 500'>${SCT_TEST_ID}</span>
+            </a>
+        </div>
+    """
+    currentBuild.description += "${runButton}"
 }
