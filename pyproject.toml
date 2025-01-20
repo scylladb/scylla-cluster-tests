@@ -1,5 +1,26 @@
 [tool.ruff]
+<<<<<<< HEAD
 lint.select = ["PL", "PLR0916", "PLR0913","PLR0914", "YTT", "BLE", "F841", "F401"]
+||||||| parent of 2686304fd (feature(ruff): scan for mutable-argument-default (B006))
+lint.select = [
+    "BLE",
+    "F401", "F821", "F823", "F841",
+    "PL", "PLR0913","PLR0914", "PLR0916",
+    "YTT",
+    "F541",
+    "PIE",
+]
+=======
+lint.select = [
+    "BLE",
+    "F401", "F821", "F823", "F841",
+    "PL", "PLR0913","PLR0914", "PLR0916",
+    "YTT",
+    "F541",
+    "PIE",
+    "B006",
+]
+>>>>>>> 2686304fd (feature(ruff): scan for mutable-argument-default (B006))
 
 lint.ignore = ["E501", "PLR2004"]
 

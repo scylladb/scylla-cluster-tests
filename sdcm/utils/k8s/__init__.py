@@ -869,7 +869,7 @@ class ScyllaPodsIPChangeTrackerThread(threading.Thread):
         self.log = SDCMAdapter(LOGGER, extra={'prefix': k8s_kluster.region_name})
 
     @retrying(n=3600, sleep_time=1, allowed_exceptions=(ConnectionError, ))
-    def _open_stream(self, cache={}) -> None:  # pylint: disable=dangerous-default-value
+    def _open_stream(self, cache={}) -> None:  # pylint: disable=dangerous-default-value  # noqa: B006
         try:
             now = time.time()
             if cache.get("last_call_at", 0) + 5 > now:
