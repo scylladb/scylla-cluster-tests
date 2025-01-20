@@ -3069,7 +3069,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             "https://github.com/scylladb/scylla-manager/issues/3829",
             "https://github.com/scylladb/scylla-manager/issues/4049"
         ]
-        is_multi_dc = (len(self.cluster.params.region_names) > 1) or ((self.params.get("simulated_regions") or 0) > 1)
+        is_multi_dc = len(self.cluster.params.region_names) > 1 or (
+            self.cluster.params.get("simulated_regions") or 0) > 1
         if SkipPerIssues(skip_issues, params=self.tester.params) and is_multi_dc:
             raise UnsupportedNemesis("MultiDC cluster configuration is not supported by this nemesis")
 
