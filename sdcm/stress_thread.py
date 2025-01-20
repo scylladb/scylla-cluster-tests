@@ -277,7 +277,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             return stress_cmd
         return stress_cmd.replace(current_error_option, 'errors ' + ' '.join(new_error_suboptions))
 
-    def _get_available_suboptions(self, loader, option, _cache={}):  # pylint: disable=dangerous-default-value
+    def _get_available_suboptions(self, loader, option, _cache={}):  # pylint: disable=dangerous-default-value  # noqa: B006
         if cached_value := _cache.get(option):
             return cached_value
         try:
@@ -292,7 +292,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         return findings
 
     @staticmethod
-    def _disable_logging_for_cs(node, cmd_runner, _cache={}):  # pylint: disable=dangerous-default-value
+    def _disable_logging_for_cs(node, cmd_runner, _cache={}):  # pylint: disable=dangerous-default-value  # noqa: B006
         if not (node.is_kubernetes() or node.name in _cache):
             cmd_runner.run("cp /etc/scylla/cassandra/logback-tools.xml .", ignore_status=True)
             _cache[node.name] = 'done'

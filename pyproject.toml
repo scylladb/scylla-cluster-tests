@@ -4,6 +4,15 @@ lint.select = [
     "F401", "F821", "F823", "F841",
     "PL", "PLR0913","PLR0914", "PLR0916",
     "YTT",
+<<<<<<< HEAD
+||||||| parent of 2686304fd (feature(ruff): scan for mutable-argument-default (B006))
+    "F541",
+    "PIE",
+=======
+    "F541",
+    "PIE",
+    "B006",
+>>>>>>> 2686304fd (feature(ruff): scan for mutable-argument-default (B006))
 ]
 
 lint.ignore = ["E501", "PLR2004"]
