@@ -5577,6 +5577,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
         self.install_scylla_monitoring(node)
         self.configure_scylla_monitoring(node)
+        self.configure_overview_template(node)
         try:
             self.start_scylla_monitoring(node)
         except (Failure, UnexpectedExit):
@@ -5741,6 +5742,57 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         node.remoter.run("bash -ce '%s'" % install_script)
         if node.distro.is_ubuntu:
             node.remoter.run(f'sed -i "s/python3/python3.6/g" {self.monitor_install_path}/*.py')
+
+    @property
+    def monitoring_template(self) -> Path:
+        return Path(get_data_dir_path("monitoring-dash-template.json"))
+
+    def configure_overview_template(self, node: BaseNode):
+        def find_overview_row(row):
+            return row["class"] == "row" and len(row.get("panels", [])) > 0 and row["panels"][0].get("class", "") == "alert_table"
+
+        with remote_file(remoter=node.remoter, remote_path=str((self.monitor_install_path / "grafana" /
+                                                                "scylla-overview.template.json").absolute())) as file:
+            sct_addon_template = json.load(self.monitoring_template.open("rt"))
+            template = json.load(file)
+            try:
+                template["dashboard"]["title"] = f"[{self.json_file_params_for_replace['$test_name']}] SCT Metrics & Cluster Overview"
+            except KeyError:
+                LOGGER.warning("Unable to set title for overview dashboard - key not found")
+
+            row, index = next(((row, i) for i, row in enumerate(
+                template["dashboard"]["rows"]) if find_overview_row(row)), (None, -1))
+            if row:
+                before = template["dashboard"]["rows"][:index + 1]
+                after = template["dashboard"]["rows"][index + 1:]
+                rows = [*before, *sct_addon_template["rows"], *after]
+            template["dashboard"]["rows"] = rows
+            for variable in sct_addon_template["variables"]:
+                template["dashboard"]["templating"]["list"].append(variable)
+
+            try:
+                variable = next(var for var in template["dashboard"]["templating"]
+                                ["list"] if var.get('class', "") == "by_template_var")
+                for value in variable["options"]:
+                    value["selected"] = False
+                variable["current"]["text"] = "Instance"
+                variable["current"]["value"] = "instance"
+                by_instance_option = next(opt for opt in variable["options"] if opt["text"] == "Instance")
+                by_instance_option["selected"] = True
+            except (StopIteration, KeyError):
+                LOGGER.warning("Unable to change defaults for the template", exc_info=True)
+
+            template["dashboard"]["annotations"] = sct_addon_template["annotations"]
+
+            file.seek(0)
+            file.truncate()
+            json.dump(template, file, indent=4)
+
+        script = dedent(f"""
+            cd -P {self.monitor_install_path}
+            ./generate-dashboards.sh -F -v {self.monitor_branch or self.monitoring_version or 'master'} -P "sct-tests"
+        """)
+        node.remoter.run(f"bash -ce '{script}'")
 
     def configure_scylla_monitoring(self, node, sct_metrics=True, alert_manager=True):  # pylint: disable=too-many-locals,too-many-branches  # noqa: PLR0914
         cloud_prom_bearer_token = self.params.get('cloud_prom_bearer_token')
