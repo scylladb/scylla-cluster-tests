@@ -1801,7 +1801,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             self.install_package('gnupg2')
             self.remoter.sudo("mkdir -p /etc/apt/keyrings")
             for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
-                self.remoter.sudo(f"gpg --debug-all --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
+                self.remoter.sudo(f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
                                   f"--keyserver hkp://keyserver.ubuntu.com:80 --keyserver-options timeout=10 --recv-keys {apt_key}",
                                   retry=3)
         self.update_repo_cache()
