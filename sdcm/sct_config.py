@@ -2781,8 +2781,9 @@ class SCTConfiguration(dict):
 
     def update_config_based_on_version(self):
         if self.is_enterprise and ComparableScyllaVersion(self.scylla_version) >= "2025.1.0~dev":
-            if 'views-with-tablets' not in self.get('experimental_features', []):
-                self['experimental_features'].append('views-with-tablets')
+            if experimental_features := self.get('experimental_features'):
+                if 'views-with-tablets' not in experimental_features:
+                    self['experimental_features'].append('views-with-tablets')
 
     def dict(self):
         out = deepcopy(self)
