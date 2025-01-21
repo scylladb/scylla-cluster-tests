@@ -7,13 +7,14 @@ def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 
 def sct_runner_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'k8s-eks', 'azure']
 
 def createRunConfiguration(String backend) {
+	def scylla_version = params.scylla_version ?: getLatestScyllaRelease('scylla')
 
     def configuration = [
         backend: backend,
         test_name: 'longevity_test.LongevityTest.test_custom_time',
         test_config: 'test-cases/PR-provision-test.yaml',
         availability_zone: 'a',
-        scylla_version: params.scylla_version,
+        scylla_version: scylla_version,
         region: 'eu-west-1',
     ]
     if (backend == 'gce') {
@@ -24,7 +25,7 @@ def createRunConfiguration(String backend) {
     } else if (backend == 'docker') {
         configuration.test_config = "test-cases/PR-provision-test-docker.yaml"
     } else if (backend in ['k8s-local-kind-aws', 'k8s-eks']) {
-        if (params.scylla_version.endsWith('latest')) {
+        if (scylla_version.endsWith('latest')) {
             configuration.scylla_version = 'latest'
             configuration.k8s_scylla_operator_helm_repo = 'https://storage.googleapis.com/scylla-operator-charts/latest'
             configuration.k8s_scylla_operator_chart_version = 'latest'
@@ -70,8 +71,8 @@ pipeline {
         }
     }
     parameters {
-        string(defaultValue: "5.2.11",
-               description: 'the scylla version to use for the provision tests',
+        string(defaultValue: '',
+               description: 'the scylla version to use for the provision tests, if empty automatically selects latest release',
                name: 'scylla_version')
         string(defaultValue: '',
                description: 'Actual user requesting job start, for automated job builds (e.g. through Argus)',
