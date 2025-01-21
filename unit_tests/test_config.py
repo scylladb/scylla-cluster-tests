@@ -1007,6 +1007,14 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         assert 'Option manager_version is not appendable' == str(context.value)
 
+    @staticmethod
+    def test_36_update_config_based_on_version():
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.scylla_version = "2025.1.0~dev"
+        conf.is_enterprise = True
+        conf.update_config_based_on_version()
+
 
 if __name__ == "__main__":
     unittest.main()
