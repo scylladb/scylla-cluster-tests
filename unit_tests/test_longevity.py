@@ -16,6 +16,17 @@ def test_test_user_batch_custom_time(params):
     class DummyLongevityTest(LongevityTest):
         def _init_params(self):
             self.params = params
+            # NOTE: running this test we get a nemesis trigerred,
+            # and if health checks are enabled then the nemesis lock gets held
+            # while it's checks are running. It may run for more than 10 minutes.
+            # Additional problem is that it is not controlled by this test,
+            # thread just runs as a side-car even after finish of this test.
+            # In this case any further unit test which runs a nemesis
+            # will stumble upon a held lock.
+            # One of such tests is following:
+            # - test_nemesis.py::test_list_nemesis_of_added_disrupt_methods
+            # So, disable health checks here.
+            self.params["cluster_health_check"] = False
 
         def start_argus_heartbeat_thread(self):
             # prevent from heartbeat thread to start
