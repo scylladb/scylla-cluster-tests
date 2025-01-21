@@ -357,7 +357,15 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
                     rack_names = self.parent_cluster.get_rack_names_per_datacenter_and_rack_idx(db_nodes=[self])
                     self._node_rack = list(rack_names.values())[0]
             else:
-                self._node_rack = str(self.rack)
+                if not (rack_names := self.test_config.tester_obj().rack_names_per_datacenter_and_rack_idx_map):
+                    return self._node_rack
+
+                if node_rack := [rack_name for dc_rack_id, rack_name in rack_names.items()
+                                 if dc_rack_id[0] == self.datacenter and dc_rack_id[1] == str(self.rack)]:
+                    self._node_rack = node_rack[0]
+                else:
+                    self._node_rack = str(self.rack)
+            LOGGER.debug("Node rack name: %s", self._node_rack)
         return self._node_rack
 
     @property
@@ -5302,6 +5310,11 @@ class BaseLoaderSet():
             LOGGER.warning('Cannot find summary in c-stress results: %s', lines[-10:])
             return {}
         return results
+
+    def update_rack_info_in_argus(self):
+        for loader in self.nodes:
+            LOGGER.debug("Update rack info in Argus for loader '%s'", loader.name)
+            loader.update_rack_info_in_argus(loader.datacenter, loader.node_rack)
 
 
 class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instance-attributes
