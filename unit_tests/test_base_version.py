@@ -134,6 +134,18 @@ class TestBaseVersion(unittest.TestCase):
         version_list = general_test(scylla_repo, linux_distro)
         assert set(version_list) == {'6.0', '2024.1', '2024.2'}
 
+    def test_2025_1_dev(self):
+        scylla_repo = self.url_base + '/master/rpm/centos/2025-01-15T09:25:01Z/scylla.repo'
+        linux_distro = 'centos'
+        version_list = general_test(scylla_repo, linux_distro)
+        assert set(version_list) == {'6.2'}
+
+    def test_2025_1_ubuntu(self):
+        scylla_repo = self.url_base + '-enterprise/enterprise-2025.1/deb/unified/latest/scylladb-2025.1/scylla.list'
+        linux_distro = 'ubuntu-focal'
+        version_list = general_test(scylla_repo, linux_distro)
+        assert {'2024.1', '2024.2'}.issubset(set(version_list))  # TODO: after 2025.1 release, need to add 6.2
+
 
 if __name__ == "__main__":
     unittest.main()
