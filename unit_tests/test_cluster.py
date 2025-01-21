@@ -761,7 +761,9 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
                                 'system.commitlog_cleanups', 'system.discovery', 'system.group0_history',
                                 'system.raft', 'system.raft_snapshot_config', 'system.raft_snapshots', 'system.raft_state',
                                 'system_schema.tables', 'system_schema.columns', 'system.compaction_history',
-                                'system.cdc_local', 'system.versions', 'system_distributed_everywhere.cdc_generation_descriptions_v2',
+                                'system.cdc_local', 'system.versions', 'system.view_build_status_v2',
+                                'system_distributed_everywhere.cdc_generation_descriptions_v2',
+                                'system_replicated_keys.encrypted_keys',
                                 'system.scylla_local', 'system.cluster_status', 'system.protocol_servers',
                                 'system_distributed.cdc_streams_descriptions_v2', 'system_schema.keyspaces',
                                 'system.size_estimates', 'system_schema.scylla_tables',
@@ -782,7 +784,8 @@ def test_get_any_ks_cf_list(docker_scylla, params, events):  # pylint: disable=u
                                 'system.role_attributes', 'system.role_members', 'system.role_permissions',
                                 'system.roles', 'system.service_levels_v2',
                                 'system.topology', 'system.topology_requests',
-                                'system.cdc_generations_v3',
+                                'system.cdc_generations_v3', 'system.tablets', 'system.view_build_status_v2',
+                                'system_replicated_keys.encrypted_keys', 'system.dicts',
                                 '"123_keyspace"."120users"', '"123_keyspace".users'}
 
     table_names = cluster.get_non_system_ks_cf_list(docker_scylla, filter_empty_tables=False, filter_out_mv=True)
