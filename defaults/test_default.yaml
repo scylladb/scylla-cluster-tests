@@ -129,6 +129,7 @@ cs_duration: '50m'
 batch_size: 1
 pre_create_schema: false
 user_profile_table_count: 1
+add_cs_user_profiles_extra_tables: false
 cassandra_stress_population_size: 1000000
 cassandra_stress_threads: 1000
 

@@ -35,7 +35,7 @@ from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import optional_stage
 from sdcm.utils.operations_thread import ThreadParams
-from sdcm.sct_events.system import InfoEvent
+from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.sct_events import Severity
 from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
 
@@ -269,10 +269,16 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         :param batch_size: Number of stress commands to run together in a batch.
         """
 
+        cs_user_profiles = self.params.get('cs_user_profiles')
+        if not cs_user_profiles:
+            TestFrameworkEvent(source="test_user_batch_custom_time",
+                               message="The Longevity test_user_batch_custom_time cannot run without 'cs_user_profiles' parameter. aborting.",
+                               severity=Severity.ERROR).publish()
+            return
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
 
         batch_size = self.params.get('batch_size')
-
+        user_profile_table_count = self.params.get('user_profile_table_count')  # pylint: disable=invalid-name
         if not self.params.get('reuse_cluster'):
             self._pre_create_templated_user_schema()
 
@@ -290,32 +296,35 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         stress_params_list = []
 
-        customer_profiles = self.params.get('cs_user_profiles')
-
         templated_table_counter = itertools.count()
 
-        if customer_profiles:
-            cs_duration = self.params.get('cs_duration')
-            duration = int(cs_duration.translate(str.maketrans('', '', string.ascii_letters)))
+        cs_duration = self.params.get('cs_duration')
+        try:
+            duration = int(cs_duration.translate(str.maketrans('', '', string.ascii_letters))) if cs_duration else None
+        except ValueError:
+            raise ValueError(f"Invalid cs_duration format: {cs_duration}")
 
-            for cs_profile in customer_profiles:
-                cs_profile = sct_abs_path(cs_profile)  # noqa: PLW2901
-                assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
-                self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
+        for cs_profile in cs_user_profiles:
+            cs_profile = sct_abs_path(cs_profile)  # noqa: PLW2901
+            assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
+            msg = f"Run stress test with user profile {cs_profile}"
+            msg += f", duration {cs_duration}" if cs_duration else ", no duration parameter"
+            self.log.debug(msg)
 
-                user_profile_table_count = self.params.get('user_profile_table_count')  # pylint: disable=invalid-name
-
-                for _ in range(user_profile_table_count):
-                    stress_params_list += self.create_templated_user_stress_params(next(templated_table_counter),
-                                                                                   cs_profile)
-            if not skip_optional_stage('main_load'):
-                self._run_user_stress_in_batches(batch_size=batch_size,
-                                                 stress_params_list=stress_params_list, duration=duration)
+            for _ in range(user_profile_table_count):
+                stress_params_list += self.create_templated_user_stress_params(next(templated_table_counter),
+                                                                               cs_profile)
+        if not skip_optional_stage('main_load'):
+            self.log.debug("Starting stress in batches of: %d with %d stress commands",
+                           batch_size, len(stress_params_list))
+            self._run_user_stress_in_batches(batch_size=batch_size,
+                                             stress_params_list=stress_params_list, duration=duration)
 
     def _run_user_stress_in_batches(self, batch_size, stress_params_list, duration):
         """
-        run user profile in batches, while adding 4 stress-commands which are not with precreated tables
-        and wait for them to finish
+        run user profile in batches, optionally adding stress-commands which are not with pre-created tables
+        and wait for them to finish.
+        The optional tables are set by add_cs_user_profiles_extra_tables parameter.
 
         :param batch_size: size of the batch
         :param stress_params_list: the list of all stress commands
@@ -326,23 +335,29 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
         def chunks(_list, chunk_size):
             """Yield successive n-sized chunks from _list."""
             for i in range(0, len(_list), chunk_size):
-                yield _list[i:i + chunk_size], i, i+chunk_size, len(_list) + i * 2
+                yield _list[i:i + chunk_size], len(_list) + i * 2
 
-        for batch, _, _, extra_tables_idx in list(chunks(stress_params_list, batch_size)):
+        all_batches = list(chunks(stress_params_list, batch_size))
+        total_batches = len(all_batches)
+
+        for batch_number, (batch, extra_tables_idx) in enumerate(all_batches, start=1):
+            self.log.info(f"Starting batch {batch_number} out of {total_batches}")
 
             stress_queue = []
             batch_params = dict(duration=duration, round_robin=True, stress_cmd=[])
 
-            # add few stress threads with tables that weren't pre-created
-            customer_profiles = self.params.get('cs_user_profiles')
-            for cs_profile in customer_profiles:
-                cs_profile = sct_abs_path(cs_profile)  # noqa: PLW2901
-                # for now we'll leave to just one fresh table, to kick schema update
-                num_of_newly_created_tables = 1
-                self._pre_create_templated_user_schema(batch_start=extra_tables_idx,
-                                                       batch_end=extra_tables_idx+num_of_newly_created_tables)
-                for i in range(num_of_newly_created_tables):
-                    batch += self.create_templated_user_stress_params(extra_tables_idx + i, cs_profile=cs_profile)  # noqa: PLW2901
+            if self.params.get('add_cs_user_profiles_extra_tables'):
+                self.log.info("adding extra tables with stress-commands in addition to pre-created tables")
+                # add few stress threads with tables that weren't pre-created
+                customer_profiles = self.params.get('cs_user_profiles')
+                for cs_profile in customer_profiles:
+                    cs_profile = sct_abs_path(cs_profile)  # noqa: PLW2901
+                    # for now we'll leave to just one fresh table, to kick schema update
+                    num_of_newly_created_tables = 1
+                    self._pre_create_templated_user_schema(batch_start=extra_tables_idx,
+                                                           batch_end=extra_tables_idx+num_of_newly_created_tables)
+                    for i in range(num_of_newly_created_tables):
+                        batch += self.create_templated_user_stress_params(extra_tables_idx + i, cs_profile=cs_profile)  # noqa: PLW2901
 
             nodes_ips = self.all_node_ips_for_stress_command
             for params in batch:
@@ -513,7 +528,11 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
             # example:
             # cassandra-stress user profile={} cl=QUORUM 'ops(insert=1)' duration={} -rate threads=100 -pop 'dist=gauss(0..1M)'
             for cmd in [line.lstrip('#').strip() for line in cont if line.find('cassandra-stress') > 0]:
-                stress_cmd = cmd.format(profile_dst, cs_duration)
+                # Use a conditional tuple to handle optional formatting arguments for c-s duration parameter.
+                # For example, without a duration: cassandra-stress user profile={} 'ops(insert=1)' cl=QUORUM n=2572262 -rate threads=1
+                # Or with a duration: cassandra-stress user profile={} 'ops(insert=1)' cl=QUORUM duration={} -rate threads=1
+                args = (profile_dst, cs_duration) if cs_duration else (profile_dst,)
+                stress_cmd = cmd.format(*args)
                 params = {'stress_cmd': stress_cmd, 'profile': profile_dst}
                 self.log.debug('Stress cmd: {}'.format(stress_cmd))
                 params_list.append(params)
