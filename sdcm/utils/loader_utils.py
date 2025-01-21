@@ -15,11 +15,14 @@
 import os
 import re
 import time
+from functools import cached_property
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.decorators import optional_stage
+from sdcm.utils.issues import SkipPerIssues
+from sdcm.utils.features import is_tablets_feature_enabled
 
 DEFAULT_USER = "cassandra"
 DEFAULT_USER_PASSWORD = "cassandra"
@@ -92,6 +95,12 @@ class LoaderUtilsMixin:
             }
             self._run_all_stress_cmds(stress_queue, params)
 
+    @cached_property
+    def tablets_enabled(self):
+        # is tablets feature enabled in Scylla configuration.
+        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+            return is_tablets_feature_enabled(session)
+
     def _run_all_stress_cmds(self, stress_queue, params):
         stress_cmds = params['stress_cmd']
         if not isinstance(stress_cmds, list):
@@ -106,8 +115,15 @@ class LoaderUtilsMixin:
             stress_params.update({'stress_cmd': stress_cmd})
 
             # Due to an issue with scylla & cassandra-stress - we need to create the counter table manually
+            # also tablets doesn't yet support counters, so we skip the command and error about it
             if 'counter_' in stress_cmd:
-                self._create_counter_table()
+                if self.tablets_enabled and SkipPerIssues('scylladb/scylladb#18180', params=self.params):
+                    TestFrameworkEvent(severity=Severity.ERROR,
+                                       source=self.__class__.__name__,
+                                       source_method='_run_all_stress_cmds',
+                                       message=f"Tablets feature is enabled, skipping counter stress:\n\n{stress_cmd}",).publish()
+                else:
+                    self._create_counter_table()
 
             if 'compression' in stress_cmd:
                 if 'keyspace_name' not in stress_params:
