@@ -24,6 +24,16 @@ latency_decorator_error_thresholds:
         fixed_limit: 1
       P99 read:
         fixed_limit: 5
+    "600000":
+      P90 read:
+        fixed_limit: 2
+      P99 read:
+        fixed_limit: 50
+    "700000":
+      P90 read:
+        fixed_limit: 3
+      P99 read:
+        fixed_limit: 50
     unthrottled:
       P90 read:
         fixed_limit: null
@@ -46,7 +56,7 @@ latency_decorator_error_thresholds:
       P90 write:
         fixed_limit: 1
       P90 read:
-        fixed_limit: 2
+        fixed_limit: 1
       P99 write:
         fixed_limit: 3
       P99 read:
