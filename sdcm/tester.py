@@ -849,6 +849,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         db_cluster.set_seeds()
         db_cluster.update_seed_provider()
 
+    @property
+    def rack_names_per_datacenter_and_rack_idx_map(self):
+        if ready_nodes := [node for node in self.db_cluster.nodes if node._is_node_ready_run_scylla_commands()]:
+            return self.db_cluster.get_rack_names_per_datacenter_and_rack_idx(db_nodes=ready_nodes)
+        return None
+
     @staticmethod
     def update_certificate():
         update_certificate()
@@ -1088,6 +1094,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.params.get('run_commit_log_check_thread'):
             self.run_commit_log_check_thread(self.get_duration(None))
+
+        # The loaders are configured in parallel with DB cluster. Collection of rack information fails because the DB nodes may be not
+        # available yet. Update rack info in Argus for loaders in the end of set up.
+        for loaders in self.loaders_multitenant:
+            loaders.update_rack_info_in_argus()
 
     def set_system_auth_rf(self, db_cluster=None):
         db_cluster = db_cluster or self.db_cluster
