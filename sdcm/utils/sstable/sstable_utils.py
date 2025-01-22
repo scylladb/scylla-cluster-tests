@@ -214,6 +214,17 @@ class SstableUtils:
         full_deletion_date_datetime = datetime.datetime.strptime(full_deletion_date, '%Y-%m-%d %H:%M:%S')
         return full_deletion_date_datetime
 
+    def corrupt_sstables(self, sstables_to_corrupt_count: int = 1):
+        """
+        Corrupts sstables by replace it's content with random data.
+        """
+        sstables = self.get_sstables()
+        if len(sstables) < sstables_to_corrupt_count:
+            sstables_to_corrupt_count = len(sstables)
+
+        for sstable in sstables[:sstables_to_corrupt_count]:
+            self.db_node.remoter.sudo(f"dd if=/dev/urandom of={sstable} bs=1M count=1", verbose=True)
+
 
 def is_new_sstable_dump_supported(node) -> bool:
     """
