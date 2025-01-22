@@ -1281,7 +1281,7 @@ class SSTablesCollector(BaseSCTLogCollector):
             with open(raw_events_file_path, "r", encoding="utf-8") as events_file:
                 for raw_line in events_file.readlines():
                     event = json.loads(raw_line)
-                    if event.get("type") == "CORRUPTED_SSTABLE":
+                    if event.get("type") == "CORRUPTED_SSTABLE" and event.get("severity") == "CRITICAL":
                         try:
                             sstable_dir, keyspace, table_name, sstable_name = self.get_sstable_details(
                                 event.get("line"))
