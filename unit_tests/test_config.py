@@ -36,7 +36,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         logging.getLogger('botocore').setLevel(logging.CRITICAL)
         logging.getLogger('boto3').setLevel(logging.CRITICAL)
         logging.getLogger('anyconfig').setLevel(logging.ERROR)
-
+        cls.clear_sct_env_variables()
         cls.setup_default_env()
 
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
