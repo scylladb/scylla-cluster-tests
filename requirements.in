@@ -4,6 +4,7 @@ fabric==3.2.2
 invoke==2.2.0
 boto3==1.28.4
 boto3-stubs[s3,ec2,dynamodb,pricing]==1.28.4
+moto[server]==5.1.1
 awscli==1.29.4
 aexpect==1.6.2
 scylla-driver==3.29.2
