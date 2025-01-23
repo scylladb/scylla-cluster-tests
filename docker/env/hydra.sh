@@ -21,7 +21,6 @@ CREATE_RUNNER_INSTANCE=""
 RUNNER_IP_FILE="${SCT_DIR}/sct_runner_ip"
 RUNNER_IP=""
 RUNNER_CMD=""
-AWS_MOCK=""
 
 HYDRA_DRY_RUN=""
 HYDRA_HELP=""
@@ -54,10 +53,6 @@ while [[ $# -gt 0 ]]; do
         --execute-on-runner)
             RUNNER_IP="$2"
             shift 2
-            ;;
-        --aws-mock)
-            AWS_MOCK="1"
-            shift
             ;;
         --dry-run-hydra)
             HYDRA_DRY_RUN="1"
@@ -370,23 +365,6 @@ if [ -z "${DOCKER_GROUP_ARGS[@]}" ]; then
 fi
 
 PREPARE_CMD="test"
-
-if [[ -n "${AWS_MOCK}" ]]; then
-    if [[ -z "${HYDRA_DRY_RUN}" ]]; then
-        AWS_MOCK_IP=$(${RUNNER_CMD} cat aws_mock_ip)
-        MOCKED_HOSTS=$(${RUNNER_CMD} openssl s_client -connect "${AWS_MOCK_IP}:443" </dev/null 2>/dev/null \
-                       | openssl x509 -noout -text \
-                       | grep -Po '(?<=DNS:)[^,]+')
-    else
-        AWS_MOCK_IP=127.0.0.1
-        MOCKED_HOSTS="aws-mock.itself scylla-qa-keystore.s3.amazonaws.com ec2.eu-west-2.amazonaws.com"
-    fi
-    for host in ${MOCKED_HOSTS}; do
-        echo "Mock requests to ${host} using ${AWS_MOCK_IP}"
-        DOCKER_ADD_HOST_ARGS+=(--add-host "${host}:${AWS_MOCK_IP}")
-    done
-    PREPARE_CMD+="; curl -sSk https://aws-mock.itself/install-ca.sh | bash"
-fi
 
 COMMAND=${HYDRA_COMMAND[0]}
 

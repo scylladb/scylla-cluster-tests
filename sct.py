@@ -24,7 +24,6 @@ import logging
 import time
 import subprocess
 import traceback
-import uuid
 import pprint
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -109,7 +108,7 @@ from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_co
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
-from sdcm.utils.aws_utils import AwsArchType, is_using_aws_mock
+from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.aws_okta import try_auth_with_okta
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS, gce_public_addresses
 from sdcm.utils.context_managers import environment
@@ -119,7 +118,6 @@ from sdcm.utils.version_utils import get_s3_scylla_repos_mapping
 import sdcm.provision.azure.utils as azure_utils
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
-from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
 
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
@@ -196,11 +194,10 @@ def cli():
     disable_loggers_during_startup()
     try_auth_with_okta()
 
-    if not is_using_aws_mock():
-        key_store = KeyStore()
-        # TODO: still leaving old keys, until we'll rebuild runner images - and reconfigure jenkins
-        key_store.sync(keys=['scylla-qa-ec2', 'scylla-test', 'scylla_test_id_ed25519'],
-                       local_path=Path('~/.ssh/').expanduser(), permissions=0o0600)
+    key_store = KeyStore()
+    # TODO: still leaving old keys, until we'll rebuild runner images - and reconfigure jenkins
+    key_store.sync(keys=['scylla-qa-ec2', 'scylla-test', 'scylla_test_id_ed25519'],
+                   local_path=Path('~/.ssh/').expanduser(), permissions=0o0600)
 
     docker_hub_login(remoter=LOCALRUNNER)
 
@@ -1641,40 +1638,6 @@ def clean_runner_instances(runner_ip, test_status, backend, dry_run, force):
     add_file_logger()
     clean_sct_runners(
         test_runner_ip=runner_ip, test_status=test_status, backend=backend, dry_run=dry_run, force=force)
-
-
-@cli.command("run-aws-mock", help="Start AWS Mock server Docker container")
-@click.option(
-    "-r", "--mock-region",
-    required=True,
-    multiple=True,
-    type=CloudRegion(cloud_provider="aws"),
-    help="Mock this AWS region",
-)
-@click.option("-f", "--force", is_flag=True, default=False, help="don't check aws_mock_ip")
-@click.option("-t", "--test-id", required=False, help="SCT Test ID")
-def run_aws_mock(mock_region: list[str], force: bool = False, test_id: str | None = None) -> None:
-    add_file_logger()
-    if test_id is None:
-        test_id = str(uuid.uuid4())
-    aws_mock_ip = AwsMock(test_id=test_id, regions=mock_region).run(force=force)
-    LOGGER.info("New mock for %r AWS regions started and listen on %s:443 (TestId=%s)",
-                mock_region, aws_mock_ip, test_id)
-
-
-@cli.command("clean-aws-mocks", help="Clean running AWS mock Docker containers")
-@click.option("-t", "--test-id", required=False, help="Clean AWS Mock container for test id")
-@click.option(
-    "-a", "--all", "all_mocks",
-    is_flag=True,
-    default=False,
-    help="Clean all AWS Mock containers running on this host",
-)
-@click.option('--verbose', is_flag=True, default=False, help="if enable, will log progress")
-@click.option("--dry-run", is_flag=True, default=False, help="dry run")
-def clean_aws_mocks(test_id: str | None, all_mocks: bool, verbose: bool, dry_run: bool) -> None:
-    add_file_logger()
-    AwsMock.clean(test_id=test_id, all_mocks=all_mocks, verbose=verbose, dry_run=dry_run)
 
 
 @cli.command("generate-pt-report", help="Generate parallel timelines representation for the SCT test events")
