@@ -310,6 +310,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self._datacenter_name = None
         self._node_rack = None
         self._is_zero_token_node = False
+        self._metadata_token = {"token": None, "expires": 0}
 
     def _is_node_ready_run_scylla_commands(self) -> bool:
         """
@@ -3142,6 +3143,22 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
         self.remoter.run(
             f'scylla-api-client system log POST --level {level} --message {shlex.quote(message)}', verbose=verbose)
+
+    def query_metadata(self, url: str, headers: dict = None, token_url: str = None, token_header: str = None,
+                       token_ttl_header: str = None, token_ttl: int = 21600) -> str:
+        """Query metadata service with optional token handling"""
+        if token_url and self._metadata_token["expires"] < time.time():
+            self._metadata_token["token"] = self.remoter.run(
+                f'curl -X PUT "{token_url}" -H "{token_ttl_header}: {token_ttl}"').stdout.strip()
+            self._metadata_token["expires"] = round(time.time()) + token_ttl - 100
+
+        headers = headers or {}
+        curl_headers = " ".join([f'-H "{k}: {v}"' for k, v in headers.items()])
+
+        if self._metadata_token["token"]:
+            curl_headers += f' -H "{token_header}: {self._metadata_token["token"]}"'
+
+        return self.remoter.run(f'curl -s {curl_headers} "{url}"').stdout.strip()
 
 
 class FlakyRetryPolicy(RetryPolicy):

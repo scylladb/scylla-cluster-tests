@@ -22,6 +22,7 @@ from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
+from sdcm.utils.net import resolve_ip_to_dns
 
 LOGGER = logging.getLogger(__name__)
 SPOT_TERMINATION_CHECK_DELAY = 15
@@ -36,6 +37,8 @@ class AzureNode(cluster.BaseNode):
     """
     Wraps Azure instances, so that we can also control the instance through SSH.
     """
+
+    METADATA_BASE_URL = "http://169.254.169.254/metadata/instance/"
 
     log = LOGGER
 
@@ -171,6 +174,14 @@ class AzureNode(cluster.BaseNode):
     def configure_remote_logging(self) -> None:
         """Remote logging configured upon vm provisioning using UserDataObject"""
         return
+
+    def query_azure_metadata(self, path: str, api_version: str = "2024-07-17") -> str:
+        url = f"{self.METADATA_BASE_URL}{path}?api-version={api_version}"
+        return self.query_metadata(url=url, headers={"Metadata": "true"})
+
+    @cached_property
+    def private_dns_name(self) -> str:
+        return resolve_ip_to_dns(self.private_ip_address)
 
 
 class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-attributes
