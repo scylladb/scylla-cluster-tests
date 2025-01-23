@@ -45,6 +45,7 @@ from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
+from sdcm.utils.net import resolve_ip_to_dns
 
 
 SPOT_TERMINATION_CHECK_DELAY = 5 * 60
@@ -64,6 +65,8 @@ class GCENode(cluster.BaseNode):
     """
     Wraps GCE instances, so that we can also control the instance through SSH.
     """
+
+    METADATA_BASE_URL = "http://metadata.google.internal/computeMetadata/v1/"
 
     log = LOGGER
 
@@ -239,6 +242,17 @@ class GCENode(cluster.BaseNode):
         disk = disk_client.get(disk=self._instance.disks[0].source.split(
             '/')[-1], project=self.project, zone=self.zone)
         return disk.source_image
+
+    def query_gce_metadata(self, path: str) -> str:
+        return self.query_metadata(url=f"{self.METADATA_BASE_URL}{path}", headers={"Metadata-Flavor": "Google"})
+
+    @cached_property
+    def private_dns_name(self) -> str:
+        return self.query_gce_metadata("instance/hostname")
+
+    @cached_property
+    def public_dns_name(self) -> str:
+        return resolve_ip_to_dns(self.public_ip_address)
 
 
 class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attributes,abstract-method

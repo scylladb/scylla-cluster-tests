@@ -40,3 +40,10 @@ def get_my_public_ip() -> str:
             LOGGER.warning("Failed to get my public IP from %s", hostname)
 
     raise ValueError("Failed to get my public IP from any service")
+
+
+def resolve_ip_to_dns(ip_address: str) -> str:
+    try:
+        return socket.gethostbyaddr(ip_address)[0]
+    except socket.herror as e:
+        raise ValueError(f"Unable to resolve IP: {e}")
