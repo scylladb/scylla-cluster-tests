@@ -469,6 +469,34 @@ def get_scylla_images_ec2_resource(region_name: str) -> EC2ServiceResource:
     return new_session.resource("ec2", region_name=region_name)
 
 
+def get_scylla_images_ec2_client(region_name: str) -> EC2Client:
+    """
+    Assume a role and create a new EC2 client session for the specified region.
+
+    Args:
+        region_name (str): The AWS region name.
+
+    Returns:
+        EC2Client: A boto3 EC2 client session with the assumed role credentials.
+
+    Raises:
+        ClientError: If there is an error assuming the role or creating the session.
+    """
+    session = boto3.Session()
+    sts = session.client("sts", region_name=region_name)
+    role_info = KeyStore().get_json('aws_images_role.json')
+    response = sts.assume_role(
+        RoleArn=role_info['role_arn'],
+        RoleSessionName=role_info['role_session_name'],
+    )
+
+    new_session = boto3.Session(aws_access_key_id=response['Credentials']['AccessKeyId'],
+                                aws_secret_access_key=response['Credentials']['SecretAccessKey'],
+                                aws_session_token=response['Credentials']['SessionToken'])
+
+    return new_session.client("ec2", region_name=region_name)
+
+
 def get_ssm_ami(parameter: str, region_name) -> str:
     """
     get AMIs from SSM parameters
