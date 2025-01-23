@@ -455,7 +455,7 @@ def get_arch_from_instance_type(instance_type: str, region_name: str) -> AwsArch
 
 def get_scylla_images_ec2_resource(region_name: str) -> EC2ServiceResource:
     session = boto3.Session()
-    sts = session.client("sts")
+    sts = session.client("sts", region_name=region_name)
     role_info = KeyStore().get_json('aws_images_role.json')
     response = sts.assume_role(
         RoleArn=role_info['role_arn'],
