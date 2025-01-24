@@ -144,33 +144,35 @@ def get_compaction_random_additional_params(strategy: CompactionStrategy):
     return list_additional_params_options[strategy]
 
 
-def calculate_allowed_twcs_ttl_borders(compaction_info: TimeWindowCompactionProperties, default_min_ttl: int):
-
-    compaction_window_size = compaction_info.compaction_window_size or 1
-    compaction_window_unit = compaction_info.compaction_window_unit or 'DAYS'
+def calculate_allowed_twcs_ttl(
+    compaction_properties: TimeWindowCompactionProperties,
+    default_min_ttl: int = 864000,  # 10 days
+    global_max_ttl: int = 4_300_000,  # 49 days
+):
+    # TODO retrieve twcs_max_window_count from scylla
+    compaction_window_size = int(compaction_properties.compaction_window_size or 1)
+    compaction_window_unit = (compaction_properties.compaction_window_unit or 'DAYS').upper()
     LOGGER.debug(f'Compaction window size: {compaction_window_size}, Unit: {compaction_window_unit}')
 
-    # Convert compaction_window_size to seconds
     unit_multipliers = {
         'MINUTES': 60,
         'HOURS': 3600,
         'DAYS': 86400,
         'WEEKS': 604800,
     }
-    multiplier = unit_multipliers.get(compaction_window_unit.upper(), 86400)
-    compaction_window_size_seconds = int(compaction_window_size) * multiplier
+    multiplier = unit_multipliers.get(compaction_window_unit, 86400)
+    window_size_in_seconds = compaction_window_size * multiplier
 
-    # twcs_max_window_count default value is 50; adjust as necessary
+    # twcs_max_window_count default value is 50;
     # opensource.docs.scylladb.com/stable/reference/configuration-parameters.html
-    twcs_max_window_count = random.randint(10, 45)
+    twcs_max_window_count = 50
 
-    # Calculate maximum allowed default_time_to_live
-    calculated_max_ttl = twcs_max_window_count * compaction_window_size_seconds
-    LOGGER.debug(f'Maximum allowed default_time_to_live: {calculated_max_ttl} seconds')
+    twcs_limit = twcs_max_window_count * window_size_in_seconds
+    safe_max_ttl = min(global_max_ttl, twcs_limit)
+    safe_min_ttl = max(1, min(default_min_ttl, safe_max_ttl))
 
-    # Check if max_ttl is less than min_ttl
-    if calculated_max_ttl < default_min_ttl:
-        # If calculated max_ttl < default_min_ttl, return a range from (max_ttl // 3) to max_ttl
-        return calculated_max_ttl // 3, calculated_max_ttl
-    else:
-        return default_min_ttl, calculated_max_ttl
+    safe_max_ttl = max(1, safe_max_ttl)
+    if safe_min_ttl > safe_max_ttl:
+        return 1
+
+    return random.randint(safe_min_ttl, safe_max_ttl)
