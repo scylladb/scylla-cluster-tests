@@ -159,7 +159,7 @@ from sdcm.exceptions import (
     NemesisStressFailure,
 )
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
-    get_gc_mode, GcMode, calculate_allowed_twcs_ttl_borders, get_table_compaction_info
+    get_gc_mode, GcMode, calculate_allowed_twcs_ttl, get_table_compaction_info
 from test_lib.cql_types import CQLTypeBuilder
 from test_lib.sla import ServiceLevel, MAX_ALLOWED_SERVICE_LEVELS
 from sdcm.utils.topology_ops import FailedDecommissionOperationMonitoring
@@ -2739,30 +2739,33 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             }
         """
         strategies = [
-            {
+            lambda: {
                 'class': 'SizeTieredCompactionStrategy',
-                'bucket_high': 1.5,
-                'bucket_low': 0.5,
-                'min_sstable_size': 50,
-                'min_threshold': 4,
-                'max_threshold': 32,
+                'bucket_high': random.uniform(1.2, 2.0),
+                'bucket_low': random.uniform(0.3, 0.7),
+                'min_sstable_size': random.randint(10, 100),
+                'min_threshold': random.randint(2, 6),
+                'max_threshold': random.randint(10, 32),
             },
-            {
+            lambda: {
                 'class': 'LeveledCompactionStrategy',
-                'sstable_size_in_mb': 160,
+                'sstable_size_in_mb': random.randint(100, 200),
             },
-            {
+            lambda: {
                 'class': 'TimeWindowCompactionStrategy',
                 'compaction_window_unit': 'DAYS',
-                'compaction_window_size': 1,
-                'expired_sstable_check_frequency_seconds': 600,
-                'min_threshold': 4,
-                'max_threshold': 32,
+                'compaction_window_size': random.randint(1, 7),
+                'expired_sstable_check_frequency_seconds': random.randint(300, 1200),
+                'min_threshold': random.randint(2, 6),
+                'max_threshold': random.randint(10, 32),
             },
         ]
-        prop_val = random.choice(strategies)
-        # max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
+
+        # Pick a random strategy and get its properties.
+        prop_val = random.choice(strategies)()
+
         if prop_val['class'] == 'TimeWindowCompactionStrategy':
+            # Max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
             self._modify_table_property(name="default_time_to_live", val=str(4300000),
                                         filter_out_table_with_counter=True)
 
@@ -2833,14 +2836,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 compaction_properties = get_table_compaction_info(
                     keyspace=keyspace, table=table, session=session
                 )
-            default_min_ttl, default_max_ttl = calculate_allowed_twcs_ttl_borders(
-                compaction_properties, default_min_ttl
-            )
+        ttl_to_set = calculate_allowed_twcs_ttl(compaction_properties, default_min_ttl, default_max_ttl)
 
-        value = random.randint(default_min_ttl, default_max_ttl)
-
-        InfoEvent(f'New default time to live to be set: {value}, for table: {keyspace_table}').publish()
-        self._modify_table_property(name="default_time_to_live", val=value,
+        InfoEvent(f'New default time to live to be set: {ttl_to_set}, for table: {keyspace_table}').publish()
+        self._modify_table_property(name="default_time_to_live", val=ttl_to_set,
                                     filter_out_table_with_counter=True, keyspace_table=keyspace_table)
 
     def modify_table_max_index_interval(self):
@@ -2911,50 +2910,50 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.use_nemesis_seed()
 
         def set_new_twcs_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
-            """ Recommended number of sstables for twcs is 20 - 30
-                if number of sstables more than 32, sstables are picked up
-                in bucket by 32
-
-                if number of sstables more than 100, then 99 sstables contain 1 time window
-                and 100th sstables will contain more than 1 sstable
-                default value for twcs_max_window_count = 50
-                number_of_sstables = ttl / unit size ~=~ 100 min / 1 min = 100 sstables
-
-                example of settings param:
-                    {"name": ks_cf,
-                     "compaction":  {'class': 'TimeWindowCompactionStrategy',
-                                     'compaction_window_size': '1',
-                                     'compaction_window_unit': 'MINUTES'},
-                     "gc": 864000,
-                     "dttl": 86400}
-
             """
-            # It is allowed that compaction strategy has only "class" defined, and "compaction_window_size" and "compaction_window_unit"
-            # are not defined.
-            current_unit = settings["compaction"].get("compaction_window_unit") or "DAYS"  # default value
-            current_size = int(settings["compaction"].get("compaction_window_size") or 1)  # default value
-            multiplier = 3600 if current_unit in ["DAYS", "HOURS"] else 60
+            Adjust window unit and size with random increments in acceptable borders,
+            ensuring the final TTL does not exceed 4,300,000 seconds (~49 days).
+            """
+            self.log.debug("Initial TWCS settings are: %s", settings)
+            MAX_TTL = 4_300_000  # ~49 days in seconds
             expected_sstable_number = 35
 
-            if current_unit == "DAYS":
-                current_size = current_size + 1
-            elif current_unit == "HOURS":
-                if (current_size // 24) > 2:
-                    current_unit = "DAYS"
-                    current_size = 3
-                else:
-                    current_size += 10
-            elif (current_size // 60) > 10:
-                current_unit = "HOURS"
-                current_size = 11
-            else:
-                current_size += 35
+            compaction = settings["compaction"]
+            current_unit = compaction.get("compaction_window_unit", "DAYS")
+            current_size = int(compaction.get("compaction_window_size", 1))
 
-            settings["gc"] = current_size * multiplier * expected_sstable_number // 2
-            settings["dttl"] = current_size * multiplier * expected_sstable_number
+            random_increments = {
+                "MINUTES": (10, 90),
+                "HOURS": (2, 24),
+                "DAYS": (1, 10),
+            }
+
+            inc_min, inc_max = random_increments.get(current_unit, (1, 5))
+            increment = random.randint(inc_min, inc_max)
+            current_size += increment
+
+            unit_multipliers = {
+                "DAYS": 24 * 3600,
+                "HOURS": 3600,
+                "MINUTES": 60,
+            }
+
+            multiplier = unit_multipliers.get(current_unit, unit_multipliers["DAYS"])
+            proposed_ttl = current_size * multiplier * expected_sstable_number
+
+            if proposed_ttl > MAX_TTL:
+                current_size = MAX_TTL // (multiplier * expected_sstable_number)
+                if current_size < 1:
+                    current_size = 1
+
+                proposed_ttl = current_size * multiplier * expected_sstable_number
+
+            settings["gc"] = proposed_ttl // 2
+            settings["dttl"] = proposed_ttl
             settings["compaction"]["compaction_window_unit"] = current_unit
             settings["compaction"]["compaction_window_size"] = current_size
 
+            self.log.debug("New TWCS settings are: %s", settings)
             return settings
 
         all_ks_cs_with_twcs = self.cluster.get_all_tables_with_twcs(self.target_node)
