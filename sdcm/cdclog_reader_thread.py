@@ -33,6 +33,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
 
     def __init__(self, *args, **kwargs):
 
+        self.termination_event = kwargs.pop("termination_event")
         self.keyspace = kwargs.pop("keyspace_name")
         self.cdc_log_table = kwargs.pop("base_table_name") + CDC_LOGTABLE_SUFFIX
         self.batching = kwargs.pop("enable_batching")
@@ -44,6 +45,23 @@ class CDCLogReaderThread(DockerBasedStressThread):
         self.stress_cmd = f"{self.stress_cmd} -keyspace {self.keyspace} -table {self.cdc_log_table} \
                             -nodes {node_ips} -group-size {shards_per_node} \
                             -worker-id {worker_id} -worker-count {worker_count}"
+
+    def run(self):
+        """
+        Overrides the base class's `run` method to customize how stress threads are spawned.
+        In the original `DockerBasedStressThread.run()`, each stress thread is submitted
+        by iterating directly over the loader objects  and then by indexing CPU cores or stress workers.
+        Here it specifically iterates over the loader indices
+        ensuring worker_id is in the valid range [0..worker_count - 1].
+        Previously, because loader indexing began at 1, the tool would fail with “worker id must be
+        from range [0..N-1].”
+        ref: https://github.com/scylladb/scylla-cluster-tests/issues/9819
+        """
+        self.configure_executer()
+        for loader_idx, loader in enumerate(self.loaders):
+            for cpu_idx in range(self.stress_num):
+                self.results_futures += [self.executor.submit(self._run_stress, *(loader, loader_idx, cpu_idx))]
+        return self
 
     def _run_stress(self, loader, loader_idx, cpu_idx):  # pylint: disable=unused-argument
         loader_node_logdir = Path(loader.logdir)
@@ -74,7 +92,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
                                     verbose=True,
                                     retry=0
                                     )
-                if not result.ok:
+                if not result.ok and not self.termination_event.is_set():
                     CDCReaderStressEvent.error(node=loader,
                                                stress_cmd=self.stress_cmd,
                                                errors=result.stderr.split("\n")).publish()
