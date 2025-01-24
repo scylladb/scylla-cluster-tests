@@ -2262,6 +2262,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="cdcreader", aggregate=stats_aggregate_cmds)
         return CDCLogReaderThread(loader_set=self.loaders,
+                                  termination_event=self.db_cluster.nemesis_termination_event,
                                   stress_cmd=stress_cmd,
                                   timeout=timeout,
                                   stress_num=stress_num,
