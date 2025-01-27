@@ -4981,7 +4981,7 @@ class BaseScyllaCluster:
         if self.params.get('use_mgmt') and self.node_type == "scylla-db":
             self.install_scylla_manager(node)
 
-    def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):
+    def node_startup(self, node: BaseNode, verbose: bool = False, timeout: int = 28800):
         if not self.test_config.REUSE_CLUSTER:
             self.log.debug('io.conf before reboot: %s', node.remoter.sudo(
                 f'cat {node.add_install_prefix("/etc/scylla.d/io.conf")}').stdout)
