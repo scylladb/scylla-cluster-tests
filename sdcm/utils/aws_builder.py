@@ -139,7 +139,7 @@ class AwsBuilder:
                 ],
                 'ImageId': runner.image.id,
                 'KeyName': self.region.SCT_KEY_PAIR_NAME,
-                'SecurityGroupIds': [self.region.sct_ssh_security_group.id],
+                'SecurityGroupIds': [self.region.sct_ssh_security_group.id, self.region.sct_security_group.id],
             }
         )
 

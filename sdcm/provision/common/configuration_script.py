@@ -23,7 +23,8 @@ from sdcm.provision.common.utils import (
     restart_syslogng_service,
     install_syslogng_exporter,
     disable_daily_apt_triggers,
-    configure_syslogng_destination_conf
+    configure_syslogng_destination_conf,
+    configure_syslogng_file_source
 )
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 
@@ -36,6 +37,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
     logs_transport: str = 'syslog-ng'
     configure_sshd: bool = True
     hostname: str = ''
+    log_file: str = ''
 
     def to_string(self) -> str:
         script = self._start_script()
@@ -55,7 +57,7 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         restarted, to retrigger sending logs.
         """
         return dedent(f"""
-        if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ]; then
+        if [ -f {CLOUD_INIT_SCRIPTS_PATH}/done ] && command -v syslog-ng >/dev/null 2>&1; then
             write_syslog_ng_destination
             sudo systemctl restart syslog-ng
             exit 0
@@ -96,6 +98,8 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         if self.logs_transport == 'syslog-ng':
             script += install_syslogng_service()
             script += configure_syslogng_target_script(hostname=self.hostname)
+            if self.log_file:
+                script += configure_syslogng_file_source(log_file=self.log_file)
             script += restart_syslogng_service()
             script += install_syslogng_exporter()
 

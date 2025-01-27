@@ -6,7 +6,6 @@ cluster_backend: 'aws'
 instance_type_db: 'i4i.large'
 instance_provision: "spot"
 instance_provision_fallback_on_demand: true
-logs_transport: 'ssh'
 n_db_nodes: 1
 n_loaders: 0
 n_monitor_nodes: 0
