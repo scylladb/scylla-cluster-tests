@@ -196,6 +196,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
     def run_gradual_increase_load(self, workload: Workload, stress_num, num_loaders, test_name):  # noqa: PLR0914
         if workload.cs_cmd_warm_up is not None:
             self.warmup_cache(workload.cs_cmd_warm_up, workload.num_threads)
+            # Wait for 4 minutes after warmup to let for all background processes to finish
+            time.sleep(240)
 
         if not self.exists():
             self.log.debug("Create test statistics in ES")
