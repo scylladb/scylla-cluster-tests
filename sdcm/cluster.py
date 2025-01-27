@@ -611,6 +611,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         return self.parent_cluster.params.get("unified_package") \
             and self.parent_cluster.params.get("nonroot_offline_install")
 
+    @cached_property
+    def is_scylla_logging_to_journal(self):
+        return self.remoter.run('sudo test -e /var/log/journal', ignore_status=True).exit_status == 0
+
     @property
     def is_client_encrypt(self):
         result = self.remoter.run(
@@ -2925,10 +2929,14 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
     def configure_remote_logging(self):
         if self.parent_cluster.params.get('logs_transport') not in ['syslog-ng',]:
             return
+        log_file = ""
+        if 'db-node' in self.name and self.is_nonroot_install and not self.is_scylla_logging_to_journal:
+            log_file = str(self.offline_install_dir / "scylla-server.log")
         script = ConfigurationScriptBuilder(
             syslog_host_port=self.test_config.get_logging_service_host_port(),
             logs_transport=self.parent_cluster.params.get('logs_transport'),
             hostname=self.name,
+            log_file=log_file,
         ).to_string()
         self.remoter.sudo(shell_script_cmd(script, quote="'"))
 
@@ -4705,7 +4713,20 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             save_kallsyms_map(node=node)
         if node.is_nonroot_install:
             self.scylla_configure_non_root_installation(node=node, devname=nic_devname)
+            if node.distro.is_rhel_like and not node.is_scylla_logging_to_journal:
+                # In case of nonroot installation on CentOS/Rocky, scylla-server log is redirected to a
+                # log file (as described in the https://github.com/scylladb/scylladb/issues/7131).
+                # To allow syslog-ng to read logs from the file and send them to test runner, we need to:
+                # - change SELinux context of the scylla installation directory
+                # - allow syslog-ng to use the port of the remote log destination
+                node.remoter.sudo(f"chcon -R -t var_log_t {node.offline_install_dir}")
+                self._allow_syslog_port_in_selinux(node)
+                node.remoter.sudo("systemctl restart syslog-ng")
             return
+        if 'no-selinux-setup' in (self.params.get('append_scylla_setup_args') or ''):
+            # If Scylla doesn't configure SELinux policies, allow syslog-ng to use the remote log destination port
+            self._allow_syslog_port_in_selinux(node)
+            node.remoter.sudo("systemctl restart syslog-ng")
 
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
@@ -4867,6 +4888,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         # remove dependency when using scylla ami but installing from repo
         node.remoter.sudo("sudo rm /etc/systemd/system/scylla-server.service.requires/scylla-image-*",
                           ignore_status=True)
+
+    def _allow_syslog_port_in_selinux(self, node: BaseNode) -> None:
+        """Allow syslog-ng to use the remote log destination port under the syslogd_port_t SELinux context."""
+        node.install_package("policycoreutils-python-utils")
+        _, syslogng_port = self.test_config.get_logging_service_host_port()
+        node.remoter.sudo(f"semanage port -a -t syslogd_port_t -p tcp {syslogng_port}")
 
     @staticmethod
     def _wait_for_preinstalled_scylla(node):

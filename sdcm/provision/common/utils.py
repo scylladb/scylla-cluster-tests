@@ -207,3 +207,16 @@ def configure_syslogng_destination_conf(host: str, port: int, throttle_per_secon
         EOF
         }}
         """).format(host=host, port=port, throttle_per_second=throttle_per_second)
+
+
+def configure_syslogng_file_source(log_file: str) -> str:
+    """Configures an additional syslog-ng source for ScyllaDB logs from a file."""
+    return dedent(f"""
+        cat <<EOF >/etc/syslog-ng/conf.d/scylla_file_source.conf
+        source s_scylla_file {{
+            file("{log_file}" follow-freq(1) flags(no-parse));
+        }};
+        EOF
+
+        echo "log {{ source(s_scylla_file); filter(filter_sct); destination(remote_sct); rewrite(r_host); }};" >> /etc/syslog-ng/syslog-ng.conf
+    """)

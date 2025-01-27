@@ -679,8 +679,7 @@ def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint:
         return K8sClientLogger(node, target_log_file)
     if logs_transport == 'ssh':
         if node.distro.uses_systemd:
-            if 'db-node' in node.name and node.is_nonroot_install and node.remoter.run(
-                    'sudo test -e /var/log/journal', ignore_status=True).exit_status != 0:
+            if 'db-node' in node.name and node.is_nonroot_install and not node.is_scylla_logging_to_journal:
                 return SSHNonRootScyllaSystemdLogger(node, target_log_file)
             if 'db-node' in node.name:
                 return SSHScyllaSystemdLogger(node, target_log_file)
