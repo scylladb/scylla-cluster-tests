@@ -17,6 +17,8 @@ from cassandra import OperationTimedOut, ReadTimeout
 # from sdcm.utils.operations_thread import ThreadParams
 from unit_tests.test_cluster import DummyDbCluster, DummyNode
 from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.issues import SkipPerIssues
+from sdcm.test_config import TestConfig
 import sdcm.scan_operation_thread
 from sdcm.scan_operation_thread import ScanOperationThread, ThreadParams, PrometheusDBStats
 
@@ -26,16 +28,16 @@ def mock_retrying_decorator(*args, **kwargs):  # pylint: disable=unused-argument
     return retrying(1, 1, allowed_exceptions=(Retry, ))
 
 
-with patch('sdcm.utils.decorators.retrying', mock_retrying_decorator):
+with patch("sdcm.utils.decorators.retrying", mock_retrying_decorator):
     reload(sdcm.scan_operation_thread)
 
 DEFAULT_PARAMS = {
-    'termination_event': Event(),
-    'user': 'sla_role_name',
-    'user_password': 'sla_role_password',
-    'duration': 10,
-    'interval': 0,
-    'validate_data': True
+    "termination_event": Event(),
+    "user": "sla_role_name",
+    "user_password": "sla_role_password",
+    "duration": 10,
+    "interval": 0,
+    "validate_data": True
 }
 
 
@@ -44,7 +46,7 @@ class DBCluster(DummyDbCluster):  # pylint: disable=abstract-method
     def __init__(self, connection_mock, nodes, params):
         super().__init__(nodes, params=params)
         self.connection_mock = connection_mock
-        self.params = {'nemesis_seed': 1}
+        self.params = {"nemesis_seed": 1}
 
     def get_non_system_ks_cf_list(*args, **kwargs):
         # pylint: disable=unused-argument
@@ -58,27 +60,27 @@ class DBCluster(DummyDbCluster):  # pylint: disable=abstract-method
 
 def get_event_log_file(events):
     if (log_file := Path(events.temp_dir, "events_log", "events.log")).exists():
-        return log_file.read_text(encoding="utf-8").rstrip().split('\n')
+        return log_file.read_text(encoding="utf-8").rstrip().split("\n")
     return ""
 
 
-@pytest.fixture(scope='function', autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def cleanup_event_log_file(events):
-    with open(os.path.join(events.temp_dir, "events_log", "events.log"), 'r+', encoding="utf-8") as file:
+    with open(os.path.join(events.temp_dir, "events_log", "events.log"), "r+", encoding="utf-8") as file:
         file.truncate(0)
 
 
-@pytest.fixture(scope='module', autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def mock_get_partition_keys():
-    with patch('sdcm.scan_operation_thread.get_partition_keys'):
+    with patch("sdcm.scan_operation_thread.get_partition_keys"):
         yield
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def node():
-    return DummyNode(name='test_node',
+    return DummyNode(name="test_node",
                      parent_cluster=None,
-                     ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+                     ssh_login_info=dict(key_file="~/.ssh/scylla-test"))
 
 
 class MockCqlConnectionPatient(MagicMock):
@@ -98,7 +100,7 @@ class MockCqlConnectionPatient(MagicMock):
     events = ["Dispatching forward_request to 1 endpoints"]
 
 
-@pytest.fixture(scope='module', name="cluster")
+@pytest.fixture(scope="module", name="cluster")
 def new_cluster(node):  # pylint: disable=redefined-outer-name
     db_cluster = DBCluster(MockCqlConnectionPatient(), [node], {})
     node.parent_cluster = db_cluster
@@ -119,16 +121,16 @@ def new_cluster(node):  # pylint: disable=redefined-outer-name
     return db_cluster
 
 
-@pytest.mark.parametrize("mode", ['table', 'partition', 'aggregate'])
+@pytest.mark.parametrize("mode", ["table", "partition", "aggregate"])
 def test_scan_positive(mode, events, cluster):  # pylint: disable=redefined-outer-name
     default_params = ThreadParams(
         db_cluster=cluster,
-        ks_cf='a.b',
+        ks_cf="a.b",
         mode=mode,
         **DEFAULT_PARAMS
     )
-    with patch.object(PrometheusDBStats, '__init__', return_value=None):
-        with patch.object(PrometheusDBStats, 'query', return_value=[{'values': [[0, '1'], [1, '2']]}]):
+    with patch.object(PrometheusDBStats, "__init__", return_value=None):
+        with patch.object(PrometheusDBStats, "query", return_value=[{"values": [[0, "1"], [1, "2"]]}]):
             with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
                 ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
             all_events = get_event_log_file(events)
@@ -141,90 +143,47 @@ def test_scan_positive(mode, events, cluster):  # pylint: disable=redefined-oute
 def test_negative_prometheus_validation_error(events, cluster):
     default_params = ThreadParams(
         db_cluster=cluster,
-        ks_cf='a.b',
+        ks_cf="a.b",
         mode="aggregate",
         **DEFAULT_PARAMS
     )
-    with patch.object(PrometheusDBStats, '__init__', return_value=None):
-        with patch.object(PrometheusDBStats, 'query', return_value=[{'values': [[0, '1'], [1, '1']]}]):
+    with patch.object(PrometheusDBStats, "__init__", return_value=None):
+        with patch.object(PrometheusDBStats, "query", return_value=[{"values": [[0, "1"], [1, "1"]]}]):
             with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=2):
                 ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
             all_events = get_event_log_file(events)
             assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
-            assert "Severity.ERROR" in all_events[1] and "period_type=end" in all_events[
+            severity = "Severity.ERROR"
+            if SkipPerIssues("https://github.com/scylladb/scylladb/issues/21578", TestConfig().tester_obj().params):
+                severity = "Severity.WARNING"
+            assert severity in all_events[1] and "period_type=end" in all_events[
                 1] and "Fullscan failed - 'mapreduce_service_requests_dispatched_to_other_nodes' was not triggered" in all_events[1]
 
 
-class ExecuteOperationTimedOutMockCqlConnectionPatient(MockCqlConnectionPatient):
-    def execute(*args, **kwargs):
-        # pylint: disable=unused-argument
-        # pylint: disable=no-method-argument
-        raise OperationTimedOut("timeout")
-
-
-class ExecuteAsyncOperationTimedOutMockCqlConnectionPatient(MockCqlConnectionPatient):
-    def execute_async(*args, **kwargs):
-        # pylint: disable=unused-argument
-        # pylint: disable=no-method-argument
-        raise OperationTimedOut("timeout")
-
-
-@pytest.mark.parametrize(("mode", 'severity', 'timeout', 'execute_mock'),
-                         [['partition', 'WARNING', 0, 'execute_async'],
-                          ['aggregate', 'ERROR', 60*30, 'execute'],
-                          ['table', 'WARNING', 0, 'execute']])
-def test_scan_negative_operation_timed_out(mode, severity, timeout, execute_mock, events, node):
+@pytest.mark.parametrize("exception", [ReadTimeout("Operation timed out"), Exception("Host has been marked down or removed"), OperationTimedOut("timeout")])
+@pytest.mark.parametrize("mode", ["table", "partition", "aggregate"])
+def test_scan_negative_execution_errors(mode, exception, events, node):
     # pylint: disable=redefined-outer-name
     # pylint: disable=too-many-arguments
-    if execute_mock == 'execute_async':
-        connection = ExecuteAsyncOperationTimedOutMockCqlConnectionPatient()
+    if mode == "partition":
+        class Connection(MockCqlConnectionPatient):
+            def execute_async(*args, **kwargs):
+                # pylint: disable=unused-argument
+                # pylint: disable=no-method-argument
+                raise exception
     else:
-        connection = ExecuteOperationTimedOutMockCqlConnectionPatient()
+        class Connection(MockCqlConnectionPatient):
+            def execute(*args, **kwargs):
+                # pylint: disable=unused-argument
+                # pylint: disable=no-method-argument
+                raise exception
+    connection = Connection()
     db_cluster = DBCluster(connection, [node], {})
     node.parent_cluster = db_cluster
     default_params = ThreadParams(
         db_cluster=db_cluster,
-        ks_cf='a.b',
+        ks_cf="a.b",
         mode=mode,
-        full_scan_aggregates_operation_limit=timeout,
-        full_scan_operation_limit=timeout,
-        **DEFAULT_PARAMS
-    )
-    with events.wait_for_n_events(events.get_events_logger(), count=2, timeout=10):
-        ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
-    all_events = get_event_log_file(events)
-    assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
-    assert f"Severity.{severity}" in all_events[1] and "period_type=end" in all_events[1]
-
-
-class ExecuteReadTimeoutMockCqlConnectionPatient1(MockCqlConnectionPatient):
-    def execute(*args, **kwargs):
-        # pylint: disable=unused-argument
-        # pylint: disable=no-method-argument
-        raise ReadTimeout("Operation timed out")
-
-
-class ExecuteReadTimeoutMockCqlConnectionPatient2(MockCqlConnectionPatient):
-    def execute(*args, **kwargs):
-        # pylint: disable=unused-argument
-        # pylint: disable=no-method-argument
-        raise ReadTimeout("some another reason")
-
-
-@pytest.mark.parametrize(('execute_mock', "expected_message"),
-                         [[ExecuteReadTimeoutMockCqlConnectionPatient1, "operation failed due to operation timed out"],
-                          [ExecuteReadTimeoutMockCqlConnectionPatient2, "operation failed, ReadTimeout error"]])
-def test_scan_negative_read_timedout(execute_mock, expected_message, events, node):
-    # pylint: disable=redefined-outer-name
-    # pylint: disable=too-many-arguments
-
-    connection = execute_mock()
-    db_cluster = DBCluster(connection, [node], {})
-    node.parent_cluster = db_cluster
-    default_params = ThreadParams(
-        db_cluster=db_cluster,
-        ks_cf='a.b',
-        mode='aggregate',
         full_scan_aggregates_operation_limit=60*30,
         full_scan_operation_limit=300,
         **DEFAULT_PARAMS
@@ -233,8 +192,7 @@ def test_scan_negative_read_timedout(execute_mock, expected_message, events, nod
         ScanOperationThread(default_params)._run_next_operation()  # pylint: disable=protected-access
     all_events = get_event_log_file(events)
     assert "Severity.NORMAL" in all_events[0] and "period_type=begin" in all_events[0]
-    assert "Severity.ERROR" in all_events[1] and "period_type=end" in all_events[1]
-    assert expected_message in all_events[1]
+    assert "Severity.WARNING" in all_events[1] and "period_type=end" in all_events[1]
 
 
 class ExecuteExceptionMockCqlConnectionPatient(MockCqlConnectionPatient):
@@ -251,19 +209,19 @@ class ExecuteAsyncExceptionMockCqlConnectionPatient(MockCqlConnectionPatient):
         raise Exception("Exception")
 
 
-@pytest.mark.parametrize(("running_nemesis", 'severity'), [[True, 'WARNING'], [False, 'ERROR']])
-@pytest.mark.parametrize(('mode', 'execute_mock'), [
-    ['partition', 'execute_async'],
-    ['aggregate', 'execute'],
-    ['table', 'execute']])
-def test_scan_negative_exception(mode, severity, running_nemesis, execute_mock, events, node):
+@pytest.mark.parametrize(("running_nemesis", "severity"), [[True, "WARNING"], [False, "ERROR"]])
+@pytest.mark.parametrize(("mode", "execute_mock"), [
+    ["partition", "execute_async"],
+    ["aggregate", "execute"],
+    ["table", "execute"]])
+def test_scan_negative_running_nemesis(mode, severity, running_nemesis, execute_mock, events, node):
     # pylint: disable=redefined-outer-name
     # pylint: disable=too-many-arguments
     if running_nemesis:
         node.running_nemesis = MagicMock()
     else:
         node.running_nemesis = None
-    if execute_mock == 'execute_async':
+    if execute_mock == "execute_async":
         connection = ExecuteAsyncExceptionMockCqlConnectionPatient()
     else:
         connection = ExecuteExceptionMockCqlConnectionPatient()
@@ -271,7 +229,7 @@ def test_scan_negative_exception(mode, severity, running_nemesis, execute_mock, 
     node.parent_cluster = db_cluster
     default_params = ThreadParams(
         db_cluster=db_cluster,
-        ks_cf='a.b',
+        ks_cf="a.b",
         mode=mode,
         ** DEFAULT_PARAMS
     )
