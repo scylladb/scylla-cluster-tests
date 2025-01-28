@@ -14,7 +14,7 @@ from typing import Optional, Type, NamedTuple, TYPE_CHECKING
 from contextlib import contextmanager
 
 from pytz import utc
-from cassandra import ConsistencyLevel, OperationTimedOut, ReadTimeout
+from cassandra import ConsistencyLevel
 from cassandra.cluster import ResponseFuture, ResultSet  # pylint: disable=no-name-in-module
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from cassandra.policies import ExponentialBackoffRetryPolicy
@@ -28,11 +28,12 @@ from sdcm.utils.operations_thread import OperationThreadStats, OneOperationStat,
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.test_config import TestConfig
 from sdcm.utils.decorators import retrying, Retry
+from sdcm.utils.issues import SkipPerIssues
 
 if TYPE_CHECKING:
     from sdcm.cluster import BaseNode
 
-ERROR_SUBSTRINGS = ("timed out", "unpack requires", "timeout", 'Host has been marked down or removed')
+ERROR_SUBSTRINGS = ("timed out", "unpack requires", "timeout", 'host has been marked down or removed')
 BYPASS_CACHE_VALUES = [" BYPASS CACHE", ""]
 LOCAL_CMD_RUNNER = LocalCmdRunner()
 
@@ -473,27 +474,8 @@ class FullScanAggregatesOperation(FullscanOperationBase):
                                   | FullPartitionScanReversedOrderEvent]) -> None:
         self.log.debug('Will run command %s', cmd)
         validate_mapreduce_service_requests_start_time = time.time()
-        try:
-            cmd_result = session.execute(
-                query=cmd, trace=False, timeout=self._session_execution_timeout)
-        except OperationTimedOut as exc:
-            self.log.error(traceback.format_exc())
-            self.current_operation_stat.exceptions.append(repr(exc))
-            event.message = f"{type(self).__name__} operation failed: {repr(exc)}," \
-                            f"session execution timeout {self._session_execution_timeout} is exceeded "
-            event.severity = Severity.ERROR
-            return
-        except ReadTimeout as exc:
-            self.current_operation_stat.exceptions.append(repr(exc))
-            self.current_operation_stat.exceptions.append(repr(exc))
-            if "Operation timed out" in repr(exc):
-                event.message = f"{type(self).__name__} operation failed due to operation timed out: {repr(exc)}," \
-                                f" full_scan_aggregates_operation_limit=" \
-                                f"{self.fullscan_params.full_scan_aggregates_operation_limit}"
-            else:
-                event.message = f"{type(self).__name__} operation failed, ReadTimeout error: {repr(exc)}"
-            event.severity = Severity.ERROR
-            return
+        cmd_result = session.execute(
+            query=cmd, trace=False, timeout=self._session_execution_timeout)
 
         message, severity = self._validate_fullscan_result(cmd_result, validate_mapreduce_service_requests_start_time)
         if not severity:
@@ -522,8 +504,10 @@ class FullScanAggregatesOperation(FullscanOperationBase):
             self.log.debug("prometheus_mapreduce_service_requests metrics:\n %s",
                            str(retry_exception))
             self.log.debug("Fullscan aggregation result: %s", output)
-            return "Fullscan failed - 'mapreduce_service_requests_dispatched_to_other_nodes' was not triggered", \
-                Severity.ERROR
+            severity = Severity.ERROR
+            if SkipPerIssues('https://github.com/scylladb/scylladb/issues/21578', TestConfig().tester_obj().params):
+                severity = Severity.WARNING
+            return "Fullscan failed - 'mapreduce_service_requests_dispatched_to_other_nodes' was not triggered", severity
 
         return f'result {result[0]}', None
 
