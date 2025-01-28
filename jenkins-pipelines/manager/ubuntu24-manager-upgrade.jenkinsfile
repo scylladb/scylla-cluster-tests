@@ -13,7 +13,7 @@ managerPipeline(
     manager_version: '3.4.0',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
-    test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/ubuntu24.yaml"]''',
+    test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/ubuntu24.yaml", "configurations/disable_client_encrypt.yaml"]''',
 
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
