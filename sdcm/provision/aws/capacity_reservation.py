@@ -56,9 +56,9 @@ class SCTCapacityReservation:
         return instance_counts, duration
 
     @classmethod
-    def get_cr_from_aws(cls, params) -> None:
+    def get_cr_from_aws(cls, params, force_fetch=False) -> None:
         """Retrieves capacity reservations for given test_id from AWS."""
-        if not cls.is_capacity_reservation_enabled(params):
+        if not cls.is_capacity_reservation_enabled(params) and not force_fetch:
             LOGGER.info("Capacity reservation is not enabled. Skipping reservation.")
             return
         test_id = params.get("reuse_cluster") or params.get("test_id")
