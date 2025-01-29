@@ -23,14 +23,14 @@ Performance master tests (latency &amp; throughput) - currently don't pass scyll
         <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
-              <properties>scylla_version=enterprise:latest
+              <properties>scylla_version=master:latest
 aws_region=us-east-1
 region=us-east-1
 provision_type=on_demand</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
           </configs>
-          <projects>../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis</projects>
+          <projects>../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-vnodes,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-vnodes,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-predefined-throughput-steps-write-tablets,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis,../scylla-enterprise/perf-regression/scylla-enterprise-perf-regression-latency-650gb-with-nemesis-rbno-disabled</projects>
           <condition>SUCCESS</condition>
           <triggerWithNoParameters>false</triggerWithNoParameters>
           <triggerFromChildProjects>false</triggerFromChildProjects>
@@ -38,7 +38,7 @@ provision_type=on_demand</properties>
         <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
-              <properties>scylla_version=enterprise:latest
+              <properties>scylla_version=master:latest
 aws_region=us-east-1
 region=us-east-1
 provision_type=on_demand</properties>
@@ -56,7 +56,7 @@ provision_type=on_demand</properties>
               <properties>scylla_version=2024.1
 aws_region=us-east-1
 region=us-east-1
-new_scylla_repo=https://downloads.scylladb.com/unstable/scylla-enterprise/enterprise/deb/unified/latest/scylladb-enterprise/scylla.list
+new_scylla_repo=https://downloads.scylladb.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list
 provision_type=on_demand</properties>
               <textParamValueOnNewLine>false</textParamValueOnNewLine>
             </hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
