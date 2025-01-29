@@ -1376,9 +1376,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         dc_topology_rf_change = self.cluster.decommission(self.target_node)
         new_node = None
         if add_node:
+            add_node_kwargs = {"count": 1, "rack": self.target_node.rack}
+            if self.target_node._is_zero_token_node:
+                add_node_kwargs.update({"is_zero_node": True})
             # When adding node after decommission the node is declared as up only after it completed bootstrapping,
             # increasing the timeout for now
-            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)[0]
+            new_node = self._add_and_init_new_cluster_nodes(**add_node_kwargs)[0]
             # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
             # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
             # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
@@ -3771,8 +3774,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert removed_node_status is None, \
                 "Node was not removed properly (Node status:{})".format(removed_node_status)
 
-            # add new node
-            new_node = self._add_and_init_new_cluster_nodes(count=1, rack=self.target_node.rack)[0]
+            # add new node with same type (data node / zero token node)
+            new_node_args = {"count": 1, "rack": self.target_node.rack}
+            if self.target_node._is_zero_token_node:
+                new_node_args.update({"is_zero_node": True})
+            new_node = self._add_and_init_new_cluster_nodes(**new_node_args)[0]
             # in case the removed node was not last seed.
             if node_to_remove.is_seed and num_of_seed_nodes > 1:
                 new_node.set_seed_flag(True)
