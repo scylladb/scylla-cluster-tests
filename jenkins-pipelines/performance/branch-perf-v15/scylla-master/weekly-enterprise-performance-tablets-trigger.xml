@@ -22,7 +22,7 @@
         <hudson.plugins.parameterizedtrigger.BuildTriggerConfig>
           <configs>
             <hudson.plugins.parameterizedtrigger.PredefinedBuildParameters>
-              <properties>scylla_version=enterprise:latest
+              <properties>scylla_version=master:latest
 aws_region=us-east-1
 region=us-east-1
 provision_type=on_demand</properties>
