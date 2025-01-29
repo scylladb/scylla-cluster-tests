@@ -315,6 +315,34 @@ def clean_ips(region_name):
     print("region %s deleted %d ip addresses kept %s" % (region_name, deleted_addresses, kept_addresses))
 
 
+def clean_capacity_reservations(region_name):
+    print("Cleaning region %s capacity reservations" % region_name)
+    client = boto3.client('ec2', region_name=region_name)
+    response = client.describe_capacity_reservations(
+        Filters=[
+            {
+                'Name': 'state',
+                'Values': ['active']
+            }]
+    )
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    for cr in response["CapacityReservations"]:
+        test_id = next((tag['Value'] for tag in cr.get('Tags', []) if tag['Key'] == 'test_id'), 'N/A')
+        print("found capacity reservation %s started at %s. instance type: %s, count: %s, available: %s, test_id: %s" %
+              (cr["CapacityReservationId"], cr["StartDate"], cr["InstanceType"], cr["TotalInstanceCount"], cr["AvailableInstanceCount"],
+               test_id))
+        if (
+                cr["TotalInstanceCount"] == cr["AvailableInstanceCount"]  # no instances running
+                and (now - cr["StartDate"]) > datetime.timedelta(minutes=15)  # don't clean too fresh reservations
+        ):
+            if DRY_RUN:
+                print("DRY RUN: would clean capacity reservation %s" % cr["CapacityReservationId"])
+            else:
+                print("cleaning capacity reservation %s" % cr["CapacityReservationId"])
+                client.cancel_capacity_reservation(CapacityReservationId=cr["CapacityReservationId"])
+
+
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser('ec2_stop')
     arg_parser.add_argument("--duration", type=int,
@@ -355,3 +383,4 @@ if __name__ == "__main__":
         clean_instances(region, arguments.duration)
         clean_volumes(region)
         clean_ips(region)
+        clean_capacity_reservations(region)
