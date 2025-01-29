@@ -1388,10 +1388,6 @@ class SCTool:
     def is_v3_cli(self):
         return self.parsed_client_version >= new_command_structure_minimum_version
 
-    @property
-    def is_minimum_3_2_6_or_snapshot(self):
-        return self.parsed_client_version >= forcing_tls_minimum_version or self.client_version == "Snapshot"
-
 
 class ScyllaMgmt:
     """
