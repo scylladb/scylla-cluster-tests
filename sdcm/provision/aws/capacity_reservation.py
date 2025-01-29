@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2024 ScyllaDB
 import logging
+import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
@@ -20,6 +21,7 @@ from botocore.exceptions import ClientError
 import boto3
 
 from sdcm.exceptions import CapacityReservationError
+from sdcm.utils.get_username import get_username
 
 LOGGER = logging.getLogger(__name__)
 
@@ -51,7 +53,7 @@ class SCTCapacityReservation:
         instance_counts[params.get("instance_type_db")] += cluster_max_size
         instance_counts[params.get("instance_type_loader")] += params.get("n_loaders")
         # don't reserve capacity for monitor - as usually it's not a problem to spin it
-        duration = params.get("test_duration") + 60  # 60 to have margin for test setup
+        duration = params.get("test_duration")
         instance_counts = {k: v for k, v in instance_counts.items() if v > 0}  # remove 0 values
         return instance_counts, duration
 
@@ -218,6 +220,15 @@ class SCTCapacityReservation:
                                 'Key': 'test_id',
                                 'Value': test_id
                             },
+                            {
+                                'Key': 'RunByUser',
+                                'Value': get_username()
+                            },
+                            {
+                                'Key': 'JenkinsJobTag',
+                                'Value': os.environ.get('BUILD_TAG')
+                            }
+
                         ]
                     },
                 ],
