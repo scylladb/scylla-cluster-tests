@@ -973,33 +973,19 @@ class ScyllaManagerTool(ScyllaManagerBase):
         Add a cluster to manager
 
         Usage:
-          sctool cluster add [flags]
-
-        Flags:
-          -h, --help                      help for add
-              --host string               hostname or IP of one of the cluster nodes
-          -n, --name alias                alias you can give to your cluster
-              --ssl-user-cert-file path   path to client certificate when using client/server encryption with require_client_auth enabled
-              --ssl-user-key-file path    path to key associated with ssl-user-cert-file
-
-        Global Flags:
-              --api-url URL    URL of Scylla Manager server (default "https://127.0.0.1:5443/api/v1")
-          -c, --cluster name   target cluster name or ID
+          sctool cluster add --host <IP> [--name <alias>] [--auth-token <token>] [flags]
 
         Scylla Docs:
-          https://docs.scylladb.com/operating-scylla/manager/1.4/add-a-cluster/
-          https://docs.scylladb.com/operating-scylla/manager/1.4/sctool/#cluster-add
-
-
+          https://manager.docs.scylladb.com/stable/add-a-cluster.html
+          https://manager.docs.scylladb.com/stable/sctool#cluster-add
         """
         # pylint: disable=too-many-locals
-
         if not any([host, db_cluster]):
             raise ScyllaManagerError("Neither host or db_cluster parameter were given to Manager add_cluster")
+
         host = host or self.get_cluster_hosts_ip(db_cluster=db_cluster)[0]
-        # FIXME: if cluster already added, print a warning, but not fail
-        cmd = 'cluster add --host={}  --name={} --auth-token {}'.format(
-            host, name, auth_token)
+
+        cmd = 'cluster add --host {} --name {} --auth-token {}'.format(host, name, auth_token)
 
         if force_non_ssl_session_port:
             cmd += " --force-non-ssl-session-port"
@@ -1011,17 +997,20 @@ class ScyllaManagerTool(ScyllaManagerBase):
                                "fail since not using client-encryption parameters.")
             else:  # check if scylla-node has client-encrypt
                 db_node, _ip = self.get_cluster_hosts_with_ips(db_cluster=db_cluster)[0]
-                if client_encrypt or db_node.is_client_encrypt:
+                if db_node.is_client_encrypt:
                     cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE,
                                                                                     SSL_USER_KEY_FILE)
+
         if credentials:
             username, password = credentials
             cmd += f" --username {username} --password {password}"
+
         res_cluster_add = self.sctool.run(cmd, parse_table_res=False)
         if not res_cluster_add or 'Cluster added' not in res_cluster_add.stderr:
             raise ScyllaManagerError("Encountered an error on 'sctool cluster add' command response: {}".format(
                 res_cluster_add))
         cluster_id = res_cluster_add.stdout.split('\n')[0]
+
         # return ManagerCluster instance with the manager's new cluster-id
         manager_cluster = self.clusterClass(manager_node=self.manager_node, cluster_id=cluster_id,
                                             client_encrypt=client_encrypt)
