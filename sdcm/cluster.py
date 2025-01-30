@@ -584,6 +584,14 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         return 'true' in result.stdout.lower()
 
     @property
+    def is_native_transport_port_ssl(self):
+        result = self.remoter.run(
+            cmd=f"grep '^native_transport_port_ssl:' {self.add_install_prefix(SCYLLA_YAML_PATH)}",
+            ignore_status=True,
+        )
+        return 'native_transport_port_ssl' in result.stdout
+
+    @property
     def cpu_cores(self) -> Optional[int]:
         try:
             result = self.remoter.run("nproc", ignore_status=True)
@@ -4862,8 +4870,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if host_ip is None:
             host_ip = self.nodes[0].scylla_listen_address
         credentials = self.get_db_auth()  # pylint: disable=no-member
-        return manager_tool.add_cluster(name=cluster_name, host=host_ip, auth_token=self.scylla_manager_auth_token,
-                                        credentials=credentials)
+        return manager_tool.add_cluster(
+            name=cluster_name,
+            host=host_ip,
+            auth_token=self.scylla_manager_auth_token,
+            credentials=credentials,
+            force_non_ssl_session_port=manager_tool.is_force_non_ssl_session_port(db_cluster=self),
+        )
 
     def is_additional_data_volume_used(self) -> bool:
         """return true if additional data volume is configured
