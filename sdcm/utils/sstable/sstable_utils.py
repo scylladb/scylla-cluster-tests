@@ -134,7 +134,7 @@ class SstableUtils:
         self.db_node.remoter.run(
             f'sudo {dump_cmd}  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
         tombstones_deletion_info = self.db_node.remoter.run(
-            'sudo egrep \'"expired" : true|marked_deleted\' /tmp/sstabledump.json', verbose=False, ignore_status=True)
+            'sudo egrep \'"expired" : true|tombstone\' /tmp/sstabledump.json', verbose=False, ignore_status=True)
         if not tombstones_deletion_info:
             self.log.debug('Got no tombstones for sstable: %s', sstable)
             return 0
@@ -188,7 +188,7 @@ class SstableUtils:
         dump_cmd = get_sstable_data_dump_command(node=self.db_node, keyspace=self.keyspace, table=self.table)
         self.db_node.remoter.run(
             f'sudo {dump_cmd}  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
-        result = self.db_node.remoter.run('sudo grep marked_deleted /tmp/sstabledump.json', verbose=False,
+        result = self.db_node.remoter.run('sudo grep tombstone /tmp/sstabledump.json', verbose=False,
                                           ignore_status=True)
         if result.ok:
             tombstones_deletion_info = result.stdout.splitlines()
@@ -213,16 +213,22 @@ class SstableUtils:
     def get_tombstone_date(tombstone_deletion_info: str) -> datetime.datetime:
         """
         Parse a datetime value out of an sstable tombstone dump.
-        Example input is: '{ "name" : "name_list", "deletion_info" : { "marked_deleted" : "2023-01-03T18:06:36.559369Z",
-         "local_delete_time" : "2023-01-03T18:06:36Z" } },'
-        Example Output:  datetime.datetime(2023, 1, 3, 18, 5, 58)
+        Example input:
+        {
+            "key": { ... },
+            "tombstone": {
+                "timestamp": 1738230562965937,
+                "deletion_time": "2025-01-30 09:49:23z"
+            }
+        }
+        Example Output: datetime.datetime(2025, 1, 30, 9, 49, 23)
         """
-        tombstone_dict = json.loads(tombstone_deletion_info[:-1])
-        deletion_date, deletion_time = tombstone_dict['deletion_info']['marked_deleted'].split('T')
-        deletion_hour, deletion_minutes, deletion_seconds = deletion_time.split(':')
-        deletion_seconds = deletion_seconds.split('.')[0]
-        full_deletion_date = f'{deletion_date} {deletion_hour}:{deletion_minutes}:{deletion_seconds}'
-        full_deletion_date_datetime = datetime.datetime.strptime(full_deletion_date, '%Y-%m-%d %H:%M:%S')
+        tombstone_dict = json.loads(tombstone_deletion_info)
+        deletion_datetime_str = tombstone_dict['tombstone']['deletion_time']
+
+        # Remove 'z' and parse the datetime string
+        full_deletion_date_datetime = datetime.datetime.strptime(deletion_datetime_str.rstrip('z'), '%Y-%m-%d %H:%M:%S')
+
         return full_deletion_date_datetime
 
     def corrupt_sstables(self, sstables_to_corrupt_count: int = 1):
