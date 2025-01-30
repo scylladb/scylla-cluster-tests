@@ -2,6 +2,7 @@ import sys
 from datetime import datetime
 from logging import getLogger
 from sdcm.send_email import Email
+from sdcm.utils.cloud_monitor.resources.capacity_reservations import get_active_capacity_reservations
 from sdcm.utils.cloud_monitor.resources.instances import CloudInstances
 from sdcm.utils.cloud_monitor.report import BaseReport, GeneralReport, DetailedReport, \
     QAonlyInstancesTimeDistributionReport, NonQaInstancesTimeDistributionReport
@@ -27,7 +28,8 @@ def notify_by_email(general_report: BaseReport,
 def cloud_report(mail_to):
     cloud_instances = CloudInstances()
     static_ips = StaticIPs(cloud_instances)
-    notify_by_email(general_report=GeneralReport(cloud_instances=cloud_instances, static_ips=static_ips),
+    crs = get_active_capacity_reservations()
+    notify_by_email(general_report=GeneralReport(cloud_instances=cloud_instances, static_ips=static_ips, crs=crs),
                     detailed_report=DetailedReport(cloud_instances=cloud_instances, static_ips=static_ips),
                     recipients=mail_to)
 
