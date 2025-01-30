@@ -301,16 +301,29 @@ class StressLoadOperations(ClusterTester, LoaderUtilsMixin):
 class ClusterOperations(ClusterTester):
     CLUSTER_NAME = "mgr_cluster1"
 
-    def ensure_and_get_cluster(self, manager_tool, force_add: bool = False):
+    def ensure_and_get_cluster(self, manager_tool, force_add: bool = False, **add_cluster_extra_params):
         """Get the cluster if it is already added, otherwise add it to manager.
+
         Use force_add=True if you want to re-add the cluster (delete and add again) even if it already added.
+        Use add_cluster_extra_params to pass additional parameters (like 'client_encrypt') to the add_cluster method.
         """
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME)
+
         if not mgr_cluster or force_add:
             if mgr_cluster:
                 mgr_cluster.delete()
-            mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
-                                                   auth_token=self.monitors.mgmt_auth_token)
+
+            add_cluster_params = {}
+            add_cluster_params.update(
+                name=self.CLUSTER_NAME,
+                db_cluster=self.db_cluster,
+                auth_token=self.monitors.mgmt_auth_token,
+                force_non_ssl_session_port=manager_tool.is_force_non_ssl_session_port(db_cluster=self.db_cluster),
+            )
+            add_cluster_params.update(add_cluster_extra_params)
+
+            mgr_cluster = manager_tool.add_cluster(**add_cluster_params)
+
         return mgr_cluster
 
     def get_cluster_hosts_ip(self):
@@ -1469,8 +1482,7 @@ class ManagerInstallationTests(ManagerTestFunctionsMixIn):
         self.log.info("Got Manager's version: %s", manager_tool.sctool.version)
 
         # Add cluster and verify hosts health
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
-                                               auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = self.ensure_and_get_cluster(manager_tool)
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.status == HostStatus.UP, "Host status is not 'UP'"

@@ -73,8 +73,13 @@ class ManagerUpgradeTest(ManagerTestFunctionsMixIn, ClusterTester):
             LOGGER.info("The new Scylla Manager is:\n{}".format(scylla_manager_yaml))
         manager_node.restart_manager_server(port=new_manager_http_port)
         manager_tool = get_scylla_manager_tool(manager_node=manager_node)
-        manager_tool.add_cluster(name="cluster_under_test", db_cluster=self.db_cluster,
-                                 auth_token=self.monitors.mgmt_auth_token)
+        is_force_non_ssl_session_port = manager_tool.is_force_non_ssl_session_port(db_cluster=self.db_cluster)
+        manager_tool.add_cluster(
+            name="cluster_under_test",
+            db_cluster=self.db_cluster,
+            auth_token=self.monitors.mgmt_auth_token,
+            force_non_ssl_session_port=is_force_non_ssl_session_port,
+        )
         current_manager_version = manager_tool.sctool.version
 
         LOGGER.debug("Generating load")
