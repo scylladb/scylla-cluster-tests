@@ -1297,6 +1297,10 @@ class SCTConfiguration(dict):
         dict(name="perf_gradual_throttle_steps", env="SCT_PERF_GRADUAL_THROTTLE_STEPS", type=dict_or_str,
              help="Used for gradual performance test. Define throttle for load step in ops. Example: {'read': ['100000', '150000'], 'mixed': ['300']}"),
 
+        dict(name="perf_gradual_step_duration", env="SCT_PERF_GRADUAL_STEP_DURATION", type=dict_or_str,
+             help="Step duration of c-s load for gradual performance test per sub-test. "
+                  "Example: {'read': '30m', 'write': None, 'mixed': '30m'}"),
+
         # RefreshTest
         dict(name="skip_download", env="SCT_SKIP_DOWNLOAD", type=boolean,
              help=""),
