@@ -138,6 +138,7 @@ class SstableUtils:
             f" Encryption results: {encryption_results}")
 
     def count_sstable_tombstones(self, sstable: str) -> int:
+<<<<<<< HEAD
         """
         Counts the number of tombstones in a given SSTable.
 
@@ -146,6 +147,23 @@ class SstableUtils:
         """
         if not self._run_sstabledump(sstable=sstable):  # Check if SSTable exists and was dumped
             self.log.debug("Skipping tombstone count as SSTable %s does not exist or dump failed.", sstable)
+||||||| parent of bdcbf7bd3 (fix(sstable_utils.py): adjust tombstone lookup for new output format of "scylla sstable dump-data")
+        dump_cmd = get_sstable_data_dump_command(node=self.db_node, keyspace=self.keyspace, table=self.table)
+        self.db_node.remoter.run(
+            f'sudo {dump_cmd}  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
+        tombstones_deletion_info = self.db_node.remoter.run(
+            'sudo egrep \'"expired" : true|marked_deleted\' /tmp/sstabledump.json', verbose=False, ignore_status=True)
+        if not tombstones_deletion_info:
+            self.log.debug('Got no tombstones for sstable: %s', sstable)
+=======
+        dump_cmd = get_sstable_data_dump_command(node=self.db_node, keyspace=self.keyspace, table=self.table)
+        self.db_node.remoter.run(
+            f'sudo {dump_cmd}  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
+        tombstones_deletion_info = self.db_node.remoter.run(
+            'sudo egrep \'"expired" : true|tombstone\' /tmp/sstabledump.json', verbose=False, ignore_status=True)
+        if not tombstones_deletion_info:
+            self.log.debug('Got no tombstones for sstable: %s', sstable)
+>>>>>>> bdcbf7bd3 (fix(sstable_utils.py): adjust tombstone lookup for new output format of "scylla sstable dump-data")
             return 0
 
         # Fetch the dumped JSON content
@@ -229,6 +247,7 @@ class SstableUtils:
 
         # Proceed with dump command
         dump_cmd = get_sstable_data_dump_command(node=self.db_node, keyspace=self.keyspace, table=self.table)
+<<<<<<< HEAD
         dump_result = self.db_node.remoter.run(
             f'sudo {dump_cmd} {sstable} 1>{remote_json_path}', verbose=False, ignore_status=True)
 
@@ -285,6 +304,29 @@ class SstableUtils:
             raise
 
         self.log.debug("Found %s tombstones for sstable %s", len(tombstones_deletion_info), sstable)
+||||||| parent of bdcbf7bd3 (fix(sstable_utils.py): adjust tombstone lookup for new output format of "scylla sstable dump-data")
+        self.db_node.remoter.run(
+            f'sudo {dump_cmd}  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
+        result = self.db_node.remoter.run('sudo grep marked_deleted /tmp/sstabledump.json', verbose=False,
+                                          ignore_status=True)
+        if result.ok:
+            tombstones_deletion_info = result.stdout.splitlines()
+        else:
+            self.log.warning('Failed to find compacted tombstones in %s: (%s, %s)',
+                             sstable, result.stdout, result.stderr)
+        self.log.debug('Found %s tombstones for sstable %s', len(tombstones_deletion_info), sstable)
+=======
+        self.db_node.remoter.run(
+            f'sudo {dump_cmd}  {sstable} 1>/tmp/sstabledump.json', verbose=False, ignore_status=True)
+        result = self.db_node.remoter.run('sudo grep tombstone /tmp/sstabledump.json', verbose=False,
+                                          ignore_status=True)
+        if result.ok:
+            tombstones_deletion_info = result.stdout.splitlines()
+        else:
+            self.log.warning('Failed to find compacted tombstones in %s: (%s, %s)',
+                             sstable, result.stdout, result.stderr)
+        self.log.debug('Found %s tombstones for sstable %s', len(tombstones_deletion_info), sstable)
+>>>>>>> bdcbf7bd3 (fix(sstable_utils.py): adjust tombstone lookup for new output format of "scylla sstable dump-data")
         return tombstones_deletion_info
 
     def verify_post_repair_sstable_tombstones(self, table_repair_date: datetime.datetime, sstable: str):
@@ -325,8 +367,42 @@ class SstableUtils:
 
     def get_tombstone_date(self, tombstone_deletion_info) -> datetime.datetime | None:
         """
+<<<<<<< HEAD
         Extracts the tombstone deletion date from the provided information.
         Handles different structures of the input data.
+||||||| parent of bdcbf7bd3 (fix(sstable_utils.py): adjust tombstone lookup for new output format of "scylla sstable dump-data")
+        Parse a datetime value out of an sstable tombstone dump.
+        Example input is: '{ "name" : "name_list", "deletion_info" : { "marked_deleted" : "2023-01-03T18:06:36.559369Z",
+         "local_delete_time" : "2023-01-03T18:06:36Z" } },'
+        Example Output:  datetime.datetime(2023, 1, 3, 18, 5, 58)
+        """
+        tombstone_dict = json.loads(tombstone_deletion_info[:-1])
+        deletion_date, deletion_time = tombstone_dict['deletion_info']['marked_deleted'].split('T')
+        deletion_hour, deletion_minutes, deletion_seconds = deletion_time.split(':')
+        deletion_seconds = deletion_seconds.split('.')[0]
+        full_deletion_date = f'{deletion_date} {deletion_hour}:{deletion_minutes}:{deletion_seconds}'
+        full_deletion_date_datetime = datetime.datetime.strptime(full_deletion_date, '%Y-%m-%d %H:%M:%S')
+        return full_deletion_date_datetime
+=======
+        Parse a datetime value out of an sstable tombstone dump.
+        Example input:
+        {
+            "key": { ... },
+            "tombstone": {
+                "timestamp": 1738230562965937,
+                "deletion_time": "2025-01-30 09:49:23z"
+            }
+        }
+        Example Output: datetime.datetime(2025, 1, 30, 9, 49, 23)
+        """
+        tombstone_dict = json.loads(tombstone_deletion_info)
+        deletion_datetime_str = tombstone_dict['tombstone']['deletion_time']
+
+        # Remove 'z' and parse the datetime string
+        full_deletion_date_datetime = datetime.datetime.strptime(deletion_datetime_str.rstrip('z'), '%Y-%m-%d %H:%M:%S')
+
+        return full_deletion_date_datetime
+>>>>>>> bdcbf7bd3 (fix(sstable_utils.py): adjust tombstone lookup for new output format of "scylla sstable dump-data")
 
         :param tombstone_deletion_info: Dictionary containing tombstone information.
         :return: datetime.datetime or None if no valid date is found.
