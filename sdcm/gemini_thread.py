@@ -24,7 +24,6 @@ from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
 from sdcm.stress_thread import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
 
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -59,7 +58,6 @@ class GeminiEventsPublisher(FileFollowerThread):
 
 
 class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
-
     DOCKER_IMAGE_PARAM_NAME = "stress_image.gemini"
 
     def __init__(self, test_cluster, oracle_cluster, loaders, stress_cmd, timeout=None, params=None):  # pylint: disable=too-many-arguments
@@ -105,9 +103,9 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         self.gemini_result_file = f"gemini_result_{self.unique_id}.log"
 
     def _generate_gemini_command(self):
-        seed = self.params.get('gemini_seed') or random.randint(1, 100)
-        table_options = self.params.get('gemini_table_options')
-        log_statements = self.params.get('gemini_log_cql_statements') or False
+        seed = self.params.get("gemini_seed") or random.randint(1, 100)
+        table_options = self.params.get("gemini_table_options")
+        log_statements = self.params.get("gemini_log_cql_statements") or False
 
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
         oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips())
@@ -119,7 +117,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                 --seed={seed} \
                 --schema-seed={seed} \
                 --profiling-port=6060 \
-                --bind=0.0.0.0:2121 \
+                --bind=0.0.0.0:2112 \
                 --outfile=/{self.gemini_result_file} \
                 --replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}}\" \
                 --oracle-replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}}\" "
@@ -130,16 +128,16 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
 
         credentials = self.loader_set.get_db_auth()
 
-        if credentials and '--test-username' not in cmd:
+        if credentials and "--test-username" not in cmd:
             cmd += f"--test-username={credentials[0]} \
                 --test-password={credentials[1]} \
                 --oracle-username={credentials[0]} \
                 --oracle-password={credentials[1]} "
 
         if table_options:
-            cmd += " ".join([f"--table-options=\"{table_opt}\"" for table_opt in table_options])
+            cmd += " ".join([f'--table-options="{table_opt}"' for table_opt in table_options])
 
-        stress_cmd = self.stress_cmd.replace('\n', ' ').strip()
+        stress_cmd = self.stress_cmd.replace("\n", " ").strip()
 
         for key, value in self.gemini_default_flags.items():
             if not key in stress_cmd:
@@ -156,35 +154,35 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         docker = cleanup_context = RemoteDocker(
             loader,
             self.docker_image_name,
-            extra_docker_opts=f'--cpuset-cpus="{cpu_idx}"' if self.stress_num > 1 else ""
-            '--label shell_marker={self.shell_marker}'
-            '--network=host '
-            '--security-opt seccomp=unconfined '
+            extra_docker_opts=f'--cpuset-cpus="{cpu_idx}" '
+            if self.stress_num > 1
+            else ""
+            "--network=host "
+            "--security-opt seccomp=unconfined "
             '--entrypoint="" '
-            f'-v $HOME/{self.gemini_result_file}:/{self.gemini_result_file} '
-            f'-v $HOME/{self.gemini_test_statements_file}:/{self.gemini_test_statements_file} '
-            f'-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file} '
+            f"--label shell_marker={self.shell_marker} "
+            f"-v $HOME/{self.gemini_result_file}:/{self.gemini_result_file} "
+            f"-v $HOME/{self.gemini_test_statements_file}:/{self.gemini_test_statements_file} "
+            f"-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file} ",
         )
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'gemini-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
-        LOGGER.debug('gemini local log: %s', log_file_name)
+        log_file_name = os.path.join(loader.logdir, "gemini-l%s-c%s-%s.log" % (loader_idx, cpu_idx, uuid.uuid4()))
+        LOGGER.debug("gemini local log: %s", log_file_name)
 
         gemini_cmd = self._generate_gemini_command()
-        with cleanup_context, \
-                GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, \
-                GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:
+        with cleanup_context, GeminiEventsPublisher(node=loader, gemini_log_filename=log_file_name) as publisher, GeminiStressEvent(node=loader, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:
             try:
                 publisher.event_id = gemini_stress_event.event_id
                 gemini_stress_event.log_file_name = log_file_name
-                result = docker.run(cmd=gemini_cmd,
-                                    timeout=self.timeout,
-                                    ignore_status=False,
-                                    log_file=log_file_name,
-                                    retry=0,
-                                    )
+                result = docker.run(
+                    cmd=gemini_cmd,
+                    timeout=self.timeout,
+                    ignore_status=False,
+                    log_file=log_file_name,
+                    retry=0,
+                )
                 # sleep to gather all latest log messages
                 time.sleep(5)
             except Exception as details:  # pylint: disable=broad-except
@@ -227,34 +225,33 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
 
     @staticmethod
     def verify_gemini_results(results):
-
-        stats = {'results': [], 'errors': {}}
+        stats = {"results": [], "errors": {}}
         if not results:
-            LOGGER.error('Gemini results are not found')
-            stats['status'] = 'FAILED'
+            LOGGER.error("Gemini results are not found")
+            stats["status"] = "FAILED"
         else:
             for res in results:
-                stats['results'].append(res)
-                for err_type in ['write_errors', 'read_errors', 'errors']:
+                stats["results"].append(res)
+                for err_type in ["write_errors", "read_errors", "errors"]:
                     if res.get(err_type, None):
                         LOGGER.error("Gemini {} errors: {}".format(err_type, res[err_type]))
-                        stats['status'] = 'FAILED'
-                        stats['errors'][err_type] = res[err_type]
-        if not stats.get('status'):
-            stats['status'] = "PASSED"
+                        stats["status"] = "FAILED"
+                        stats["errors"][err_type] = res[err_type]
+        if not stats.get("status"):
+            stats["status"] = "PASSED"
 
         return stats
 
     @staticmethod
     def _parse_gemini_summary_json(json_str):
-        results = {'result': {}}
+        results = {"result": {}}
         try:
             results = json.loads(json_str)
 
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.error("Invalid json document {}".format(details))
 
-        return results.get('result')
+        return results.get("result")
 
     @staticmethod
     def _parse_gemini_summary(lines):
@@ -263,7 +260,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
 
         for line in lines:
             line.strip()
-            if 'Results:' in line:
+            if "Results:" in line:
                 enable_parse = True
                 continue
             if "run completed" in line:
@@ -272,7 +269,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             if not enable_parse:
                 continue
 
-            split_idx = line.index(':')
+            split_idx = line.index(":")
             key = line[:split_idx].strip()
             value = line[split_idx + 1:].split()[0]
             results[key] = int(value)
