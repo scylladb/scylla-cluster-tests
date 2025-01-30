@@ -1037,7 +1037,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         return [[n, n.ip_address] for n in db_cluster.nodes]
 
     def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=True,  # pylint: disable=too-many-arguments
-                    auth_token=None, credentials=None):
+                    auth_token=None, credentials=None, force_non_ssl_session_port=False):
         """
         :param name: cluster name
         :param host: cluster node IP
@@ -1047,6 +1047,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
          This param removes that task.
         :param auth_token: a token used to authenticate requests to the Agent
         :param credentials: a tuple of the username and password that are used to access the cluster.
+        :param force_non_ssl_session_port: force SM to always use the non-SSL port for TLS-enabled cluster CQL sessions.
         :return: ManagerCluster
 
         Add a cluster to manager
@@ -1079,6 +1080,10 @@ class ScyllaManagerTool(ScyllaManagerBase):
         # FIXME: if cluster already added, print a warning, but not fail
         cmd = 'cluster add --host={}  --name={} --auth-token {}'.format(
             host, name, auth_token)
+
+        if force_non_ssl_session_port:
+            cmd += " --force-non-ssl-session-port"
+
         # Adding client-encryption parameters if required
         if client_encrypt:
             if not db_cluster:
@@ -1115,6 +1120,11 @@ class ScyllaManagerTool(ScyllaManagerBase):
 
     def rollback_upgrade(self, scylla_mgmt_address):
         raise NotImplementedError
+
+    @staticmethod
+    def is_force_non_ssl_session_port(db_cluster) -> bool:
+        _node = db_cluster.nodes[0]
+        return _node.is_client_encrypt and not _node.is_native_transport_port_ssl
 
 
 class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
