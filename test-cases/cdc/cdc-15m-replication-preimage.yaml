@@ -22,8 +22,17 @@ extra_network_interface: true
 
 # Note: for preimage and postimage we use 1 thread because there is no sensible way
 # to test pre/post-images with concurrent writes happening to a single row.
-gemini_cmd: "gemini -d --duration 15m --warmup 0s -c 1 -m write --non-interactive --cql-features basic --max-mutation-retries 100 --max-mutation-retries-backoff 100ms --replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}\" --table-options \"cdc = {'enabled': true, 'preimage': 'full'}\""
+gemini_cmd: |
+  --duration 15m
+  --warmup 0s
+  --concurrency 1
+  --mode write
+  --cql-features basic
+  --max-mutation-retries 100
+  --max-mutation-retries-backoff 100ms
 
+gemini_table_options:
+  - "cdc = {'enabled': true, 'preimage': 'full'}"
 
 # Required by SCT, although not used:
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
