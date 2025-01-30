@@ -20,7 +20,17 @@ nemesis_interval: 1
 # Required by the nemesis:
 extra_network_interface: true
 
-gemini_cmd: "gemini -d --duration 15m --warmup 0s -c 5 -m write --non-interactive --cql-features basic --max-mutation-retries 100 --max-mutation-retries-backoff 100ms --replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}\" --table-options \"cdc = {'enabled': true}\""
+gemini_cmd: |
+  --duration 15m
+  --warmup 0s
+  --concurrency 5
+  --mode write
+  --cql-features basic
+  --max-mutation-retries 100
+  --max-mutation-retries-backoff 100ms
+
+gemini_table_options:
+  - "cdc={'enabled': true}"
 
 
 # Required by SCT, although not used:
