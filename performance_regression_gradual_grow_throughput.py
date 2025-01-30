@@ -28,6 +28,7 @@ class Workload(NamedTuple):
     preload_data: bool
     drop_keyspace: bool
     wait_no_compactions: bool
+    step_duration: str
 
 
 class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # pylint: disable=too-many-instance-attributes
@@ -53,6 +54,15 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
                                severity=Severity.CRITICAL).publish()
         return throttle_steps[workload_type]
 
+    def step_duration(self, workload_type):
+        step_duration = self.params["perf_gradual_step_duration"]
+        if workload_type not in step_duration:
+            TestFrameworkEvent(source=self.__class__.__name__,
+                               message=f"Step duration for '{workload_type}' test is not defined in "
+                                       f"'perf_gradual_step_duration' parameter",
+                               severity=Severity.CRITICAL).publish()
+        return step_duration[workload_type]
+
     def test_mixed_gradual_increase_load(self):  # pylint: disable=too-many-locals
         """
         Test steps:
@@ -68,7 +78,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
                             throttle_steps=self.throttle_steps(workload_type),
                             preload_data=True,
                             drop_keyspace=False,
-                            wait_no_compactions=True)
+                            wait_no_compactions=True,
+                            step_duration=self.step_duration(workload_type))
         self._base_test_workflow(workload=workload,
                                  test_name="test_mixed_gradual_increase_load (read:50%,write:50%)")
 
@@ -87,7 +98,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
                             throttle_steps=self.throttle_steps(workload_type),
                             preload_data=False,
                             drop_keyspace=True,
-                            wait_no_compactions=False)
+                            wait_no_compactions=False,
+                            step_duration=self.step_duration(workload_type))
         self._base_test_workflow(workload=workload,
                                  test_name="test_write_gradual_increase_load (100% writes)")
 
@@ -106,7 +118,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
                             throttle_steps=self.throttle_steps(workload_type),
                             preload_data=True,
                             drop_keyspace=False,
-                            wait_no_compactions=True)
+                            wait_no_compactions=True,
+                            step_duration=self.step_duration(workload_type))
         self._base_test_workflow(workload=workload,
                                  test_name="test_read_gradual_increase_load (100% reads)")
 
@@ -169,13 +182,15 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
             self.update({"latency_during_ops": latency_results})
             return latency_results
 
-    def run_step(self, stress_cmds, current_throttle, num_threads):
+    def run_step(self, stress_cmds, current_throttle, num_threads, step_duration):
         results = []
         stress_queue = []
         for stress_cmd in stress_cmds:
             params = {"round_robin": True, "stats_aggregate_cmds": False}
             stress_cmd_to_run = stress_cmd.replace(
                 "$threads", f"{num_threads}").replace("$throttle", f"{current_throttle}")
+            if step_duration is not None:
+                stress_cmd_to_run = stress_cmd_to_run.replace("$duration", step_duration)
             params.update({'stress_cmd': stress_cmd_to_run})
             # Run all stress commands
             self.log.debug('RUNNING stress cmd: %s', stress_cmd_to_run)
@@ -209,8 +224,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
             current_throttle = f"fixed={int(int(throttle_step) // (num_loaders * stress_num))}/s" if throttle_step != "unthrottled" else ""
             run_step = ((latency_calculator_decorator(legend=f"Gradual test step {throttle_step} op/s",
                                                       cycle_name=throttle_step))(self.run_step))
-            results, _ = run_step(
-                stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle, num_threads=workload.num_threads)
+            results, _ = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
+                                  num_threads=workload.num_threads, step_duration=workload.step_duration)
 
             calculate_result = self._calculate_average_max_latency(results)
             self.update_test_details(scylla_conf=True)
