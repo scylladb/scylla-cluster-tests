@@ -32,3 +32,4 @@ use_hdr_cs_histogram: true
 
 use_placement_group: true
 use_capacity_reservation: true
+nemesis_add_node_cnt: 0
