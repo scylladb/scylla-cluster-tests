@@ -1,2 +1,8 @@
 gemini:
+<<<<<<< HEAD
   image: 'scylladb/hydra-loaders:gemini-v1.8.6'
+||||||| parent of 2ef3cbfa2 (fix(gemini-cmd): broken gemini commands on upgrades)
+  image: scylladb/gemini:1.8.9
+=======
+  image: scylladb/gemini:1.8.10
+>>>>>>> 2ef3cbfa2 (fix(gemini-cmd): broken gemini commands on upgrades)
