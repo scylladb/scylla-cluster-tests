@@ -50,3 +50,4 @@ append_scylla_args: '--blocked-reactor-notify-ms 5 --abort-on-lsa-bad-alloc 1 --
 
 use_placement_group: true
 use_capacity_reservation: true
+nemesis_add_node_cnt: 0
