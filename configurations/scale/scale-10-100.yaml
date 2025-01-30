@@ -1,6 +1,6 @@
 test_duration: 6000
-n_db_nodes: 10
-add_node_cnt: 10
+n_db_nodes: 5
+add_node_cnt: 95
 cluster_target_size: 100
 
 user_prefix: 'cluster-scale-10-100-test'
