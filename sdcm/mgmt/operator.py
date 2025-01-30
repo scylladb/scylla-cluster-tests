@@ -421,7 +421,7 @@ class ScyllaManagerToolOperator(ScyllaManagerTool):
         raise NotImplementedError()
 
     def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=True,
-                    auth_token=None, credentials=None):
+                    auth_token=None, credentials=None, force_non_ssl_session_port=False):
         raise NotImplementedError()
 
     def upgrade(self, scylla_mgmt_upgrade_to_repo):
