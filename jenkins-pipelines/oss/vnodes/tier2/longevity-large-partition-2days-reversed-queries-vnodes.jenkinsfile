@@ -4,9 +4,9 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
-    backend: 'gce',
-    region: 'us-east1',
+    backend: 'aws',
+    region: 'eu-west-1',
     test_name: 'longevity_large_partition_test.LargePartitionLongevityTest.test_large_partition_longevity',
-    test_config: 'test-cases/longevity/longevity-large-partition-200k_pks-4days.yaml'
+    test_config: '''["test-cases/longevity/longevity-large-partitions-deletions-and-reversed-queries.yaml", "configurations/tablets_disabled.yaml"]'''
 
 )

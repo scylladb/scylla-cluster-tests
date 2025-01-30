@@ -5,10 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'aws',
-    availability_zone: 'a,b,c',
     region: '''["eu-west-1", "eu-west-2"]''',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-multidc-parallel-topology-schema-changes-12h.yaml", "configurations/network_config/all_addresses_ipv6_public.yaml"]''',
-
-    timeout: [time: 820, unit: 'MINUTES']
+    test_config: '''["test-cases/longevity/longevity-encryption-at-rest-20GB-6h-multidc.yaml", "configurations/kms-ear.yaml", "configurations/tablets_disabled.yaml"]'''
 )
