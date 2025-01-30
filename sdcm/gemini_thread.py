@@ -119,7 +119,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                 --seed={seed} \
                 --schema-seed={seed} \
                 --profiling-port=6060 \
-                --bind=0.0.0.0:2121 \
+                --bind=0.0.0.0:2112 \
                 --outfile=/{self.gemini_result_file} \
                 --replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}}\" \
                 --oracle-replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}}\" "
@@ -156,13 +156,13 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         docker = cleanup_context = RemoteDocker(
             loader,
             self.docker_image_name,
-            extra_docker_opts=f'--cpuset-cpus="{cpu_idx}"'
+            extra_docker_opts=f'--cpuset-cpus="{cpu_idx}" '
             if self.stress_num > 1
             else ""
-            "--label shell_marker={self.shell_marker}"
             "--network=host "
             "--security-opt seccomp=unconfined "
             '--entrypoint="" '
+            f"--label shell_marker={self.shell_marker} "
             f"-v $HOME/{self.gemini_result_file}:/{self.gemini_result_file} "
             f"-v $HOME/{self.gemini_test_statements_file}:/{self.gemini_test_statements_file} "
             f"-v $HOME/{self.gemini_oracle_statements_file}:/{self.gemini_oracle_statements_file} ",
