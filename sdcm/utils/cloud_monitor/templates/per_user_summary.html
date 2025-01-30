@@ -37,4 +37,35 @@
         {% endfor %}
     </table>
     {% endfor %}
-    <h2>For detailed report download and open attached html</h2>
+
+{% if report.crs %}
+    <h3>Active Capacity Reservations (AWS)</h3>
+    <table id="results_table">
+        <tr>
+            <th>User</th>
+            <th>Region</th>
+            <th>Instance Type</th>
+            <th>Capacity total</th>
+            <th>Capacity available</th>
+            <th>Start Time</th>
+            <th>id</th>
+        </tr>
+        {% for cr in report.crs %}
+            <tr>
+                <td>{{ cr.user }}</td>
+                <td>{{ cr.region }}</td>
+                <td>{{ cr.instance_type }}</td>
+                <td>{{ cr.capacity_total }}</td>
+                {% if cr.is_unused %}
+                    <td><span class="red fbold">{{ cr.capacity_available }}</span></td>
+                {% else %}
+                    <td>{{ cr.capacity_available }}</td>
+                {% endif %}
+                <td>{{ cr.start_time }}</td>
+                <td>{{ cr.id }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+{% endif %}
+
+<h2>For detailed report download and open attached html</h2>

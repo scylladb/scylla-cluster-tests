@@ -24,6 +24,7 @@ import pytz
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.cloud_monitor.resources import CLOUD_PROVIDERS
+from sdcm.utils.cloud_monitor.resources.capacity_reservations import CapacityReservation
 from sdcm.utils.cloud_monitor.resources.instances import CloudInstances
 from sdcm.utils.cloud_monitor.resources.static_ips import StaticIPs
 
@@ -84,9 +85,9 @@ class CloudResourcesReport(BaseReport):
 
 
 class PerUserSummaryReport(BaseReport):
-    def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs):
+    def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs, crs: list[CapacityReservation]):
         super().__init__(cloud_instances, static_ips, html_template="per_user_summary.html")
-        self.report = {"results": {"qa": {}, "others": {}}, "cloud_providers": CLOUD_PROVIDERS}
+        self.report = {"results": {"qa": {}, "others": {}}, "cloud_providers": CLOUD_PROVIDERS, "crs": crs}
         self.qa_users = KeyStore().get_qa_users()
 
     def user_type(self, user_name: str):
@@ -119,10 +120,10 @@ class PerUserSummaryReport(BaseReport):
 
 
 class GeneralReport(BaseReport):
-    def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs):
+    def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs, crs: list[CapacityReservation]):
         super().__init__(cloud_instances, static_ips, html_template="base.html")
         self.cloud_resources_report = CloudResourcesReport(cloud_instances=cloud_instances, static_ips=static_ips)
-        self.per_user_report = PerUserSummaryReport(cloud_instances, static_ips)
+        self.per_user_report = PerUserSummaryReport(cloud_instances, static_ips, crs)
 
     def to_html(self):
         cloud_resources_html = self.cloud_resources_report.to_html()
