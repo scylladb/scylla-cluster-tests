@@ -1,0 +1,12 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'aws',
+    region: 'eu-west-1',
+    test_name: 'longevity_tombstone_gc_test.TombstoneGcLongevityTest.test_switch_tombstone_gc_modes',
+    test_config: '''["test-cases/features/tombstone_gc/longevity-tombstone-gc-modes.yaml", "configurations/tablets_disabled.yaml"]'''
+
+)

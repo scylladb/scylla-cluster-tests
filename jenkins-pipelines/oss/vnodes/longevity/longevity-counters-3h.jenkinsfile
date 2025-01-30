@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
-    test_name: 'longevity_twcs_test.TWCSLongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-twcs-48h.yaml'
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: '''["test-cases/longevity/longevity-counters-3h.yaml", "configurations/tablets_disabled.yaml"]'''
 
 )
