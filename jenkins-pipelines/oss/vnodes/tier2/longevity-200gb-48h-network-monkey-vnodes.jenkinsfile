@@ -4,9 +4,8 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
-    backend: 'azure',
-    azure_region_name: 'eastus',
+    backend: 'aws',
+    region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-1TB-5days-authorization-and-tls-ssl.yaml'
-
+    test_config: '''["test-cases/longevity/longevity-200GB-48h-network-monkey.yaml", "configurations/network_config/two_interfaces.yaml", "configurations/tablets_disabled.yaml"]'''
 )
