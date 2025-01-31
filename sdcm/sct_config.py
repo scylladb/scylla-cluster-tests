@@ -666,8 +666,9 @@ class SCTConfiguration(dict):
              help="""Run nemesis during prepare stage of the test"""),
 
         dict(name="nemesis_seed", env="SCT_NEMESIS_SEED",
-             type=int, k8s_multitenancy_supported=True,
-             help="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey"""),
+             type=int_or_space_separated_ints, k8s_multitenancy_supported=True,
+             help="""A seed number in order to repeat nemesis sequence as part of SisyphusMonkey.
+             Can provide a list of seeds for multiple nemesis"""),
 
         dict(name="nemesis_add_node_cnt",
              env="SCT_NEMESIS_ADD_NODE_CNT",
