@@ -19,6 +19,7 @@ instance_type_db: 'i3en.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey:1 SisyphusMonkey:1'
 nemesis_selector: [["topology_changes"],["!disruptive","schema_changes"]]
+nemesis_seed: '253 328'
 nemesis_interval: 10
 nemesis_filter_seeds: false
 nemesis_during_prepare: false

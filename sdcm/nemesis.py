@@ -227,7 +227,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     delete_rows: bool = False  # A flag denotes a nemesis deletes partitions/rows, generating tombstones.
     zero_node_changes: bool = False
 
-    def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, **kwargs):  # pylint: disable=unused-argument
+    def __init__(self, tester_obj, termination_event, *args, nemesis_selector=None, nemesis_seed=None, **kwargs):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(self, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
             if not name.startswith(self.DISRUPT_NAME_PREF):
                 continue
@@ -264,6 +264,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log = SDCMAdapter(logger, extra={'prefix': str(self)})
         self.task_used_streaming = None
         self.filter_seed = self.cluster.params.get('nemesis_filter_seeds')
+        self.nemesis_seed = nemesis_seed or random.randint(0, 1000)
         self._random_sequence = None
         self._add_drop_column_max_per_drop = 5
         self._add_drop_column_max_per_add = 5
@@ -282,6 +283,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._init_num_deletions_factor()
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
         self.hdr_tags = []
+        self.log.debug('Instantiated %s nemesis with %d seed', self.__class__.__name__, self.nemesis_seed)
 
     def _init_num_deletions_factor(self):
         # num_deletions_factor is a numeric divisor. It's a factor by which the available-partitions-for-deletion
@@ -350,8 +352,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 node.running_nemesis = None
 
     def use_nemesis_seed(self):
-        if nemesis_seed := self.tester.params.get("nemesis_seed"):
-            random.seed(nemesis_seed)
+        if self.nemesis_seed:
+            random.seed(self.nemesis_seed)
 
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
@@ -2024,15 +2026,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return [nemesis.__name__ for nemesis in self.disruptions_list]
 
     def shuffle_list_of_disruptions(self):
-        if self.cluster.params.get('nemesis_seed'):
-            nemesis_seed = self.cluster.params.get('nemesis_seed')
-        else:
-            nemesis_seed = random.randint(0, 1000)
-            self.log.info(f'nemesis_seed generated for this test is {nemesis_seed}')
-        self.log.debug(f'nemesis_seed to be used is {nemesis_seed}')
+        self.log.debug(f'nemesis_seed to be used is {self.nemesis_seed}')
 
         self.log.debug(f"nemesis stack BEFORE SHUFFLE is {self._disruption_list_names}")
-        random.Random(nemesis_seed).shuffle(self.disruptions_list)
+        random.Random(self.nemesis_seed).shuffle(self.disruptions_list)
         self.log.info(f"List of Nemesis to execute: {self._disruption_list_names}")
 
     def call_next_nemesis(self):
@@ -4075,7 +4072,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return new_node
 
         terminate_pattern = self.target_node.raft.get_random_log_message(operation=TopologyOperations.DECOMMISSION,
-                                                                         seed=self.tester.params.get("nemesis_seed"))
+                                                                         seed=self.nemesis_seed)
         self.log.debug("Reboot node after log message: '%s'", terminate_pattern.log_message)
 
         nodetool_decommission_timeout = terminate_pattern.timeout + 600
@@ -5297,7 +5294,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
 
         terminate_pattern = self.target_node.raft.get_random_log_message(operation=TopologyOperations.BOOTSTRAP,
-                                                                         seed=self.tester.params.get("nemesis_seed"))
+                                                                         seed=self.nemesis_seed)
 
         bootstrapabortmanager = NodeBootstrapAbortManager(bootstrap_node=new_node, verification_node=self.target_node)
 
