@@ -6,7 +6,7 @@ boto3==1.28.4
 boto3-stubs[s3,ec2,dynamodb,pricing]==1.28.4
 awscli==1.29.4
 aexpect==1.6.2
-scylla-driver==3.28.0
+scylla-driver==3.28.2
 requests==2.32.2
 elasticsearch==7.15.0
 sortedcontainers==2.4.0
