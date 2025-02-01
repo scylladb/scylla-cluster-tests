@@ -50,14 +50,14 @@ BACKEND_TIMEOUTS: dict[str, Mapping[LogPosition, int]] = {
 
 ABORT_DECOMMISSION_LOG_PATTERNS: Iterable[MessagePosition] = [
     MessagePosition("api - decommission", LogPosition.BEGIN),
-    MessagePosition("DECOMMISSIONING: unbootstrap starts", LogPosition.BEGIN),
-    MessagePosition("DECOMMISSIONING: unbootstrap done", LogPosition.END),
-    MessagePosition("becoming a group 0 non-voter", LogPosition.END),
-    MessagePosition("became a group 0 non-voter", LogPosition.END),
-    MessagePosition("leaving token ring", LogPosition.END),
-    MessagePosition("left token ring", LogPosition.END),
     MessagePosition("raft_topology - decommission: waiting for completion", LogPosition.BEGIN),
-    MessagePosition("repair - decommission_with_repair", LogPosition.END)
+    MessagePosition("repair - decommission_with_repair", LogPosition.END),
+    MessagePosition("raft_topology - request decommission for", LogPosition.BEGIN),
+    MessagePosition("storage_service - Started batchlog replay for decommission", LogPosition.END),
+    MessagePosition("raft_topology - start streaming", LogPosition.BEGIN),
+    MessagePosition("raft_topology - streaming completed", LogPosition.END),
+    MessagePosition("raft_topology - decommission: successfully removed from topology", LogPosition.END),
+    MessagePosition("raft_topology - Decommission succeeded", LogPosition.END),
 ]
 
 ABORT_BOOTSTRAP_LOG_PATTERNS: Iterable[MessagePosition] = [
