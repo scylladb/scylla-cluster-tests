@@ -775,7 +775,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.kill_stress_thread()
 
     def build_histogram(self, workload: PerformanceTestWorkload, test_type: PerformanceTestType):
-        if not self.params["use_hdr_cs_histogram"]:
+        if not self.params["use_hdrhistogram"]:
             return
 
         start_time = self.get_test_start_time() or self.start_time
