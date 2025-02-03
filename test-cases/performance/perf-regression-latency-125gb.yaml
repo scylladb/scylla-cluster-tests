@@ -30,4 +30,4 @@ use_mgmt: true
 store_perf_results: true
 email_recipients: ['scylla-perf-results@scylladb.com']
 custom_es_index: 'performancestatsv2'
-use_hdr_cs_histogram: true
+use_hdrhistogram: true
