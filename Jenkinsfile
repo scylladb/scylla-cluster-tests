@@ -169,6 +169,7 @@ pipeline {
                 script {
                     def curr_params = createRunConfiguration('docker')
                     def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name)
+                    dockerLogin(params)
                     try {
                         withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                             dir('scylla-cluster-tests') {
