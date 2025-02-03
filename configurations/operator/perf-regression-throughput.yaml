@@ -5,4 +5,4 @@ append_scylla_args: ''
 
 # NOTE: remove following when the following SCT bug gets fixed:
 #       https://github.com/scylladb/scylla-cluster-tests/issues/6289
-use_hdr_cs_histogram: false
+use_hdrhistogram: false
