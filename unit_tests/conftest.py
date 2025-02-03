@@ -74,6 +74,11 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
     cluster = LocalScyllaClusterDummy(params=params)
 
     ssl_dir = (Path(__file__).parent.parent / 'data_dir' / 'ssl_conf').absolute()
+
+    if ssl:
+        localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
+        create_ca(localhost)
+
     extra_docker_opts = (f'-p {ALTERNATOR_PORT} -p {BaseNode.CQL_PORT} --cpus="1" -v {entryfile_path}:/entry.sh'
                          f' -v {ssl_dir}:{SCYLLA_SSL_CONF_DIR}'
                          ' --entrypoint /entry.sh')
@@ -86,8 +91,6 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
         curr_dir = os.getcwd()
         try:
             os.chdir(Path(__file__).parent.parent)
-            localhost = LocalHost(user_prefix='unit_test_fake_user', test_id='unit_test_fake_test_id')
-            create_ca(localhost)
             create_certificate(CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, cname="scylladb",
                                ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE, ip_addresses=[scylla.ip_address])
             create_certificate(CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb",
@@ -116,7 +119,6 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
     wait.wait_for(func=db_up, step=1, text='Waiting for DB services to be up', timeout=120, throw_exc=True)
     wait.wait_for(func=db_alternator_up, step=1, text='Waiting for DB services to be up alternator)',
                   timeout=120, throw_exc=True)
-
     yield scylla
 
     scylla.kill()
