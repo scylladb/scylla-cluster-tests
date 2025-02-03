@@ -9,7 +9,7 @@ stress_multiplier: 1
 instance_type_loader: 'c6i.2xlarge'
 round_robin: true
 # https://github.com/scylladb/scylla-cluster-tests/issues/5883
-use_hdr_cs_histogram: false
+use_hdrhistogram: false
 
 # NOTE: following are tmp values for testing 2vCPUs/16GbRAM single serverless Scylla cluster
 prepare_write_cmd: "cassandra-stress write no-warmup cl=ALL n=50331648 -schema 'replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=340 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..50331648"

@@ -29,7 +29,7 @@ print_kernel_callstack: true
 store_perf_results: true
 email_recipients: ["scylla-perf-results@scylladb.com"]
 use_prepared_loaders: true
-use_hdr_cs_histogram: true
+use_hdrhistogram: true
 use_placement_group: true
 email_subject_postfix: 'latency during upgrades'
 
