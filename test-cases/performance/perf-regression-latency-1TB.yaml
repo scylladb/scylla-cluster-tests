@@ -28,7 +28,7 @@ email_recipients: ['scylla-perf-results@scylladb.com']
 backtrace_decoding: false
 print_kernel_callstack: true
 custom_es_index: 'performancestatsv2'
-use_hdr_cs_histogram: true
+use_hdrhistogram: true
 
 use_placement_group: true
 use_capacity_reservation: true

@@ -386,7 +386,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
             cmd_runner.send_files(str(connection_bundle_file),
                                   self.target_connection_bundle_file, delete_dst=True, verbose=True)
 
-        if self.params.get("use_hdr_cs_histogram"):
+        if self.params.get("use_hdrhistogram"):
             stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)
             hdr_logger_context = CSHDRFileLogger(
                 node=loader,
