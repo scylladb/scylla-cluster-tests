@@ -13,11 +13,13 @@
 
 from __future__ import annotations
 
+import os
 import time
 import socket
 import logging
 import subprocess
 from abc import abstractmethod, ABCMeta
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from functools import cached_property
 from threading import Thread, Event as ThreadEvent
@@ -36,6 +38,7 @@ from urllib3.exceptions import (
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events import Severity
 from sdcm.sct_events.decorators import raise_event_on_failure
+from sdcm.sct_events.loaders import HDRFileMissed
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.decorators import retrying
@@ -47,6 +50,9 @@ if TYPE_CHECKING:
 
 
 logging.getLogger('parso.python.diff').setLevel(logging.WARNING)
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class LoggerBase(metaclass=ABCMeta):
@@ -123,6 +129,97 @@ class SSHLoggerBase(LoggerBase):
     @abstractmethod
     def _logger_cmd_template(self) -> str:  # The `since' parameter will be passed to a returned template.
         ...
+
+
+class HDRHistogramFileLogger(SSHLoggerBase):
+    VERBOSE_RETRIEVE = False
+
+    def __init__(self, node: BaseNode, remote_log_file: str, target_log_file: str):
+        super().__init__(node=node, target_log_file=target_log_file)
+        self._child_process = None
+        self._remote_log_file = remote_log_file
+        self.target_log_file = target_log_file
+        self._child_thread = ThreadPoolExecutor(max_workers=1)
+        self._thread = None
+
+    def start(self) -> None:
+        LOGGER.debug("Start to read target_log_file: %s", self.target_log_file)
+        self._termination_event.clear()
+        self._thread = self._child_thread.submit(self._journal_thread)
+        LOGGER.debug("Journal thread started for target_log_file: %s", self.target_log_file)
+
+    def stop(self, timeout: float | None = None) -> None:
+        self._termination_event.set()
+        thread_cancelled = self._thread.cancel()
+        LOGGER.debug("Is thread cancelled?: %s, target_log_file: %s", thread_cancelled, self.target_log_file)
+        self._child_thread.shutdown(wait=False, cancel_futures=True)
+        LOGGER.debug("Is thread shutdown?: %s, target_log_file: %s", self._thread.running(), self.target_log_file)
+        if self._thread.running():
+            self._thread.cancel()  # pylint: disable=no-member
+
+    @cached_property
+    def _logger_cmd_template(self) -> str:
+        return f"tail -f {self._remote_log_file}"
+
+    def validate_and_collect_hdr_file(self):
+        """
+        Validate that HDR file exists on the SCT runner.
+        If it does not exist check if the file was created on the loader.
+        If the HDR file found on the loader, try to copy to the runner.
+        If the file is missed even on the loader - print error event.
+        """
+        if os.path.exists(self._target_log_file):
+            return
+
+        LOGGER.debug("'%s' file is not found on the runner. Try to find it on the loader %s",
+                     self._target_log_file, self._node.name)
+        HDRFileMissed(
+            message=f"'{self._remote_log_file}' HDR file was not copied to the runner from loader",
+            severity=Severity.WARNING).publish()
+        result = self._node.remoter.run(f"test -f {self._remote_log_file}", ignore_status=True)
+        if not result.ok:
+            HDRFileMissed(
+                message=f"'{self._remote_log_file}' HDR file was not created on the loader {self._node.name}",
+                severity=Severity.ERROR).publish()
+        try:
+            LOGGER.debug("The '%s' file found on the loader %s", self._remote_log_file, self._node.name)
+            self._node.remoter.receive_files(src=self._remote_log_file, dst=self._target_log_file)
+        except Exception:  # noqa: BLE001
+            HDRFileMissed(
+                message=f"'{self._remote_log_file}' HDR file couldn't copied from loader {self._node.name}",
+                severity=Severity.ERROR).publish()
+
+    # @raise_event_on_failure
+    def _journal_thread(self) -> None:
+        LOGGER.debug("Start journal thread. %s", self._remote_log_file)
+        read_from_timestamp = None
+        te_is_set = self._termination_event.is_set()
+        while not te_is_set:
+            LOGGER.debug("Start check if remoter ready. %s", self._remote_log_file)
+            if self._is_ready_to_retrieve():
+                LOGGER.debug("Remoter ready. %s", self._remote_log_file)
+                self._retrieve(since=read_from_timestamp)
+                LOGGER.debug("Retrieve finished. %s", self._remote_log_file)
+                read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                LOGGER.debug("Remoter is not ready. %s", self._remote_log_file)
+                time.sleep(self.READINESS_CHECK_DELAY)
+            te_is_set = self._termination_event.is_set()
+            LOGGER.debug("_termination_event is set?: %s. %s", te_is_set, self._remote_log_file)
+
+    def _is_ready_to_retrieve(self) -> bool:
+        LOGGER.debug("Before remoter is_up. %s", self._remote_log_file)
+        is_up = self._remoter.is_up()
+        LOGGER.debug("After remoter is_up. Result: %s. %s", is_up, self._remote_log_file)
+        return is_up
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.validate_and_collect_hdr_file()
+        self.stop()
 
 
 class SSHScyllaSystemdLogger(SSHLoggerBase):
