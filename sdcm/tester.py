@@ -140,8 +140,12 @@ from sdcm.utils.gce_utils import get_gce_compute_instances_client
 from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
-from sdcm.utils.csrangehistogram import CSHistogramTagTypes, CSWorkloadTypes, make_cs_range_histogram_summary, \
-    make_cs_range_histogram_summary_by_interval
+from sdcm.utils.hdrhistogram import (
+    CSHistogramTagTypes,
+    CSWorkloadTypes,
+    make_cs_range_histogram_summary,
+    make_cs_range_histogram_summary_by_interval,
+)
 from sdcm.utils.raft.common import validate_raft_on_nodes
 from sdcm.commit_log_check_thread import CommitLogCheckThread
 from sdcm.kafka.kafka_consumer import KafkaCDCReaderThread
