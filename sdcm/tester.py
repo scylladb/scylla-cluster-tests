@@ -3872,7 +3872,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def get_cs_range_histogram(self, stress_operation: str,
                                start_time: float, end_time: float,
                                tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> dict[str, Any]:
-        if not self.params["use_hdr_cs_histogram"]:
+        if not self.params["use_hdrhistogram"]:
             return {}
         self.log.info("Build HDR histogram with start time: %s, end time: %s; for operation: %s",
                       start_time, end_time, stress_operation)
@@ -3887,7 +3887,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self, stress_operation: str,
             start_time: float, end_time: float, time_interval: int = 600,
             tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> list[dict[str, Any]]:
-        if not self.params["use_hdr_cs_histogram"]:
+        if not self.params["use_hdrhistogram"]:
             return []
         self.log.info("Build HDR histogram with start time: %s, end time: %s, time interval: %s for operation: %s",
                       start_time, end_time, time_interval, stress_operation)

@@ -36,4 +36,4 @@ email_recipients: ['scylla-perf-results@scylladb.com']
 email_subject_postfix: 'disk and cache'
 custom_es_index: 'performancestatsv2'
 
-use_hdr_cs_histogram: true
+use_hdrhistogram: true

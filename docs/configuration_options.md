@@ -3325,7 +3325,7 @@ add/remove num of process on each round
 **type:** int
 
 
-## **use_hdr_cs_histogram** / SCT_USE_HDR_CS_HISTOGRAM
+## **use_hdrhistogram** / SCT_USE_HDRHISTOGRAM
 
 Enable hdr histogram logging for cs
 
@@ -3516,7 +3516,7 @@ Error thresholds for latency decorator. Defined by dict: {<write, read, mixed>: 
 
 ## **workload_name** / SCT_WORKLOAD_NAME
 
-Workload name, can be: write|read|mixed|unset.Used for e.g. latency_calculator_decorator (use with 'use_hdr_cs_histogram' set to true).If unset, workload is taken from test name.
+Workload name, can be: write|read|mixed|unset.Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true).If unset, workload is taken from test name.
 
 **default:** N/A
 

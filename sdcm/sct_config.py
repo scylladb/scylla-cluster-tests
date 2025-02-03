@@ -1657,7 +1657,7 @@ class SCTConfiguration(dict):
              help="""Number of stress processes per loader"""),
         dict(name="stress_process_step", env="SCT_STRESS_PROCESS_STEP", type=int,
              help="""add/remove num of process on each round"""),
-        dict(name="use_hdr_cs_histogram", env="SCT_USE_HDR_CS_HISTOGRAM", type=boolean,
+        dict(name="use_hdrhistogram", env="SCT_USE_HDRHISTOGRAM", type=boolean,
              help="""Enable hdr histogram logging for cs"""),
 
         dict(name="stop_on_hw_perf_failure", env="SCT_STOP_ON_HW_PERF_FAILURE", type=boolean,
@@ -1739,7 +1739,7 @@ class SCTConfiguration(dict):
 
         dict(name="workload_name", env="SCT_WORKLOAD_NAME", type=str,
              help="Workload name, can be: write|read|mixed|unset."
-                  "Used for e.g. latency_calculator_decorator (use with 'use_hdr_cs_histogram' set to true)."
+                  "Used for e.g. latency_calculator_decorator (use with 'use_hdrhistogram' set to true)."
                   "If unset, workload is taken from test name."),
     ]
 
