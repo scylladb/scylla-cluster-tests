@@ -79,6 +79,7 @@ def test_02_cassandra_stress_user_profile(request, docker_scylla, params):
     assert float(output[0]["latency 99th percentile"]) > 0
 
 
+@pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-cluster-tests/issues/9988")
 @pytest.mark.docker_scylla_args(ssl=True)
 def test_03_cassandra_stress_client_encrypt(request, docker_scylla, params):
 
