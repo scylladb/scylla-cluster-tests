@@ -20,20 +20,19 @@ import contextlib
 from typing import Any
 from itertools import chain
 from pathlib import Path
-from functools import cached_property
 
 from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
-from sdcm.cluster import BaseLoaderSet, BaseNode
+from sdcm.cluster import BaseLoaderSet
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, c_s_transport_str
 from sdcm.reporting.tooling_reporter import CassandraStressVersionReporter
 from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, get_data_dir_path, time_period_str_to_seconds, SoftTimeoutContext
 from sdcm.utils.user_profile import get_profile_content, replace_scylla_qa_internal_path
-from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS, HDRFileMissed
+from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
 from sdcm.stress.base import DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.utils.remote_logger import SSHLoggerBase
+from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
 
 LOGGER = logging.getLogger(__name__)
@@ -69,49 +68,6 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                             event.severity = Severity.ERROR
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
                         break  # Stop iterating patterns to avoid creating two events for one line of the log
-
-
-class CSHDRFileLogger(SSHLoggerBase):
-    VERBOSE_RETRIEVE = False
-
-    def __init__(self, node: BaseNode, remote_log_file: str, target_log_file: str):
-        super().__init__(node=node, target_log_file=target_log_file)
-        self._remote_log_file = remote_log_file
-
-    @cached_property
-    def _logger_cmd_template(self) -> str:
-        return f"tail -f {self._remote_log_file}"
-
-    def validate_and_collect_hdr_file(self):
-        """
-        Validate that HDR file exists on the SCT runner.
-        If it does not exist check if the file was created on the loader.
-        If the HDR file found on the loader, try to copy to the runner.
-        If the file is missed even on the loader - print error event.
-        """
-        if os.path.exists(self._target_log_file):
-            return
-
-        LOGGER.debug("'%s' file is not found on the runner. Try to find it on the loader %s",
-                     self._target_log_file, self._node.name)
-        result = self._node.remoter.run(f"test -f {self._remote_log_file}", ignore_status=True)
-        if not result.ok:
-            HDRFileMissed(message=f"'{self._remote_log_file}' HDR file was not created on the loader {self._node.name}",
-                          severity=Severity.ERROR).publish()
-        try:
-            LOGGER.debug("The '%s' file found on the loader %s", self._remote_log_file, self._node.name)
-            self._node.remoter.receive_files(src=self._remote_log_file, dst=self._target_log_file)
-        except Exception:  # noqa: BLE001
-            HDRFileMissed(message=f"'{self._remote_log_file}' HDR file couldn't copied from loader {self._node.name}",
-                          severity=Severity.ERROR).publish()
-
-    def __enter__(self):
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.validate_and_collect_hdr_file()
-        self.stop()
 
 
 class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
@@ -341,7 +297,7 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
         if self.params.get("use_hdrhistogram"):
             stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)
-            hdr_logger_context = CSHDRFileLogger(
+            hdr_logger_context = HDRHistogramFileLogger(
                 node=loader,
                 remote_log_file=remote_hdr_file_name_full_path,
                 target_log_file=os.path.join(loader.logdir, remote_hdr_file_name),

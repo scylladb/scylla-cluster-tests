@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 import socket
 import logging
@@ -36,6 +37,7 @@ from urllib3.exceptions import (
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events import Severity
 from sdcm.sct_events.decorators import raise_event_on_failure
+from sdcm.sct_events.loaders import HDRFileMissed
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.decorators import retrying
@@ -47,6 +49,9 @@ if TYPE_CHECKING:
 
 
 logging.getLogger('parso.python.diff').setLevel(logging.WARNING)
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class LoggerBase(metaclass=ABCMeta):
@@ -123,6 +128,49 @@ class SSHLoggerBase(LoggerBase):
     @abstractmethod
     def _logger_cmd_template(self) -> str:  # The `since' parameter will be passed to a returned template.
         ...
+
+
+class HDRHistogramFileLogger(SSHLoggerBase):
+    VERBOSE_RETRIEVE = False
+
+    def __init__(self, node: BaseNode, remote_log_file: str, target_log_file: str):
+        super().__init__(node=node, target_log_file=target_log_file)
+        self._remote_log_file = remote_log_file
+
+    @cached_property
+    def _logger_cmd_template(self) -> str:
+        return f"tail -f {self._remote_log_file}"
+
+    def validate_and_collect_hdr_file(self):
+        """
+        Validate that HDR file exists on the SCT runner.
+        If it does not exist check if the file was created on the loader.
+        If the HDR file found on the loader, try to copy to the runner.
+        If the file is missed even on the loader - print error event.
+        """
+        if os.path.exists(self._target_log_file):
+            return
+
+        LOGGER.debug("'%s' file is not found on the runner. Try to find it on the loader %s",
+                     self._target_log_file, self._node.name)
+        result = self._node.remoter.run(f"test -f {self._remote_log_file}", ignore_status=True)
+        if not result.ok:
+            HDRFileMissed(message=f"'{self._remote_log_file}' HDR file was not created on the loader {self._node.name}",
+                          severity=Severity.ERROR).publish()
+        try:
+            LOGGER.debug("The '%s' file found on the loader %s", self._remote_log_file, self._node.name)
+            self._node.remoter.receive_files(src=self._remote_log_file, dst=self._target_log_file)
+        except Exception:  # noqa: BLE001
+            HDRFileMissed(message=f"'{self._remote_log_file}' HDR file couldn't copied from loader {self._node.name}",
+                          severity=Severity.ERROR).publish()
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.validate_and_collect_hdr_file()
+        self.stop()
 
 
 class SSHScyllaSystemdLogger(SSHLoggerBase):
