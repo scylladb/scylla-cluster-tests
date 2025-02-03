@@ -20,7 +20,11 @@ from typing import NamedTuple
 
 from sdcm.prometheus import NemesisMetrics
 from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
-from sdcm.utils.csrangehistogram import CSHistogramTags, CSWorkloadTypes, make_cs_range_histogram_summary_from_log_line
+from sdcm.utils.hdrhistogram import (
+    CSHistogramTags,
+    CSWorkloadTypes,
+    make_cs_range_histogram_summary_from_log_line,
+)
 
 LOGGER = logging.getLogger(__name__)
 
