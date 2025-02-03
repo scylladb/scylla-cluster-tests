@@ -29,7 +29,7 @@ from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressEvent
 from sdcm.sct_events.system import HWPerforanceEvent, InfoEvent
 from sdcm.utils.decorators import log_run_info, latency_calculator_decorator
-from sdcm.utils.csrangehistogram import CSHistogramTagTypes
+from sdcm.utils.hdrhistogram import CSHistogramTagTypes
 from sdcm.utils.nemesis_utils.indexes import wait_for_view_to_be_built
 
 KB = 1024
