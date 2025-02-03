@@ -2541,7 +2541,7 @@ add/remove num of process on each round
 **default:** N/A
 
 
-## **use_hdr_cs_histogram** / SCT_USE_HDR_CS_HISTOGRAM
+## **use_hdrhistogram** / SCT_USE_HDRHISTOGRAM
 
 Enable hdr histogram logging for cs
 
