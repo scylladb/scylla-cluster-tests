@@ -184,6 +184,16 @@ MAX_TIME_WAIT_FOR_DECOMMISSION: int = HOUR_IN_SEC * 6
 LOGGER = logging.getLogger(__name__)
 
 
+@contextmanager
+def timeit_and_log(logger: logging.Logger, message: str):
+
+    logger.info(">>>>>>>>>>>>>>>>>>>>> %s starting", message)
+    st = time.perf_counter()
+    yield
+    ft = time.perf_counter()
+    logger.info(">>>>>>>>>>>>>>>>>>>> %s done for %s seconds", message, ft - st)
+
+
 class NodeError(Exception):
 
     def __init__(self, msg=None):
@@ -4151,8 +4161,9 @@ def wait_for_init_wrap(method):
                 verify_node_setup_or_startup(start_time, startup_queue, startup_results)
             # Check DB nodes for UN
             if isinstance(cl_inst, BaseScyllaCluster):
-                cl_inst.wait_for_nodes_up_and_normal(
-                    nodes=node_list, verification_node=node_list[0], timeout=timeout)
+                with timeit_and_log(cl_inst.log, "wait up and normal in cluster wrap init"):
+                    cl_inst.wait_for_nodes_up_and_normal(
+                        nodes=node_list, verification_node=node_list[0], timeout=timeout)
             for node in node_list:
                 try:
                     node.update_rack_info_in_argus(node.datacenter, node.node_rack)
@@ -4998,10 +5009,13 @@ class BaseScyllaCluster:
                 node.wait_manager_agent_up()
                 manager_agent_version = node.remoter.run("scylla-manager-agent --version").stdout
                 node.log.info("node %s has scylla-manager-agent version %s", node.name, manager_agent_version)
+        with timeit_and_log(node.log, "DB UP"):
+            node.wait_db_up(verbose=verbose, timeout=timeout)
+        with timeit_and_log(node.log, f"{node.name} get status with nodetool in cl.node_startup"):
+            nodes_status = node.get_nodes_status()
+        with timeit_and_log(node.log, f"{node.name} check_check_node_status in cl.node_startup"):
+            check_nodes_status(nodes_status=nodes_status, current_node=node)
 
-        node.wait_db_up(verbose=verbose, timeout=timeout)
-        nodes_status = node.get_nodes_status()
-        check_nodes_status(nodes_status=nodes_status, current_node=node)
         self.clean_replacement_node_options(node)
 
     def install_scylla_manager(self, node):
