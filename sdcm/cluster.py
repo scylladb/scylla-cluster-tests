@@ -5044,10 +5044,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def decommission(self, node: BaseNode, timeout: int | float = None) -> DataCenterTopologyRfControl | None:
-        with node.parent_cluster.cql_connection_patient(node) as session:
-            if tablets_enabled := is_tablets_feature_enabled(session):
-                dc_topology_rf_change = DataCenterTopologyRfControl(target_node=node)
-                dc_topology_rf_change.decrease_keyspaces_rf()
+        if tablets_enabled := is_tablets_feature_enabled(node):
+            dc_topology_rf_change = DataCenterTopologyRfControl(target_node=node)
+            dc_topology_rf_change.decrease_keyspaces_rf()
         with adaptive_timeout(operation=Operations.DECOMMISSION, node=node):
             node.run_nodetool("decommission", timeout=timeout, long_running=True, retry=0)
         self.verify_decommission(node)

@@ -799,9 +799,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         """
         n_db_nodes = str(self.params.get('n_db_nodes'))
         min_nodes_dc = min([int(nodes_num) for nodes_num in n_db_nodes.split() if int(nodes_num) > 0])
-        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-            # In case tablets are enabled, it's better to set RF smaller than dc-nodes-number, so decommission is allowed.
-            return max([min_nodes_dc - 1, 1]) if is_tablets_feature_enabled(session) else min_nodes_dc
+
+        # In case tablets are enabled, it's better to set RF smaller than dc-nodes-number, so decommission is allowed.
+        rf_candidate = max([min_nodes_dc - 1, 1]
+                           ) if is_tablets_feature_enabled(self.db_cluster.nodes[0]) else min_nodes_dc
+        # NOTE: use RF=3 at max to avoid problems on big setups
+        return min(rf_candidate, 3)
 
     @property
     def test_id(self):
