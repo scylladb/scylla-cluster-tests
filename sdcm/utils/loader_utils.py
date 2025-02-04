@@ -98,8 +98,7 @@ class LoaderUtilsMixin:
     @cached_property
     def tablets_enabled(self):
         # is tablets feature enabled in Scylla configuration.
-        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-            return is_tablets_feature_enabled(session)
+        return is_tablets_feature_enabled(self.db_cluster.nodes[0])
 
     def _run_all_stress_cmds(self, stress_queue, params):
         stress_cmds = params['stress_cmd']
