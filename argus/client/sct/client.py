@@ -290,7 +290,7 @@ class ArgusSCTClient(ArgusClient):
         """
             Submits a JUnit-formatted XML report to argus
         """
-        response = self.post(
+        self.post(
             endpoint=self.Routes.SUBMIT_JUNIT_REPORT,
             location_params={"id": str(self.run_id)},
             body={
