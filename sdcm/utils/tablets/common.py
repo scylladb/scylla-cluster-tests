@@ -34,10 +34,9 @@ def wait_for_tablets_balanced(node):
     if not node.raft.is_enabled:
         LOGGER.info("Raft is disabled, skipping wait for balance")
         return
-    with node.parent_cluster.cql_connection_patient(node=node) as session:
-        if not is_tablets_feature_enabled(session):
-            LOGGER.info("Tablets are disabled, skipping wait for balance")
-            return
+    if not is_tablets_feature_enabled(node):
+        LOGGER.info("Tablets are disabled, skipping wait for balance")
+        return
     time.sleep(60)  # one minute gap before checking, just to give some time to the state machine
     client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=node)
     LOGGER.info("Waiting for tablets to be balanced")

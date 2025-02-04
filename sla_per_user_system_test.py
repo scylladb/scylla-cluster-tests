@@ -22,6 +22,7 @@ from sdcm.es import ES
 from sdcm.sct_events import Severity
 from sdcm.sct_events.workload_prioritisation import WorkloadPrioritisationEvent
 from test_lib.sla import ServiceLevel, Role, User
+from sdcm.utils.features import is_tablets_feature_enabled
 
 
 # pylint: disable=too-many-public-methods
@@ -371,6 +372,14 @@ class SlaPerUserTest(LongevityTest):
 
     def _two_users_load_througput_workload(self, shares, load, expected_shares_ratio=None):
         session = self.prepare_schema()
+
+        if is_tablets_feature_enabled(self.db_cluster.nodes[0]):
+            self.run_pre_create_keyspace()
+            # after several test runs with Tablets decided to decrease by half of the percent(usually tests show about 96.8 - 97.5)
+            # due to unbalanced shards utilization with tablets(particular tablet belong to particular shard)
+            # during gauss distribution read
+            self.MIN_CPU_UTILIZATION = 96.5
+
         self.create_test_data_and_wait_no_compaction()
 
         # Define Service Levels/Roles/Users
