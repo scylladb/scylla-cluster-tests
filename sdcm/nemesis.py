@@ -5166,8 +5166,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             reduce categories by excluding DML and QUERY,
             verify DDL are logged in audit log correctly. Leaves audit log enabled this way.
         """
-        if not self.target_node.is_enterprise:
-            raise UnsupportedNemesis("Auditing feature is only supported by Scylla Enterprise")
+        if not self.target_node.is_enterprise and ComparableScyllaVersion(self.target_node.scylla_version) < "2025.1.0~dev":
+            raise UnsupportedNemesis(
+                "Auditing feature is only supported by Scylla Enterprise or non-enterprise versions greater than 6")
 
         if store == "syslog" and self._is_it_on_kubernetes():
             # generally syslog is not supported on K8S because of different log line format
