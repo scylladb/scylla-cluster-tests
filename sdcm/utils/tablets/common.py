@@ -31,10 +31,9 @@ def wait_for_tablets_balanced(node):
     "currently a small time window after adding nodes and before load balancing starts during which
     topology may appear as quiesced because the state machine goes through an idle state before it enters load balancing state"
     """
-    with node.parent_cluster.cql_connection_patient(node=node) as session:
-        if not is_tablets_feature_enabled(session):
-            LOGGER.info("Tablets are disabled, skipping wait for balance")
-            return
+    if not is_tablets_feature_enabled(node):
+        LOGGER.info("Tablets are disabled, skipping wait for balance")
+        return
     time.sleep(60)  # one minute gap before checking, just to give some time to the state machine
     client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=node)
     LOGGER.info("Waiting for tablets to be balanced")
