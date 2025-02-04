@@ -224,6 +224,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
     def _upgrade_node(self, node, upgrade_sstables=True, new_scylla_repo=None, new_version=None):  # noqa: PLR0915
         # pylint: disable=too-many-branches,too-many-statements
+        InfoEvent(message=f"Upgrade Node {node.name} begin").publish()
         new_scylla_repo = new_scylla_repo or self.params.get('new_scylla_repo')
         new_version = new_version or self.params.get('new_version')
         upgrade_node_packages = self.params.get('upgrade_node_packages')
@@ -368,6 +369,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message='upgrade_node - ended to "upgradesstables_if_command_available"').publish()
 
         self.db_cluster.wait_all_nodes_un()
+        InfoEvent(message=f"Upgrade Node {node.name} ended").publish()
 
     def upgrade_os(self, nodes):
         def upgrade(node):
@@ -391,7 +393,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                             ignore_raft_topology_cmd_failing])
     def _rollback_node(self, node, upgrade_sstables=True):
         # pylint: disable=too-many-branches,too-many-statements
-        InfoEvent(message='Rollbacking a Node').publish()
+        InfoEvent(message=f"Rollback Node {node.name} begin").publish()
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout.strip()
         # flush all memtables to SSTables
@@ -456,6 +458,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self.upgradesstables_if_command_available(node)
 
         self.db_cluster.wait_all_nodes_un()
+        InfoEvent(message=f"Rollback Node {node.name} ended").publish()
 
     @staticmethod
     def upgradesstables_if_command_available(node, queue=None):  # pylint: disable=invalid-name
@@ -566,10 +569,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         # upgrade all the nodes in random order
         for i in indexes:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
-            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
             self.upgrade_node(self.db_cluster.node_to_upgrade)
             time.sleep(300)
-            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
 
         InfoEvent(message='Run some Queries to verify data AFTER UPGRADE').publish()
         self.verify_db_data()
@@ -695,9 +696,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message=step).publish()
             # upgrade first node
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
-            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
             self.upgrade_node(self.db_cluster.node_to_upgrade)
-            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
             self.db_cluster.node_to_upgrade.check_node_health()
 
             # wait for the prepare write workload to finish
@@ -729,9 +728,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message=step).publish()
             # upgrade second node
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[1]]
-            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
             self.upgrade_node(self.db_cluster.node_to_upgrade)
-            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
             self.db_cluster.node_to_upgrade.check_node_health()
 
             # wait for the 10m read workload to finish
@@ -749,9 +746,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
 
             InfoEvent(message='Step3 - Rollback Second Node ').publish()
             # rollback second node
-            InfoEvent(message='Rollback Node %s begin' % self.db_cluster.nodes[indexes[1]].name).publish()
             self.rollback_node(self.db_cluster.nodes[indexes[1]])
-            InfoEvent(message='Rollback Node %s ended' % self.db_cluster.nodes[indexes[1]].name).publish()
             self.db_cluster.nodes[indexes[1]].check_node_health()
 
         step = 'Step4 - Verify data during mixed cluster mode '
@@ -768,9 +763,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message=step).publish()
             for i in indexes[1:]:
                 self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
-                InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
                 self.upgrade_node(self.db_cluster.node_to_upgrade)
-                InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
                 self.db_cluster.node_to_upgrade.check_node_health()
                 self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
                 self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
@@ -908,9 +901,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     def _start_and_wait_for_node_upgrade(self, node: BaseNode, step: int) -> None:
         InfoEvent(
             message=f"Step {step} - Upgrade {node.name} from dc {node.dc_idx}").publish()
-        InfoEvent(message='Upgrade Node %s begins' % node.name).publish()
         self.upgrade_node(node, upgrade_sstables=self.params.get('upgrade_sstables'))
-        InfoEvent(message='Upgrade Node %s ended' % node.name).publish()
         node.check_node_health()
 
     def _start_and_wait_for_node_rollback(self, node: BaseNode, step: int) -> None:
@@ -918,9 +909,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             message=f"Step {step} - "
                     f"Rollback {node.name} from dc {node.dc_idx}"
         ).publish()
-        InfoEvent(message='Rollback Node %s begin' % node).publish()
         self.rollback_node(node, upgrade_sstables=self.params.get('upgrade_sstables'))
-        InfoEvent(message='Rollback Node %s ended' % node).publish()
         node.check_node_health()
 
     def _run_stress_workload(self, workload_name: str, wait_for_finish: bool = False) -> [CassandraStressThread]:
@@ -1540,11 +1529,9 @@ class UpgradeCustomTest(UpgradeTest):
             InfoEvent(message=step).publish()
             # upgrade first node
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
-            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
             # Call "_upgrade_node" to prevent running truncate test
             self._upgrade_node(self.db_cluster.node_to_upgrade,
                                new_scylla_repo=new_scylla_repo, new_version=new_version)
-            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
             self.db_cluster.node_to_upgrade.check_node_health()
 
             InfoEvent(message='after upgraded one node').publish()
@@ -1555,22 +1542,17 @@ class UpgradeCustomTest(UpgradeTest):
             InfoEvent(message=step).publish()
             # upgrade second node
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[1]]
-            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
             # Call "_upgrade_node" to prevent running truncate test
             self._upgrade_node(self.db_cluster.node_to_upgrade,
                                new_scylla_repo=new_scylla_repo, new_version=new_version)
-            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
             self.db_cluster.node_to_upgrade.check_node_health()
 
             self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                           step=step+' - after upgraded two nodes')
 
             InfoEvent(message='Step3 - Rollback Second Node ').publish()
-            # rollback second node
-            InfoEvent(message='Rollback Node %s begin' % self.db_cluster.nodes[indexes[1]].name).publish()
-            # Call "_rollback_node" to prevent running truncate test
+            # rollback second node, use "_rollback_node" to prevent running truncate test
             self._rollback_node(self.db_cluster.nodes[indexes[1]])
-            InfoEvent(message='Rollback Node %s ended' % self.db_cluster.nodes[indexes[1]].name).publish()
             self.db_cluster.nodes[indexes[1]].check_node_health()
 
         step = 'Step4 - Verify data during mixed cluster mode '
@@ -1586,11 +1568,9 @@ class UpgradeCustomTest(UpgradeTest):
             InfoEvent(message=step).publish()
             for i in indexes[1:]:
                 self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
-                InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
                 # Call "_upgrade_node" to prevent running truncate test
                 self._upgrade_node(self.db_cluster.node_to_upgrade,
                                    new_scylla_repo=new_scylla_repo, new_version=new_version)
-                InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
                 self.db_cluster.node_to_upgrade.check_node_health()
                 self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                               step=step)
