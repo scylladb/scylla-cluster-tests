@@ -374,7 +374,7 @@ class SlaPerUserTest(LongevityTest):
     def _two_users_load_througput_workload(self, shares, load, expected_shares_ratio=None):
         session = self.prepare_schema()
 
-        if is_tablets_feature_enabled(session=session):
+        if is_tablets_feature_enabled(self.db_cluster.nodes[0]):
             self.run_pre_create_keyspace()
             # after several test runs with Tablets decided to decrease by half of the percent(usually tests show about 96.8 - 97.5)
             # due to unbalanced shards utilization with tablets(particular tablet belong to particular shard)
