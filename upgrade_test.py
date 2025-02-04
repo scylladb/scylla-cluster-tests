@@ -447,7 +447,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         node.start_scylla_server(verify_up_timeout=500)
 
         InfoEvent(message='original scylla-server version is %s, latest: %s' % (orig_ver, new_ver)).publish()
-        assert orig_ver != new_ver, "scylla-server version isn't changed"
+        assert orig_ver != new_ver, "scylla-server version didn't change during rollback"
 
         if upgrade_sstables:
             self.upgradesstables_if_command_available(node)
