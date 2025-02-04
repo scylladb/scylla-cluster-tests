@@ -1,1 +1,1 @@
-from argus.client.base import ArgusClient
+from argus.client.base import ArgusClient # noqa: F401
