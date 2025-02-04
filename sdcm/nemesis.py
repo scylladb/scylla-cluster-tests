@@ -1005,10 +1005,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 "Run 'disrupt_nodetool_flush_and_reshard_on_kubernetes' instead")
 
         # If tablets in use, skipping resharding since it is not supported.
-        with self.cluster.cql_connection_patient(self.target_node) as session:
-            if is_tablets_feature_enabled(session=session):
-                if SkipPerIssues('https://github.com/scylladb/scylladb/issues/16739', params=self.tester.params):
-                    raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/16739')
+        if is_tablets_feature_enabled(self.target_node):
+            if SkipPerIssues('https://github.com/scylladb/scylladb/issues/16739', params=self.tester.params):
+                raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/16739')
 
         murmur3_partitioner_ignore_msb_bits = 15  # pylint: disable=invalid-name
         self.log.info(f'Restart node with resharding. New murmur3_partitioner_ignore_msb_bits value: '
@@ -1424,10 +1423,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('It is supported only on kubernetes')
         # If tablets in use, skipping resharding since it is not supported.
-        with self.cluster.cql_connection_patient(self.target_node) as session:
-            if is_tablets_feature_enabled(session=session):
-                if SkipPerIssues('https://github.com/scylladb/scylladb/issues/16739', params=self.tester.params):
-                    raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/16739')
+        if is_tablets_feature_enabled(self.target_node):
+            if SkipPerIssues('https://github.com/scylladb/scylladb/issues/16739', params=self.tester.params):
+                raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/16739')
 
         dc_idx = 0
         for node in self.cluster.nodes:
@@ -1710,10 +1708,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # NOTE: resharding happens only if we have more than 1 core.
                 #       We may have 1 core in a K8S multitenant setup.
                 # If tablets in use, skipping resharding validation since it doesn't work the same as vnodes
-                with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
-                    if shards_num > 1 and not is_tablets_feature_enabled(session=session):
-                        SstableLoadUtils.validate_resharding_after_refresh(
-                            node=node, system_log_follower=system_log_follower)
+                if shards_num > 1 and not is_tablets_feature_enabled(self.cluster.nodes[0]):
+                    SstableLoadUtils.validate_resharding_after_refresh(
+                        node=node, system_log_follower=system_log_follower)
 
             # Verify that the special key is loaded by SELECT query
             result = self.target_node.run_cqlsh(query_verify)
@@ -5103,10 +5100,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not node.raft.is_enabled:
             self.log.info("Raft is disabled, skipping wait for balance")
             return
-        with self.cluster.cql_connection_patient(node=node) as session:
-            if not is_tablets_feature_enabled(session):
-                self.log.info("Tablets are disabled, skipping wait for balance")
-                return
+        if not is_tablets_feature_enabled(node):
+            self.log.info("Tablets are disabled, skipping wait for balance")
+            return
         time.sleep(60)  # one minute gap before checking, just to give some time to the state machine
         client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=node)
         self.log.info("Waiting for tablets to be balanced")
