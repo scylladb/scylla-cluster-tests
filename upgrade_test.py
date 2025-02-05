@@ -278,15 +278,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             InfoEvent(message='upgrade_node - ended to "stop_scylla_server"').publish()
 
             orig_is_enterprise = node.is_enterprise
-            if node.distro.is_rhel_like:
-                result = node.remoter.run("sudo yum search scylla-enterprise 2>&1", ignore_status=True)
-                new_is_enterprise = bool('scylla-enterprise.x86_64' in result.stdout or
-                                         'No matches found' not in result.stdout)
-            else:
-                result = node.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
-                new_is_enterprise = 'scylla-enterprise' in result.stdout
 
-            scylla_pkg = 'scylla-enterprise' if new_is_enterprise else 'scylla'
+            scylla_pkg = 'scylla'
             ver_suffix = r'\*{}'.format(new_version) if new_version else ''
             scylla_pkg_ver = f"{scylla_pkg}{ver_suffix}"
 
@@ -297,10 +290,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 scylla_pkg = 'scylla'
                 scylla_pkg_ver = f"{scylla_pkg}{ver_suffix}"
 
-            if orig_is_enterprise != new_is_enterprise:
-                self.upgrade_rollback_mode = 'reinstall'
-                if self.params.get('use_preinstalled_scylla'):
-                    scylla_pkg_ver += f" {scylla_pkg}-machine-image{ver_suffix}"
+            if self.params.get('use_preinstalled_scylla'):
+                scylla_pkg_ver += f" {scylla_pkg}-machine-image{ver_suffix}"
 
             if self.upgrade_rollback_mode == 'reinstall':
                 if node.distro.is_rhel_like:
@@ -335,7 +326,12 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                         f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
                     )
                     InfoEvent(message='upgrade_node - ended to "apt-get update"').publish()
-
+                InfoEvent(message='upgrade_node - starting to "recover_conf"').publish()
+                recover_conf(node)
+                InfoEvent(message='upgrade_node - ended to "recover_conf"').publish()
+                InfoEvent(message='upgrade_node - starting to "daemon-reload"').publish()
+                node.remoter.run('sudo systemctl daemon-reload')
+                InfoEvent(message='upgrade_node - ended to "daemon-reload"').publish()
         InfoEvent(message='upgrade_node - fix /etc/scylla.d/io.conf arguments compatibility').publish()
         node.remoter.sudo(
             f"sed -i 's/--num-io-queues/--num-io-groups/' {node.add_install_prefix('/etc/scylla.d/io.conf')}")
