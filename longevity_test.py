@@ -31,14 +31,13 @@ from sdcm.sct_events.group_common_events import \
     ignore_max_memory_for_unlimited_query_soft_limit
 from sdcm.tester import ClusterTester
 from sdcm.utils import loader_utils
-from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.common import skip_optional_stage
 from sdcm.utils.cluster_tools import group_nodes_by_dc_idx
 from sdcm.utils.decorators import optional_stage
 from sdcm.utils.operations_thread import ThreadParams
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent
 from sdcm.sct_events import Severity
-from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP
+from sdcm.cluster import MAX_TIME_WAIT_FOR_NEW_NODE_UP, timeit_and_log
 
 
 class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):

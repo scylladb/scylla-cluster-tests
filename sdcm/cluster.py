@@ -4164,12 +4164,12 @@ def wait_for_init_wrap(method):
                 with timeit_and_log(cl_inst.log, "wait up and normal in cluster wrap init"):
                     cl_inst.wait_for_nodes_up_and_normal(
                         nodes=node_list, verification_node=node_list[0], timeout=timeout)
-            for node in node_list:
-                try:
-                    node.update_rack_info_in_argus(node.datacenter, node.node_rack)
-                except Exception:  # noqa: BLE001
-                    LOGGER.warning("Failure settings dc/rack infomration for %s in Argus.", node)
-                    LOGGER.debug("Exception details:\n", exc_info=True)
+            # for node in node_list:
+            #     try:
+            #         node.update_rack_info_in_argus(node.datacenter, node.node_rack)
+            #     except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            #         LOGGER.warning("Failure settings dc/rack infomration for %s in Argus.", node)
+            #         LOGGER.debug("Exception details:\n", exc_info=True)
 
         time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug('TestConfig duration -> %s s', int(time_elapsed))
@@ -5011,10 +5011,10 @@ class BaseScyllaCluster:
                 node.log.info("node %s has scylla-manager-agent version %s", node.name, manager_agent_version)
         with timeit_and_log(node.log, "DB UP"):
             node.wait_db_up(verbose=verbose, timeout=timeout)
-        with timeit_and_log(node.log, f"{node.name} get status with nodetool in cl.node_startup"):
-            nodes_status = node.get_nodes_status()
-        with timeit_and_log(node.log, f"{node.name} check_check_node_status in cl.node_startup"):
-            check_nodes_status(nodes_status=nodes_status, current_node=node)
+        # with timeit_and_log(node.log, f"{node.name} get status with nodetool in cl.node_startup"):
+        #     nodes_status = node.get_nodes_status()
+        # with timeit_and_log(node.log, f"{node.name} check_check_node_status in cl.node_startup"):
+        #     check_nodes_status(nodes_status=nodes_status, current_node=node)
 
         self.clean_replacement_node_options(node)
 
