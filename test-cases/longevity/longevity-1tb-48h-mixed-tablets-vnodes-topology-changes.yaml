@@ -1,0 +1,50 @@
+test_duration: 3100
+
+# Explictily create 2 keyspaces, one with tablets enabled and one with tablets disabled
+pre_create_keyspace: [
+  "CREATE KEYSPACE keyspace1 WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 3 } AND tablets = {'enabled': true};",
+  "CREATE KEYSPACE keyspace2 WITH REPLICATION = {'class' : 'NetworkTopologyStrategy', 'replication_factor': 3 } AND tablets = {'enabled': false};"
+]
+
+# write 500 GB of data to each of the keyspaces
+prepare_write_cmd:
+  - "cassandra-stress write cl=ALL n=524288000  -schema 'keyspace=keyspace1 replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..524288000 -log interval=15"
+  - "cassandra-stress write cl=ALL n=524288000  -schema 'keyspace=keyspace2 replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..524288000 -log interval=15"
+
+# run mixed workload on both keyspaces for 40 hours
+# run write workload that adds 300 GB of data to each of the keyspaces
+stress_cmd:
+  - "cassandra-stress mixed cl=QUORUM duration=40h  -schema 'keyspace=keyspace1' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..524288000 -log interval=15"
+  - "cassandra-stress mixed cl=QUORUM duration=40h  -schema 'keyspace=keyspace2' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..524288000 -log interval=15"
+  - "cassandra-stress write cl=QUORUM duration=40h  -schema 'keyspace=keyspace1' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=524288001..838860800 -log interval=15"
+  - "cassandra-stress write cl=QUORUM duration=40h  -schema 'keyspace=keyspace2' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=524288001..838860800 -log interval=15"
+
+run_fullscan:
+  - '{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 60}'
+
+n_db_nodes: 4
+instance_type_db: 'i4i.4xlarge'
+
+n_loaders: 2
+instance_type_loader: 'c7i.2xlarge'
+round_robin: true
+
+n_monitor_nodes: 1
+instance_type_monitor: 'm6i.xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: ["topology_changes"]
+nemesis_seed: '003'
+nemesis_interval: 5
+nemesis_during_prepare: false
+
+user_prefix: 'longevity-1tb-mixed-tablets-vnodes-topology-changes'
+
+server_encrypt: true
+client_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
+
+use_preinstalled_scylla: true
