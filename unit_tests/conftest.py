@@ -92,7 +92,8 @@ def fixture_docker_scylla(request: pytest.FixtureRequest, params):  # pylint: di
         try:
             os.chdir(Path(__file__).parent.parent)
             create_certificate(CLIENT_FACING_CERTFILE, CLIENT_FACING_KEYFILE, cname="scylladb",
-                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE, ip_addresses=[scylla.ip_address])
+                               ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE,
+                               ip_addresses=[scylla.ip_address], dns_names=[scylla.public_dns_name])
             create_certificate(CLIENT_CERT_FILE, CLIENT_KEY_FILE, cname="scylladb",
                                ca_cert_file=CA_CERT_FILE, ca_key_file=CA_KEY_FILE)
         finally:
