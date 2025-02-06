@@ -20,9 +20,11 @@ import json
 import yaml
 import requests
 
+from sdcm.argus_results import send_iotune_results_to_argus
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import ScyllaHousekeepingServiceEvent
 from sdcm.provision.helpers.certificate import c_s_transport_str
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.tester import ClusterTester
 from sdcm.utils.adaptive_timeouts import NodeLoadInfoServices
 from sdcm.utils.housekeeping import HousekeepingDB
@@ -30,6 +32,7 @@ from sdcm.utils.common import get_latest_scylla_release, ScyllaProduct
 from sdcm.utils.decorators import retrying
 from sdcm.utils.issues import SkipPerIssues
 from sdcm.utils.perftune_validator import PerftuneOutputChecker
+from sdcm.utils.validators.iotune import IOTuneValidator
 from utils.scylla_doctor import ScyllaDoctor
 
 STRESS_CMD: str = "/usr/bin/cassandra-stress"
@@ -324,6 +327,23 @@ class ArtifactsTest(ClusterTester):  # pylint: disable=too-many-public-methods
         if backend == "aws":
             with self.subTest("check ENA support"):
                 assert self.node.ena_support, "ENA support is not enabled"
+
+        if backend in ["gce", "aws", "azure"] and self.params.get("use_preinstalled_scylla"):
+            with self.subTest("check Scylla IO Params"):
+                try:
+                    validator = IOTuneValidator(self.node)
+                    validator.validate()
+                    send_iotune_results_to_argus(
+                        self.test_config.argus_client(),
+                        validator.results,
+                        self.node,
+                        self.params
+                    )
+                except Exception:  # pylint: disable=broad-except # noqa: BLE001
+                    self.log.error("IOTuneValidator failed", exc_info=True)
+                    TestFrameworkEvent(source={self.__class__.__name__},
+                                       message="Error during IOTune params validation.",
+                                       severity=Severity.ERROR).publish()
 
         with self.subTest("verify write cache for NVMe devices"):
             self.verify_nvme_write_cache()
