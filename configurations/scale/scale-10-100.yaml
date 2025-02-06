@@ -12,4 +12,4 @@ seeds_num: 5
 # Takes too long on big clusters
 cluster_health_check: false
 
-backtrace_decoding: false
+backtrace_decoding: true
