@@ -1,5 +1,6 @@
 import logging
 import shlex
+import socket
 from functools import cached_property, cache
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from invoke.exceptions import UnexpectedExit
 from sdcm.cluster import BaseNode
 from sdcm.remote.libssh2_client import UnexpectedExit as Libssh2_UnexpectedExit
 from sdcm.utils.common import get_data_dir_path
+from sdcm.utils.net import resolve_ip_to_dns
 
 LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +68,10 @@ class RemoteDocker(BaseNode):
 
     @property
     def public_dns_name(self) -> str:
-        raise NotImplementedError()
+        try:
+            return resolve_ip_to_dns(self.external_address)
+        except (ValueError, socket.herror):
+            return self.external_address
 
     @cached_property
     def running_in_docker(self):
