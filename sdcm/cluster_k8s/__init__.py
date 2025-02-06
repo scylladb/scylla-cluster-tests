@@ -49,6 +49,7 @@ from invoke.exceptions import CommandTimedOut
 
 from sdcm import sct_abs_path, cluster
 from sdcm.cluster import ClusterNodesNotReady
+from sdcm.provision.network_configuration import NetworkInterface, ScyllaNetworkConfiguration
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.sct_config import init_and_verify_sct_config
 from sdcm.test_config import TestConfig
@@ -2035,7 +2036,17 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
 
     @property
     def network_interfaces(self):
-        pass
+        interfaces = [NetworkInterface(ipv4_public_address=self.public_ip_address,
+                                       ipv6_public_addresses="",
+                                       ipv4_private_addresses=self.private_ip_address,
+                                       ipv6_private_address='',
+                                       dns_private_name=self.k8s_lb_dns_name,
+                                       dns_public_name="",
+                                       device_index=0,
+                                       device_name='eth0',
+                                       mac_address=""
+                                       )]
+        return interfaces
 
     parent_cluster: ScyllaPodCluster
 
@@ -2125,6 +2136,9 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
             self.remoter.sudo('yum install --downloadonly iproute', retry=5)
             self.remoter.sudo("yum install -y iproute")
         self.remoter.sudo('mkdir -p /var/lib/scylla/coredumps', ignore_status=True)
+        self.scylla_network_configuration = ScyllaNetworkConfiguration(
+            network_interfaces=self.network_interfaces,
+            scylla_network_config=[])
 
     def drain_k8s_node(self):
         """

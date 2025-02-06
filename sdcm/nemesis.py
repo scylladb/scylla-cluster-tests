@@ -3588,7 +3588,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.target_node.install_traffic_control():
             raise UnsupportedNemesis("Traffic control package not installed on system")
 
-        if not self.target_node.scylla_network_configuration.device:
+        if (not self.target_node.scylla_network_configuration or
+                (self.target_node.scylla_network_configuration and not self.target_node.scylla_network_configuration.device)):
             raise ValueError("The network device name is not recognized")
 
         rate_limit: Optional[str] = self.get_rate_limit_for_network_disruption()
