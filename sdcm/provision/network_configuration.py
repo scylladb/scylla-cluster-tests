@@ -98,7 +98,8 @@ class ScyllaNetworkConfiguration:
         # else empty string.
         if address_config := [conf for conf in self.scylla_network_config if conf["address"] == "broadcast_address"]:
             return "".join([ni.device_name for ni in self.network_interfaces if ni.device_index == address_config[0]['nic']])
-        return ""
+        # Workaround for k8s, while it does not support `scylla_network_config`
+        return self.network_interfaces[0].device_name if self.network_interfaces and self.network_interfaces[0].device_name else ""
 
     def get_ip_by_address_config(self, address_config: dict) -> str:
         if not (interface := [conf for conf in self.network_interfaces if address_config["nic"] == conf.device_index]):
