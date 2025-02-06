@@ -115,6 +115,7 @@ class DummyDbCluster(BaseCluster, BaseScyllaCluster):  # pylint: disable=abstrac
 class DummyNode(BaseNode):  # pylint: disable=abstract-method
     _system_log = None
     is_enterprise = False
+    is_product_enterprise = False
     distro = Distro.CENTOS7
 
     def init(self):
