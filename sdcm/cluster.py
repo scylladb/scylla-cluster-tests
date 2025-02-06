@@ -121,7 +121,7 @@ from sdcm.utils.version_utils import (
     get_gemini_version,
     get_systemd_version,
     ComparableScyllaVersion,
-    SCYLLA_VERSION_RE,
+    SCYLLA_VERSION_RE, is_enterprise,
 )
 from sdcm.utils.net import get_my_ip
 from sdcm.utils.node import build_node_api_command
@@ -765,7 +765,7 @@ class BaseNode(AutoSshContainerMixin):
         return False
 
     def scylla_pkg(self):
-        return 'scylla-enterprise' if self.is_enterprise else 'scylla'
+        return 'scylla-enterprise' if self.is_product_enterprise else 'scylla'
 
     def file_exists(self, file_path: str) -> Optional[bool]:
         try:
@@ -791,8 +791,12 @@ class BaseNode(AutoSshContainerMixin):
             startup_interface_command = "ip link set {} up"
         self.remoter.sudo(startup_interface_command.format(interface_name))
 
+    @property
+    def is_enterprise(self) -> bool:
+        return is_enterprise(self.scylla_version)
+
     @optional_cached_property
-    def is_enterprise(self) -> bool | None:
+    def is_product_enterprise(self) -> bool | None:
         _is_enterprise = None
 
         if self.distro.is_rhel_like:
@@ -2859,17 +2863,10 @@ class BaseNode(AutoSshContainerMixin):
 
     @property
     def is_cqlsh_support_cloud_bundle(self):
-        if bool(self.parent_cluster.connection_bundle_file):
-            if self.is_enterprise:
-                return ComparableScyllaVersion(self.scylla_version) >= "2022.3.0~dev"
-            else:
-                return ComparableScyllaVersion(self.scylla_version) >= "5.2.0~dev"
-        return False
+        return bool(self.parent_cluster.connection_bundle_file)
 
     @property
     def is_replacement_by_host_id_supported(self):
-        if self.is_enterprise:
-            return ComparableScyllaVersion(self.scylla_version) > '2022.3.0~dev'
         return ComparableScyllaVersion(self.scylla_version) > '5.2.0~dev'
 
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, connect_timeout):
