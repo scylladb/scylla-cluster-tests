@@ -28,3 +28,6 @@ hinted_handoff: 'enabled'
 parallel_node_operations: true
 
 instance_type_runner: 'c7i.16xlarge'
+
+backtrace_decoding: true
+cluster_health_check: false
