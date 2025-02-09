@@ -106,6 +106,9 @@ class LocalLoaderSetDummy(BaseCluster):
     def get_loader(self):
         return self.nodes[0]
 
+    def log_message(self, *args, **kwargs):
+        pass
+
 
 class LocalScyllaClusterDummy(BaseScyllaCluster, BaseCluster):
     # pylint: disable=super-init-not-called
