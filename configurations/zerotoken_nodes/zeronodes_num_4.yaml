@@ -1,0 +1,3 @@
+n_db_zero_token_nodes: 4
+zero_token_instance_type_db: 'i4i.large'
+use_zero_nodes: true
