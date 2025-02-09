@@ -3072,8 +3072,7 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
         self.wait_native_transport()
 
     def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
-        self.remoter.run(
-            f'scylla-api-client system log POST --level {level} --message {shlex.quote(message)}', verbose=verbose)
+        self.remoter.run(f'logger -p {level} -t scylla {shlex.quote(message)}', verbose=verbose)
 
 
 class FlakyRetryPolicy(RetryPolicy):
@@ -5146,6 +5145,10 @@ class BaseLoaderSet():
             LOGGER.warning('Cannot find summary in c-stress results: %s', lines[-10:])
             return {}
         return results
+
+    def log_message(self, message: str, level: str = 'info', verbose: bool = False) -> None:
+        for node in self.nodes:
+            node.log_message(message, level, verbose)
 
 
 class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instance-attributes

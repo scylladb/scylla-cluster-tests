@@ -13,6 +13,7 @@ from sdcm.cluster_k8s.eks import EksScyllaPodCluster
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_docker import ScyllaDockerCluster
+from unit_tests.dummy_remote import LocalLoaderSetDummy
 from unit_tests.test_tester import ClusterTesterForTests
 
 
@@ -49,7 +50,7 @@ class Cluster:
 @dataclass
 class FakeTester:
     params: dict = field(default_factory=lambda: PARAMS)
-    loaders: list = field(default_factory=list)
+    loaders: LocalLoaderSetDummy = field(default_factory=LocalLoaderSetDummy)
     db_cluster: Cluster | BaseScyllaCluster = field(default_factory=lambda: Cluster(nodes=[Node(), Node()]))
     monitors: list = field(default_factory=list)
 
