@@ -5387,8 +5387,9 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
             start_msg = (f"Started disruption {method_name} ({current_disruption} nemesis) on the target node "
                          f"'{str(args[0].target_node)}'")
             args[0].log.debug("{start_symbol} {msg} {start_symbol}".format(start_symbol='>' * 12, msg=start_msg))
-            args[0].cluster.log_message(
-                "{start_symbol} {msg} {start_symbol}".format(start_symbol='=' * 12, msg=start_msg))
+            for nodes_set in (args[0].cluster, args[0].loaders):
+                nodes_set.log_message(
+                    "{start_symbol} {msg} {start_symbol}".format(start_symbol='=' * 12, msg=start_msg))
 
             class_name = args[0].get_class_name()
             if class_name.find('Chaos') < 0:
@@ -5474,8 +5475,9 @@ def disrupt_method_wrapper(method, is_exclusive=False):  # pylint: disable=too-m
                     end_msg = (f"Finished disruption {method_name} ({current_disruption} nemesis) with status "
                                f"'{get_nemesis_status(nemesis_event)}'")
                     args[0].log.debug("{end_symbol} {msg} {end_symbol}".format(end_symbol='<' * 12, msg=end_msg))
-                    args[0].cluster.log_message(
-                        "{end_symbol} {msg} {end_symbol}".format(end_symbol='=' * 12, msg=end_msg))
+                    for nodes_set in (args[0].cluster, args[0].loaders):
+                        nodes_set.log_message(
+                            "{end_symbol} {msg} {end_symbol}".format(end_symbol='=' * 12, msg=end_msg))
 
             args[0].cluster.check_cluster_health()
             num_data_nodes_after = len(args[0].cluster.data_nodes)
