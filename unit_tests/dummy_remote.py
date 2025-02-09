@@ -88,6 +88,9 @@ class LocalLoaderSetDummy(BaseCluster):
     def is_kubernetes():
         return False
 
+    def log_message(self, *args, **kwargs):
+        pass
+
 
 class LocalScyllaClusterDummy(BaseScyllaCluster):
     # pylint: disable=super-init-not-called
