@@ -717,7 +717,7 @@
         },
         "links": [],
         "options": {
-          "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">C-S stress tool latency 95%</h1>",
+          "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">C-S, CQL-stress and Latte benchmarking tools latency 95%</h1>",
           "mode": "html"
         },
         "pluginVersion": "8.5.2",
@@ -805,110 +805,38 @@
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "B"
+            "refId": "A"
           },
           {
             "expr": "sct_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "D"
-          }
-        ],
-        "title": "C-S stress tools write latency 95%",
-        "type": "timeseries"
-      },
-      {
-        "datasource": "prometheus",
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineInterpolation": "linear",
-              "lineWidth": 2,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "never",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "min": 0,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "ms"
+            "refId": "B"
           },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 12,
-          "x": 0,
-          "y": 33
-        },
-        "links": [],
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "hidden",
-            "placement": "bottom"
+          {
+            "expr": "sct_latte_write_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
           },
-          "tooltip": {
-            "mode": "multi",
-            "sort": "none"
-          }
-        },
-        "pluginVersion": "8.5.2",
-        "targets": [
           {
             "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "B"
+            "refId": "D"
           },
           {
             "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "D"
+            "refId": "E"
           }
         ],
-        "title": "cql-stress C-S write latency 95%",
+        "title": "WRITE P95 latency | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "timeseries"
       },
       {
@@ -969,264 +897,142 @@
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "B"
+            "refId": "A"
           },
           {
             "expr": "sct_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "D"
-          }
-        ],
-        "title": "C-S stress tools write latency 95% histogram",
-        "type": "histogram"
-      },
-      {
-        "datasource": "prometheus",
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "thresholds"
-            },
-            "custom": {
-              "fillOpacity": 80,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineWidth": 1
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
+            "refId": "B"
           },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 12,
-          "x": 12,
-          "y": 33
-        },
-        "links": [],
-        "options": {
-          "bucketOffset": 0,
-          "bucketSize": 2,
-          "legend": {
-            "calcs": [],
-            "displayMode": "hidden",
-            "placement": "bottom"
-          }
-        },
-        "pluginVersion": "8.5.2",
-        "targets": [
+          {
+            "expr": "sct_latte_write_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
+          },
           {
             "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "B"
+            "refId": "D"
           },
           {
             "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
+            "refId": "E"
+          }
+        ],
+        "title": "WRITE P95 latency histogram | C-S and/or CQL-stress and/or Latte benchmarking tools",
+        "type": "histogram"
+      },
+      {
+        "datasource": "prometheus",
+        "description": "",
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ms"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 0,
+          "y": 40
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "hidden",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "none"
+          }
+        },
+        "pluginVersion": "8.5.2",
+        "targets": [
+          {
+            "expr": "sct_cassandra_stress_read_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "A"
+          },
+          {
+            "expr": "sct_cassandra_stress_counter_read_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "B"
+          },
+          {
+            "expr": "sct_latte_read_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_read_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
             "refId": "D"
-          }
-        ],
-        "title": "cql-stress C-S write latency 95% histogram",
-        "type": "histogram"
-      },
-      {
-        "datasource": "prometheus",
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineInterpolation": "linear",
-              "lineWidth": 2,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "never",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "min": 0,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "ms"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 12,
-          "x": 0,
-          "y": 40
-        },
-        "links": [],
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "hidden",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi",
-            "sort": "none"
-          }
-        },
-        "pluginVersion": "8.5.2",
-        "targets": [
-          {
-            "expr": "sct_cassandra_stress_read_gauge{type=\"lat_perc_95\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "C"
-          },
-          {
-            "expr": "sct_cassandra_stress_counter_read_gauge{type=\"lat_perc_95\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "E"
-          }
-        ],
-        "title": "C-S stress tool read latency 95%",
-        "type": "timeseries"
-      },
-      {
-        "datasource": "prometheus",
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineInterpolation": "linear",
-              "lineWidth": 2,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "never",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "min": 0,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "ms"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 12,
-          "x": 0,
-          "y": 40
-        },
-        "links": [],
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "hidden",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi",
-            "sort": "none"
-          }
-        },
-        "pluginVersion": "8.5.2",
-        "targets": [
-          {
-            "expr": "sct_cql_stress_cassandra_stress_read_gauge{type=\"lat_perc_95\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "C"
           },
           {
             "expr": "sct_cql_stress_cassandra_stress_counter_read_gauge{type=\"lat_perc_95\"}",
@@ -1236,7 +1042,7 @@
             "refId": "E"
           }
         ],
-        "title": "cql-stress C-S read latency 95%",
+        "title": "READ P95 latency | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "timeseries"
       },
       {
@@ -1297,78 +1103,28 @@
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "C"
+            "refId": "A"
           },
           {
             "expr": "sct_cassandra_stress_counter_read_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "E"
-          }
-        ],
-        "title": "C-S stress tool read latency 95% histogram",
-        "type": "histogram"
-      },
-      {
-        "datasource": "prometheus",
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "thresholds"
-            },
-            "custom": {
-              "fillOpacity": 80,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineWidth": 1
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
+            "refId": "B"
           },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 12,
-          "x": 12,
-          "y": 40
-        },
-        "links": [],
-        "options": {
-          "bucketOffset": 0,
-          "bucketSize": 2,
-          "legend": {
-            "calcs": [],
-            "displayMode": "hidden",
-            "placement": "bottom"
-          }
-        },
-        "pluginVersion": "8.5.2",
-        "targets": [
+          {
+            "expr": "sct_latte_read_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
+          },
           {
             "expr": "sct_cql_stress_cassandra_stress_read_gauge{type=\"lat_perc_95\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "C"
+            "refId": "D"
           },
           {
             "expr": "sct_cql_stress_cassandra_stress_counter_read_gauge{type=\"lat_perc_95\"}",
@@ -1378,7 +1134,7 @@
             "refId": "E"
           }
         ],
-        "title": "cql-stress C-S read latency 95% histogram",
+        "title": "READ P95 latency histogram | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "histogram"
       },
       {
@@ -1462,9 +1218,23 @@
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "A"
+          },
+          {
+            "expr": "sct_latte_mixed_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "B"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_mixed_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
           }
         ],
-        "title": "C-S stress tool mixed latency 95%",
+        "title": "MIXED P95 latency | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "timeseries"
       },
       {
@@ -1526,9 +1296,23 @@
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "A"
+          },
+          {
+            "expr": "sct_latte_mixed_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "B"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_mixed_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
           }
         ],
-        "title": "C-S stress tool mixed latency 95% histogram",
+        "title": "MIXED P95 latency histogram | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "histogram"
       },
       {
@@ -1611,10 +1395,24 @@
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "F"
+            "refId": "A"
+          },
+          {
+            "expr": "sct_latte_user_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "B"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_user_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
           }
         ],
-        "title": "C-S stress tool user profile latency 95%",
+        "title": "USER PROFILE P95 latency | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "timeseries"
       },
       {
@@ -1677,10 +1475,24 @@
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "F"
+            "refId": "A"
+          },
+          {
+            "expr": "sct_latte_user_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "B"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_user_gauge{type=\"lat_perc_95\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
           }
         ],
-        "title": "C-S stress tool user profile latency 95% histogram",
+        "title": "USER PROFILE P95 latency histogram | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "histogram"
       },
       {
@@ -1699,7 +1511,7 @@
         },
         "links": [],
         "options": {
-          "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">C-S Stress tool latency 99%</h1>",
+          "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">C-S, CQL-stress and Latte benchmarking tools latency 99%</h1>",
           "mode": "html"
         },
         "pluginVersion": "8.5.2",
@@ -1787,110 +1599,38 @@
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "B"
+            "refId": "A"
           },
           {
             "expr": "sct_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "D"
-          }
-        ],
-        "title": "C-S stress tools write latency 99%",
-        "type": "timeseries"
-      },
-      {
-        "datasource": "prometheus",
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineInterpolation": "linear",
-              "lineWidth": 2,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "never",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "min": 0,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "ms"
+            "refId": "B"
           },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 12,
-          "x": 0,
-          "y": 64
-        },
-        "links": [],
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "hidden",
-            "placement": "bottom"
+          {
+            "expr": "sct_latte_write_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
           },
-          "tooltip": {
-            "mode": "multi",
-            "sort": "none"
-          }
-        },
-        "pluginVersion": "8.5.2",
-        "targets": [
           {
             "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "B"
+            "refId": "D"
           },
           {
             "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "D"
+            "refId": "E"
           }
         ],
-        "title": "cql-stress C-S write latency 99%",
+        "title": "WRITE P99 latency | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "timeseries"
       },
       {
@@ -1951,264 +1691,142 @@
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "B"
+            "refId": "A"
           },
           {
             "expr": "sct_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "D"
-          }
-        ],
-        "title": "C-S stress tools write latency 99% histogram",
-        "type": "histogram"
-      },
-      {
-        "datasource": "prometheus",
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "thresholds"
-            },
-            "custom": {
-              "fillOpacity": 80,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineWidth": 1
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
+            "refId": "B"
           },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 12,
-          "x": 12,
-          "y": 64
-        },
-        "links": [],
-        "options": {
-          "bucketOffset": 0,
-          "bucketSize": 2,
-          "legend": {
-            "calcs": [],
-            "displayMode": "hidden",
-            "placement": "bottom"
-          }
-        },
-        "pluginVersion": "8.5.2",
-        "targets": [
+          {
+            "expr": "sct_latte_write_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
+          },
           {
             "expr": "sct_cql_stress_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "B"
+            "refId": "D"
           },
           {
             "expr": "sct_cql_stress_cassandra_stress_counter_write_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
+            "refId": "E"
+          }
+        ],
+        "title": "WRITE P99 latency histogram | C-S and/or CQL-stress and/or Latte benchmarking tools",
+        "type": "histogram"
+      },
+      {
+        "datasource": "prometheus",
+        "description": "",
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisLabel": "",
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 0,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "viz": false
+              },
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "mappings": [],
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "ms"
+          },
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 0,
+          "y": 71
+        },
+        "links": [],
+        "options": {
+          "legend": {
+            "calcs": [],
+            "displayMode": "hidden",
+            "placement": "bottom"
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "none"
+          }
+        },
+        "pluginVersion": "8.5.2",
+        "targets": [
+          {
+            "expr": "sct_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "A"
+          },
+          {
+            "expr": "sct_cassandra_stress_counter_read_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "B"
+          },
+          {
+            "expr": "sct_latte_read_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
             "refId": "D"
-          }
-        ],
-        "title": "cql-stress C-S write latency 99% histogram",
-        "type": "histogram"
-      },
-      {
-        "datasource": "prometheus",
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineInterpolation": "linear",
-              "lineWidth": 2,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "never",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "min": 0,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "ms"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 12,
-          "x": 0,
-          "y": 71
-        },
-        "links": [],
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "hidden",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi",
-            "sort": "none"
-          }
-        },
-        "pluginVersion": "8.5.2",
-        "targets": [
-          {
-            "expr": "sct_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "C"
-          },
-          {
-            "expr": "sct_cassandra_stress_counter_read_gauge{type=\"lat_perc_99\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "E"
-          }
-        ],
-        "title": "C-S stress tool read latency 99%",
-        "type": "timeseries"
-      },
-      {
-        "datasource": "prometheus",
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineInterpolation": "linear",
-              "lineWidth": 2,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "never",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "min": 0,
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "ms"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 12,
-          "x": 0,
-          "y": 71
-        },
-        "links": [],
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "hidden",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi",
-            "sort": "none"
-          }
-        },
-        "pluginVersion": "8.5.2",
-        "targets": [
-          {
-            "expr": "sct_cql_stress_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "C"
           },
           {
             "expr": "sct_cql_stress_cassandra_stress_counter_read_gauge{type=\"lat_perc_99\"}",
@@ -2218,7 +1836,7 @@
             "refId": "E"
           }
         ],
-        "title": "cql-stress C-S read latency 99%",
+        "title": "READ P99 latency | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "timeseries"
       },
       {
@@ -2279,78 +1897,28 @@
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "C"
+            "refId": "A"
           },
           {
             "expr": "sct_cassandra_stress_counter_read_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "E"
-          }
-        ],
-        "title": "C-S stress tool read latency 99% histogram",
-        "type": "histogram"
-      },
-      {
-        "datasource": "prometheus",
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "thresholds"
-            },
-            "custom": {
-              "fillOpacity": 80,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "lineWidth": 1
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
+            "refId": "B"
           },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 12,
-          "x": 12,
-          "y": 71
-        },
-        "links": [],
-        "options": {
-          "bucketOffset": 0,
-          "bucketSize": 2,
-          "legend": {
-            "calcs": [],
-            "displayMode": "hidden",
-            "placement": "bottom"
-          }
-        },
-        "pluginVersion": "8.5.2",
-        "targets": [
+          {
+            "expr": "sct_latte_read_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
+          },
           {
             "expr": "sct_cql_stress_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "C"
+            "refId": "D"
           },
           {
             "expr": "sct_cql_stress_cassandra_stress_counter_read_gauge{type=\"lat_perc_99\"}",
@@ -2360,7 +1928,7 @@
             "refId": "E"
           }
         ],
-        "title": "cql-stress C-S read latency 99% histogram",
+        "title": "READ P99 latency histogram | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "histogram"
       },
       {
@@ -2444,9 +2012,23 @@
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "A"
+          },
+          {
+            "expr": "sct_latte_mixed_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "B"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_mixed_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
           }
         ],
-        "title": "C-S stress tool mixed latency 99%",
+        "title": "MIXED P99 latency | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "timeseries"
       },
       {
@@ -2510,9 +2092,23 @@
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "A"
+          },
+          {
+            "expr": "sct_latte_mixed_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "B"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_mixed_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
           }
         ],
-        "title": "C-S stress tool mixed latency 99% histogram",
+        "title": "MIXED P99 latency histogram | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "histogram"
       },
       {
@@ -2595,10 +2191,24 @@
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "F"
+            "refId": "A"
+          },
+          {
+            "expr": "sct_latte_user_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "B"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_user_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
           }
         ],
-        "title": "C-S stress tool user profile latency 99%",
+        "title": "USER PROFILE P99 latency | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "timeseries"
       },
       {
@@ -2659,10 +2269,24 @@
             "format": "time_series",
             "interval": "15s",
             "intervalFactor": 1,
-            "refId": "F"
+            "refId": "A"
+          },
+          {
+            "expr": "sct_latte_user_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "B"
+          },
+          {
+            "expr": "sct_cql_stress_cassandra_stress_user_gauge{type=\"lat_perc_99\"}",
+            "format": "time_series",
+            "interval": "15s",
+            "intervalFactor": 1,
+            "refId": "C"
           }
         ],
-        "title": "C-S stress tool user profile latency 99% histogram",
+        "title": "USER PROFILE P99 latency histogram | C-S and/or CQL-stress and/or Latte benchmarking tools",
         "type": "histogram"
       },
       {
@@ -2772,27 +2396,6 @@
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "K"
-          },
-                    {
-            "expr": "sct_latte_read_gauge{type=\"p95\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "L"
-          },
-          {
-            "expr": "sct_latte_update_gauge{type=\"p95\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "M"
-          },
-          {
-            "expr": "sct_latte_run_gauge{type=\"p95\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "N"
           }
         ],
         "thresholds": [],
@@ -2910,27 +2513,6 @@
             "interval": "15s",
             "intervalFactor": 1,
             "refId": "K"
-          },
-          {
-            "expr": "sct_latte_read_gauge{type=\"p99\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "L"
-          },
-          {
-            "expr": "sct_latte_update_gauge{type=\"p99\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "M"
-          },
-          {
-            "expr": "sct_latte_run_gauge{type=\"p99\"}",
-            "format": "time_series",
-            "interval": "15s",
-            "intervalFactor": 1,
-            "refId": "N"
           }
         ],
         "thresholds": [],
