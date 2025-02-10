@@ -646,6 +646,18 @@ class ManagerTestFunctionsMixIn(
         # FIXME: Make it works with multiple locations or file a bug for scylla-manager.
         return [f"{backend}:{location}" for location in buckets[:1]]
 
+    def get_dc_mapping(self) -> str | None:
+        """Get the datacenter mapping string for the restore task if there are > 1 DCs (multiDC) in the cluster.
+        In case of singleDC, return None.
+
+        Example of return string:
+            eu-west-2scylla_node_west=eu-west-2scylla_node_west,us-eastscylla_node_east=us-eastscylla_node_east
+        """
+        if len(dcs := self.get_all_dcs_names()) > 1:
+            return ",".join([f"{dc}={dc}" for dc in dcs])
+        else:
+            return None
+
     # pylint: disable=too-many-arguments
     def verify_backup_success(self, mgr_cluster, backup_task, ks_names: list = None, tables_names: list = None,
                               truncate=True, restore_data_with_task=False, timeout=None):
@@ -726,9 +738,10 @@ class ManagerTestFunctionsMixIn(
     def restore_backup_with_task(self, mgr_cluster, snapshot_tag, timeout, restore_schema=False, restore_data=False,
                                  location_list=None, extra_params=None):
         location_list = location_list if location_list else self.locations
+        dc_mapping = self.get_dc_mapping()
         restore_task = mgr_cluster.create_restore_task(restore_schema=restore_schema, restore_data=restore_data,
                                                        location_list=location_list, snapshot_tag=snapshot_tag,
-                                                       extra_params=extra_params)
+                                                       dc_mapping=dc_mapping, extra_params=extra_params)
         restore_task.wait_and_get_final_status(step=30, timeout=timeout)
         assert restore_task.status == TaskStatus.DONE, f"Restoration of {snapshot_tag} has failed!"
         InfoEvent(message=f'The restore task has ended successfully. '
