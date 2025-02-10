@@ -3702,7 +3702,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         assert removed_node_status is not None, "failed to get host_id using nodetool status"
         host_id = removed_node_status["host_id"]
 
-        with ignore_ycsb_connection_refused():
+        if SkipPerIssues('https://github.com/scylladb/scylladb/issues/21815', params=self.tester.params):
+            # TBD: To be removed after https://github.com/scylladb/scylladb/issues/21815 is resolved
+            ignore_stream_mutation_errors_due_to_issue = ignore_stream_mutation_fragments_errors
+        else:
+            ignore_stream_mutation_errors_due_to_issue = contextlib.nullcontext
+
+        with ignore_ycsb_connection_refused(), ignore_stream_mutation_errors_due_to_issue():
             # node stop and make sure its "DN"
             node_to_remove.stop_scylla_server(verify_up=True, verify_down=True)
 
