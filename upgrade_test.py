@@ -294,47 +294,26 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             if (orig_is_enterprise and
                     ComparableScyllaVersion(self.orig_ver) < '2025.1.0~dev' <= ComparableScyllaVersion(
                         self.params.scylla_version_upgrade_target)):
+                InfoEvent(
+                    message=f'upgrade_node - orig is enterprise and version {self.orig_ver} < 2025.1.0~dev and '
+                            f'scylla_version_upgrade_target is {self.params.scylla_version_upgrade_target}').publish()
                 scylla_pkg = 'scylla'
                 scylla_pkg_ver = f"{scylla_pkg}{ver_suffix}"
-
-            if orig_is_enterprise != new_is_enterprise:
+                InfoEvent(message='Rollback mode is set to reinstall').publish()
                 self.upgrade_rollback_mode = 'reinstall'
-                if self.params.get('use_preinstalled_scylla'):
-                    scylla_pkg_ver += f" {scylla_pkg}-machine-image{ver_suffix}"
 
-            if self.upgrade_rollback_mode == 'reinstall':
-                if node.distro.is_rhel_like:
-                    InfoEvent(message='upgrade_node - starting to remove and install scylla on RHEL').publish()
-                    node.remoter.run(r'sudo yum remove scylla\* -y')
-                    node.remoter.run('sudo yum install {} -y'.format(scylla_pkg_ver))
-                    InfoEvent(message='upgrade_node - ended to remove and install scylla on RHEL').publish()
-                else:
-                    InfoEvent(message='upgrade_node - starting to remove and install scylla on debian').publish()
-                    node.remoter.sudo(r'apt-get remove scylla\* -y')
-                    node.remoter.sudo(
-                        f'DEBIAN_FRONTEND=noninteractive apt-get install {scylla_pkg_ver} -y'
-                        f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
-                    )
-                    InfoEvent(message='upgrade_node - ended to remove and install scylla on debian').publish()
-                InfoEvent(message='upgrade_node - starting to "recover_conf"').publish()
-                recover_conf(node)
-                InfoEvent(message='upgrade_node - ended to "recover_conf"').publish()
-                InfoEvent(message='upgrade_node - starting to "daemon-reload"').publish()
-                node.remoter.run('sudo systemctl daemon-reload')
-                InfoEvent(message='upgrade_node - ended to "daemon-reload"').publish()
-            else:  # noqa: PLR5501
-                if node.distro.is_rhel_like:
-                    InfoEvent(message='upgrade_node - starting to "yum update"').publish()
-                    node.remoter.run(r'sudo yum update {}\* -y'.format(scylla_pkg_ver))
-                    InfoEvent(message='upgrade_node - ended to "yum update"').publish()
-                else:
-                    InfoEvent(message='upgrade_node - starting to "apt-get update"').publish()
-                    node.remoter.sudo('apt-get update')
-                    node.remoter.sudo(
-                        f'DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade {scylla_pkg} -y'
-                        f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
-                    )
-                    InfoEvent(message='upgrade_node - ended to "apt-get update"').publish()
+            if node.distro.is_rhel_like:
+                InfoEvent(message='upgrade_node - starting to "yum update"').publish()
+                node.remoter.run(r'sudo yum update {}\* -y'.format(scylla_pkg_ver))
+                InfoEvent(message='upgrade_node - ended to "yum update"').publish()
+            else:
+                InfoEvent(message='upgrade_node - starting to "apt-get update"').publish()
+                node.remoter.sudo('apt-get update')
+                node.remoter.sudo(
+                    f'DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade {scylla_pkg} -y'
+                    f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+                )
+                InfoEvent(message='upgrade_node - ended to "apt-get update"').publish()
 
         InfoEvent(message='upgrade_node - fix /etc/scylla.d/io.conf arguments compatibility').publish()
         node.remoter.sudo(
@@ -343,8 +322,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(message='upgrade_node - starting to "check_reload_systemd_config"').publish()
         check_reload_systemd_config(node)
         InfoEvent(message='upgrade_node - ended to "check_reload_systemd_config"').publish()
-        # Current default 300s aren't enough for upgrade test of Debian 9.
-        # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
+
         InfoEvent(message='upgrade_node - starting to "run_scylla_sysconfig_setup"').publish()
         node.run_scylla_sysconfig_setup()
         InfoEvent(message='upgrade_node - ended to "run_scylla_sysconfig_setup"').publish()
