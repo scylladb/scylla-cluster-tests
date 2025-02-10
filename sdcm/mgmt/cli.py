@@ -603,7 +603,7 @@ class ManagerCluster(ScyllaManagerBase):
         self.id = value
 
     def create_restore_task(self, restore_schema=False, restore_data=False, location_list=None, snapshot_tag=None,
-                            extra_params=None):
+                            dc_mapping=None, extra_params=None):
         cmd = f"restore -c {self.id}"
         if restore_schema:
             cmd += " --restore-schema"
@@ -614,6 +614,8 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += " --location {} ".format(locations_names)
         if snapshot_tag:
             cmd += f" --snapshot-tag {snapshot_tag}"
+        if dc_mapping:
+            cmd += f" --dc-mapping {dc_mapping}"
         if extra_params:
             cmd += f" {extra_params}"
 
