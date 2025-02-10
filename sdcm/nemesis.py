@@ -3702,7 +3702,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         assert removed_node_status is not None, "failed to get host_id using nodetool status"
         host_id = removed_node_status["host_id"]
 
-        with ignore_ycsb_connection_refused():
+        with ignore_ycsb_connection_refused(), ignore_stream_mutation_fragments_errors():
             # node stop and make sure its "DN"
             node_to_remove.stop_scylla_server(verify_up=True, verify_down=True)
 
