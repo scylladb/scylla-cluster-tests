@@ -25,6 +25,7 @@ from sdcm.sct_provision.user_data_objects import SctUserDataObject
 from sdcm.sct_provision.user_data_objects.scylla import ScyllaUserDataObject
 from sdcm.sct_provision.user_data_objects.sshd import SshdUserDataObject
 from sdcm.sct_provision.user_data_objects.syslog_ng import SyslogNgUserDataObject
+from sdcm.sct_provision.user_data_objects.walinuxagent import EnableWaLinuxAgent
 from sdcm.test_config import TestConfig
 
 
@@ -141,6 +142,7 @@ class DefinitionBuilder(abc.ABC):
         user_data_object_classes: List[Type[SctUserDataObject]] = [
             SyslogNgUserDataObject,
             SshdUserDataObject,
+            EnableWaLinuxAgent,
             ScyllaUserDataObject,
         ]
         user_data_objects = [
