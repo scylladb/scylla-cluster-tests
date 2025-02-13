@@ -2126,10 +2126,9 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
 
         https://github.com/scylladb/scylla-web-install
         """
-        is_enterprise, version = assume_version(self.parent_cluster.params, scylla_version)
-        product_type = '--scylla-product scylla-enterprise' if is_enterprise else ''
+        version = assume_version(self.parent_cluster.params, scylla_version)
         self.remoter.run(
-            f"curl -sSf get.scylladb.com/server | sudo bash -s -- --scylla-version {version} {product_type}")
+            f"curl -sSf get.scylladb.com/server | sudo bash -s -- --scylla-version {version}")
 
     def install_scylla_debuginfo(self) -> None:
         if self.distro.is_rhel_like or self.distro.is_sles:
