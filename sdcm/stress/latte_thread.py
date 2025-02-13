@@ -205,8 +205,10 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        cmd_runner = cleanup_context = RemoteDocker(loader, self.docker_image_name,
-                                                    extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker}')
+        cmd_runner = cleanup_context = RemoteDocker(
+            loader, self.docker_image_name,
+            command_line="-c 'tail -f /dev/null'",
+            extra_docker_opts=f'--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}')
         stress_cmd = self.build_stress_cmd(cmd_runner, loader)
 
         if not os.path.exists(loader.logdir):
