@@ -437,9 +437,9 @@ def is_enterprise(scylla_version):
     return bool(re.search(r"^20[0-9]{2}.*", scylla_version))
 
 
-def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> tuple[bool, str]:
+def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> str:
     # Try to get the major version from the branch name, it will only be used when scylla_version isn't assigned.
-    # It can be switched to RELEASE_BRANCH from upstream job
+    # It can be switched to RELEASE_BRANCH from an upstream job
     git_branch = os.environ.get('GIT_BRANCH')  # origin/branch-4.5
     scylla_repo = params.get('scylla_repo')
 
@@ -448,16 +448,11 @@ def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> t
     if match := re.match(r'[\D\d]*-(\d+\.\d+)', scylla_version_source) or \
             re.match(r'\D*(\d+\.\d+)', scylla_version_source):
         version_type = f"nightly-{match.group(1)}"
-        is_enterprise_version = is_enterprise(match.group(1))
-    elif scylla_version_source and 'enterprise' in scylla_version_source:
-        version_type = "nightly-enterprise"
-        is_enterprise_version = True
     elif scylla_version_source and 'master' in scylla_version_source:
         version_type = "nightly-master"
-        is_enterprise_version = False
     else:
         raise Exception("Scylla version for web install isn't identified")
-    return is_enterprise_version, version_type
+    return version_type
 
 
 def get_gemini_version(output: str):
