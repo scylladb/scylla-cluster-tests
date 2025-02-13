@@ -141,42 +141,20 @@ class TestVersionUtils(unittest.TestCase):
         self.assertIn('4.5.3', get_all_versions(
             'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.5.repo'))
 
-    def test_08_assume_versions_oss(self):
-        with unittest.mock.patch.object(os.environ, 'get', return_value='branch-5.0', clear=True):
-            params = {}
-            is_version_enterprise, version = assume_version(params)
-            self.assertTrue(not is_version_enterprise, 'This should be OSS')
-            self.assertEqual(version, 'nightly-5.0', 'Version should be 5.0')
-
-            scylla_version = '5.0'
-            is_version_enterprise, version = assume_version(params, scylla_version)
-            self.assertTrue(not is_version_enterprise, 'This should be OSS')
-            self.assertEqual(version, 'nightly-5.0', 'Version should be 5.0')
-
-            repo_url = 'https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/branch-5.0/rpm/centos/' \
-                       '2022-05-10T07:40:41Z/scylla.repo'
-            params.update({'scylla_repo': repo_url})
-            is_version_enterprise, version = assume_version(params)
-            self.assertTrue(not is_version_enterprise, 'This should be OSS')
-            self.assertEqual(version, 'nightly-5.0', 'Version should be 5.0')
-
-    def test_09_assume_versions_enterprise(self):
+    def test_09_assume_versions(self):
         with unittest.mock.patch.object(os.environ, 'get', return_value='branch-2022.1', clear=True):
             params = {}
-            is_version_enterprise, version = assume_version(params)
-            self.assertTrue(is_version_enterprise, 'This should be enterprise')
+            version = assume_version(params)
             self.assertEqual(version, 'nightly-2022.1', 'Version should be 2022.1')
 
             scylla_version = '2022.1'
-            is_version_enterprise, version = assume_version(params, scylla_version)
-            self.assertTrue(is_version_enterprise, 'This should be enterprise')
+            version = assume_version(params, scylla_version)
             self.assertEqual(version, 'nightly-2022.1', 'Version should be 2022.1')
 
             repo_url = 'http://downloads.scylladb.com/unstable/scylla-enterprise/enterprise-2022.1/deb/unified/' \
                        '2022-05-10T22:12:50Z/scylladb-2022.1/scylla.list'
             params.update({'scylla_repo': repo_url})
-            is_version_enterprise, version = assume_version(params)
-            self.assertTrue(is_version_enterprise, 'This should be enterprise')
+            version = assume_version(params)
             self.assertEqual(version, 'nightly-2022.1', 'Version should be 2022.1')
 
 
