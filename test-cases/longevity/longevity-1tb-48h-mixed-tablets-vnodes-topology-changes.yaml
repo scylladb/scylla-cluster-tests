@@ -8,16 +8,16 @@ pre_create_keyspace: [
 
 # write 500 GB of data to each of the keyspaces
 prepare_write_cmd:
-  - "cassandra-stress write cl=ALL n=524288000  -schema 'keyspace=keyspace1 replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..524288000 -log interval=15"
-  - "cassandra-stress write cl=ALL n=524288000  -schema 'keyspace=keyspace2 replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..524288000 -log interval=15"
+  - "cassandra-stress write cl=ALL n=262144000  -schema 'keyspace=keyspace1 replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..262144000 -log interval=15"
+  - "cassandra-stress write cl=ALL n=262144000  -schema 'keyspace=keyspace2 replication(strategy=NetworkTopologyStrategy,replication_factor=3)' -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..262144000 -log interval=15"
 
 # run mixed workload on both keyspaces for 40 hours
 # run write workload that adds 300 GB of data to each of the keyspaces
 stress_cmd:
-  - "cassandra-stress mixed cl=QUORUM duration=40h  -schema 'keyspace=keyspace1' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..524288000 -log interval=15"
-  - "cassandra-stress mixed cl=QUORUM duration=40h  -schema 'keyspace=keyspace2' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..524288000 -log interval=15"
-  - "cassandra-stress write cl=QUORUM duration=40h  -schema 'keyspace=keyspace1' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=524288001..838860800 -log interval=15"
-  - "cassandra-stress write cl=QUORUM duration=40h  -schema 'keyspace=keyspace2' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=524288001..838860800 -log interval=15"
+  - "cassandra-stress mixed cl=QUORUM duration=40h  -schema 'keyspace=keyspace1' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..262144000 -log interval=15"
+  - "cassandra-stress mixed cl=QUORUM duration=40h  -schema 'keyspace=keyspace2' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..262144000 -log interval=15"
+  - "cassandra-stress write cl=QUORUM duration=40h  -schema 'keyspace=keyspace1' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=262144001..524288000 -log interval=15"
+  - "cassandra-stress write cl=QUORUM duration=40h  -schema 'keyspace=keyspace2' -mode cql3 native -rate threads=100 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=262144001..524288000 -log interval=15"
 
 run_fullscan:
   - '{"mode": "table_and_aggregate", "ks_cf": "random", "interval": 60}'
