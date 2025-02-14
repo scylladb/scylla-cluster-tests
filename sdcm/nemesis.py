@@ -4849,8 +4849,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                         "Should have been already switched to NetworkStrategy"
                     strategy.replication_factors_per_dc.update({new_dc_name: 1})  # pylint: disable=protected-access
                     replication_strategy_setter(**{keyspace: strategy})
+
+                for key, preserved_strategy in replication_strategy_setter.preserved.items():
+                    preserved_strategy.replication_factors_per_dc[new_dc_name] = 0
+
                 InfoEvent(message='execute rebuild on new datacenter').publish()
-                with wait_for_log_lines(node=new_node, start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
+                with wait_for_log_lines(node=new_node,
+                                        start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
                                         end_line_patterns=["rebuild.*finished with keyspaces=", "Rebuild succeeded"],
                                         start_timeout=60, end_timeout=600):
                     new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", long_running=True, retry=0)
