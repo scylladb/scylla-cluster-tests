@@ -88,7 +88,7 @@ class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
         if not nemesis:
             self.check_regression()
         else:
-            self.check_latency_during_ops()
+            self.check_latency_during_ops(hdr_tags=stress_queue.hdr_tags)
 
     def test_latency(self):
         """

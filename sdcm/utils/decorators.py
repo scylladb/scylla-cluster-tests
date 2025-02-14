@@ -157,6 +157,22 @@ def measure_time(func):
     return wrapped
 
 
+def _find_hdr_tags(*args):
+    for input_arg in args:
+        if isinstance(input_arg, dict) and "hdr_tags" in input_arg:
+            # NOTE: case when some method has 'hdr_tags' kwarg
+            return input_arg["hdr_tags"]
+        elif hasattr(input_arg, "hdr_tags"):
+            # NOTE: case of 'stress_queue.hdr_tags' and 'nemesis.hdr_tags'
+            return input_arg.hdr_tags
+        elif isinstance(input_arg, tuple):
+            # NOTE: case when 'stress_queue' is part of a returned tuple
+            for input_subarg in input_arg:
+                if hasattr(input_subarg, "hdr_tags"):
+                    return input_subarg.hdr_tags
+    raise ValueError("Failed to find 'hdr_tags'")
+
+
 def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None):
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
@@ -231,12 +247,27 @@ def latency_calculator_decorator(original_function: Optional[Callable] = None, *
             result["screenshots"] = screenshots
             result["duration"] = f"{datetime.timedelta(seconds=int(end - start))}"
             result["duration_in_sec"] = int(end - start)
-            result["hdr"] = tester.get_cs_range_histogram_by_interval(stress_operation=workload,
-                                                                      start_time=start,
-                                                                      end_time=end)
-            result["hdr_summary"] = tester.get_cs_range_histogram(stress_operation=workload,
-                                                                  start_time=start,
-                                                                  end_time=end)
+            try:
+                hdr_tags = _find_hdr_tags(kwargs, res, _self)
+            except Exception as err:  # noqa: BLE001
+                LOGGER.error("Failed to find 'hdr_tags': %s", err)
+                hdr_tags = []
+            try:
+                result["hdr"] = tester.get_hdrhistogram_by_interval(
+                    hdr_tags=hdr_tags, stress_operation=workload,
+                    start_time=start, end_time=end)
+                LOGGER.debug("hdr: %s", result["hdr"])
+            except Exception as err:  # noqa: BLE001
+                LOGGER.error("Failed to get hdrhistogram_by_interval error: %s", err)
+                result["hdr"] = {}
+
+            try:
+                result["hdr_summary"] = tester.get_hdrhistogram(
+                    hdr_tags=hdr_tags, stress_operation=workload,
+                    start_time=start, end_time=end)
+            except Exception as err:  # noqa: BLE001
+                LOGGER.error("Failed to get hdrhistogram error: %s", err)
+                result["hdr_summary"] = {}
             hdr_throughput = 0
             for summary, values in result["hdr_summary"].items():
                 hdr_throughput += values["throughput"]
