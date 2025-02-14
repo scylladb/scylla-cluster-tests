@@ -184,7 +184,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
         for stress in stress_queue:
             results.extend(self.get_stress_results(queue=stress, store_results=False))
             self.log.debug("One c-s command results: %s", results[-1])
-        return results
+        # NOTE: 'stress_queue' will be used by the 'latency_calculator_decorator' decorator
+        return results, stress_queue
 
     def drop_keyspace(self):
         self.log.debug(f'Drop keyspace {"keyspace1"}')
@@ -208,8 +209,8 @@ class PerformanceRegressionPredefinedStepsTest(PerformanceRegressionTest):  # py
             current_throttle = f"fixed={int(int(throttle_step) // (num_loaders * stress_num))}/s" if throttle_step != "unthrottled" else ""
             run_step = ((latency_calculator_decorator(legend=f"Gradual test step {throttle_step} op/s",
                                                       cycle_name=throttle_step))(self.run_step))
-            results = run_step(stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle,
-                               num_threads=workload.num_threads)
+            results, _ = run_step(
+                stress_cmds=workload.cs_cmd_tmpl, current_throttle=current_throttle, num_threads=workload.num_threads)
 
             calculate_result = self._calculate_average_max_latency(results)
             self.update_test_details(scylla_conf=True)

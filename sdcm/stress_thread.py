@@ -14,13 +14,13 @@
 import os
 import re
 import time
-import uuid
 import logging
 import contextlib
 from typing import Any
 from itertools import chain
 from pathlib import Path
 
+from sdcm.db_stats import get_stress_cmd_params
 from sdcm.loader import CassandraStressExporter, CassandraStressHDRExporter
 from sdcm.cluster import BaseLoaderSet
 from sdcm.prometheus import nemesis_metrics_obj
@@ -85,6 +85,24 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         self.client_encrypt = client_encrypt
         self.stop_test_on_failure = stop_test_on_failure
         self.compaction_strategy = compaction_strategy
+        self.set_hdr_tags(stress_cmd)
+
+    def set_hdr_tags(self, stress_cmd):
+        # TODO: add support for the "counter_write" and "user" modes?
+        params = get_stress_cmd_params(stress_cmd)
+        if "fixed threads" in params:
+            if " mixed " in stress_cmd:
+                self.hdr_tags = ["WRITE-rt", "READ-rt"]
+            elif " read " in stress_cmd:
+                self.hdr_tags = ["READ-rt"]
+            else:
+                self.hdr_tags = ["WRITE-rt"]
+        elif " mixed " in stress_cmd:
+            self.hdr_tags = ["WRITE-st", "READ-st"]
+        elif " read " in stress_cmd:
+            self.hdr_tags = ["READ-st"]
+        else:
+            self.hdr_tags = ["WRITE-st"]
 
     @staticmethod
     def append_no_warmup_to_cmd(stress_cmd):
@@ -222,10 +240,6 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
         return stress_cmd
 
-    @staticmethod
-    def _build_log_file_id(loader_idx, cpu_idx, keyspace_idx):
-        return f"l{loader_idx}-c{cpu_idx}-k{keyspace_idx}-{uuid.uuid4()}"
-
     def _run_stress(self, loader, loader_idx, cpu_idx):
         pass
 
@@ -241,8 +255,8 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
         log_file_name = \
             os.path.join(loader.logdir, f'cassandra-stress-{stress_cmd_opt}-{log_id}.log')
         LOGGER.debug('cassandra-stress local log: %s', log_file_name)
-        remote_hdr_file_name = f"cs-hdr-{stress_cmd_opt}-{log_id}.hdr"
-        LOGGER.debug("cassandra-stress remote HDR log file: %s", remote_hdr_file_name)
+        remote_hdr_file_name = f"hdrh-cs-{stress_cmd_opt}-{log_id}.hdr"
+        LOGGER.debug("cassandra-stress remote HDR histogram log file: %s", remote_hdr_file_name)
         local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
         LOGGER.debug("cassandra-stress HDR local file %s", local_hdr_file_name)
 
@@ -297,13 +311,13 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
 
         if self.params.get("use_hdrhistogram"):
             stress_cmd = self._add_hdr_log_option(stress_cmd, remote_hdr_file_name)
-            hdr_logger_context = HDRHistogramFileLogger(
+            hdrh_logger_context = HDRHistogramFileLogger(
                 node=loader,
                 remote_log_file=remote_hdr_file_name_full_path,
                 target_log_file=os.path.join(loader.logdir, remote_hdr_file_name),
             )
         else:
-            hdr_logger_context = contextlib.nullcontext()
+            hdrh_logger_context = contextlib.nullcontext()
 
         LOGGER.info('Stress command:\n%s', stress_cmd)
 
@@ -335,11 +349,12 @@ class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-man
                 CassandraStressEvent(node=loader, stress_cmd=self.stress_cmd,
                                      log_file_name=log_file_name) as cs_stress_event, \
                 CassandraStressHDRExporter(instance_name=cmd_runner_name,
+                                           hdr_tags=self.hdr_tags,
                                            metrics=nemesis_metrics_obj(),
                                            stress_operation=stress_cmd_opt,
                                            stress_log_filename=local_hdr_file_name,
                                            loader_idx=loader_idx, cpu_idx=cpu_idx), \
-                hdr_logger_context:
+                hdrh_logger_context:
             publisher.event_id = cs_stress_event.event_id
             try:
                 with SoftTimeoutContext(timeout=self.soft_timeout, operation="cassandra-stress"):
