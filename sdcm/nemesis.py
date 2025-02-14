@@ -280,6 +280,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.es_publisher = NemesisElasticSearchPublisher(self.tester)
         self._init_num_deletions_factor()
         self._target_node_pool_type = NEMESIS_TARGET_POOLS.data_nodes
+        self.hdr_tags = []
 
     def _init_num_deletions_factor(self):
         # num_deletions_factor is a numeric divisor. It's a factor by which the available-partitions-for-deletion
@@ -4286,6 +4287,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         results = self.tester.get_stress_results(queue=stress_queue, store_results=False)
         self.stop_nemesis_on_stress_errors(stress_queue)
         self.log.info(f"Double load results: {results}")
+        return stress_queue
 
     @target_data_nodes
     def disrupt_grow_shrink_cluster(self):

@@ -16,6 +16,7 @@ import random
 import concurrent.futures
 from pathlib import Path
 from functools import cached_property
+import uuid
 
 from sdcm.cluster import BaseLoaderSet
 from sdcm.utils.common import generate_random_string
@@ -51,6 +52,7 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         self.shell_marker = generate_random_string(20)
         self.shutdown_timeout = 180  # extra 3 minutes
         self.stop_test_on_failure = stop_test_on_failure
+        self.hdr_tags = []
 
         if "k8s" not in self.params.get("cluster_backend") and self.docker_image_name:
             for loader in self.loader_set.nodes:
@@ -145,6 +147,11 @@ class DockerBasedStressThread:  # pylint: disable=too-many-instance-attributes
         else:
             stress_event.severity = Severity.ERROR
         stress_event.add_error(errors=[error_msg])
+
+    @staticmethod
+    def _build_log_file_id(loader_idx, cpu_idx, keyspace_idx):
+        keyspace_suffix = f"-k{keyspace_idx}" if keyspace_idx else ""
+        return f"l{loader_idx}-c{cpu_idx}{keyspace_suffix}-{uuid.uuid4()}"
 
 
 def format_stress_cmd_error(exc: Exception) -> str:
