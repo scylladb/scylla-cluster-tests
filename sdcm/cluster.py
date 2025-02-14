@@ -1745,9 +1745,8 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             # we don't have systemd working inside docker
             return
 
-        systemd_version = get_systemd_version(self.remoter.run("systemctl --version", ignore_status=True).stdout)
-        if systemd_version >= 240:
-            self.log.debug("systemd version %d >= 240: we can change FinalKillSignal", systemd_version)
+        if self.systemd_version >= 240:
+            self.log.debug("systemd version %d >= 240: we can change FinalKillSignal", self.systemd_version)
             self.remoter.sudo(shell_script_cmd("""\
                 mkdir -p /etc/systemd/system/scylla-server.service.d
                 cat <<EOF > /etc/systemd/system/scylla-server.service.d/override.conf
@@ -3171,6 +3170,10 @@ class BaseNode(AutoSshContainerMixin):  # pylint: disable=too-many-instance-attr
             curl_headers += f' -H "{token_header}: {self._metadata_token["token"]}"'
 
         return self.remoter.run(f'curl -s {curl_headers} "{url}"').stdout.strip()
+
+    @cached_property
+    def systemd_version(self) -> int:
+        return get_systemd_version(self.remoter.run("systemctl --version", ignore_status=True).stdout)
 
 
 class FlakyRetryPolicy(RetryPolicy):

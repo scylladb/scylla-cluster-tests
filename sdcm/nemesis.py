@@ -134,7 +134,7 @@ from sdcm.utils.sstable.sstable_utils import SstableUtils
 from sdcm.utils.tablets.common import wait_no_tablets_migration_running
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import (
-    MethodVersionNotFound, scylla_versions, ComparableScyllaVersion, get_systemd_version)
+    MethodVersionNotFound, scylla_versions, ComparableScyllaVersion)
 from sdcm.utils.raft import Group0MembersNotConsistentWithTokenRingMembersException, TopologyOperations
 from sdcm.utils.raft.common import NodeBootstrapAbortManager, get_topology_coordinator_node
 from sdcm.utils.issues import SkipPerIssues
@@ -3614,15 +3614,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         option_name, selected_option = random.choice(list_of_tc_options)
         wait_time = random.choice(list_of_timeout_options)
 
+        if self.target_node.systemd_version < 256:
+            context_manager = EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING, event_class=CoreDumpEvent, regex=r".*executable=.*networkd.*",
+                extra_time_to_expiration=60)
+        else:
+            context_manager = contextlib.nullcontext()
+
         InfoEvent(option_name).publish()
         self.log.debug("NetworkRandomInterruption: [%s] for %dsec", selected_option, wait_time)
-        self.target_node.traffic_control(None)
-        try:
-            self.target_node.traffic_control(selected_option)
-            time.sleep(wait_time)
-        finally:
+        with context_manager:
             self.target_node.traffic_control(None)
-            self.cluster.wait_all_nodes_un()
+            try:
+                self.target_node.traffic_control(selected_option)
+                time.sleep(wait_time)
+            finally:
+                self.target_node.traffic_control(None)
+                self.cluster.wait_all_nodes_un()
 
     def _disrupt_network_block_k8s(self, list_of_timeout_options):
         duration = f"{random.choice(list_of_timeout_options)}s"
@@ -3644,9 +3652,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.target_node.install_traffic_control():
             raise UnsupportedNemesis("Traffic control package not installed on system")
 
-        systemd_version = get_systemd_version(
-            self.target_node.remoter.run("systemctl --version", ignore_status=True).stdout)
-        if systemd_version < 256:
+        if self.target_node.systemd_version < 256:
             context_manager = EventsSeverityChangerFilter(
                 new_severity=Severity.WARNING, event_class=CoreDumpEvent, regex=r".*executable=.*networkd.*",
                 extra_time_to_expiration=60)
