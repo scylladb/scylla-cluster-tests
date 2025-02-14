@@ -849,7 +849,7 @@ class LoaderLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name='*cassandra-harry*.log',
                 search_locally=True),
-        FileLog(name="*cs-hdr-*.hdr",
+        FileLog(name="hdrh-*.hdr",
                 search_locally=True),
         FileLog(name='*latte*',
                 search_locally=True),

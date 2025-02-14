@@ -4498,11 +4498,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           text="Waiting until cfstat '%s' reaches value '%s'" % (key, size),
                           key=key, threshold=size, keyspaces=keyspace, throw_exc=False)
 
-    def add_nemesis(self, nemesis, tester_obj):
+    def add_nemesis(self, nemesis, tester_obj, hdr_tags: list[str] = None):
         for nem in nemesis:
             nemesis_obj = nem['nemesis'](tester_obj=tester_obj,
                                          termination_event=self.nemesis_termination_event,
                                          nemesis_selector=nem['nemesis_selector'])
+            if hdr_tags:
+                nemesis_obj.hdr_tags = hdr_tags
             self.nemesis.append(nemesis_obj)
         self.nemesis_count = len(nemesis)
 
