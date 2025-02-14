@@ -143,10 +143,8 @@ from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
 from sdcm.utils.latency import calculate_latency, analyze_hdr_percentiles
 from sdcm.utils.hdrhistogram import (
-    CSHistogramTagTypes,
-    CSWorkloadTypes,
-    make_cs_range_histogram_summary,
-    make_cs_range_histogram_summary_by_interval,
+    make_hdrhistogram_summary,
+    make_hdrhistogram_summary_by_interval,
 )
 from sdcm.utils.raft.common import validate_raft_on_nodes
 from sdcm.commit_log_check_thread import CommitLogCheckThread
@@ -2004,7 +2002,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         params = dict(stress_cmd=stress_cmd, duration=duration, stress_num=stress_num, keyspace_num=keyspace_num,
                       keyspace_name=keyspace_name, profile=profile, prefix=prefix, round_robin=round_robin,
                       stats_aggregate_cmds=stats_aggregate_cmds, use_single_loader=use_single_loader)
-
         if 'cql-stress-cassandra-stress' in stress_cmd:
             params['stop_test_on_failure'] = stop_test_on_failure
             params['compaction_strategy'] = compaction_strategy
@@ -2181,9 +2178,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                          round_robin=False, stats_aggregate_cmds=True, stop_test_on_failure=True, **_):
         if duration:
             timeout = self.get_duration(duration)
-        elif self._stress_duration and ' --duration' in stress_cmd:
+        elif self._stress_duration and (' --duration' in stress_cmd or ' -d' in stress_cmd):
             timeout = self.get_duration(self._stress_duration)
-            stress_cmd = re.sub(r'\s--duration\s+\d+[mhd]\s', f' --duration {self._stress_duration}m ', stress_cmd)
+            stress_cmd = re.sub(
+                r'\s(?:--duration|-d)[ =]\d+[mhd]?\s',
+                f' --duration {self._stress_duration}m ', stress_cmd)
         else:
             timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
 
@@ -3296,7 +3295,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         assert used >= size, f"Waiting for Scylla data dir to reach '{size}', " \
                              f"current size is: '{used}'"
 
-    def check_latency_during_ops(self):
+    def check_latency_during_ops(self, hdr_tags: list[str]):
         start_time = self.start_time if not self.create_stats else self._stats["test_details"]["start_time"]
         end_time = time.time()
         analyzer = LatencyDuringOperationsPerformanceAnalyzer
@@ -3313,12 +3312,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
         if latency_results and self.create_stats:
             workload = self._test_index.split("-")[-1]
-            histogram_total_data = self.get_cs_range_histogram(stress_operation=workload,
-                                                               start_time=start_time,
-                                                               end_time=end_time)
-            histogram_data_by_interval = self.get_cs_range_histogram_by_interval(stress_operation=workload,
-                                                                                 start_time=start_time,
-                                                                                 end_time=end_time)
+            histogram_total_data = self.get_hdrhistogram(
+                hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time)
+            histogram_data_by_interval = self.get_hdrhistogram_by_interval(
+                hdr_tags=hdr_tags, stress_operation=workload, start_time=start_time, end_time=end_time)
             latency_results["summary"] = {"hdr_summary": histogram_total_data,
                                           "hdr": histogram_data_by_interval}
             latency_results = calculate_latency(latency_results)
@@ -3828,28 +3825,26 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 return True
         return False
 
-    def get_cs_range_histogram(self, stress_operation: str,
-                               start_time: float, end_time: float,
-                               tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> dict[str, Any]:
+    def get_hdrhistogram(self, hdr_tags: list[str], stress_operation: str,
+                         start_time: float, end_time: float) -> dict[str, Any]:
         if not self.params["use_hdrhistogram"]:
             return {}
-        self.log.info("Build HDR histogram with start time: %s, end time: %s; for operation: %s",
-                      start_time, end_time, stress_operation)
-        histogram_data = make_cs_range_histogram_summary(
-            workload=CSWorkloadTypes(stress_operation),
-            base_path=self.loaders.logdir, start_time=start_time, end_time=end_time,
-            tag_type=tag_type)
+        self.log.info("Build HDR histogram (tags: %s) with start time: %s, end time: %s; for operation: %s",
+                      hdr_tags, start_time, end_time, stress_operation)
+        histogram_data = make_hdrhistogram_summary(
+            hdr_tags=hdr_tags, stress_operation=stress_operation,
+            start_time=start_time, end_time=end_time, base_path=self.loaders.logdir)
+        self.log.info("HDR histogram summary result: %s", histogram_data)
         return histogram_data[0] if histogram_data else {}
 
-    def get_cs_range_histogram_by_interval(
-            self, stress_operation: str,
-            start_time: float, end_time: float, time_interval: int = 600,
-            tag_type: CSHistogramTagTypes = CSHistogramTagTypes.LATENCY) -> list[dict[str, Any]]:
+    def get_hdrhistogram_by_interval(self, hdr_tags: list[str], stress_operation: str,
+                                     start_time: float, end_time: float,
+                                     time_interval: int = 600) -> list[dict[str, Any]]:
         if not self.params["use_hdrhistogram"]:
             return []
-        self.log.info("Build HDR histogram with start time: %s, end time: %s, time interval: %s for operation: %s",
-                      start_time, end_time, time_interval, stress_operation)
-        return make_cs_range_histogram_summary_by_interval(
-            workload=CSWorkloadTypes(stress_operation),
-            path=self.loaders.logdir, start_time=start_time, end_time=end_time,
-            interval=time_interval, tag_type=tag_type)
+        self.log.info(
+            "Build HDR histogram (tags: %s) with start time: %s, end time: %s, time interval: %s for operation: %s",
+            hdr_tags, start_time, end_time, time_interval, stress_operation)
+        return make_hdrhistogram_summary_by_interval(
+            hdr_tags=hdr_tags, stress_operation=stress_operation,
+            path=self.loaders.logdir, start_time=start_time, end_time=end_time, interval=time_interval)
