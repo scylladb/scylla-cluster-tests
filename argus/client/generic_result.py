@@ -62,6 +62,7 @@ class ResultTableMeta(type):
             cls_instance.description = meta.description
             cls_instance.columns = meta.Columns
             cls_instance.column_types = {column.name: column.type for column in cls_instance.columns}
+            cls_instance.sut_package_name = getattr(meta, 'sut_package_name', '')
             cls_instance.rows = []
             validation_rules = getattr(meta, 'ValidationRules', {})
             for col_name, rule in validation_rules.items():
@@ -98,7 +99,6 @@ class GenericResultTable(metaclass=ResultTableMeta):
     Base class for all Generic Result Tables in Argus. Use it as a base class for your result table.
     """
     sut_timestamp: int = 0  # automatic timestamp based on SUT version. Works only with SCT and refers to Scylla version.
-    sut_details: str = ""
     results: list[Cell] = field(default_factory=list)
 
     def as_dict(self) -> dict:
@@ -112,12 +112,12 @@ class GenericResultTable(metaclass=ResultTableMeta):
             "description": self.description,
             "columns_meta": [column.as_dict() for column in self.columns],
             "rows_meta": rows,
-            "validation_rules": {k: v.as_dict() for k, v in self.validation_rules.items()}
+            "validation_rules": {k: v.as_dict() for k, v in self.validation_rules.items()},
+            "sut_package_name": self.sut_package_name,
         }
         return {
             "meta": meta_info,
             "sut_timestamp": self.sut_timestamp,
-            "sut_details": self.sut_details,
             "results": [result.as_dict() for result in self.results]
         }
 
