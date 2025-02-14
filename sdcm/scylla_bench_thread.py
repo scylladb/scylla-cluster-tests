@@ -126,6 +126,10 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         self.sb_mode: ScyllaBenchModes = ScyllaBenchModes(re.search(r"-mode=(.+?) ", stress_cmd).group(1))
         self.sb_workload: ScyllaBenchWorkloads = ScyllaBenchWorkloads(
             re.search(r"-workload=(.+?) ", stress_cmd).group(1))
+        # NOTE: scylla-bench doesn't have 'mixed' workload. Its hdr tag names are the same in all cases.
+        #       Another "raw" tag/metric is ignored because it is coordinated omission affected
+        #       and not really needed having 'coordinated omission fixed' latency one.
+        self.hdr_tags = ["co-fixed"]
 
     def verify_results(self):
         sb_summary = []
