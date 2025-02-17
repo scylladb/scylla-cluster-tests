@@ -510,14 +510,14 @@ class SnapshotPreparerOperations(ClusterTester):
         The name should include all the parameters important for c-s read verification and can be used to
         recreate such a command based on ks_name.
         """
-        _scylla_version = re.sub(r"[.]", "_", self.params.get_version_based_on_conf()[0].split("-")[0])
+        scylla_version = re.sub(r"[.]", "_", self.db_cluster.nodes[0].scylla_version)
         ks_name = self.ks_name_template.format(
             size=backup_size,
             compaction=self._abbreviate_compaction_strategy_name(cs_cmd_params.get("compaction")),
             cl=cs_cmd_params.get("cl").lower(),
             col_size=cs_cmd_params.get("col_size"),
             col_n=cs_cmd_params.get("col_n"),
-            scylla_version=_scylla_version,
+            scylla_version=scylla_version,
         )
         return ks_name
 
