@@ -624,11 +624,14 @@ class ManagerTestFunctionsMixIn(
     @cached_property
     def locations(self) -> list[str]:
         backend = self.params.get("backup_bucket_backend")
-
         region = next(iter(self.params.region_names), '')
-        buckets = self.params.get("backup_bucket_location").format(region=region)
-        if not isinstance(buckets, list):
-            buckets = buckets.split()
+        bucket_locations = self.params.get("backup_bucket_location")
+
+        buckets = (
+            [bucket.format(region=region) for bucket in bucket_locations]
+            if isinstance(bucket_locations, list)
+            else bucket_locations.format(region=region).split()
+        )
 
         # FIXME: Make it works with multiple locations or file a bug for scylla-manager.
         return [f"{backend}:{location}" for location in buckets[:1]]
