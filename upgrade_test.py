@@ -401,10 +401,11 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 node.remoter.run(r'sudo yum remove scylla\* -y')
                 node.remoter.run(r'sudo yum install %s -y' % node.scylla_pkg())
             else:
-                node.remoter.run(r'sudo apt-get remove scylla\* -y')
-                node.remoter.run(
-                    r'sudo apt-get install %s\* -y '
-                    r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" ' % node.scylla_pkg())
+                node.remoter.sudo(r'apt-get remove scylla\* -y')
+                node.remoter.sudo(
+                    rf'DEBIAN_FRONTEND=noninteractive apt-get install {node.scylla_pkg()} -y'
+                    rf' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+                )
             recover_conf(node)
             node.remoter.run('sudo systemctl daemon-reload')
 
