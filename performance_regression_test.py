@@ -22,6 +22,7 @@ from enum import Enum
 import yaml
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
+from sdcm.utils import loader_utils
 from upgrade_test import UpgradeTest
 from sdcm.tester import ClusterTester, teardown_on_exception
 from sdcm.sct_events import Severity
@@ -44,7 +45,7 @@ class PerformanceTestType(Enum):
     LATENCY = "latency"
 
 
-class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-public-methods
+class PerformanceRegressionTest(ClusterTester, loader_utils.LoaderUtilsMixin):  # pylint: disable=too-many-public-methods
 
     """
     Test Scylla performance regression with cassandra-stress.
@@ -217,6 +218,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             self.loaders.kill_stress_thread()
 
     def preload_data(self, compaction_strategy=None):
+        # Check if the test keyspace should be pre-created
+        if self.params.get('pre_create_keyspace'):
+            self._pre_create_keyspace()
         # if test require a pre-population of data
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         if prepare_write_cmd:
