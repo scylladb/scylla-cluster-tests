@@ -13,6 +13,4 @@ managerPipeline(
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
     post_behavior_monitor_nodes: 'destroy',
-
-    extra_environment_variables: 'SCT_BACKUP_BUCKET_REGION=us-east-1',
 )
