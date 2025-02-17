@@ -433,7 +433,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             else:
                 node.remoter.sudo(r'apt-get remove scylla\* -y')
                 node.remoter.sudo(
-                    rf'DEBIAN_FRONTEND=noninteractive apt-get install {node.scylla_pkg()}\* -y'
+                    rf'DEBIAN_FRONTEND=noninteractive apt-get install {node.scylla_pkg()} -y'
                     rf' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
                 )
             recover_conf(node)
