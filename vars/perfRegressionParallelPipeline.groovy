@@ -177,7 +177,7 @@ def call(Map pipelineParams) {
                                         checkout scm
                                         dockerLogin(params)
                                         (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
-                                        base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
+                                        ArrayList base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
                                         def new_repo = params.new_scylla_repo
                                         supportedVersions = ''
                                         new_params = params.collectEntries { param -> [param.key, param.value] }
