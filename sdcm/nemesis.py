@@ -44,6 +44,7 @@ from invoke import UnexpectedExit
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.common.enums import NemesisStatus
 
+from sdcm.utils.cql_utils import cql_unquote_if_needed
 from sdcm import wait
 from sdcm.audit import Audit, AuditConfiguration, AuditStore
 from sdcm.cluster import (
@@ -2082,7 +2083,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
         table_exist = f'{ks}.{table}' in ks_cfs if table else True
 
-        test_keyspaces = self.cluster.get_test_keyspaces()
+        test_keyspaces = [cql_unquote_if_needed(ks) for ks in self.cluster.get_test_keyspaces()]
         # if keyspace or table doesn't exist, create it by cassandra-stress
         if ks not in test_keyspaces or not table_exist:
             stress_cmd = "cassandra-stress write n=400000 cl=QUORUM -mode native cql3 " \
@@ -3111,7 +3112,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.info("Restoring the keyspace %s", chosen_snapshot_info["keyspace_name"])
         location_list = [f"{self.cluster.params.get('backup_bucket_backend')}:{target_bucket}"]
-        test_keyspaces = [keyspace.replace('"', '') for keyspace in self.cluster.get_test_keyspaces()]
+        test_keyspaces = [cql_unquote_if_needed(keyspace) for keyspace in self.cluster.get_test_keyspaces()]
         # Keyspace names that start with a digit are surrounded by quotation marks in the output of a describe query
         if chosen_snapshot_info["keyspace_name"] not in test_keyspaces:
             self.log.info("Restoring the schema of the keyspace '%s'",
@@ -3187,7 +3188,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             location = f"{backup_bucket_backend}:{backup_bucket_location.split()[0]}"
         self._delete_existing_backups(mgr_cluster)
         if backup_specific_tables:
-            non_test_keyspaces = self.cluster.get_test_keyspaces()
+            non_test_keyspaces = [cql_unquote_if_needed(ks) for ks in self.cluster.get_test_keyspaces()]
             mgr_task = mgr_cluster.create_backup_task(location_list=[location, ], keyspace_list=non_test_keyspaces)
         else:
             mgr_task = mgr_cluster.create_backup_task(location_list=[location, ])
@@ -4455,7 +4456,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     node.restart_scylla()
 
         # Create table with encryption
-        keyspace_name, table_name = self.cluster.get_test_keyspaces()[0], 'tmp_encrypted_table'
+        keyspace_name, table_name = cql_unquote_if_needed(self.cluster.get_test_keyspaces()[0]), 'tmp_encrypted_table'
         self.log.info("Create '%s.%s' table with server encryption", keyspace_name, table_name)
         with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_name) as session:
             # NOTE: scylla-bench expects following table structure:
