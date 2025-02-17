@@ -4491,7 +4491,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         """Function returning a list of non-system keyspaces (created by test)"""
         db_node = db_node or self.nodes[0]
         keyspaces = db_node.run_cqlsh("describe keyspaces").stdout.split()
-        return [ks for ks in keyspaces if not is_system_keyspace(ks)]
+        return [ks.strip('"') for ks in keyspaces if not is_system_keyspace(ks)]
 
     def cfstat_reached_threshold(self, key, threshold, keyspaces=None):
         """
