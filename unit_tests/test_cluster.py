@@ -166,7 +166,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
                 with ignore_upgrade_schema_errors():
                     self._read_and_publish_events()
 
-        time.sleep(0.1)
+        time.sleep(0.2)
         with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
             cdc_err_events = [line for line in events_file if 'cdc - Could not retrieve CDC streams' in line]
             assert cdc_err_events != []
