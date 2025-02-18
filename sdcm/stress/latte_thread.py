@@ -11,96 +11,69 @@
 #
 # Copyright (c) 2023 ScyllaDB
 
+import contextlib
 import os
 import re
-import time
 import uuid
 import logging
 from pathlib import Path
 
+from sdcm.loader import (
+    LatteExporter,
+    LatteHDRExporter,
+    LatteKeyspaceHolder,
+)
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.helpers.certificate import SCYLLA_SSL_CONF_DIR, TLSAssets
+from sdcm.remote.libssh2_client.exceptions import Failure
 from sdcm.sct_events.loaders import LatteStressEvent
-from sdcm.utils.common import (
-    FileFollowerThread,
-    generate_random_string,
-    get_sct_root_path,
-)
-from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.sct_events import Severity
 from sdcm.stress.base import DockerBasedStressThread
+from sdcm.utils.common import get_sct_root_path
+from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.remote_logger import HDRHistogramFileLogger
 
+LATTE_FN_NAME_RE = '(?:-f|--function)[ =]([\w\s\d:,]+)|--functions[ =]([\w\s\d:,]+)'
 LOGGER = logging.getLogger(__name__)
 
 
-class LatteStatsPublisher(FileFollowerThread):
-    METRICS = {}
-
-    def __init__(self, loader_node, loader_idx, latte_log_filename, operation):
-        super().__init__()
-        self.loader_node = loader_node
-        self.loader_idx = loader_idx
-        self.latte_log_filename = latte_log_filename
-        self.uuid = generate_random_string(10)
-        self.operation = operation
-
-        gauge_name = self.gauge_name(self.operation)
-        if gauge_name not in self.METRICS:
-            metrics = nemesis_metrics_obj()
-            self.METRICS[gauge_name] = metrics.create_gauge(gauge_name,
-                                                            'Gauge for latte metrics',
-                                                            ['instance', 'loader_idx', 'uuid', 'type'])
-
-    @staticmethod
-    def gauge_name(operation):
-        return 'sct_latte_%s_gauge' % operation.replace('-', '_')
-
-    def set_metric(self, operation, name, value):
-        metric = self.METRICS[self.gauge_name(operation)]
-        metric.labels(self.loader_node.ip_address, self.loader_idx, self.uuid, name).set(value)
-
-    def run(self):
-        regex = re.compile(r"""
-        \s*(?P<secoands>\d*\.\d*)
-        \s*(?P<ops>\d*)
-        \s*(?P<reqs>\d*)
-        \s*(?P<min>\d*\.\d*)
-        \s*(?P<p25>\d*\.\d*)
-        \s*(?P<p50>\d*\.\d*)
-        \s*(?P<p75>\d*\.\d*)
-        \s*(?P<p90>\d*\.\d*)
-        \s*(?P<p95>\d*\.\d*)
-        \s*(?P<p99>\d*\.\d*)
-        \s*(?P<p999>\d*\.\d*)
-        \s*(?P<max>\d*\.\d*)\s*
-        """, re.VERBOSE)
-
-        while not self.stopped():
-            exists = os.path.isfile(self.latte_log_filename)
-            if not exists:
-                time.sleep(0.5)
+def find_latte_fn_names(stress_cmd):
+    fn_names = []
+    matches = re.findall(LATTE_FN_NAME_RE, stress_cmd)
+    for group in matches:
+        for item in group:
+            if not item.strip():
                 continue
+            # 'write:1,read:2'
+            sub_items = item.split(",")
+            for sub_item in sub_items:
+                # 'write' and 'read'
+                fn_names.append(sub_item.split(":")[0].strip())
+    return fn_names
 
-            for line in self.follow_file(self.latte_log_filename):
-                if self.stopped():
-                    break
-                try:
-                    match = regex.search(line)
-                    if match:
-                        for key, _value in match.groupdict().items():
-                            value = float(_value)
-                            self.set_metric(self.operation, key, value)
 
-                except Exception:  # pylint: disable=broad-except
-                    LOGGER.exception("fail to send metric")
+def get_latte_operation_type(stress_cmd):
+    write_found, read_found = False, False
+    for fn in find_latte_fn_names(stress_cmd):
+        if re.findall(r"(?:^|_)(write|insert|update)(?:_|$)", fn):
+            write_found = True
+        elif re.findall(r"(?:^|_)(read|select|get)(?:_|$)", fn):
+            read_found = True
+        else:
+            return "user"
+    if write_found and read_found:
+        return "mixed"
+    elif write_found:
+        return "write"
+    else:
+        return "read"
 
 
 class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
 
     DOCKER_IMAGE_PARAM_NAME = "stress_image.latte"
 
-    def build_stress_cmd(self, cmd_runner, loader):  # pylint: disable=too-many-locals
-        hosts = " ".join([i.cql_address for i in self.node_list])
-
+    def build_stress_cmd(self, cmd_runner, loader, hosts):  # pylint: disable=too-many-locals
         # extract the script so we know which files to mount into the docker image
         script_name_regx = re.compile(r'([/\w-]*\.rn)')
         script_name = script_name_regx.search(self.stress_cmd).group(0)
@@ -141,17 +114,15 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
             timeout=self.timeout,
             retry=0,
         )
-        stress_cmd = f'{self.stress_cmd} {ssl_config} {auth_config} {datacenter} -q -- {hosts} '
+        stress_cmd = f'{self.stress_cmd} {ssl_config} {auth_config} {datacenter} -q '
+        self.set_hdr_tags(self.stress_cmd)
 
         return stress_cmd
 
-    @staticmethod
-    def function_name(stress_cmd):
-        function_name_regex = re.compile(r'.*--function\s*(.*?\S)\s')
-        if match := function_name_regex.match(stress_cmd):
-            return match.group(1)
-        else:
-            return 'read'
+    def set_hdr_tags(self, stress_cmd):
+        # NOTE: latte HDR histogram tags are constructed like "fn--foo" where 'foo' is a rune function name.
+        #       There will be HDR tags for every rune function used in a stress command.
+        self.hdr_tags = [f"fn--{fn_name}" for fn_name in find_latte_fn_names(stress_cmd)]
 
     @staticmethod
     def parse_final_output(result):
@@ -162,21 +133,22 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         :param result: output of latte stats
         :return: dict
         """
-        ops_regex = re.compile(r'Throughput(.*?)\[op/s\]\s*(?P<op_rate>\d*)\s')
-        latency_99_regex = re.compile(r'\s*99\s*(?P<latency_99th_percentile>\d*\.\d*)\s')
-        latency_mean_regex = re.compile(r'\s*Mean resp. time\s.*\s(?P<latency_mean>\d*\.\d*)\s')
+        ops_regex = re.compile(r'\s*Throughput(.*?)\[op\/s\]\s*(?P<op_rate>\d*)\s')
+        latency_99_regex = re.compile(r'\s* 99 \s*(?P<latency_99th_percentile>\d*\.\d*)\s')
+        latency_mean_regex = re.compile(
+            r'\s*(?:Mean resp\. time|Request latency)\s*(?:\[(ms|s)\])?\s*(?P<latency_mean>\d+\.\d+)')
 
-        output = {'latency 99th percentile': 0,
-                  'latency mean': 0,
-                  'op rate': 0
-                  }
-        for line in result.stdout.splitlines():
+        output = {'latency 99th percentile': 0, 'latency mean': 0, 'op rate': 0}
+        for line in result.stdout.split("SUMMARY STATS")[-1].splitlines():
             if match := ops_regex.match(line):
                 output['op rate'] = match.groupdict()['op_rate']
+                continue
             if match := latency_99_regex.match(line):
                 output['latency 99th percentile'] = float(match.groupdict()['latency_99th_percentile'])
+                continue
             if match := latency_mean_regex.match(line):
                 output['latency mean'] = float(match.groupdict()['latency_mean'])
+                continue
 
         # output back to strings
         output = {k: str(v) for k, v in output.items()}
@@ -184,33 +156,73 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         cpu_options = ""
-
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        cmd_runner = cleanup_context = RemoteDocker(
-            loader, self.docker_image_name,
-            command_line="-c 'tail -f /dev/null'",
-            extra_docker_opts=f'--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}')
-        stress_cmd = self.build_stress_cmd(cmd_runner, loader)
-
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
-        log_file_name = os.path.join(loader.logdir, 'latte-l%s-c%s-%s.log' %
-                                     (loader_idx, cpu_idx, uuid.uuid4()))
-        LOGGER.debug('latter-stress local log: %s', log_file_name)
+        log_file_name = os.path.join(
+            loader.logdir, 'latte-l%s-c%s-%s.log' % (loader_idx, cpu_idx, uuid.uuid4()))
+        LOGGER.debug('latte benchmarking tool local log: %s', log_file_name)
+
+        # TODO: fix usage of the "$HOME". Code works when home is "/". It will fail for non-root.
+        log_id = self._build_log_file_id(loader_idx, cpu_idx, "")
+        stress_operation = get_latte_operation_type(self.stress_cmd)
+        remote_hdr_file_name = f"hdrh-latte-{stress_operation}-{log_id}.hdr"
+        LOGGER.debug("latte remote HDR histogram log file: %s", remote_hdr_file_name)
+        local_hdr_file_name = os.path.join(loader.logdir, remote_hdr_file_name)
+        LOGGER.debug("latte HDR local file %s", local_hdr_file_name)
+
+        loader.remoter.run(f"touch $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False)
+        remote_hdr_file_name_full_path = loader.remoter.run(
+            f"realpath $HOME/{remote_hdr_file_name}", ignore_status=False, verbose=False,
+        ).stdout.strip()
+        cmd_runner = cleanup_context = RemoteDocker(
+            loader,
+            self.docker_image_name,
+            command_line="-c 'tail -f /dev/null'",
+            extra_docker_opts=(
+                f"--entrypoint /bin/bash {cpu_options} --label shell_marker={self.shell_marker}"
+                f" -v {remote_hdr_file_name_full_path}:/{remote_hdr_file_name}"
+            ),
+        )
+        hosts = " ".join([i.cql_address for i in self.node_list])
+        stress_cmd = self.build_stress_cmd(cmd_runner, loader, hosts)
+        if self.params.get("use_hdrhistogram"):
+            stress_cmd += f" --hdrfile={remote_hdr_file_name}"
+            hdrh_logger_context = HDRHistogramFileLogger(
+                node=loader,
+                remote_log_file=remote_hdr_file_name_full_path,
+                target_log_file=os.path.join(loader.logdir, remote_hdr_file_name),
+            )
+        else:
+            hdrh_logger_context = contextlib.nullcontext()
+        stress_cmd += f" -- {hosts} "
 
         LOGGER.debug("running: %s", stress_cmd)
 
-        operation = self.function_name(stress_cmd)
-
+        keyspace_holder = {}, LatteKeyspaceHolder()
         with cleanup_context, \
-                LatteStatsPublisher(loader, loader_idx, latte_log_filename=log_file_name,
-                                    operation=operation), \
-                LatteStressEvent(node=loader,
-                                 stress_cmd=stress_cmd,
-                                 log_file_name=log_file_name,
-                                 ) as latte_stress_event:
+                hdrh_logger_context, \
+                LatteExporter(
+                    keyspace=keyspace_holder,
+                    instance_name=loader.ip_address,
+                    metrics=nemesis_metrics_obj(),
+                    stress_operation=stress_operation,
+                    stress_log_filename=log_file_name,
+                    loader_idx=loader_idx, cpu_idx=cpu_idx), \
+                LatteHDRExporter(
+                    keyspace=keyspace_holder,
+                    instance_name=loader.ip_address,
+                    hdr_tags=self.hdr_tags,
+                    metrics=nemesis_metrics_obj(),
+                    stress_operation=stress_operation,
+                    stress_log_filename=local_hdr_file_name,
+                    loader_idx=loader_idx, cpu_idx=cpu_idx), \
+                LatteStressEvent(
+                    node=loader,
+                    stress_cmd=stress_cmd,
+                    log_file_name=log_file_name) as latte_stress_event:
             try:
                 result = cmd_runner.run(
                     cmd=stress_cmd,
@@ -224,5 +236,29 @@ class LatteStressThread(DockerBasedStressThread):  # pylint: disable=too-many-in
                 self.configure_event_on_failure(stress_event=latte_stress_event, exc=exc)
 
         return {}
-        # TODOs:
-        # 1) take back the report workload..3.0.8.p128.t1.c1.20231025.220812.json
+
+    def configure_event_on_failure(self, stress_event: LatteStressEvent, exc: Exception | Failure):
+        error_msg = format_stress_cmd_error(exc)
+        if (hasattr(exc, "result") and exc.result.failed) and exc.result.exited == 137:
+            error_msg = f"Stress killed by test/teardown\n{error_msg}"
+            stress_event.severity = Severity.WARNING
+        elif self.stop_test_on_failure:
+            stress_event.severity = Severity.CRITICAL
+        else:
+            stress_event.severity = Severity.ERROR
+        stress_event.add_error(errors=[error_msg])
+
+
+def format_stress_cmd_error(exc: Exception) -> str:
+    """Format nicely the exception from a stress command failure."""
+
+    if hasattr(exc, "result") and exc.result.failed:
+        # NOTE: print only last 2 lines in common case or whole 'panic' message
+        last_n_lines, line_index = exc.result.stderr.splitlines()[-30:], -2
+        for current_line_index, line in enumerate(last_n_lines):
+            if "panicked at" in line:
+                line_index = current_line_index
+                break
+        message = "\n".join(last_n_lines[line_index:])
+        return f"Stress command completed with bad status {exc.result.exited}: {message}"
+    return f"Stress command execution failed with: {exc}"
