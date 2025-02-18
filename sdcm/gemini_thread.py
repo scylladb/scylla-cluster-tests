@@ -18,6 +18,8 @@ import random
 import json
 import time
 
+from sdcm.cluster import BaseCluster, BaseScyllaCluster
+from sdcm.cluster_aws import CassandraAWSCluster, ScyllaAWSCluster
 from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread
 from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
@@ -60,7 +62,7 @@ class GeminiEventsPublisher(FileFollowerThread):
 class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
     DOCKER_IMAGE_PARAM_NAME = "stress_image.gemini"
 
-    def __init__(self, test_cluster, oracle_cluster, loaders, stress_cmd, timeout=None, params=None):  # pylint: disable=too-many-arguments
+    def __init__(self, test_cluster: BaseCluster | BaseScyllaCluster, oracle_cluster: ScyllaAWSCluster | CassandraAWSCluster | None, loaders, stress_cmd: str, timeout=None, params=None):  # pylint: disable=too-many-arguments
         super().__init__(loader_set=loaders, stress_cmd=stress_cmd, timeout=timeout, params=params)
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
@@ -106,13 +108,10 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
         seed = self.params.get("gemini_seed") or random.randint(1, 100)
         table_options = self.params.get("gemini_table_options")
         log_statements = self.params.get("gemini_log_cql_statements") or False
-
         test_nodes = ",".join(self.test_cluster.get_node_cql_ips())
-        oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips())
 
         cmd = f"gemini \
                 --non-interactive \
-                --oracle-cluster=\"{oracle_nodes}\" \
                 --test-cluster=\"{test_nodes}\" \
                 --seed={seed} \
                 --schema-seed={seed} \
@@ -121,6 +120,10 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
                 --outfile=/{self.gemini_result_file} \
                 --replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '3'}}\" \
                 --oracle-replication-strategy=\"{{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}}\" "
+
+        if self.oracle_cluster is not None:
+            oracle_nodes = ",".join(self.oracle_cluster.get_node_cql_ips())
+            cmd += f'--oracle-cluster="{oracle_nodes}" '
 
         if log_statements:
             cmd += f"--test-statement-log-file=/{self.gemini_test_statements_file} \
