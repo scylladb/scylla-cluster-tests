@@ -164,6 +164,81 @@ class CassandraStressExporter(StressExporter):
         return [element.strip() for element in line.split(',')]
 
 
+class LatteKeyspaceHolder:
+    """Allows to reuse Keyspace for the Latte exporters."""
+
+    def __init__(self):
+        self._value = ''
+
+    def set_value(self, v):
+        self._value = v
+
+    def __str__(self):
+        return self._value
+
+
+class LatteExporter(StressExporter):
+    def init(self):
+        self.keyspace_regex = re.compile(r'.*Keyspace:\s(.*?)$')
+
+    def create_metrix_gauge(self):
+        gauge_name = f'sct_latte_{self.stress_operation}_gauge'
+        if gauge_name not in self.METRICS_GAUGES:
+            self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
+                gauge_name,
+                'Gauge for latte metrics',
+                [f'latte_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', 'keyspace'])
+        return gauge_name
+
+    def metrics_position_in_log(self) -> MetricsPosition:
+        # Example:
+        #  Time  Cycles  Errors  Thrpt.  ───────────────────── Latency [ms/op] ─────────────────
+        #   [s]    [op]    [op]  [op/s]     Min     50     75     90     95     99   99.9    Max
+        # 1.001     299       0     299   0.202  1.626  1.934  2.269  2.427  2.632  3.369  3.369
+        return MetricsPosition(
+            ops=3,
+            # NOTE: latte doesn't print out the 'mean' values.
+            # So, set the 'lat_mean' column to store 'P90' value and consider it as a 'placeholder'
+            lat_mean=7,
+            lat_med=5,
+            lat_perc_95=8,
+            lat_perc_99=9,
+            lat_perc_999=10,
+            lat_max=11,
+            errors=2,
+        )
+
+    def skip_line(self, line: str) -> bool:
+        if not self.keyspace and 'Keyspace:' in line:
+            self.keyspace.set_value(self.keyspace_regex.match(line).groups()[0])
+            return True
+
+        # NOTE: all latency data lines consist of digits only.
+        if columns := line.split():
+            for column in columns:
+                try:
+                    float(column)
+                except ValueError:
+                    return True
+        else:
+            return True
+
+        # NOTE: 'Keyspace: foo' line print depends on the rune script implementation.
+        #       So, if it is absent then set it to be 'unknown'.
+        if not self.keyspace:
+            self.keyspace.set_value('unknown')
+        return False
+
+    @staticmethod
+    def split_line(line: str) -> list:
+        ret = line.split()
+        if len(ret) != 12:
+            LOGGER.error(
+                "'%s' line got splitted in the following unexpected list: %s",
+                line, ret)
+        return ret
+
+
 class CassandraStressHDRExporter(StressExporter):
     METRIC_NAMES = ['lat_perc_50', 'lat_perc_90', 'lat_perc_99', 'lat_perc_999', "lat_perc_9999"]
 
@@ -206,6 +281,17 @@ class CassandraStressHDRExporter(StressExporter):
             log_line=line, hst_log_start_time=self.log_start_time)
         self.current_line_hdr_tag, percentiles = summary_data.popitem()
         return list(percentiles.values())
+
+
+class LatteHDRExporter(CassandraStressHDRExporter):
+    def create_metrix_gauge(self):
+        gauge_name = f'collectd_latte_hdr_{self.stress_operation}_gauge'
+        if gauge_name not in self.METRICS_GAUGES:
+            self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
+                gauge_name,
+                'Gauge for latte hdr percentiles',
+                [f'latte_hdr_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', 'keyspace'])
+        return gauge_name
 
 
 class CqlStressCassandraStressExporter(StressExporter):
