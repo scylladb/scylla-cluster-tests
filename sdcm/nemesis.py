@@ -3322,7 +3322,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             - for a few keyspaces (with all their tables) - nodetool snapshot cmd with "-ks" parameter:
                 nodetool snapshot -ks system, system_schema
             - for one keyspace and few tables - nodetool snapshot cmd with "-cf" parameter like:
-                nodetool snapshot test -cf cf1,cf2. In this case the snapshot will be taken for table and its MVs
+                nodetool snapshot test -cf cf1,cf2. In this case the snapshot will be taken for table and its MVs in all versions before
+                2025.1.0. Beginning from 2025.1.0 the snapshot will be taken for base table only (ignore views)
+                according to https://github.com/scylladb/scylladb/pull/21433/commits/9645a0414dbf4f41e0ce612b485b09c16a408f42
 
             By parsing of nodetool_cmd is recognized with type of snapshot was created.
             This function check if all expected keyspace/tables are in the snapshot
@@ -3357,8 +3359,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
                     for cf in snapshot_params[3].split(','):
                         keyspace_table.extend([[keyspace, cf]])
-                        for view in get_views_of_base_table(keyspace_name=keyspace, base_table_name=cf, session=session):
-                            keyspace_table.extend([[keyspace, view]])
+                        # Stop taking snapshots of MVs when snapshotting a base table - presented in
+                        # https://github.com/scylladb/scylladb/pull/21433/commits/9645a0414dbf4f41e0ce612b485b09c16a408f42
+                        if ComparableScyllaVersion(self.target_node.scylla_version) <= "2024.2":
+                            for view in get_views_of_base_table(keyspace_name=keyspace, base_table_name=cf, session=session):
+                                keyspace_table.extend([[keyspace, view]])
         else:
             # Example: snapshot
             keyspace_table.extend([k_c.split('.') for k_c in ks_cf])
