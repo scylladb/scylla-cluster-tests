@@ -1,0 +1,53 @@
+# NOTE: this is wrapper for the following exisitng cassandra-stress based perf config:
+#       test-cases/performance/perf-regression-latency-650gb-upgrade.yaml
+#       Does the same as C-S just using latte benchmarking tool (rust).
+
+prepare_write_cmd:
+  - >-
+    latte run --function=write --tag=latte-prepare-01 --duration=162500000
+    -P replication_factor=3 --threads=7 --concurrency=21 --consistency=ALL
+    -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-prepare-02 --duration=162500000
+    -P replication_factor=3 --threads=7 --concurrency=21 --consistency=ALL
+    -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=162500000
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-prepare-03 --duration=162500000
+    -P replication_factor=3 --threads=7 --concurrency=21 --consistency=ALL
+    -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=325000000
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    data_dir/latte/latte_cs_alike.rn
+  - >-
+    latte run --function=write --tag=latte-prepare-04 --duration=162500000
+    -P replication_factor=3 --threads=7 --concurrency=21 --consistency=ALL
+    -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=487500000
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_w: >-
+    latte run --function=write --tag=latte-main-write --duration=90m --rate=40664
+    -P replication_factor=3 --threads=7 --concurrency=21 --consistency=QUORUM
+    -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    -P gauss_mean=325000000 -P gauss_stddev=9750000
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_r: >-
+    latte run --function=read --tag=latte-main-read --duration=90m --rate=20620
+    -P replication_factor=3 --threads=7 --concurrency=21 --consistency=QUORUM
+    -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    -P gauss_mean=325000000 -P gauss_stddev=9750000
+    data_dir/latte/latte_cs_alike.rn
+
+stress_cmd_m: >-
+    latte run --function=write,read --tag=latte-main-mixed --duration=90m --rate=17500
+    -P replication_factor=3 --threads=7 --concurrency=21 --consistency=QUORUM
+    -P column_size=128 -P column_count=8 -P row_count=650000000 -P offset=0
+    --sampling=10s --retry-number=10 --retry-interval='500ms,5s' --request-timeout=60
+    -P gauss_mean=325000000 -P gauss_stddev=9750000
+    data_dir/latte/latte_cs_alike.rn
