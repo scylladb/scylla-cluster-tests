@@ -33,16 +33,65 @@ class DBCluster:  # pylint: disable=too-few-public-methods
 def test_01_gemini_thread(request, docker_scylla, params):
     loader_set = LocalLoaderSetDummy(params=params)
     test_cluster = DBCluster([docker_scylla])
-    cmd = (
-        "gemini -d --duration 1m --warmup 0s -c 5 -m write --non-interactive --cql-features basic --max-mutation-retries 100 "
-        "--max-mutation-retries-backoff 100ms --replication-strategy \"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\" "
-        "--table-options \"cdc = {'enabled': true, 'ttl': 0}\" --use-server-timestamps"
+
+    cmd = " ".join(
+        [
+            "--duration=1m",
+            "--warmup=0",
+            "--concurrency=5",
+            "--mode=write",
+            "--cql-features=basic",
+            "--max-mutation-retries=100",
+            "--max-mutation-retries-backoff=100ms",
+            "--replication-strategy=\"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\"",
+            "--table-options=\"cdc = {'enabled': true, 'ttl': 0}\"",
+            "--use-server-timestamps=true",
+        ]
     )
+
     gemini_thread = GeminiStressThread(
         loaders=loader_set,
         stress_cmd=cmd,
         test_cluster=test_cluster,
         oracle_cluster=test_cluster,
+        timeout=120,
+        params=params,
+    )
+
+    def cleanup_thread():
+        gemini_thread.kill()
+
+    request.addfinalizer(cleanup_thread)
+
+    gemini_thread.run()
+
+    results = gemini_thread.get_gemini_results()
+    gemini_thread.verify_gemini_results(results)
+
+
+def test_gemini_thread_without_cluster(request, docker_scylla, params):
+    loader_set = LocalLoaderSetDummy(params=params)
+    test_cluster = DBCluster([docker_scylla])
+    cmd = " ".join(
+        [
+            "--duration=1m",
+            "--warmup=0",
+            "--concurrency=5",
+            "--mode=write",
+            "--cql-features=basic",
+            "--max-mutation-retries=100",
+            "--max-mutation-retries-backoff=100ms",
+            "--replication-strategy=\"{'class': 'NetworkTopologyStrategy', 'replication_factor': '1'}\"",
+            "--table-options=\"cdc = {'enabled': true, 'ttl': 0}\"",
+            "--use-server-timestamps=true",
+        ]
+    )
+
+    gemini_thread = GeminiStressThread(
+        loaders=loader_set,
+        stress_cmd=cmd,
+        test_cluster=test_cluster,
+        oracle_cluster=None,
         timeout=120,
         params=params,
     )
