@@ -4,9 +4,13 @@ import sys
 import re
 import os
 
-from sdcm.utils.version_utils import is_enterprise, get_all_versions
-from sdcm.utils.version_utils import ComparableScyllaVersion, get_s3_scylla_repos_mapping
-
+from sdcm.utils.version_utils import (
+    is_enterprise,
+    get_all_versions,
+    get_branch_version,
+    ComparableScyllaVersion,
+    get_s3_scylla_repos_mapping,
+)
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 
@@ -38,24 +42,25 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
             self.dist_version = None
         self.scylla_repo = scylla_repo
         self.linux_distro = linux_distro
-        self.product, self.scylla_version = self.get_product_and_version(scylla_version)
+        self.scylla_version = self.get_version(scylla_version)
         self.repo_maps = get_s3_scylla_repos_mapping(self.dist_type, self.dist_version)
 
-    def get_product_and_version(self, scylla_version: str = None) -> tuple[str, str]:
+    def get_version(self, scylla_version: str = None) -> str:
         """
         return scylla product name and major version. if scylla_version isn't assigned,
         we will try to get the major version from the scylla_repo url.
         """
         LOGGER.info("Getting scylla product and major version for upgrade versions listing...")
         if scylla_version is None:
-            assert 'unstable/' in self.scylla_repo, "Did not find 'unstable/' in scylla_repo. " \
-                                                    "Scylla repo: %s" % self.scylla_repo
-            product, version = self.scylla_repo.split('unstable/')[1].split('/')[0:2]
-            scylla_version = version.replace('branch-', '').replace('enterprise-', '')
-        else:
-            product = 'scylla-enterprise' if is_enterprise(scylla_version) else 'scylla'
-        LOGGER.info("Scylla product and major version used for upgrade versions listing: %s, %s", product, version)
-        return product, scylla_version
+            try:
+                assert 'unstable/' in self.scylla_repo, "Did not find 'unstable/' in scylla_repo. " \
+                                                        "Scylla repo: %s" % self.scylla_repo
+                version = self.scylla_repo.split('unstable/')[1].split('/')[1]
+                scylla_version = version.replace('branch-', '').replace('enterprise-', '')
+            except AssertionError:
+                scylla_version = get_branch_version(self.scylla_repo)
+        LOGGER.info("Scylla major version used for upgrade versions listing: %s", version)
+        return scylla_version
 
     def set_start_support_version(self, backend: str = None) -> None:
         """
@@ -88,55 +93,40 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
         oss_base_version = []
         ent_base_version = []
 
-        oss_release_list = [v for v in supported_versions if not is_enterprise(v)]
+        oss_release_list = [v for v in supported_versions if (
+            not is_enterprise(v)) or ComparableScyllaVersion(v) >= '2025.1.dev']
+        oss_release_list = sorted(oss_release_list)
         ent_release_list = [v for v in supported_versions if is_enterprise(v)]
 
         # The major version of unstable scylla, eg: 4.6.dev, 4.5, 2021.2.dev, 2021.1
         version = self.scylla_version
-        product = self.product
 
-        if product == 'scylla-enterprise':
-            if version in supported_versions:
-                # The dest version is a released enterprise version
-                idx = ent_release_list.index(version)
-                oss_base_version.append(supported_src_oss.get(version))
-                ent_base_version.append(version)
-                if idx != 0:
-                    lts_version = re.compile(r'\d{4}\.1')  # lts = long term support
-                    sts_version = re.compile(r'\d{4}\.2')  # sts = short term support
+        if version in supported_versions:
+            # The dest version is a released opensource version
+            idx = ent_release_list.index(version)
+            oss_base_version.append(version)
+            oss_base_version.append(supported_src_oss.get(version))
+            if idx != 0:
+                lts_version = re.compile(r'\d{4}\.1')  # lts = long term support
+                sts_version = re.compile(r'\d{4}\.2')  # sts = short term support
 
-                    if sts_version.search(version) or ComparableScyllaVersion(version) < '2023.1':
-                        # we need to support last LTS version
-                        ent_base_version += ent_release_list[idx - 1:][:2]
-                    elif lts_version.search(version):
-                        # we need to support last version + last LTS version
-                        idx = 2 if idx == 1 else idx
-                        ent_base_version += ent_release_list[idx - 2:][:2]
-                    else:
-                        LOGGER.warning('enterprise version format not the default - %s', version)
-            elif version == 'enterprise':
-                ent_base_version.append(ent_release_list[-1])
-            elif re.match(r'\d+.\d+', version):
-                relevant_versions = [v for v in ent_release_list if ComparableScyllaVersion(v) < version]
-                # oss_base_version.append(oss_release_list[-1])
-                ent_base_version += relevant_versions[-2:]
-        elif product == 'scylla':
-            if version in supported_versions:
-                # The dest version is a released opensource version
-                idx = oss_release_list.index(version)
-                oss_base_version.append(version)
-                if idx != 0:
-                    # Choose the last two releases as upgrade base
-                    oss_base_version += oss_release_list[idx-1:][:2]
-            elif version == 'master':
-                oss_base_version.append(oss_release_list[-1])
-            elif re.match(r'\d+.\d+', version):
-                relevant_versions = [v for v in oss_release_list if ComparableScyllaVersion(v) < version]
-                # If dest version is smaller than the first supported opensource release,
-                # it might be an invalid dest version
-                oss_base_version.append(relevant_versions[-1])
-        else:
-            raise ValueError("Unsupported product %s" % product)
+                if sts_version.search(version) or ComparableScyllaVersion(version) < '2023.1':
+                    # we need to support last LTS version
+                    oss_base_version += ent_release_list[idx - 1:][:2]
+                elif lts_version.search(version):
+                    # we need to support last version + last LTS version
+                    idx = 2 if idx == 1 else idx
+                    oss_base_version += ent_release_list[idx - 2:][:2]
+                else:
+                    LOGGER.warning('version format not the default - %s', version)
+
+        elif version == 'master':
+            oss_base_version.append(oss_release_list[-1])
+        elif re.match(r'\d+.\d+', version):
+            relevant_versions = [v for v in oss_release_list if ComparableScyllaVersion(v) < version]
+            # If dest version is smaller than the first supported opensource release,
+            # it might be an invalid dest version
+            oss_base_version.append(relevant_versions[-1])
 
         # Filter out unsupported version
         oss_base_version = [v for v in oss_base_version if v in supported_versions]
