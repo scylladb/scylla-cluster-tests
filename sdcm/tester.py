@@ -1153,9 +1153,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     (self.params.get('alternator_access_key_id'),
                                      self.params.get('alternator_secret_access_key')))
 
-            with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
-                # is tablets feature enabled in Scylla configuration.
-                tablets_enabled = is_tablets_feature_enabled(session)
+            tablets_enabled = is_tablets_feature_enabled(self.db_cluster.nodes[0])
             prepare_cmd = self.params.get('prepare_write_cmd')
             stress_cmd = self.params.get('stress_cmd')
             is_ttl_in_workload = any('dynamodb.ttlKey' in str(cmd) for cmd in [prepare_cmd, stress_cmd])

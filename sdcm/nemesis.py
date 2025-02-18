@@ -1486,10 +1486,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('It is supported only on kubernetes')
         # If tablets in use, skipping resharding since it is not supported.
-        with self.cluster.cql_connection_patient(self.target_node) as session:
-            if is_tablets_feature_enabled(session=session):
-                if SkipPerIssues('https://github.com/scylladb/scylladb/issues/16739', params=self.tester.params):
-                    raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/16739')
+        if is_tablets_feature_enabled(self.target_node):
+            if SkipPerIssues('https://github.com/scylladb/scylladb/issues/16739', params=self.tester.params):
+                raise UnsupportedNemesis('https://github.com/scylladb/scylladb/issues/16739')
 
         dc_idx = 0
         for node in self.cluster.nodes:
@@ -1785,10 +1784,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # NOTE: resharding happens only if we have more than 1 core.
                 #       We may have 1 core in a K8S multitenant setup.
                 # If tablets in use, skipping resharding validation since it doesn't work the same as vnodes
-                with self.cluster.cql_connection_patient(self.cluster.data_nodes[0]) as session:
-                    if shards_num > 1 and not is_tablets_feature_enabled(session=session):
-                        SstableLoadUtils.validate_resharding_after_refresh(
-                            node=node, system_log_follower=system_log_follower)
+                if shards_num > 1 and not is_tablets_feature_enabled(self.cluster.data_nodes[0]):
+                    SstableLoadUtils.validate_resharding_after_refresh(
+                        node=node, system_log_follower=system_log_follower)
 
             # Verify that the special key is loaded by SELECT query
             result = self.target_node.run_cqlsh(query_verify)
