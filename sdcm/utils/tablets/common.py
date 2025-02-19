@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 from sdcm.rest.remote_curl_client import RemoteCurlClient
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import InfoEvent
+from sdcm.utils.adaptive_timeouts import adaptive_timeout, Operations
 from sdcm.utils.features import is_tablets_feature_enabled
 
 LOGGER = logging.getLogger(__name__)
@@ -23,7 +26,7 @@ class TabletsConfiguration:
         return '{' + ', '.join(items) + '}'
 
 
-def wait_no_tablets_migration_running(node):
+def wait_no_tablets_migration_running(node, timeout: int = 3600):
     """
     Waiting for having no ongoing tablets topology operations using REST API.
     !!! It does not guarantee that tablets are balanced !!!
@@ -40,8 +43,11 @@ def wait_no_tablets_migration_running(node):
     time.sleep(60)  # one minute gap before checking, just to give some time to the state machine
     client = RemoteCurlClient(host="127.0.0.1:10000", endpoint="", node=node)
     LOGGER.info("Waiting for having no ongoing tablets topology operations")
-    for _ in range(3):
-        client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology",
-                                params={}, timeout=3600, retry=3)
-        time.sleep(5)
-    LOGGER.info("All ongoing tablets topology operations are done")
+    try:
+        with adaptive_timeout(Operations.TABLET_MIGRATION, node, timeout=timeout):
+            client.run_remoter_curl(method="POST", path="storage_service/quiesce_topology",
+                                    params={}, timeout=4*3600)
+        LOGGER.info("All ongoing tablets topology operations are done")
+    except Exception as exc:  # pylint: disable=broad-except  # noqa: BLE001
+        InfoEvent(f"Failed to wait for having no ongoing tablets topology operations. Exception: {exc.__repr__()}",
+                  severity=Severity.ERROR).publish()
