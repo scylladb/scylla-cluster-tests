@@ -72,6 +72,7 @@ class Operations(Enum):
     QUERY = ("query", _get_query_timeout, ("timeout", "query"))
     SERVICE_LEVEL_PROPAGATION = ("service_level_propagation", _get_service_level_propagation_timeout,
                                  ("timeout", "service_level_for_test_step"))
+    TABLET_MIGRATION = ("tablet_migration", _get_soft_timeout, ("timeout",))
 
 
 class TestInfoServices:  # pylint: disable=too-few-public-methods
