@@ -3709,6 +3709,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         def execute_cmd(cql_session, entity_type):
             result = set()
+            counter_tables = set()
             is_column_type = entity_type == "column"
             column_names = regular_column_names
             if is_column_type:
@@ -3733,6 +3734,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                     continue
 
                 if is_column_type and (filter_out_table_with_counter and "counter" in row.type):
+                    counter_tables.add(table_name)
                     continue
 
                 if filter_out_cdc_log_tables and getattr(row, column_names[1]).endswith(cdc.options.CDC_LOGTABLE_SUFFIX):
@@ -3763,6 +3765,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
             if filter_func is not None:
                 self.get_keyspace_info.cache_clear()  # pylint: disable=no-member
+            result = result - counter_tables
             return result
 
         with self.cql_connection_patient(db_node, connect_timeout=600) as session:

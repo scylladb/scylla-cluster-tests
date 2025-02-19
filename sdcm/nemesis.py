@@ -2748,7 +2748,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         prop_val = random.choice(strategies)
         # max allowed TTL - 49 days (4300000) (to be compatible with default TWCS settings)
         if prop_val['class'] == 'TimeWindowCompactionStrategy':
-            self._modify_table_property(name="default_time_to_live", val=str(4300000))
+            self._modify_table_property(name="default_time_to_live", val=str(4300000),
+                                        filter_out_table_with_counter=True)
 
         self._modify_table_property(name="compaction", val=str(prop_val))
 
@@ -5123,7 +5124,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.set_current_running_nemesis(cql_query_executor_node)
         try:
             ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=cql_query_executor_node,
-                                                            filter_empty_tables=True, filter_out_mv=True)
+                                                            filter_empty_tables=True, filter_out_mv=True,
+                                                            filter_out_table_with_counter=True)
             if not ks_cfs:
                 raise UnsupportedNemesis(
                     'Non-system keyspace and table are not found. nemesis can\'t be run')
