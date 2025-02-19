@@ -282,7 +282,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             node.stop_scylla_server(verify_down=False)
             InfoEvent(message='upgrade_node - ended to "stop_scylla_server"').publish()
 
-            orig_is_enterprise = node.is_enterprise
+            orig_is_enterprise = node.is_product_enterprise
             if node.distro.is_rhel_like:
                 result = node.remoter.run("sudo yum search scylla-enterprise 2>&1", ignore_status=True)
                 new_is_enterprise = bool('scylla-enterprise.x86_64' in result.stdout or
