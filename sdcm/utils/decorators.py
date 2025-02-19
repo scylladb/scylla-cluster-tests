@@ -165,11 +165,16 @@ def _find_hdr_tags(*args):
         elif hasattr(input_arg, "hdr_tags"):
             # NOTE: case of 'stress_queue.hdr_tags' and 'nemesis.hdr_tags'
             return input_arg.hdr_tags
-        elif isinstance(input_arg, tuple):
-            # NOTE: case when 'stress_queue' is part of a returned tuple
-            for input_subarg in input_arg:
-                if hasattr(input_subarg, "hdr_tags"):
-                    return input_subarg.hdr_tags
+        elif isinstance(input_arg, (list, tuple)):
+            # NOTE: case when 'stress_queue' is part of a returned tuple/(tuple of lists)
+            hdr_tags = []
+            for subinput_arg in input_arg:
+                try:
+                    hdr_tags = _find_hdr_tags(subinput_arg)
+                    if hdr_tags:
+                        return hdr_tags
+                except ValueError:
+                    continue
     raise ValueError("Failed to find 'hdr_tags'")
 
 
