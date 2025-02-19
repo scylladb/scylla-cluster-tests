@@ -300,7 +300,8 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 scylla_pkg = 'scylla'
                 scylla_pkg_ver = f"{scylla_pkg}{ver_suffix}"
                 InfoEvent(message='Rollback mode is set to reinstall').publish()
-                self.upgrade_rollback_mode = 'reinstall'
+                if self.params.get('use_preinstalled_scylla'):
+                    scylla_pkg_ver += f" {scylla_pkg}-machine-image"
 
             if node.distro.is_rhel_like:
                 InfoEvent(message='upgrade_node - starting to "yum update"').publish()
@@ -310,7 +311,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 InfoEvent(message='upgrade_node - starting to "apt-get update"').publish()
                 node.remoter.sudo('apt-get update')
                 node.remoter.sudo(
-                    f'DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade {scylla_pkg} -y'
+                    f'DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade {scylla_pkg_ver} -y'
                     f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
                 )
                 InfoEvent(message='upgrade_node - ended to "apt-get update"').publish()
@@ -394,13 +395,18 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self.upgrade_rollback_mode = 'minor_release'
 
         if self.upgrade_rollback_mode == 'reinstall' or not node.distro.is_rhel_like:
+            scylla_pkg_ver = node.scylla_pkg()
+
+            if self.params.get('use_preinstalled_scylla'):
+                scylla_pkg_ver += f" {scylla_pkg_ver}-machine-image"
+
             if node.distro.is_rhel_like:
                 node.remoter.run(r'sudo yum remove scylla\* -y')
-                node.remoter.run(r'sudo yum install %s -y' % node.scylla_pkg())
+                node.remoter.run(rf'sudo yum install {scylla_pkg_ver} -y')
             else:
                 node.remoter.sudo(r'apt-get remove scylla\* -y')
                 node.remoter.sudo(
-                    rf'DEBIAN_FRONTEND=noninteractive apt-get install {node.scylla_pkg()} -y'
+                    rf'DEBIAN_FRONTEND=noninteractive apt-get install {scylla_pkg_ver} -y'
                     rf' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
                 )
             recover_conf(node)
