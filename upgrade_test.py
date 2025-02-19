@@ -298,6 +298,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                 if self.params.get('use_preinstalled_scylla'):
                     scylla_pkg_ver += f" {scylla_pkg}-machine-image{ver_suffix}"
 
+<<<<<<< HEAD
             if self.upgrade_rollback_mode == 'reinstall':
                 if node.distro.is_rhel_like:
                     InfoEvent(message='upgrade_node - starting to remove and install scylla on RHEL').publish()
@@ -331,6 +332,36 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                         f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
                     )
                     InfoEvent(message='upgrade_node - ended to "apt-get update"').publish()
+||||||| parent of 3e7edfd5d (fix(upgrade_tests): reintroduce logic for reinstalling SMI package)
+            if node.distro.is_rhel_like:
+                InfoEvent(message='upgrade_node - starting to "yum update"').publish()
+                node.remoter.run(r'sudo yum update {}\* -y'.format(scylla_pkg_ver))
+                InfoEvent(message='upgrade_node - ended to "yum update"').publish()
+            else:
+                InfoEvent(message='upgrade_node - starting to "apt-get update"').publish()
+                node.remoter.sudo('apt-get update')
+                node.remoter.sudo(
+                    f'DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade {scylla_pkg} -y'
+                    f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+                )
+                InfoEvent(message='upgrade_node - ended to "apt-get update"').publish()
+=======
+                if self.params.get('use_preinstalled_scylla'):
+                    scylla_pkg_ver += f" {scylla_pkg}-machine-image"
+
+            if node.distro.is_rhel_like:
+                InfoEvent(message='upgrade_node - starting to "yum update"').publish()
+                node.remoter.run(r'sudo yum update {}\* -y'.format(scylla_pkg_ver))
+                InfoEvent(message='upgrade_node - ended to "yum update"').publish()
+            else:
+                InfoEvent(message='upgrade_node - starting to "apt-get update"').publish()
+                node.remoter.sudo('apt-get update')
+                node.remoter.sudo(
+                    f'DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade {scylla_pkg_ver} -y'
+                    f' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
+                )
+                InfoEvent(message='upgrade_node - ended to "apt-get update"').publish()
+>>>>>>> 3e7edfd5d (fix(upgrade_tests): reintroduce logic for reinstalling SMI package)
 
         InfoEvent(message='upgrade_node - fix /etc/scylla.d/io.conf arguments compatibility').publish()
         node.remoter.sudo(
@@ -401,13 +432,24 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
             self.upgrade_rollback_mode = 'minor_release'
 
         if self.upgrade_rollback_mode == 'reinstall' or not node.distro.is_rhel_like:
+            scylla_pkg_ver = node.scylla_pkg()
+
+            if self.params.get('use_preinstalled_scylla'):
+                scylla_pkg_ver += f" {scylla_pkg_ver}-machine-image"
+
             if node.distro.is_rhel_like:
                 node.remoter.run(r'sudo yum remove scylla\* -y')
-                node.remoter.run(r'sudo yum install %s -y' % node.scylla_pkg())
+                node.remoter.run(rf'sudo yum install {scylla_pkg_ver} -y')
             else:
                 node.remoter.sudo(r'apt-get remove scylla\* -y')
                 node.remoter.sudo(
+<<<<<<< HEAD
                     rf'DEBIAN_FRONTEND=noninteractive apt-get install {node.scylla_pkg()}\* -y'
+||||||| parent of 3e7edfd5d (fix(upgrade_tests): reintroduce logic for reinstalling SMI package)
+                    rf'DEBIAN_FRONTEND=noninteractive apt-get install {node.scylla_pkg()} -y'
+=======
+                    rf'DEBIAN_FRONTEND=noninteractive apt-get install {scylla_pkg_ver} -y'
+>>>>>>> 3e7edfd5d (fix(upgrade_tests): reintroduce logic for reinstalling SMI package)
                     rf' -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"'
                 )
             recover_conf(node)
