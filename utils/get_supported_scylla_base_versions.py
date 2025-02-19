@@ -140,7 +140,7 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
 
     def filter_rc_only_version(self, base_version_list: list) -> list:
         LOGGER.info("Filtering rc versions from base version list...")
-        base_version_list = sorted(list(set(base_version_list)))
+        base_version_list = sorted(list(set(base_version_list)), key=ComparableScyllaVersion)
         if base_version_list and self.scylla_version not in ('enterprise', 'master'):
             filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if 'rc' not in v]
             if not filter_rc:
