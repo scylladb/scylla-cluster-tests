@@ -8,7 +8,7 @@ lint.select = [
     "PIE",
     "B006",
 ]
-
+exclude = ["argus/"]
 lint.ignore = ["E501", "PLR2004"]
 
 target-version = "py310"
