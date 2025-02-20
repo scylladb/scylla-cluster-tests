@@ -336,7 +336,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         availability_zone = self.params.get('availability_zone').split(",")[az_idx] if az_idx is not None else None
         ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
                                           spot_max_price_percentage=self.params.get('spot_max_price'))
-        results = list_instances_aws(tags_dict={'TestId': test_id, 'NodeType': self.node_type},
+        results = list_instances_aws(tags_dict={'TestId': test_id, 'NodeType': self.node_type}, running=True,
                                      region_name=self.region_names[dc_idx], group_as_region=True, availability_zone=availability_zone)
         instances = results[self.region_names[dc_idx]]
 
@@ -824,6 +824,7 @@ class AWSNode(cluster.BaseNode):
         self.stop_task_threads()
         self.wait_till_tasks_threads_are_stopped()
         self._instance.terminate()
+        self._instance.wait_until_terminated()
         if self.eip_allocation_id:
             self.release_address()
         super().destroy()
