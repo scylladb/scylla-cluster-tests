@@ -1141,6 +1141,7 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
             # if version is not exact version, we need to add the wildcard to the end, to catch all minor versions
             scylla_version_filter = f"*{version.replace('enterprise-', '')}*"
 
+    scylla_version_filter = scylla_version_filter.replace('-', '?').replace('~', '?').replace('.rc', '?rc')
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
     images = []
     for client, owner in zip((ec2_resource, get_scylla_images_ec2_resource(region_name=region_name)),
@@ -1169,7 +1170,7 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, ver
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
     filters = "(family eq 'scylla(-enterprise)?')( labels.environment eq 'production' )"
     if version and version != "all":
-        filters += f"(labels.scylla_version eq '{version.replace('.', '-')}.*"
+        filters += f"(labels.scylla_version eq '{version.replace('.', '-').replace('~', '-')}.*"
         if 'rc' not in version and len(version.split('.')) < 3:
             filters += "(-\\d)?(\\d)?(\\d)?(-rc)?(\\d)?(\\d)?')"
         else:
