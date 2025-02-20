@@ -195,14 +195,14 @@ class DataCenterTopologyRfControl:
 
         return matching_keyspaces
 
-    def _alter_keyspace_rf(self, keyspace: str, replication_factor: int, session):
+    def _alter_keyspace_rf(self, keyspace: str, replication_factor: int, node: 'BaseNode') -> None:
         # Alter the replication factor for keyspace of the data-center.
-
-        alter_ks_cmd = f"ALTER KEYSPACE {keyspace} WITH REPLICATION = {{ 'class' : 'NetworkTopologyStrategy', '{self.datacenter}':{replication_factor} }}"
-        message = f"Altering {keyspace} RF with: {alter_ks_cmd}"
+        replication_strategy = ReplicationStrategy.get(node, keyspace)
+        replication_strategy.replication_factors_per_dc.update({self.datacenter: replication_factor})
+        message = f"Altering {keyspace} RF with: {replication_strategy}"
         LOGGER.debug(message)
         try:
-            session.execute(alter_ks_cmd)
+            replication_strategy.apply(node, keyspace)
         except Exception as error:
             LOGGER.error(f"{message} Failed with: {error}")
             raise error
@@ -210,10 +210,9 @@ class DataCenterTopologyRfControl:
     def revert_to_original_keyspaces_rf(self, node_to_wait_for_balance: 'BaseNode' = None):
         if self.decreased_rf_keyspaces:
             LOGGER.debug(f"Reverting keyspaces replication factor to original value of {self.datacenter}..")
-            with self.cluster.cql_connection_patient(self.cluster.data_nodes[0]) as session:
-                for keyspace in self.decreased_rf_keyspaces:
-                    self._alter_keyspace_rf(keyspace=keyspace, replication_factor=self.original_nodes_number,
-                                            session=session)
+            for keyspace in self.decreased_rf_keyspaces:
+                self._alter_keyspace_rf(keyspace=keyspace, replication_factor=self.original_nodes_number,
+                                        node=self.cluster.data_nodes[0])
         if node_to_wait_for_balance:
             wait_no_tablets_migration_running(node_to_wait_for_balance)
 
@@ -226,22 +225,23 @@ class DataCenterTopologyRfControl:
             replication-factor value.
         """
         node = self.target_node
-        with self.cluster.cql_connection_patient(node) as session:
-            # Ensure that nodes_num is 2 or greater
-            if self.original_nodes_number > 1:
-                if decreased_rf_keyspaces := self._get_keyspaces_to_decrease_rf(session=session):
-                    LOGGER.debug(
-                        f"Found the following keyspaces with replication factor to decrease: {decreased_rf_keyspaces}")
-                    try:
-                        for keyspace in decreased_rf_keyspaces:
-                            self._alter_keyspace_rf(keyspace=keyspace, replication_factor=self.original_nodes_number - 1,
-                                                    session=session)
-                            self.decreased_rf_keyspaces.append(keyspace)
-                    except Exception as error:
-                        self.revert_to_original_keyspaces_rf()
-                        LOGGER.error(
-                            f"Decreasing keyspace replication factor failed with: ({error}), aborting operation")
-                        raise error
-            else:
-                LOGGER.error(
-                    f"DC {self.datacenter} has {self.original_nodes_number} nodes. Cannot alter replication factor")
+        # Ensure that nodes_num is 2 or greater
+        if self.original_nodes_number > 1:
+            with self.cluster.cql_connection_patient(node) as session:
+                decreased_rf_keyspaces = self._get_keyspaces_to_decrease_rf(session=session)
+            if decreased_rf_keyspaces:
+                LOGGER.debug(
+                    f"Found the following keyspaces with replication factor to decrease: {decreased_rf_keyspaces}")
+                try:
+                    for keyspace in decreased_rf_keyspaces:
+                        self._alter_keyspace_rf(keyspace=keyspace, replication_factor=self.original_nodes_number - 1,
+                                                node=node)
+                        self.decreased_rf_keyspaces.append(keyspace)
+                except Exception as error:
+                    self.revert_to_original_keyspaces_rf()
+                    LOGGER.error(
+                        f"Decreasing keyspace replication factor failed with: ({error}), aborting operation")
+                    raise error
+        else:
+            LOGGER.error(
+                f"DC {self.datacenter} has {self.original_nodes_number} nodes. Cannot alter replication factor")
