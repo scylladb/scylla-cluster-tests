@@ -73,7 +73,7 @@ email_subject_postfix: ''
 collect_logs: false
 
 hinted_handoff: 'disabled'
-parallel_node_operations: false  # supported from Scylla 6.0
+parallel_node_operations: true  # supported from Scylla 6.0
 
 server_encrypt: false
 client_encrypt: false
