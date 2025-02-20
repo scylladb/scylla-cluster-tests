@@ -4038,7 +4038,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
             delay=0
         )
-        full_operations_timeout = nodetool_decommission_timeout + 600
+        full_operations_timeout = nodetool_decommission_timeout + 3600
         with contextlib.ExitStack() as stack:
             for expected_start_failed_context in self.target_node.raft.get_severity_change_filters_scylla_start_failed(
                     terminate_pattern.timeout):
