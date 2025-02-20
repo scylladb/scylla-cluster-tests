@@ -21,6 +21,7 @@ from botocore.exceptions import ClientError
 import boto3
 
 from sdcm.exceptions import CapacityReservationError
+from sdcm.utils.common import all_aws_regions, ParallelObject
 from sdcm.utils.get_username import get_username
 
 LOGGER = logging.getLogger(__name__)
@@ -253,3 +254,42 @@ class SCTCapacityReservation:
                     LOGGER.info("Capacity reservation %s for %s cancelled successfully.", cr_id, instance_type)
                 except ClientError as exp:
                     LOGGER.error("Failed to cancel capacity reservation %s. Error: %s", cr_id, exp)
+
+    @classmethod
+    def cancel_all_regions(cls, test_id) -> None:
+        """Finds and cancels capacity reservations for all regions in parallel."""
+        regions = all_aws_regions()
+        if not test_id:
+            LOGGER.warning("No test_id provided. Skipping capacity reservation cancellation.")
+            return
+
+        def cancel_region(region):
+            ec2 = boto3.client('ec2', region_name=region)
+            try:
+                reservations = ec2.describe_capacity_reservations(
+                    Filters=[
+                        {
+                            'Name': 'tag:test_id',
+                            'Values': [test_id]
+                        },
+                        {
+                            'Name': 'state',
+                            'Values': ['active']
+                        }
+                    ]
+                )
+                if not reservations['CapacityReservations']:
+                    LOGGER.info("There are no CRs to remove in region %s.", region)
+                for reservation in reservations['CapacityReservations']:
+                    try:
+                        ec2.cancel_capacity_reservation(CapacityReservationId=reservation['CapacityReservationId'])
+                        LOGGER.info("Capacity reservation %s in region %s cancelled successfully.",
+                                    reservation['CapacityReservationId'], region)
+                    except ClientError as exp:
+                        LOGGER.error("Failed to cancel capacity reservation %s in region %s. Error: %s",
+                                     reservation['CapacityReservationId'], region, exp)
+
+            except ClientError as exp:
+                LOGGER.error("Failed to describe capacity reservations in region %s. Error: %s", region, exp)
+
+        ParallelObject(regions, timeout=60, num_workers=len(regions)).run(cancel_region, ignore_exceptions=True)
