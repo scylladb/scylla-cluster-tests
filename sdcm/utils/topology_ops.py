@@ -46,8 +46,9 @@ class FailedDecommissionOperationMonitoring:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        decommission_in_progress = self.is_node_decommissioning()
         # Do not check decommission status if SCT raise KillNemesis
-        if exc_type and exc_type != KillNemesis:
+        if (exc_type and exc_type != KillNemesis) or decommission_in_progress:
             LOGGER.warning("Decommission failed with error: %s", traceback.format_exception(exc_type, exc_val, exc_tb))
             decommission_in_progress = self.is_node_decommissioning()
             if not decommission_in_progress:
