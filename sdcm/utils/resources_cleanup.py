@@ -88,8 +88,11 @@ def clean_cloud_resources(tags_dict, config=None, dry_run=False):
 
     if cluster_backend in ('aws', 'k8s-eks', ''):
         clean_instances_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
-        SCTCapacityReservation.get_cr_from_aws(config, force_fetch=True)
-        SCTCapacityReservation.cancel(config)
+        if config.region_names:
+            SCTCapacityReservation.get_cr_from_aws(config, force_fetch=True)
+            SCTCapacityReservation.cancel(config)
+        else:
+            SCTCapacityReservation.cancel_all_regions(config.get("test_id"))
         clean_elastic_ips_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_test_security_groups(tags_dict, regions=aws_regions, dry_run=dry_run)
         clean_placement_groups_aws(tags_dict, regions=aws_regions, dry_run=dry_run)
