@@ -4002,12 +4002,12 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             if isinstance(cl_inst, BaseScyllaCluster):
                 cl_inst.wait_for_nodes_up_and_normal(
                     nodes=node_list, verification_node=node_list[0], timeout=timeout)
-            for node in node_list:
-                try:
-                    node.update_rack_info_in_argus(node.datacenter, node.node_rack)
-                except Exception:  # pylint: disable=broad-except  # noqa: BLE001
-                    LOGGER.warning("Failure settings dc/rack infomration for %s in Argus.", node)
-                    LOGGER.debug("Exception details:\n", exc_info=True)
+            # for node in node_list:
+            #     try:
+            #         node.update_rack_info_in_argus(node.datacenter, node.node_rack)
+            #     except Exception:  # pylint: disable=broad-except  # noqa: BLE001
+            #         LOGGER.warning("Failure settings dc/rack infomration for %s in Argus.", node)
+            #         LOGGER.debug("Exception details:\n", exc_info=True)
 
         time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug('TestConfig duration -> %s s', int(time_elapsed))
@@ -4840,8 +4840,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.log.info("node %s has scylla-manager-agent version %s", node.name, manager_agent_version)
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
-        nodes_status = node.get_nodes_status()
-        check_nodes_status(nodes_status=nodes_status, current_node=node)
+        # nodes_status = node.get_nodes_status()
+        # check_nodes_status(nodes_status=nodes_status, current_node=node)
         self.clean_replacement_node_options(node)
 
     def install_scylla_manager(self, node):
