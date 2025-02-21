@@ -51,9 +51,9 @@ gce_instance_type_loader: 'e2-standard-16'
 gce_n_local_ssd_disk_db: 16
 instance_type_loader: 'c5n.4xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
+nemesis_class_name: 'DecommissionStreamingErrMonkey'
 nemesis_seed: '016'
-nemesis_interval: 30
+nemesis_interval: 10
 
 user_prefix: 'longevity-large-partitions-200k-pks-4d'
 
