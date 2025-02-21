@@ -100,10 +100,9 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
 
         table_repair_date, delta_repair_date_minutes = sstable_utils.get_table_repair_date_and_delta_minutes()
         sstables = sstable_utils.get_sstables(from_minutes_ago=delta_repair_date_minutes)
-        self.log.debug('Starting sstabledump to verify correctness of tombstones for %s sstables',
+        self.log.debug('Starting sstable dump to verify correctness of tombstones for %s sstables',
                        len(sstables))
-        for sstable in sstables:
-            sstable_utils.verify_post_repair_sstable_tombstones(table_repair_date=table_repair_date, sstable=sstable)
+        sstable_utils.verify_post_repair_ttl_expired_tombstones(table_repair_date=table_repair_date, sstables=sstables)
 
         self.log.info("Change tombstone-gc mode to 'immediate'")
         with self.db_cluster.cql_connection_patient(node=self.db_node) as session:
@@ -130,5 +129,5 @@ class TombstoneGcLongevityTest(TWCSLongevityTest):
         self.log.debug('Starting sstabledump to verify correctness of tombstones for %s sstables',
                        len(sstables))
         for sstable in sstables:
-            tombstone_deletion_info = sstable_utils.get_compacted_tombstone_deletion_info(sstable=sstable)
+            tombstone_deletion_info = sstable_utils.get_ttl_expired_tombstone_deletion_info(sstable=sstable)
             assert not tombstone_deletion_info, f"Found unexpected existing tombstones: {tombstone_deletion_info} for sstable: {sstable}"
