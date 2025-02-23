@@ -1673,6 +1673,8 @@ def check_archive(remoter, path: str) -> bool:
         cmd = f"tar --zstd -tf '{path}'"
     elif path.endswith(".zip"):
         cmd = f"unzip -qql '{path}'"
+    elif path.endswith(".zst"):
+        cmd = f"zstd -t '{path}'"
     elif path.endswith(".gz"):
         cmd = f"gzip -t '{path}' && gzip -lv '{path}'"
     else:
