@@ -56,6 +56,7 @@ from sdcm.sct_events.group_common_events import (
     ignore_topology_change_coordinator_errors,
     ignore_upgrade_schema_errors,
     ignore_ycsb_connection_refused,
+    ignore_raft_topology_cmd_failing,
 )
 from sdcm.utils import loader_utils
 from sdcm.utils.features import CONSISTENT_TOPOLOGY_CHANGES_FEATURE
@@ -206,7 +207,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     def upgrade_node(self, node, upgrade_sstables=True):
         self._upgrade_node(node=node, upgrade_sstables=upgrade_sstables)
 
-    @decorate_with_context(ignore_abort_requested_errors)
+    @decorate_with_context([ignore_abort_requested_errors,
+                            ignore_ycsb_connection_refused,
+                            ignore_topology_change_coordinator_errors,
+                            ignore_raft_topology_cmd_failing])
     # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
     def _upgrade_node(self, node, upgrade_sstables=True, new_scylla_repo=None, new_version=None):  # noqa: PLR0915
         # pylint: disable=too-many-branches,too-many-statements
@@ -371,7 +375,10 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
     def rollback_node(self, node, upgrade_sstables=True):
         self._rollback_node(node=node, upgrade_sstables=upgrade_sstables)
 
-    @decorate_with_context(ignore_abort_requested_errors)
+    @decorate_with_context([ignore_abort_requested_errors,
+                            ignore_ycsb_connection_refused,
+                            ignore_topology_change_coordinator_errors,
+                            ignore_raft_topology_cmd_failing])
     def _rollback_node(self, node, upgrade_sstables=True):
         # pylint: disable=too-many-branches,too-many-statements
         InfoEvent(message='Rollbacking a Node').publish()
@@ -886,8 +893,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
         InfoEvent(
             message=f"Step {step} - Upgrade {node.name} from dc {node.dc_idx}").publish()
         InfoEvent(message='Upgrade Node %s begins' % node.name).publish()
-        with ignore_ycsb_connection_refused(), ignore_topology_change_coordinator_errors():
-            self.upgrade_node(node, upgrade_sstables=self.params.get('upgrade_sstables'))
+        self.upgrade_node(node, upgrade_sstables=self.params.get('upgrade_sstables'))
         InfoEvent(message='Upgrade Node %s ended' % node.name).publish()
         node.check_node_health()
 
@@ -897,8 +903,7 @@ class UpgradeTest(FillDatabaseData, loader_utils.LoaderUtilsMixin):
                     f"Rollback {node.name} from dc {node.dc_idx}"
         ).publish()
         InfoEvent(message='Rollback Node %s begin' % node).publish()
-        with ignore_ycsb_connection_refused():
-            self.rollback_node(node, upgrade_sstables=self.params.get('upgrade_sstables'))
+        self.rollback_node(node, upgrade_sstables=self.params.get('upgrade_sstables'))
         InfoEvent(message='Rollback Node %s ended' % node).publish()
         node.check_node_health()
 
