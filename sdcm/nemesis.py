@@ -4863,14 +4863,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # and removed from the list of nodes
                 self.set_current_running_nemesis(new_node)
                 new_dc_name = new_dc_list[0]
+
                 for keyspace in system_keyspaces + ["keyspace_new_dc"]:
                     strategy = ReplicationStrategy.get(node, keyspace)
                     assert isinstance(strategy, NetworkTopologyReplicationStrategy), \
                         "Should have been already switched to NetworkStrategy"
                     strategy.replication_factors_per_dc.update({new_dc_name: 1})  # pylint: disable=protected-access
                     replication_strategy_setter(**{keyspace: strategy})
+
                 InfoEvent(message='execute rebuild on new datacenter').publish()
-                with wait_for_log_lines(node=new_node, start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
+                with wait_for_log_lines(node=new_node,
+                                        start_line_patterns=["rebuild.*started with keyspaces=", "Rebuild starts"],
                                         end_line_patterns=["rebuild.*finished with keyspaces=", "Rebuild succeeded"],
                                         start_timeout=60, end_timeout=600):
                     new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}", long_running=True, retry=0)
@@ -4879,6 +4882,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     cluster_node.run_nodetool(sub_cmd="repair -pr", publish_event=True)
                 datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
                 self._write_read_data_to_multi_dc_keyspace(datacenters)
+
+                for keyspace in system_keyspaces + ["keyspace_new_dc"]:
+                    strategy = ReplicationStrategy.get(node, keyspace)
+                    strategy.replication_factors_per_dc.update({new_dc_name: 0})
+                    replication_strategy_setter(**{keyspace: strategy})
 
             self.cluster.decommission(new_node)
             node_added = False
