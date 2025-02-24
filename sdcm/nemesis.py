@@ -2074,8 +2074,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         test_keyspaces = self.cluster.get_test_keyspaces()
         # if keyspace or table doesn't exist, create it by cassandra-stress
         if ks not in test_keyspaces or not table_exist:
-            stress_cmd = "cassandra-stress write n=400000 cl=QUORUM -mode native cql3 " \
-                         f"-schema 'replication(strategy=NetworkTopologyStrategy," \
+            stress_cmd = f"cassandra-stress write n=400000 cl=QUORUM -mode native cql3 " \
+                         f"-schema keyspace={ks} 'replication(strategy=NetworkTopologyStrategy," \
                          f"replication_factor={self.tester.reliable_replication_factor})' -log interval=5"
             cs_thread = self.tester.run_stress_thread(
                 stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False, round_robin=True)
@@ -2108,11 +2108,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # NOTE: 'self' is used by the 'scylla_versions' decorator
         return ''
 
+    def disrupt_drop(self):
+        keyspace_drop = 'ks_drop'
+        table = 'standard1'
+
+        self._prepare_test_table(ks=keyspace_drop, table=True)
+
+        # do the actual drop
+        with self.cluster.cql_connection_patient(self.target_node, keyspace=keyspace_drop) as session:
+            session.execute(f"DROP TABLE {table};")
+
     def disrupt_truncate(self):
         keyspace_truncate = 'ks_truncate'
         table = 'standard1'
 
-        self._prepare_test_table(ks=keyspace_truncate)
+        self._prepare_test_table(ks=keyspace_truncate, table=True)
 
         # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
         with adaptive_timeout(Operations.FLUSH, self.target_node, timeout=HOUR_IN_SEC * 2):
@@ -4305,6 +4315,32 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return stress_queue
 
     @target_data_nodes
+    def grow_cluster(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+        self._grow_cluster(rack=None)
+
+    @target_data_nodes
+    def grow_fill_cluster(self):
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        if not self.has_steady_run and sleep_time_between_ops:
+            self.steady_state_latency()
+            self.has_steady_run = True
+
+        stress_cmds = self.cluster.params.get('stress_cmd')
+        for stress_cmd in stress_cmds:
+            self._grow_cluster()
+            # self.tester.wait_no_compactions_running(n=240)
+            time.sleep(self.cluster.params.get('nemesis_interval') * 60)
+            write_thread = self.tester.run_stress_thread(
+                stress_cmd=stress_cmd, stop_test_on_failure=False, stats_aggregate_cmds=False)
+            self.tester.verify_stress_thread(write_thread)
+            self.log.info("Finish cluster fill")
+            time.sleep(self.interval)
+
+    @target_data_nodes
     def disrupt_grow_shrink_cluster(self):
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
         if not self.has_steady_run and sleep_time_between_ops:
@@ -4766,6 +4802,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert actual_cdc_settings == cdc_settings, \
                 f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}"
 
+    @latency_calculator_decorator(legend="Adding new nodes in new DC")
     def _add_new_node_in_new_dc(self, is_zero_node=False) -> BaseNode:
         if is_zero_node:
             new_node = skip_on_capacity_issues(self.cluster.add_nodes)(
@@ -5665,6 +5702,24 @@ class AddRemoveDcNemesis(Nemesis):
         self.disrupt_add_remove_dc()
 
 
+class GrowClusterMonkey(Nemesis):
+    disruptive = True
+    kubernetes = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.grow_cluster()
+
+
+class GrowFillMonkey(Nemesis):
+    disruptive = True
+    kubernetes = True
+    topology_changes = True
+
+    def disrupt(self):
+        self.grow_fill_cluster()
+
+
 class GrowShrinkClusterNemesis(Nemesis):
     disruptive = True
     kubernetes = True
@@ -5906,6 +5961,16 @@ class NodeToolCleanupMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_nodetool_cleanup()
+
+
+class DropMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+    limited = True
+    free_tier_set = True
+
+    def disrupt(self):
+        self.disrupt_drop()
 
 
 class TruncateMonkey(Nemesis):

@@ -1,0 +1,70 @@
+# Keyspace Definition
+keyspace: ks_ttl
+
+# Keyspace Configuration
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS ks_ttl WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3} AND tablets = {'initial': 128};
+
+# Table name and schema
+table: standard1
+
+# Table Definition
+table_definition: |
+  CREATE TABLE IF NOT EXISTS ks_ttl.standard1 (
+    key blob PRIMARY KEY,
+    c0 blob,
+    c1 blob,
+    c2 blob,
+    c3 blob,
+    c4 blob,
+    c5 blob,
+    c6 blob,
+    c7 blob
+  ) WITH default_time_to_live = 21600
+    AND gc_grace_seconds = 25200
+    AND compression = {}
+    AND compaction = { 'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': 1, 'compaction_window_unit': 'HOURS' }
+    AND tombstone_gc = {'mode':'immediate'};
+# 21600 = 6 hours in seconds
+# 25200 = 7 hours in seconds
+
+# Column Distribution
+columnspec:
+  - name: key
+    size: fixed(10)
+
+  - name: c0
+    size: fixed(128)
+
+  - name: c1
+    size: fixed(128)
+
+  - name: c2
+    size: fixed(128)
+
+  - name: c3
+    size: fixed(128)
+
+  - name: c4
+    size: fixed(128)
+
+  - name: c5
+    size: fixed(128)
+
+  - name: c6
+    size: fixed(128)
+
+  - name: c7
+    size: fixed(128)
+
+# Insert Distribution
+insert:
+  partitions: fixed(1)
+  select: fixed(1)/1
+  batchtype: UNLOGGED
+
+# Main Configuration
+queries:
+  insert_query:
+    cql: insert into ks_ttl.standard1 (key, C0, C1, C2, C3, C4, C5, C6, C7) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    fields: samerow
