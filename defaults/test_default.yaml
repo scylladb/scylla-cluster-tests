@@ -1,3 +1,9 @@
+# NOTE: set the 'tablets_initial_scale_factor' explicitly while the following
+#       Scylla change is not merged:
+#       https://github.com/scylladb/scylladb/pull/22522
+append_scylla_yaml:
+  tablets_initial_scale_factor: 10
+
 db_type: "scylla"
 
 test_duration: 60
