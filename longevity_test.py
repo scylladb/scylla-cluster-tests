@@ -21,6 +21,7 @@ import itertools
 import contextlib
 from typing import List, Dict
 
+from collections import defaultdict
 import yaml
 from cassandra import AlreadyExists, InvalidRequest
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
@@ -155,22 +156,45 @@ class LongevityTest(ClusterTester, loader_utils.LoaderUtilsMixin):
 
         # Grow cluster to target size if requested
         if cluster_target_size := self.params.get('cluster_target_size'):
+            def group_by_dc_idx(nodes: list['BaseNode']) -> dict[int, list['BaseNode']]:  # noqa: F821
+                l = defaultdict(list)
+                for node in nodes:
+                    l[node.dc_idx].append(node)
+                return l
+
+            def is_target_reached(current: list[int], target: list[int]) -> bool:
+                return all([x >= y for x, y in zip(current, target)])
+
+            cluster_target_size = list(map(int, cluster_target_size.split())) if isinstance(
+                cluster_target_size, str) else [cluster_target_size]
             add_node_cnt = self.params.get('add_node_cnt')
-            node_cnt = len(self.db_cluster.data_nodes)
+            # node_cnt = len(self.db_cluster.data_nodes)
+            nodes_by_dcx = group_by_dc_idx(self.db_cluster.data_nodes)
+            current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
 
-            InfoEvent(message=f"Starting to grow cluster from {node_cnt} to {cluster_target_size}").publish()
+            InfoEvent(
+                message=f"Starting to grow cluster from {self.params.get('n_db_nodes')} to {cluster_target_size}").publish()
 
-            while node_cnt < cluster_target_size:
-                InfoEvent(message=f"Adding node number {node_cnt + 1}").publish()
-                new_nodes = self.db_cluster.add_nodes(count=add_node_cnt, enable_auto_bootstrap=True)
+            while not is_target_reached(current_cluster_size, cluster_target_size):
+                InfoEvent(message=f"Adding next number of nodes {add_node_cnt}").publish()
+                added_nodes = []
+                for dcx, target in enumerate(cluster_target_size):
+                    if current_cluster_size[dcx] < target:
+                        add_nodes_num = add_node_cnt if (
+                            target - current_cluster_size[dcx]) >= add_node_cnt else target - current_cluster_size[dcx]
+                        added_nodes.extend(self.db_cluster.add_nodes(
+                            count=add_nodes_num, enable_auto_bootstrap=True, dc_idx=dcx))
+
                 self.monitors.reconfigure_scylla_monitoring()
                 up_timeout = MAX_TIME_WAIT_FOR_NEW_NODE_UP
                 with adaptive_timeout(Operations.NEW_NODE, node=self.db_cluster.data_nodes[0], timeout=up_timeout):
-                    self.db_cluster.wait_for_init(node_list=new_nodes, timeout=up_timeout, check_node_health=False)
-                self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
-                node_cnt = len(self.db_cluster.data_nodes)
+                    self.db_cluster.wait_for_init(node_list=added_nodes, timeout=up_timeout, check_node_health=False)
+                self.db_cluster.wait_for_nodes_up_and_normal(nodes=added_nodes)
+                # node_cnt = len(self.db_cluster.data_nodes)
+                nodes_by_dcx = group_by_dc_idx(self.db_cluster.data_nodes)
+                current_cluster_size = [len(nodes_by_dcx[dcx]) for dcx in sorted(nodes_by_dcx)]
 
-            InfoEvent(message=f"Growing cluster finished, new cluster size is {node_cnt}").publish()
+            InfoEvent(message=f"Growing cluster finished, new cluster size is {current_cluster_size}").publish()
 
         # Collect data about partitions and their rows amount
         if self.partitions_attrs and self.partitions_attrs.validate_partitions:
