@@ -44,9 +44,9 @@ class MessageTimeout(NamedTuple):
 
 
 BACKEND_TIMEOUTS: dict[str, Mapping[LogPosition, int]] = {
-    "aws": {LogPosition.BEGIN: 300, LogPosition.END: 3600},
-    "gce": {LogPosition.BEGIN: 300, LogPosition.END: 3600},
-    "azure": {LogPosition.BEGIN: 1200, LogPosition.END: 7200},
+    "aws": {LogPosition.BEGIN: 1200, LogPosition.END: 3600},
+    "gce": {LogPosition.BEGIN: 1800, LogPosition.END: 7200},
+    "azure": {LogPosition.BEGIN: 1800, LogPosition.END: 7200},
 }
 
 ABORT_DECOMMISSION_LOG_PATTERNS: Iterable[MessagePosition] = [
