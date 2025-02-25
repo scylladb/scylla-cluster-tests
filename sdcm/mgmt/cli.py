@@ -32,6 +32,7 @@ from sdcm import wait
 from sdcm.mgmt.common import \
     TaskStatus, ScyllaManagerError, HostStatus, HostSsl, HostRestStatus, duration_to_timedelta, DEFAULT_TASK_TIMEOUT
 from sdcm.provision.helpers.certificate import TLSAssets
+from sdcm.utils.context_managers import DbNodeLogger
 from sdcm.wait import WaitForTimeoutError
 
 LOGGER = logging.getLogger(__name__)
@@ -710,7 +711,8 @@ class ManagerCluster(ScyllaManagerBase):
         if cron is not None:
             cmd += " --cron '{}' ".format(" ".join(cron))
 
-        res = self.sctool.run(cmd=cmd, parse_table_res=False)
+        with DbNodeLogger([self.manager_node], f"start scylla-manager task {cmd}", target_node=self.manager_node):
+            res = self.sctool.run(cmd=cmd, parse_table_res=False)
         if not res:
             raise ScyllaManagerError("Unknown failure for sctool {} command".format(cmd))
 
