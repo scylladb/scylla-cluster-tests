@@ -98,6 +98,7 @@ class GeminiStressThread(DockerBasedStressThread):  # pylint: disable=too-many-i
             # These two are used to control the memory usage of Gemini
             "token-range-slices": 512,  # Number of partitions
             "partition-key-buffer-reuse-size": 100,  # Internal Channel Size per parittion value generation
+            "statement-log-file-compression": "zstd",
         }
 
         self.gemini_oracle_statements_file = f"gemini_oracle_statements_{self.unique_id}.log"
